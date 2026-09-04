@@ -34,8 +34,8 @@ class PeSummaryTests(unittest.TestCase):
         self.assertEqual(result["bitness"], 32)
         self.assertEqual(result["entrypoint_rva"], 0x1234)
         self.assertEqual(result["sections"][0]["name"], ".text")
+        self.assertEqual(result["imports"], [])
 
 
 if __name__ == "__main__":
     unittest.main()
-

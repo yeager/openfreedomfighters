@@ -8,7 +8,8 @@ This is a multi-year reverse-engineering effort. Dates are deliberately omitted 
 - [x] Establish clean-room and game-data policies.
 - [x] Define platform/mode architecture and initial subsystem map.
 - [x] Add a non-extracting installation inspector.
-- [ ] Complete PE sections/import inventory on a cross-architecture host.
+- [x] Complete PE sections/import inventory with a host-independent parser.
+- [ ] Resolve imported ordinals, delay/dynamic imports, TLS callbacks, and exception metadata.
 - [ ] Produce archive/resource magic census and three-scene consistency report.
 - [ ] Capture black-box boot/menu/first-level behavior specifications.
 
@@ -79,4 +80,3 @@ Gate: fresh installs locate user-owned data and complete the campaign without Wi
 - Original and Modern share one authoritative gameplay simulation.
 - Performance target: stable 60 fps at native Deck resolution in Modern mode; Original supports the reference timing profile.
 - Save format is documented and versioned; retail-save import is optional and isolated.
-

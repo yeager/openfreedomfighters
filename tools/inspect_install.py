@@ -21,9 +21,28 @@ def sha256(path: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
+def _rva_to_offset(rva: int, sections: list[dict[str, object]]) -> int:
+    for section in sections:
+        start = int(section["virtual_address"])
+        extent = max(int(section["virtual_size"]), int(section["raw_size"]))
+        if start <= rva < start + extent:
+            return int(section["raw_offset"]) + (rva - start)
+    raise ValueError(f"RVA 0x{rva:x} does not map to a section")
+
+
+def _cstring(image: bytes, offset: int, limit: int = 4096) -> str:
+    if offset < 0 or offset >= len(image):
+        raise ValueError("string offset outside image")
+    end = image.find(b"\0", offset, min(len(image), offset + limit))
+    if end < 0:
+        raise ValueError("unterminated string")
+    return image[offset:end].decode("ascii", "replace")
+
+
 def pe_summary(path: pathlib.Path) -> dict[str, object]:
+    image = path.read_bytes()
     with path.open("rb") as handle:
-        dos = handle.read(64)
+        dos = image[:64]
         if len(dos) != 64 or dos[:2] != b"MZ":
             raise ValueError("not an MZ executable")
         pe_offset = struct.unpack_from("<I", dos, 0x3C)[0]
@@ -63,6 +82,45 @@ def pe_summary(path: pathlib.Path) -> dict[str, object]:
                     "raw_size": raw_size,
                 }
             )
+    directory_offset = 96 if magic == 0x10B else 112
+    imports: list[dict[str, object]] = []
+    if len(optional) >= directory_offset + 16:
+        import_rva, import_size = struct.unpack_from("<II", optional, directory_offset + 8)
+        if import_rva and import_size:
+            descriptor_offset = _rva_to_offset(import_rva, section_rows)
+            max_descriptors = min(import_size // 20, 1024)
+            thunk_width = 4 if magic == 0x10B else 8
+            thunk_format = "<I" if magic == 0x10B else "<Q"
+            ordinal_mask = 0x80000000 if magic == 0x10B else 0x8000000000000000
+            for index in range(max_descriptors):
+                offset = descriptor_offset + index * 20
+                if offset + 20 > len(image):
+                    raise ValueError("truncated import descriptor")
+                original_thunk, _, _, name_rva, first_thunk = struct.unpack_from(
+                    "<IIIII", image, offset
+                )
+                if not any((original_thunk, name_rva, first_thunk)):
+                    break
+                dll = _cstring(image, _rva_to_offset(name_rva, section_rows))
+                thunk_rva = original_thunk or first_thunk
+                thunk_offset = _rva_to_offset(thunk_rva, section_rows)
+                symbols = []
+                for symbol_index in range(16384):
+                    item_offset = thunk_offset + symbol_index * thunk_width
+                    if item_offset + thunk_width > len(image):
+                        raise ValueError("truncated import thunk")
+                    thunk = struct.unpack_from(thunk_format, image, item_offset)[0]
+                    if thunk == 0:
+                        break
+                    if thunk & ordinal_mask:
+                        symbols.append({"ordinal": thunk & 0xFFFF})
+                    else:
+                        name_offset = _rva_to_offset(thunk, section_rows)
+                        if name_offset + 2 > len(image):
+                            raise ValueError("truncated import-by-name record")
+                        hint = struct.unpack_from("<H", image, name_offset)[0]
+                        symbols.append({"name": _cstring(image, name_offset + 2), "hint": hint})
+                imports.append({"dll": dll, "symbols": symbols})
     return {
         "machine": f"0x{machine:04x}",
         "bitness": 32 if magic == 0x10B else 64,
@@ -71,6 +129,7 @@ def pe_summary(path: pathlib.Path) -> dict[str, object]:
         "entrypoint_rva": entrypoint,
         "image_base": image_base,
         "sections": section_rows,
+        "imports": imports,
     }
 
 
@@ -145,4 +204,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
