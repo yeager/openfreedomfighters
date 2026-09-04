@@ -43,6 +43,8 @@ Representative scene archives consistently expose a family of resource types:
 
 This table is provisional. Every claim graduates only after cross-file validation against at least three scenes and a synthetic parser test.
 
+Aggregate sizes, header invariants, and the first three-scene comparison are recorded in [FORMAT_CENSUS.md](FORMAT_CENSUS.md).
+
 Across all 90 archives, each of `GMS`, `OCT`, `PRM`, `RMC`, `RMI`, `SGP`, `SND`, `SUP`, `TEX`, and `ZGF` occurs 90 times. `BUF` and `LOC` occur 88 times and `ANM` occurs 42 times. This regularity strongly supports a per-scene resource-family design, but semantics remain hypotheses.
 
 ## PE image map
@@ -96,8 +98,8 @@ Files named `.WAV` are often banks rather than conventional RIFF WAV files. `.WH
 
 ## Next probes
 
-1. Parse PE headers/imports with a host-independent parser and record only structural results.
-2. Generate aggregate archive manifests and identify magic/version fields.
+1. Resolve PE ordinals, dynamic imports, TLS callbacks, and exception metadata.
+2. Promote three-scene resource invariants to corpus-wide validators and infer section tables.
 3. Build read-only parsers for ZIP and one smallest resource family using synthetic fixtures.
 4. Record black-box boot, menu, input, timing, and first-level traces from the retail game.
 5. Define golden screenshots/state traces stored locally as hashes and numeric measurements.

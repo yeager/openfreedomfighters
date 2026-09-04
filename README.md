@@ -27,11 +27,17 @@ python3 tools/inspect_install.py /path/to/FreedomFighters
 
 Use `--private-paths` only for a local report that will not be committed.
 
+Generate an aggregate resource-format census (at most 32 bytes read from each archive member):
+
+```sh
+python3 tools/resource_census.py /path/to/FreedomFighters
+```
+
 ## Documentation
 
 - [Current technical map](docs/TECHNICAL_MAP.md)
+- [Resource-format census](docs/FORMAT_CENSUS.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap and acceptance gates](docs/ROADMAP.md)
 - [Localization plan](docs/LOCALIZATION.md)
 - [Clean-room protocol](CLEAN_ROOM.md)
-

@@ -10,7 +10,10 @@ This is a multi-year reverse-engineering effort. Dates are deliberately omitted 
 - [x] Add a non-extracting installation inspector.
 - [x] Complete PE sections/import inventory with a host-independent parser.
 - [ ] Resolve imported ordinals, delay/dynamic imports, TLS callbacks, and exception metadata.
-- [ ] Produce archive/resource magic census and three-scene consistency report.
+- [x] Produce aggregate archive/resource magic and size census.
+- [x] Complete the first three-scene field-level consistency report.
+- [x] Promote initial field hypotheses to corpus-wide validators.
+- [ ] Infer and validate resource section schemas.
 - [ ] Capture black-box boot/menu/first-level behavior specifications.
 
 Gate: a new contributor can generate the same structural report from a supported install without creating redistributable artifacts.
