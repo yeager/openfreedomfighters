@@ -63,6 +63,19 @@ The supported executable is PE32/i386, image base `0x00400000`, entry-point RVA 
 
 The large zero-filled tail of `.data`, thread-local storage, and relocation table matter for any static-lifting runtime. Import-table parsing and TLS callback discovery are still required before choosing a lifting ABI.
 
+### Loader directories and exported registry
+
+The image has export, import, resource, certificate, relocation, debug, TLS, load-config, and import-address-table directories. It has no delay-import or x86 exception directory. The TLS directory has no callback array, so the normal entry point is the first observed executable initialization boundary. Authenticode uses a file-offset certificate entry, as required by the PE format.
+
+All 341 exports are named:
+
+- 102 geometry/object class-info records;
+- 230 routed event/behavior class-info records;
+- one additional decorated WinMain property record;
+- eight plain engine boundary functions covering engine execution, renderer creation, project interface, script engine/interfaces, editing output, and destruction notification.
+
+This is strong evidence that Glacier uses exported static class metadata to register scene objects and routed behaviors. The registry gives Phase 3 a finite compatibility surface: decode class identifiers from scene data, map them to behavior specifications, then implement only the classes exercised by the campaign vertical slice before expanding to all 332 records.
+
 ## Imported platform surface
 
 The executable imports 274 symbols from 24 DLLs. The narrow multimedia boundary is encouraging: one Direct3D 8 factory call, one DirectInput 8 factory call, one XInput state call, one ordinal DirectSound entry, and one ordinal EAX entry. Steam integration uses only init, shutdown, and restart-if-needed imports. Winsock contributes 11 ordinal imports.
@@ -98,7 +111,7 @@ Files named `.WAV` are often banks rather than conventional RIFF WAV files. `.WH
 
 ## Next probes
 
-1. Resolve PE ordinals, dynamic imports, TLS callbacks, and exception metadata.
+1. Resolve imported ordinals and dynamically loaded APIs; map load-config metadata.
 2. Promote three-scene resource invariants to corpus-wide validators and infer section tables.
 3. Build read-only parsers for ZIP and one smallest resource family using synthetic fixtures.
 4. Record black-box boot, menu, input, timing, and first-level traces from the retail game.

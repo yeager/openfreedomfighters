@@ -13,6 +13,26 @@ import sys
 import zipfile
 
 
+PE_DIRECTORY_NAMES = (
+    "exports",
+    "imports",
+    "resources",
+    "exceptions",
+    "certificates",
+    "base_relocations",
+    "debug",
+    "architecture",
+    "global_pointer",
+    "tls",
+    "load_config",
+    "bound_imports",
+    "import_address_table",
+    "delay_imports",
+    "clr_runtime",
+    "reserved",
+)
+
+
 def sha256(path: pathlib.Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -83,9 +103,94 @@ def pe_summary(path: pathlib.Path) -> dict[str, object]:
                 }
             )
     directory_offset = 96 if magic == 0x10B else 112
+    directory_count_offset = 92 if magic == 0x10B else 108
+    declared_directory_count = (
+        struct.unpack_from("<I", optional, directory_count_offset)[0]
+        if len(optional) >= directory_count_offset + 4
+        else 0
+    )
+    available_directory_count = max(0, (len(optional) - directory_offset) // 8)
+    directory_count = min(
+        declared_directory_count,
+        available_directory_count,
+        len(PE_DIRECTORY_NAMES),
+    )
+    directories: dict[str, dict[str, object]] = {}
+    directory_rows: list[tuple[int, int]] = []
+    for index in range(directory_count):
+        rva, size = struct.unpack_from("<II", optional, directory_offset + index * 8)
+        directory_rows.append((rva, size))
+        if rva or size:
+            directories[PE_DIRECTORY_NAMES[index]] = {
+                "address": rva,
+                "address_kind": "file_offset" if index == 4 else "rva",
+                "size": size,
+            }
+
+    exports: dict[str, object] = {
+        "image_name": None,
+        "function_count": 0,
+        "named": [],
+    }
+    if directory_rows:
+        export_rva, export_size = directory_rows[0]
+        if export_rva and export_size >= 40:
+            export_offset = _rva_to_offset(export_rva, section_rows)
+            if export_offset + 40 > len(image):
+                raise ValueError("truncated export directory")
+            (
+                _,
+                _,
+                _,
+                _,
+                image_name_rva,
+                ordinal_base,
+                function_count,
+                name_count,
+                functions_rva,
+                names_rva,
+                ordinals_rva,
+            ) = struct.unpack_from("<IIHHIIIIIII", image, export_offset)
+            if function_count > 1_000_000 or name_count > function_count:
+                raise ValueError("unreasonable export counts")
+            functions_offset = _rva_to_offset(functions_rva, section_rows)
+            names_offset = _rva_to_offset(names_rva, section_rows)
+            ordinals_offset = _rva_to_offset(ordinals_rva, section_rows)
+            if functions_offset + function_count * 4 > len(image):
+                raise ValueError("truncated export address table")
+            if names_offset + name_count * 4 > len(image):
+                raise ValueError("truncated export name table")
+            if ordinals_offset + name_count * 2 > len(image):
+                raise ValueError("truncated export ordinal table")
+            named_exports = []
+            for index in range(name_count):
+                name_rva = struct.unpack_from("<I", image, names_offset + index * 4)[0]
+                ordinal_index = struct.unpack_from(
+                    "<H", image, ordinals_offset + index * 2
+                )[0]
+                if ordinal_index >= function_count:
+                    raise ValueError("export ordinal exceeds function table")
+                function_rva = struct.unpack_from(
+                    "<I", image, functions_offset + ordinal_index * 4
+                )[0]
+                named_exports.append(
+                    {
+                        "name": _cstring(image, _rva_to_offset(name_rva, section_rows)),
+                        "ordinal": ordinal_base + ordinal_index,
+                        "rva": function_rva,
+                    }
+                )
+            exports = {
+                "image_name": _cstring(
+                    image, _rva_to_offset(image_name_rva, section_rows)
+                ),
+                "function_count": function_count,
+                "named": named_exports,
+            }
+
     imports: list[dict[str, object]] = []
-    if len(optional) >= directory_offset + 16:
-        import_rva, import_size = struct.unpack_from("<II", optional, directory_offset + 8)
+    if len(directory_rows) > 1:
+        import_rva, import_size = directory_rows[1]
         if import_rva and import_size:
             descriptor_offset = _rva_to_offset(import_rva, section_rows)
             max_descriptors = min(import_size // 20, 1024)
@@ -121,6 +226,39 @@ def pe_summary(path: pathlib.Path) -> dict[str, object]:
                         hint = struct.unpack_from("<H", image, name_offset)[0]
                         symbols.append({"name": _cstring(image, name_offset + 2), "hint": hint})
                 imports.append({"dll": dll, "symbols": symbols})
+
+    tls_callbacks: list[int] = []
+    if len(directory_rows) > 9:
+        tls_rva, tls_size = directory_rows[9]
+        minimum_tls_size = 24 if magic == 0x10B else 40
+        if tls_rva and tls_size >= minimum_tls_size:
+            tls_offset = _rva_to_offset(tls_rva, section_rows)
+            callback_field_offset = 12 if magic == 0x10B else 24
+            pointer_format = "<I" if magic == 0x10B else "<Q"
+            pointer_width = 4 if magic == 0x10B else 8
+            if tls_offset + callback_field_offset + pointer_width > len(image):
+                raise ValueError("truncated TLS directory")
+            callback_array_va = struct.unpack_from(
+                pointer_format, image, tls_offset + callback_field_offset
+            )[0]
+            if callback_array_va:
+                if callback_array_va < image_base:
+                    raise ValueError("TLS callback array precedes image base")
+                callback_array_offset = _rva_to_offset(
+                    callback_array_va - image_base, section_rows
+                )
+                for index in range(256):
+                    offset = callback_array_offset + index * pointer_width
+                    if offset + pointer_width > len(image):
+                        raise ValueError("truncated TLS callback array")
+                    callback_va = struct.unpack_from(pointer_format, image, offset)[0]
+                    if callback_va == 0:
+                        break
+                    if callback_va < image_base:
+                        raise ValueError("TLS callback precedes image base")
+                    tls_callbacks.append(callback_va - image_base)
+                else:
+                    raise ValueError("TLS callback array is not terminated")
     return {
         "machine": f"0x{machine:04x}",
         "bitness": 32 if magic == 0x10B else 64,
@@ -130,6 +268,9 @@ def pe_summary(path: pathlib.Path) -> dict[str, object]:
         "image_base": image_base,
         "sections": section_rows,
         "imports": imports,
+        "exports": exports,
+        "data_directories": directories,
+        "tls_callback_rvas": tls_callbacks,
     }
 
 

@@ -9,7 +9,9 @@ This is a multi-year reverse-engineering effort. Dates are deliberately omitted 
 - [x] Define platform/mode architecture and initial subsystem map.
 - [x] Add a non-extracting installation inspector.
 - [x] Complete PE sections/import inventory with a host-independent parser.
-- [ ] Resolve imported ordinals, delay/dynamic imports, TLS callbacks, and exception metadata.
+- [x] Map PE data directories, exports, delay-import absence, and TLS callbacks.
+- [ ] Resolve imported ordinals and dynamically loaded APIs; map load-config metadata.
+- [ ] Convert the 332 exported class registrations into behavior-only subsystem specifications.
 - [x] Produce aggregate archive/resource magic and size census.
 - [x] Complete the first three-scene field-level consistency report.
 - [x] Promote initial field hypotheses to corpus-wide validators.

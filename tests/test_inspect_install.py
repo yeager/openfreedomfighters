@@ -23,9 +23,13 @@ class PeSummaryTests(unittest.TestCase):
         struct.pack_into("<H", image, optional, 0x10B)
         struct.pack_into("<I", image, optional + 16, 0x1234)
         struct.pack_into("<I", image, optional + 28, 0x400000)
+        struct.pack_into("<I", image, optional + 92, 16)
+        struct.pack_into("<II", image, optional + 96 + 9 * 8, 0x1040, 24)
         section = optional + 0xE0
         image[section:section + 8] = b".text\0\0\0"
         struct.pack_into("<IIII", image, section + 8, 0x100, 0x1000, 0x80, 0x180)
+        struct.pack_into("<IIIIII", image, 0x1C0, 0, 0, 0, 0x401060, 0, 0)
+        struct.pack_into("<II", image, 0x1E0, 0x401234, 0)
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "fixture.exe"
             path.write_bytes(image)
@@ -35,6 +39,11 @@ class PeSummaryTests(unittest.TestCase):
         self.assertEqual(result["entrypoint_rva"], 0x1234)
         self.assertEqual(result["sections"][0]["name"], ".text")
         self.assertEqual(result["imports"], [])
+        self.assertEqual(
+            result["data_directories"]["tls"],
+            {"address": 0x1040, "address_kind": "rva", "size": 24},
+        )
+        self.assertEqual(result["tls_callback_rvas"], [0x1234])
 
 
 if __name__ == "__main__":
