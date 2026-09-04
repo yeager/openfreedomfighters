@@ -1,0 +1,3 @@
+# Optional tooling used only for local clean-room measurements.
+capstone==5.0.7
+

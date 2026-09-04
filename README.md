@@ -33,11 +33,18 @@ Generate an aggregate resource-format census (at most 32 bytes read from each ar
 python3 tools/resource_census.py /path/to/FreedomFighters
 ```
 
+With the optional analysis dependency installed, generate a code-boundary census that emits no instruction listing:
+
+```sh
+python3 tools/code_census.py /path/to/FreedomFighters/Freedom.Exe
+```
+
 ## Documentation
 
 - [Current technical map](docs/TECHNICAL_MAP.md)
 - [Resource-format census](docs/FORMAT_CENSUS.md)
 - [Windows ABI replacement map](docs/ABI_MAP.md)
+- [Code-boundary census](docs/CODE_CENSUS.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap and acceptance gates](docs/ROADMAP.md)
 - [Localization plan](docs/LOCALIZATION.md)
