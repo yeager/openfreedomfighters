@@ -20,13 +20,13 @@ class ResourceCensusTests(unittest.TestCase):
             with zipfile.ZipFile(root / "one.ZIP", "w") as archive:
                 archive.writestr(
                     "SCENES/ONE.ANM",
-                    struct.pack("<III", 0x00414E4D, 0, 16) + b"a" * 4,
+                    struct.pack("<III", 0x00414E4D, 1, 16) + b"a" * 4,
                 )
                 archive.writestr("SCENES/ONE.PRM", b"PRM!" + b"b" * 4)
             with zipfile.ZipFile(root / "two.ZIP", "w") as archive:
                 archive.writestr(
                     "SCENES/TWO.ANM",
-                    struct.pack("<III", 0x00414E4D, 0, 24) + b"c" * 12,
+                    struct.pack("<III", 0x00414E4D, 2, 24) + b"c" * 12,
                 )
             result = MODULE.census(root)
 
