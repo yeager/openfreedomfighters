@@ -1,0 +1,32 @@
+# Never commit proprietary Freedom Fighters files.
+.openfreedomfighters/
+game/
+gamedata/
+original-data/
+*.exe
+*.Exe
+*.dll
+*.DLL
+*.zip
+*.ZIP
+*.wav
+*.WAV
+*.whd
+*.WHD
+*.loc
+*.LOC
+*.tex
+*.TEX
+*.prm
+*.PRM
+*.zgf
+*.ZGF
+
+# Generated local reports and build output.
+build/
+out/
+reports/private/
+__pycache__/
+*.pyc
+.DS_Store
+

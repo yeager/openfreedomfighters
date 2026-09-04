@@ -1,0 +1,85 @@
+# Technical map: Steam PC build
+
+## Observed installation
+
+Local source: Steam 2020 Windows re-release. The repository records only non-expressive facts.
+
+| Property | Observation |
+|---|---|
+| Installation size | approximately 636 MiB |
+| File count | 188 |
+| Main executable | PE32, Intel i386, Windows GUI |
+| Main executable size | 3,353,592 bytes |
+| Main executable SHA-256 | `b05ca73c44474320e1b7321c24be66270f1de2a0686b063b6cb18e9ed21de9c9` |
+| Engine identity | Glacier |
+| Graphics API | Direct3D 8 |
+| Input | DirectInput 8 |
+| Audio | DirectSound with optional EAX/OpenAL paths |
+| Distribution integration | Steam API |
+| Content layout | 90 ZIP scene packages, 46 WAV banks, 45 WHD headers |
+| Archive contents | 1,118 members; 1,005,021,227 bytes uncompressed |
+| Campaign layout | startup, intro, cutscenes, and single-player scene groups |
+
+The executable contains developer-facing diagnostics and source-path identifiers that expose subsystem boundaries: filesystem/ZIP, save games, renderer, DirectInput, audio/EAX, scripting host, GUI, player profile, mission state, and Steam lifecycle. These names are evidence for decomposition only and must not be copied as original implementation.
+
+## Scene-package anatomy
+
+Representative scene archives consistently expose a family of resource types:
+
+| Extension | Working hypothesis | Verification needed |
+|---|---|---|
+| `ZGF` | scene graph or zone graph | header, references, node traversal |
+| `SUP` | scene support metadata | relation to graph and buffers |
+| `BUF` | binary data buffers | offsets, alignment, ownership |
+| `GMS` | game/mission scripting data | VM or declarative structure |
+| `TEX` | texture container | format table, mip levels, palettes |
+| `SND` | sound event metadata | bank links, loop and spatial flags |
+| `LOC` | localization table | encoding, identifiers, plural rules |
+| `OCT` | spatial octree | bounds and cell/object references |
+| `SGP` | scene/game parameters | determine semantics |
+| `RMC`/`RMI` | render material/index metadata | relation to PRM/TEX |
+| `PRM` | render primitives/meshes | vertices, indices, materials, skinning |
+| `ANM` | animation data (42 observed) | clips, tracks, time units, skeleton binding |
+
+This table is provisional. Every claim graduates only after cross-file validation against at least three scenes and a synthetic parser test.
+
+Across all 90 archives, each of `GMS`, `OCT`, `PRM`, `RMC`, `RMI`, `SGP`, `SND`, `SUP`, `TEX`, and `ZGF` occurs 90 times. `BUF` and `LOC` occur 88 times and `ANM` occurs 42 times. This regularity strongly supports a per-scene resource-family design, but semantics remain hypotheses.
+
+## PE image map
+
+The supported executable is PE32/i386, image base `0x00400000`, entry-point RVA `0x00233903`, with relocations present. Its seven sections are:
+
+| Section | RVA | Virtual bytes | File offset | File bytes |
+|---|---:|---:|---:|---:|
+| `.text` | `0x00001000` | 2,574,008 | 1,024 | 2,574,336 |
+| `.rdata` | `0x00276000` | 449,620 | 2,575,360 | 450,048 |
+| `.data` | `0x002e4000` | 1,245,772 | 3,025,408 | 101,888 |
+| `.gfids` | `0x00415000` | 48 | 3,127,296 | 512 |
+| `.tls` | `0x00416000` | 9 | 3,127,808 | 512 |
+| `.rsrc` | `0x00417000` | 3,904 | 3,128,320 | 4,096 |
+| `.reloc` | `0x00418000` | 213,240 | 3,132,416 | 213,504 |
+
+The large zero-filled tail of `.data`, thread-local storage, and relocation table matter for any static-lifting runtime. Import-table parsing and TLS callback discovery are still required before choosing a lifting ABI.
+
+## Audio
+
+Files named `.WAV` are often banks rather than conventional RIFF WAV files. `.WHD` appears to be the paired index/header. A large global stream bank is present. Work must determine sample codecs, offsets, rate/channel metadata, streaming behavior, and event references without checking any audio into the repository.
+
+## Key unknowns
+
+- PE image sections, import table, calling conventions, and code/data relocation model.
+- Exact Glacier resource schemas and archive precedence rules.
+- Script representation and VM semantics.
+- Fixed-step simulation frequency, frame-dependent behavior, and deterministic state.
+- Skeleton, animation, AI navigation, squad command, combat, and camera rules.
+- Save/profile schema and compatibility expectations.
+- Original localization identifiers and safe translation workflow.
+- macOS arm64 and Linux x86-64/arm64 strategy for any translated x86 behavior.
+
+## Next probes
+
+1. Parse PE headers/imports with a host-independent parser and record only structural results.
+2. Generate aggregate archive manifests and identify magic/version fields.
+3. Build read-only parsers for ZIP and one smallest resource family using synthetic fixtures.
+4. Record black-box boot, menu, input, timing, and first-level traces from the retail game.
+5. Define golden screenshots/state traces stored locally as hashes and numeric measurements.
