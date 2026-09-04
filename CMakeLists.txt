@@ -8,6 +8,7 @@ find_package(ZLIB REQUIRED)
 add_library(off_core
     src/crypto/sha256.cpp
     src/data/archive_vfs.cpp
+    src/data/audio_bank_header.cpp
     src/data/install.cpp
     src/data/vfs_file_view.cpp
     src/data/zip_archive.cpp
@@ -35,4 +36,8 @@ if(BUILD_TESTING)
         off_core_tests PRIVATE OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/test-work"
     )
     add_test(NAME off_core_tests COMMAND off_core_tests)
+
+    add_executable(off_audio_bank_header_tests tests/audio_bank_header_tests.cpp)
+    target_link_libraries(off_audio_bank_header_tests PRIVATE off_core)
+    add_test(NAME off_audio_bank_header_tests COMMAND off_audio_bank_header_tests)
 endif()

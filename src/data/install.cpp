@@ -2,11 +2,15 @@
 
 #include "off/crypto/sha256.hpp"
 #include "off/data/archive_vfs.hpp"
+#include "off/data/audio_bank_header.hpp"
 #include "off/data/byte_reader.hpp"
 #include "off/data/zip_archive.hpp"
 
+#include <algorithm>
 #include <array>
+#include <cctype>
 #include <cstddef>
+#include <stdexcept>
 #include <system_error>
 
 namespace off::data {
@@ -24,6 +28,13 @@ InstallVerification failure(
         .executable_sha256 = {},
         .message = std::move(message),
     };
+}
+
+std::string lowercase(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char character) {
+        return static_cast<char>(std::tolower(character));
+    });
+    return value;
 }
 
 }  // namespace
@@ -102,6 +113,35 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         }
         std::array<std::byte, 16> stream_probe{};
         global_stream.read_at(0, stream_probe);
+
+        std::size_t audio_header_count = 0;
+        std::size_t audio_record_count = 0;
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(root / "Scenes")) {
+            if (!entry.is_regular_file() || lowercase(entry.path().extension().string()) != ".whd") {
+                continue;
+            }
+            std::error_code relative_error;
+            const auto relative = std::filesystem::relative(entry.path(), root, relative_error);
+            if (relative_error) {
+                throw std::runtime_error("could not resolve audio header path");
+            }
+            const auto header = AudioBankHeader::parse(
+                installation_vfs.read(relative.generic_string())
+            );
+            auto local_bank = relative;
+            local_bank.replace_extension(".WAV");
+            const auto local_stream = installation_vfs.open_stream(local_bank.generic_string());
+            header.validate_payload_ranges(local_stream.size(), global_stream.size());
+            ++audio_header_count;
+            audio_record_count += header.records().size();
+        }
+        if (audio_header_count != 45 || audio_record_count != 121'187) {
+            return failure(
+                InstallError::incomplete_game_data,
+                root,
+                "audio header corpus does not match the supported build"
+            );
+        }
 
         const auto startup_archive = ZipArchive::open(root / "Scenes/StartLoader.ZIP");
         const auto* scene_graph = startup_archive.find("SCENES/StartLoader.ZGF");

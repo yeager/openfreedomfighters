@@ -28,3 +28,5 @@ Synthetic fixtures cover stored and deflated payloads, the Glacier footer, case 
 Private executable evidence reports that an older archive entry is invalidated when the same virtual file appears in a newer archive. The public VFS expresses only that interoperability behavior; it does not reproduce the original implementation.
 
 No retail payload or filename inventory is embedded in the test fixtures.
+
+The first format model above the VFS is documented in [AUDIO_FORMAT.md](AUDIO_FORMAT.md).
