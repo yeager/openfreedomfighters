@@ -11,7 +11,7 @@ This is an independent fan project and is not affiliated with or endorsed by IO 
 
 ## Status
 
-Phase 1, portable data layer. The Steam digital Windows build has been inventoried and fully disassembled in private clean-room storage. The native C++ executable verifies the supported user-owned installation, selects Original or Modern mode, provides a bounds-checked overlay VFS, and validates the complete audio-header corpus against streamed local and global banks. No playable build exists yet.
+Phase 1, portable data layer. The Steam digital Windows build has been inventoried and fully disassembled in private clean-room storage. The native C++ executable verifies the supported user-owned installation, selects Original or Modern mode, provides a bounds-checked overlay VFS, validates the complete audio-header corpus, and decodes confirmed PCM and IMA ADPCM streams. No playable build exists yet.
 
 ## Build the native bootstrap
 

@@ -6,6 +6,7 @@ include(CTest)
 find_package(ZLIB REQUIRED)
 
 add_library(off_core
+    src/audio/decode.cpp
     src/crypto/sha256.cpp
     src/data/archive_vfs.cpp
     src/data/audio_bank_header.cpp
@@ -40,4 +41,8 @@ if(BUILD_TESTING)
     add_executable(off_audio_bank_header_tests tests/audio_bank_header_tests.cpp)
     target_link_libraries(off_audio_bank_header_tests PRIVATE off_core)
     add_test(NAME off_audio_bank_header_tests COMMAND off_audio_bank_header_tests)
+
+    add_executable(off_audio_decode_tests tests/audio_decode_tests.cpp)
+    target_link_libraries(off_audio_decode_tests PRIVATE off_core)
+    add_test(NAME off_audio_decode_tests COMMAND off_audio_decode_tests)
 endif()

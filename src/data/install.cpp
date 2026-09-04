@@ -1,5 +1,6 @@
 #include "off/data/install.hpp"
 
+#include "off/audio/decode.hpp"
 #include "off/crypto/sha256.hpp"
 #include "off/data/archive_vfs.hpp"
 #include "off/data/audio_bank_header.hpp"
@@ -116,6 +117,8 @@ InstallVerification verify_install(const std::filesystem::path& root) {
 
         std::size_t audio_header_count = 0;
         std::size_t audio_record_count = 0;
+        bool decoded_pcm_reference = false;
+        bool decoded_ima_reference = false;
         for (const auto& entry : std::filesystem::recursive_directory_iterator(root / "Scenes")) {
             if (!entry.is_regular_file() || lowercase(entry.path().extension().string()) != ".whd") {
                 continue;
@@ -132,10 +135,30 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             local_bank.replace_extension(".WAV");
             const auto local_stream = installation_vfs.open_stream(local_bank.generic_string());
             header.validate_payload_ranges(local_stream.size(), global_stream.size());
+            for (const auto& record : header.records()) {
+                const auto format = record.format_flags & 0x7fffffffU;
+                const auto needs_reference =
+                    (format == 1 && !decoded_pcm_reference) ||
+                    (format == 0x11 && !decoded_ima_reference);
+                if (!needs_reference) {
+                    continue;
+                }
+                const auto& bank = record.uses_global_bank() ? global_stream : local_stream;
+                const auto decoded = audio::decode_stream(
+                    record,
+                    bank.read(record.data_offset, record.encoded_size)
+                );
+                if (decoded.frame_count() == 0) {
+                    throw std::runtime_error("audio reference stream decoded to no frames");
+                }
+                decoded_pcm_reference = decoded_pcm_reference || format == 1;
+                decoded_ima_reference = decoded_ima_reference || format == 0x11;
+            }
             ++audio_header_count;
             audio_record_count += header.records().size();
         }
-        if (audio_header_count != 45 || audio_record_count != 121'187) {
+        if (audio_header_count != 45 || audio_record_count != 121'187 ||
+            !decoded_pcm_reference || !decoded_ima_reference) {
             return failure(
                 InstallError::incomplete_game_data,
                 root,

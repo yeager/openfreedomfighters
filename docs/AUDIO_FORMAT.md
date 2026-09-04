@@ -38,3 +38,14 @@ Bit 31 is a global-bank selector: all 111,264 `0x80000011`, 379 `0x80000001`, an
 ## Runtime validation
 
 Installation verification parses all 45 headers, requires the expected aggregate record count, opens every paired local bank and the global bank as streaming views, and validates every declared byte range without decoding or copying audio into the repository.
+
+## Native decoding
+
+The portable decoder currently supports the two confirmed families:
+
+- signed 16-bit little-endian PCM, mono or stereo;
+- Microsoft-layout IMA ADPCM, including per-block predictor/index reset, low-nibble-first mono samples, and four-byte stereo channel groups.
+
+The decoder verifies encoded size, channel count, bit depth, block alignment, samples per block, ADPCM step indices, reserved header bytes, and a 64-million-sample output limit before or during decoding. Synthetic golden vectors cover signed PCM endpoints, mono nibble order, stereo interleaving, malformed metadata, and unsupported formats. Installation verification also decodes one user-owned PCM record and one IMA ADPCM record as private compatibility probes; decoded samples are immediately discarded and never written to the repository.
+
+The `0x80001000` family is rejected rather than guessed. Support will be added only after its codec and framing have independent evidence.
