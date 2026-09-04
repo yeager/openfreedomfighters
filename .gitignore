@@ -24,6 +24,7 @@ original-data/
 
 # Generated local reports and build output.
 build/
+build-*/
 out/
 reports/private/
 __pycache__/

@@ -6,6 +6,7 @@ The census reads at most 32 uncompressed bytes from each archive member and emit
 
 - 90 valid ZIP archives; 0 invalid.
 - 1,118 members in 13 resource families.
+- 89 archives append a 22-byte engine footer after the standard ZIP end record; one has no trailing engine footer.
 - ZIP methods observed by the tool are recorded numerically so results remain independent of host library labels.
 
 | Format | Count | Minimum bytes | Median bytes | Maximum bytes | Stable leading bytes |

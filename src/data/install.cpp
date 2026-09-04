@@ -1,6 +1,8 @@
 #include "off/data/install.hpp"
 
 #include "off/crypto/sha256.hpp"
+#include "off/data/byte_reader.hpp"
+#include "off/data/zip_archive.hpp"
 
 #include <array>
 #include <system_error>
@@ -83,6 +85,33 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                 std::string{"required game-data file is missing: "} + relative
             );
         }
+    }
+
+    try {
+        const auto startup_archive = ZipArchive::open(root / "Scenes/StartLoader.ZIP");
+        const auto* scene_graph = startup_archive.find("SCENES/StartLoader.ZGF");
+        if (startup_archive.entries().size() != 12 || scene_graph == nullptr) {
+            return failure(
+                InstallError::incomplete_game_data,
+                root,
+                "startup archive does not match the supported resource layout"
+            );
+        }
+        const auto payload = startup_archive.read(*scene_graph);
+        const ByteReader payload_reader(payload);
+        if (payload_reader.u32(4) != payload.size()) {
+            return failure(
+                InstallError::incomplete_game_data,
+                root,
+                "startup scene graph failed structural validation"
+            );
+        }
+    } catch (const std::exception& exception) {
+        return failure(
+            InstallError::incomplete_game_data,
+            root,
+            std::string{"startup archive failed integrity validation: "} + exception.what()
+        );
     }
 
     return {
