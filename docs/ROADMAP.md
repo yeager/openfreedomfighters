@@ -10,7 +10,8 @@ This is a multi-year reverse-engineering effort. Dates are deliberately omitted 
 - [x] Add a non-extracting installation inspector.
 - [x] Complete PE sections/import inventory with a host-independent parser.
 - [x] Map PE data directories, exports, delay-import absence, and TLS callbacks.
-- [ ] Resolve imported ordinals and dynamically loaded APIs; map load-config metadata.
+- [x] Resolve all imported ordinals and record IAT addresses.
+- [ ] Resolve dynamically loaded APIs and map load-config metadata.
 - [ ] Convert the 332 exported class registrations into behavior-only subsystem specifications.
 - [x] Produce aggregate archive/resource magic and size census.
 - [x] Complete the first three-scene field-level consistency report.

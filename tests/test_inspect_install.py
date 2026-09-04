@@ -13,6 +13,11 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PeSummaryTests(unittest.TestCase):
+    def test_known_ordinal_resolution_is_case_insensitive(self):
+        self.assertEqual(MODULE.resolve_ordinal("WS2_32.DLL", 115), "WSAStartup")
+        self.assertEqual(MODULE.resolve_ordinal("DSOUND.dll", 2), "DirectSoundEnumerateA")
+        self.assertIsNone(MODULE.resolve_ordinal("unknown.dll", 1))
+
     def test_minimal_pe32(self):
         image = bytearray(0x200)
         image[:2] = b"MZ"

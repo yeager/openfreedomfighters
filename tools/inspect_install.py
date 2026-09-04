@@ -32,6 +32,32 @@ PE_DIRECTORY_NAMES = (
     "reserved",
 )
 
+# Interoperability names for ordinals observed in the supported build. System
+# mappings are cross-checked against Wine .spec files; EAX is resolved from the
+# retail DLL's own export directory. See docs/ABI_MAP.md.
+KNOWN_ORDINALS = {
+    "dsound.dll": {2: "DirectSoundEnumerateA"},
+    "eax.dll": {6: "EAXDirectSoundCreate8"},
+    "oleaut32.dll": {2: "SysAllocString", 6: "SysFreeString"},
+    "ws2_32.dll": {
+        3: "closesocket",
+        4: "connect",
+        9: "htons",
+        11: "inet_addr",
+        19: "send",
+        23: "socket",
+        51: "gethostbyaddr",
+        52: "gethostbyname",
+        57: "gethostname",
+        115: "WSAStartup",
+        116: "WSACleanup",
+    },
+}
+
+
+def resolve_ordinal(dll: str, ordinal: int) -> str | None:
+    return KNOWN_ORDINALS.get(dll.lower(), {}).get(ordinal)
+
 
 def sha256(path: pathlib.Path) -> str:
     digest = hashlib.sha256()
@@ -217,14 +243,29 @@ def pe_summary(path: pathlib.Path) -> dict[str, object]:
                     thunk = struct.unpack_from(thunk_format, image, item_offset)[0]
                     if thunk == 0:
                         break
+                    iat_rva = first_thunk + symbol_index * thunk_width
                     if thunk & ordinal_mask:
-                        symbols.append({"ordinal": thunk & 0xFFFF})
+                        ordinal = thunk & 0xFFFF
+                        symbol: dict[str, object] = {
+                            "ordinal": ordinal,
+                            "iat_rva": iat_rva,
+                        }
+                        resolved_name = resolve_ordinal(dll, ordinal)
+                        if resolved_name is not None:
+                            symbol["resolved_name"] = resolved_name
+                        symbols.append(symbol)
                     else:
                         name_offset = _rva_to_offset(thunk, section_rows)
                         if name_offset + 2 > len(image):
                             raise ValueError("truncated import-by-name record")
                         hint = struct.unpack_from("<H", image, name_offset)[0]
-                        symbols.append({"name": _cstring(image, name_offset + 2), "hint": hint})
+                        symbols.append(
+                            {
+                                "name": _cstring(image, name_offset + 2),
+                                "hint": hint,
+                                "iat_rva": iat_rva,
+                            }
+                        )
                 imports.append({"dll": dll, "symbols": symbols})
 
     tls_callbacks: list[int] = []

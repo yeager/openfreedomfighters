@@ -37,6 +37,7 @@ python3 tools/resource_census.py /path/to/FreedomFighters
 
 - [Current technical map](docs/TECHNICAL_MAP.md)
 - [Resource-format census](docs/FORMAT_CENSUS.md)
+- [Windows ABI replacement map](docs/ABI_MAP.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap and acceptance gates](docs/ROADMAP.md)
 - [Localization plan](docs/LOCALIZATION.md)

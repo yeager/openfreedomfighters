@@ -111,7 +111,7 @@ Files named `.WAV` are often banks rather than conventional RIFF WAV files. `.WH
 
 ## Next probes
 
-1. Resolve imported ordinals and dynamically loaded APIs; map load-config metadata.
+1. Find dynamically loaded APIs from IAT call sites and map load-config metadata.
 2. Promote three-scene resource invariants to corpus-wide validators and infer section tables.
 3. Build read-only parsers for ZIP and one smallest resource family using synthetic fixtures.
 4. Record black-box boot, menu, input, timing, and first-level traces from the retail game.
