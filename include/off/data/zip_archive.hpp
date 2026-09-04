@@ -28,7 +28,7 @@ public:
     [[nodiscard]] std::span<const ZipEntry> entries() const noexcept {
         return entries_;
     }
-    [[nodiscard]] const ZipEntry* find(std::string_view name) const noexcept;
+    [[nodiscard]] const ZipEntry* find(std::string_view name) const;
     [[nodiscard]] std::vector<std::byte> read(const ZipEntry& entry) const;
 
 private:

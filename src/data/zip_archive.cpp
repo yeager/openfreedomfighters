@@ -182,7 +182,7 @@ ZipArchive ZipArchive::open(const std::filesystem::path& path) {
     return archive;
 }
 
-const ZipEntry* ZipArchive::find(std::string_view name) const noexcept {
+const ZipEntry* ZipArchive::find(std::string_view name) const {
     const auto wanted = normalized(name);
     const auto found = std::find_if(entries_.begin(), entries_.end(), [&](const ZipEntry& entry) {
         return normalized(entry.name) == wanted;

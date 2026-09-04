@@ -1,6 +1,7 @@
 #include "off/data/install.hpp"
 
 #include "off/crypto/sha256.hpp"
+#include "off/data/archive_vfs.hpp"
 #include "off/data/byte_reader.hpp"
 #include "off/data/zip_archive.hpp"
 
@@ -72,22 +73,25 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         return result;
     }
 
-    constexpr std::array required_paths{
-        "Scenes/StartLoader.ZIP",
-        "Scenes/FF-StartUp.ZIP",
-        "streams.wav",
-    };
-    for (const auto* relative : required_paths) {
-        if (!std::filesystem::is_regular_file(root / relative, error)) {
-            return failure(
-                InstallError::incomplete_game_data,
-                root,
-                std::string{"required game-data file is missing: "} + relative
-            );
-        }
-    }
-
     try {
+        ArchiveVfs installation_vfs;
+        const auto installation_mount = installation_vfs.mount_directory(root);
+        static_cast<void>(installation_mount);
+        constexpr std::array required_paths{
+            "Scenes/StartLoader.ZIP",
+            "Scenes/FF-StartUp.ZIP",
+            "streams.wav",
+        };
+        for (const auto* relative : required_paths) {
+            if (!installation_vfs.contains(relative)) {
+                return failure(
+                    InstallError::incomplete_game_data,
+                    root,
+                    std::string{"required game-data file is missing: "} + relative
+                );
+            }
+        }
+
         const auto startup_archive = ZipArchive::open(root / "Scenes/StartLoader.ZIP");
         const auto* scene_graph = startup_archive.find("SCENES/StartLoader.ZGF");
         if (startup_archive.entries().size() != 12 || scene_graph == nullptr) {
@@ -110,7 +114,7 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         return failure(
             InstallError::incomplete_game_data,
             root,
-            std::string{"startup archive failed integrity validation: "} + exception.what()
+            std::string{"game data failed integrity validation: "} + exception.what()
         );
     }
 

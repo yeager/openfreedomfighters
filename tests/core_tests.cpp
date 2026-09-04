@@ -188,19 +188,33 @@ void test_zip_reader() {
 
     const auto base_path = work / "base.zip";
     const auto override_path = work / "override.zip";
+    const auto loose_path = work / "loose";
+    std::filesystem::create_directories(loose_path / "Scenes");
+    {
+        std::ofstream loose(loose_path / "Scenes/Shared.ZGF", std::ios::binary);
+        loose << "loose";
+    }
     write_test_zip(base_path, "SCENES/Shared.ZGF", "base", 0, false);
     write_test_zip(override_path, "scenes/shared.zgf", "override", 8, true);
     off::data::ArchiveVfs vfs;
-    vfs.mount(base_path);
-    vfs.mount(override_path);
-    check(vfs.mount_count() == 2, "mount multiple archives in the VFS");
+    const auto loose_mount = vfs.mount_directory(loose_path);
+    const auto base_mount = vfs.mount_archive(base_path);
+    const auto override_mount = vfs.mount_archive(override_path);
+    check(vfs.mount_count() == 3, "mount directories and archives in the VFS");
     check(vfs.contains("Scenes\\Shared.zgf"), "find a normalized VFS path");
-    const auto overlaid = vfs.read("SCENES/SHARED.ZGF");
-    const std::string overlaid_value(
-        reinterpret_cast<const char*>(overlaid.data()),
-        overlaid.size()
-    );
-    check(overlaid_value == "override", "prefer the most recently mounted archive");
+    const auto read_text = [&vfs]() {
+        const auto bytes = vfs.read("SCENES/SHARED.ZGF");
+        return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    };
+    check(read_text() == "override", "prefer the most recently mounted archive");
+    check(vfs.unmount(override_mount), "unmount the active scene archive");
+    check(read_text() == "base", "reveal the previous archive after unmount");
+    check(vfs.unmount(base_mount), "unmount the base archive");
+    check(read_text() == "loose", "fall back to the loose-file mount");
+    check(!vfs.unmount(base_mount), "reject a duplicate unmount");
+    check(vfs.unmount(loose_mount), "unmount the loose-file directory");
+    check(!vfs.contains("Scenes/Shared.ZGF"), "remove paths with their mount");
+    vfs.clear();
 }
 
 }  // namespace

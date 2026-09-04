@@ -28,7 +28,8 @@ Gate: a new contributor can generate the same structural report from a supported
 ## Phase 1 - Portable data layer
 
 - [x] Bounds-checked read-only ZIP parser and archive overlay precedence.
-- [ ] Complete game-data VFS with loose files, global banks, and scene mount lifecycles.
+- [x] Add loose-file overlays and explicit scene mount lifecycles.
+- [ ] Add streaming views for global audio banks and other large files.
 - [ ] Safe, bounds-checked readers for all required formats.
 - [ ] Texture, mesh, material, skeleton, animation, audio, localization, and spatial data models.
 - [ ] Fuzz targets and synthetic fixtures for every parser.
