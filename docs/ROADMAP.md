@@ -2,12 +2,15 @@
 
 This is a multi-year reverse-engineering effort. Dates are deliberately omitted until the vertical slice establishes throughput.
 
-## Phase 0 — Evidence, policy, and reproducibility
+## Phase 0 - Evidence, policy, and reproducibility
 
 - [x] Identify the Steam installation and record aggregate inventory.
 - [x] Establish clean-room and game-data policies.
 - [x] Define platform/mode architecture and initial subsystem map.
 - [x] Add a non-extracting installation inspector.
+- [x] Add a native C++23 bootstrap that requires and verifies the supported retail data.
+- [x] Expose Original and Modern runtime profile selection in the native bootstrap.
+- [x] Complete private byte-covering and structured Ghidra disassembly.
 - [x] Complete PE sections/import inventory with a host-independent parser.
 - [x] Map PE data directories, exports, delay-import absence, and TLS callbacks.
 - [x] Resolve all imported ordinals and record IAT addresses.
@@ -22,7 +25,7 @@ This is a multi-year reverse-engineering effort. Dates are deliberately omitted 
 
 Gate: a new contributor can generate the same structural report from a supported install without creating redistributable artifacts.
 
-## Phase 1 — Portable data layer
+## Phase 1 - Portable data layer
 
 - [ ] VFS and archive precedence.
 - [ ] Safe, bounds-checked readers for all required formats.
@@ -32,7 +35,7 @@ Gate: a new contributor can generate the same structural report from a supported
 
 Gate: all startup and first-level assets load into validated portable models under ASan/UBSan; no retail data enters test artifacts.
 
-## Phase 2 — Render/audio/input vertical slice
+## Phase 2 - Render/audio/input vertical slice
 
 - [ ] SDL3 platform layer and controller action map.
 - [ ] Backend prototype and renderer decision.
@@ -43,7 +46,7 @@ Gate: all startup and first-level assets load into validated portable models und
 
 Gate: deterministic camera fly-through matches structural and image-difference tolerances on all target platforms.
 
-## Phase 3 — Simulation vertical slice
+## Phase 3 - Simulation vertical slice
 
 - [ ] Fixed-step clock, entity/component lifetime, events, and serialization.
 - [ ] Script/mission runtime.
@@ -53,7 +56,7 @@ Gate: deterministic camera fly-through matches structural and image-difference t
 
 Gate: first playable mission segment completes from recorded inputs with deterministic checkpoints.
 
-## Phase 4 — Campaign compatibility
+## Phase 4 - Campaign compatibility
 
 - [ ] Every mission, rebel-base segment, and cutscene.
 - [ ] Mission persistence, profiles, saves, difficulty, secrets, and unlocks.
@@ -62,7 +65,7 @@ Gate: first playable mission segment completes from recorded inputs with determi
 
 Gate: campaign completes in Original mode on all three targets with no compatibility-critical divergence.
 
-## Phase 5 — Localization and Modern mode
+## Phase 5 - Localization and Modern mode
 
 - [ ] Message-ID catalog, Unicode shaping, fallback fonts, plural/select support.
 - [ ] 20 locale packs and in-context review, including Swedish.
@@ -71,7 +74,7 @@ Gate: campaign completes in Original mode on all three targets with no compatibi
 
 Gate: every locale passes completeness and UI-layout checks; Modern and Original simulations produce identical state hashes for shared settings.
 
-## Phase 6 — Release engineering
+## Phase 6 - Release engineering
 
 - [ ] Signed/notarized packages, crash reports with opt-in privacy, migration and diagnostics.
 - [ ] CI across Linux/macOS architectures and Steam Deck hardware validation.

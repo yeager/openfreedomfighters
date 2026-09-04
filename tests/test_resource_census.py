@@ -12,10 +12,13 @@ MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
+TEST_ROOT = pathlib.Path.cwd() / ".test-work"
+TEST_ROOT.mkdir(exist_ok=True)
+
 
 class ResourceCensusTests(unittest.TestCase):
     def test_aggregate_without_extracting(self):
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir=TEST_ROOT) as directory:
             root = pathlib.Path(directory)
             with zipfile.ZipFile(root / "one.ZIP", "w") as archive:
                 archive.writestr(

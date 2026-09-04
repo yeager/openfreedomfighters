@@ -28,5 +28,7 @@ out/
 reports/private/
 __pycache__/
 *.pyc
+.test-work/
+*.gpr
+*.rep/
 .DS_Store
-

@@ -11,6 +11,9 @@ MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
+TEST_ROOT = pathlib.Path.cwd() / ".test-work"
+TEST_ROOT.mkdir(exist_ok=True)
+
 
 class PeSummaryTests(unittest.TestCase):
     def test_known_ordinal_resolution_is_case_insensitive(self):
@@ -35,7 +38,7 @@ class PeSummaryTests(unittest.TestCase):
         struct.pack_into("<IIII", image, section + 8, 0x100, 0x1000, 0x80, 0x180)
         struct.pack_into("<IIIIII", image, 0x1C0, 0, 0, 0, 0x401060, 0, 0)
         struct.pack_into("<II", image, 0x1E0, 0x401234, 0)
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory(dir=TEST_ROOT) as directory:
             path = pathlib.Path(directory) / "fixture.exe"
             path.write_bytes(image)
             result = MODULE.pe_summary(path)

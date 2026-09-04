@@ -11,11 +11,29 @@ This is an independent fan project and is not affiliated with or endorsed by IO 
 
 ## Status
 
-Phase 0, evidence mapping and architecture. The Steam 2020 Windows build has been inventoried locally. No playable build exists yet.
+Phase 0, evidence mapping and native bootstrap. The Steam digital Windows build has been inventoried and fully disassembled in private clean-room storage. The native C++ executable verifies the supported user-owned installation and selects Original or Modern mode. No playable build exists yet.
+
+## Build the native bootstrap
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+ctest --test-dir build --output-on-failure
+./build/openfreedomfighters --data /path/to/FreedomFighters --mode original --verify-only
+```
+
+Replace `original` with `modern` to verify the second runtime profile. Omitting `--verify-only` intentionally stops after validation until the native runtime is implemented.
 
 ## Repository rules
 
 Do not upload game files, extracted assets, decompiled source, disassembly listings, original strings/dialogue, or generated files that substantially reproduce the original program. See [CLEAN_ROOM.md](CLEAN_ROOM.md) and [DATA_POLICY.md](DATA_POLICY.md).
+
+Before every push, scan both history and the working tree:
+
+```sh
+gitleaks detect --source . --redact
+gitleaks detect --source . --no-git --redact
+```
 
 ## Inspect your installation
 
@@ -39,12 +57,16 @@ With the optional analysis dependency installed, generate a code-boundary census
 python3 tools/code_census.py /path/to/FreedomFighters/Freedom.Exe
 ```
 
+Full instruction listings are private research artifacts. `tools/private_disassemble.py` refuses to write inside this repository. Never commit or distribute its output.
+
 ## Documentation
 
 - [Current technical map](docs/TECHNICAL_MAP.md)
 - [Resource-format census](docs/FORMAT_CENSUS.md)
 - [Windows ABI replacement map](docs/ABI_MAP.md)
 - [Code-boundary census](docs/CODE_CENSUS.md)
+- [2003 versus digital-build provenance](docs/BUILD_PROVENANCE.md)
+- [Private disassembly status](docs/DISASSEMBLY_STATUS.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap and acceptance gates](docs/ROADMAP.md)
 - [Localization plan](docs/LOCALIZATION.md)

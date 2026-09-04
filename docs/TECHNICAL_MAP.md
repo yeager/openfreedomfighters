@@ -2,7 +2,7 @@
 
 ## Observed installation
 
-Local source: Steam 2020 Windows re-release. The repository records only non-expressive facts.
+Local source: Steam 2020 Windows re-release, with a game executable timestamped January 2021. The repository records only non-expressive facts. See [BUILD_PROVENANCE.md](BUILD_PROVENANCE.md) for the evidence separating original content from the later Steam/Windows build.
 
 | Property | Observation |
 |---|---|
