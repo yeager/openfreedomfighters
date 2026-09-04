@@ -6,6 +6,7 @@
 #include "off/data/zip_archive.hpp"
 
 #include <array>
+#include <cstddef>
 #include <system_error>
 
 namespace off::data {
@@ -91,6 +92,16 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                 );
             }
         }
+        const auto global_stream = installation_vfs.open_stream("streams.wav");
+        if (global_stream.size() == 0) {
+            return failure(
+                InstallError::incomplete_game_data,
+                root,
+                "global audio stream bank is empty"
+            );
+        }
+        std::array<std::byte, 16> stream_probe{};
+        global_stream.read_at(0, stream_probe);
 
         const auto startup_archive = ZipArchive::open(root / "Scenes/StartLoader.ZIP");
         const auto* scene_graph = startup_archive.find("SCENES/StartLoader.ZGF");

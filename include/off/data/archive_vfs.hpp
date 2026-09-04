@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/data/zip_archive.hpp"
+#include "off/data/vfs_file_view.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -30,6 +31,7 @@ public:
     }
     [[nodiscard]] bool contains(std::string_view path) const;
     [[nodiscard]] std::vector<std::byte> read(std::string_view path) const;
+    [[nodiscard]] VfsFileView open_stream(std::string_view path) const;
 
 private:
     struct Mount {

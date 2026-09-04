@@ -9,6 +9,7 @@ add_library(off_core
     src/crypto/sha256.cpp
     src/data/archive_vfs.cpp
     src/data/install.cpp
+    src/data/vfs_file_view.cpp
     src/data/zip_archive.cpp
 )
 target_include_directories(off_core PUBLIC include)

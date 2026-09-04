@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -194,6 +195,10 @@ void test_zip_reader() {
         std::ofstream loose(loose_path / "Scenes/Shared.ZGF", std::ios::binary);
         loose << "loose";
     }
+    {
+        std::ofstream stream(loose_path / "Stream.bin", std::ios::binary);
+        stream << "0123456789abcdef";
+    }
     write_test_zip(base_path, "SCENES/Shared.ZGF", "base", 0, false);
     write_test_zip(override_path, "scenes/shared.zgf", "override", 8, true);
     off::data::ArchiveVfs vfs;
@@ -202,6 +207,37 @@ void test_zip_reader() {
     const auto override_mount = vfs.mount_archive(override_path);
     check(vfs.mount_count() == 3, "mount directories and archives in the VFS");
     check(vfs.contains("Scenes\\Shared.zgf"), "find a normalized VFS path");
+    const auto stream = vfs.open_stream("stream.BIN");
+    check(stream.size() == 16, "report the streaming file size");
+    std::array<std::byte, 4> range{};
+    stream.read_at(3, range);
+    const std::string range_value(reinterpret_cast<const char*>(range.data()), range.size());
+    check(range_value == "3456", "read a bounded range from a loose file");
+    bool range_rejected = false;
+    try {
+        stream.read_at(15, range);
+    } catch (const std::runtime_error&) {
+        range_rejected = true;
+    }
+    check(range_rejected, "reject a streaming read beyond end of file");
+    {
+        std::ofstream changed(loose_path / "Stream.bin", std::ios::binary | std::ios::app);
+        changed << '!';
+    }
+    bool changed_source_rejected = false;
+    try {
+        stream.read_at(0, range);
+    } catch (const std::runtime_error&) {
+        changed_source_rejected = true;
+    }
+    check(changed_source_rejected, "reject a streaming source changed after mount");
+    bool archive_stream_rejected = false;
+    try {
+        static_cast<void>(vfs.open_stream("Scenes/Shared.ZGF"));
+    } catch (const std::runtime_error&) {
+        archive_stream_rejected = true;
+    }
+    check(archive_stream_rejected, "do not bypass an overlaid archive for streaming");
     const auto read_text = [&vfs]() {
         const auto bytes = vfs.read("SCENES/SHARED.ZGF");
         return std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size());
@@ -211,6 +247,7 @@ void test_zip_reader() {
     check(read_text() == "base", "reveal the previous archive after unmount");
     check(vfs.unmount(base_mount), "unmount the base archive");
     check(read_text() == "loose", "fall back to the loose-file mount");
+    check(vfs.open_stream("Scenes/Shared.ZGF").size() == 5, "stream the revealed loose file");
     check(!vfs.unmount(base_mount), "reject a duplicate unmount");
     check(vfs.unmount(loose_mount), "unmount the loose-file directory");
     check(!vfs.contains("Scenes/Shared.ZGF"), "remove paths with their mount");

@@ -146,4 +146,26 @@ std::vector<std::byte> ArchiveVfs::read(std::string_view path) const {
     throw std::runtime_error("virtual file was not found");
 }
 
+VfsFileView ArchiveVfs::open_stream(std::string_view path) const {
+    if (!is_safe_archive_path(path)) {
+        throw std::runtime_error("unsafe virtual path");
+    }
+    const auto wanted = normalized(path);
+    for (auto mount = mounts_.rbegin(); mount != mounts_.rend(); ++mount) {
+        if (const auto loose = mount->loose_files.find(wanted);
+            loose != mount->loose_files.end()) {
+            std::error_code error;
+            const auto size = std::filesystem::file_size(loose->second, error);
+            if (error || size > maximum_loose_file_size) {
+                throw std::runtime_error("streaming VFS source is unavailable");
+            }
+            return VfsFileView(loose->second, size);
+        }
+        if (mount->archive.has_value() && mount->archive->find(path) != nullptr) {
+            throw std::runtime_error("archive entries do not support streaming access");
+        }
+    }
+    throw std::runtime_error("virtual file was not found");
+}
+
 }  // namespace off::data

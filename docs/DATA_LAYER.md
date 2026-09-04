@@ -16,12 +16,14 @@ The first Phase 1 component is a read-only ZIP archive reader and overlay virtua
 - Read-only directory and archive mounts form one overlay: the most recently mounted source wins when multiple sources provide the same normalized virtual path.
 - Every mount receives a stable identifier and can be removed explicitly, allowing scene resources to be retired without disturbing lower-priority global mounts.
 - Directory mounts reject symbolic links, normalized-name collisions, files larger than 256 MiB, and declared totals larger than 1 GiB.
+- Loose files expose bounded random-access views, allowing global audio banks and other large sources to be consumed in small chunks without whole-file allocation.
+- A random-access view detects replacement, resizing, or conversion of its source into a symbolic link before each read.
 
 These rules protect the native runtime from malformed user-supplied data. They do not yet define the complete game-data mount lifecycle or any resource-family schema.
 
 ## Verification
 
-Synthetic fixtures cover stored and deflated payloads, the Glacier footer, case and slash normalization, traversal rejection, CRC corruption, directory-to-archive overlay precedence, and mount removal. The native installation verifier also opens the supported retail `StartLoader.ZIP`, reads its `ZGF` member through this parser, verifies its CRC, and checks the corpus-proven file-size invariant.
+Synthetic fixtures cover stored and deflated payloads, the Glacier footer, case and slash normalization, traversal rejection, CRC corruption, directory-to-archive overlay precedence, mount removal, bounded streaming reads, and end-of-file rejection. The native installation verifier opens the supported retail global stream bank through a streaming view. It also opens `StartLoader.ZIP`, reads its `ZGF` member through the archive parser, verifies its CRC, and checks the corpus-proven file-size invariant.
 
 Private executable evidence reports that an older archive entry is invalidated when the same virtual file appears in a newer archive. The public VFS expresses only that interoperability behavior; it does not reproduce the original implementation.
 
