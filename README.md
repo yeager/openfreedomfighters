@@ -171,6 +171,7 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [Modern graphics specification](docs/MODERN_GRAPHICS.md)
 - [F10 graphics-settings overlay](docs/GRAPHICS_SETTINGS.md)
 - [Retail font runtime contract](docs/RETAIL_FONT_RUNTIME.md)
+- [Retail UI texture runtime contract](docs/RETAIL_UI_TEXTURES.md)
 - [DLSS 4.5 integration plan](docs/DLSS.md)
 - [Roadmap and acceptance gates](docs/ROADMAP.md)
 - [Phase execution specifications](docs/PHASES.md)

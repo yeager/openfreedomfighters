@@ -157,5 +157,16 @@ int main() {
     opaque_pixels += alpha == 255 ? 1U : 0U;
   check(opaque_pixels > 1000 && atlas.alpha[80U * 128U + 120U] == 255,
         "generated Spleen glyphs and the solid UI texel are present");
+
+  auto textured = reference;
+  textured.textures.push_back({off::ui::UiLayer::panel,
+                               off::ui::RetailUiTextureRole::black_fill_top,
+                               {20, 30, 80, 40},
+                               {0, 0, 0.5F, 0.5F}});
+  check(off::ui::validate_graphics_menu_draw_list(textured),
+        "bounded normalized texture commands are renderer-neutral");
+  textured.textures.back().source.width = 1.01F;
+  check(!off::ui::validate_graphics_menu_draw_list(textured),
+        "texture commands reject source regions outside the image");
   return failures == 0 ? 0 : 1;
 }

@@ -80,6 +80,7 @@ add_library(off_core
     src/ui/graphics_menu.cpp
     src/ui/graphics_menu_draw.cpp
     src/ui/retail_ui_fonts.cpp
+    src/ui/retail_ui_textures.cpp
 )
 target_include_directories(off_core PUBLIC include)
 target_compile_features(off_core PUBLIC cxx_std_23)
@@ -193,6 +194,10 @@ if(BUILD_TESTING)
     target_compile_definitions(off_retail_ui_fonts_tests PRIVATE
         OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/retail-ui-fonts-work")
     add_test(NAME off_retail_ui_fonts_tests COMMAND off_retail_ui_fonts_tests)
+
+    add_executable(off_retail_ui_textures_tests tests/retail_ui_textures_tests.cpp)
+    target_link_libraries(off_retail_ui_textures_tests PRIVATE off_core)
+    add_test(NAME off_retail_ui_textures_tests COMMAND off_retail_ui_textures_tests)
 
     add_executable(off_simulation_runtime_tests tests/simulation_runtime_tests.cpp)
     target_link_libraries(off_simulation_runtime_tests PRIVATE off_core)

@@ -54,10 +54,21 @@ struct GpuScene {
 };
 
 struct OverlayBatch {
+  struct DrawRange {
+    std::size_t first_vertex{};
+    std::size_t vertex_count{};
+    std::optional<ui::RetailUiTextureRole> texture_role;
+    std::optional<ui::UiRect> clip;
+  };
   std::vector<PreviewVertex> vertices;
   std::vector<std::uint8_t> atlas_rgba;
-  std::size_t rectangle_vertices{};
+  std::vector<DrawRange> draws;
   bool valid{true};
+};
+
+struct GpuUiTexture {
+  ui::RetailUiTextureRole role{};
+  SDL_GPUTexture *texture{nullptr};
 };
 
 struct GpuOverlay {
@@ -67,6 +78,7 @@ struct GpuOverlay {
   SDL_GPUGraphicsPipeline *pipeline{nullptr};
   SDL_IOStream *font_stream{nullptr};
   TTF_Font *font{nullptr};
+  std::vector<GpuUiTexture> retail_textures;
   bool ttf_initialized{false};
   std::size_t vertex_capacity{};
 };
@@ -113,6 +125,9 @@ void release_overlay(SDL_GPUDevice *device, GpuOverlay &overlay) {
     TTF_Quit();
   if (overlay.pipeline != nullptr)
     SDL_ReleaseGPUGraphicsPipeline(device, overlay.pipeline);
+  for (const auto &texture : overlay.retail_textures)
+    if (texture.texture != nullptr)
+      SDL_ReleaseGPUTexture(device, texture.texture);
   if (overlay.sampler != nullptr)
     SDL_ReleaseGPUSampler(device, overlay.sampler);
   if (overlay.atlas != nullptr)
@@ -261,7 +276,9 @@ create_shader(SDL_GPUDevice *device, const unsigned char *bytes,
   if (result.font == nullptr)
     return false;
   result.vertex_capacity =
-      (ui::maximum_ui_rects + ui::maximum_ui_text_bytes) * 6U;
+      (ui::maximum_ui_rects + ui::maximum_ui_texture_commands +
+       ui::maximum_ui_text_bytes) *
+      6U;
   const auto vertex_bytes = result.vertex_capacity * sizeof(PreviewVertex);
   if (vertex_bytes > std::numeric_limits<Uint32>::max())
     return false;
@@ -346,16 +363,25 @@ build_overlay_batch(const ui::GraphicsMenuDrawList &list, TTF_Font *font) {
   for (std::size_t pixel = 0; pixel < batch.atlas_rgba.size() / 4U; ++pixel)
     batch.atlas_rgba[pixel * 4U + 3U] = 0;
   batch.atlas_rgba[3] = 255U;
-  batch.vertices.reserve((list.rectangles.size() + ui::maximum_ui_text_bytes) *
+  batch.vertices.reserve((list.rectangles.size() + list.textures.size() +
+                          ui::maximum_ui_text_bytes) *
                          6U);
+  constexpr std::size_t layer_count = 5;
+  struct ClippedVertices {
+    std::vector<PreviewVertex> vertices;
+    ui::UiRect clip;
+  };
+  std::array<std::vector<PreviewVertex>, layer_count> rectangle_vertices;
+  std::array<std::vector<ClippedVertices>, layer_count> text_pieces;
   constexpr float solid_u = 0.25F / static_cast<float>(overlay_atlas_width);
   constexpr float solid_v = 0.25F / static_cast<float>(overlay_atlas_height);
   for (const auto &command : list.rectangles)
-    add_ui_quad(batch.vertices, command.bounds, command.color, list.target,
-                solid_u, solid_v, solid_u, solid_v);
-  batch.rectangle_vertices = batch.vertices.size();
+    add_ui_quad(rectangle_vertices[static_cast<std::size_t>(command.layer)],
+                command.bounds, command.color, list.target, solid_u, solid_v,
+                solid_u, solid_v);
   Uint32 cursor_x = 1, cursor_y = 1, shelf_height = 0;
   for (const auto &command : list.texts) {
+    const auto layer = static_cast<std::size_t>(command.layer);
     SDL_Surface *rendered = TTF_RenderText_Blended(
         font, command.text.data(), command.text.size(), {255, 255, 255, 255});
     SDL_Surface *surface =
@@ -405,17 +431,53 @@ build_overlay_batch(const ui::GraphicsMenuDrawList &list, TTF_Font *font) {
           static_cast<float>(cursor_x + width) / overlay_atlas_width;
       const float v1 =
           static_cast<float>(cursor_y + height) / overlay_atlas_height;
-      add_clipped_ui_quad(batch.vertices,
+      ClippedVertices piece{.clip = command.clip};
+      add_clipped_ui_quad(piece.vertices,
                           {command.x, command.y, static_cast<float>(width),
                            static_cast<float>(height)},
                           command.clip, command.color, list.target, u0, v0, u1,
                           v1);
+      if (!piece.vertices.empty())
+        text_pieces[layer].push_back(std::move(piece));
       cursor_x += width + 1U;
       shelf_height = std::max(shelf_height, height);
     } else {
       batch.valid = false;
     }
     SDL_DestroySurface(surface);
+  }
+  const auto append = [&](const std::vector<PreviewVertex> &vertices,
+                          std::optional<ui::RetailUiTextureRole> role,
+                          std::optional<ui::UiRect> clip = std::nullopt) {
+    if (vertices.empty())
+      return;
+    const auto first = batch.vertices.size();
+    batch.vertices.insert(batch.vertices.end(), vertices.begin(),
+                          vertices.end());
+    if (!batch.draws.empty() && batch.draws.back().texture_role == role &&
+        batch.draws.back().clip == clip &&
+        batch.draws.back().first_vertex + batch.draws.back().vertex_count ==
+            first) {
+      batch.draws.back().vertex_count += vertices.size();
+    } else {
+      batch.draws.push_back({first, vertices.size(), role, clip});
+    }
+  };
+  for (std::size_t layer = 0; layer < layer_count; ++layer) {
+    append(rectangle_vertices[layer], std::nullopt);
+    for (const auto &command : list.textures) {
+      if (static_cast<std::size_t>(command.layer) != layer)
+        continue;
+      std::vector<PreviewVertex> vertices;
+      vertices.reserve(6);
+      add_ui_quad(vertices, command.bounds, command.color, list.target,
+                  command.source.x, command.source.y,
+                  command.source.x + command.source.width,
+                  command.source.y + command.source.height);
+      append(vertices, command.texture_role);
+    }
+    for (const auto &piece : text_pieces[layer])
+      append(piece.vertices, std::nullopt, piece.clip);
   }
   return batch;
 }
@@ -635,6 +697,90 @@ make_upload_transfer(SDL_GPUDevice *device, const void *bytes, Uint32 size) {
   return transfer;
 }
 
+[[nodiscard]] bool
+upload_overlay_retail_textures(SDL_GPUDevice *device,
+                               const ui::RetailUiTextureSet &source,
+                               GpuOverlay &result) {
+  constexpr std::size_t required_role_count =
+      static_cast<std::size_t>(ui::RetailUiTextureRole::arrow_down) + 1U;
+  const auto images = source.textures();
+  // Until the retail primitive/material join is recovered, callers supply no
+  // UI images. Never substitute generated pixels for that missing evidence.
+  if (images.empty())
+    return true;
+  if (images.size() != required_role_count)
+    return false;
+  std::vector<TextureUpload> uploads;
+  uploads.reserve(images.size());
+  result.retail_textures.reserve(images.size());
+  std::array<bool, required_role_count> seen{};
+  const auto release_transfers = [&]() {
+    for (const auto &upload : uploads)
+      if (upload.transfer != nullptr)
+        SDL_ReleaseGPUTransferBuffer(device, upload.transfer);
+  };
+  for (const auto &image : images) {
+    const auto role_index = static_cast<std::size_t>(image.role);
+    const auto width = image.mip_zero.width;
+    const auto height = image.mip_zero.height;
+    const std::uint64_t byte_count =
+        static_cast<std::uint64_t>(width) * height * 4U;
+    if (role_index >= seen.size() || seen[role_index] || byte_count == 0 ||
+        byte_count > std::numeric_limits<Uint32>::max() ||
+        image.mip_zero.pixels.size() != byte_count) {
+      release_transfers();
+      return false;
+    }
+    seen[role_index] = true;
+    const SDL_GPUTextureCreateInfo info{
+        .type = SDL_GPU_TEXTURETYPE_2D,
+        .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+        .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
+        .width = width,
+        .height = height,
+        .layer_count_or_depth = 1,
+        .num_levels = 1,
+        .sample_count = SDL_GPU_SAMPLECOUNT_1};
+    auto *texture = SDL_CreateGPUTexture(device, &info);
+    auto *transfer = make_upload_transfer(device, image.mip_zero.pixels.data(),
+                                          static_cast<Uint32>(byte_count));
+    if (texture == nullptr || transfer == nullptr) {
+      if (texture != nullptr)
+        SDL_ReleaseGPUTexture(device, texture);
+      if (transfer != nullptr)
+        SDL_ReleaseGPUTransferBuffer(device, transfer);
+      release_transfers();
+      return false;
+    }
+    result.retail_textures.push_back({image.role, texture});
+    uploads.push_back({transfer, texture, width, height});
+  }
+  SDL_GPUCommandBuffer *command = SDL_AcquireGPUCommandBuffer(device);
+  SDL_GPUCopyPass *copy =
+      command == nullptr ? nullptr : SDL_BeginGPUCopyPass(command);
+  if (copy == nullptr) {
+    if (command != nullptr)
+      SDL_CancelGPUCommandBuffer(command);
+    release_transfers();
+    return false;
+  }
+  for (const auto &upload : uploads) {
+    const SDL_GPUTextureTransferInfo from{.transfer_buffer = upload.transfer,
+                                          .pixels_per_row = upload.width,
+                                          .rows_per_layer = upload.height};
+    const SDL_GPUTextureRegion to{.texture = upload.texture,
+                                  .w = upload.width,
+                                  .h = upload.height,
+                                  .d = 1};
+    SDL_UploadToGPUTexture(copy, &from, &to, false);
+  }
+  SDL_EndGPUCopyPass(copy);
+  const bool uploaded =
+      SDL_SubmitGPUCommandBuffer(command) && SDL_WaitForGPUIdle(device);
+  release_transfers();
+  return uploaded;
+}
+
 [[nodiscard]] bool upload_scene(SDL_GPUDevice *device, SDL_Window *window,
                                 const graphics::SceneGpuPlan &source,
                                 GpuScene &result) {
@@ -818,6 +964,7 @@ make_upload_transfer(SDL_GPUDevice *device, const void *bytes, Uint32 size) {
 RuntimeResult
 run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
                     const ui::RetailUiFontSet &ui_fonts,
+                    const ui::RetailUiTextureSet &ui_textures,
                     std::size_t frame_limit, bool show_graphics_menu,
                     const std::filesystem::path &screenshot_path) {
   if (ui_fonts.fonts.empty())
@@ -869,6 +1016,16 @@ run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
   GpuOverlay overlay;
   if (!create_overlay(device, window, ui_fonts, overlay)) {
     const auto result = failure("graphics overlay GPU upload failed");
+    release_overlay(device, overlay);
+    release_scene(device, gpu);
+    SDL_ReleaseWindowFromGPUDevice(device, window);
+    SDL_DestroyGPUDevice(device);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return result;
+  }
+  if (!upload_overlay_retail_textures(device, ui_textures, overlay)) {
+    const auto result = failure("retail UI texture GPU upload failed");
     release_overlay(device, overlay);
     release_scene(device, gpu);
     SDL_ReleaseWindowFromGPUDevice(device, window);
@@ -1177,27 +1334,48 @@ run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
         const SDL_Rect full_scissor{0, 0, static_cast<int>(swapchain_width),
                                     static_cast<int>(swapchain_height)};
         SDL_SetGPUScissor(overlay_pass, &full_scissor);
-        if (overlay_batch.rectangle_vertices != 0)
-          SDL_DrawGPUPrimitives(
-              overlay_pass,
-              static_cast<Uint32>(overlay_batch.rectangle_vertices), 1, 0, 0);
-        const auto text_vertices =
-            overlay_batch.vertices.size() - overlay_batch.rectangle_vertices;
-        if (text_vertices != 0) {
-          SDL_Rect text_scissor = full_scissor;
-          if (!draw_list.texts.empty()) {
-            const auto &clip = draw_list.texts.front().clip;
-            text_scissor = {static_cast<int>(std::floor(clip.x)),
-                            static_cast<int>(std::floor(clip.y)),
-                            static_cast<int>(std::ceil(clip.width)),
-                            static_cast<int>(std::ceil(clip.height))};
+        SDL_GPUTexture *bound_overlay_texture = nullptr;
+        for (const auto &draw : overlay_batch.draws) {
+          SDL_Rect scissor = full_scissor;
+          if (draw.clip.has_value()) {
+            scissor = {static_cast<int>(std::floor(draw.clip->x)),
+                       static_cast<int>(std::floor(draw.clip->y)),
+                       static_cast<int>(std::ceil(draw.clip->width)),
+                       static_cast<int>(std::ceil(draw.clip->height))};
           }
-          SDL_SetGPUScissor(overlay_pass, &text_scissor);
-          SDL_DrawGPUPrimitives(
-              overlay_pass, static_cast<Uint32>(text_vertices), 1,
-              static_cast<Uint32>(overlay_batch.rectangle_vertices), 0);
+          SDL_SetGPUScissor(overlay_pass, &scissor);
+          SDL_GPUTexture *texture = overlay.atlas;
+          if (draw.texture_role.has_value()) {
+            const auto found = std::find_if(
+                overlay.retail_textures.begin(), overlay.retail_textures.end(),
+                [&](const GpuUiTexture &candidate) {
+                  return candidate.role == *draw.texture_role;
+                });
+            if (found == overlay.retail_textures.end()) {
+              result = {.success = false,
+                        .message = "graphics overlay references a missing "
+                                   "retail UI texture"};
+              break;
+            }
+            texture = found->texture;
+          }
+          if (texture != bound_overlay_texture) {
+            const SDL_GPUTextureSamplerBinding binding{
+                .texture = texture, .sampler = overlay.sampler};
+            SDL_BindGPUFragmentSamplers(overlay_pass, 0, &binding, 1);
+            bound_overlay_texture = texture;
+          }
+          SDL_DrawGPUPrimitives(overlay_pass,
+                                static_cast<Uint32>(draw.vertex_count), 1,
+                                static_cast<Uint32>(draw.first_vertex), 0);
         }
         SDL_EndGPURenderPass(overlay_pass);
+        if (!result.success) {
+          SDL_SubmitGPUCommandBuffer(command);
+          SDL_WaitForGPUIdle(device);
+          release_overlay_transfers();
+          break;
+        }
       }
       if (capture_texture != nullptr) {
         const SDL_GPUBlitInfo blit{.source = {.texture = capture_texture,

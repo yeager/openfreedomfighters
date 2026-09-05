@@ -31,6 +31,16 @@ bool inside(const UiRect &rect, UiExtent target) {
          rect.y + rect.height <= static_cast<float>(target.height);
 }
 
+bool normalized(const UiRect &rect) {
+  return std::isfinite(rect.x) && std::isfinite(rect.y) &&
+         std::isfinite(rect.width) && std::isfinite(rect.height) &&
+         rect.width > 0.0F && rect.height > 0.0F && rect.x >= 0.0F &&
+         rect.y >= 0.0F && rect.x + rect.width <= 1.0F &&
+         rect.y + rect.height <= 1.0F;
+}
+
+bool valid_layer(UiLayer layer) { return layer <= UiLayer::modal; }
+
 std::string profile_name(const settings::RequestedGraphicsSettings &value) {
   return value.profile == Mode::original
              ? "Original"
@@ -286,18 +296,25 @@ bool validate_graphics_menu_draw_list(
     const GraphicsMenuDrawList &list) noexcept {
   if (list.status != UiBuildStatus::ok ||
       list.rectangles.size() > maximum_ui_rects ||
+      list.textures.size() > maximum_ui_texture_commands ||
       list.texts.size() > maximum_ui_texts ||
       list.hit_targets.size() > maximum_ui_hit_targets) {
     return false;
   }
   std::size_t bytes = 0;
   for (const auto &command : list.rectangles) {
-    if (!inside(command.bounds, list.target))
+    if (!valid_layer(command.layer) || !inside(command.bounds, list.target))
+      return false;
+  }
+  for (const auto &command : list.textures) {
+    if (!valid_layer(command.layer) ||
+        command.texture_role > RetailUiTextureRole::arrow_down ||
+        !inside(command.bounds, list.target) || !normalized(command.source))
       return false;
   }
   for (const auto &command : list.texts) {
-    if (!inside(command.clip, list.target) || !std::isfinite(command.x) ||
-        !std::isfinite(command.y))
+    if (!valid_layer(command.layer) || !inside(command.clip, list.target) ||
+        !std::isfinite(command.x) || !std::isfinite(command.y))
       return false;
     bytes += command.text.size();
     if (bytes > maximum_ui_text_bytes)

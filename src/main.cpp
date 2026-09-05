@@ -4,6 +4,7 @@
 #include "off/mode.hpp"
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/ui/retail_ui_fonts.hpp"
+#include "off/ui/retail_ui_textures.hpp"
 
 #include <charconv>
 #include <cstddef>
@@ -112,6 +113,7 @@ int main(int argc, char **argv) {
   }
   off::graphics::SceneGpuPlan scene;
   off::ui::RetailUiFontSet ui_fonts;
+  off::ui::RetailUiTextureSet ui_textures;
   try {
     scene = off::graphics::prepare_scene_gpu_plan(
         off::graphics::load_diagnostic_scene_render_asset(data_path));
@@ -122,7 +124,8 @@ int main(int argc, char **argv) {
     return 4;
   }
   const auto runtime = off::platform::run_sdl_gpu_runtime(
-      mode, scene, ui_fonts, frame_limit, show_graphics_menu, screenshot_path);
+      mode, scene, ui_fonts, ui_textures, frame_limit, show_graphics_menu,
+      screenshot_path);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';
     return 4;

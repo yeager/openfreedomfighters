@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/ui/graphics_menu.hpp"
+#include "off/ui/retail_ui_textures.hpp"
 
 #include <array>
 #include <cstdint>
@@ -65,6 +66,18 @@ struct UiTextCommand {
   auto operator<=>(const UiTextCommand &) const = default;
 };
 
+// Renderer-neutral reference to an image supplied by the caller. The draw
+// list never owns or embeds retail pixels; texture_role addresses a validated
+// runtime texture set and source selects a normalized region of that image.
+struct UiTextureCommand {
+  UiLayer layer{};
+  RetailUiTextureRole texture_role{};
+  UiRect bounds{};
+  UiRect source{0.0F, 0.0F, 1.0F, 1.0F};
+  UiColor color{255, 255, 255, 255};
+  auto operator<=>(const UiTextureCommand &) const = default;
+};
+
 struct UiHitTarget {
   UiRect bounds{};
   UiControl control{UiControl::none};
@@ -80,6 +93,7 @@ enum class UiBuildStatus : std::uint8_t {
 };
 
 inline constexpr std::size_t maximum_ui_rects = 64;
+inline constexpr std::size_t maximum_ui_texture_commands = 64;
 inline constexpr std::size_t maximum_ui_texts = 64;
 inline constexpr std::size_t maximum_ui_hit_targets = 16;
 inline constexpr std::size_t maximum_ui_text_bytes = 4096;
@@ -89,6 +103,7 @@ struct GraphicsMenuDrawList {
   float ui_scale{1.0F};
   UiBuildStatus status{UiBuildStatus::ok};
   std::vector<UiRectCommand> rectangles;
+  std::vector<UiTextureCommand> textures;
   std::vector<UiTextCommand> texts;
   std::vector<UiHitTarget> hit_targets;
   auto operator<=>(const GraphicsMenuDrawList &) const = default;
