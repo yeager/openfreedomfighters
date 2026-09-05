@@ -13,7 +13,33 @@ The object-source directory begins with a 32-bit entry count followed by eight-b
 | 0 | 4 | packed object-source reference |
 | 4 | 4 | auxiliary value retained without guessed semantics |
 
-Bits 23-0 of the packed reference are a word offset to a source record and therefore become a byte offset after multiplication by four. Bits 31-25 tell the loader how many parent pool contexts to leave before processing the entry. Bit 24 enters a child pool context after the current object is created. The loader reads at least 48 bytes from each referenced source record; the public parser validates that complete minimum range.
+Bits 23-0 of the packed reference are a word offset to a source record and therefore become a byte offset after multiplication by four. Bits 31-25 tell the loader how many parent pool contexts to leave before processing the entry. Bit 24 enters a child pool context after the current object is created. The loader reads a 48-byte source record; the public parser validates its complete range.
+
+## Object-source records
+
+Executable control flow establishes the resource domain and use of the following fields. Names remain deliberately conservative where the target structure is not decoded yet.
+
+| Record offset | Type | Portable meaning |
+|---:|---|---|
+| 0 | `u32` | offset of serialized object data in the scene `BUF` resource |
+| 4 | `u32` | GMS-relative offset of a nine-float object basis |
+| 8 | `u32` | GMS-relative offset of a three-float object position |
+| 12 | `u32` | linked-object value retained for later materialization |
+| 16 | `u32` | source type used by the object factory and pool classifier |
+| 20 | `u32` | optional GMS-relative attachment-table offset |
+| 24 | `u32` | object flags |
+| 28 | `u32` | optional offset of an auxiliary block in `BUF` |
+| 32 | `u32` | optional GMS-relative deferred-source offset |
+| 36 | `u32` | child value retained without guessed semantics |
+| 40 | `u32` | optional GMS-relative post-load-source offset |
+| 44 | `u8` | reserved, zero throughout the supported corpus |
+| 45 | `u8` | pool variant, observed as 0, 1, or 2 |
+
+The attachment table starts with a 32-bit count followed by eight-byte entries. Each entry contains a GMS-relative source offset and a finite floating-point parameter. The retail loader passes that parameter through integer conversion when attaching the referenced source; the portable model preserves the original float until the target schema is known.
+
+The parser decodes each basis and position to finite portable floats, checks every GMS-relative range, and retains the opaque values needed by later materialization. A separate cross-resource validator checks each object offset against its archive's `BUF`. Optional auxiliary BUF blocks contain their bounded byte size in the low 30 bits of their second word; both their eight-byte header and complete declared extent are checked.
+
+Across all 179,838 directory uses, 151,519 source-record offsets are distinct and 28,319 reuse an earlier record in the same image. There are 34,218 attachment tables containing 39,885 entries and 5,765 optional auxiliary BUF blocks. All referenced ranges and all transform and attachment floats validate. The two empty GMS images are also the only scene archives without `BUF`, proving the loader relationship without inventing placeholder data.
 
 Header word 5 locates a third table. It begins with a pool-group count, followed by 24 little-endian class counts per group. A source-type field and one variant byte in each source record select its class. The directory's parent-step and child-entry operations select its group. Within each group, the loader allocates class ranges in ascending class order and assigns source records to consecutive 112-byte slots.
 
@@ -38,4 +64,4 @@ Corpus validation confirms that all 2,801 primary handles and all 201 present op
 
 ## Validation coverage
 
-Synthetic tests use a project-authored stored image. They cover directory, pool-count, and identifier-table bounds; parent/child pool traversal; class and local-slot assignment; local and external handle lookup; packed source-reference fields; tagged slot-zero and interior runtime handles; unsupported tags; and handle misalignment. No retail GMS content or identifier text is present in the repository.
+Synthetic tests use a project-authored stored image. They cover directory, pool-count, identifier, transform, attachment, and BUF-relative bounds; finite transform decoding; auxiliary BUF extents; parent/child pool traversal; class and local-slot assignment; local and external handle lookup; packed source-reference fields; tagged slot-zero and interior runtime handles; unsupported tags; and handle misalignment. No retail GMS, BUF, or identifier content is present in the repository.

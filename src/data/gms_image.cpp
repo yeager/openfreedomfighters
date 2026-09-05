@@ -3,6 +3,8 @@
 #include "off/data/byte_reader.hpp"
 
 #include <algorithm>
+#include <bit>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -23,6 +25,7 @@ constexpr std::size_t minimum_record_size = 48;
 constexpr std::size_t object_slot_size = 112;
 constexpr std::size_t pool_class_count = 24;
 constexpr std::size_t pool_group_size = pool_class_count * sizeof(std::uint32_t);
+constexpr std::uint32_t auxiliary_size_mask = 0x3fffffffU;
 
 [[nodiscard]] std::size_t checked_table_end(
     std::size_t offset,
@@ -52,6 +55,24 @@ constexpr std::size_t pool_group_size = pool_class_count * sizeof(std::uint32_t)
         return 0;
     }
     return (source_type & 0x00800000U) != 0U ? 2 : 3;
+}
+
+[[nodiscard]] float read_finite_float(const ByteReader& reader, std::size_t offset) {
+    const auto value = std::bit_cast<float>(reader.u32(offset));
+    if (!std::isfinite(value)) {
+        throw std::runtime_error("GMS object source contains a non-finite component");
+    }
+    return value;
+}
+
+void require_optional_offset(
+    std::uint32_t offset,
+    std::size_t payload_size,
+    const char* message
+) {
+    if (offset != 0U && offset >= payload_size) {
+        throw std::runtime_error(message);
+    }
 }
 
 }  // namespace
@@ -153,6 +174,79 @@ GmsImage GmsImage::parse(PackedResource resource) {
         active_groups.resize(active_groups.size() - parent_steps);
         const auto pool_group = active_groups.back();
         const auto source_type = reader.u32(record_offset + 16U);
+        const auto buf_object_offset = reader.u32(record_offset);
+        const auto basis_offset = reader.u32(record_offset + 4U);
+        const auto position_offset = reader.u32(record_offset + 8U);
+        const auto linked_object_value = reader.u32(record_offset + 12U);
+        const auto attachment_table_offset = reader.u32(record_offset + 20U);
+        const auto object_flags = reader.u32(record_offset + 24U);
+        const auto buf_auxiliary_offset = reader.u32(record_offset + 28U);
+        const auto deferred_source_offset = reader.u32(record_offset + 32U);
+        const auto child_value = reader.u32(record_offset + 36U);
+        const auto post_load_source_offset = reader.u32(record_offset + 40U);
+        if (basis_offset > payload.size() || 36U > payload.size() - basis_offset ||
+            position_offset > payload.size() ||
+            12U > payload.size() - position_offset) {
+            throw std::runtime_error("GMS object transform exceeds the decoded image");
+        }
+        require_optional_offset(
+            deferred_source_offset,
+            payload.size(),
+            "GMS deferred object source exceeds the decoded image"
+        );
+        require_optional_offset(
+            post_load_source_offset,
+            payload.size(),
+            "GMS post-load object source exceeds the decoded image"
+        );
+        std::array<float, 9> basis{};
+        for (std::size_t component = 0; component < basis.size(); ++component) {
+            basis[component] = read_finite_float(
+                reader,
+                static_cast<std::size_t>(basis_offset) + component * 4U
+            );
+        }
+        std::array<float, 3> position{};
+        for (std::size_t component = 0; component < position.size(); ++component) {
+            position[component] = read_finite_float(
+                reader,
+                static_cast<std::size_t>(position_offset) + component * 4U
+            );
+        }
+        std::vector<GmsAttachment> attachments;
+        if (attachment_table_offset != 0U) {
+            if (attachment_table_offset > payload.size() - sizeof(std::uint32_t)) {
+                throw std::runtime_error("GMS attachment table exceeds the decoded image");
+            }
+            const auto attachment_count = static_cast<std::size_t>(
+                reader.u32(attachment_table_offset)
+            );
+            const auto attachment_start =
+                static_cast<std::size_t>(attachment_table_offset) + sizeof(std::uint32_t);
+            static_cast<void>(checked_table_end(
+                attachment_start,
+                attachment_count,
+                8U,
+                payload.size(),
+                "GMS attachment table exceeds the decoded image"
+            ));
+            attachments.reserve(attachment_count);
+            for (std::size_t attachment_index = 0;
+                 attachment_index < attachment_count;
+                 ++attachment_index) {
+                const auto attachment_offset = attachment_start + attachment_index * 8U;
+                const auto target_offset = reader.u32(attachment_offset);
+                if (target_offset >= payload.size()) {
+                    throw std::runtime_error(
+                        "GMS attachment references outside the decoded image"
+                    );
+                }
+                attachments.push_back({
+                    .source_offset = target_offset,
+                    .parameter = read_finite_float(reader, attachment_offset + 4U),
+                });
+            }
+        }
         const auto source_variant = std::to_integer<std::uint8_t>(
             payload[record_offset + 45U]
         );
@@ -188,6 +282,19 @@ GmsImage GmsImage::parse(PackedResource resource) {
             .group_slot_index = group_slot_index,
             .local_slot_index = local_slot_index,
             .pool_group = static_cast<std::uint32_t>(pool_group),
+            .buf_object_offset = buf_object_offset,
+            .basis_offset = basis_offset,
+            .position_offset = position_offset,
+            .linked_object_value = linked_object_value,
+            .attachment_table_offset = attachment_table_offset,
+            .object_flags = object_flags,
+            .buf_auxiliary_offset = buf_auxiliary_offset,
+            .deferred_source_offset = deferred_source_offset,
+            .child_value = child_value,
+            .post_load_source_offset = post_load_source_offset,
+            .basis = basis,
+            .position = position,
+            .attachments = std::move(attachments),
             .parent_steps = parent_steps,
             .source_variant = source_variant,
             .pool_class = static_cast<std::uint8_t>(pool_class),
@@ -239,6 +346,30 @@ GmsImage GmsImage::parse(PackedResource resource) {
         }
     }
     return result;
+}
+
+void GmsImage::validate_buf(std::span<const std::byte> bytes) const {
+    if (bytes.empty() && !directory_.empty()) {
+        throw std::runtime_error("GMS object sources require a non-empty BUF resource");
+    }
+    const ByteReader reader(bytes);
+    for (const auto& entry : directory_) {
+        if (entry.buf_object_offset >= bytes.size()) {
+            throw std::runtime_error("GMS object source exceeds its BUF resource");
+        }
+        if (entry.buf_auxiliary_offset == 0U) {
+            continue;
+        }
+        const auto offset = static_cast<std::size_t>(entry.buf_auxiliary_offset);
+        if (offset > bytes.size() || 8U > bytes.size() - offset) {
+            throw std::runtime_error("GMS auxiliary BUF header exceeds its resource");
+        }
+        const auto size = static_cast<std::size_t>(reader.u32(offset + 4U) &
+                                                   auxiliary_size_mask);
+        if (size < 8U || size > bytes.size() - offset) {
+            throw std::runtime_error("GMS auxiliary BUF block exceeds its resource");
+        }
+    }
 }
 
 GmsObjectHandle GmsImage::decode_object_handle(std::uint32_t packed_reference) {

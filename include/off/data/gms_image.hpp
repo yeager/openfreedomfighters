@@ -6,9 +6,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <vector>
 
 namespace off::data {
+
+struct GmsAttachment {
+    std::uint32_t source_offset{0};
+    float parameter{0.0F};
+};
 
 struct GmsDirectoryEntry {
     std::uint32_t packed_record_reference{0};
@@ -19,6 +25,19 @@ struct GmsDirectoryEntry {
     std::uint32_t group_slot_index{0};
     std::uint32_t local_slot_index{0};
     std::uint32_t pool_group{0};
+    std::uint32_t buf_object_offset{0};
+    std::uint32_t basis_offset{0};
+    std::uint32_t position_offset{0};
+    std::uint32_t linked_object_value{0};
+    std::uint32_t attachment_table_offset{0};
+    std::uint32_t object_flags{0};
+    std::uint32_t buf_auxiliary_offset{0};
+    std::uint32_t deferred_source_offset{0};
+    std::uint32_t child_value{0};
+    std::uint32_t post_load_source_offset{0};
+    std::array<float, 9> basis{};
+    std::array<float, 3> position{};
+    std::vector<GmsAttachment> attachments;
     std::uint8_t parent_steps{0};
     std::uint8_t source_variant{0};
     std::uint8_t pool_class{0};
@@ -44,6 +63,7 @@ public:
     [[nodiscard]] std::optional<std::size_t> local_source_for_handle(
         std::uint32_t packed_reference
     ) const;
+    void validate_buf(std::span<const std::byte> bytes) const;
 
     [[nodiscard]] const std::vector<GmsDirectoryEntry>& directory() const noexcept {
         return directory_;

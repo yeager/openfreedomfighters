@@ -197,6 +197,10 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         std::size_t gms_directory_entry_count = 0;
         std::size_t gms_identifier_count = 0;
         std::size_t gms_pool_group_count = 0;
+        std::size_t buf_resource_count = 0;
+        std::size_t gms_attachment_table_count = 0;
+        std::size_t gms_attachment_count = 0;
+        std::size_t gms_buf_auxiliary_count = 0;
         std::size_t texture_catalog_count = 0;
         std::size_t texture_image_count = 0;
         std::size_t texture_sequence_count = 0;
@@ -224,11 +228,13 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             std::size_t support_files_in_archive = 0;
             std::size_t scene_graph_files_in_archive = 0;
             std::size_t gms_files_in_archive = 0;
+            std::size_t buf_files_in_archive = 0;
             std::size_t texture_files_in_archive = 0;
             std::size_t primitive_files_in_archive = 0;
             std::size_t render_map_files_in_archive = 0;
             std::size_t render_instance_files_in_archive = 0;
             std::optional<GmsImage> gms_image;
+            std::optional<std::vector<std::byte>> buf_resource;
             std::vector<std::uint32_t> scene_geometry_references;
             for (const auto& member : archive.entries()) {
                 const auto extension = lowercase(
@@ -241,6 +247,15 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                     }
                     ++support_files_in_archive;
                     ++scene_support_count;
+                } else if (extension == ".buf") {
+                    if (buf_resource.has_value()) {
+                        throw std::runtime_error(
+                            "scene archive contains multiple BUF resources"
+                        );
+                    }
+                    buf_resource = archive.read(member);
+                    ++buf_files_in_archive;
+                    ++buf_resource_count;
                 } else if (extension == ".zgf" || extension == ".gms") {
                     auto resource = PackedResource::parse(archive.read(member));
                     if (extension == ".zgf") {
@@ -265,6 +280,14 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                         gms_payload_bytes += resource.payload().size();
                         gms_image = GmsImage::parse(std::move(resource));
                         gms_directory_entry_count += gms_image->directory().size();
+                        for (const auto& source : gms_image->directory()) {
+                            if (!source.attachments.empty()) {
+                                ++gms_attachment_table_count;
+                                gms_attachment_count += source.attachments.size();
+                            }
+                            gms_buf_auxiliary_count +=
+                                source.buf_auxiliary_offset != 0U ? 1U : 0U;
+                        }
                         gms_identifier_count += gms_image->identifier_count();
                         gms_pool_group_count += gms_image->pool_groups().size();
                         ++gms_files_in_archive;
@@ -354,6 +377,20 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                     "scene archive does not contain every required resource exactly once"
                 );
             }
+            if (gms_image->directory().empty()) {
+                if (buf_files_in_archive != 0) {
+                    throw std::runtime_error(
+                        "empty GMS image unexpectedly has a BUF resource"
+                    );
+                }
+            } else {
+                if (buf_files_in_archive != 1 || !buf_resource.has_value()) {
+                    throw std::runtime_error(
+                        "GMS object sources do not have exactly one BUF resource"
+                    );
+                }
+                gms_image->validate_buf(*buf_resource);
+            }
             for (const auto reference : scene_geometry_references) {
                 static_cast<void>(GmsImage::decode_object_handle(reference));
                 ++decoded_gms_object_handle_count;
@@ -379,6 +416,10 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             gms_directory_entry_count != 179'838 ||
             gms_identifier_count != 154'941 ||
             gms_pool_group_count != 29'450 ||
+            buf_resource_count != 88 ||
+            gms_attachment_table_count != 34'218 ||
+            gms_attachment_count != 39'885 ||
+            gms_buf_auxiliary_count != 5'765 ||
             texture_catalog_count != scene_archive_count || texture_image_count != 23'522 ||
             texture_sequence_count != 19 || !decoded_dxt1_reference ||
             !decoded_dxt3_reference || !decoded_abgr_reference ||

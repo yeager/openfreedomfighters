@@ -30,8 +30,8 @@ Representative scene archives consistently expose a family of resource types:
 |---|---|---|
 | `ZGF` | packed bundle of named scene resources | embedded `TTF`/`PPO` schemas and cross-bundle references |
 | `SUP` | `DLCF` dependency list | downstream loading semantics |
-| `BUF` | binary data buffers | offsets, alignment, ownership |
-| `GMS` | object-source and identifier directories used to populate runtime pools | remaining sections and object materialization semantics |
+| `BUF` | serialized object data and bounded auxiliary blocks referenced by GMS sources | per-type object schemas and downstream primitive links |
+| `GMS` | object-source transforms, attachments, identifiers, and runtime-pool population | remaining sections and per-type materialization semantics |
 | `TEX` | texture catalog with indexed image and sequence blocks | renderer upload and material references |
 | `SND` | sound event metadata | bank links, loop and spatial flags |
 | `LOC` | localization table | encoding, identifiers, plural rules |
@@ -112,7 +112,7 @@ Files named `.WAV` are often banks rather than conventional RIFF WAV files. All 
 ## Next probes
 
 1. Resolve runtime-computed dynamic module/API arguments and map load-config metadata.
-2. Decode GMS object-source record fields and identify the four bootstrap handles external to empty local images.
-3. Determine the `RMC`/`RMI` runtime distinction and bind materialized objects to `PRM`, then bind decoded `TEX` pixels to renderable geometry.
+2. Decode the type-specific serialized objects reached through GMS-to-BUF references and identify the four bootstrap handles external to empty local images.
+3. Determine the `RMC`/`RMI` runtime distinction, follow BUF materialization into `PRM`, then bind decoded `TEX` pixels to renderable geometry.
 4. Record black-box boot, menu, input, timing, and first-level traces from the retail game.
 5. Define golden screenshots/state traces stored locally as hashes and numeric measurements.

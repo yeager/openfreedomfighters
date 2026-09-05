@@ -1,6 +1,8 @@
 #include "off/data/gms_image.hpp"
 
 #include <algorithm>
+#include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -31,8 +33,12 @@ void set_u32(std::vector<std::byte>& bytes, std::size_t offset, std::uint32_t va
     }
 }
 
+void set_f32(std::vector<std::byte>& bytes, std::size_t offset, float value) {
+    set_u32(bytes, offset, std::bit_cast<std::uint32_t>(value));
+}
+
 std::vector<std::byte> packed_fixture() {
-    std::vector<std::byte> payload(384);
+    std::vector<std::byte> payload(512);
     auto write_u32 = [&payload](std::size_t offset, std::uint32_t value) {
         for (unsigned int shift = 0; shift < 32; shift += 8) {
             payload[offset++] = static_cast<std::byte>((value >> shift) & 0xffU);
@@ -58,11 +64,28 @@ std::vector<std::byte> packed_fixture() {
                 sizeof(first_identifier), payload.begin() + 72);
     std::copy_n(reinterpret_cast<const std::byte*>(second_identifier),
                 sizeof(second_identifier), payload.begin() + 324);
+    write_u32(80, 32);
     write_u32(80 + 16, 0x00100000U);
+    write_u32(80 + 4, 384);
+    write_u32(80 + 8, 420);
+    write_u32(80 + 20, 432);
+    write_u32(80 + 28, 16);
     write_u32(128, 2);
     write_u32(128 + 4, 1);
     write_u32(128 + 4 + 3 * 4, 1);
     write_u32(128 + 4 + 24 * 4 + 3 * 4, 1);
+    write_u32(336 + 4, 384);
+    write_u32(336 + 8, 420);
+    write_u32(336, 40);
+    for (std::size_t component = 0; component < 9; ++component) {
+        set_f32(payload, 384 + component * 4, component % 4 == 0 ? 1.0F : 0.0F);
+    }
+    set_f32(payload, 420, 10.0F);
+    set_f32(payload, 424, 20.0F);
+    set_f32(payload, 428, 30.0F);
+    write_u32(432, 1);
+    write_u32(436, 444);
+    set_f32(payload, 440, 2.0F);
     std::vector<std::byte> bytes;
     append_u32(bytes, static_cast<std::uint32_t>(payload.size()));
     append_u32(bytes, static_cast<std::uint32_t>(payload.size() + 9));
@@ -102,7 +125,7 @@ int main() {
     const auto image = off::data::GmsImage::parse(
         off::data::PackedResource::parse(packed_fixture())
     );
-    check(image.decoded_size() == 384, "retain the decoded GMS image");
+    check(image.decoded_size() == 512, "retain the decoded GMS image");
     check(image.directory().size() == 3, "parse the object-source directory");
     check(image.identifier_count() == 2, "parse the identifier table");
     check(image.pool_groups().size() == 2 &&
@@ -118,6 +141,22 @@ int main() {
               image.directory()[0].local_slot_index == 0 &&
               image.directory()[0].enters_child_pool,
           "decode a packed object-source reference");
+    check(image.directory()[0].basis ==
+              std::array<float, 9>{1.0F, 0.0F, 0.0F, 0.0F, 1.0F,
+                                   0.0F, 0.0F, 0.0F, 1.0F} &&
+              image.directory()[0].position ==
+                  std::array<float, 3>{10.0F, 20.0F, 30.0F},
+          "decode an object-source transform");
+    check(image.directory()[0].buf_object_offset == 32 &&
+              image.directory()[0].buf_auxiliary_offset == 16,
+          "retain object-source BUF offsets");
+    check(image.directory()[0].attachments.size() == 1 &&
+              image.directory()[0].attachments[0].source_offset == 444 &&
+              image.directory()[0].attachments[0].parameter == 2.0F,
+          "decode an object-source attachment table");
+    std::vector<std::byte> buf(64);
+    set_u32(buf, 20, 12);
+    image.validate_buf(buf);
     check(image.directory()[1].pool_group == 1 &&
               image.directory()[1].pool_class == 3 &&
               image.directory()[1].group_slot_index == 0 &&
@@ -165,7 +204,7 @@ int main() {
         "reject a misaligned object handle"
     );
     check_parse_rejected(
-        [](auto& bytes) { set_u32(bytes, 9, 384); },
+        [](auto& bytes) { set_u32(bytes, 9, 512); },
         "reject an out-of-bounds object-source directory"
     );
     check_parse_rejected(
@@ -177,13 +216,13 @@ int main() {
         "reject an out-of-bounds identifier table"
     );
     check_parse_rejected(
-        [](auto& bytes) { set_u32(bytes, 9 + 64, 384); },
+        [](auto& bytes) { set_u32(bytes, 9 + 64, 512); },
         "reject an out-of-bounds identifier"
     );
     check_parse_rejected(
         [](auto& bytes) {
-            set_u32(bytes, 9 + 64, 383);
-            bytes[9 + 383] = std::byte{1};
+            set_u32(bytes, 9 + 64, 511);
+            bytes[9 + 511] = std::byte{1};
         },
         "reject a non-terminated identifier"
     );
@@ -202,6 +241,49 @@ int main() {
     check_parse_rejected(
         [](auto& bytes) { bytes[9 + 336 + 45] = std::byte{3}; },
         "reject an invalid source variant"
+    );
+    check_parse_rejected(
+        [](auto& bytes) { set_u32(bytes, 9 + 80 + 4, 500); },
+        "reject an out-of-bounds object-source basis"
+    );
+    check_parse_rejected(
+        [](auto& bytes) { set_u32(bytes, 9 + 384, 0x7f800000U); },
+        "reject a non-finite object-source basis"
+    );
+    check_parse_rejected(
+        [](auto& bytes) { set_u32(bytes, 9 + 80 + 20, 510); },
+        "reject an out-of-bounds attachment table"
+    );
+    check_parse_rejected(
+        [](auto& bytes) { set_u32(bytes, 9 + 436, 512); },
+        "reject an attachment target outside the image"
+    );
+    check_parse_rejected(
+        [](auto& bytes) { set_u32(bytes, 9 + 440, 0x7f800000U); },
+        "reject a non-finite attachment parameter"
+    );
+    check_parse_rejected(
+        [](auto& bytes) { set_u32(bytes, 9 + 80 + 32, 512); },
+        "reject a deferred source outside the image"
+    );
+    check_parse_rejected(
+        [](auto& bytes) { set_u32(bytes, 9 + 80 + 40, 512); },
+        "reject a post-load source outside the image"
+    );
+    check_rejected(
+        [&image] {
+            std::vector<std::byte> short_buf(16);
+            image.validate_buf(short_buf);
+        },
+        "reject an object source outside its BUF resource"
+    );
+    check_rejected(
+        [&image] {
+            std::vector<std::byte> truncated_buf(64);
+            set_u32(truncated_buf, 20, 60);
+            image.validate_buf(truncated_buf);
+        },
+        "reject a truncated auxiliary BUF block"
     );
     check_parse_rejected(
         [](auto& bytes) { set_u32(bytes, 9 + 12, 3); },
