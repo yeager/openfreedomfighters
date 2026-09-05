@@ -176,6 +176,9 @@ and an established integer viewport. It preserves perspective division by
 emitted Z and does not repeat the picture transform. It neither selects the
 original startup camera nor replaces the diagnostic renderer's projection.
 See [Conditional picture projection](docs/PICTURE_PROJECTION.md).
+The raw viewport setter conversion also preserves truncation and low-32-bit
+wrapping, with unsupported math-error cases rejected explicitly. Conversion
+does not itself establish a usable viewport or select the original camera.
 Recovered picture constructors default both extent scales to `1.0`; descriptor
 bounds are not substituted for the still-explicit runtime extent, matrix,
 visitor, or projection inputs.

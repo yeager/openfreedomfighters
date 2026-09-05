@@ -19,6 +19,21 @@ void finite(float value) {
 }
 } // namespace
 
+PictureViewport
+convert_picture_viewport_request(const std::array<float, 4> &request) {
+  const auto component = [](float value) -> std::uint32_t {
+    // The exclusive positive endpoint is exact; converting INT64_MAX to
+    // binary32 would round up and admit an undefined float-to-integer cast.
+    if (!std::isfinite(value) || double(value) < -0x1p63 ||
+        double(value) >= 0x1p63)
+      throw std::runtime_error("Picture viewport request exceeds signed64 range");
+    const auto truncated = static_cast<std::int64_t>(value);
+    return static_cast<std::uint32_t>(truncated);
+  };
+  return {component(request[0]), component(request[1]), component(request[2]),
+          component(request[3])};
+}
+
 PictureProjection prepare_picture_projection(float near_distance,
                                              float far_distance,
                                              float half_extent_0,

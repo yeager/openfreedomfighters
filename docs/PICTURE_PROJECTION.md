@@ -44,6 +44,15 @@ camera or outside the frustum can have algebraic output, not drawable pixels.
 
 ## Portable safety policy
 
+`convert_picture_viewport_request` implements the separate raw setter boundary:
+each supplied binary32 X/Y/Width/Height in `[-2^63,2^63)` truncates toward zero
+to signed64 and retains only the low unsigned32 bits. It does not round to
+nearest, saturate or validate a viewport. For example, -1.75 becomes
+`0xffffffff`, and exactly 2^32 becomes zero. Both signed zeros produce zero.
+Non-finite/out-of-domain inputs are rejected as project policy; original
+math-error handlers and floating-point status/trap side effects are not modeled.
+The resulting raw viewport must still pass the separate mapping checks below.
+
 Inputs and results must be finite, near must already be at least 5, far must
 exceed near, and both signed half-extents must be nonzero. These checks reject
 unsupported inputs rather than silently selecting a camera. The separate
@@ -60,8 +69,8 @@ These are project safety constraints, not recovered error diagnostics.
 ## Remaining integration requirements
 
 This operation does not select the startup camera, derive half-extents from
-camera parameters, convert floating-point viewport requests to integers, or
-choose final draw-time pass state. The original producer and its edge cases
+camera parameters or choose final draw-time pass state. Raw viewport conversion
+accepts explicit requests; their upstream camera/rectangle arithmetic and edge cases
 remain separate from this explicit mathematical boundary. No guessed near,
 far, field of view or backbuffer rectangle is supplied to the native renderer.
 GPU integration, clipping, rasterizer sample locations and final compositing
@@ -72,3 +81,5 @@ perspective size changes, viewport origins and Y flip, negative W, integration
 with expanded picture vertices, invalid parameters, and arithmetic overflow.
 These are conditional mathematical tests, not original camera or pixel-fidelity
 evidence.
+Raw-conversion tests separately cover all four fields, fractional signs,
+subnormal values, modulo wrap and both signed64 domain boundaries.

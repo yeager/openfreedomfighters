@@ -164,5 +164,36 @@ int main() {
               map_picture_clip_to_viewport(bad_clip, {0, 0, 100, 100}));
         },
         "reject each screen coordinate overflow before conversion");
+  const auto raw = convert_picture_viewport_request({10.75F, -1.75F, 0x1p32F,
+      std::nextafter(0x1p32F, std::numeric_limits<float>::infinity())});
+  check(raw.x == 10 && raw.y == uint_max && raw.width == 0 && raw.height == 512,
+        "truncate each raw viewport field and preserve low32 wrap");
+  for (float value : {0.0F, -0.0F, tiny, -tiny, 0.75F, -0.75F,
+                      -0x1p32F, -0x1p63F}) {
+    const auto zeros = convert_picture_viewport_request({value, value, value, value});
+    check(zeros.x == 0 && zeros.y == 0 && zeros.width == 0 && zeros.height == 0,
+          "raw conversion preserves zero, truncation and signed64 lower boundary");
+  }
+  const auto upper = convert_picture_viewport_request(
+      {std::nextafter(0x1p63F, 0.0F), 0, 1, 1});
+  check(upper.x == 0, "accept largest binary32 below signed64 upper endpoint");
+  for (float invalid : {0x1p63F,
+                        std::nextafter(-0x1p63F, -std::numeric_limits<float>::infinity()),
+                        std::numeric_limits<float>::infinity(),
+                        -std::numeric_limits<float>::infinity(),
+                        std::numeric_limits<float>::quiet_NaN()}) {
+    for (std::size_t field = 0; field < 4; ++field) {
+      std::array<float, 4> request{0, 0, 100, 80};
+      request[field] = invalid;
+      rejects([&] { static_cast<void>(convert_picture_viewport_request(request)); },
+              "reject unsafe conversion in every request field before casting");
+    }
+  }
+  rejects([&] { static_cast<void>(map_picture_clip_to_viewport({0, 0, 0, 1}, raw)); },
+          "raw conversion does not imply a usable viewport");
+  const auto usable = convert_picture_viewport_request({10.75F, 20.75F, 100.75F, 80.75F});
+  check(map_picture_clip_to_viewport({0, 0, 0, 1}, usable) ==
+            std::array<float, 3>{60, 60, 0},
+        "valid raw request reaches established viewport mapping without nearest rounding");
   return failures == 0 ? 0 : 1;
 }

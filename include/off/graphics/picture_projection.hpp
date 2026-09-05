@@ -25,6 +25,13 @@ struct PictureViewport {
   std::uint32_t height;
 };
 
+// Raw setter conversion, not viewport validation: finite binary32 components
+// in [-2^63,2^63) truncate to int64, then retain their low uint32 bits.
+// Out-of-domain values throw instead of emulating retail math-error handlers.
+// Does not emulate floating-point status/traps or derive camera requests.
+[[nodiscard]] PictureViewport
+convert_picture_viewport_request(const std::array<float, 4> &request);
+
 // Conditional ordinary projection, with explicitly resolved camera inputs.
 // Replacement safety policy: finite n/f/h0/h1, n>=5, f>n, signed nonzero
 // half-extents. No near clamp, camera defaults, or half-extent derivation.
