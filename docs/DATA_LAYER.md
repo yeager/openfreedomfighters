@@ -66,7 +66,10 @@ the first supported textured triangle strip, copies its vertices, flattened inde
 buffer, and draw ranges into an owned render asset, decodes mip zero to RGBA8, and
 computes its model-space bounds. It rejects missing resources, missing texture
 bindings, empty mip chains, and degenerate geometry before SDL GPU is initialized.
-Synthetic tests cover construction and failure without embedding retail content.
+The platform layer converts that owned asset to a bounds-normalized diagnostic
+projection, uploads vertex and 16-bit index buffers plus the RGBA8 texture, and
+submits every preserved range as an indexed triangle-strip draw. Synthetic tests
+cover construction and failure without embedding retail content.
 
 Every `RMC` and `RMI` member is parsed as well. The supported corpus contains 2,587 nodes and 1,612 entries in `RMC`, plus 1,359 nodes and 1,189 entries in `RMI`. Every octree node is reached exactly once, every spatial element has exactly one owner, and every fixed-size descriptor reference and quantized bound is range checked. World-space bounds queries reproduce the recovered quantization, loose-cell, and half-open intersection rules. The final descriptor words are now confirmed as one required and one optional packed geometry reference rather than floating-point scale values. See [RENDER_MAP_FORMAT.md](RENDER_MAP_FORMAT.md).
 

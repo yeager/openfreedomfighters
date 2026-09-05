@@ -61,7 +61,7 @@ Gate: all startup and first-level assets load into validated portable models und
 - [ ] SDL3 platform layer and controller action map.
 - [x] Select SDL GPU and prove the native window/device/swapchain clear-pass lifecycle.
 - [x] Prepare a validated startup-scene mesh and texture for GPU upload.
-- [ ] Upload and draw the first decoded retail mesh and texture.
+- [x] Upload and draw the first decoded retail mesh and texture.
 - [ ] Original-mode material/lighting reference path.
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
 - [ ] Audio-bank decoding/mixing and positional sound.

@@ -49,9 +49,11 @@ SDL GPU driver, claims its swapchain, records a color clear render pass, submits
 the command buffer, and exits cleanly on window close or Escape. Before creating
 the GPU device it selects a textured triangle-strip primitive from the startup
 scene, copies its validated vertices, indexes, and draw ranges, decodes mip zero
-to RGBA8, and computes finite model bounds. This proves the retail-to-renderer
-handoff and platform/device/presentation lifecycle; retail geometry is not drawn
-yet.
+to RGBA8, and computes finite model bounds. It then creates the native shader
+pipeline, uploads vertex/index/texture resources through an SDL GPU copy pass,
+and submits each preserved range as an indexed triangle-strip draw. The current
+bounds-normalized projection is diagnostic; scene transforms, camera matrices,
+depth, and reconstructed materials remain separate milestones.
 
 ## Compatibility profiles
 

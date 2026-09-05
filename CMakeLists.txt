@@ -24,6 +24,18 @@ if(NOT SDL3_FOUND)
     FetchContent_MakeAvailable(SDL3)
 endif()
 
+# SDL_ttf's zlib-licensed GPU example provides one small, precompiled shader
+# pair in every SDL GPU format. Fetch only its source tree; SDL_ttf itself is
+# neither configured nor linked.
+FetchContent_Declare(
+    off_shader_assets
+    URL https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz
+    URL_HASH SHA256=63547d58d0185c833213885b635a2c0548201cc8f301e6587c0be1a67e1e045d
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    SOURCE_SUBDIR off-no-cmake-project
+)
+FetchContent_MakeAvailable(off_shader_assets)
+
 if(TARGET SDL3::SDL3-static)
     set(OFF_SDL3_TARGET SDL3::SDL3-static)
 else()
@@ -66,6 +78,18 @@ add_executable(
     src/platform/sdl_gpu_runtime.cpp
 )
 target_link_libraries(openfreedomfighters PRIVATE off_core ${OFF_SDL3_TARGET})
+target_include_directories(
+    openfreedomfighters PRIVATE
+    "${off_shader_assets_SOURCE_DIR}/examples"
+)
+if(MSVC)
+    target_compile_options(openfreedomfighters PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(
+        openfreedomfighters PRIVATE -Wall -Wextra -Wpedantic -Wconversion
+        -Wno-missing-field-initializers
+    )
+endif()
 
 install(TARGETS openfreedomfighters RUNTIME DESTINATION bin)
 

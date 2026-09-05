@@ -37,9 +37,9 @@ and fully disassembled in private clean-room storage. The native C++ bootstrap n
 Texture, primary-vertex, topology, spatial, and supported audio data decode into
 portable representations. The executable now opens a resizable high-DPI native
 window, loads a validated textured triangle-strip preview from `FF-StartUp.ZIP`,
-and submits its first SDL GPU render pass through Vulkan, Metal, or D3D12. The
-preview's retail vertices, indexes, bounds, and decoded RGBA texture are prepared
-in memory but are not uploaded or drawn yet. Retail geometry rendering, gameplay
+uploads its retail vertices, indexes, and decoded RGBA texture, and issues indexed
+draws through Vulkan, Metal, or D3D12. This first diagnostic projection is not yet
+the scene camera or Original material model. Complete scene rendering, gameplay
 simulation, menus, localization, and the complete native runtime remain under
 development; no playable build exists yet.
 
