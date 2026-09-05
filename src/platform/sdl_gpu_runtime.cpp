@@ -739,8 +739,11 @@ make_upload_transfer(SDL_GPUDevice *device, const void *bytes, Uint32 size) {
 
 RuntimeResult
 run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
+                    const ui::RetailUiFontSet &ui_fonts,
                     std::size_t frame_limit, bool show_graphics_menu,
                     const std::filesystem::path &screenshot_path) {
+  if (ui_fonts.fonts.empty())
+    return failure("retail UI font set is empty");
   try {
     graphics::validate_scene_gpu_plan(scene);
   } catch (const std::exception &error) {
@@ -815,12 +818,13 @@ run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
 
   RuntimeResult result{
       .success = true,
-      .message = std::string("Renderer: SDL GPU/") +
-                 SDL_GetGPUDeviceDriver(device) +
-                 " (source-only diagnostic scene: " +
-                 std::to_string(scene.meshes.size()) + " meshes, " +
-                 std::to_string(scene.instances.size()) + " instances, " +
-                 std::to_string(scene.draws.size()) + " draws)"};
+      .message =
+          std::string("Renderer: SDL GPU/") + SDL_GetGPUDeviceDriver(device) +
+          " (source-only diagnostic scene: " +
+          std::to_string(scene.meshes.size()) + " meshes, " +
+          std::to_string(scene.instances.size()) + " instances, " +
+          std::to_string(scene.draws.size()) + " draws; " +
+          std::to_string(ui_fonts.fonts.size()) + " retail UI fonts loaded)"};
   constexpr std::array<float, 32> matrices{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
                                            0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1,
                                            0, 0, 0, 0, 1, 0, 0, 0, 0, 1};

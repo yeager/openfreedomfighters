@@ -9,6 +9,25 @@ The overlay is the single supported in-game entry point for display, rendering,
 quality, and advanced presentation controls. It is not a developer console and
 must remain usable when an optional renderer feature fails to initialize.
 
+## Original visual-language requirement
+
+The shipping overlay must look and behave like an extension of the game's own
+menus, not a generic desktop settings window. Layout hierarchy, panel placement,
+spacing, focus treatment, selector treatment, colors, animation timing, and audio
+cues must be recovered as behavior-only measurements from a legally owned retail
+copy. At runtime it uses the applicable menu resources from that verified
+installation whenever they are present and decoded. Modern-only rows may extend
+the menu, but must use the same recovered visual grammar. Accessibility overrides
+may deliberately change contrast, scale, motion, or input feedback.
+
+No retail font, interface texture, string, screenshot, or sampled audio is copied
+into this repository. Public tests use project-authored geometry and text only.
+The temporary diagnostic skin is permitted solely as a labelled implementation
+aid; it is not the design reference and cannot satisfy the final UI acceptance
+gate. If a required retail menu resource cannot yet be decoded, the production
+path reports that limitation instead of silently replacing it with synthetic
+content. See [Game-data policy](../DATA_POLICY.md).
+
 ## Interaction contract
 
 - F10 opens the overlay and copies the confirmed requested settings into an
@@ -132,12 +151,15 @@ snapshot.
 1. Platform-neutral requested/effective settings, validation, menu-session state,
    capability fallbacks, and transaction tests.
 2. Bounded UI draw list plus a temporary permissively licensed ASCII atlas for
-   the diagnostic English overlay.
+   the explicitly labelled diagnostic English overlay.
 3. F10 SDL event routing, keyboard navigation, overlay rendering, and safe
    window/present application.
-4. Gamepad lifecycle, atomic persistence in the platform configuration directory,
+4. Recover behavior-only retail menu layout/style measurements and bind the
+   overlay to menu fonts, interface art, focus states, and audio read from the
+   verified installation at runtime.
+5. Gamepad lifecycle, atomic persistence in the platform configuration directory,
    and a Unicode text backend for all supported localizations.
-5. Enable advanced rows as their real Original/Modern/Modern+ renderer paths land.
+6. Enable advanced rows as their real Original/Modern/Modern+ renderer paths land.
 
 Stage 1 now has an initial implementation for Original/Modern profile selection,
 windowed or borderless mode, window size, and VSync/mailbox/immediate presentation.
@@ -194,5 +216,5 @@ The retail installation must validate first, and the destination must not exist.
 Use an absolute destination outside the source tree because the scene behind the
 overlay may contain retail-derived imagery. A release or CI artifact must never
 contain that capture. The screenshot demonstrates the current diagnostic layout,
-not completed advanced controls, DLSS integration, localization, accessibility,
-or final art direction.
+not fidelity to the original menu design, completed advanced controls, DLSS
+integration, localization, accessibility, or final art direction.

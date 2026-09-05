@@ -4,6 +4,11 @@
 
 OpenFreedomFighters is a clean-room, native reimplementation and static-recompilation research project for the Windows version of *Freedom Fighters* (2003). The target platforms are Windows, macOS, Linux, and Steam Deck. A legally purchased PC installation is required at runtime; this repository contains no game assets, original executable code, or encryption keys.
 
+User-visible compatibility paths are retail-data-first: when required content is
+available in the verified installation, OpenFreedomFighters reads it there rather
+than substituting synthetic content. Project-authored fixtures are reserved for
+CI, fuzzing, security tests, and clearly labelled developer diagnostics.
+
 The project has two runtime profiles plus an optional presentation layer:
 
 - **Original** preserves gameplay, timing, presentation, and content while adding a portable renderer, modern input, stable widescreen output, and localization infrastructure for 20 languages including Swedish.
@@ -101,6 +106,10 @@ from effective runtime values. Advanced renderer paths, including a verified
 DLSS 4.5 backend on supported Windows/NVIDIA systems, remain capability-gated
 until their real implementations land; the menu does not establish DLSS support
 by itself.
+The current skin is a labelled diagnostic implementation. The production F10
+overlay must recover the original menu's layout and visual language and load its
+applicable fonts and interface resources from the user's verified installation at
+runtime; retail UI assets are never committed or shipped by this repository.
 
 ## Repository rules
 
@@ -163,6 +172,7 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [F10 graphics-settings overlay](docs/GRAPHICS_SETTINGS.md)
 - [DLSS 4.5 integration plan](docs/DLSS.md)
 - [Roadmap and acceptance gates](docs/ROADMAP.md)
+- [Phase execution specifications](docs/PHASES.md)
 - [Localization plan](docs/LOCALIZATION.md)
 - [Clean-room protocol](CLEAN_ROOM.md)
 - [Continuous integration and releases](docs/CI.md)

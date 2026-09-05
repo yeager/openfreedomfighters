@@ -3,6 +3,7 @@
 #include "off/graphics/scene_render.hpp"
 #include "off/mode.hpp"
 #include "off/platform/sdl_gpu_runtime.hpp"
+#include "off/ui/retail_ui_fonts.hpp"
 
 #include <charconv>
 #include <cstddef>
@@ -110,15 +111,18 @@ int main(int argc, char **argv) {
     return 0;
   }
   off::graphics::SceneGpuPlan scene;
+  off::ui::RetailUiFontSet ui_fonts;
   try {
     scene = off::graphics::prepare_scene_gpu_plan(
         off::graphics::load_diagnostic_scene_render_asset(data_path));
+    ui_fonts =
+        off::ui::load_retail_ui_fonts(data_path / "Scenes" / "FF-StartUp.ZIP");
   } catch (const std::exception &error) {
-    std::cerr << "Scene loading failed: " << error.what() << '\n';
+    std::cerr << "Runtime data loading failed: " << error.what() << '\n';
     return 4;
   }
   const auto runtime = off::platform::run_sdl_gpu_runtime(
-      mode, scene, frame_limit, show_graphics_menu, screenshot_path);
+      mode, scene, ui_fonts, frame_limit, show_graphics_menu, screenshot_path);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';
     return 4;

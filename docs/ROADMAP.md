@@ -1,6 +1,10 @@
 # Roadmap and acceptance gates
 
 This is a multi-year reverse-engineering effort. Dates are deliberately omitted until the vertical slice establishes throughput.
+The phase checklist records status; [Phase execution specifications](PHASES.md)
+define inputs, deliverables, validation evidence, and exit criteria for every
+phase and the cross-cutting gates. A checked item is not evidence for an entire
+phase unless its phase gate also passes.
 
 ## Phase 0 - Evidence, policy, and reproducibility
 
@@ -79,6 +83,8 @@ Gate: all startup and first-level assets load into validated portable models und
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
 - [ ] Audio-bank decoding/mixing and positional sound.
 - [ ] Startup/menu and one static level render on Windows, Linux, Steam Deck, and macOS.
+- [ ] Replace the diagnostic F10 skin with a retail-data-backed overlay matching
+  the recovered original menu layout and visual language.
 
 Gate: deterministic camera fly-through matches structural and image-difference tolerances on all target platforms.
 
@@ -128,6 +134,9 @@ Gate: fresh installs locate user-owned data and complete the campaign without Wi
 ## Cross-cutting acceptance criteria
 
 - No original game data in Git history, CI, releases, or issue attachments.
+- User-visible compatibility paths consume verified retail data when it exists;
+  synthetic fixtures are restricted to tests, fuzzing, security regressions, and
+  explicitly labelled developer diagnostics.
 - Untrusted asset input is bounds checked and fuzzed.
 - Original and Modern share one authoritative gameplay simulation.
 - Performance target: stable 60 fps at native Deck resolution in Modern mode; Original supports the reference timing profile.

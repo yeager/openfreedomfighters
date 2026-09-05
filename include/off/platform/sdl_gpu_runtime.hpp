@@ -2,6 +2,7 @@
 
 #include "off/graphics/scene_gpu_plan.hpp"
 #include "off/mode.hpp"
+#include "off/ui/retail_ui_fonts.hpp"
 
 #include <cstddef>
 #include <filesystem>
@@ -16,6 +17,7 @@ struct RuntimeResult {
 
 [[nodiscard]] RuntimeResult
 run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
+                    const ui::RetailUiFontSet &ui_fonts,
                     std::size_t frame_limit = 0,
                     bool show_graphics_menu = false,
                     const std::filesystem::path &screenshot_path = {});
