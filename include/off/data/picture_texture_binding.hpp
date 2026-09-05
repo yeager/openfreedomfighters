@@ -50,6 +50,11 @@ struct PictureQuad {
     float v_min{0.0F};
     std::uint32_t modulation_color{0};
     std::size_t descriptor_index{0};
+    // Keep authored values: rounded bounds cannot reconstruct them losslessly.
+    float local_center_x{0.0F};
+    float local_center_y{0.0F};
+    float horizontal_edge_span{0.0F};
+    float vertical_edge_span{0.0F};
 };
 
 struct BoundPictureDrawGroup {

@@ -42,6 +42,12 @@ or transform-orientation claim.
 The owning window/scene transform is external and remains the caller's
 responsibility.
 
+The neutral quad also retains authored center X/Y and full edge spans directly,
+without reconstructing them from its derived bounds. Binary32 rounding can make
+both bounds equal despite a nonzero span, or lose the center when spans are
+large. These source values, including signed zero, survive the owning pre-raster
+plan unchanged. Bounds remain useful local metadata, not lossless raster inputs.
+
 The recovered renderer-neutral alignment and cache arithmetic is documented in
 [window-picture transforms](PICTURE_TRANSFORM.md). Descriptor local Z is
 preserved across that boundary.

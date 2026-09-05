@@ -1,6 +1,7 @@
 #include "off/data/picture_texture_binding.hpp"
 
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -175,5 +176,35 @@ int main() {
               static_cast<void>(off::data::PictureDrawPlan::build(
                   descriptors, bad_group, one_texture));
           }), "reject hostile draw-plan spans without addition overflow");
+    const std::array precision_descriptor{off::data::PictureResourceDescriptor{
+        .local_center_x = 16777216.0F, .local_center_y = -16777216.0F,
+        .local_z = 3.0F, .u_min = 0.8F, .u_max = 0.2F,
+        .v_max = 0.1F, .v_min = 0.9F,
+        .horizontal_edge_span = 1.0F, .vertical_edge_span = 1.0F}};
+    const std::array precision_group{off::data::PictureDrawGroup{
+        .descriptor_span_count = 1, .first_descriptor_index = 0}};
+    const auto precision_plan = off::data::PictureDrawPlan::build(
+        precision_descriptor, precision_group, one_texture);
+    const auto &precise = precision_plan.groups()[0].quads[0];
+    check(precise.local_x_min == precise.local_x_max &&
+              precise.local_y_min == precise.local_y_max &&
+              precise.local_center_x == 16777216.0F &&
+              precise.local_center_y == -16777216.0F &&
+              precise.horizontal_edge_span == 1.0F &&
+              precise.vertical_edge_span == 1.0F &&
+              precise.u_min == 0.8F && precise.u_max == 0.2F &&
+              precise.v_min == 0.9F && precise.v_max == 0.1F,
+          "retain authored centers, spans and reversed UVs despite rounded bounds");
+    auto signed_zero_descriptor = precision_descriptor;
+    signed_zero_descriptor[0].local_center_x = -0.0F;
+    signed_zero_descriptor[0].horizontal_edge_span = -0.0F;
+    const auto signed_zero_plan = off::data::PictureDrawPlan::build(
+        signed_zero_descriptor, precision_group, one_texture);
+    const auto &signed_zero = signed_zero_plan.groups()[0].quads[0];
+    check(std::bit_cast<std::uint32_t>(signed_zero.local_center_x) ==
+              0x80000000U &&
+              std::bit_cast<std::uint32_t>(signed_zero.horizontal_edge_span) ==
+                  0x80000000U,
+          "copy authored negative zero without normalizing its representation");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

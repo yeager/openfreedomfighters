@@ -12,7 +12,9 @@ namespace {
 [[nodiscard]] bool finite(const data::PictureQuad &quad) {
   const std::array values{quad.local_x_min, quad.local_x_max, quad.local_y_min,
                           quad.local_y_max, quad.local_z, quad.u_min,
-                          quad.u_max, quad.v_min, quad.v_max};
+                          quad.u_max, quad.v_min, quad.v_max,
+                          quad.local_center_x, quad.local_center_y,
+                          quad.horizontal_edge_span, quad.vertical_edge_span};
   return std::ranges::all_of(values,
                              [](float value) { return std::isfinite(value); });
 }

@@ -116,6 +116,10 @@ PictureDrawPlan PictureDrawPlan::build(
                 .v_min = descriptor.v_min,
                 .modulation_color = descriptor.modulation_color,
                 .descriptor_index = descriptor_index,
+                .local_center_x = descriptor.local_center_x,
+                .local_center_y = descriptor.local_center_y,
+                .horizontal_edge_span = descriptor.horizontal_edge_span,
+                .vertical_edge_span = descriptor.vertical_edge_span,
             });
         }
         result.groups_.push_back(std::move(bound));

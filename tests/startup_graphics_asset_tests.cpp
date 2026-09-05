@@ -295,7 +295,11 @@ int main(int argc, char **argv) {
             prepared.pictures().front().first_submission == 0 &&
             prepared.pictures().front().submission_count == 5 &&
             prepared.quads().front().source.local_x_min == -1.0F &&
-            prepared.quads().front().source.local_x_max == 1.0F,
+            prepared.quads().front().source.local_x_max == 1.0F &&
+            prepared.quads().front().source.local_center_x == 0.0F &&
+            prepared.quads().front().source.local_center_y == 0.0F &&
+            prepared.quads().front().source.horizontal_edge_span == 2.0F &&
+            prepared.quads().front().source.vertical_edge_span == 2.0F,
         "preserve first traversal picture and raw descriptor quad");
   check(prepared.pictures()[1].base_render_property == 0xfedcba98U &&
             prepared.pictures()[1].authored_alpha == 255U &&
