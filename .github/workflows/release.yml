@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version without the leading v, for example 0.1.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build zlib1g-dev
+      - name: Build and test
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          ninja -C build
+          ctest --test-dir build -j4 --output-on-failure
+      - name: Package
+        run: |
+          cmake --install build --prefix package
+          cp README.md LICENSE package/
+          tar -czf OpenFreedomFighters-linux-x86_64.tar.gz -C package .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-x86_64
+          path: OpenFreedomFighters-linux-x86_64.tar.gz
+          if-no-files-found: error
+
+  build-macos:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install dependencies
+        run: brew install cmake ninja zlib
+      - name: Build and test
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix zlib)"
+          ninja -C build
+          ctest --test-dir build -j4 --output-on-failure
+      - name: Package
+        run: |
+          cmake --install build --prefix package
+          cp README.md LICENSE package/
+          tar -czf OpenFreedomFighters-macos.tar.gz -C package .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos
+          path: OpenFreedomFighters-macos.tar.gz
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build zlib
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/madler/zlib.git zlib-src
+          cmake -S zlib-src -B zlib-build -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/zlib-install"
+          cmake --build zlib-build --config Release --parallel 2
+          cmake --install zlib-build --config Release
+      - name: Build and test
+        shell: pwsh
+        run: |
+          cmake -S . -B build -DCMAKE_PREFIX_PATH="${{ github.workspace }}/zlib-install"
+          cmake --build build --config Release --parallel 2
+          $env:PATH = "${{ github.workspace }}/zlib-install/bin;$env:PATH"
+          ctest --test-dir build -C Release -j4 --output-on-failure
+      - name: Package
+        shell: pwsh
+        run: |
+          cmake --install build --config Release --prefix package
+          Copy-Item README.md, LICENSE package/
+          $zlib = Get-ChildItem "${{ github.workspace }}/zlib-install/bin" -Filter '*.dll'
+          if ($zlib) { Copy-Item $zlib.FullName package/bin/ }
+          Compress-Archive -Path package/* -DestinationPath OpenFreedomFighters-windows-x64.zip
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-x64
+          path: OpenFreedomFighters-windows-x64.zip
+          if-no-files-found: error
+
+  create-release:
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - name: Verify release version matches CMake
+        shell: bash
+        run: |
+          set -euo pipefail
+          requested_version="${RELEASE_VERSION#v}"
+          project_version=$(sed -n 's/^project(OpenFreedomFighters VERSION \([^ ]*\) LANGUAGES CXX).*/\1/p' CMakeLists.txt)
+          test -n "$project_version"
+          test "$requested_version" = "$project_version"
+      - name: Verify artifacts contain no retail data
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s artifacts/linux-x86_64/OpenFreedomFighters-linux-x86_64.tar.gz
+          test -s artifacts/macos/OpenFreedomFighters-macos.tar.gz
+          test -s artifacts/windows-x64/OpenFreedomFighters-windows-x64.zip
+          if tar -tzf artifacts/linux-x86_64/OpenFreedomFighters-linux-x86_64.tar.gz | grep -Eai '\.(exe|dll|zip|wav|whd|loc|tex|prm|zgf)$'; then
+            echo 'Linux artifact contains a prohibited retail-data extension' >&2
+            exit 1
+          fi
+          if tar -tzf artifacts/macos/OpenFreedomFighters-macos.tar.gz | grep -Eai '\.(exe|dll|zip|wav|whd|loc|tex|prm|zgf)$'; then
+            echo 'macOS artifact contains a prohibited retail-data extension' >&2
+            exit 1
+          fi
+          if unzip -Z1 artifacts/windows-x64/OpenFreedomFighters-windows-x64.zip | grep -Eai '\.(wav|whd|loc|tex|prm|zgf)$'; then
+            echo 'Windows artifact contains a prohibited retail-data extension' >&2
+            exit 1
+          fi
+      - name: Scan repository with Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
+          name: OpenFreedomFighters ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
+          files: |
+            artifacts/linux-x86_64/OpenFreedomFighters-linux-x86_64.tar.gz
+            artifacts/macos/OpenFreedomFighters-macos.tar.gz
+            artifacts/windows-x64/OpenFreedomFighters-windows-x64.zip
+          generate_release_notes: true

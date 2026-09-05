@@ -1,5 +1,7 @@
 # OpenFreedomFighters
 
+[![Build](https://github.com/yeager/openfreedomfighters/actions/workflows/build.yml/badge.svg)](https://github.com/yeager/openfreedomfighters/actions/workflows/build.yml)
+
 OpenFreedomFighters is a clean-room, native reimplementation and static-recompilation research project for the Windows version of *Freedom Fighters* (2003). The target platforms are macOS, Linux, and Steam Deck. A legally purchased PC installation is required at runtime; this repository contains no game assets, original executable code, or encryption keys.
 
 The project has two runtime profiles:
@@ -75,3 +77,4 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [Roadmap and acceptance gates](docs/ROADMAP.md)
 - [Localization plan](docs/LOCALIZATION.md)
 - [Clean-room protocol](CLEAN_ROOM.md)
+- [Continuous integration and releases](docs/CI.md)
