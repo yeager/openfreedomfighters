@@ -12,7 +12,6 @@ namespace {
 void check(bool value, const char* message) {
     if (!value) { std::cerr << "FAIL: " << message << '\n'; std::exit(1); }
 }
-
 struct Fixture {
     std::vector<off::data::GmsDirectoryEntry> directory;
     std::vector<off::data::GmsHierarchyNode> hierarchy;
@@ -89,6 +88,7 @@ std::array<off::data::StartupGraphicsRowComposition, 8> valid_rows() {
         row.slot_y = static_cast<float>(i < 6 ? i * 18 : 108);
         row.same_slot_multiplicity = i < 6 ? 1 : 2;
         row.same_slot_ordinal = i < 6 ? 0 : i - 6;
+        row.authored_hidden = i == 7;
         row.construction_chain = {row.owner_directory_index};
         row.transform_chain = {{row.owner_directory_index, {}, {}}};
         for (std::size_t picture = 0; picture < 3; ++picture) {
@@ -103,6 +103,7 @@ std::array<off::data::StartupGraphicsRowComposition, 8> valid_rows() {
                 {row.owner_directory_index, {}, {}},
                 {instance.directory_index, {}, {}}};
             instance.draw_plan = picture == 0 ? background : chrome;
+            instance.authored_state_mask = picture == 0 ? 0x80U : 0x01U;
         }
     }
     return rows;
@@ -190,10 +191,64 @@ int main() {
     rows_value[0].slot_y = 999.0F;
     check(owned.rows()[0].slot_y == 0.0F,
           "factory owns row values independently of its input");
+    const auto resting = owned.visible_pictures(0x01U);
+    check(resting.requested_state == 0x01U && resting.effective_state == 0x01U,
+          "preserve the resting state identity");
+    check(resting.pictures.size() == 21,
+          "resting state exposes three pictures for seven visible rows");
+    std::array<std::size_t, 8> resting_per_row{};
+    for (const auto& picture : resting.pictures) {
+        ++resting_per_row[picture.row_index];
+        check(picture.row_directory_index ==
+                  owned.rows()[picture.row_index].owner_directory_index &&
+              picture.picture_directory_index ==
+                  owned.rows()[picture.row_index].pictures[picture.picture_index]
+                      .directory_index,
+              "visibility keeps row and picture instance identities");
+    }
+    for (std::size_t i = 0; i < resting_per_row.size(); ++i)
+        check(resting_per_row[i] == (i == 7 ? 0U : 3U),
+              "resting state keeps both chrome instances on visible rows");
+    for (const auto requested : {0x08U, 0x10U, 0x20U}) {
+        const auto active = owned.visible_pictures(requested);
+        check(active.effective_state == requested && active.pictures.size() == 7,
+              "active state retains only seven persistent backgrounds");
+        for (const auto& picture : active.pictures)
+            check(picture.picture_index == 0 &&
+                  picture.role ==
+                      off::data::StartupGraphicsCompositionRole::row_background &&
+                  picture.draw_group_count == 1,
+                  "active state hides both chrome instances together");
+    }
+    const auto persistent = owned.visible_pictures(0x80U);
+    check(persistent.effective_state == 0x80U &&
+              persistent.pictures.size() == 7,
+          "authored persistent state bit remains an allowed state");
+    const auto fallback = owned.visible_pictures(0x04U);
+    check(fallback.requested_state == 0x04U &&
+              fallback.effective_state == 0x01U &&
+              fallback.pictures.size() == 21,
+          "unsupported requested state falls back to resting child visibility");
+    const auto mixed = owned.visible_pictures(0x09U);
+    check(mixed.requested_state == 0x09U && mixed.effective_state == 0x09U &&
+              mixed.pictures.size() == 21,
+          "mixed requested mask with an allowed bit does not fall back");
     auto bad_role = valid_rows();
     bad_role[0].pictures[0].role =
         off::data::StartupGraphicsCompositionRole::row_chrome;
     check(factory_rejects(bad_role), "factory rejects role mismatch");
+    auto bad_mask = valid_rows();
+    bad_mask[0].pictures[1].authored_state_mask = 0x08U;
+    check(factory_rejects(bad_mask),
+          "factory rejects a noncanonical authored chrome state mask");
+    auto no_hidden_duplicate = valid_rows();
+    no_hidden_duplicate[7].authored_hidden = false;
+    check(factory_rejects(no_hidden_duplicate),
+          "factory requires one authored-hidden duplicate-slot row");
+    auto hidden_regular_row = valid_rows();
+    hidden_regular_row[0].authored_hidden = true;
+    check(factory_rejects(hidden_regular_row),
+          "factory rejects an additional authored-hidden regular row");
     auto bad_group_count = valid_rows();
     bad_group_count[0].pictures[1].draw_plan = plan(4, 60);
     check(factory_rejects(bad_group_count), "factory rejects group-count mismatch");

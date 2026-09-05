@@ -42,6 +42,10 @@ or transform-orientation claim.
 The owning window/scene transform is external and remains the caller's
 responsibility.
 
+The recovered renderer-neutral alignment and cache arithmetic is documented in
+[window-picture transforms](PICTURE_TRANSFORM.md). Descriptor local Z is
+preserved across that boundary.
+
 Each draw-group texture-resource reference is itself an unsigned PRM-relative byte
 displacement. It resolves to a neutral 32-byte typed resource record embedded
 in the bounded PRM data region. The portable model retains the displacement and

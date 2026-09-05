@@ -101,3 +101,34 @@ chains, slot identity, rejection cases, and independence from caller storage.
 Malformed picture-resource parsing and texture-catalog joins remain covered by
 their lower-layer unit tests; the composition tests do not duplicate those
 parser and resolver contracts.
+
+The renderer-neutral visibility evaluator preserves both duplicate-slot row
+identities and every picture-instance identity. Initial state `0x01` yields
+seven visible rows, each with its persistent background and both chrome
+instances. The other duplicate-slot row is excluded by its authored hide flag.
+Recovered states `0x08`, `0x10`, and `0x20` hide both chrome instances together
+and retain the persistent backgrounds. A requested mask containing no recovered
+allowed-state bit retains its requested value but evaluates child visibility
+with the recovered `0x01` fallback. A mixed mask containing an allowed bit does
+not fall back. The returned sequence is an identity-bearing visibility result,
+not a claim about inter-picture, inter-row, container, or GPU submission order.
+The hardcoded allowed-state mask is scoped only to this recovered startup
+graphics control family and must not be reused as a general window-state mask.
+
+## Owning startup graphics asset
+
+After whole-install verification, the runtime can open the supported startup
+archive once and build an owning `StartupGraphicsAsset`. The loader requires one
+GMS, BUF, PRM, and TEX member, validates the BUF against the paired GMS, builds
+the canonical startup row composition, and collects its six distinct
+catalog-local image identities. It decodes mip zero for those six images only;
+the other startup catalog images are not decoded by this boundary. The result
+owns the composition and decoded RGBA bytes after the ZIP, packed resources,
+raw PRM allocation, and TEX catalog have left scope.
+
+Decoded startup graphics are capped at an aggregate 64 MiB. This is a
+project-authored CPU/GPU upload policy, not a claim about a retail format or
+corpus maximum. Size accumulation uses checked arithmetic before allocation.
+The asset preserves both the catalog-local image index and normalized TEX ID,
+but assigns no `RetailUiTextureRole` and makes no claim about transform
+composition, draw order, chrome scheduling, focus states, or action behavior.

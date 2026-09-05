@@ -116,7 +116,9 @@ composition: eight row owners, each with one persistent background picture and
 two chrome pictures co-gated by the same recovered visibility-state mask. Their
 24 instances bind 88 draw groups to six retail images while preserving, but not
 composing, every authored inclusive root-to-instance construction and transform
-chain. The visible focus marker and extended Modern/Modern+ rows
+chain. A paired GMS/BUF/PRM/TEX loader now owns and decodes mip zero for only
+those six composition-selected retail images; renderer wiring remains pending.
+The visible focus marker and extended Modern/Modern+ rows
 remain project-authored diagnostic UI until this recovered composition is wired
 into the renderer.
 The current skin is a labelled diagnostic implementation. The production F10
@@ -175,6 +177,7 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [Texture-catalog format](docs/TEXTURE_FORMAT.md)
 - [Primitive-catalog format](docs/PRIMITIVE_FORMAT.md)
 - [PRM-backed UI picture-resource format](docs/PICTURE_RESOURCE.md)
+- [Window-picture transform contract](docs/PICTURE_TRANSFORM.md)
 - [Packed ZGF/GMS resource envelope](docs/PACKED_RESOURCE_FORMAT.md)
 - [ZGF resource-bundle format](docs/ZGF_FORMAT.md)
 - [GMS object-source image and runtime handles](docs/GMS_FORMAT.md)

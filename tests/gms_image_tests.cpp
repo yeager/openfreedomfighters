@@ -134,7 +134,10 @@ std::vector<std::byte> deep_hierarchy_fixture() {
     return bytes;
 }
 
-std::vector<std::byte> window_picture_fixture(bool has_extension = true) {
+std::vector<std::byte> window_picture_fixture(
+    bool has_extension = true,
+    std::uint32_t authored_state_exponent = 0
+) {
     auto bytes = packed_fixture();
     constexpr std::size_t envelope_size = 9;
     constexpr std::size_t record_offset = 336;
@@ -159,7 +162,8 @@ std::vector<std::byte> window_picture_fixture(bool has_extension = true) {
         set_u32(bytes, cursor + 1U, value);
         cursor += 5U;
     };
-    for (std::uint32_t value = 1; value <= 4; ++value) {
+    append_scalar(authored_state_exponent);
+    for (std::uint32_t value = 2; value <= 4; ++value) {
         append_scalar(value);
     }
     if (has_extension) {
@@ -307,17 +311,27 @@ int main() {
     const auto picture_image = off::data::GmsImage::parse(
         off::data::PackedResource::parse(window_picture_fixture())
     );
-    check(picture_image.startup_window_picture_source(1).picture_asset_reference ==
+    check(picture_image.startup_window_picture_source(1).authored_state_exponent ==
+                  0U &&
+              picture_image.startup_window_picture_source(1).picture_asset_reference ==
                   0x1234U &&
+              picture_image.startup_window_picture_source(2).authored_state_exponent ==
+                  0U &&
               picture_image.startup_window_picture_source(2)
                       .picture_asset_reference == 0x1234U,
-          "parse a complete tagged startup window-picture source");
+          "preserve authored state exponents and picture references");
     const auto picture_without_extension = off::data::GmsImage::parse(
         off::data::PackedResource::parse(window_picture_fixture(false))
     );
     check(picture_without_extension.startup_window_picture_source(1)
                   .picture_asset_reference == 0x1234U,
           "parse the shape without an optional extension scalar");
+    const auto persistent_picture_image = off::data::GmsImage::parse(
+        off::data::PackedResource::parse(window_picture_fixture(true, 7U))
+    );
+    check(persistent_picture_image.startup_window_picture_source(1)
+                  .authored_state_exponent == 7U,
+          "preserve the highest authored exponent representable by a byte mask");
     check(image.directory()[1].pool_group == 1 &&
               image.directory()[1].pool_class == 3 &&
               image.directory()[1].group_slot_index == 0 &&
@@ -452,6 +466,15 @@ int main() {
             static_cast<void>(image.startup_window_picture_source(1));
         },
         "reject an unexpected window-picture scalar tag"
+    );
+    check_rejected(
+        [] {
+            const auto image = off::data::GmsImage::parse(
+                off::data::PackedResource::parse(window_picture_fixture(true, 8U))
+            );
+            static_cast<void>(image.startup_window_picture_source(1));
+        },
+        "reject a window-picture state exponent outside a byte mask"
     );
     check_rejected(
         [] {

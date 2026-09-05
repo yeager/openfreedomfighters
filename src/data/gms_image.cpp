@@ -251,7 +251,11 @@ void require_optional_offset(
         ++cursor;
     };
 
-    for (std::size_t index = 0; index < 4U; ++index) {
+    const auto authored_state_exponent = read_integer();
+    if (authored_state_exponent >= std::numeric_limits<std::uint8_t>::digits) {
+        throw std::runtime_error("GMS window-picture state exponent is out of range");
+    }
+    for (std::size_t index = 1; index < 4U; ++index) {
         static_cast<void>(read_integer());
     }
     if (current_type() == integer_tag_type) {
@@ -268,7 +272,11 @@ void require_optional_offset(
     if (cursor != end) {
         throw std::runtime_error("GMS window-picture source has trailing data");
     }
-    return {.picture_asset_reference = picture_asset_reference};
+    return {
+        .authored_state_exponent =
+            static_cast<std::uint8_t>(authored_state_exponent),
+        .picture_asset_reference = picture_asset_reference,
+    };
 }
 
 }  // namespace

@@ -76,6 +76,8 @@ add_library(off_core
     src/graphics/render_preview.cpp
     src/graphics/scene_render.cpp
     src/graphics/scene_gpu_plan.cpp
+    src/graphics/startup_graphics_asset.cpp
+    src/graphics/picture_transform.cpp
     src/settings/graphics_settings.cpp
     src/simulation/fixed_step.cpp
     src/simulation/input.cpp
@@ -207,6 +209,18 @@ if(BUILD_TESTING)
     target_link_libraries(off_startup_graphics_composition_tests PRIVATE off_core)
     add_test(NAME off_startup_graphics_composition_tests
         COMMAND off_startup_graphics_composition_tests)
+
+    add_executable(off_startup_graphics_asset_tests
+        tests/startup_graphics_asset_tests.cpp)
+    target_link_libraries(off_startup_graphics_asset_tests PRIVATE off_core)
+    target_compile_definitions(off_startup_graphics_asset_tests PRIVATE
+        OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/startup-graphics-asset-work")
+    add_test(NAME off_startup_graphics_asset_tests
+        COMMAND off_startup_graphics_asset_tests)
+
+    add_executable(off_picture_transform_tests tests/picture_transform_tests.cpp)
+    target_link_libraries(off_picture_transform_tests PRIVATE off_core)
+    add_test(NAME off_picture_transform_tests COMMAND off_picture_transform_tests)
 
     add_executable(off_retail_ui_fonts_tests tests/retail_ui_fonts_tests.cpp)
     target_link_libraries(off_retail_ui_fonts_tests PRIVATE off_core)

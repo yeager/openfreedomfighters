@@ -30,6 +30,7 @@ struct StartupGraphicsCompositionInstance {
     std::vector<std::size_t> construction_chain;
     std::vector<StartupGraphicsLocalTransform> transform_chain;
     std::uint32_t picture_reference{0};
+    std::uint8_t authored_state_mask{0};
     PictureDrawPlan draw_plan;
 };
 
@@ -38,9 +39,25 @@ struct StartupGraphicsRowComposition {
     float slot_y{0.0F};
     std::size_t same_slot_ordinal{0};
     std::size_t same_slot_multiplicity{1};
+    bool authored_hidden{false};
     std::vector<std::size_t> construction_chain;
     std::vector<StartupGraphicsLocalTransform> transform_chain;
     std::array<StartupGraphicsCompositionInstance, 3> pictures;
+};
+
+struct StartupGraphicsVisiblePicture {
+    std::size_t row_index{0};
+    std::size_t picture_index{0};
+    std::size_t row_directory_index{0};
+    std::size_t picture_directory_index{0};
+    StartupGraphicsCompositionRole role{StartupGraphicsCompositionRole::row_chrome};
+    std::size_t draw_group_count{0};
+};
+
+struct StartupGraphicsVisibility final {
+    std::uint8_t requested_state{0};
+    std::uint8_t effective_state{0};
+    std::vector<StartupGraphicsVisiblePicture> pictures;
 };
 
 struct StartupGraphicsRowLocation {
@@ -72,6 +89,12 @@ public:
 
     [[nodiscard]] const std::array<StartupGraphicsRowComposition, 8>& rows()
         const noexcept { return rows_; }
+
+    // Evaluates the recovered state-mask and authored-hide contract. The result
+    // preserves identities but deliberately does not assert GPU draw order.
+    [[nodiscard]] StartupGraphicsVisibility visible_pictures(
+        std::uint8_t requested_state
+    ) const;
 
 private:
     std::array<StartupGraphicsRowComposition, 8> rows_;

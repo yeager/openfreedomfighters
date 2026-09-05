@@ -18,6 +18,7 @@ struct GmsAttachment {
 };
 
 struct GmsWindowPictureSource {
+    std::uint8_t authored_state_exponent{0};
     std::uint32_t picture_asset_reference{0};
 };
 

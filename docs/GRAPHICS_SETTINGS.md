@@ -200,6 +200,17 @@ the two chrome siblings are not focused/normal alternatives. Retail draw order,
 GPU transform composition, motion, sound cues, and action behavior mapping are
 still incomplete.
 
+The recovered visibility evaluator keeps exactly one of the duplicate final-slot
+rows authored-hidden. Initial state `0x01` exposes seven backgrounds and both
+chrome instances for all seven visible rows. States `0x08`, `0x10`, and `0x20`
+retain those backgrounds while hiding both chrome instances together; unknown
+requested masks use the retail `0x01` child-selection fallback only when they
+contain no recovered allowed-state bit. Mixed masks that contain an allowed bit
+remain effective. Picture identities are retained, but result order is not
+described as retail GPU order. The hardcoded allowed-state mask is deliberately
+limited to this recovered startup graphics control family; it is not a generic
+window-state contract.
+
 The `--screenshot FILE.bmp` diagnostic path captures the final bounded frame
 (or the first frame without a frame limit), renders it into an application-owned
 color target, blits it into SDL's write-only swapchain, and

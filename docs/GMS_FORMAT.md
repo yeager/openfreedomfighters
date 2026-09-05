@@ -73,7 +73,9 @@ model provides an explicitly startup-scoped, on-demand decoder for the exact
 startup picture stream. Callers must first establish archive provenance. It
 checks the block's masked byte size, four required base scalars, optional
 extension scalar, structural delimiters, picture-reference scalar, terminal
-marker, and exact end before exposing `picture_asset_reference`.
+marker, and exact end. The first base scalar is preserved as
+`authored_state_exponent`, bounded to `0..7` before any byte-mask shift, and
+exposed alongside `picture_asset_reference`.
 
 Parsing is intentionally on demand rather than imposed on every picture class in
 all scene archives: the proven stream contract and corpus pass currently cover
@@ -116,4 +118,4 @@ Corpus validation confirms that all 2,801 primary handles and all 201 present op
 
 ## Validation coverage
 
-Synthetic tests use a project-authored stored image. They cover directory, pool-count, identifier, transform, attachment, and BUF-relative bounds; finite transform decoding; object-name termination; auxiliary BUF extents; source-type diagnostics; parent/child pool traversal; class and local-slot assignment; local and external handle lookup; packed source-reference fields; tagged slot-zero and interior runtime handles; unsupported tags; handle misalignment; and bounded startup window-picture streams with and without the optional extension scalar. They reject invalid block sizes, scalar tags, missing serialization, and trailing data. No retail GMS, BUF, identifier, or picture reference is present in the repository.
+Synthetic tests use a project-authored stored image. They cover directory, pool-count, identifier, transform, attachment, and BUF-relative bounds; finite transform decoding; object-name termination; auxiliary BUF extents; source-type diagnostics; parent/child pool traversal; class and local-slot assignment; local and external handle lookup; packed source-reference fields; tagged slot-zero and interior runtime handles; unsupported tags; handle misalignment; and bounded startup window-picture streams with and without the optional extension scalar. They preserve authored state exponents `0` and `7`, reject `8`, and also reject invalid block sizes, scalar tags, missing serialization, and trailing data. No retail GMS, BUF, identifier, or picture reference is present in the repository.

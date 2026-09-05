@@ -15,6 +15,13 @@ constexpr std::uint32_t control_type = 0x00100033U;
 constexpr std::uint32_t row_type = 0x00100034U;
 constexpr std::uint32_t text_type = 0x0020002dU;
 constexpr std::uint32_t picture_type = 0x00200046U;
+constexpr std::uint32_t authored_hide_flag = 0x00000400U;
+constexpr std::uint8_t resting_state = 0x01U;
+constexpr std::uint8_t persistent_state_mask = 0x80U;
+// This is the narrow recovered allowed-state mask for the startup graphics
+// control family, not a general window-state mask.
+constexpr std::uint8_t recovered_allowed_states =
+    resting_state | 0x08U | 0x10U | 0x20U | persistent_state_mask;
 
 bool at(const GmsDirectoryEntry& entry, float x, float y) {
     return entry.position[0] == x && entry.position[1] == y;
@@ -251,6 +258,9 @@ StartupGraphicsComposition StartupGraphicsComposition::build(
             locations | std::views::take(row_index), [&](const auto& other) {
                 return image.directory()[other.owner_directory_index].position[1] == row.slot_y;
             }));
+        row.authored_hidden =
+            (image.directory()[location.owner_directory_index].object_flags &
+             authored_hide_flag) != 0;
         row.construction_chain = std::move(row_chain);
         row.transform_chain = std::move(row_transforms);
         const std::array<std::size_t, 3> indexes{
@@ -260,6 +270,13 @@ StartupGraphicsComposition StartupGraphicsComposition::build(
         for (std::size_t picture_index = 0; picture_index < indexes.size(); ++picture_index) {
             const auto directory_index = indexes[picture_index];
             const auto source = image.startup_window_picture_source(directory_index);
+            if (source.authored_state_exponent >=
+                std::numeric_limits<std::uint8_t>::digits) {
+                throw std::runtime_error(
+                    "startup graphics picture state exponent is out of range");
+            }
+            const auto authored_state_mask = static_cast<std::uint8_t>(
+                std::uint32_t{1} << source.authored_state_exponent);
             const auto picture = PictureResource::parse(
                 primitive_allocation, source.picture_asset_reference);
             const auto expected_groups = picture_index == 0 ? 1U : 5U;
@@ -281,6 +298,7 @@ StartupGraphicsComposition StartupGraphicsComposition::build(
                                    : StartupGraphicsCompositionRole::row_chrome,
                 directory_index, std::move(chain), std::move(transforms),
                 source.picture_asset_reference,
+                authored_state_mask,
                 PictureDrawPlan::build(picture, bindings)};
         }
         built_rows[row_index] = std::move(row);
@@ -311,6 +329,10 @@ StartupGraphicsComposition StartupGraphicsComposition::from_rows(
             row.pictures[1].draw_plan.groups().size() != 5 ||
             row.pictures[2].draw_plan.groups().size() != 5)
             throw std::runtime_error("startup graphics row composition roles or group counts mismatch");
+        if (row.pictures[0].authored_state_mask != persistent_state_mask ||
+            row.pictures[1].authored_state_mask != resting_state ||
+            row.pictures[2].authored_state_mask != resting_state)
+            throw std::runtime_error("startup graphics picture state-mask contract mismatch");
         for (const auto& picture : row.pictures) {
             for (std::size_t group_index = 0;
                  group_index < picture.draw_plan.groups().size(); ++group_index) {
@@ -353,6 +375,45 @@ StartupGraphicsComposition StartupGraphicsComposition::from_rows(
             if (picture.construction_chain.empty() ||
                 picture.construction_chain.back() != picture.directory_index)
                 throw std::runtime_error("startup graphics picture construction endpoint mismatch");
+    }
+    const auto hidden_rows = std::ranges::count_if(
+        result.rows_, [](const auto& row) { return row.authored_hidden; });
+    if (hidden_rows != 1 ||
+        (!result.rows_[6].authored_hidden && !result.rows_[7].authored_hidden))
+        throw std::runtime_error("startup graphics authored row visibility mismatch");
+    return result;
+}
+
+StartupGraphicsVisibility StartupGraphicsComposition::visible_pictures(
+    std::uint8_t requested_state
+) const {
+    StartupGraphicsVisibility result;
+    result.requested_state = requested_state;
+    result.effective_state =
+        (requested_state & recovered_allowed_states) != 0
+            ? requested_state
+            : resting_state;
+    result.pictures.reserve(21);
+    for (std::size_t row_index = 0; row_index < rows_.size(); ++row_index) {
+        const auto& row = rows_[row_index];
+        if (row.authored_hidden) continue;
+        for (std::size_t picture_index = 0;
+             picture_index < row.pictures.size(); ++picture_index) {
+            const auto& picture = row.pictures[picture_index];
+            const auto persistent =
+                (picture.authored_state_mask & persistent_state_mask) != 0;
+            if (!persistent &&
+                (picture.authored_state_mask & result.effective_state) == 0)
+                continue;
+            result.pictures.push_back({
+                row_index,
+                picture_index,
+                row.owner_directory_index,
+                picture.directory_index,
+                picture.role,
+                picture.draw_plan.groups().size(),
+            });
+        }
     }
     return result;
 }
