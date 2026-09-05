@@ -39,6 +39,13 @@ The attachment table starts with a 32-bit count followed by eight-byte entries. 
 
 The parser decodes each basis and position to finite portable floats, checks every GMS-relative range, and retains the opaque values needed by later materialization. Executable control flow passes the first BUF reference to the common object constructor as a character pointer and stores it as the object's name. A separate cross-resource validator therefore checks both its range and NUL terminator. Across the 151,519 distinct source records, all referenced names terminate within their owning BUF; their lengths range from zero to 78 bytes.
 
+Independent executable tracing establishes one additional behavioral boundary:
+the loader copies the nine-float basis into runtime matrix storage, copies the
+three-float position, and passes both to the transform setter of the
+newly allocated runtime object before that object is registered. The loader also
+maintains hierarchy context and creates attachment links, but the available
+evidence does not establish their transform composition or coordinate spaces.
+
 The current renderer's row-major `basis * local + position` calculation is an
 explicit source-only diagnostic convention, not an established world-transform
 formula. The parser does not infer hierarchy, parent-relative composition, map

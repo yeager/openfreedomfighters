@@ -167,6 +167,27 @@ int main() {
     );
     check(
         map.query_bounds({
+            .minimum = {-47'071.0F, -47'070.0F, -87'069.0F},
+            .maximum = {-43'071.0F, -43'070.0F, -83'069.0F},
+        }).empty(),
+        "do not add the quantized root center to converted query coordinates"
+    );
+    check(
+        map.query_bounds({
+            .minimum = {99'997.0F, 88'002.0F, 48'003.0F},
+            .maximum = {99'997.0F, 88'002.0F, 48'003.0F},
+        }) == std::vector<std::size_t>{0},
+        "include a point immediately below a half-open record maximum"
+    );
+    check(
+        map.query_bounds({
+            .minimum = {100'001.0F, 88'002.0F, 48'003.0F},
+            .maximum = {100'001.0F, 88'002.0F, 48'003.0F},
+        }).empty(),
+        "exclude a point at a half-open record maximum"
+    );
+    check(
+        map.query_bounds({
             .minimum = {1.0F, 2.0F, 3.0F},
             .maximum = {1.0F, 2.0F, 3.0F},
         }).empty(),

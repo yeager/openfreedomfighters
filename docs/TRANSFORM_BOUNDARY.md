@@ -20,6 +20,14 @@ retail content into the project:
 - RMC/RMI spatial records retain their quantized bounds and their descriptor's
   finite orientation, position, auxiliary-position, and extent values.
 
+Executable tracing further establishes that the GMS loader copies the source
+basis into runtime matrix storage, copies the source position, and passes both
+values to the newly allocated runtime object's transform setter before
+registration. The same loading path maintains hierarchy context and creates
+attachment links. This proves transform consumption and ordering within object
+creation, but not the matrix layout exposed to rendering, parent-relative or
+attachment propagation, world-space composition, or the final submitted matrix.
+
 These facts establish identity and provenance. They do not establish a final
 object-to-world matrix.
 
@@ -63,11 +71,13 @@ Until additional evidence is available, the renderer must not:
 - describe any such result as the original camera, world placement, hierarchy,
   or material behavior.
 
-A corpus observation reinforces this boundary: under the simplest inverse of
-the currently documented map quantization, only four of 2,801 descriptor
-positions fall inside their associated spatial bounds. This disproves that
-specific direct-coordinate interpretation; it does not identify the missing
-coordinate conversion or the fields' final semantics.
+A controlled aggregate probe of 220 directly materialized instances found that
+adding a speculative `0x8000` coordinate bias increased spatial-bound overlap
+for one unproven transform candidate from zero instances to 197. That
+correlation is not evidence for changing the query conversion: executable code
+passes `0x8000` separately as the loose-octree root center, and the transform
+candidate itself remains unproven. The result instead reinforces that corpus
+overlap cannot establish world-transform composition on its own.
 
 The current opaque, blended, and fully transparent scheduling and diagnostic
 depth policies are likewise renderer-development policies. They are not yet
@@ -79,9 +89,9 @@ World-space scene rendering remains gated on all of the following:
 
 1. Trace the separate RMC and RMI descriptor-consumer paths for both observed
    object kinds and for primary and secondary handles.
-2. Establish how GMS basis and position data reach a runtime object's render
-   transform, including matrix layout, multiplication direction, handedness,
-   units, and parent-relative behavior.
+2. Trace the established runtime-object transform through hierarchy updates and
+   render submission, including matrix layout, multiplication direction,
+   handedness, units, and parent-relative behavior.
 3. Establish the meaning and coordinate space of map orientation, position,
    auxiliary position, and extents, and whether they replace, compose with, or
    only describe the referenced object.

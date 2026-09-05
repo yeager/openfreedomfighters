@@ -33,7 +33,7 @@ The parser follows the tree from node zero and requires every referenced node to
 
 ## World-space queries
 
-The portable reader performs bounds queries with the same quantized loose-octree rules recovered from the Windows executable. Each world coordinate is converted with `trunc((world - center) * factor + 0.5)`. The converted maximum is incremented before traversal, unless it is already saturated at the signed 32-bit maximum.
+The portable reader performs bounds queries with the same quantized loose-octree rules recovered from the Windows executable. Each world coordinate is converted with `trunc((world - center) * factor + 0.5)`. The converted maximum is incremented before traversal, unless it is already saturated at the signed 32-bit maximum. The executable passes `0x8000` separately as each axis of the traversal root; it does not add that value to the converted query coordinates.
 
 The root center is `(0x8000, 0x8000, 0x8000)`. At child depth `d`, the cell size is `0x10000 >> d`; each child center moves by half that size according to its three octant bits. A child is traversed when the query overlaps its loose bounds of `center +/- cell size`. Spatial-index records use half-open intersection tests: a query axis must extend below the record maximum and above the record minimum.
 
@@ -73,4 +73,4 @@ Executable query callbacks independently establish that offset 76 is passed to t
 
 ## Validation coverage
 
-Installation verification parses 90 `RMC` files containing 2,587 octree nodes and 1,612 entries, plus 90 `RMI` files containing 1,359 nodes and 1,189 entries. Synthetic tests exercise whole-tree and octant-selective world queries and reject invalid query bounds, truncated or misaligned envelopes, invalid quantization factors, cyclic or reused nodes, repeated sibling octants, overlapping element ownership, excessive hierarchy padding, unsupported object kinds, duplicate or misaligned descriptor references, invalid geometry references, inverted bounds, and non-finite values.
+Installation verification parses 90 `RMC` files containing 2,587 octree nodes and 1,612 entries, plus 90 `RMI` files containing 1,359 nodes and 1,189 entries. Synthetic tests exercise whole-tree and octant-selective world queries, distinguish the traversal-root center from an additive coordinate bias, verify half-open record maxima, and reject invalid query bounds, truncated or misaligned envelopes, invalid quantization factors, cyclic or reused nodes, repeated sibling octants, overlapping element ownership, excessive hierarchy padding, unsupported object kinds, duplicate or misaligned descriptor references, invalid geometry references, inverted bounds, and non-finite values.

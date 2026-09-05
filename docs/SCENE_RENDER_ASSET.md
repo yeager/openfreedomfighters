@@ -24,6 +24,14 @@ map views. It:
 - keeps the GMS and map transforms separate because their composition has not
   yet been established from evidence.
 
+Executable tracing confirms that the original loader copies the GMS basis into
+runtime matrix storage, copies the GMS position, and passes both to the newly
+allocated runtime object's transform setter before registration. It does not
+yet establish the matrix
+layout consumed by rendering, hierarchy or attachment propagation, world-space
+composition, or final draw-matrix provenance. The asset therefore continues to
+retain source and map transforms separately.
+
 The asset includes line lists, untextured meshes, and transparent geometry. The
 diagnostic single-mesh preview's selection rules do not apply to scene assets.
 Textures are decoded to owned RGBA8 mip-zero images once per referenced TEX
@@ -108,12 +116,12 @@ materials, selecting the scene camera, adding depth, and resolving indirect or
 non-primitive GMS sources are later milestones. Modern and Modern+ render paths
 must consume the same instance identity and gameplay snapshot as Original mode.
 The current source-only diagnostic transform is a presentation convention, not a
-recovered world-space formula. An aggregate audit found that only four of 2,801
-map positions fall inside their associated decoded spatial bounds under the
-currently documented quantization inverse, so naively treating those fields as
-world-space placement is specifically unsupported. The exact proven
-relationships, prohibited interpretations, and evidence gates are documented in
-[TRANSFORM_BOUNDARY.md](TRANSFORM_BOUNDARY.md).
+recovered world-space formula. Aggregate overlap experiments are useful for
+rejecting candidates, but cannot override the executable's query arithmetic or
+establish map placement: even a speculative additive root bias substantially
+improves one candidate while contradicting the recovered query path. The exact
+proven relationships, prohibited interpretations, and evidence gates are
+documented in [TRANSFORM_BOUNDARY.md](TRANSFORM_BOUNDARY.md).
 
 ## SDL-free GPU plan
 
