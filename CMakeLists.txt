@@ -47,6 +47,7 @@ add_library(off_core
     src/data/zip_archive.cpp
     src/graphics/texture_decode.cpp
     src/graphics/render_assets.cpp
+    src/graphics/render_preview.cpp
 )
 target_include_directories(off_core PUBLIC include)
 target_compile_features(off_core PUBLIC cxx_std_23)
@@ -115,6 +116,10 @@ if(BUILD_TESTING)
     add_executable(off_render_assets_tests tests/render_assets_tests.cpp)
     target_link_libraries(off_render_assets_tests PRIVATE off_core)
     add_test(NAME off_render_assets_tests COMMAND off_render_assets_tests)
+
+    add_executable(off_render_preview_tests tests/render_preview_tests.cpp)
+    target_link_libraries(off_render_preview_tests PRIVATE off_core)
+    add_test(NAME off_render_preview_tests COMMAND off_render_preview_tests)
 
     add_executable(off_zgf_bundle_tests tests/zgf_bundle_tests.cpp)
     target_link_libraries(off_zgf_bundle_tests PRIVATE off_core)

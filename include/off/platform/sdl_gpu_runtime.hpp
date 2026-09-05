@@ -1,5 +1,6 @@
 #pragma once
 
+#include "off/graphics/render_preview.hpp"
 #include "off/mode.hpp"
 
 #include <cstddef>
@@ -8,13 +9,12 @@
 namespace off::platform {
 
 struct RuntimeResult {
-    bool success{false};
-    std::string message;
+  bool success{false};
+  std::string message;
 };
 
-[[nodiscard]] RuntimeResult run_sdl_gpu_runtime(
-    Mode mode,
-    std::size_t frame_limit = 0
-);
+[[nodiscard]] RuntimeResult
+run_sdl_gpu_runtime(Mode mode, const graphics::RenderPreviewAsset &preview,
+                    std::size_t frame_limit = 0);
 
-}  // namespace off::platform
+} // namespace off::platform

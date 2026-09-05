@@ -61,6 +61,13 @@ contiguous portable index buffer, and draw ranges that preserve every source bat
 The full installation yields 57,284 triangle-strip and 4,140 line-list bindings;
 their 461,344 ranges cover all 4,412,738 indexes exactly once.
 
+The runtime preview loader applies that contract to `FF-StartUp.ZIP`. It chooses
+the first supported textured triangle strip, copies its vertices, flattened index
+buffer, and draw ranges into an owned render asset, decodes mip zero to RGBA8, and
+computes its model-space bounds. It rejects missing resources, missing texture
+bindings, empty mip chains, and degenerate geometry before SDL GPU is initialized.
+Synthetic tests cover construction and failure without embedding retail content.
+
 Every `RMC` and `RMI` member is parsed as well. The supported corpus contains 2,587 nodes and 1,612 entries in `RMC`, plus 1,359 nodes and 1,189 entries in `RMI`. Every octree node is reached exactly once, every spatial element has exactly one owner, and every fixed-size descriptor reference and quantized bound is range checked. World-space bounds queries reproduce the recovered quantization, loose-cell, and half-open intersection rules. The final descriptor words are now confirmed as one required and one optional packed geometry reference rather than floating-point scale values. See [RENDER_MAP_FORMAT.md](RENDER_MAP_FORMAT.md).
 
 The audio format model is documented in [AUDIO_FORMAT.md](AUDIO_FORMAT.md).

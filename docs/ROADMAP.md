@@ -60,6 +60,7 @@ Gate: all startup and first-level assets load into validated portable models und
 
 - [ ] SDL3 platform layer and controller action map.
 - [x] Select SDL GPU and prove the native window/device/swapchain clear-pass lifecycle.
+- [x] Prepare a validated startup-scene mesh and texture for GPU upload.
 - [ ] Upload and draw the first decoded retail mesh and texture.
 - [ ] Original-mode material/lighting reference path.
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
@@ -93,6 +94,7 @@ Gate: campaign completes in Original mode on all three targets with no compatibi
 - [ ] 20 locale packs and in-context review, including Swedish.
 - [ ] Modern graphics feature set, presets, accessibility, and performance budgets.
 - [ ] Optional Modern+ replacement-asset contract and curated HD content pipeline.
+- [ ] Optional Modern+ DLSS 5 backend with portable temporal and native fallbacks.
 - [ ] Translation completeness and overflow automation.
 
 Gate: every locale passes completeness and UI-layout checks; Modern and Original simulations produce identical state hashes for shared settings.

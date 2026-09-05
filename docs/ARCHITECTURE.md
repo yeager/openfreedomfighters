@@ -46,8 +46,12 @@ The deterministic simulation is shared by both modes. Presentation is downstream
 
 The current runtime creates a resizable high-DPI SDL window, selects the native
 SDL GPU driver, claims its swapchain, records a color clear render pass, submits
-the command buffer, and exits cleanly on window close or Escape. This proves the
-platform/device/presentation lifecycle; retail geometry is not drawn yet.
+the command buffer, and exits cleanly on window close or Escape. Before creating
+the GPU device it selects a textured triangle-strip primitive from the startup
+scene, copies its validated vertices, indexes, and draw ranges, decodes mip zero
+to RGBA8, and computes finite model bounds. This proves the retail-to-renderer
+handoff and platform/device/presentation lifecycle; retail geometry is not drawn
+yet.
 
 ## Compatibility profiles
 

@@ -9,9 +9,10 @@ The project has two runtime profiles:
 - **Original** preserves gameplay, timing, presentation, and content while adding a portable renderer, modern input, stable widescreen output, and localization infrastructure for 20 languages including Swedish.
 - **Modern** uses the same gameplay simulation and user-supplied data, with modern rendering, scalable resolution, improved lighting and shadows, higher-quality filtering, accessibility options, and unlocked presentation frame rates where simulation safety permits.
 
-An optional future **Modern+** asset layer may provide independently licensed HD
-textures and material maps. Retail assets always remain the fallback, and no
-replacement pack is distributed from this engine repository.
+An optional future **Modern+** layer targets independently licensed HD assets and
+DLSS 5 on supported NVIDIA RTX hardware once an official redistributable SDK is
+available. Retail assets and portable native/temporal rendering always remain the
+fallback, and no replacement pack is distributed from this engine repository.
 
 This is an independent fan project and is not affiliated with or endorsed by IO Interactive, Electronic Arts, or the relevant rights holders. *Freedom Fighters* and related names and assets belong to their respective owners.
 
@@ -35,9 +36,12 @@ and fully disassembled in private clean-room storage. The native C++ bootstrap n
 
 Texture, primary-vertex, topology, spatial, and supported audio data decode into
 portable representations. The executable now opens a resizable high-DPI native
-window and submits its first SDL GPU render pass through Vulkan, Metal, or D3D12.
-Retail geometry rendering, gameplay simulation, menus, localization, and the
-complete native runtime remain under development; no playable build exists yet.
+window, loads a validated textured triangle-strip preview from `FF-StartUp.ZIP`,
+and submits its first SDL GPU render pass through Vulkan, Metal, or D3D12. The
+preview's retail vertices, indexes, bounds, and decoded RGBA texture are prepared
+in memory but are not uploaded or drawn yet. Retail geometry rendering, gameplay
+simulation, menus, localization, and the complete native runtime remain under
+development; no playable build exists yet.
 
 ## Build the native bootstrap
 

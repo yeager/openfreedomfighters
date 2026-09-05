@@ -15,7 +15,7 @@ or save-state results.
 | Widescreen and ultrawide | Corrected projection | Native | Native |
 | Presentation frame rate | Reference-compatible option | Unlocked where safe | Unlocked where safe |
 | Texture filtering | Reference path | Anisotropic and stable mip selection | Same, with replacement maps |
-| Anti-aliasing | Reference-compatible | Temporal or high-quality spatial AA | Same |
+| Anti-aliasing | Reference-compatible | Temporal or high-quality spatial AA | Same, plus optional DLSS 5 on supported RTX hardware |
 | Lighting and shadows | Reproduced original model | Higher-resolution dynamic path | Optional authored relighting |
 | Color output | SDR reference transform | SDR/HDR tone mapping | SDR/HDR tone mapping |
 | Effects | Reference particles and blending | Improved particles, water, glass, smoke, and explosions | Optional authored effects |
@@ -68,6 +68,28 @@ Original reference, GPU captures for pass and resource correctness, and frametim
 budgets rather than average FPS alone. Linux, macOS, and Steam Deck must render
 the same material semantics even when their native graphics backends differ.
 
+## Temporal upscaling and DLSS
+
+Modern always retains a portable native-resolution and temporal anti-aliasing
+path. The renderer-facing temporal interface owns color, depth, motion vectors,
+exposure, jitter, reactive-mask, and HUD-less inputs; UI is composed afterward at
+output resolution. This contract allows quality-equivalent fallbacks on AMD,
+Intel, Apple, and Steam Deck hardware without affecting simulation state.
+
+Modern+ targets DLSS 5 as an optional NVIDIA RTX backend once NVIDIA publishes an
+official, redistributable SDK under that name. Until then, the implementation may
+use the newest supported official DLSS release, but must report its actual version
+and must never label it DLSS 5. Capability checks choose between DLSS, the portable
+temporal path, or native rendering at runtime. Original mode does not enable DLSS
+by default.
+
+DLSS frame generation is a later, independently selectable feature. It requires
+validated depth and motion vectors, a HUD-less color buffer, correct UI separation,
+latency controls, and robust frame pacing before it can ship. Generated frames and
+upscaling are presentation-only and may not influence input sampling, physics,
+mission logic, replay state, or saves. Only official redistributable binaries may
+be packaged; no proprietary SDK source or binary belongs in this repository.
+
 ## Accessibility and user control
 
 The renderer will provide brightness and HDR calibration, color-vision filters,
@@ -80,10 +102,10 @@ AI perception or simulation state.
 
 The portable data layer already decodes retail texture formats, mip levels,
 palettes, UVs, vertex colors, grouped topology, and 40,071 validated
-primitive-to-texture links. The remaining prerequisites are confirmed material
-flag semantics, render-state reconstruction, a portable GPU backend, the Original
-reference shader path, and then the Modern render graph. A renderer-facing binding
-table now resolves every ordinary primitive to its optional TEX image while
+primitive-to-texture links. The SDL GPU platform and clear-pass lifecycle are
+operational; confirmed material semantics, render-state reconstruction, mesh
+upload, the Original reference shaders, and then the Modern render graph remain.
+A renderer-facing binding table resolves every ordinary primitive to its optional TEX image while
 preserving the still-opaque selector flag. It also supplies validated vertex-alpha
 classes and GPU-oriented triangle-strip or line-list index buffers with explicit
 draw ranges. Unknown fields remain explicitly opaque until corpus evidence and
