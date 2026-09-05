@@ -183,6 +183,9 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path) {
   } else if (!verification) {
     result.outcome = StartupPreflightOutcome::data_error;
     result.message = data_error_message(data_path, verification);
+    // A late verification result may arrive after the loading surface replaced
+    // the timed splash. Restore the artwork behind the error dialog.
+    static_cast<void>(draw_splash(window.get(), image.get()));
     static_cast<void>(
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Game data required",
                                  result.message.c_str(), window.get()));

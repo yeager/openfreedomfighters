@@ -7,6 +7,8 @@ beside them. CMake copies the BMP beside the built executable and installs it at
 `bin/assets/openfreedomfighters-splash.bmp`. The runtime resolves it from
 `SDL_GetBasePath`, so launching from another working directory does not change
 asset discovery.
+The asset-copy target runs on each executable build with `copy_if_different`,
+so artwork-only changes and missing staged assets do not require relinking.
 
 The splash uses SDL's CPU window surface and built-in BMP decoder. It therefore
 does not require a GPU device, a retail archive, or another image dependency.
@@ -17,13 +19,16 @@ changes. The three-second deadline begins only after the first successful
 `SDL_UpdateWindowSurface`. A monotonic-clock state machine keeps the splash
 visible until the first tick at or after that deadline. If verification is
 still running then, the image is replaced by a dark loading surface; it is not
-kept beyond its specified duration.
+kept beyond its specified duration during loading.
 
 Installation verification runs on a worker while the SDL main thread pumps
 events. An early result remains behind the full three-second presentation. A
 missing, invalid, unsupported, or omitted installation produces a concise
 `SDL_ShowSimpleMessageBox` error parented to the startup window, then exits with
-the existing data-error status. Closing the startup window or pressing Escape
+the existing data-error status. Before showing this dialog, the artwork is
+redrawn even when verification outlasted the timed splash. It remains the error
+backdrop until dismissal; this does not restart the three-second timer.
+Closing the startup window or pressing Escape
 hides it immediately;
 the process safely joins any in-flight verifier before teardown.
 Surface, window, and SDL-session lifetime is guarded in that destruction order.

@@ -114,8 +114,7 @@ target_include_directories(
     openfreedomfighters PRIVATE
     "${off_shader_assets_SOURCE_DIR}/examples"
 )
-add_custom_command(
-    TARGET openfreedomfighters POST_BUILD
+add_custom_target(off_startup_assets
     COMMAND ${CMAKE_COMMAND} -E make_directory
             "$<TARGET_FILE_DIR:openfreedomfighters>/assets"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -123,6 +122,7 @@ add_custom_command(
             "$<TARGET_FILE_DIR:openfreedomfighters>/assets/openfreedomfighters-splash.bmp"
     VERBATIM
 )
+add_dependencies(openfreedomfighters off_startup_assets)
 if(MSVC)
     target_compile_options(openfreedomfighters PRIVATE /W4 /permissive-)
 else()
