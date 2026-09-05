@@ -56,6 +56,10 @@ audit records 46,140 opaque, 12,751 variable-alpha, and 2,533 fully transparent
 ordinary primitives. All variable-alpha primitives carry selector bit 11, while
 5,980 all-zero or all-255 primitives carry it too; therefore the public API keeps
 the observed flag separate from inferred render-state policy.
+Each binding also exposes the confirmed triangle-strip or line-list topology, a
+contiguous portable index buffer, and draw ranges that preserve every source batch.
+The full installation yields 57,284 triangle-strip and 4,140 line-list bindings;
+their 461,344 ranges cover all 4,412,738 indexes exactly once.
 
 Every `RMC` and `RMI` member is parsed as well. The supported corpus contains 2,587 nodes and 1,612 entries in `RMC`, plus 1,359 nodes and 1,189 entries in `RMI`. Every octree node is reached exactly once, every spatial element has exactly one owner, and every fixed-size descriptor reference and quantized bound is range checked. World-space bounds queries reproduce the recovered quantization, loose-cell, and half-open intersection rules. The final descriptor words are now confirmed as one required and one optional packed geometry reference rather than floating-point scale values. See [RENDER_MAP_FORMAT.md](RENDER_MAP_FORMAT.md).
 

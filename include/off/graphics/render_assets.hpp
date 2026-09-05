@@ -17,6 +17,16 @@ enum class VertexAlphaClass {
     opaque,
 };
 
+enum class PrimitiveTopology {
+    triangle_strip,
+    line_list,
+};
+
+struct PrimitiveDrawRange {
+    std::size_t first_index{0};
+    std::size_t index_count{0};
+};
+
 struct PrimitiveTextureBinding {
     std::size_t primitive_entry_index{0};
     std::optional<std::size_t> texture_image_index;
@@ -24,6 +34,9 @@ struct PrimitiveTextureBinding {
     VertexAlphaClass vertex_alpha_class{VertexAlphaClass::opaque};
     std::uint8_t minimum_vertex_alpha{255};
     std::uint8_t maximum_vertex_alpha{255};
+    PrimitiveTopology topology{PrimitiveTopology::triangle_strip};
+    std::vector<std::uint16_t> indices;
+    std::vector<PrimitiveDrawRange> draws;
 };
 
 class RenderAssetBindings final {

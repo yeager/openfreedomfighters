@@ -80,6 +80,15 @@ repeat batch_count times:
 
 Every batch consumes at least one index, every referenced index must be below the descriptor's vertex count, and the batches must consume the table exactly. Batch lengths vary from lines and triangles through longer strips or polygons, so the portable model preserves the grouping instead of forcing all input into triangles prematurely.
 
+Corpus shape and the executable's primitive dispatch distinguish the two observed
+kinds. Kind 0 is a triangle strip with one independent draw per stored batch; its
+303,484 batches contain at least three indexes. Kind 3 is a line list; all 157,860
+of its batches contain exactly two indexes. The renderer binding flattens each
+primitive's batches into one index buffer plus explicit draw ranges, preserving
+strip boundaries and avoiding synthetic degenerate connectors. Across the corpus
+this produces 57,284 triangle-strip primitives, 4,140 line-list primitives,
+461,344 draw ranges, and the original 4,412,738 validated indexes.
+
 ## Safety and clean-room evidence
 
 The parser caps files at 256 MiB, entries at 65,536, vertices per ordinary descriptor at 16,384, and topology tables at 1,048,576 words. It checks all arithmetic, duplicated offsets, descriptor extents, pointer alignment, complete vertex storage, finite components, topology extents, batch lengths, trailing words, and vertex references before constructing the model.

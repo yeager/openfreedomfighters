@@ -207,6 +207,10 @@ InstallVerification verify_install(const std::filesystem::path &root) {
     std::size_t variable_vertex_alpha_count = 0;
     std::size_t fully_transparent_vertex_alpha_count = 0;
     std::size_t unflagged_variable_vertex_alpha_count = 0;
+    std::size_t triangle_strip_primitive_count = 0;
+    std::size_t line_list_primitive_count = 0;
+    std::size_t render_draw_count = 0;
+    std::size_t render_index_count = 0;
     std::size_t gms_primitive_reference_count = 0;
     std::size_t primitive_vertex_count = 0;
     std::size_t primitive_batch_count = 0;
@@ -430,6 +434,13 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           ++fully_transparent_vertex_alpha_count;
           break;
         }
+        if (binding.topology == graphics::PrimitiveTopology::triangle_strip) {
+          ++triangle_strip_primitive_count;
+        } else {
+          ++line_list_primitive_count;
+        }
+        render_draw_count += binding.draws.size();
+        render_index_count += binding.indices.size();
       }
       for (const auto reference : scene_geometry_references) {
         static_cast<void>(GmsImage::decode_object_handle(reference));
@@ -470,6 +481,9 @@ InstallVerification verify_install(const std::filesystem::path &root) {
         variable_vertex_alpha_count != 12'751 ||
         fully_transparent_vertex_alpha_count != 2'533 ||
         unflagged_variable_vertex_alpha_count != 0 ||
+        triangle_strip_primitive_count != 57'284 ||
+        line_list_primitive_count != 4'140 ||
+        render_draw_count != 461'344 || render_index_count != 4'412'738 ||
         gms_primitive_reference_count != 115'977 ||
         primitive_vertex_count != 2'820'961 ||
         primitive_batch_count != 461'344 ||

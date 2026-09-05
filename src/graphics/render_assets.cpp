@@ -48,6 +48,17 @@ RenderAssetBindings RenderAssetBindings::build(
         } else if (minimum_vertex_alpha == 0 && maximum_vertex_alpha == 0) {
             vertex_alpha_class = VertexAlphaClass::fully_transparent;
         }
+        PrimitiveTopology topology;
+        std::size_t minimum_batch_size;
+        if (primitive.primitive_kind == 0) {
+            topology = PrimitiveTopology::triangle_strip;
+            minimum_batch_size = 3;
+        } else if (primitive.primitive_kind == 3) {
+            topology = PrimitiveTopology::line_list;
+            minimum_batch_size = 2;
+        } else {
+            throw std::runtime_error("render primitive has an unsupported topology");
+        }
         PrimitiveTextureBinding binding{
             .primitive_entry_index = index,
             .texture_image_index = std::nullopt,
@@ -55,7 +66,28 @@ RenderAssetBindings RenderAssetBindings::build(
             .vertex_alpha_class = vertex_alpha_class,
             .minimum_vertex_alpha = minimum_vertex_alpha,
             .maximum_vertex_alpha = maximum_vertex_alpha,
+            .topology = topology,
+            .indices = {},
+            .draws = {},
         };
+        binding.draws.reserve(primitive.batches.size());
+        for (const auto& batch : primitive.batches) {
+            if (batch.indices.size() < minimum_batch_size ||
+                (topology == PrimitiveTopology::line_list &&
+                 batch.indices.size() != 2)) {
+                throw std::runtime_error("render primitive has an invalid draw batch");
+            }
+            binding.draws.push_back({
+                .first_index = binding.indices.size(),
+                .index_count = batch.indices.size(),
+            });
+            binding.indices.insert(
+                binding.indices.end(), batch.indices.begin(), batch.indices.end()
+            );
+        }
+        if (binding.draws.empty()) {
+            throw std::runtime_error("render primitive has no draw batches");
+        }
         if (primitive.texture_id.has_value()) {
             const auto texture_index = texture_indexes[*primitive.texture_id];
             if (texture_index == missing) {

@@ -84,5 +84,7 @@ primitive-to-texture links. The remaining prerequisites are confirmed material
 flag semantics, render-state reconstruction, a portable GPU backend, the Original
 reference shader path, and then the Modern render graph. A renderer-facing binding
 table now resolves every ordinary primitive to its optional TEX image while
-preserving the still-opaque selector flag. Unknown fields remain explicitly opaque
-until corpus evidence and private executable analysis agree.
+preserving the still-opaque selector flag. It also supplies validated vertex-alpha
+classes and GPU-oriented triangle-strip or line-list index buffers with explicit
+draw ranges. Unknown fields remain explicitly opaque until corpus evidence and
+private executable analysis agree.

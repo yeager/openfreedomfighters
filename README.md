@@ -9,11 +9,33 @@ The project has two runtime profiles:
 - **Original** preserves gameplay, timing, presentation, and content while adding a portable renderer, modern input, stable widescreen output, and localization infrastructure for 20 languages including Swedish.
 - **Modern** uses the same gameplay simulation and user-supplied data, with modern rendering, scalable resolution, improved lighting and shadows, higher-quality filtering, accessibility options, and unlocked presentation frame rates where simulation safety permits.
 
+An optional future **Modern+** asset layer may provide independently licensed HD
+textures and material maps. Retail assets always remain the fallback, and no
+replacement pack is distributed from this engine repository.
+
 This is an independent fan project and is not affiliated with or endorsed by IO Interactive, Electronic Arts, or the relevant rights holders. *Freedom Fighters* and related names and assets belong to their respective owners.
 
 ## Status
 
-Phase 1, portable data layer. The Steam digital Windows build has been inventoried and fully disassembled in private clean-room storage. The native C++ executable verifies the supported user-owned installation, selects Original or Modern mode, provides a bounds-checked overlay VFS, decompresses all 180 ZGF/GMS resources, parses 1,019 embedded ZGF resources plus 179,838 GMS object-source entries with transforms, attachments, NUL-terminated BUF names, bounded auxiliary blocks, 29,450 pool groups, 102 source-class diagnostics, 115,977 validated PRM links, and 154,941 identifier references, maps 2,998 RMC/RMI runtime handles to local GMS sources, identifies four external handles in empty images, parses all 23,522 texture images, 61,451 render primitives, 40,071 primitive-to-texture links, and 2,801 spatial entries, fully traverses and queries their 3,946 octree nodes, and decodes texture, primary vertex, topology, and audio data to portable representations. No playable build exists yet.
+Phase 1, portable data layer. The Steam digital Windows build has been inventoried
+and fully disassembled in private clean-room storage. The native C++ bootstrap now:
+
+- verifies the supported user-owned installation and selects Original or Modern;
+- provides a bounds-checked archive/directory overlay VFS;
+- decompresses all 180 ZGF/GMS resources and parses 1,019 embedded ZGF resources;
+- validates 179,838 GMS object sources, 115,977 PRM links, 154,941 identifiers,
+  29,450 pool groups, and 2,998 locally resolved RMC/RMI runtime handles;
+- parses 23,522 texture images, 61,451 primitive records, 2,820,961 vertices,
+  461,344 topology batches, and 4,412,738 range-checked indexes;
+- resolves all 40,071 nonzero primitive texture selectors into their paired TEX
+  images and classifies 46,140 opaque, 12,751 variable-alpha, and 2,533 fully
+  transparent ordinary primitives; and
+- produces renderer-facing index buffers and draw ranges for 57,284 triangle-strip
+  and 4,140 line-list primitives while preserving every source batch.
+
+Texture, primary-vertex, topology, spatial, and supported audio data decode into
+portable representations. The renderer, gameplay simulation, menus, localization,
+and complete native runtime remain under development; no playable build exists yet.
 
 ## Build the native bootstrap
 
