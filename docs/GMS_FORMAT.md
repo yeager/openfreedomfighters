@@ -74,6 +74,10 @@ is never treated as one opaque block because other referenced data may occur
 there. See the
 [retail UI texture boundary](RETAIL_UI_TEXTURES.md).
 
+The extracted startup picture reference is a byte displacement from the base of
+the scene's raw PRM allocation. The bounded target layout is documented in the
+[picture-resource format](PICTURE_RESOURCE.md).
+
 Across all 179,838 directory uses, 151,519 source-record offsets are distinct and 28,319 reuse an earlier record in the same image. There are 34,218 attachment tables containing 39,885 entries and 5,765 optional auxiliary BUF blocks. All referenced ranges and all transform and attachment floats validate. The two empty GMS images are also the only scene archives without `BUF`, proving the loader relationship without inventing placeholder data.
 
 ## Source-type registry

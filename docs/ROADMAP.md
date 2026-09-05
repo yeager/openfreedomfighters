@@ -89,7 +89,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   the recovered original menu layout and visual language.
 - [x] Recover and bounds-check the startup tagged window-picture stream through
   its picture asset reference.
-- [ ] Recover the runtime picture-allocation producer and descriptor-to-TEX join
+- [x] Parse every startup PRM-backed picture resource with bounded descriptors,
+  frame texture references, and portable descriptor indexes.
+- [ ] Recover the frame texture-resource allocation and its final TEX-image join
   before binding F10 picture frames to TEX images.
 
 Gate: a deterministic camera trace meets structural and image-difference

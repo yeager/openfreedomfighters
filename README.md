@@ -162,6 +162,7 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [Scene-support dependency format](docs/SCENE_SUPPORT_FORMAT.md)
 - [Texture-catalog format](docs/TEXTURE_FORMAT.md)
 - [Primitive-catalog format](docs/PRIMITIVE_FORMAT.md)
+- [PRM-backed UI picture-resource format](docs/PICTURE_RESOURCE.md)
 - [Packed ZGF/GMS resource envelope](docs/PACKED_RESOURCE_FORMAT.md)
 - [ZGF resource-bundle format](docs/ZGF_FORMAT.md)
 - [GMS object-source image and runtime handles](docs/GMS_FORMAT.md)

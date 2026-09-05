@@ -6,6 +6,7 @@
 #include "off/data/audio_bank_header.hpp"
 #include "off/data/gms_image.hpp"
 #include "off/data/packed_resource.hpp"
+#include "off/data/picture_resource.hpp"
 #include "off/data/primitive_catalog.hpp"
 #include "off/data/render_map.hpp"
 #include "off/data/scene_support.hpp"
@@ -216,6 +217,8 @@ InstallVerification verify_install(const std::filesystem::path &root) {
     std::size_t primitive_vertex_count = 0;
     std::size_t primitive_batch_count = 0;
     std::size_t primitive_index_count = 0;
+    std::size_t startup_picture_resource_count = 0;
+    std::unordered_set<std::uint32_t> startup_picture_references;
     std::size_t render_map_count = 0;
     std::size_t render_map_entry_count = 0;
     std::size_t render_map_node_count = 0;
@@ -253,6 +256,7 @@ InstallVerification verify_install(const std::filesystem::path &root) {
       std::optional<std::vector<std::byte>> buf_resource;
       std::optional<TextureCatalog> texture_catalog;
       std::optional<PrimitiveCatalog> primitive_catalog;
+      std::optional<std::vector<std::byte>> primitive_resource;
       std::optional<RenderMap> render_map;
       std::optional<RenderMap> render_instance_map;
       std::unordered_set<std::uint32_t> primitive_indices;
@@ -355,7 +359,8 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           ++texture_files_in_archive;
           ++texture_catalog_count;
         } else if (extension == ".prm") {
-          auto catalog = PrimitiveCatalog::parse(archive.read(member));
+          auto bytes = archive.read(member);
+          auto catalog = PrimitiveCatalog::parse(bytes);
           for (const auto &primitive : catalog.entries()) {
             primitive_indices.insert(primitive.packed_index);
             if (primitive.flagged_reference) {
@@ -370,6 +375,7 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           }
           primitive_entry_count += catalog.entries().size();
           primitive_catalog = std::move(catalog);
+          primitive_resource = std::move(bytes);
           ++primitive_files_in_archive;
           ++primitive_catalog_count;
         } else if (extension == ".rmc" || extension == ".rmi") {
@@ -402,6 +408,7 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           primitive_files_in_archive != 1 || render_map_files_in_archive != 1 ||
           render_instance_files_in_archive != 1 || !gms_image.has_value() ||
           !texture_catalog.has_value() || !primitive_catalog.has_value() ||
+          !primitive_resource.has_value() ||
           !render_map.has_value() || !render_instance_map.has_value()) {
         throw std::runtime_error("scene archive does not contain every "
                                  "required resource exactly once");
@@ -417,6 +424,26 @@ InstallVerification verify_install(const std::filesystem::path &root) {
               "GMS object sources do not have exactly one BUF resource");
         }
         gms_image->validate_buf(*buf_resource);
+      }
+      if (lowercase(entry.path().filename().string()) == "ff-startup.zip") {
+        for (std::size_t source_index = 0;
+             source_index < gms_image->directory().size(); ++source_index) {
+          const auto &source = gms_image->directory()[source_index];
+          if (GmsImage::source_class_name(source.source_type) != "ZWINPIC") {
+            continue;
+          }
+          const auto picture_source =
+              gms_image->startup_window_picture_source(source_index);
+          if (!startup_picture_references
+                   .insert(picture_source.picture_asset_reference)
+                   .second) {
+            throw std::runtime_error(
+                "startup picture sources reuse a PRM resource reference");
+          }
+          static_cast<void>(PictureResource::parse(
+              *primitive_resource, picture_source.picture_asset_reference));
+          ++startup_picture_resource_count;
+        }
       }
       for (const auto &source : gms_image->directory()) {
         if (!source.primitive_reference.has_value()) {
@@ -534,6 +561,8 @@ InstallVerification verify_install(const std::filesystem::path &root) {
         primitive_vertex_count != 2'820'961 ||
         primitive_batch_count != 461'344 ||
         primitive_index_count != 4'412'738 ||
+        startup_picture_resource_count != 124 ||
+        startup_picture_references.size() != startup_picture_resource_count ||
         render_map_count != scene_archive_count ||
         render_map_entry_count != 1'612 || render_map_node_count != 2'587 ||
         render_instance_map_count != scene_archive_count ||

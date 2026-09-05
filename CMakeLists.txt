@@ -61,6 +61,7 @@ add_library(off_core
     src/data/gms_image.cpp
     src/data/install.cpp
     src/data/packed_resource.cpp
+    src/data/picture_resource.cpp
     src/data/primitive_catalog.cpp
     src/data/render_map.cpp
     src/data/scene_support.cpp
@@ -152,6 +153,10 @@ if(BUILD_TESTING)
     add_executable(off_packed_resource_tests tests/packed_resource_tests.cpp)
     target_link_libraries(off_packed_resource_tests PRIVATE off_core)
     add_test(NAME off_packed_resource_tests COMMAND off_packed_resource_tests)
+
+    add_executable(off_picture_resource_tests tests/picture_resource_tests.cpp)
+    target_link_libraries(off_picture_resource_tests PRIVATE off_core)
+    add_test(NAME off_picture_resource_tests COMMAND off_picture_resource_tests)
 
     add_executable(off_gms_image_tests tests/gms_image_tests.cpp)
     target_link_libraries(off_gms_image_tests PRIVATE off_core)

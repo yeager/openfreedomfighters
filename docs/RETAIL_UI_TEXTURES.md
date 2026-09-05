@@ -42,13 +42,24 @@ returning the scalar reference. Private corpus validation passes all 124 startup
 picture sources.
 
 The texture manager interprets that scalar as a byte displacement from a runtime
-allocation base. It is not a PRM index, TEX image ID, catalog ordinal, or offset
-from the raw TEX file. The returned resource has a descriptor count, 40-byte
-descriptors, a frame count, a four-byte frame array, and eight-byte frame records;
-each frame record contains a descriptor index. The producer of that runtime
-allocation, the descriptor field that selects final image storage, the TEX-image
-mapping, UVs, and compositing order remain unresolved. Candidate scalar values
-must not be interpreted as retail texture identifiers.
+allocation base. Disassembly proves that this allocation begins with the raw PRM
+member: the renderer allocates its byte size plus a private working reserve, then
+reads exactly the raw PRM bytes at the allocation base without repacking them.
+The reference is therefore a PRM-base-relative byte displacement, but it is not
+a packed primitive index, TEX image ID, catalog ordinal, or raw TEX offset.
+
+The returned resource has a descriptor count, 40-byte presentation descriptors,
+a frame count, a parallel array of frame texture-resource references, and
+eight-byte frame records. Each frame record contains a descriptor index. The
+renderer submits each texture-resource reference together with its corresponding
+frame record; the descriptor supplies presentation geometry rather than texture
+identity. The bounded [picture-resource parser](PICTURE_RESOURCE.md) models this
+association without converting runtime indexes into pointers.
+
+The remaining missing join is from each frame texture-resource reference through
+its runtime resource to raw TEX image storage. That allocation producer and final
+TEX mapping remain unresolved, so candidate values must not be interpreted as
+retail texture identifiers and cannot yet produce `RetailUiTextureBinding`.
 
 Public unit tests supply explicit project-authored bindings and generated pixel
 buffers. A retail smoke test must obtain bindings from the recovered picture
