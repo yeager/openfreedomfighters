@@ -1,0 +1,26 @@
+name: Gitleaks audit
+description: Scan Git history and the complete working tree with a checksum-pinned Gitleaks CLI
+
+runs:
+  using: composite
+  steps:
+    - name: Install checksum-pinned Gitleaks
+      shell: bash
+      run: |
+        set -euo pipefail
+        version=8.30.1
+        tool_dir="$RUNNER_TOOL_CACHE/gitleaks-$version"
+        archive="$tool_dir/gitleaks_${version}_linux_x64.tar.gz"
+        mkdir -p "$tool_dir"
+        curl --fail --location --silent --show-error \
+          "https://github.com/gitleaks/gitleaks/releases/download/v${version}/gitleaks_${version}_linux_x64.tar.gz" \
+          --output "$archive"
+        echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $archive" | sha256sum --check --status
+        tar -xzf "$archive" -C "$tool_dir" gitleaks
+        echo "$tool_dir" >> "$GITHUB_PATH"
+    - name: Scan Git history and working tree
+      shell: bash
+      run: |
+        set -euo pipefail
+        gitleaks detect --source . --redact
+        gitleaks detect --source . --no-git --redact

@@ -33,15 +33,18 @@ jobs:
             exit 1
           fi
       - name: Scan repository with Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: ./.github/actions/gitleaks
 
   build-linux:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-analysis.txt
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -53,7 +56,9 @@ jobs:
       - name: Test
         run: ctest --test-dir build -j4 --output-on-failure
       - name: Run Python analysis-tool tests
-        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
+        run: |
+          python3 -m pip install --requirement requirements-analysis.txt
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Test with address and undefined-behavior sanitizers
         run: |
           cmake -S . -B build-sanitize -G Ninja -DCMAKE_BUILD_TYPE=Debug \

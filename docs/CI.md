@@ -6,7 +6,7 @@ The workflow structure follows the sibling [OpenCaptive](https://github.com/yeag
 
 Every push to `main`, pull request targeting `main`, and manual dispatch runs:
 
-- a tracked-file extension audit and a full-history Gitleaks scan;
+- a tracked-file extension audit plus full-history and working-tree Gitleaks scans using a checksum-pinned CLI;
 - CMake/Ninja builds and CTest on Ubuntu 24.04 and macOS 14;
 - a CMake/MSVC build and CTest on Windows Server 2022;
 - Python analysis-tool tests and ASan/UBSan tests on Linux.
