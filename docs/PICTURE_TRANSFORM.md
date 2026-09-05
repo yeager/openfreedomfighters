@@ -72,7 +72,7 @@ Picture descriptor local Z remains part of the neutral quad and must reach the
 eventual picture visitor unchanged. Cache preparation also retains the input
 and aligned-local Z values. A zero picture width sets normalized X and its
 resulting X basis scale to zero; a zero picture height does the same for Y.
-Zero virtual-window Y scale and zero renderer Y scalar are valid
+Zero virtual-window Y scale and zero external Y basis scale are valid
 multipliers. Invalid enums, non-finite inputs, negative picture extents,
 non-positive viewports, and zero or non-finite values actually used as divisors
 fail closed.
@@ -95,7 +95,9 @@ behavior. This boundary keeps the transform independent of Windows, macOS,
 Linux, Steam Deck, display resolution, and output aspect ratio.
 
 The original base-window path can leave the virtual-window scale components
-used by picture preparation indeterminate. This undefined stack state is not
-treated as retail data. Callers must provide an explicit, initialized
-virtual-window policy; this module neither invents `(1,1)` nor supplies any
-other fallback.
+used by picture preparation indeterminate. Separately, the concrete startup
+chain produces no stable x87 value before the multiply represented by
+`external_y_basis_scale`. Neither undefined state is treated as retail data.
+Callers must provide explicit initialized virtual-window, external-Y-scale,
+and `q` policies. The module does not invent `(1,1)`, attribute the external Y
+operand to a renderer query, or supply any other fallback.

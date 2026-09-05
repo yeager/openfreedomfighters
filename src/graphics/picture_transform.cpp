@@ -170,7 +170,7 @@ prepare_picture_cache_transform(const PictureCacheTransformInput &input) {
   const std::array scalars{
       input.viewport_width,          input.viewport_height,
       input.picture_width,           input.picture_height,
-      input.owner_projection_scalar, input.renderer_y_scalar,
+      input.owner_projection_scalar, input.external_y_basis_scale,
   };
   require_finite(scalars, "picture transform scalar is not finite");
   if (input.viewport_width <= 0.0F || input.viewport_height <= 0.0F ||
@@ -213,7 +213,7 @@ prepare_picture_cache_transform(const PictureCacheTransformInput &input) {
   for (std::size_t component = 6; component < 9; ++component)
     basis[component] *= x_scale;
   for (std::size_t component = 3; component < 6; ++component)
-    basis[component] *= input.renderer_y_scalar * y_scale;
+    basis[component] *= input.external_y_basis_scale * y_scale;
 
   translation = transform_vector(translation, basis);
   std::array<float, 9> composed{};

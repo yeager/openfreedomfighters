@@ -173,7 +173,7 @@ int main() {
       .picture_width = 20.0F,
       .picture_height = 10.0F,
       .owner_projection_scalar = 2.0F,
-      .renderer_y_scalar = 2.0F,
+      .external_y_basis_scale = 2.0F,
   };
   const auto result = off::graphics::prepare_picture_cache_transform(input);
   const std::array<float, 9> expected_basis{0.0F, 0.0F, 1.0F, 0.0F, -1.0F,
@@ -220,13 +220,13 @@ int main() {
           "accept zero virtual-window Y scale as a multiplier");
   }
   {
-    auto zero_renderer_y_scale = input;
-    zero_renderer_y_scale.renderer_y_scalar = 0.0F;
+    auto zero_external_y_scale = input;
+    zero_external_y_scale.external_y_basis_scale = 0.0F;
     const auto transformed =
-        off::graphics::prepare_picture_cache_transform(zero_renderer_y_scale);
+        off::graphics::prepare_picture_cache_transform(zero_external_y_scale);
     check(transformed.basis[3] == 0.0F && transformed.basis[4] == 0.0F &&
               transformed.basis[5] == 0.0F,
-          "accept and apply a zero renderer Y multiplier");
+          "accept and apply a zero external Y basis multiplier");
   }
   for (const auto invalid : {-1.0F}) {
     auto bad = input;

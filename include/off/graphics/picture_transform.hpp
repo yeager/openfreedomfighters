@@ -33,7 +33,9 @@ struct PictureCacheTransformInput {
   float picture_width{};
   float picture_height{};
   float owner_projection_scalar{};
-  float renderer_y_scalar{};
+  // Initialized clean-room replacement for an undefined retail x87 operand.
+  // This is an explicit policy input, not a recovered renderer query.
+  float external_y_basis_scale{};
 };
 
 struct PictureCacheTransform {
