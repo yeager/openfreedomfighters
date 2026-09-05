@@ -29,7 +29,15 @@ The node array begins at offset 20 and node zero is the root. Nodes are addresse
 
 Bits 0-2 of the packed word select an octant. Bits 3-14 hold the number of consecutive elements owned by the node, and bit 15 marks the final node in a contiguous sibling list. A nonzero child index selects the first sibling; traversal continues through consecutive nodes until the final-sibling bit is encountered.
 
-The parser follows the tree from node zero and requires every referenced node to be in range and reachable exactly once. Sibling octants must be unique. Node element ranges must remain inside the spatial index and cover every element exactly once without overlap. This traversal also determines the true end of the node array, separating it from alignment bytes without interpreting padding as nodes.
+The parser follows the tree from node zero and requires every referenced node to be in range and reachable exactly once. Sibling octants must be unique, and depth cannot exceed the 16 levels representable by the quantized coordinate space. Node element ranges must remain inside the spatial index and cover every element exactly once without overlap. This traversal also determines the true end of the node array, separating it from alignment bytes without interpreting padding as nodes.
+
+## World-space queries
+
+The portable reader performs bounds queries with the same quantized loose-octree rules recovered from the Windows executable. Each world coordinate is converted with `trunc((world - center) * factor + 0.5)`. The converted maximum is incremented before traversal, unless it is already saturated at the signed 32-bit maximum.
+
+The root center is `(0x8000, 0x8000, 0x8000)`. At child depth `d`, the cell size is `0x10000 >> d`; each child center moves by half that size according to its three octant bits. A child is traversed when the query overlaps its loose bounds of `center +/- cell size`. Spatial-index records use half-open intersection tests: a query axis must extend below the record maximum and above the record minimum.
+
+Traversal is iterative and preserves packed sibling order. It visits only intersecting child cells and returns the original spatial-index positions, allowing later rendering and collision systems to resolve descriptors without copying game data.
 
 ## Spatial index record
 
@@ -56,4 +64,4 @@ All 20 floating-point values are required to be finite. The matrix/vector names 
 
 ## Validation coverage
 
-Installation verification parses 90 `RMC` files containing 2,587 octree nodes and 1,612 entries, plus 90 `RMI` files containing 1,359 nodes and 1,189 entries. Synthetic tests reject truncated or misaligned envelopes, invalid quantization factors, cyclic or reused nodes, repeated sibling octants, overlapping element ownership, excessive hierarchy padding, unsupported object kinds, duplicate or misaligned descriptor references, inverted bounds, and non-finite values.
+Installation verification parses 90 `RMC` files containing 2,587 octree nodes and 1,612 entries, plus 90 `RMI` files containing 1,359 nodes and 1,189 entries. Synthetic tests exercise whole-tree and octant-selective world queries and reject invalid query bounds, truncated or misaligned envelopes, invalid quantization factors, cyclic or reused nodes, repeated sibling octants, overlapping element ownership, excessive hierarchy padding, unsupported object kinds, duplicate or misaligned descriptor references, inverted bounds, and non-finite values.

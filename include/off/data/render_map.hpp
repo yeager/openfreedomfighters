@@ -13,6 +13,11 @@ struct QuantizedBounds {
     std::array<std::uint16_t, 3> maximum{};
 };
 
+struct WorldBounds {
+    std::array<float, 3> minimum{};
+    std::array<float, 3> maximum{};
+};
+
 struct RenderMapObject {
     std::uint32_t kind{0};
     std::array<float, 9> orientation{};
@@ -59,6 +64,9 @@ public:
     [[nodiscard]] std::span<const RenderMapEntry> entries() const noexcept {
         return entries_;
     }
+    [[nodiscard]] std::vector<std::size_t> query_bounds(
+        const WorldBounds& bounds
+    ) const;
 
 private:
     std::uint32_t index_offset_{0};

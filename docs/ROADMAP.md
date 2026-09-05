@@ -39,6 +39,7 @@ Gate: a new contributor can generate the same structural report from a supported
 - [x] Decode primary primitive vertices to portable attributes.
 - [x] Parse and corpus-validate RMC/RMI spatial indexes and object descriptors.
 - [x] Decode and fully traverse RMC/RMI packed octrees.
+- [x] Implement bounds-checked world-space queries over RMC/RMI octrees.
 - [ ] Safe, bounds-checked readers for all required formats.
 - [ ] Texture, mesh, material, skeleton, animation, audio, localization, and spatial data models.
 - [ ] Fuzz targets and synthetic fixtures for every parser.

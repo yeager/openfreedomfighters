@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -60,11 +61,19 @@ std::vector<std::byte> map_fixture() {
 
     set_u32(bytes, table_offset, descriptor_start + descriptor_size);
     set_u32(bytes, table_offset + 16, descriptor_start);
+    constexpr std::array minimums{
+        std::array<std::uint16_t, 3>{20'000, 20'000, 10'000},
+        std::array<std::uint16_t, 3>{30'000, 10'000, 30'000},
+    };
+    constexpr std::array maximums{
+        std::array<std::uint16_t, 3>{25'000, 25'000, 15'000},
+        std::array<std::uint16_t, 3>{35'000, 15'000, 35'000},
+    };
     for (std::size_t entry = 0; entry < 2; ++entry) {
         const auto index = table_offset + entry * 16;
         for (std::size_t axis = 0; axis < 3; ++axis) {
-            set_u16(bytes, index + 4 + axis * 2, static_cast<std::uint16_t>(10 + axis));
-            set_u16(bytes, index + 10 + axis * 2, static_cast<std::uint16_t>(20 + axis));
+            set_u16(bytes, index + 4 + axis * 2, minimums[entry][axis]);
+            set_u16(bytes, index + 10 + axis * 2, maximums[entry][axis]);
         }
         const auto descriptor = descriptor_start + entry * descriptor_size;
         set_u32(bytes, descriptor, static_cast<std::uint32_t>(entry));
@@ -111,14 +120,65 @@ int main() {
     check(map.entries().size() == 2, "parse map entries");
     check(map.entries()[0].descriptor_offset == descriptor_start + descriptor_size,
           "follow permuted descriptor index");
-    check(map.entries()[0].bounds.minimum == std::array<std::uint16_t, 3>{10, 11, 12},
+    check(map.entries()[0].bounds.minimum ==
+              std::array<std::uint16_t, 3>{20'000, 20'000, 10'000},
           "parse quantized minimum");
-    check(map.entries()[0].bounds.maximum == std::array<std::uint16_t, 3>{20, 21, 22},
+    check(map.entries()[0].bounds.maximum ==
+              std::array<std::uint16_t, 3>{25'000, 25'000, 15'000},
           "parse quantized maximum");
     check(map.entries()[0].object.kind == 1, "parse object kind");
     check(map.entries()[0].object.position[0] == 101.0F, "parse object position");
     check(map.entries()[0].object.extents == std::array{5.0F, 6.0F, 7.0F},
           "parse object extents");
+
+    check(
+        map.query_bounds({
+            .minimum = {-1'000'000.0F, -1'000'000.0F, -1'000'000.0F},
+            .maximum = {1'000'000.0F, 1'000'000.0F, 1'000'000.0F},
+        }) == std::vector<std::size_t>{0, 1},
+        "query all octree entries in traversal order"
+    );
+    check(
+        map.query_bounds({
+            .minimum = {84'001.0F, 84'002.0F, 44'003.0F},
+            .maximum = {88'001.0F, 88'002.0F, 48'003.0F},
+        }) == std::vector<std::size_t>{0},
+        "query a nested negative-z octant"
+    );
+    check(
+        map.query_bounds({
+            .minimum = {124'001.0F, 44'002.0F, 124'003.0F},
+            .maximum = {128'001.0F, 48'002.0F, 128'003.0F},
+        }) == std::vector<std::size_t>{1},
+        "query a positive-z sibling octant"
+    );
+    check(
+        map.query_bounds({
+            .minimum = {1.0F, 2.0F, 3.0F},
+            .maximum = {1.0F, 2.0F, 3.0F},
+        }).empty(),
+        "return no entries for a point outside indexed bounds"
+    );
+    bool invalid_query_rejected = false;
+    try {
+        static_cast<void>(map.query_bounds({
+            .minimum = {2.0F, 0.0F, 0.0F},
+            .maximum = {1.0F, 0.0F, 0.0F},
+        }));
+    } catch (const std::invalid_argument&) {
+        invalid_query_rejected = true;
+    }
+    check(invalid_query_rejected, "reject inverted world-space query bounds");
+    invalid_query_rejected = false;
+    try {
+        static_cast<void>(map.query_bounds({
+            .minimum = {std::numeric_limits<float>::quiet_NaN(), 0.0F, 0.0F},
+            .maximum = {1.0F, 1.0F, 1.0F},
+        }));
+    } catch (const std::invalid_argument&) {
+        invalid_query_rejected = true;
+    }
+    check(invalid_query_rejected, "reject non-finite world-space query bounds");
 
     check_rejected(
         [](auto& value) { set_u32(value, 0, table_offset + 1); },
@@ -160,7 +220,7 @@ int main() {
         "reject a misaligned descriptor reference"
     );
     check_rejected(
-        [](auto& value) { set_u16(value, table_offset + 4, 30); },
+        [](auto& value) { set_u16(value, table_offset + 4, 30'000); },
         "reject inverted quantized bounds"
     );
     check_rejected(

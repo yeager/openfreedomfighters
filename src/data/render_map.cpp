@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -21,9 +22,12 @@ constexpr std::size_t descriptor_size = 84;
 constexpr std::size_t bytes_per_entry = index_entry_size + descriptor_size;
 constexpr std::size_t maximum_file_size = 16U * 1024U * 1024U;
 constexpr std::size_t maximum_entries = 65'536;
+constexpr std::uint32_t maximum_tree_depth = 16;
 constexpr std::uint16_t element_count_mask = 0x7ff8U;
 constexpr std::uint16_t last_sibling_mask = 0x8000U;
 constexpr std::uint16_t octant_mask = 0x0007U;
+constexpr std::int32_t quantized_root_center = 0x8000;
+constexpr std::int32_t quantized_root_size = 0x10000;
 
 [[nodiscard]] float read_finite_float(const ByteReader& reader, std::size_t offset) {
     const auto value = std::bit_cast<float>(reader.u32(offset));
@@ -31,6 +35,32 @@ constexpr std::uint16_t octant_mask = 0x0007U;
         throw std::runtime_error("render-map descriptor contains a non-finite value");
     }
     return value;
+}
+
+[[nodiscard]] std::int32_t quantize(float value, float center, float factor) {
+    const auto transformed = (value - center) * factor + 0.5F;
+    const auto wide = static_cast<double>(transformed);
+    if (wide <= static_cast<double>(std::numeric_limits<std::int32_t>::min())) {
+        return std::numeric_limits<std::int32_t>::min();
+    }
+    if (wide >= static_cast<double>(std::numeric_limits<std::int32_t>::max())) {
+        return std::numeric_limits<std::int32_t>::max();
+    }
+    return static_cast<std::int32_t>(transformed);
+}
+
+[[nodiscard]] bool overlaps(
+    const std::array<std::int32_t, 3>& minimum,
+    const std::array<std::int32_t, 3>& maximum,
+    const QuantizedBounds& candidate
+) {
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        if (minimum[axis] >= candidate.maximum[axis] ||
+            maximum[axis] <= candidate.minimum[axis]) {
+            return false;
+        }
+    }
+    return true;
 }
 
 [[nodiscard]] RenderMapNode read_node(const ByteReader& reader, std::size_t index) {
@@ -94,11 +124,16 @@ RenderMap RenderMap::parse(std::span<const std::byte> bytes) {
     }
     std::vector<bool> visited_nodes(node_capacity, false);
     std::vector<bool> referenced_elements(entry_count, false);
-    std::vector<std::size_t> pending_nodes{0};
+    struct PendingParseNode {
+        std::size_t index;
+        std::uint32_t depth;
+    };
+    std::vector<PendingParseNode> pending_nodes{{.index = 0, .depth = 0}};
     std::size_t highest_node_index = 0;
     while (!pending_nodes.empty()) {
-        const auto node_index = pending_nodes.back();
+        const auto current = pending_nodes.back();
         pending_nodes.pop_back();
+        const auto node_index = current.index;
         if (node_index >= node_capacity || visited_nodes[node_index]) {
             throw std::runtime_error("render-map hierarchy contains a cycle or reused node");
         }
@@ -119,6 +154,9 @@ RenderMap RenderMap::parse(std::span<const std::byte> bytes) {
         if (node.child_index == 0) {
             continue;
         }
+        if (current.depth == maximum_tree_depth) {
+            throw std::runtime_error("render-map hierarchy exceeds quantized tree depth");
+        }
         std::array<bool, 8> occupied_octants{};
         auto child_index = static_cast<std::size_t>(node.child_index);
         while (true) {
@@ -130,7 +168,10 @@ RenderMap RenderMap::parse(std::span<const std::byte> bytes) {
                 throw std::runtime_error("render-map child list repeats an octant");
             }
             occupied_octants[child.octant] = true;
-            pending_nodes.push_back(child_index);
+            pending_nodes.push_back({
+                .index = child_index,
+                .depth = current.depth + 1U,
+            });
             if (child.last_sibling) {
                 break;
             }
@@ -204,6 +245,98 @@ RenderMap RenderMap::parse(std::span<const std::byte> bytes) {
         throw std::runtime_error("render-map contains an unreferenced descriptor");
     }
     return result;
+}
+
+std::vector<std::size_t> RenderMap::query_bounds(const WorldBounds& bounds) const {
+    std::array<std::int32_t, 3> query_minimum{};
+    std::array<std::int32_t, 3> query_maximum{};
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        if (!std::isfinite(bounds.minimum[axis]) ||
+            !std::isfinite(bounds.maximum[axis]) ||
+            bounds.minimum[axis] > bounds.maximum[axis]) {
+            throw std::invalid_argument("invalid world-space render-map bounds");
+        }
+        query_minimum[axis] = quantize(
+            bounds.minimum[axis],
+            center_[axis],
+            quantization_factor_
+        );
+        const auto maximum = quantize(
+            bounds.maximum[axis],
+            center_[axis],
+            quantization_factor_
+        );
+        query_maximum[axis] = maximum == std::numeric_limits<std::int32_t>::max()
+                                  ? maximum
+                                  : maximum + 1;
+    }
+
+    struct PendingNode {
+        std::size_t index;
+        std::uint32_t depth;
+        std::array<std::int32_t, 3> center;
+    };
+    std::vector<PendingNode> pending{{
+        .index = 0,
+        .depth = 0,
+        .center = {
+            quantized_root_center,
+            quantized_root_center,
+            quantized_root_center,
+        },
+    }};
+    std::vector<std::size_t> matches;
+    while (!pending.empty()) {
+        const auto current = pending.back();
+        pending.pop_back();
+        const auto& node = nodes_[current.index];
+        const auto element_end =
+            static_cast<std::size_t>(node.element_offset) + node.element_count;
+        for (std::size_t element = node.element_offset; element < element_end; ++element) {
+            if (overlaps(query_minimum, query_maximum, entries_[element].bounds)) {
+                matches.push_back(element);
+            }
+        }
+        if (node.child_index == 0) {
+            continue;
+        }
+
+        const auto cell_size = quantized_root_size >> (current.depth + 1U);
+        const auto center_offset = cell_size / 2;
+        std::vector<PendingNode> children;
+        auto child_index = static_cast<std::size_t>(node.child_index);
+        while (true) {
+            const auto& child = nodes_[child_index];
+            auto child_center = current.center;
+            bool intersects = true;
+            for (std::size_t axis = 0; axis < 3; ++axis) {
+                const auto positive_octant =
+                    (child.octant & (1U << axis)) != 0U;
+                child_center[axis] += positive_octant ? center_offset : -center_offset;
+                const auto loose_minimum = child_center[axis] - cell_size;
+                const auto loose_maximum = child_center[axis] + cell_size;
+                if (query_minimum[axis] >= loose_maximum ||
+                    query_maximum[axis] < loose_minimum) {
+                    intersects = false;
+                }
+            }
+            if (intersects) {
+                children.push_back({
+                    .index = child_index,
+                    .depth = current.depth + 1U,
+                    .center = child_center,
+                });
+            }
+            if (child.last_sibling) {
+                break;
+            }
+            ++child_index;
+        }
+        for (auto child = children.rbegin(); child != children.rend(); ++child) {
+            pending.push_back(*child);
+        }
+    }
+    return matches;
 }
 
 }  // namespace off::data

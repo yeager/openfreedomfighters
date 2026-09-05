@@ -22,7 +22,7 @@ The first Phase 1 component is a read-only ZIP archive reader and overlay virtua
 - Scene `SUP` resources are parsed as bounded `DLCF` dependency lists in both observed scalar and array layouts.
 - Scene `TEX` resources are parsed into image, mip, palette, and sequence models with bidirectional index validation, then decoded through portable CPU paths to RGBA8.
 - Scene `PRM` resources are parsed into indexed primitive descriptors, portable position/normal/color/texture-coordinate vertices, and bounds-checked topology batches. Optional auxiliary streams remain opaque.
-- Scene `RMC` and `RMI` resources are parsed into fully traversed quantized octrees, bounds, and portable object transform/extent descriptors.
+- Scene `RMC` and `RMI` resources are parsed into fully traversed and world-queryable quantized octrees, bounds, and portable object transform/extent descriptors.
 
 These rules protect the native runtime from malformed user-supplied data. They do not yet define the complete game-data mount lifecycle or any resource-family schema.
 
@@ -40,6 +40,6 @@ The same full-corpus pass parses every `TEX` member and validates 23,522 image r
 
 Every `PRM` member is also parsed during installation verification. The supported corpus contains 61,451 entries, including 27 flagged references, plus 2,820,961 decoded primary vertices, 461,344 topology batches, and 4,412,738 individually range-checked vertex indexes. See [PRIMITIVE_FORMAT.md](PRIMITIVE_FORMAT.md).
 
-Every `RMC` and `RMI` member is parsed as well. The supported corpus contains 2,587 nodes and 1,612 entries in `RMC`, plus 1,359 nodes and 1,189 entries in `RMI`. Every octree node is reached exactly once, every spatial element has exactly one owner, and every fixed-size descriptor reference and quantized bound is range checked. See [RENDER_MAP_FORMAT.md](RENDER_MAP_FORMAT.md).
+Every `RMC` and `RMI` member is parsed as well. The supported corpus contains 2,587 nodes and 1,612 entries in `RMC`, plus 1,359 nodes and 1,189 entries in `RMI`. Every octree node is reached exactly once, every spatial element has exactly one owner, and every fixed-size descriptor reference and quantized bound is range checked. World-space bounds queries reproduce the recovered quantization, loose-cell, and half-open intersection rules. See [RENDER_MAP_FORMAT.md](RENDER_MAP_FORMAT.md).
 
 The audio format model is documented in [AUDIO_FORMAT.md](AUDIO_FORMAT.md).
