@@ -1,6 +1,8 @@
 # Continuous integration and releases
 
-The workflow structure follows the sibling [OpenCaptive](https://github.com/yeager/OpenCaptive) project while adapting its commands and artifacts to OpenFreedomFighters.
+The workflow structure is self-contained in this repository and keeps platform
+jobs, security audits, data-free artifacts, and release gates explicit so it can
+be compared mechanically with the requested OpenCapture workflow convention.
 
 ## Build workflow
 

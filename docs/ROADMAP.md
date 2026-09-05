@@ -56,8 +56,10 @@ Gate: a new contributor can generate the same structural report from a supported
 - [x] Identify and validate packed geometry references in RMC/RMI descriptors.
 - [ ] Safe, bounds-checked readers for all required formats.
 - [ ] Texture, mesh, material, skeleton, animation, audio, localization, and spatial data models.
-- [ ] Fuzz targets and synthetic fixtures for every parser.
-- [ ] Local derived-cache format with versioning and invalidation.
+- [ ] Fuzz targets and synthetic fixtures for every parser, following the
+  [cache and fuzzing specification](CACHE_AND_FUZZING.md).
+- [ ] Local derived-cache format with versioning and invalidation, following the
+  [cache and fuzzing specification](CACHE_AND_FUZZING.md).
 
 Gate: every startup and first-level asset parses into validated portable models
 under ASan/UBSan; public malformed-input and resource-limit tests pass; and CI
@@ -66,7 +68,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 ## Phase 2 - Render, audio, input, and menu vertical slice
 
 - [x] SDL3 window, event, and GPU platform bootstrap.
-- [ ] Controller action map.
+- [ ] Controller action map and SDL device routing specified in the
+  [input runtime contract](INPUT_RUNTIME.md).
 - [x] Select SDL GPU and prove the native window/device/swapchain clear-pass lifecycle.
 - [x] Prepare a validated startup-scene mesh and texture for GPU upload.
 - [x] Upload and draw the first decoded retail mesh and texture.
@@ -83,7 +86,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   behavior.
 - [ ] Original-mode material/lighting reference path.
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
-- [ ] Audio-bank decoding/mixing and positional sound.
+- [ ] Audio mixing, device output, streaming voices, and positional sound as
+  specified by the [audio runtime contract](AUDIO_RUNTIME.md). Audio-bank
+  decoding is implemented; runtime playback is not.
 - [ ] Startup/menu and one static level render on Windows, Linux, Steam Deck, and macOS.
 - [ ] Replace the diagnostic F10 skin with a retail-data-backed overlay matching
   the recovered original menu layout and visual language.
@@ -99,6 +104,9 @@ tolerances on Windows, Linux, Steam Deck hardware, and macOS, with audio/input
 smoke evidence and a retail-data-backed F10 comparison.
 
 ## Phase 3 - Simulation vertical slice
+
+Execution details and evidence requirements are defined in the
+[gameplay simulation specification](GAMEPLAY_SIMULATION.md).
 
 - [x] Portable rational fixed-step scheduler and tick-addressed input snapshots.
 - [x] Deterministic generational entity lifetime, future-tick event queue, and
@@ -139,6 +147,10 @@ requirements; and Modern and Original produce identical simulation hashes for
 shared settings.
 
 ## Phase 6 - Release engineering
+
+Packaging, trust, privacy, migration, clean-install, support, and reproducibility
+requirements are defined in the
+[release engineering specification](RELEASE_ENGINEERING.md).
 
 - [ ] Signed/notarized packages, crash reports with opt-in privacy, migration and diagnostics.
 - [ ] CI across Windows, Linux, and macOS architectures plus Steam Deck hardware validation.

@@ -51,7 +51,8 @@ The gate requires ASan/UBSan parsing of every startup and first-level asset from
 verified installation, plus public malformed-input and resource-limit tests. It
 also requires proof that CI artifacts, fuzz corpora, caches, and logs contain no
 retail data. See the [data-layer contract](DATA_LAYER.md) and format documents
-linked from the [README](../README.md).
+linked from the [README](../README.md), plus the dedicated
+[cache and fuzzing specification](CACHE_AND_FUZZING.md).
 
 ## Phase 2 - Render, audio, input, and menu vertical slice
 
@@ -73,6 +74,7 @@ tolerances on Windows, Linux, Steam Deck hardware, and macOS, plus audio and inp
 smoke evidence and a retail-data-backed F10 comparison. See the
 [transform boundary](TRANSFORM_BOUNDARY.md), [camera evidence](CAMERA_EVIDENCE.md),
 [scene asset](SCENE_RENDER_ASSET.md), [audio format](AUDIO_FORMAT.md),
+[audio runtime](AUDIO_RUNTIME.md), [input runtime](INPUT_RUNTIME.md),
 [Modern graphics specification](MODERN_GRAPHICS.md), and
 [graphics-settings specification](GRAPHICS_SETTINGS.md).
 
@@ -86,7 +88,9 @@ systems, animation, collision, and physics for the selected first mission segmen
 The gate replays recorded inputs from a declared initial state and compares
 versioned checkpoints across all target platforms. Original and Modern must
 produce the same authoritative hashes. See the
-[simulation runtime](SIMULATION_RUNTIME.md) and [timing evidence](TIMING_EVIDENCE.md).
+[gameplay simulation execution specification](GAMEPLAY_SIMULATION.md),
+[simulation runtime](SIMULATION_RUNTIME.md), and
+[timing evidence](TIMING_EVIDENCE.md).
 
 ## Phase 4 - Campaign compatibility
 
@@ -132,7 +136,8 @@ environment; locates or requests the user-owned data; and completes the campaign
 natively on Windows, Linux, Steam Deck hardware, and macOS without Wine, Proton,
 Rosetta, or another compatibility layer. Steam Deck requires a native Linux
 runtime hardware result, not only an x86-64 Linux CI build. See the
-[CI specification](CI.md) and
+[release engineering specification](RELEASE_ENGINEERING.md),
+[CI specification](CI.md), and
 [third-party policy](../THIRD_PARTY.md).
 
 ## Cross-cutting gates
