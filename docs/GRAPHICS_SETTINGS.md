@@ -81,8 +81,17 @@ snapshot.
    and a Unicode text backend for all supported localizations.
 5. Enable advanced rows as their real Original/Modern/Modern+ renderer paths land.
 
+Stage 1 now has an initial implementation for Original/Modern profile selection,
+windowed or borderless mode, window size, and VSync/mailbox/immediate presentation.
+The resolver preserves requested intent, emits deterministic capability fallbacks,
+and rejects invalid enums and dimensions. The menu session implements non-repeated
+F10 open/close, draft cancellation, runtime apply acknowledgement, a 15-second
+confirmation deadline, explicit rollback acknowledgement, and commit only after
+success. It performs no SDL calls or persistence I/O. Modern+, DLSS, resolution
+scaling, and advanced rows remain specified but disabled until their broader
+settings fields and real renderer capability paths are implemented.
+
 Hosted CI tests the pure model, menu state, event translation, draw-list bounds,
 and fallback resolution on every target. Real fullscreen, HDR, refresh switching,
 high-DPI resize, depth recreation, and GPU overlay composition remain hardware
 smoke gates.
-
