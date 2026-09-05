@@ -56,6 +56,17 @@ Optional auxiliary BUF blocks contain their bounded byte size in the low 30 bits
 
 For 16 geometry source types, executable use and an exact corpus join establish record word 3 as a packed primitive reference. Zero means that the object has no direct primitive. Every one of the 115,977 present references across directory uses exactly matches an index value in the same archive's `PRM` catalog, including the high-bit reference form. The portable model exposes these references separately from the retained class-specific raw value, and installation verification rejects missing targets. Other source types use the same word for different class data and are not coerced into primitive references.
 
+Window-picture sources use a separate class loader and do not carry a direct
+primitive in that field. Their loader reads a picture asset reference from the
+deferred class-specific serialization stream, resolves it through the texture
+resource manager, and receives a frame count and frame descriptors. The public
+parser does not yet expose that reference: tag-specific serialized lengths, the
+base-class read sequence and version branch, and the manager key-space join must
+be recovered first. The deferred offset remains bounds-checked, but the interval
+between it and the generic source record is not treated as one opaque block
+because other referenced data may occur there. See the
+[retail UI texture boundary](RETAIL_UI_TEXTURES.md).
+
 Across all 179,838 directory uses, 151,519 source-record offsets are distinct and 28,319 reuse an earlier record in the same image. There are 34,218 attachment tables containing 39,885 entries and 5,765 optional auxiliary BUF blocks. All referenced ranges and all transform and attachment floats validate. The two empty GMS images are also the only scene archives without `BUF`, proving the loader relationship without inventing placeholder data.
 
 ## Source-type registry

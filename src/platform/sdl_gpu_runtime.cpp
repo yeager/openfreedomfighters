@@ -704,7 +704,7 @@ upload_overlay_retail_textures(SDL_GPUDevice *device,
   constexpr std::size_t required_role_count =
       static_cast<std::size_t>(ui::RetailUiTextureRole::arrow_down) + 1U;
   const auto images = source.textures();
-  // Until the retail primitive/material join is recovered, callers supply no
+  // Until the retail UI-picture resource join is recovered, callers supply no
   // UI images. Never substitute generated pixels for that missing evidence.
   if (images.empty())
     return true;

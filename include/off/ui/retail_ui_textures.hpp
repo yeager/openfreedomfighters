@@ -37,8 +37,9 @@ struct RetailUiTexture {
   graphics::RgbaImage mip_zero;
 };
 
-// Produced by the recovered scene/material join. The image index is ephemeral
-// parser state, never a published retail identifier or persistent contract.
+// Produced only after a recovered UI-picture resource join. The image index is
+// ephemeral parser state, never a published retail identifier or persistent
+// contract.
 struct RetailUiTextureBinding {
   RetailUiTextureRole role{};
   std::size_t image_index{};
@@ -60,8 +61,9 @@ private:
   std::vector<RetailUiTexture> textures_;
 };
 
-// Decodes a complete role mapping recovered from scene/material relationships.
-// This function never guesses from resource names, catalog order, or pixels.
+// Decodes a complete role mapping recovered from UI-picture resource
+// relationships. This function never guesses from resource names, catalog order,
+// or pixels.
 [[nodiscard]] RetailUiTextureSet
 resolve_retail_ui_textures(std::span<const data::TextureImage> images,
                            std::span<const RetailUiTextureBinding> bindings);
