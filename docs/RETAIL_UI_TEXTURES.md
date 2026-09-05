@@ -32,15 +32,25 @@ through the engine's tagged serializer, resolves that reference through the
 texture-resource manager, and receives a frame count plus frame descriptors. A
 descriptor index addresses a 40-byte record within that resolved resource.
 
-This establishes the required direction of the join but not its packed public
-schema. The tagged serializer's tag lengths and version branch, the texture
-manager's lookup key space, the remaining frame fields, the final TEX-image
-mapping, UVs, and compositing order remain unresolved. The existing deferred GMS
-offset is therefore bounds-checked but must not be sliced up to the generic source
-record: other referenced data can occupy that interval. Candidate scalar values
-must not be interpreted as PRM or TEX identifiers.
+The startup picture block has a bounded 24-bit byte size and a proven sequence of
+four base scalars, an optional extension scalar, a structural delimiter, one
+picture asset reference, another delimiter, and a terminal marker. The public GMS
+model exposes an on-demand, fail-closed decoder for this exact path. It validates
+the complete block, tag types, the shape-based optional branch selected exactly
+when the next tag has the integer type, stream order, and exact end before
+returning the scalar reference. Private corpus validation passes all 124 startup
+picture sources.
+
+The texture manager interprets that scalar as a byte displacement from a runtime
+allocation base. It is not a PRM index, TEX image ID, catalog ordinal, or offset
+from the raw TEX file. The returned resource has a descriptor count, 40-byte
+descriptors, a frame count, a four-byte frame array, and eight-byte frame records;
+each frame record contains a descriptor index. The producer of that runtime
+allocation, the descriptor field that selects final image storage, the TEX-image
+mapping, UVs, and compositing order remain unresolved. Candidate scalar values
+must not be interpreted as retail texture identifiers.
 
 Public unit tests supply explicit project-authored bindings and generated pixel
 buffers. A retail smoke test must obtain bindings from the recovered picture
-resource resolver and read the player's archive in memory; it must not write decoded
-textures to disk or commit runtime evidence containing retail identifiers.
+resource resolver and read the player's archive in memory; it must not write
+decoded textures to disk or commit runtime evidence containing retail identifiers.

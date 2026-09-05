@@ -87,8 +87,10 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [ ] Startup/menu and one static level render on Windows, Linux, Steam Deck, and macOS.
 - [ ] Replace the diagnostic F10 skin with a retail-data-backed overlay matching
   the recovered original menu layout and visual language.
-- [ ] Recover the tagged window-picture serializer and texture-resource key-space
-  join before binding F10 picture frames to TEX images.
+- [x] Recover and bounds-check the startup tagged window-picture stream through
+  its picture asset reference.
+- [ ] Recover the runtime picture-allocation producer and descriptor-to-TEX join
+  before binding F10 picture frames to TEX images.
 
 Gate: a deterministic camera trace meets structural and image-difference
 tolerances on Windows, Linux, Steam Deck hardware, and macOS, with audio/input

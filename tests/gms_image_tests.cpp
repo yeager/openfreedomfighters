@@ -94,6 +94,44 @@ std::vector<std::byte> packed_fixture() {
     return bytes;
 }
 
+std::vector<std::byte> window_picture_fixture(bool has_extension = true) {
+    auto bytes = packed_fixture();
+    constexpr std::size_t envelope_size = 9;
+    constexpr std::size_t record_offset = 336;
+    constexpr std::size_t block_offset = 452;
+    constexpr std::uint32_t picture_source_type = 0x00200046U;
+
+    set_u32(bytes, envelope_size + record_offset + 16, picture_source_type);
+    set_u32(bytes, envelope_size + record_offset + 32, block_offset);
+    set_u32(bytes, envelope_size + 128 + 4 + 4, 1);
+    set_u32(bytes, envelope_size + 128 + 4 + 12, 0);
+    set_u32(bytes, envelope_size + 128 + 4 + 24 * 4 + 4, 1);
+    set_u32(bytes, envelope_size + 128 + 4 + 24 * 4 + 12, 0);
+
+    const auto stream_size = static_cast<std::uint32_t>(
+        sizeof(std::uint32_t) + 4U * 5U + (has_extension ? 5U : 0U) + 1U +
+        5U + 1U + 1U
+    );
+    set_u32(bytes, envelope_size + block_offset, stream_size);
+    auto cursor = envelope_size + block_offset + sizeof(std::uint32_t);
+    auto append_scalar = [&](std::uint32_t value) {
+        bytes[cursor] = std::byte{0x83};
+        set_u32(bytes, cursor + 1U, value);
+        cursor += 5U;
+    };
+    for (std::uint32_t value = 1; value <= 4; ++value) {
+        append_scalar(value);
+    }
+    if (has_extension) {
+        append_scalar(5);
+    }
+    bytes[cursor++] = std::byte{0x46};
+    append_scalar(0x1234U);
+    bytes[cursor++] = std::byte{0x06};
+    bytes[cursor] = std::byte{0xff};
+    return bytes;
+}
+
 template <typename Operation>
 void check_rejected(Operation operation, const char* message) {
     bool rejected = false;
@@ -179,6 +217,20 @@ int main() {
               primitive_source_image.directory()[1].primitive_reference == 0x12345678U &&
               primitive_source_image.directory()[2].primitive_reference == 0x12345678U,
           "classify direct primitive references for geometry source types");
+    const auto picture_image = off::data::GmsImage::parse(
+        off::data::PackedResource::parse(window_picture_fixture())
+    );
+    check(picture_image.startup_window_picture_source(1).picture_asset_reference ==
+                  0x1234U &&
+              picture_image.startup_window_picture_source(2)
+                      .picture_asset_reference == 0x1234U,
+          "parse a complete tagged startup window-picture source");
+    const auto picture_without_extension = off::data::GmsImage::parse(
+        off::data::PackedResource::parse(window_picture_fixture(false))
+    );
+    check(picture_without_extension.startup_window_picture_source(1)
+                  .picture_asset_reference == 0x1234U,
+          "parse the shape without an optional extension scalar");
     check(image.directory()[1].pool_group == 1 &&
               image.directory()[1].pool_class == 3 &&
               image.directory()[1].group_slot_index == 0 &&
@@ -291,6 +343,69 @@ int main() {
     check_parse_rejected(
         [](auto& bytes) { set_u32(bytes, 9 + 80 + 40, 512); },
         "reject a post-load source outside the image"
+    );
+    check_rejected(
+        [] {
+            auto bytes = window_picture_fixture();
+            set_u32(bytes, 9 + 452, 3);
+            const auto image = off::data::GmsImage::parse(
+                off::data::PackedResource::parse(bytes)
+            );
+            static_cast<void>(image.startup_window_picture_source(1));
+        },
+        "reject an undersized tagged window-picture source"
+    );
+    check_rejected(
+        [] {
+            auto bytes = window_picture_fixture();
+            bytes[9 + 452 + 4] = std::byte{2};
+            const auto image = off::data::GmsImage::parse(
+                off::data::PackedResource::parse(bytes)
+            );
+            static_cast<void>(image.startup_window_picture_source(1));
+        },
+        "reject an unexpected window-picture scalar tag"
+    );
+    check_rejected(
+        [] {
+            auto bytes = window_picture_fixture();
+            set_u32(bytes, 9 + 336 + 32, 0);
+            const auto image = off::data::GmsImage::parse(
+                off::data::PackedResource::parse(bytes)
+            );
+            static_cast<void>(image.startup_window_picture_source(1));
+        },
+        "reject a window-picture source without deferred serialization"
+    );
+    check_rejected(
+        [] {
+            auto bytes = window_picture_fixture();
+            set_u32(bytes, 9 + 452, 38);
+            const auto image = off::data::GmsImage::parse(
+                off::data::PackedResource::parse(bytes)
+            );
+            static_cast<void>(image.startup_window_picture_source(1));
+        },
+        "reject trailing data in a tagged window-picture source"
+    );
+    check_rejected(
+        [] {
+            auto bytes = window_picture_fixture();
+            bytes[9 + 452 + 36] = std::byte{0};
+            const auto image = off::data::GmsImage::parse(
+                off::data::PackedResource::parse(bytes)
+            );
+            static_cast<void>(image.startup_window_picture_source(1));
+        },
+        "reject a missing window-picture terminal tag"
+    );
+    check_rejected(
+        [&image] { static_cast<void>(image.startup_window_picture_source(0)); },
+        "reject a non-picture source at the startup parser boundary"
+    );
+    check_rejected(
+        [&image] { static_cast<void>(image.startup_window_picture_source(3)); },
+        "reject an out-of-range startup picture directory index"
     );
     check_rejected(
         [&image] {

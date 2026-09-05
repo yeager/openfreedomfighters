@@ -26,6 +26,12 @@ constexpr std::size_t object_slot_size = 112;
 constexpr std::size_t pool_class_count = 24;
 constexpr std::size_t pool_group_size = pool_class_count * sizeof(std::uint32_t);
 constexpr std::uint32_t auxiliary_size_mask = 0x3fffffffU;
+constexpr std::uint32_t tagged_block_size_mask = 0x00ffffffU;
+constexpr std::uint8_t tagged_type_mask = 0x3fU;
+constexpr std::uint8_t integer_tag_type = 3U;
+constexpr std::uint8_t structural_tag_type = 6U;
+constexpr std::uint8_t terminal_tag = 0xffU;
+constexpr std::uint32_t window_picture_source_type = 0x00200046U;
 constexpr std::array<std::pair<std::uint32_t, std::string_view>, 102>
     geometry_classes{{
         {0x00000000U, "ZGEOM"},
@@ -202,6 +208,67 @@ void require_optional_offset(
     if (offset != 0U && offset >= payload_size) {
         throw std::runtime_error(message);
     }
+}
+
+[[nodiscard]] GmsWindowPictureSource parse_startup_window_picture_source(
+    const ByteReader& reader,
+    std::span<const std::byte> payload,
+    std::size_t block_offset
+) {
+    if (block_offset > payload.size() ||
+        sizeof(std::uint32_t) > payload.size() - block_offset) {
+        throw std::runtime_error("GMS window-picture source is truncated");
+    }
+    const auto block_size = static_cast<std::size_t>(
+        reader.u32(block_offset) & tagged_block_size_mask
+    );
+    if (block_size < sizeof(std::uint32_t) ||
+        block_size > payload.size() - block_offset) {
+        throw std::runtime_error("GMS window-picture source has an invalid size");
+    }
+    const auto end = block_offset + block_size;
+    auto cursor = block_offset + sizeof(std::uint32_t);
+
+    const auto current_type = [&]() -> std::uint8_t {
+        if (cursor >= end) {
+            throw std::runtime_error("GMS window-picture tag stream is truncated");
+        }
+        return std::to_integer<std::uint8_t>(payload[cursor]) & tagged_type_mask;
+    };
+    const auto read_integer = [&]() -> std::uint32_t {
+        if (current_type() != integer_tag_type ||
+            sizeof(std::uint32_t) > end - cursor - 1U) {
+            throw std::runtime_error("GMS window-picture integer tag is invalid");
+        }
+        const auto value = reader.u32(cursor + 1U);
+        cursor += 1U + sizeof(std::uint32_t);
+        return value;
+    };
+    const auto read_structure = [&]() {
+        if (current_type() != structural_tag_type) {
+            throw std::runtime_error("GMS window-picture structure tag is invalid");
+        }
+        ++cursor;
+    };
+
+    for (std::size_t index = 0; index < 4U; ++index) {
+        static_cast<void>(read_integer());
+    }
+    if (current_type() == integer_tag_type) {
+        static_cast<void>(read_integer());
+    }
+    read_structure();
+    const auto picture_asset_reference = read_integer();
+    read_structure();
+    if (cursor >= end ||
+        std::to_integer<std::uint8_t>(payload[cursor]) != terminal_tag) {
+        throw std::runtime_error("GMS window-picture terminal tag is invalid");
+    }
+    ++cursor;
+    if (cursor != end) {
+        throw std::runtime_error("GMS window-picture source has trailing data");
+    }
+    return {.picture_asset_reference = picture_asset_reference};
 }
 
 }  // namespace
@@ -548,6 +615,27 @@ std::optional<std::size_t> GmsImage::local_source_for_handle(
         return std::nullopt;
     }
     return local_slot_to_directory_[handle.slot_index];
+}
+
+GmsWindowPictureSource GmsImage::startup_window_picture_source(
+    std::size_t directory_index
+) const {
+    if (directory_index >= directory_.size()) {
+        throw std::runtime_error("GMS window-picture directory index is out of range");
+    }
+    const auto& entry = directory_[directory_index];
+    if (entry.source_type != window_picture_source_type) {
+        throw std::runtime_error("GMS source is not a window-picture source");
+    }
+    if (entry.deferred_source_offset == 0U) {
+        throw std::runtime_error(
+            "GMS window-picture source has no deferred serialization"
+        );
+    }
+    const auto payload = resource_.payload();
+    return parse_startup_window_picture_source(
+        ByteReader(payload), payload, entry.deferred_source_offset
+    );
 }
 
 }  // namespace off::data

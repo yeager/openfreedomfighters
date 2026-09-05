@@ -1,5 +1,6 @@
 #include "off/ui/retail_ui_textures.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
@@ -74,6 +75,17 @@ int main() {
   check(textures.find(off::ui::RetailUiTextureRole::arrow_left) != nullptr,
         "look up a resolved role without exposing a retail identifier");
 
+  auto reversed = bindings;
+  std::ranges::reverse(reversed);
+  const auto resolved_reversed =
+      off::ui::resolve_retail_ui_textures(images, reversed);
+  check(resolved_reversed.textures().size() == bindings.size() &&
+            resolved_reversed.textures().front().role ==
+                off::ui::RetailUiTextureRole::scanlines_top &&
+            resolved_reversed.textures().back().role ==
+                off::ui::RetailUiTextureRole::arrow_down,
+        "canonicalize output independently of binding order");
+
   auto duplicate_names = images;
   for (auto &candidate : duplicate_names)
     candidate.name = "duplicate_fixture_name";
@@ -102,4 +114,27 @@ int main() {
   auto wrong_size = images;
   wrong_size[0] = image("fixture_wrong_size", 64, 64);
   check(rejects(wrong_size, bindings), "enforce recovered role dimensions");
+
+  auto out_of_range_role = bindings;
+  out_of_range_role[0].role = static_cast<off::ui::RetailUiTextureRole>(255);
+  check(rejects(images, out_of_range_role), "reject an unknown semantic role");
+
+  auto out_of_range_image = bindings;
+  out_of_range_image[0].image_index = images.size();
+  check(rejects(images, out_of_range_image),
+        "reject an out-of-range image binding");
+
+  auto empty_mips = images;
+  empty_mips[0].mips.clear();
+  check(rejects(empty_mips, bindings), "reject an image without mip zero");
+
+  auto mismatched_mip = images;
+  mismatched_mip[0].mips.front().width = 64;
+  check(rejects(mismatched_mip, bindings),
+        "reject disagreement between image and mip dimensions");
+
+  auto malformed_mip = images;
+  malformed_mip[0].mips.front().encoded.pop_back();
+  check(rejects(malformed_mip, bindings),
+        "reject a truncated encoded retail UI mip");
 }

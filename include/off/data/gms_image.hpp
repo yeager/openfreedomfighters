@@ -17,6 +17,10 @@ struct GmsAttachment {
     float parameter{0.0F};
 };
 
+struct GmsWindowPictureSource {
+    std::uint32_t picture_asset_reference{0};
+};
+
 struct GmsDirectoryEntry {
     std::uint32_t packed_record_reference{0};
     std::uint32_t auxiliary_value{0};
@@ -67,6 +71,11 @@ public:
     ) noexcept;
     [[nodiscard]] std::optional<std::size_t> local_source_for_handle(
         std::uint32_t packed_reference
+    ) const;
+    // Callers must establish that this image came from the supported startup
+    // archive; other scene-specific picture stream variants are not yet covered.
+    [[nodiscard]] GmsWindowPictureSource startup_window_picture_source(
+        std::size_t directory_index
     ) const;
     void validate_buf(std::span<const std::byte> bytes) const;
 

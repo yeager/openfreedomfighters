@@ -60,11 +60,18 @@ Window-picture sources use a separate class loader and do not carry a direct
 primitive in that field. Their loader reads a picture asset reference from the
 deferred class-specific serialization stream, resolves it through the texture
 resource manager, and receives a frame count and frame descriptors. The public
-parser does not yet expose that reference: tag-specific serialized lengths, the
-base-class read sequence and version branch, and the manager key-space join must
-be recovered first. The deferred offset remains bounds-checked, but the interval
-between it and the generic source record is not treated as one opaque block
-because other referenced data may occur there. See the
+model provides an explicitly startup-scoped, on-demand decoder for the exact
+startup picture stream. Callers must first establish archive provenance. It
+checks the block's masked byte size, four required base scalars, optional
+extension scalar, structural delimiters, picture-reference scalar, terminal
+marker, and exact end before exposing `picture_asset_reference`.
+
+Parsing is intentionally on demand rather than imposed on every picture class in
+all scene archives: the proven stream contract and corpus pass currently cover
+all 124 startup picture sources, while other scene-specific variants remain
+unverified. The interval between a deferred offset and the generic source record
+is never treated as one opaque block because other referenced data may occur
+there. See the
 [retail UI texture boundary](RETAIL_UI_TEXTURES.md).
 
 Across all 179,838 directory uses, 151,519 source-record offsets are distinct and 28,319 reuse an earlier record in the same image. There are 34,218 attachment tables containing 39,885 entries and 5,765 optional auxiliary BUF blocks. All referenced ranges and all transform and attachment floats validate. The two empty GMS images are also the only scene archives without `BUF`, proving the loader relationship without inventing placeholder data.
@@ -96,4 +103,4 @@ Corpus validation confirms that all 2,801 primary handles and all 201 present op
 
 ## Validation coverage
 
-Synthetic tests use a project-authored stored image. They cover directory, pool-count, identifier, transform, attachment, and BUF-relative bounds; finite transform decoding; object-name termination; auxiliary BUF extents; source-type diagnostics; parent/child pool traversal; class and local-slot assignment; local and external handle lookup; packed source-reference fields; tagged slot-zero and interior runtime handles; unsupported tags; and handle misalignment. No retail GMS, BUF, or identifier content is present in the repository.
+Synthetic tests use a project-authored stored image. They cover directory, pool-count, identifier, transform, attachment, and BUF-relative bounds; finite transform decoding; object-name termination; auxiliary BUF extents; source-type diagnostics; parent/child pool traversal; class and local-slot assignment; local and external handle lookup; packed source-reference fields; tagged slot-zero and interior runtime handles; unsupported tags; handle misalignment; and bounded startup window-picture streams with and without the optional extension scalar. They reject invalid block sizes, scalar tags, missing serialization, and trailing data. No retail GMS, BUF, identifier, or picture reference is present in the repository.
