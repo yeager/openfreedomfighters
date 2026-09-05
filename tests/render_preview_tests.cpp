@@ -1,4 +1,5 @@
 #include "off/graphics/render_preview.hpp"
+#include "off/graphics/scene_gpu_plan.hpp"
 #include "off/graphics/scene_render.hpp"
 
 #include <array>
@@ -216,6 +217,130 @@ int main() {
   }
   check(invalid_scene_texture_rejected,
         "reject inconsistent scene RGBA storage before upload");
+
+  const auto gpu_plan = off::graphics::prepare_scene_gpu_plan(scene_asset);
+  check(gpu_plan.textures.size() == 1 && gpu_plan.meshes.size() == 2 &&
+            gpu_plan.instances.size() == 3 &&
+            gpu_plan.meshes[0].vertices.size() == 4 &&
+            gpu_plan.meshes[0].vertices[0].color[3] == 1.0F &&
+            gpu_plan.textures[0].rgba8 ==
+                std::vector<std::uint8_t>{0x10, 0x20, 0x30, 0xff} &&
+            gpu_plan.source_only_diagnostic,
+        "own normalized upload resources independently of parser storage");
+  bool valid_gpu_plan_accepted = true;
+  try {
+    off::graphics::validate_scene_gpu_plan(gpu_plan);
+  } catch (const std::invalid_argument &) {
+    valid_gpu_plan_accepted = false;
+  }
+  check(valid_gpu_plan_accepted,
+        "accept an independently validated owning GPU plan");
+  check(gpu_plan.draws.size() == 3 && gpu_plan.draws[0].instance_index == 0 &&
+            gpu_plan.draws[1].instance_index == 1 &&
+            gpu_plan.draws[0].mesh_index == gpu_plan.draws[1].mesh_index &&
+            gpu_plan.draws[2].topology ==
+                off::graphics::PrimitiveTopology::line_list &&
+            !gpu_plan.draws[2].texture_index.has_value(),
+        "prepare stable multi-instance draws with shared resources and an "
+        "untextured line");
+  check(gpu_plan.projection.minimum == std::array{9.0F, 17.0F, 27.0F} &&
+            gpu_plan.projection.maximum == std::array{71.0F, 82.0F, 94.0F},
+        "fit one diagnostic projection to every indexed scene instance");
+  const auto first_depth = off::graphics::project_scene_diagnostic_position(
+      gpu_plan, 0, scene_asset.meshes[0].vertices[0].position);
+  const auto second_depth = off::graphics::project_scene_diagnostic_position(
+      gpu_plan, 1, scene_asset.meshes[0].vertices[0].position);
+  check(first_depth[2] != second_depth[2] && first_depth[2] >= 0.05F &&
+            first_depth[2] <= 0.95F && second_depth[2] >= 0.05F &&
+            second_depth[2] <= 0.95F,
+        "preserve distinct instance depth in the diagnostic clip range");
+  const auto wide_uniform = off::graphics::make_scene_diagnostic_uniform(
+      gpu_plan.projection, 1600, 900);
+  const auto tall_uniform = off::graphics::make_scene_diagnostic_uniform(
+      gpu_plan.projection, 900, 1600);
+  check(wide_uniform.scale[0] < wide_uniform.scale[1] &&
+            tall_uniform.scale[0] > tall_uniform.scale[1] &&
+            wide_uniform.scale[2] == tall_uniform.scale[2],
+        "recompute aspect-correct XY fit while preserving diagnostic depth");
+  bool zero_viewport_rejected = false;
+  try {
+    static_cast<void>(off::graphics::make_scene_diagnostic_uniform(
+        gpu_plan.projection, 0, 720));
+  } catch (const std::invalid_argument &) {
+    zero_viewport_rejected = true;
+  }
+  check(zero_viewport_rejected, "reject a zero-sized diagnostic GPU viewport");
+
+  auto invalid_gpu_plan = gpu_plan;
+  invalid_gpu_plan.draws[0].mesh_index = gpu_plan.meshes.size();
+  bool invalid_gpu_draw_rejected = false;
+  try {
+    off::graphics::validate_scene_gpu_plan(invalid_gpu_plan);
+  } catch (const std::invalid_argument &) {
+    invalid_gpu_draw_rejected = true;
+  }
+  check(invalid_gpu_draw_rejected,
+        "reject an invalid owning GPU-plan resource reference");
+
+  auto overflowing_gpu_instance = gpu_plan.instances[0];
+  overflowing_gpu_instance.source_basis[0] = std::numeric_limits<float>::max();
+  bool overflowing_diagnostic_transform_rejected = false;
+  try {
+    static_cast<void>(off::graphics::transform_scene_source_diagnostic_position(
+        overflowing_gpu_instance,
+        {std::numeric_limits<float>::max(), 0.0F, 0.0F}));
+  } catch (const std::invalid_argument &) {
+    overflowing_diagnostic_transform_rejected = true;
+  }
+  check(overflowing_diagnostic_transform_rejected,
+        "reject diagnostic transform overflow before GPU preparation");
+
+  auto blended_scene_asset = scene_asset;
+  blended_scene_asset.meshes[0].alpha_class =
+      off::graphics::VertexAlphaClass::variable;
+  const auto blended_plan =
+      off::graphics::prepare_scene_gpu_plan(blended_scene_asset);
+  check(blended_plan.draws[0].instance_index == 2 &&
+            blended_plan.draws[0].depth_policy ==
+                off::graphics::SceneDepthPolicy::test_and_write &&
+            !blended_plan.draws[0].blend_enabled &&
+            blended_plan.draws[1].instance_index == 0 &&
+            blended_plan.draws[2].instance_index == 1 &&
+            blended_plan.draws[1].depth_policy ==
+                off::graphics::SceneDepthPolicy::test_only &&
+            blended_plan.draws[1].blend_enabled,
+        "order opaque draws before stable blended draws and disable their "
+        "depth writes");
+
+  auto invisible_scene_asset = scene_asset;
+  invisible_scene_asset.meshes[1].alpha_class =
+      off::graphics::VertexAlphaClass::fully_transparent;
+  const auto invisible_plan =
+      off::graphics::prepare_scene_gpu_plan(invisible_scene_asset);
+  check(
+      invisible_plan.draws.back().instance_index == 2 &&
+          invisible_plan.draws.back().depth_policy ==
+              off::graphics::SceneDepthPolicy::no_draw &&
+          !invisible_plan.draws.back().blend_enabled,
+      "retain fully transparent commands without issuing depth or color work");
+
+  auto map_mutated_scene = scene_asset;
+  map_mutated_scene.instances[0].map_orientation.fill(123.0F);
+  map_mutated_scene.instances[0].map_position.fill(-456.0F);
+  const auto map_mutated_plan =
+      off::graphics::prepare_scene_gpu_plan(map_mutated_scene);
+  check(off::graphics::transform_scene_source_diagnostic_position(
+            gpu_plan.instances[0], {2.0F, 3.0F, 4.0F}) ==
+            off::graphics::transform_scene_source_diagnostic_position(
+                map_mutated_plan.instances[0], {2.0F, 3.0F, 4.0F}),
+        "keep unresolved map transforms out of the source-only diagnostic "
+        "convention");
+
+  const off::graphics::SceneRenderAsset empty_scene_asset;
+  const auto empty_plan =
+      off::graphics::prepare_scene_gpu_plan(empty_scene_asset);
+  check(empty_plan.draws.empty(),
+        "prepare an empty plan without fabricating fallback geometry");
   const auto instanced =
       off::graphics::build_first_primary_scene_render_preview(
           primitives, textures, object_sources, map_entries);

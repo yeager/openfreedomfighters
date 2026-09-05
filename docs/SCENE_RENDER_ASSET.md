@@ -67,3 +67,25 @@ recovered world-space formula. An aggregate audit found that only four of 2,801
 map positions fall inside their associated decoded spatial bounds under the
 currently documented quantization inverse, so naively treating those fields as
 world-space placement is specifically unsupported.
+
+## SDL-free GPU plan
+
+`prepare_scene_gpu_plan` converts a validated asset into a deterministic command
+schedule without depending on SDL or a graphics device. It computes one global
+fit over every indexed vertex of every materialized instance, owns normalized GPU
+vertex data and one copy of each deduplicated mesh/texture resource, and emits one
+command per preserved draw range. Opaque
+commands remain in stable instance order and use depth test/write; non-opaque
+commands follow in stable order with blending and depth test but no depth writes.
+Untextured commands retain an empty texture index so the backend can bind one
+explicit shared white fallback.
+
+The diagnostic projection preserves a real third coordinate in SDL GPU's
+`[0, 1]` clip-depth convention rather than flattening every object to one plane.
+It reserves `[0.05, 0.95]` for geometry and handles planar depth with a stable
+midpoint. Physical viewport dimensions produce an aspect-correct uniform without
+rebuilding geometry resources, and zero-sized viewports are rejected. The fit
+uses only the explicitly named source-only diagnostic transform;
+RMC/RMI transform values cannot influence it. This CPU-only boundary makes global
+bounds, instance ordering, topology, alpha/depth policy, and eventual resize-aware
+uniform generation testable identically on Linux, macOS, and Windows.

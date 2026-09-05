@@ -55,7 +55,10 @@ geometry. The startup RMC
 source is not itself a primitive, so the visible preview still uses the documented
 GMS diagnostic fallback. Primary and secondary scene handles now receive explicit
 stable manifest outcomes instead of silently disappearing. The projection is not
-yet the scene camera or Original material model. Complete scene rendering, gameplay
+yet the scene camera or Original material model. An SDL-free GPU plan now produces
+stable opaque/blended multi-instance commands, shared resource references, global
+diagnostic bounds, and non-flattened clip depth for cross-platform testing.
+Complete scene rendering, gameplay
 simulation, menus, localization, and the complete native runtime remain under
 development; no playable build exists yet.
 
