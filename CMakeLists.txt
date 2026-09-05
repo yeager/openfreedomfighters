@@ -83,6 +83,7 @@ add_library(off_core
     src/graphics/picture_expansion.cpp
     src/graphics/picture_material_state.cpp
     src/platform/startup_lifecycle.cpp
+    src/platform/startup_preparation.cpp
     src/settings/graphics_settings.cpp
     src/simulation/fixed_step.cpp
     src/simulation/input.cpp
@@ -250,6 +251,10 @@ if(BUILD_TESTING)
     add_executable(off_startup_lifecycle_tests tests/startup_lifecycle_tests.cpp)
     target_link_libraries(off_startup_lifecycle_tests PRIVATE off_core)
     add_test(NAME off_startup_lifecycle_tests COMMAND off_startup_lifecycle_tests)
+
+    add_executable(off_startup_preparation_tests tests/startup_preparation_tests.cpp)
+    target_link_libraries(off_startup_preparation_tests PRIVATE off_core)
+    add_test(NAME off_startup_preparation_tests COMMAND off_startup_preparation_tests)
 
     add_executable(off_retail_ui_fonts_tests tests/retail_ui_fonts_tests.cpp)
     target_link_libraries(off_retail_ui_fonts_tests PRIVATE off_core)

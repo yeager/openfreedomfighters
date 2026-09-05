@@ -1,6 +1,7 @@
 #include "off/platform/sdl_startup.hpp"
 
 #include "off/platform/startup_lifecycle.hpp"
+#include "off/platform/startup_preparation.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -92,7 +93,8 @@ data_error_message(const std::filesystem::path &path,
 }
 
 [[nodiscard]] StartupPreflightResult
-run_sdl_startup_preflight_impl(const std::filesystem::path &data_path) {
+run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
+                             const std::function<void()> &prepare_assets) {
   if (!SDL_Init(SDL_INIT_VIDEO))
     return {.outcome = StartupPreflightOutcome::platform_error,
             .message =
@@ -119,21 +121,16 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path) {
 
   StartupLifecycle lifecycle;
   lifecycle.presented(StartupClock::now());
-  std::future<data::InstallVerification> verification_future;
+  std::atomic_bool cancelled{false};
+  std::future<StartupPreparationResult> verification_future;
   try {
-    verification_future = std::async(std::launch::async, [data_path] {
-      try {
-        return data::verify_install(data_path);
-      } catch (...) {
-        return data::InstallVerification{
-            .error = data::InstallError::io_error,
-            .root = data_path,
-            .message = "game-data verification could not be completed"};
-      }
+    verification_future = std::async(std::launch::async, [&] {
+      return prepare_startup_cpu([&] { return data::verify_install(data_path); },
+                                 prepare_assets, cancelled);
     });
   } catch (...) {
     return {.outcome = StartupPreflightOutcome::platform_error,
-            .message = "Could not start game-data verification"};
+            .message = "Could not start game-data verification and preparation"};
   }
   bool loading_surface_presented = false;
   while (lifecycle.phase() != StartupPhase::ready &&
@@ -145,6 +142,7 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path) {
           (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat &&
            event.key.key == SDLK_ESCAPE)) {
         lifecycle.cancel();
+        cancelled.store(true);
       } else if (event.type == SDL_EVENT_WINDOW_EXPOSED ||
                  event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
         if (lifecycle.phase() == StartupPhase::splash)
@@ -168,30 +166,38 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path) {
     static_cast<void>(SDL_HideWindow(window.get()));
   // std::future owns a real worker. Await it before tearing down process state;
   // a cancelled launch hides immediately but never abandons an active parser.
-  data::InstallVerification verification;
+  StartupPreparationResult preparation;
   try {
-    verification = verification_future.get();
+    preparation = verification_future.get();
   } catch (...) {
     return {.outcome = StartupPreflightOutcome::platform_error,
-            .message = "Game-data verification did not return a result"};
+            .message = "Startup work did not return a result"};
   }
   StartupPreflightResult result;
-  result.verification = verification;
-  if (lifecycle.phase() == StartupPhase::cancelled) {
+  result.verification = preparation.verification;
+  if (lifecycle.phase() == StartupPhase::cancelled ||
+      preparation.outcome == StartupPreparationOutcome::cancelled) {
     result.outcome = StartupPreflightOutcome::quit_requested;
     result.message = "Startup cancelled";
-  } else if (!verification) {
+  } else if (preparation.outcome == StartupPreparationOutcome::verification_error) {
     result.outcome = StartupPreflightOutcome::data_error;
-    result.message = data_error_message(data_path, verification);
+    result.message = data_error_message(data_path, preparation.verification);
     // A late verification result may arrive after the loading surface replaced
     // the timed splash. Restore the artwork behind the error dialog.
     static_cast<void>(draw_splash(window.get(), image.get()));
     static_cast<void>(
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Game data required",
                                  result.message.c_str(), window.get()));
+  } else if (preparation.outcome == StartupPreparationOutcome::preparation_error) {
+    result.outcome = StartupPreflightOutcome::platform_error;
+    result.message = preparation.message;
+    static_cast<void>(draw_splash(window.get(), image.get()));
+    static_cast<void>(SDL_ShowSimpleMessageBox(
+        SDL_MESSAGEBOX_ERROR, "Startup data loading failed",
+        result.message.c_str(), window.get()));
   } else {
     result.outcome = StartupPreflightOutcome::ready;
-    result.message = verification.message;
+    result.message = preparation.message;
   }
 
   return result;
@@ -200,9 +206,10 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path) {
 } // namespace
 
 StartupPreflightResult
-run_sdl_startup_preflight(const std::filesystem::path &data_path) {
+run_sdl_startup_preflight(const std::filesystem::path &data_path,
+                          const std::function<void()> &prepare_assets) {
   try {
-    return run_sdl_startup_preflight_impl(data_path);
+    return run_sdl_startup_preflight_impl(data_path, prepare_assets);
   } catch (...) {
     return {.outcome = StartupPreflightOutcome::platform_error,
             .message = "Native startup encountered an unexpected error"};

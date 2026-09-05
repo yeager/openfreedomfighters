@@ -17,12 +17,16 @@ with the subsequent runtime.
 The image is aspect-fit against black and redrawn on exposure or pixel-size
 changes. The three-second deadline begins only after the first successful
 `SDL_UpdateWindowSurface`. A monotonic-clock state machine keeps the splash
-visible until the first tick at or after that deadline. If verification is
+visible until the first tick at or after that deadline. If CPU startup work is
 still running then, the image is replaced by a dark loading surface; it is not
 kept beyond its specified duration during loading.
 
 Installation verification runs on a worker while the SDL main thread pumps
-events. An early result remains behind the full three-second presentation. A
+events. Only successful verification allows that worker to prepare the decoded
+scene, startup images and font bytes. This is CPU-only preparation; SDL window,
+GPU and font-rasterizer operations remain on the main thread. Owned prepared
+data is consumed only after the worker is joined. An early result remains
+behind the full three-second presentation. A
 missing, invalid, unsupported, or omitted installation produces a concise
 `SDL_ShowSimpleMessageBox` error parented to the startup window, then exits with
 the existing data-error status. Before showing this dialog, the artwork is
@@ -31,6 +35,9 @@ backdrop until dismissal; this does not restart the three-second timer.
 Archive-validation errors identify the installation-relative archive and, when
 the failure occurs while parsing a member, its member name. The original
 integrity error is retained; no archive payload is included in the message.
+Asset-preparation failures likewise restore the artwork and show a parented
+diagnostic, but retain runtime-error exit status 4 instead of verification-error
+status 3. They do not silently substitute placeholder assets.
 Closing the startup window or pressing Escape
 hides it immediately;
 the process safely joins any in-flight verifier before teardown.
@@ -43,9 +50,21 @@ none escape the public preflight boundary.
 usable without a display. Argument syntax and output-path validation also remain
 CLI diagnostics.
 
-The current safe integration destroys the startup window after successful
-verification and lets the existing SDL GPU runtime create its own window. This
+The current integration destroys the startup window after successful
+verification and CPU preparation, then lets the SDL GPU runtime create its own
+window. This
 can produce a short platform-dependent transition. A later ownership refactor
-will reuse one window after destroying its CPU surface, and will move subsequent
-retail asset preparation behind the responsive startup host. Neither limitation
-changes the splash deadline or the missing-data dialog path.
+will reuse one window after destroying its CPU surface. This limitation does not
+change the splash deadline or the missing-data dialog path.
+
+## Verification evidence
+
+The orchestration tests cover verifier failure/exception, skipped preparation,
+preparation exceptions, successful owned output and cooperative cancellation
+before, between and during stages. A targeted ASan/UBSan run passes.
+On the ARM64 Linux development host, a real supported-install launch with
+`--frame-limit 1` completed successfully through this worker pipeline and the
+SDL GPU Vulkan diagnostic renderer: six startup images uploaded and four
+retail fonts loaded. This is a startup smoke test, not a faithful menu or
+gameplay pass. A headless verification run with an intentionally unavailable
+SDL video driver also succeeded without creating a window.

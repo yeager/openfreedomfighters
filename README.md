@@ -94,12 +94,16 @@ Omit `--verify-only` to open the current native renderer prototype. Close the
 window or press Escape to exit. `--frame-limit COUNT` is available for bounded
 GPU smoke tests and still requires successful retail-data verification first.
 Every normal launch first presents project-owned OpenFreedomFighters artwork for
-three seconds. Retail verification runs concurrently so the window remains
-responsive. Missing, invalid, unsupported, or omitted game data produces a
+three seconds. Retail verification and subsequent CPU asset preparation run on
+a worker so the window remains responsive. Preparation begins only after
+successful verification; GPU work stays on the main thread. Missing, invalid,
+unsupported, or omitted game data produces a
 native error dialog attached to that startup window. `--verify-only`, `--help`,
 and `--version` remain headless and never open the splash.
 Archive integrity errors now identify the affected installation-relative archive
 and member when known, while preserving the underlying validation failure.
+Later CPU-loading failures also show a diagnostic over the artwork and exit
+with runtime-error status 4, without falling back to placeholder assets.
 The exact lifecycle and current window-handoff limitation are documented in
 [Native startup splash](docs/STARTUP_SPLASH.md).
 `--show-graphics-menu` opens the same overlay immediately for bounded visual

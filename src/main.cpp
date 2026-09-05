@@ -104,8 +104,19 @@ int main(int argc, char **argv) {
   }
 
   std::optional<off::data::InstallVerification> verification;
+  off::graphics::SceneGpuPlan scene;
+  std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
+  off::ui::RetailUiFontSet ui_fonts;
+  off::ui::RetailUiTextureSet ui_textures;
   if (!verify_only) {
-    const auto preflight = off::platform::run_sdl_startup_preflight(data_path);
+    const auto preflight = off::platform::run_sdl_startup_preflight(data_path, [&] {
+      scene = off::graphics::prepare_scene_gpu_plan(
+          off::graphics::load_diagnostic_scene_render_asset(data_path));
+      startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
+          data_path / "Scenes" / "FF-StartUp.ZIP"));
+      ui_fonts = off::ui::load_retail_ui_fonts(
+          data_path / "Scenes" / "FF-StartUp.ZIP");
+    });
     if (preflight.outcome ==
         off::platform::StartupPreflightOutcome::quit_requested)
       return 0;
@@ -134,21 +145,6 @@ int main(int argc, char **argv) {
             << "Mode: " << off::mode_name(mode) << '\n';
   if (verify_only) {
     return 0;
-  }
-  off::graphics::SceneGpuPlan scene;
-  std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
-  off::ui::RetailUiFontSet ui_fonts;
-  off::ui::RetailUiTextureSet ui_textures;
-  try {
-    scene = off::graphics::prepare_scene_gpu_plan(
-        off::graphics::load_diagnostic_scene_render_asset(data_path));
-    startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
-        data_path / "Scenes" / "FF-StartUp.ZIP"));
-    ui_fonts =
-        off::ui::load_retail_ui_fonts(data_path / "Scenes" / "FF-StartUp.ZIP");
-  } catch (const std::exception &error) {
-    std::cerr << "Runtime data loading failed: " << error.what() << '\n';
-    return 4;
   }
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       mode, scene, *startup_graphics, ui_fonts, ui_textures, frame_limit,
