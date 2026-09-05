@@ -109,11 +109,14 @@ AI perception or simulation state.
 The portable data layer already decodes retail texture formats, mip levels,
 palettes, UVs, vertex colors, grouped topology, and 40,071 validated
 primitive-to-texture links. The SDL GPU platform now uploads a validated retail
-triangle strip, index ranges, and decoded RGBA texture, applies the first matching
-GMS object-source transform, and submits textured indexed draws through Vulkan,
-Metal, or D3D12. Authoritative scene-instance selection, confirmed material
-semantics, render-state reconstruction, the Original reference shaders, and then
-the Modern render graph remain.
+triangle strip, index ranges, and decoded RGBA texture, applies the explicitly
+diagnostic GMS object-source transform, and submits textured indexed draws through
+Vulkan, Metal, or D3D12. The portable scene path already prepares deduplicated
+resources and stable multi-instance commands. Its upcoming SDL presentation
+remains a source-only diagnostic scene: it is not evidence for camera behavior,
+RMC/RMI world placement, or Original material semantics. Faithful transform
+composition, confirmed material semantics, render-state reconstruction, the
+Original reference shaders, and then the Modern render graph remain.
 A renderer-facing binding table resolves every ordinary primitive to its optional TEX image while
 preserving the still-opaque selector flag. It also supplies validated vertex-alpha
 classes and GPU-oriented triangle-strip or line-list index buffers with explicit

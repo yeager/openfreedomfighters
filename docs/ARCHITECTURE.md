@@ -78,12 +78,15 @@ projection plane with the greatest indexed surface area and uses a neutral white
 texture tint until the startup material's zero-coded vertex-color semantics are
 confirmed.
 
-The next renderer boundary is the owning `SceneRenderAsset`. It consumes ordered
+The next SDL runtime boundary is the already implemented owning
+`SceneRenderAsset` and SDL-free GPU plan. The asset consumes ordered
 RMC/RMI views and materializes every directly resolved local ordinary PRM while
 retaining all other resolution outcomes for diagnostics. Meshes are deduplicated
 by PRM catalog entry, decoded mip-zero textures by TEX catalog entry, and instances
 remain distinct. Source and map transforms remain separate until their composition
-is evidenced. See [SCENE_RENDER_ASSET.md](SCENE_RENDER_ASSET.md).
+is evidenced. The planned SDL integration is a multi-instance source-only
+diagnostic scene, not a reconstructed level or faithful world placement. See
+[SCENE_RENDER_ASSET.md](SCENE_RENDER_ASSET.md).
 
 ## Compatibility profiles
 

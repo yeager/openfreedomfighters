@@ -85,6 +85,13 @@ struct SceneDiagnosticUniform {
   bool degenerate_depth{false};
 };
 
+// The bundled diagnostic shader evaluates row vectors as
+// position * model * projection_view. Both arrays are stored row-major.
+struct SceneDiagnosticMatrices {
+  std::array<float, 16> projection_view{};
+  std::array<float, 16> model{};
+};
+
 [[nodiscard]] std::array<float, 3> transform_scene_source_diagnostic_position(
     const SceneGpuInstance &instance,
     const std::array<float, 3> &local_position);
@@ -98,6 +105,10 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan);
 make_scene_diagnostic_uniform(const SceneDiagnosticProjection &projection,
                               std::uint32_t pixel_width,
                               std::uint32_t pixel_height);
+
+[[nodiscard]] SceneDiagnosticMatrices make_scene_diagnostic_matrices(
+    const SceneGpuPlan &plan, std::size_t instance_index,
+    std::uint32_t pixel_width, std::uint32_t pixel_height);
 
 [[nodiscard]] std::array<float, 3> project_scene_diagnostic_position(
     const SceneGpuPlan &plan, std::size_t instance_index,

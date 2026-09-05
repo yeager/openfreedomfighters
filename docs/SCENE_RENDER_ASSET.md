@@ -91,6 +91,9 @@ valid instance with the wrong mesh resource.
 
 The diagnostic projection preserves a real third coordinate in SDL GPU's
 `[0, 1]` clip-depth convention rather than flattening every object to one plane.
+`make_scene_diagnostic_matrices` exposes the same calculation as two row-major
+matrices in the bundled shader's `position * model * projection_view` order, so
+backends do not need to reconstruct or transpose the source-only convention.
 It reserves `[0.05, 0.95]` for geometry and handles planar depth with a stable
 midpoint. Physical viewport dimensions produce an aspect-correct uniform without
 rebuilding geometry resources, and zero-sized viewports are rejected. The fit
@@ -98,3 +101,26 @@ uses only the explicitly named source-only diagnostic transform;
 RMC/RMI transform values cannot influence it. This CPU-only boundary makes global
 bounds, instance ordering, topology, alpha/depth policy, and eventual resize-aware
 uniform generation testable identically on Linux, macOS, and Windows.
+
+## SDL runtime integration contract
+
+The next SDL GPU step is to consume the validated plan as a multi-instance
+**source-only diagnostic scene**. The runtime may upload each deduplicated mesh
+and texture once, bind the shared white fallback for untextured commands, and
+submit every planned command in its established diagnostic schedule. It must use
+the plan's global fit and per-instance source diagnostic positions unchanged;
+RMC/RMI transforms must remain retained evidence and must not influence GPU
+placement.
+
+Runtime output must call this view a `source-only diagnostic scene`. Success
+messages may report materialized instance, mesh, texture, and draw-command counts,
+but must not call the result a loaded level, recovered scene, Original rendering,
+or faithful world placement. Missing, external, and non-primitive sources remain
+reported resolution outcomes rather than placeholder draws. A zero-instance plan
+is a valid diagnostic result and must not silently fall back to the older
+single-mesh preview.
+
+This integration does not establish camera matrices, map/GMS transform
+composition, material semantics, lighting, transparent ordering fidelity, or
+line-list presentation fidelity. Those remain independently gated by the evidence
+requirements in [TRANSFORM_BOUNDARY.md](TRANSFORM_BOUNDARY.md).

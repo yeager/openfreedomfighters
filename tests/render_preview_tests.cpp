@@ -3,6 +3,7 @@
 #include "off/graphics/scene_render.hpp"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -264,6 +265,60 @@ int main() {
             tall_uniform.scale[0] > tall_uniform.scale[1] &&
             wide_uniform.scale[2] == tall_uniform.scale[2],
         "recompute aspect-correct XY fit while preserving diagnostic depth");
+
+  const auto apply_row_major = [](const std::array<float, 4> &input,
+                                  const std::array<float, 16> &matrix) {
+    std::array<float, 4> output{};
+    for (std::size_t column = 0; column < 4; ++column) {
+      for (std::size_t row = 0; row < 4; ++row) {
+        output[column] += input[row] * matrix[row * 4 + column];
+      }
+    }
+    return output;
+  };
+  const auto approximately_equal = [](float left, float right) {
+    return std::abs(left - right) <= 1.0e-5F;
+  };
+  const std::array diagnostic_points{
+      std::array{-2.0F, 1.0F, 4.0F},
+      std::array{0.25F, -3.5F, 2.0F},
+  };
+  const std::array diagnostic_viewports{
+      std::array<std::uint32_t, 2>{1, 1},
+      std::array<std::uint32_t, 2>{1600, 900},
+      std::array<std::uint32_t, 2>{900, 1600},
+  };
+  bool matrix_projection_matches = true;
+  for (const auto viewport : diagnostic_viewports) {
+    for (std::size_t instance_index = 0;
+         instance_index < gpu_plan.instances.size(); ++instance_index) {
+      const auto matrices = off::graphics::make_scene_diagnostic_matrices(
+          gpu_plan, instance_index, viewport[0], viewport[1]);
+      for (const auto &point : diagnostic_points) {
+        const auto world = apply_row_major({point[0], point[1], point[2], 1.0F},
+                                           matrices.model);
+        const auto clip = apply_row_major(world, matrices.projection_view);
+        const auto expected = off::graphics::project_scene_diagnostic_position(
+            gpu_plan, instance_index, point, viewport[0], viewport[1]);
+        matrix_projection_matches &=
+            approximately_equal(clip[0], expected[0]) &&
+            approximately_equal(clip[1], expected[1]) &&
+            approximately_equal(clip[2], expected[2]) &&
+            approximately_equal(clip[3], 1.0F);
+      }
+    }
+  }
+  check(matrix_projection_matches,
+        "match CPU diagnostic projection with row-major shader matrices");
+  const auto diagnostic_matrices =
+      off::graphics::make_scene_diagnostic_matrices(gpu_plan, 0, 1600, 900);
+  check(diagnostic_matrices.model[1] == object_source.basis[3] &&
+            diagnostic_matrices.model[4] == object_source.basis[1] &&
+            diagnostic_matrices.model[12] == object_source.position[0] &&
+            diagnostic_matrices.model[13] == object_source.position[1] &&
+            diagnostic_matrices.model[14] == object_source.position[2] &&
+            diagnostic_matrices.model[15] == 1.0F,
+        "lay out the source basis and translation for row-vector shaders");
   bool zero_viewport_rejected = false;
   try {
     static_cast<void>(off::graphics::make_scene_diagnostic_uniform(

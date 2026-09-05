@@ -58,6 +58,9 @@ stable manifest outcomes instead of silently disappearing. The projection is not
 yet the scene camera or Original material model. An SDL-free GPU plan now produces
 stable opaque/blended multi-instance commands, shared resource references, global
 diagnostic bounds, and non-flattened clip depth for cross-platform testing.
+The upcoming SDL integration is intentionally described as a multi-instance
+source-only diagnostic scene; it will not establish the original camera,
+RMC/RMI world placement, material behavior, or a faithfully loaded level.
 Complete scene rendering, gameplay
 simulation, menus, localization, and the complete native runtime remain under
 development; no playable build exists yet.

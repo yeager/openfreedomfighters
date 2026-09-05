@@ -391,6 +391,38 @@ make_scene_diagnostic_uniform(const SceneDiagnosticProjection &projection,
   };
 }
 
+SceneDiagnosticMatrices make_scene_diagnostic_matrices(
+    const SceneGpuPlan &plan, std::size_t instance_index,
+    std::uint32_t pixel_width, std::uint32_t pixel_height) {
+  if (instance_index >= plan.instances.size()) {
+    throw std::invalid_argument(
+        "scene diagnostic matrices have an invalid instance index");
+  }
+  const auto uniform =
+      make_scene_diagnostic_uniform(plan.projection, pixel_width, pixel_height);
+  SceneDiagnosticMatrices result;
+  const auto &instance = plan.instances[instance_index];
+  for (std::size_t row = 0; row < 3; ++row) {
+    for (std::size_t column = 0; column < 3; ++column) {
+      result.model[column * 4 + row] = instance.source_basis[row * 3 + column];
+    }
+    result.model[3 * 4 + row] = instance.source_position[row];
+  }
+  result.model[15] = 1.0F;
+
+  result.projection_view[uniform.axes[0] * 4] = uniform.scale[0];
+  result.projection_view[uniform.axes[1] * 4 + 1] = -uniform.scale[1];
+  result.projection_view[uniform.axes[2] * 4 + 2] = uniform.scale[2];
+  result.projection_view[12] = -uniform.center_horizontal * uniform.scale[0];
+  result.projection_view[13] = uniform.center_vertical * uniform.scale[1];
+  result.projection_view[14] =
+      uniform.degenerate_depth
+          ? 0.5F
+          : depth_minimum - uniform.minimum_depth * uniform.scale[2];
+  result.projection_view[15] = 1.0F;
+  return result;
+}
+
 std::array<float, 3> project_scene_diagnostic_position(
     const SceneGpuPlan &plan, std::size_t instance_index,
     const std::array<float, 3> &local_position, std::uint32_t pixel_width,

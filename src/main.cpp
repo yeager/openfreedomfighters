@@ -1,5 +1,6 @@
 #include "off/data/install.hpp"
-#include "off/graphics/render_preview.hpp"
+#include "off/graphics/scene_gpu_plan.hpp"
+#include "off/graphics/scene_render.hpp"
 #include "off/mode.hpp"
 #include "off/platform/sdl_gpu_runtime.hpp"
 
@@ -108,15 +109,16 @@ int main(int argc, char **argv) {
   if (verify_only) {
     return 0;
   }
-  off::graphics::RenderPreviewAsset preview;
+  off::graphics::SceneGpuPlan scene;
   try {
-    preview = off::graphics::load_startup_render_preview(data_path);
+    scene = off::graphics::prepare_scene_gpu_plan(
+        off::graphics::load_startup_scene_render_asset(data_path));
   } catch (const std::exception &error) {
-    std::cerr << "Render-preview loading failed: " << error.what() << '\n';
+    std::cerr << "Scene loading failed: " << error.what() << '\n';
     return 4;
   }
   const auto runtime = off::platform::run_sdl_gpu_runtime(
-      mode, preview, frame_limit, show_graphics_menu, screenshot_path);
+      mode, scene, frame_limit, show_graphics_menu, screenshot_path);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';
     return 4;
