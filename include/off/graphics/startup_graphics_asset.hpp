@@ -26,6 +26,11 @@ struct StartupGraphicsImage {
 
 class StartupGraphicsAsset final {
 public:
+  StartupGraphicsAsset(StartupGraphicsAsset &&) noexcept = default;
+  StartupGraphicsAsset &operator=(StartupGraphicsAsset &&) noexcept = default;
+  StartupGraphicsAsset(const StartupGraphicsAsset &) = delete;
+  StartupGraphicsAsset &operator=(const StartupGraphicsAsset &) = delete;
+
   [[nodiscard]] const data::StartupGraphicsComposition &
   composition() const noexcept {
     return composition_;

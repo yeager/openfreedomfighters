@@ -1,6 +1,7 @@
 #include "off/data/install.hpp"
 #include "off/graphics/scene_gpu_plan.hpp"
 #include "off/graphics/scene_render.hpp"
+#include "off/graphics/startup_graphics_asset.hpp"
 #include "off/mode.hpp"
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/ui/retail_ui_fonts.hpp"
@@ -11,6 +12,7 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <optional>
 #include <string_view>
 
 namespace {
@@ -112,11 +114,14 @@ int main(int argc, char **argv) {
     return 0;
   }
   off::graphics::SceneGpuPlan scene;
+  std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
   off::ui::RetailUiFontSet ui_fonts;
   off::ui::RetailUiTextureSet ui_textures;
   try {
     scene = off::graphics::prepare_scene_gpu_plan(
         off::graphics::load_diagnostic_scene_render_asset(data_path));
+    startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
+        data_path / "Scenes" / "FF-StartUp.ZIP"));
     ui_fonts =
         off::ui::load_retail_ui_fonts(data_path / "Scenes" / "FF-StartUp.ZIP");
   } catch (const std::exception &error) {
@@ -124,7 +129,8 @@ int main(int argc, char **argv) {
     return 4;
   }
   const auto runtime = off::platform::run_sdl_gpu_runtime(
-      mode, scene, ui_fonts, ui_textures, frame_limit, show_graphics_menu,
+      mode, scene, *startup_graphics, ui_fonts, ui_textures, frame_limit,
+      show_graphics_menu,
       screenshot_path);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';

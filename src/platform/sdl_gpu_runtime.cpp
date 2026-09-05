@@ -71,6 +71,16 @@ struct GpuUiTexture {
   SDL_GPUTexture *texture{nullptr};
 };
 
+struct GpuStartupImage {
+  std::size_t catalog_image_index{};
+  std::uint32_t texture_id{};
+  SDL_GPUTexture *texture{nullptr};
+};
+
+struct GpuStartupImages {
+  std::vector<GpuStartupImage> images;
+};
+
 struct GpuOverlay {
   SDL_GPUBuffer *vertex_buffer{nullptr};
   SDL_GPUTexture *atlas{nullptr};
@@ -135,6 +145,14 @@ void release_overlay(SDL_GPUDevice *device, GpuOverlay &overlay) {
   if (overlay.vertex_buffer != nullptr)
     SDL_ReleaseGPUBuffer(device, overlay.vertex_buffer);
   overlay = {};
+}
+
+void release_startup_images(SDL_GPUDevice *device,
+                            GpuStartupImages &startup) {
+  for (const auto &image : startup.images)
+    if (image.texture != nullptr)
+      SDL_ReleaseGPUTexture(device, image.texture);
+  startup = {};
 }
 
 struct ShaderBytes {
@@ -781,6 +799,97 @@ upload_overlay_retail_textures(SDL_GPUDevice *device,
   return uploaded;
 }
 
+[[nodiscard]] bool upload_startup_images(
+    SDL_GPUDevice *device, const graphics::StartupGraphicsAsset &source,
+    GpuStartupImages &result) {
+  const auto &images = source.images();
+  if (images.size() != graphics::startup_graphics_image_count)
+    return false;
+
+  std::size_t aggregate_bytes = 0;
+  std::vector<TextureUpload> uploads;
+  uploads.reserve(images.size());
+  result.images.reserve(images.size());
+  const auto release_transfers = [&]() {
+    for (const auto &upload : uploads)
+      if (upload.transfer != nullptr)
+        SDL_ReleaseGPUTransferBuffer(device, upload.transfer);
+  };
+
+  for (std::size_t index = 0; index < images.size(); ++index) {
+    const auto &image = images[index];
+    for (std::size_t previous = 0; previous < index; ++previous) {
+      if (images[previous].catalog_image_index == image.catalog_image_index ||
+          images[previous].texture_id == image.texture_id) {
+        release_transfers();
+        return false;
+      }
+    }
+    const auto width = image.mip_zero.width;
+    const auto height = image.mip_zero.height;
+    const auto byte_count = static_cast<std::uint64_t>(width) * height * 4U;
+    if (width == 0 || height == 0 || byte_count == 0 ||
+        byte_count > std::numeric_limits<Uint32>::max() ||
+        byte_count > graphics::startup_graphics_decoded_byte_budget ||
+        aggregate_bytes > graphics::startup_graphics_decoded_byte_budget -
+                              static_cast<std::size_t>(byte_count) ||
+        image.mip_zero.pixels.size() != byte_count) {
+      release_transfers();
+      return false;
+    }
+    aggregate_bytes += static_cast<std::size_t>(byte_count);
+
+    const SDL_GPUTextureCreateInfo info{
+        .type = SDL_GPU_TEXTURETYPE_2D,
+        .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
+        .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
+        .width = width,
+        .height = height,
+        .layer_count_or_depth = 1,
+        .num_levels = 1,
+        .sample_count = SDL_GPU_SAMPLECOUNT_1};
+    auto *texture = SDL_CreateGPUTexture(device, &info);
+    if (texture == nullptr) {
+      release_transfers();
+      return false;
+    }
+    result.images.push_back(
+        {image.catalog_image_index, image.texture_id, texture});
+    auto *transfer = make_upload_transfer(
+        device, image.mip_zero.pixels.data(), static_cast<Uint32>(byte_count));
+    if (transfer == nullptr) {
+      release_transfers();
+      return false;
+    }
+    uploads.push_back({transfer, texture, width, height});
+  }
+
+  SDL_GPUCommandBuffer *command = SDL_AcquireGPUCommandBuffer(device);
+  SDL_GPUCopyPass *copy =
+      command == nullptr ? nullptr : SDL_BeginGPUCopyPass(command);
+  if (copy == nullptr) {
+    if (command != nullptr)
+      SDL_CancelGPUCommandBuffer(command);
+    release_transfers();
+    return false;
+  }
+  for (const auto &upload : uploads) {
+    const SDL_GPUTextureTransferInfo from{.transfer_buffer = upload.transfer,
+                                          .pixels_per_row = upload.width,
+                                          .rows_per_layer = upload.height};
+    const SDL_GPUTextureRegion to{.texture = upload.texture,
+                                  .w = upload.width,
+                                  .h = upload.height,
+                                  .d = 1};
+    SDL_UploadToGPUTexture(copy, &from, &to, false);
+  }
+  SDL_EndGPUCopyPass(copy);
+  const bool uploaded =
+      SDL_SubmitGPUCommandBuffer(command) && SDL_WaitForGPUIdle(device);
+  release_transfers();
+  return uploaded;
+}
+
 [[nodiscard]] bool upload_scene(SDL_GPUDevice *device, SDL_Window *window,
                                 const graphics::SceneGpuPlan &source,
                                 GpuScene &result) {
@@ -963,6 +1072,7 @@ upload_overlay_retail_textures(SDL_GPUDevice *device,
 
 RuntimeResult
 run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
+                    const graphics::StartupGraphicsAsset &startup_graphics,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,
                     std::size_t frame_limit, bool show_graphics_menu,
@@ -1034,6 +1144,18 @@ run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
     SDL_Quit();
     return result;
   }
+  GpuStartupImages gpu_startup;
+  if (!upload_startup_images(device, startup_graphics, gpu_startup)) {
+    const auto result = failure("startup graphics image GPU upload failed");
+    release_startup_images(device, gpu_startup);
+    release_overlay(device, overlay);
+    release_scene(device, gpu);
+    SDL_ReleaseWindowFromGPUDevice(device, window);
+    SDL_DestroyGPUDevice(device);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return result;
+  }
 
   settings::GraphicsCapabilities capabilities;
   capabilities.mailbox_present = SDL_WindowSupportsGPUPresentMode(
@@ -1059,6 +1181,8 @@ run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
           std::to_string(scene.meshes.size()) + " meshes, " +
           std::to_string(scene.instances.size()) + " instances, " +
           std::to_string(scene.draws.size()) + " draws; " +
+          std::to_string(gpu_startup.images.size()) +
+          " startup graphics images uploaded, not rendered; " +
           std::to_string(ui_fonts.fonts.size()) + " retail UI fonts loaded)"};
   constexpr std::array<float, 32> matrices{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
                                            0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1,
@@ -1484,6 +1608,7 @@ run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
   }
   SDL_WaitForGPUIdle(device);
   release_overlay(device, overlay);
+  release_startup_images(device, gpu_startup);
   release_scene(device, gpu);
   SDL_ReleaseWindowFromGPUDevice(device, window);
   SDL_DestroyGPUDevice(device);

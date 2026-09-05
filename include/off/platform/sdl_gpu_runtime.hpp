@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/graphics/scene_gpu_plan.hpp"
+#include "off/graphics/startup_graphics_asset.hpp"
 #include "off/mode.hpp"
 #include "off/ui/retail_ui_fonts.hpp"
 #include "off/ui/retail_ui_textures.hpp"
@@ -18,6 +19,7 @@ struct RuntimeResult {
 
 [[nodiscard]] RuntimeResult
 run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
+                    const graphics::StartupGraphicsAsset &startup_graphics,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,
                     std::size_t frame_limit = 0,

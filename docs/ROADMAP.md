@@ -55,6 +55,8 @@ Gate: a new contributor can generate the same structural report from a supported
 - [x] Resolve every startup picture draw group to its bounded PRM texture-resource record.
 - [x] Build an owning startup graphics asset that decodes only the six
   structurally selected retail images after paired GMS/BUF/PRM/TEX validation.
+- [x] Upload the six validated startup composition images to dedicated native
+  GPU textures without drawing them ahead of the transform/order evidence.
 - [x] Implement bounds-checked world-space queries over RMC/RMI octrees.
 - [x] Identify and validate packed geometry references in RMC/RMI descriptors.
 - [ ] Safe, bounds-checked readers for all required formats.

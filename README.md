@@ -117,7 +117,10 @@ two chrome pictures co-gated by the same recovered visibility-state mask. Their
 24 instances bind 88 draw groups to six retail images while preserving, but not
 composing, every authored inclusive root-to-instance construction and transform
 chain. A paired GMS/BUF/PRM/TEX loader now owns and decodes mip zero for only
-those six composition-selected retail images; renderer wiring remains pending.
+those six composition-selected retail images. The native runtime uploads them
+to six validated GPU sampler textures after installation verification, but does
+not render them until the remaining transform and submission-order contracts
+are recovered.
 The visible focus marker and extended Modern/Modern+ rows
 remain project-authored diagnostic UI until this recovered composition is wired
 into the renderer.
