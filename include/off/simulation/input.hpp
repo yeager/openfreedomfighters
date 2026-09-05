@@ -32,6 +32,7 @@ struct InputSnapshot {
   std::uint64_t pressed{};
   std::uint64_t released{};
   std::array<std::int16_t, static_cast<std::size_t>(AnalogAxis::count)> axes{};
+  auto operator<=>(const InputSnapshot &) const = default;
 
   [[nodiscard]] bool is_held(DigitalAction action) const noexcept;
   [[nodiscard]] bool was_pressed(DigitalAction action) const noexcept;

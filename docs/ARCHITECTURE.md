@@ -46,6 +46,11 @@ tick rate without rounding its period to nanoseconds, bounds long frame stalls,
 and exposes interpolation only to presentation. Original and Modern must feed
 the same snapshots into the same fixed-step simulation; display refresh,
 rendering mode, menus, and frame limits must not redefine simulation time.
+`SimulationWorld` now supplies the first owner for that boundary: generational
+entity identities, tick-boundary lifecycle queues, future-tick ordered events,
+and canonical SHA-256 checkpoints over integer authoritative state and pending
+work. These are portable vertical-slice policies, not recovered retail ECS
+semantics. See [SIMULATION_RUNTIME.md](SIMULATION_RUNTIME.md).
 
 The F10 graphics-settings overlay is downstream of the same presentation boundary.
 Its platform-neutral session separates confirmed requested values, editable draft

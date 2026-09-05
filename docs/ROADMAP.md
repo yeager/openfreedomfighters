@@ -85,7 +85,9 @@ Gate: deterministic camera fly-through matches structural and image-difference t
 ## Phase 3 - Simulation vertical slice
 
 - [x] Portable rational fixed-step scheduler and tick-addressed input snapshots.
-- [ ] Entity/component lifetime, simulation events, and serialization.
+- [x] Deterministic generational entity lifetime, future-tick event queue, and
+  canonical state checkpoints.
+- [ ] Gameplay component model and save-game serialization.
 - [ ] Script/mission runtime.
 - [ ] Character locomotion, camera, weapons, damage, interaction.
 - [ ] Navigation, AI, squad recruitment, orders, and morale/charisma mechanics.

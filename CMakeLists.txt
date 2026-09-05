@@ -65,6 +65,7 @@ add_library(off_core
     src/settings/graphics_settings.cpp
     src/simulation/fixed_step.cpp
     src/simulation/input.cpp
+    src/simulation/world.cpp
     src/ui/graphics_menu.cpp
     src/ui/graphics_menu_draw.cpp
 )
@@ -175,4 +176,8 @@ if(BUILD_TESTING)
     add_executable(off_simulation_runtime_tests tests/simulation_runtime_tests.cpp)
     target_link_libraries(off_simulation_runtime_tests PRIVATE off_core)
     add_test(NAME off_simulation_runtime_tests COMMAND off_simulation_runtime_tests)
+
+    add_executable(off_simulation_world_tests tests/simulation_world_tests.cpp)
+    target_link_libraries(off_simulation_world_tests PRIVATE off_core)
+    add_test(NAME off_simulation_world_tests COMMAND off_simulation_world_tests)
 endif()
