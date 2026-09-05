@@ -99,6 +99,8 @@ InstallVerification verify_install(const std::filesystem::path &root) {
     return result;
   }
 
+  std::string archive_context;
+  std::string member_context;
   try {
     ArchiveVfs installation_vfs;
     const auto installation_mount = installation_vfs.mount_directory(root);
@@ -258,6 +260,9 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           lowercase(entry.path().extension().string()) != ".zip") {
         continue;
       }
+      // Keep only installation-relative names in public-facing diagnostics.
+      archive_context = entry.path().lexically_relative(root).generic_string();
+      member_context.clear();
       const auto archive = ZipArchive::open(entry.path());
       std::size_t support_files_in_archive = 0;
       std::size_t scene_graph_files_in_archive = 0;
@@ -277,6 +282,7 @@ InstallVerification verify_install(const std::filesystem::path &root) {
       std::unordered_set<std::uint32_t> primitive_indices;
       std::vector<std::uint32_t> scene_geometry_references;
       for (const auto &member : archive.entries()) {
+        member_context = member.name;
         const auto extension =
             lowercase(std::filesystem::path(member.name).extension().string());
         if (extension == ".sup") {
@@ -418,6 +424,7 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           }
         }
       }
+      member_context.clear();
       if (support_files_in_archive != 1 || scene_graph_files_in_archive != 1 ||
           gms_files_in_archive != 1 || texture_files_in_archive != 1 ||
           primitive_files_in_archive != 1 || render_map_files_in_archive != 1 ||
@@ -588,6 +595,7 @@ InstallVerification verify_install(const std::filesystem::path &root) {
         }
       }
       ++scene_archive_count;
+      archive_context.clear();
     }
     if (scene_archive_count != 90 ||
         scene_support_count != scene_archive_count ||
@@ -657,6 +665,7 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           "scene resource corpus does not match the supported build");
     }
 
+    archive_context = "Scenes/StartLoader.ZIP";
     const auto startup_archive =
         ZipArchive::open(root / "Scenes/StartLoader.ZIP");
     const auto *scene_graph = startup_archive.find("SCENES/StartLoader.ZGF");
@@ -665,12 +674,20 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           InstallError::incomplete_game_data, root,
           "startup archive does not match the supported resource layout");
     }
+    member_context = scene_graph->name;
     const auto payload = startup_archive.read(*scene_graph);
     static_cast<void>(ZgfBundle::parse(PackedResource::parse(payload)));
   } catch (const std::exception &exception) {
+    const auto context = archive_context.empty()
+                             ? std::string{}
+                             : archive_context +
+                                   (member_context.empty()
+                                        ? std::string{}
+                                        : " [" + member_context + "]") +
+                                   ": ";
     return failure(InstallError::incomplete_game_data, root,
                    std::string{"game data failed integrity validation: "} +
-                       exception.what());
+                       context + exception.what());
   }
 
   return {

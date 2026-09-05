@@ -399,6 +399,30 @@ int main(int argc, char **argv) {
     check(retail_prepared.pictures().size() == 21 &&
               retail_prepared.submissions().size() == 77,
           "prepare the canonical retail startup pre-raster plan");
+    for (unsigned state = 0; state < 256; ++state) {
+      const auto requested = static_cast<std::uint8_t>(state);
+      const auto prepared_state =
+          off::graphics::prepare_startup_graphics_plan(retail, requested);
+      const auto effective = (state & 0xb9U) == 0 ? 1U : state;
+      const bool chrome_visible = (effective & 1U) != 0;
+      check(prepared_state.requested_state() == requested &&
+                prepared_state.effective_state() == effective &&
+                prepared_state.pictures().size() ==
+                    (chrome_visible ? 21U : 7U) &&
+                prepared_state.submissions().size() ==
+                    (chrome_visible ? 77U : 7U),
+            "validate every retail startup state mask and fallback");
+      for (const auto &picture : prepared_state.pictures()) {
+        const auto &row = retail.composition().rows()[picture.row_index];
+        const auto &source = row.pictures[picture.picture_index];
+        check(!row.authored_hidden &&
+                  picture.base_render_property == source.base_render_property &&
+                  picture.authored_alpha == source.authored_alpha &&
+                  picture.alignment_enum == source.alignment_enum &&
+                  picture.extension_control == source.extension_control,
+              "retain real authored controls across every startup state");
+      }
+    }
   }
   std::cout << "startup graphics asset tests passed\n";
 }

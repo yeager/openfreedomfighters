@@ -167,6 +167,13 @@ resource or picture identity, discontinuous span, mismatched emission identity,
 missing texture identity, non-finite quad value, multi-quad group, or count over
 those bounds.
 
+The optional local compatibility run of `off_startup_graphics_asset_tests`
+accepts the user-owned startup archive path and checks all 256 requested state
+masks, including fallback and mixed masks, against these two shapes. It also
+checks that every emitted picture excludes hidden rows and preserves its real
+authored controls. Only pass/fail diagnostics are emitted; no retail assets are
+written. Hosted CI continues to use project-authored fixtures.
+
 This is intentionally a prepared/pre-raster plan, not a GPU or draw plan. It
 contains no generated transform, vertex order, indexes, topology, UV-to-corner
 pairing, winding, blend state, material scheduling, or physical-output mapping.

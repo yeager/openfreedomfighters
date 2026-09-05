@@ -28,6 +28,9 @@ missing, invalid, unsupported, or omitted installation produces a concise
 the existing data-error status. Before showing this dialog, the artwork is
 redrawn even when verification outlasted the timed splash. It remains the error
 backdrop until dismissal; this does not restart the three-second timer.
+Archive-validation errors identify the installation-relative archive and, when
+the failure occurs while parsing a member, its member name. The original
+integrity error is retained; no archive payload is included in the message.
 Closing the startup window or pressing Escape
 hides it immediately;
 the process safely joins any in-flight verifier before teardown.

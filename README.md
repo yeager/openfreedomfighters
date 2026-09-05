@@ -98,6 +98,8 @@ three seconds. Retail verification runs concurrently so the window remains
 responsive. Missing, invalid, unsupported, or omitted game data produces a
 native error dialog attached to that startup window. `--verify-only`, `--help`,
 and `--version` remain headless and never open the splash.
+Archive integrity errors now identify the affected installation-relative archive
+and member when known, while preserving the underlying validation failure.
 The exact lifecycle and current window-handoff limitation are documented in
 [Native startup splash](docs/STARTUP_SPLASH.md).
 `--show-graphics-menu` opens the same overlay immediately for bounded visual
