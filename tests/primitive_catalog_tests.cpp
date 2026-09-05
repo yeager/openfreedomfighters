@@ -1,5 +1,7 @@
 #include "off/data/primitive_catalog.hpp"
 
+#include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -40,6 +42,10 @@ void set_u32(std::vector<std::byte>& bytes, std::size_t offset, std::uint32_t va
     }
 }
 
+void set_f32(std::vector<std::byte>& bytes, std::size_t offset, float value) {
+    set_u32(bytes, offset, std::bit_cast<std::uint32_t>(value));
+}
+
 struct Fixture {
     std::vector<std::byte> bytes{16, std::byte{0}};
     std::size_t topology_offset{0};
@@ -50,7 +56,14 @@ struct Fixture {
 
 Fixture catalog_fixture(bool include_flagged_reference = false) {
     Fixture fixture;
-    fixture.bytes.insert(fixture.bytes.end(), 36, std::byte{0});
+    fixture.bytes.insert(fixture.bytes.end(), 3 * 36, std::byte{0});
+    set_f32(fixture.bytes, 16, 1.0F);
+    set_f32(fixture.bytes, 20, 2.0F);
+    set_f32(fixture.bytes, 24, 3.0F);
+    set_f32(fixture.bytes, 32, 1.0F);
+    set_u32(fixture.bytes, 40, 0x80445566U);
+    set_f32(fixture.bytes, 44, 0.25F);
+    set_f32(fixture.bytes, 48, 0.75F);
     fixture.topology_offset = fixture.bytes.size();
     for (const std::uint16_t word : {1, 3, 0, 1, 2}) {
         append_u16(fixture.bytes, word);
@@ -115,6 +128,16 @@ int main() {
     check(entry.primitive_kind == 3, "preserve primitive kind");
     check(entry.vertex_count == 3, "parse primitive vertex count");
     check(entry.vertex_data_offset == 16, "parse primitive vertex-data offset");
+    check(entry.vertices.size() == 3, "decode primitive vertex table");
+    check(entry.vertices[0].position == std::array{1.0F, 2.0F, 3.0F},
+          "decode vertex position");
+    check(entry.vertices[0].normal == std::array{0.0F, 1.0F, 0.0F},
+          "decode vertex normal");
+    check(entry.vertices[0].color_rgba ==
+              std::array<std::uint8_t, 4>{0x44, 0x55, 0x66, 0x80},
+          "decode packed vertex color to RGBA8");
+    check(entry.vertices[0].texture_coordinates == std::array{0.25F, 0.75F},
+          "decode vertex texture coordinates");
     check(entry.topology_data_offset == fixture.topology_offset,
           "parse primitive topology offset");
     check(entry.batches.size() == 1, "parse topology batch count");
@@ -170,6 +193,10 @@ int main() {
     check_rejected(
         [](auto& value) { set_u32(value.bytes, value.descriptor_offset + 20, 17); },
         "reject an unaligned vertex-data offset"
+    );
+    check_rejected(
+        [](auto& value) { set_u32(value.bytes, 16, 0x7f800000U); },
+        "reject a non-finite vertex component"
     );
     check_rejected(
         [](auto& value) { set_u32(value.bytes, value.descriptor_offset + 64, 6); },

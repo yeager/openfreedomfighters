@@ -32,7 +32,20 @@ Executable control flow and cross-file relationships confirm these fields for an
 | 60 | `u32` | topology-data offset |
 | 64 | `u32` | topology size in 16-bit words |
 
-All four data offsets are file-relative, even, and point backward from the descriptor. The vertex table is guaranteed to contain at least three 32-bit components per declared vertex. Exact vertex strides and optional streams vary with the format flags and remain deliberately undecoded until their layouts are independently confirmed.
+All four data offsets are file-relative, even, and point backward from the descriptor. Optional secondary and auxiliary streams vary with the format flags and remain deliberately opaque until their roles are independently confirmed.
+
+## Vertex records
+
+Every ordinary descriptor in the supported corpus uses the same 36-byte primary vertex record:
+
+| Vertex offset | Type | Portable meaning |
+|---:|---|---|
+| 0 | `f32[3]` | position |
+| 12 | `f32[3]` | normal |
+| 24 | packed `u32` | vertex color |
+| 28 | `f32[2]` | texture coordinates |
+
+Vertex colors use the same packed channel masks confirmed for texture palettes and are converted to RGBA8. Floating-point components are preserved without normalization or coordinate-system conversion. Non-finite values are rejected. The complete corpus contains 2,820,961 decoded primary vertices; every 36-byte table fits before its owning descriptor.
 
 ## Topology batches
 
@@ -49,6 +62,6 @@ Every batch consumes at least one index, every referenced index must be below th
 
 ## Safety and clean-room evidence
 
-The parser caps files at 256 MiB, entries at 65,536, vertices per ordinary descriptor at 16,384, and topology tables at 1,048,576 words. It checks all arithmetic, duplicated offsets, descriptor extents, pointer alignment, minimum vertex storage, topology extents, batch lengths, trailing words, and vertex references before constructing the model.
+The parser caps files at 256 MiB, entries at 65,536, vertices per ordinary descriptor at 16,384, and topology tables at 1,048,576 words. It checks all arithmetic, duplicated offsets, descriptor extents, pointer alignment, complete vertex storage, finite components, topology extents, batch lengths, trailing words, and vertex references before constructing the model.
 
-The complete supported corpus passes these rules. Private executable analysis independently confirms the descriptor size, vertex-count and data-offset accesses, and the high-bit handling used by packed index references. Public tests contain only an invented three-vertex fixture and destructive mutations; no retail vertex, index, or descriptor bytes are present in the repository.
+The complete supported corpus passes these rules. Private executable analysis independently confirms the descriptor size, vertex-count and data-offset accesses, 36-byte output stride, attribute positions, packed channel handling, and the high-bit handling used by packed index references. Public tests contain only an invented three-vertex fixture and destructive mutations; no retail vertex, index, or descriptor bytes are present in the repository.

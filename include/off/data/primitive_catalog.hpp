@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -9,6 +10,13 @@ namespace off::data {
 
 struct PrimitiveBatch {
     std::vector<std::uint16_t> indices;
+};
+
+struct PrimitiveVertex {
+    std::array<float, 3> position{};
+    std::array<float, 3> normal{};
+    std::array<std::uint8_t, 4> color_rgba{};
+    std::array<float, 2> texture_coordinates{};
 };
 
 struct PrimitiveEntry {
@@ -22,6 +30,7 @@ struct PrimitiveEntry {
     std::uint32_t auxiliary_data_offset{0};
     std::uint32_t vertex_data_offset{0};
     std::uint32_t topology_data_offset{0};
+    std::vector<PrimitiveVertex> vertices;
     std::vector<PrimitiveBatch> batches;
 };
 

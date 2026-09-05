@@ -3,6 +3,8 @@
 #include "off/data/byte_reader.hpp"
 
 #include <algorithm>
+#include <bit>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
@@ -14,6 +16,7 @@ namespace {
 
 constexpr std::size_t header_size = 16;
 constexpr std::size_t descriptor_size = 124;
+constexpr std::size_t vertex_size = 36;
 constexpr std::size_t maximum_file_size = 256U * 1024U * 1024U;
 constexpr std::uint32_t maximum_entries = 65'536;
 constexpr std::uint32_t maximum_vertex_count = 16'384;
@@ -32,6 +35,14 @@ void require_data_offset(
     if (value < header_size || value >= descriptor_offset || (value & 1U) != 0U) {
         throw std::runtime_error("primitive descriptor contains an invalid data offset");
     }
+}
+
+[[nodiscard]] float read_float(const ByteReader& reader, std::size_t offset) {
+    const auto value = std::bit_cast<float>(reader.u32(offset));
+    if (!std::isfinite(value)) {
+        throw std::runtime_error("primitive vertex contains a non-finite component");
+    }
+    return value;
 }
 
 }  // namespace
@@ -101,17 +112,47 @@ PrimitiveCatalog PrimitiveCatalog::parse(std::span<const std::byte> bytes) {
         require_data_offset(entry.vertex_data_offset, descriptor_offset, false);
         require_data_offset(entry.topology_data_offset, descriptor_offset, false);
 
-        const auto minimum_vertex_bytes =
-            static_cast<std::uint64_t>(entry.vertex_count) * 3U * sizeof(std::uint32_t);
-        if (static_cast<std::uint64_t>(entry.vertex_data_offset) + minimum_vertex_bytes >
+        const auto vertex_bytes =
+            static_cast<std::uint64_t>(entry.vertex_count) * vertex_size;
+        if (static_cast<std::uint64_t>(entry.vertex_data_offset) + vertex_bytes >
             descriptor_offset) {
-            throw std::runtime_error("primitive vertex positions exceed descriptor bounds");
+            throw std::runtime_error("primitive vertex table exceeds descriptor bounds");
         }
         const auto topology_bytes =
             static_cast<std::uint64_t>(topology_word_count) * sizeof(std::uint16_t);
         if (static_cast<std::uint64_t>(entry.topology_data_offset) + topology_bytes >
             descriptor_offset) {
             throw std::runtime_error("primitive topology exceeds descriptor bounds");
+        }
+
+        entry.vertices.reserve(entry.vertex_count);
+        for (std::uint32_t vertex_index = 0; vertex_index < entry.vertex_count;
+             ++vertex_index) {
+            const auto vertex_offset = entry.vertex_data_offset +
+                                       static_cast<std::size_t>(vertex_index) * vertex_size;
+            const auto packed_color = reader.u32(vertex_offset + 24U);
+            entry.vertices.push_back({
+                .position = {
+                    read_float(reader, vertex_offset),
+                    read_float(reader, vertex_offset + 4U),
+                    read_float(reader, vertex_offset + 8U),
+                },
+                .normal = {
+                    read_float(reader, vertex_offset + 12U),
+                    read_float(reader, vertex_offset + 16U),
+                    read_float(reader, vertex_offset + 20U),
+                },
+                .color_rgba = {
+                    static_cast<std::uint8_t>((packed_color >> 16U) & 0xffU),
+                    static_cast<std::uint8_t>((packed_color >> 8U) & 0xffU),
+                    static_cast<std::uint8_t>(packed_color & 0xffU),
+                    static_cast<std::uint8_t>(packed_color >> 24U),
+                },
+                .texture_coordinates = {
+                    read_float(reader, vertex_offset + 28U),
+                    read_float(reader, vertex_offset + 32U),
+                },
+            });
         }
 
         const auto batch_count = reader.u16(entry.topology_data_offset);

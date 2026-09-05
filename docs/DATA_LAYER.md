@@ -21,7 +21,7 @@ The first Phase 1 component is a read-only ZIP archive reader and overlay virtua
 - A random-access view detects replacement, resizing, or conversion of its source into a symbolic link before each read.
 - Scene `SUP` resources are parsed as bounded `DLCF` dependency lists in both observed scalar and array layouts.
 - Scene `TEX` resources are parsed into image, mip, palette, and sequence models with bidirectional index validation, then decoded through portable CPU paths to RGBA8.
-- Scene `PRM` resources are parsed into indexed primitive descriptors and bounds-checked topology batches while unresolved vertex encodings remain opaque.
+- Scene `PRM` resources are parsed into indexed primitive descriptors, portable position/normal/color/texture-coordinate vertices, and bounds-checked topology batches. Optional auxiliary streams remain opaque.
 
 These rules protect the native runtime from malformed user-supplied data. They do not yet define the complete game-data mount lifecycle or any resource-family schema.
 
@@ -37,6 +37,6 @@ The installation verifier parses the single `SUP` member in each of all 90 scene
 
 The same full-corpus pass parses every `TEX` member and validates 23,522 image records and 19 sequence records. It decodes a retail reference from each of the four observed encoding families and discards the output immediately. Encoded and decoded mip bytes are held only in transient memory. See [TEXTURE_FORMAT.md](TEXTURE_FORMAT.md).
 
-Every `PRM` member is also parsed during installation verification. The supported corpus contains 61,451 entries, including 27 flagged references, plus 461,344 topology batches and 4,412,738 individually range-checked vertex indexes. See [PRIMITIVE_FORMAT.md](PRIMITIVE_FORMAT.md).
+Every `PRM` member is also parsed during installation verification. The supported corpus contains 61,451 entries, including 27 flagged references, plus 2,820,961 decoded primary vertices, 461,344 topology batches, and 4,412,738 individually range-checked vertex indexes. See [PRIMITIVE_FORMAT.md](PRIMITIVE_FORMAT.md).
 
 The audio format model is documented in [AUDIO_FORMAT.md](AUDIO_FORMAT.md).

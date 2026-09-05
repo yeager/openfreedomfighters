@@ -181,6 +181,7 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         std::size_t primitive_catalog_count = 0;
         std::size_t primitive_entry_count = 0;
         std::size_t primitive_reference_count = 0;
+        std::size_t primitive_vertex_count = 0;
         std::size_t primitive_batch_count = 0;
         std::size_t primitive_index_count = 0;
         bool decoded_dxt1_reference = false;
@@ -248,6 +249,7 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                             ++primitive_reference_count;
                             continue;
                         }
+                        primitive_vertex_count += primitive.vertices.size();
                         primitive_batch_count += primitive.batches.size();
                         for (const auto& batch : primitive.batches) {
                             primitive_index_count += batch.indices.size();
@@ -272,7 +274,8 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             !decoded_dxt3_reference || !decoded_abgr_reference ||
             !decoded_palette_reference || primitive_catalog_count != scene_archive_count ||
             primitive_entry_count != 61'451 || primitive_reference_count != 27 ||
-            primitive_batch_count != 461'344 || primitive_index_count != 4'412'738) {
+            primitive_vertex_count != 2'820'961 || primitive_batch_count != 461'344 ||
+            primitive_index_count != 4'412'738) {
             return failure(
                 InstallError::incomplete_game_data,
                 root,
