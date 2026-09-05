@@ -1,7 +1,9 @@
 #include "off/graphics/picture_transform.hpp"
 
 #include <cmath>
+#include <limits>
 #include <stdexcept>
+#include <vector>
 
 namespace off::graphics {
 namespace {
@@ -27,6 +29,52 @@ transform_vector(const std::array<float, 3> &value,
   };
 }
 
+[[nodiscard]] std::array<float, 3>
+inverse_transform_vector(const std::array<float, 3> &value,
+                         const std::array<float, 9> &matrix) {
+  return {
+      value[0] * matrix[6] + value[1] * matrix[7] + value[2] * matrix[8],
+      value[0] * matrix[3] + value[1] * matrix[4] + value[2] * matrix[5],
+      value[0] * matrix[0] + value[1] * matrix[1] + value[2] * matrix[2],
+  };
+}
+
+template <typename Transform>
+void transform_basis(std::array<float, 9> &basis,
+                     const std::array<float, 9> &matrix, Transform transform) {
+  for (std::size_t row = 0; row < 3; ++row) {
+    const std::array<float, 3> source{basis[row * 3], basis[row * 3 + 1],
+                                      basis[row * 3 + 2]};
+    const auto result = transform(source, matrix);
+    for (std::size_t component = 0; component < 3; ++component)
+      basis[row * 3 + component] = result[component];
+  }
+}
+
+[[nodiscard]] std::vector<std::uint32_t>
+validated_chain(const std::vector<PictureHierarchyNode> &nodes,
+                std::uint32_t start) {
+  if (start >= nodes.size())
+    throw std::runtime_error("picture hierarchy endpoint is out of range");
+  std::vector<bool> visited(nodes.size());
+  std::vector<std::uint32_t> chain;
+  auto current = start;
+  while (current != no_picture_transform_parent) {
+    if (current >= nodes.size())
+      throw std::runtime_error("picture hierarchy parent is out of range");
+    if (visited[current])
+      throw std::runtime_error("picture hierarchy contains a cycle");
+    visited[current] = true;
+    require_finite(nodes[current].matrix,
+                   "picture hierarchy matrix is not finite");
+    require_finite(nodes[current].position,
+                   "picture hierarchy position is not finite");
+    chain.push_back(current);
+    current = nodes[current].parent;
+  }
+  return chain;
+}
+
 [[nodiscard]] float aligned_axis(float half_extent, float owner_half_extent,
                                  std::uint8_t mask, std::uint8_t axis_mask,
                                  std::uint8_t positive_bit,
@@ -45,6 +93,41 @@ transform_vector(const std::array<float, 3> &value,
 }
 
 } // namespace
+
+PictureHierarchyTransform produce_picture_hierarchy_transform(
+    const std::vector<PictureHierarchyNode> &nodes, std::uint32_t picture_node,
+    std::uint32_t owner_node) {
+  const auto picture_chain = validated_chain(nodes, picture_node);
+  const auto owner_chain = validated_chain(nodes, owner_node);
+  if (picture_chain.back() != owner_chain.back())
+    throw std::runtime_error("picture and owner hierarchy endpoints differ");
+
+  PictureHierarchyTransform result{
+      .basis = {0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 0.0F, 1.0F, 0.0F, 0.0F},
+      .position = {0.0F, 0.0F, 0.0F},
+  };
+  for (const auto index : picture_chain) {
+    const auto &node = nodes[index];
+    transform_basis(result.basis, node.matrix, transform_vector);
+    result.position = transform_vector(result.position, node.matrix);
+    for (std::size_t axis = 0; axis < result.position.size(); ++axis)
+      result.position[axis] += node.position[axis];
+  }
+
+  // The terminal/root node is excluded. Reverse traversal then visits the
+  // deepest nonterminal ancestor first and the owner last.
+  for (auto iterator = owner_chain.rbegin() + 1; iterator != owner_chain.rend();
+       ++iterator) {
+    const auto &node = nodes[*iterator];
+    for (std::size_t axis = 0; axis < result.position.size(); ++axis)
+      result.position[axis] -= node.position[axis];
+    result.position = inverse_transform_vector(result.position, node.matrix);
+    transform_basis(result.basis, node.matrix, inverse_transform_vector);
+  }
+  require_finite(result.basis, "picture hierarchy result is not finite");
+  require_finite(result.position, "picture hierarchy result is not finite");
+  return result;
+}
 
 std::uint8_t decode_picture_alignment(std::uint32_t value) {
   constexpr std::array<std::uint8_t, 16> mapping{

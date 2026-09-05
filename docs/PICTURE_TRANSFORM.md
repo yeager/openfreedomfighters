@@ -1,10 +1,9 @@
 # Window-picture transforms
 
 The renderer-neutral picture-transform module implements the recovered
-window-picture alignment and cache-preparation arithmetic. It deliberately
-starts after the virtual window service has produced its basis, scale, owner
-projection scalar, and renderer Y scalar. It does not infer a world transform
-or multiply the GMS construction chain.
+window-picture alignment, hierarchy production, and cache-preparation
+arithmetic. It does not treat every serialized GMS construction link as a
+conventional scene matrix.
 
 ## Alignment
 
@@ -23,6 +22,30 @@ owner half extent for bit `1`, subtracts it for bit `2`, and applies
 `floor(value + 1/8192)`. Bit `4` performs neither owner-extent adjustment. A
 zero nibble yields zero. Public names intentionally describe the arithmetic
 rather than assigning unproven left/right or top/bottom labels.
+
+## Hierarchy producer
+
+`produce_picture_hierarchy_transform` accepts an explicit bounded node array
+and picture/owner indices. Each node contains the recovered nine-float matrix,
+position, and parent index. It starts the basis with the recovered vectors
+`(0,0,1)`, `(0,1,0)`, `(1,0,0)`, then applies the picture node and each parent
+in forward order. Position follows the same chain, adding each node's local
+position after its matrix operation.
+
+Owner-relative adjustment follows the owner chain to its terminal root, skips
+that terminal node, and unwinds from the deepest nonterminal node to the owner.
+For each node it subtracts local position and applies the transpose-form
+operation:
+
+```text
+out.x = v.x*m[6] + v.y*m[7] + v.z*m[8]
+out.y = v.x*m[3] + v.y*m[4] + v.z*m[5]
+out.z = v.x*m[0] + v.y*m[1] + v.z*m[2]
+```
+
+The same operation is applied independently to all three basis vectors. The
+producer rejects empty or out-of-range endpoints, invalid parents, cycles,
+non-finite values, and picture/owner chains ending at different roots.
 
 ## Cached submission transform
 
@@ -56,13 +79,16 @@ fail closed.
 
 ## Startup viewport boundary
 
-The retail startup UI is authored in a logical 640×480 canvas, but the pure
-transform function contains no hardcoded reference dimensions. The startup
-consumer supplies the logical viewport and maps the completed result to the
-physical output with centred, aspect-preserving letterboxing. This keeps the
-retail transform independent of Windows, macOS, Linux, Steam Deck, display
-resolution, and output aspect ratio.
+The recovered transform functions contain no hardcoded reference dimensions,
+and the executable picture-cache path does not yet prove visitor values of 640
+and 480. The portable startup consumer explicitly selects a logical 640×480
+canvas as project policy. Mapping that canvas to physical output with centred,
+uniform letterboxing is likewise portable output policy, not recovered retail
+behavior. This boundary keeps the transform independent of Windows, macOS,
+Linux, Steam Deck, display resolution, and output aspect ratio.
 
-The unresolved virtual-window hierarchy producer remains outside this module.
-Construction-chain order is useful provenance but is not evidence that every
-serialized GMS matrix is a parent-to-child render matrix.
+The original base-window path can leave the virtual-window scale components
+used by picture preparation indeterminate. This undefined stack state is not
+treated as retail data. Callers must provide an explicit, initialized
+virtual-window policy; this module neither invents `(1,1)` nor supplies any
+other fallback.

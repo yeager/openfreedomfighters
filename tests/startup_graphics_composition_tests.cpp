@@ -233,10 +233,75 @@ int main() {
     check(mixed.requested_state == 0x09U && mixed.effective_state == 0x09U &&
               mixed.pictures.size() == 21,
           "mixed requested mask with an allowed bit does not fall back");
+    const auto traversal = owned.traversal_emission_plan(0x01U);
+    check(traversal.requested_state == 0x01U &&
+              traversal.effective_state == 0x01U &&
+              traversal.pictures.size() == 21 &&
+              traversal.group_emissions.size() == 77,
+          "build the complete resting traversal and group-emission plan");
+    for (std::size_t row_ordinal = 0; row_ordinal < 7; ++row_ordinal) {
+        const auto expected_row = 6 - row_ordinal;
+        const auto picture_offset = row_ordinal * 3;
+        check(traversal.pictures[picture_offset].row_index == expected_row &&
+                  traversal.pictures[picture_offset].picture_index == 1 &&
+                  traversal.pictures[picture_offset + 1].picture_index == 2 &&
+                  traversal.pictures[picture_offset + 2].picture_index == 0,
+              "reverse authored rows and emit chrome instances before background");
+        for (std::size_t local_picture = 0; local_picture < 3; ++local_picture) {
+            const auto& picture = traversal.pictures[picture_offset + local_picture];
+            for (std::size_t group = 0; group < picture.draw_group_count; ++group) {
+                const auto& emission =
+                    traversal.group_emissions[picture.first_group_emission + group];
+                check(emission.row_index == picture.row_index &&
+                          emission.picture_index == picture.picture_index &&
+                          emission.picture_directory_index ==
+                              picture.picture_directory_index &&
+                          emission.group_index == group,
+                      "preserve picture identity and ascending authored group order");
+            }
+        }
+    }
+    for (const auto requested : {0x08U, 0x10U, 0x20U}) {
+        const auto active = owned.traversal_emission_plan(requested);
+        check(active.pictures.size() == 7 && active.group_emissions.size() == 7,
+              "active traversal emits one persistent background per visible row");
+        for (std::size_t i = 0; i < active.pictures.size(); ++i)
+            check(active.pictures[i].row_index == 6 - i &&
+                      active.pictures[i].picture_index == 0 &&
+                      active.group_emissions[i].group_index == 0,
+                  "active traversal retains reverse row order and group identity");
+    }
+    auto alternate_hidden_rows = valid_rows();
+    alternate_hidden_rows[7].authored_hidden = false;
+    alternate_hidden_rows[6].authored_hidden = true;
+    const auto alternate_hidden =
+        off::data::StartupGraphicsComposition::from_rows(alternate_hidden_rows)
+            .traversal_emission_plan(0x01U);
+    check(alternate_hidden.pictures.front().row_index == 7 &&
+              alternate_hidden.pictures[3].row_index == 5,
+          "filter the authored-hidden duplicate without collapsing slot identity");
     auto bad_role = valid_rows();
     bad_role[0].pictures[0].role =
         off::data::StartupGraphicsCompositionRole::row_chrome;
     check(factory_rejects(bad_role), "factory rejects role mismatch");
+    auto duplicate_row_identity = valid_rows();
+    duplicate_row_identity[1].owner_directory_index =
+        duplicate_row_identity[0].owner_directory_index;
+    duplicate_row_identity[1].construction_chain.back() =
+        duplicate_row_identity[0].owner_directory_index;
+    duplicate_row_identity[1].transform_chain.back().directory_index =
+        duplicate_row_identity[0].owner_directory_index;
+    check(factory_rejects(duplicate_row_identity),
+          "factory rejects duplicate authored row identities");
+    auto duplicate_picture_identity = valid_rows();
+    duplicate_picture_identity[1].pictures[0].directory_index =
+        duplicate_picture_identity[0].pictures[0].directory_index;
+    duplicate_picture_identity[1].pictures[0].construction_chain.back() =
+        duplicate_picture_identity[0].pictures[0].directory_index;
+    duplicate_picture_identity[1].pictures[0].transform_chain.back().directory_index =
+        duplicate_picture_identity[0].pictures[0].directory_index;
+    check(factory_rejects(duplicate_picture_identity),
+          "factory rejects duplicate authored picture identities");
     auto bad_mask = valid_rows();
     bad_mask[0].pictures[1].authored_state_mask = 0x08U;
     check(factory_rejects(bad_mask),

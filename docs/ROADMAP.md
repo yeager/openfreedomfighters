@@ -57,6 +57,8 @@ Gate: a new contributor can generate the same structural report from a supported
   structurally selected retail images after paired GMS/BUF/PRM/TEX validation.
 - [x] Upload the six validated startup composition images to dedicated native
   GPU textures without drawing them ahead of the transform/order evidence.
+- [x] Reproduce the startup graphics live hierarchy traversal and immediate
+  picture/group emission order without treating it as GPU completion order.
 - [x] Implement bounds-checked world-space queries over RMC/RMI octrees.
 - [x] Identify and validate packed geometry references in RMC/RMI descriptors.
 - [ ] Safe, bounds-checked readers for all required formats.

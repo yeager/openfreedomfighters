@@ -206,8 +206,13 @@ chrome instances for all seven visible rows. States `0x08`, `0x10`, and `0x20`
 retain those backgrounds while hiding both chrome instances together; unknown
 requested masks use the retail `0x01` child-selection fallback only when they
 contain no recovered allowed-state bit. Mixed masks that contain an allowed bit
-remain effective. Picture identities are retained, but result order is not
-described as retail GPU order. The hardcoded allowed-state mask is deliberately
+remain effective. Picture identities are retained. A separate
+traversal/emission plan reproduces the recovered live hierarchy preorder:
+eligible rows are visited in reverse authored sibling order, and each row emits
+chrome instance 0, chrome instance 1, then its persistent background. Every
+picture's groups remain in ascending authored order. This is CPU-side immediate
+emission order, not GPU execution or completion order. The hardcoded
+allowed-state mask is deliberately
 limited to this recovered startup graphics control family; it is not a generic
 window-state contract.
 

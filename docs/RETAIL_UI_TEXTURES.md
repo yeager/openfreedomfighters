@@ -131,7 +131,11 @@ project-authored CPU/GPU upload policy, not a claim about a retail format or
 corpus maximum. Size accumulation uses checked arithmetic before allocation.
 The asset preserves both the catalog-local image index and normalized TEX ID,
 but assigns no `RetailUiTextureRole` and makes no claim about transform
-composition, draw order, chrome scheduling, focus states, or action behavior.
+composition, GPU completion order, focus states, or action behavior. Its
+composition exposes a renderer-neutral traversal/emission plan: visible rows
+use reverse authored sibling order, each row visits its two chrome instances
+before its persistent background, and picture groups retain ascending authored
+order.
 
 The SDL runtime now accepts this asset and validates the six unique catalog
 indexes and TEX IDs again at the CPU/GPU boundary. It checks nonzero extents,
@@ -139,6 +143,6 @@ exact RGBA byte counts, 32-bit transfer sizes, and the aggregate budget before
 creating six RGBA8 sampler textures and uploading them in one copy submission.
 These textures are deliberately not bound or drawn. They are a data-to-GPU
 startup gate only; visible use remains blocked on the virtual-window transform
-producer and recovered submission order. Partial initialization and every
+producer and GPU draw integration. Partial initialization and every
 normal runtime exit release all created startup textures before device
 destruction.

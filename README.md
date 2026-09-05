@@ -119,8 +119,12 @@ composing, every authored inclusive root-to-instance construction and transform
 chain. A paired GMS/BUF/PRM/TEX loader now owns and decodes mip zero for only
 those six composition-selected retail images. The native runtime uploads them
 to six validated GPU sampler textures after installation verification, but does
-not render them until the remaining transform and submission-order contracts
-are recovered.
+not render them until the remaining transform and GPU integration contracts are
+recovered. A separate renderer-neutral plan now preserves duplicate identities,
+filters hidden instances, visits eligible rows in recovered live hierarchy
+order, emits both chrome instances before the persistent background, and keeps
+each picture's groups in ascending authored order. It does not promise GPU
+execution or completion order.
 The visible focus marker and extended Modern/Modern+ rows
 remain project-authored diagnostic UI until this recovered composition is wired
 into the renderer.

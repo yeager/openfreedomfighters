@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <vector>
 
 namespace off::graphics {
 
@@ -39,6 +40,27 @@ struct PictureCacheTransform {
   std::array<float, 9> basis{};
   std::array<float, 3> translation{};
 };
+
+inline constexpr std::uint32_t no_picture_transform_parent = UINT32_MAX;
+
+struct PictureHierarchyNode {
+  std::array<float, 9> matrix{};
+  std::array<float, 3> position{};
+  std::uint32_t parent{no_picture_transform_parent};
+};
+
+struct PictureHierarchyTransform {
+  std::array<float, 9> basis{};
+  std::array<float, 3> position{};
+};
+
+// Produces the object-to-owner values consumed by picture cache preparation.
+// The picture chain is accumulated forward through its terminal node. Owner
+// adjustment runs deepest-nonterminal-to-owner and deliberately skips the
+// terminal node, matching the recovered runtime hierarchy operation.
+[[nodiscard]] PictureHierarchyTransform produce_picture_hierarchy_transform(
+    const std::vector<PictureHierarchyNode> &nodes, std::uint32_t picture_node,
+    std::uint32_t owner_node);
 
 // Reproduces the renderer-neutral ZWINPIC cache preparation after the virtual
 // window service has supplied its basis, scale, and scalar values. It does not

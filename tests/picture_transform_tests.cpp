@@ -83,6 +83,85 @@ int main() {
 
   constexpr std::array<float, 9> helper_identity{0.0F, 0.0F, 1.0F, 0.0F, 1.0F,
                                                  0.0F, 1.0F, 0.0F, 0.0F};
+  {
+    const std::vector<off::graphics::PictureHierarchyNode> nodes{
+        {.matrix = helper_identity, .position = {100.0F, 100.0F, 100.0F}},
+        {.matrix = helper_identity,
+         .position = {10.0F, 20.0F, 30.0F},
+         .parent = 0},
+        {.matrix = helper_identity,
+         .position = {5.0F, 6.0F, 7.0F},
+         .parent = 0},
+    };
+    const auto hierarchy =
+        off::graphics::produce_picture_hierarchy_transform(nodes, 1, 2);
+    check(hierarchy.basis == helper_identity,
+          "preserve the recovered hierarchy basis seed");
+    check(hierarchy.position == std::array<float, 3>{105.0F, 114.0F, 123.0F},
+          "accumulate picture chain and skip terminal owner adjustment");
+  }
+  {
+    auto owner_scale = helper_identity;
+    owner_scale[6] = 2.0F;
+    owner_scale[4] = 3.0F;
+    owner_scale[2] = 4.0F;
+    const std::vector<off::graphics::PictureHierarchyNode> nodes{
+        {.matrix = helper_identity},
+        {.matrix = helper_identity,
+         .position = {1.0F, 2.0F, 3.0F},
+         .parent = 0},
+        {.matrix = owner_scale, .position = {1.0F, 1.0F, 1.0F}, .parent = 0},
+    };
+    const auto hierarchy =
+        off::graphics::produce_picture_hierarchy_transform(nodes, 1, 2);
+    check(hierarchy.position == std::array<float, 3>{0.0F, 3.0F, 8.0F},
+          "apply owner transpose-form operation after subtracting position");
+    check(close(hierarchy.basis[2], 4.0F) && close(hierarchy.basis[4], 3.0F) &&
+              close(hierarchy.basis[6], 2.0F),
+          "apply the owner operation independently to every basis vector");
+  }
+  rejects(
+      [&] {
+        const std::vector<off::graphics::PictureHierarchyNode> nodes{
+            {.matrix = helper_identity, .parent = 0}};
+        static_cast<void>(
+            off::graphics::produce_picture_hierarchy_transform(nodes, 0, 0));
+      },
+      "reject a hierarchy cycle");
+  rejects(
+      [&] {
+        const std::vector<off::graphics::PictureHierarchyNode> nodes{
+            {.matrix = helper_identity, .parent = 2}};
+        static_cast<void>(
+            off::graphics::produce_picture_hierarchy_transform(nodes, 0, 0));
+      },
+      "reject an out-of-range hierarchy parent");
+  rejects(
+      [&] {
+        const std::vector<off::graphics::PictureHierarchyNode> nodes{
+            {.matrix = helper_identity}, {.matrix = helper_identity}};
+        static_cast<void>(
+            off::graphics::produce_picture_hierarchy_transform(nodes, 0, 1));
+      },
+      "reject mismatched hierarchy endpoints");
+  rejects(
+      [&] {
+        auto bad_matrix = helper_identity;
+        bad_matrix[0] = std::numeric_limits<float>::quiet_NaN();
+        const std::vector<off::graphics::PictureHierarchyNode> nodes{
+            {.matrix = bad_matrix}};
+        static_cast<void>(
+            off::graphics::produce_picture_hierarchy_transform(nodes, 0, 0));
+      },
+      "reject non-finite hierarchy inputs");
+  rejects(
+      [&] {
+        const std::vector<off::graphics::PictureHierarchyNode> nodes{
+            {.matrix = helper_identity}};
+        static_cast<void>(
+            off::graphics::produce_picture_hierarchy_transform(nodes, 1, 0));
+      },
+      "reject an out-of-range hierarchy endpoint");
   off::graphics::PictureCacheTransformInput input{
       .submission_position = {0.5F, 1.5F, 4.0F},
       .aligned_local_position = {50.0F, 40.0F, 0.0F},

@@ -320,8 +320,12 @@ StartupGraphicsComposition StartupGraphicsComposition::from_rows(
     for (const auto& group : chrome.groups()) image_identities.insert(group.texture.image_index);
     if (image_identities.size() != 6)
         throw std::runtime_error("startup graphics composition does not use six distinct catalog images");
+    std::unordered_set<std::size_t> row_identities;
+    std::unordered_set<std::size_t> picture_identities;
     for (std::size_t row_index = 0; row_index < result.rows_.size(); ++row_index) {
         const auto& row = result.rows_[row_index];
+        if (!row_identities.insert(row.owner_directory_index).second)
+            throw std::runtime_error("startup graphics row identity is duplicated");
         if (row.pictures[0].role != StartupGraphicsCompositionRole::row_background ||
             row.pictures[1].role != StartupGraphicsCompositionRole::row_chrome ||
             row.pictures[2].role != StartupGraphicsCompositionRole::row_chrome ||
@@ -334,6 +338,8 @@ StartupGraphicsComposition StartupGraphicsComposition::from_rows(
             row.pictures[2].authored_state_mask != resting_state)
             throw std::runtime_error("startup graphics picture state-mask contract mismatch");
         for (const auto& picture : row.pictures) {
+            if (!picture_identities.insert(picture.directory_index).second)
+                throw std::runtime_error("startup graphics picture identity is duplicated");
             for (std::size_t group_index = 0;
                  group_index < picture.draw_plan.groups().size(); ++group_index) {
                 const auto& group = picture.draw_plan.groups()[group_index];
@@ -413,6 +419,52 @@ StartupGraphicsVisibility StartupGraphicsComposition::visible_pictures(
                 picture.role,
                 picture.draw_plan.groups().size(),
             });
+        }
+    }
+    return result;
+}
+
+StartupGraphicsTraversalPlan StartupGraphicsComposition::traversal_emission_plan(
+    std::uint8_t requested_state
+) const {
+    const auto visibility = visible_pictures(requested_state);
+    StartupGraphicsTraversalPlan result;
+    result.requested_state = visibility.requested_state;
+    result.effective_state = visibility.effective_state;
+    result.pictures.reserve(visibility.pictures.size());
+    result.group_emissions.reserve(visibility.pictures.size() * 5);
+
+    std::vector<std::size_t> live_rows;
+    live_rows.reserve(rows_.size());
+    for (std::size_t row_index = 0; row_index < rows_.size(); ++row_index)
+        if (!rows_[row_index].authored_hidden) live_rows.push_back(row_index);
+    std::ranges::sort(live_rows, std::greater{}, [&](std::size_t row_index) {
+        return rows_[row_index].owner_directory_index;
+    });
+
+    constexpr std::array<std::size_t, 3> live_picture_order{1, 2, 0};
+    for (const auto row_index : live_rows) {
+        const auto& row = rows_[row_index];
+        for (const auto picture_index : live_picture_order) {
+            const auto& picture = row.pictures[picture_index];
+            const auto persistent =
+                (picture.authored_state_mask & persistent_state_mask) != 0;
+            if (!persistent &&
+                (picture.authored_state_mask & result.effective_state) == 0)
+                continue;
+            const auto first_group = result.group_emissions.size();
+            result.pictures.push_back({{
+                row_index,
+                picture_index,
+                row.owner_directory_index,
+                picture.directory_index,
+                picture.role,
+                picture.draw_plan.groups().size(),
+            }, first_group});
+            for (std::size_t group_index = 0;
+                 group_index < picture.draw_plan.groups().size(); ++group_index)
+                result.group_emissions.push_back({
+                    row_index, picture_index, picture.directory_index, group_index});
         }
     }
     return result;

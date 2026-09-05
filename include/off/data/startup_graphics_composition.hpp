@@ -60,6 +60,26 @@ struct StartupGraphicsVisibility final {
     std::vector<StartupGraphicsVisiblePicture> pictures;
 };
 
+struct StartupGraphicsDrawGroupEmission {
+    std::size_t row_index{0};
+    std::size_t picture_index{0};
+    std::size_t picture_directory_index{0};
+    std::size_t group_index{0};
+};
+
+struct StartupGraphicsTraversalPicture : StartupGraphicsVisiblePicture {
+    std::size_t first_group_emission{0};
+};
+
+// CPU-side renderer-neutral traversal and immediate emission plan. This order
+// does not promise GPU execution or completion order.
+struct StartupGraphicsTraversalPlan final {
+    std::uint8_t requested_state{0};
+    std::uint8_t effective_state{0};
+    std::vector<StartupGraphicsTraversalPicture> pictures;
+    std::vector<StartupGraphicsDrawGroupEmission> group_emissions;
+};
+
 struct StartupGraphicsRowLocation {
     std::size_t owner_directory_index{0};
     std::size_t background_directory_index{0};
@@ -93,6 +113,12 @@ public:
     // Evaluates the recovered state-mask and authored-hide contract. The result
     // preserves identities but deliberately does not assert GPU draw order.
     [[nodiscard]] StartupGraphicsVisibility visible_pictures(
+        std::uint8_t requested_state
+    ) const;
+
+    // Reproduces the recovered live hierarchy preorder and immediate picture
+    // group emission order without making a GPU scheduling guarantee.
+    [[nodiscard]] StartupGraphicsTraversalPlan traversal_emission_plan(
         std::uint8_t requested_state
     ) const;
 
