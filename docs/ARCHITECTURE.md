@@ -12,7 +12,9 @@ target. OpenFreedomFighters uses SDL GPU's left-handed coordinates, `[0, 1]` dep
 range, top-left texture origin, and backend-independent viewport convention as the
 portable rendering contract. Shaders will be authored once and compiled ahead of
 time into SPIR-V, DXIL, and Metal libraries; runtime shader compilation is not a
-release dependency.
+release dependency. The current first-draw pipeline temporarily uses SDL's
+checksum-pinned test shader blobs while project-authored cross-backend shaders are
+developed.
 
 ## Components
 
@@ -50,13 +52,17 @@ SDL GPU driver, claims its swapchain, records render passes, submits command
 buffers, and exits cleanly on window close or Escape. Before creating
 the GPU device it selects a textured triangle-strip primitive from the startup
 scene, copies its validated vertices, indexes, and draw ranges, decodes mip zero
-to RGBA8, computes finite model bounds, and joins the primitive to the first exact
-GMS object-source reference. The recovered basis is stored as three row vectors;
+to RGBA8 and computes finite model bounds. A scene binder now resolves a required
+RMC primary handle to its exact GMS source and PRM record, retaining the RMC and
+GMS transforms separately. The startup RMC source has no direct primitive, so the
+visible first-draw path currently falls back to the first exact GMS reference for
+its diagnostic primitive. The recovered GMS basis is stored as three row vectors;
 the diagnostic world position is `basis * local_position + position`. It then
 creates the native shader pipeline, uploads vertex/index/texture resources through an SDL GPU copy pass,
 and submits each preserved range as an indexed triangle-strip draw. The current
 bounds-normalized projection applies that instance transform but is diagnostic;
-RMC/RMI scene selection and hierarchy, camera matrices, depth, and reconstructed
+RMC/RMI transform composition and multi-object materialization, camera matrices,
+depth, and reconstructed
 materials remain separate milestones. It selects the
 projection plane with the greatest indexed surface area and uses a neutral white
 texture tint until the startup material's zero-coded vertex-color semantics are

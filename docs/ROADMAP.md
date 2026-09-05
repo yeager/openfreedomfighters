@@ -58,7 +58,8 @@ Gate: all startup and first-level assets load into validated portable models und
 
 ## Phase 2 - Render/audio/input vertical slice
 
-- [ ] SDL3 platform layer and controller action map.
+- [x] SDL3 window, event, and GPU platform bootstrap.
+- [ ] Controller action map.
 - [x] Select SDL GPU and prove the native window/device/swapchain clear-pass lifecycle.
 - [x] Prepare a validated startup-scene mesh and texture for GPU upload.
 - [x] Upload and draw the first decoded retail mesh and texture.

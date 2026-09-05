@@ -37,7 +37,7 @@ int main() {
   });
 
   off::data::PrimitiveEntry primitive;
-  primitive.packed_index = 0x8000002aU;
+  primitive.packed_index = 42;
   primitive.primitive_kind = 0;
   primitive.texture_id = 7;
   primitive.vertices.resize(4);
@@ -66,44 +66,118 @@ int main() {
   check(preview.minimum_position == std::array{-2.0F, -1.0F, -3.0F} &&
             preview.maximum_position == std::array{3.0F, 5.0F, 4.0F},
         "calculate indexed preview bounds and ignore unused vertices");
-  check(preview.primitive_packed_index == 0x8000002aU &&
+  check(preview.primitive_packed_index == 42 &&
             !preview.object_instance.has_value(),
         "preserve preview primitive identity before instance binding");
 
   off::data::GmsDirectoryEntry object_source;
-  object_source.primitive_reference = 0x8000002aU;
+  object_source.primitive_reference = 42;
   object_source.source_type = 0x00200002U;
   object_source.local_slot_index = 9;
   object_source.basis = {0.0F, 1.0F, 0.0F, -1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F};
   object_source.position = {10.0F, 20.0F, 30.0F};
-  auto duplicate_source = object_source;
-  duplicate_source.position = {40.0F, 50.0F, 60.0F};
-  const std::array object_sources{object_source, duplicate_source};
-  const auto instanced = off::graphics::bind_first_render_preview_instance(
-      preview, object_sources);
-  check(instanced.object_instance.has_value() &&
-            instanced.object_instance->basis == object_source.basis &&
-            instanced.object_instance->position == object_source.position &&
-            instanced.object_instance->source_type ==
-                object_source.source_type &&
-            instanced.object_instance->directory_index == 0 &&
-            instanced.object_instance->local_slot_index == 9,
-        "bind the first exact GMS object-source match and its identity");
+  auto earlier_source = object_source;
+  earlier_source.local_slot_index = 1;
+  earlier_source.position = {40.0F, 50.0F, 60.0F};
+  const std::array object_sources{earlier_source, object_source};
+  off::data::RenderMapEntry map_entry;
+  map_entry.descriptor_offset = 144;
+  map_entry.object.primary_geometry_reference = 0x400003f0U;
+  map_entry.object.orientation = {1.0F, 0.0F, 0.0F, 0.0F, 1.0F,
+                                  0.0F, 0.0F, 0.0F, 1.0F};
+  map_entry.object.position = {100.0F, 200.0F, 300.0F};
+  const std::array map_entries{map_entry};
+  const auto instanced = off::graphics::build_first_scene_render_preview(
+      primitives, textures, object_sources, map_entries);
+  check(
+      instanced.object_instance.has_value() &&
+          instanced.object_instance->basis == object_source.basis &&
+          instanced.object_instance->position == object_source.position &&
+          instanced.object_instance->source_type == object_source.source_type &&
+          instanced.object_instance->directory_index == 1 &&
+          instanced.object_instance->local_slot_index == 9 &&
+          instanced.object_instance->map_entry_index == 0 &&
+          instanced.object_instance->map_descriptor_offset == 144 &&
+          instanced.object_instance->geometry_reference == 0x400003f0U &&
+          instanced.object_instance->map_orientation ==
+              map_entry.object.orientation &&
+          instanced.object_instance->map_position == map_entry.object.position,
+      "resolve the scene handle to its exact GMS source and retain identities");
   check(off::graphics::transform_render_position(*instanced.object_instance,
                                                  {2.0F, 3.0F, 4.0F}) ==
             std::array{13.0F, 18.0F, 34.0F},
         "apply the GMS basis as rows before adding position");
 
+  auto slot_zero_source = object_source;
+  slot_zero_source.local_slot_index = 0;
+  auto slot_zero_entry = map_entry;
+  slot_zero_entry.object.primary_geometry_reference = 0x40000000U;
+  const std::array slot_zero_sources{slot_zero_source};
+  const std::array slot_zero_entries{slot_zero_entry};
+  const auto slot_zero_preview =
+      off::graphics::build_first_scene_render_preview(
+          primitives, textures, slot_zero_sources, slot_zero_entries);
+  check(slot_zero_preview.object_instance->local_slot_index == 0,
+        "resolve tagged runtime slot zero as a present object");
+
   bool missing_instance_rejected = false;
   try {
     const std::array<off::data::GmsDirectoryEntry, 0> no_objects{};
-    static_cast<void>(
-        off::graphics::bind_first_render_preview_instance(preview, no_objects));
+    static_cast<void>(off::graphics::build_first_scene_render_preview(
+        primitives, textures, no_objects, map_entries));
   } catch (const std::runtime_error &) {
     missing_instance_rejected = true;
   }
   check(missing_instance_rejected,
-        "reject preview primitives without a GMS object instance");
+        "reject render maps without a local GMS object instance");
+
+  auto source_without_primitive = object_source;
+  source_without_primitive.primitive_reference.reset();
+  bool nonprimitive_source_rejected = false;
+  try {
+    const std::array nonprimitive_sources{source_without_primitive};
+    static_cast<void>(off::graphics::build_first_scene_render_preview(
+        primitives, textures, nonprimitive_sources, map_entries));
+  } catch (const std::runtime_error &) {
+    nonprimitive_source_rejected = true;
+  }
+  check(nonprimitive_source_rejected,
+        "do not guess geometry for a non-primitive GMS source");
+
+  bool duplicate_primitive_rejected = false;
+  try {
+    const std::array duplicate_primitives{primitive, primitive};
+    static_cast<void>(off::graphics::build_first_scene_render_preview(
+        duplicate_primitives, textures, object_sources, map_entries));
+  } catch (const std::runtime_error &) {
+    duplicate_primitive_rejected = true;
+  }
+  check(duplicate_primitive_rejected,
+        "reject ambiguous duplicate PRM packed indexes");
+
+  bool duplicate_slot_rejected = false;
+  try {
+    const std::array duplicate_sources{object_source, object_source};
+    static_cast<void>(off::graphics::build_first_scene_render_preview(
+        primitives, textures, duplicate_sources, map_entries));
+  } catch (const std::runtime_error &) {
+    duplicate_slot_rejected = true;
+  }
+  check(duplicate_slot_rejected, "reject ambiguous duplicate GMS local slots");
+
+  auto flagged = primitive;
+  flagged.packed_index = 0x8000002aU;
+  flagged.flagged_reference = true;
+  bool flagged_rejected = false;
+  try {
+    const std::array flagged_primitives{flagged};
+    static_cast<void>(
+        off::graphics::build_render_preview(flagged_primitives, textures));
+  } catch (const std::runtime_error &) {
+    flagged_rejected = true;
+  }
+  check(flagged_rejected,
+        "do not treat high-bit PRM aliases as decoded render geometry");
 
   auto malformed = primitive;
   malformed.batches = {{{0, 1, 4}}};

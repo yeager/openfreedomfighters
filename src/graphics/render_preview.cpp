@@ -4,12 +4,21 @@
 
 #include <algorithm>
 #include <cctype>
+#include <iterator>
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace off::graphics {
 namespace {
+
+class NoScenePreviewError final : public std::runtime_error {
+public:
+  NoScenePreviewError()
+      : std::runtime_error(
+            "render map contains no supported local preview geometry") {}
+};
 
 [[nodiscard]] std::string lowercase(std::string value) {
   std::transform(value.begin(), value.end(), value.begin(),
@@ -66,25 +75,9 @@ has_nondegenerate_triangle(std::span<const data::PrimitiveVertex> vertices,
   return false;
 }
 
-} // namespace
-
-std::array<float, 3>
-transform_render_position(const RenderObjectInstance &instance,
-                          const std::array<float, 3> &local_position) {
-  const auto &basis = instance.basis;
-  return {
-      basis[0] * local_position[0] + basis[1] * local_position[1] +
-          basis[2] * local_position[2] + instance.position[0],
-      basis[3] * local_position[0] + basis[4] * local_position[1] +
-          basis[5] * local_position[2] + instance.position[1],
-      basis[6] * local_position[0] + basis[7] * local_position[1] +
-          basis[8] * local_position[2] + instance.position[2],
-  };
-}
-
-RenderPreviewAsset
-build_render_preview(std::span<const data::PrimitiveEntry> primitives,
-                     std::span<const data::TextureImage> textures) {
+[[nodiscard]] std::optional<RenderPreviewAsset>
+try_build_render_preview(std::span<const data::PrimitiveEntry> primitives,
+                         std::span<const data::TextureImage> textures) {
   const auto bindings = RenderAssetBindings::build(primitives, textures);
   for (const auto &binding : bindings.primitives()) {
     if (binding.topology != PrimitiveTopology::triangle_strip ||
@@ -139,11 +132,10 @@ build_render_preview(std::span<const data::PrimitiveEntry> primitives,
     }
     return result;
   }
-  throw std::runtime_error(
-      "startup resources contain no supported render-preview primitive");
+  return std::nullopt;
 }
 
-RenderPreviewAsset bind_first_render_preview_instance(
+[[nodiscard]] RenderPreviewAsset bind_diagnostic_source_instance(
     RenderPreviewAsset preview,
     std::span<const data::GmsDirectoryEntry> object_sources) {
   for (std::size_t index = 0; index < object_sources.size(); ++index) {
@@ -158,11 +150,109 @@ RenderPreviewAsset bind_first_render_preview_instance(
         .source_type = source.source_type,
         .directory_index = index,
         .local_slot_index = source.local_slot_index,
+        .map_entry_index = 0,
+        .map_descriptor_offset = 0,
+        .geometry_reference = 0,
+        .map_orientation = {},
+        .map_position = {},
     };
     return preview;
   }
   throw std::runtime_error(
       "render preview primitive has no GMS object-source instance");
+}
+
+} // namespace
+
+std::array<float, 3>
+transform_render_position(const RenderObjectInstance &instance,
+                          const std::array<float, 3> &local_position) {
+  const auto &basis = instance.basis;
+  return {
+      basis[0] * local_position[0] + basis[1] * local_position[1] +
+          basis[2] * local_position[2] + instance.position[0],
+      basis[3] * local_position[0] + basis[4] * local_position[1] +
+          basis[5] * local_position[2] + instance.position[1],
+      basis[6] * local_position[0] + basis[7] * local_position[1] +
+          basis[8] * local_position[2] + instance.position[2],
+  };
+}
+
+RenderPreviewAsset
+build_render_preview(std::span<const data::PrimitiveEntry> primitives,
+                     std::span<const data::TextureImage> textures) {
+  if (auto result = try_build_render_preview(primitives, textures)) {
+    return std::move(*result);
+  }
+  throw std::runtime_error(
+      "startup resources contain no supported render-preview primitive");
+}
+
+RenderPreviewAsset build_first_scene_render_preview(
+    std::span<const data::PrimitiveEntry> primitives,
+    std::span<const data::TextureImage> textures,
+    std::span<const data::GmsDirectoryEntry> object_sources,
+    std::span<const data::RenderMapEntry> map_entries) {
+  for (std::size_t entry_index = 0; entry_index < map_entries.size();
+       ++entry_index) {
+    const auto &entry = map_entries[entry_index];
+    const auto handle = data::GmsImage::decode_object_handle(
+        entry.object.primary_geometry_reference);
+    const auto source_match =
+        std::ranges::find_if(object_sources, [&](const auto &source) {
+          return source.local_slot_index == handle.slot_index;
+        });
+    if (source_match != object_sources.end() &&
+        std::ranges::find_if(std::next(source_match), object_sources.end(),
+                             [&](const auto &source) {
+                               return source.local_slot_index ==
+                                      handle.slot_index;
+                             }) != object_sources.end()) {
+      throw std::runtime_error(
+          "scene geometry handle resolves to duplicate GMS local slots");
+    }
+    if (source_match == object_sources.end() ||
+        !source_match->primitive_reference.has_value()) {
+      continue;
+    }
+    const auto primitive_reference = *source_match->primitive_reference;
+    const auto first_primitive =
+        std::ranges::find_if(primitives, [&](const auto &primitive) {
+          return primitive.packed_index == primitive_reference;
+        });
+    if (first_primitive == primitives.end()) {
+      continue;
+    }
+    if (std::ranges::find_if(std::next(first_primitive), primitives.end(),
+                             [&](const auto &primitive) {
+                               return primitive.packed_index ==
+                                      primitive_reference;
+                             }) != primitives.end()) {
+      throw std::runtime_error(
+          "scene geometry reference resolves to duplicate PRM indexes");
+    }
+    auto candidate =
+        try_build_render_preview(std::span{&*first_primitive, 1}, textures);
+    if (!candidate.has_value()) {
+      continue;
+    }
+    auto preview = std::move(*candidate);
+    preview.object_instance = RenderObjectInstance{
+        .basis = source_match->basis,
+        .position = source_match->position,
+        .source_type = source_match->source_type,
+        .directory_index = static_cast<std::size_t>(
+            std::distance(object_sources.begin(), source_match)),
+        .local_slot_index = source_match->local_slot_index,
+        .map_entry_index = entry_index,
+        .map_descriptor_offset = entry.descriptor_offset,
+        .geometry_reference = entry.object.primary_geometry_reference,
+        .map_orientation = entry.object.orientation,
+        .map_position = entry.object.position,
+    };
+    return preview;
+  }
+  throw NoScenePreviewError{};
 }
 
 RenderPreviewAsset
@@ -172,14 +262,23 @@ load_startup_render_preview(const std::filesystem::path &install_root) {
   const auto &primitive_member = unique_member_with_extension(archive, ".prm");
   const auto &texture_member = unique_member_with_extension(archive, ".tex");
   const auto &object_member = unique_member_with_extension(archive, ".gms");
+  const auto &map_member = unique_member_with_extension(archive, ".rmc");
   const auto primitive_bytes = archive.read(primitive_member);
   const auto texture_bytes = archive.read(texture_member);
   const auto object_bytes = archive.read(object_member);
+  const auto map_bytes = archive.read(map_member);
   const auto primitives = data::PrimitiveCatalog::parse(primitive_bytes);
   const auto textures = data::TextureCatalog::parse(texture_bytes);
   const auto objects =
       data::GmsImage::parse(data::PackedResource::parse(object_bytes));
-  return bind_first_render_preview_instance(
+  const auto map = data::RenderMap::parse(map_bytes);
+  try {
+    return build_first_scene_render_preview(primitives.entries(),
+                                            textures.images(),
+                                            objects.directory(), map.entries());
+  } catch (const NoScenePreviewError &) {
+  }
+  return bind_diagnostic_source_instance(
       build_render_preview(primitives.entries(), textures.images()),
       objects.directory());
 }

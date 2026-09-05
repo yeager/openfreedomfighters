@@ -67,10 +67,12 @@ buffer, and draw ranges into an owned render asset, decodes mip zero to RGBA8, a
 computes its model-space bounds. It rejects missing resources, missing texture
 bindings, empty mip chains, and indexed meshes without a nondegenerate triangle
 before SDL GPU is initialized. Bounds include only referenced vertices so unused
-storage cannot distort the diagnostic projection. It then binds the first exact
-GMS object-source reference, preserving the directory and local-slot identity,
-source type, three-row basis, and position. This deterministic first match is a
-preview policy, not a claim that it is the authoritative RMC/RMI scene instance.
+storage cannot distort the diagnostic projection. A scene-resolution path follows
+an RMC primary geometry handle to its exact local GMS slot and then its PRM
+reference, preserving map-entry, descriptor, handle, source, and transform
+identity. Missing local sources and non-primitive sources are not guessed. Because
+the startup RMC source is not a primitive, the visible preview currently uses a
+separate deterministic first-GMS-match fallback.
 The platform layer applies `world = basis * local + position`, converts that owned
 asset to a bounds-normalized diagnostic projection, uploads vertex and 16-bit index
 buffers plus the RGBA8 texture, and submits every preserved range as an indexed

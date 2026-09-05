@@ -19,8 +19,9 @@ This is an independent fan project and is not affiliated with or endorsed by IO 
 
 ## Status
 
-Phase 1, portable data layer. The Steam digital Windows build has been inventoried
-and fully disassembled in private clean-room storage. The native C++ bootstrap now:
+Phase 1 data layer, with the Phase 2 renderer vertical slice underway. The Steam
+digital Windows build has been inventoried and fully disassembled in private
+clean-room storage. The native C++ bootstrap now:
 
 - verifies the supported user-owned installation and selects Original or Modern;
 - provides a bounds-checked archive/directory overlay VFS;
@@ -39,9 +40,12 @@ Texture, primary-vertex, topology, spatial, and supported audio data decode into
 portable representations. The executable now opens a resizable high-DPI native
 window, loads a validated textured triangle-strip preview from `FF-StartUp.ZIP`,
 uploads its retail vertices, indexes, and decoded RGBA texture, and issues indexed
-draws through Vulkan, Metal, or D3D12. The loader binds the first exact GMS
-object-source match and applies its recovered basis and position. This diagnostic
-choice is not yet authoritative scene placement, and the projection is not yet
+draws through SDL GPU's Vulkan, Metal, or D3D12 backend path. Local runtime
+validation currently covers Vulkan; CI compiles and tests Windows and macOS without
+retail data or GPU hardware. A new scene binder follows RMC handles to exact GMS
+sources and PRM records while preserving both transform records. The startup RMC
+source is not itself a primitive, so the visible preview still uses the documented
+GMS diagnostic fallback. The projection is not yet
 the scene camera or Original material model. Complete scene rendering, gameplay
 simulation, menus, localization, and the complete native runtime remain under
 development; no playable build exists yet.
