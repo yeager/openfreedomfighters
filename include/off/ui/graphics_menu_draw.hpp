@@ -82,6 +82,7 @@ inline constexpr std::size_t maximum_ui_text_bytes = 4096;
 
 struct GraphicsMenuDrawList {
   UiExtent target{};
+  float ui_scale{1.0F};
   UiBuildStatus status{UiBuildStatus::ok};
   std::vector<UiRectCommand> rectangles;
   std::vector<UiTextCommand> texts;
@@ -94,7 +95,7 @@ struct DiagnosticAsciiAtlas {
   static constexpr std::uint32_t glyph_height = 16;
   static constexpr std::uint32_t columns = 16;
   static constexpr std::uint32_t rows = 6;
-  UiExtent extent{columns * glyph_width, rows * glyph_height};
+  UiExtent extent{columns * glyph_width, rows *glyph_height};
   std::vector<std::uint8_t> alpha;
 };
 
@@ -103,8 +104,8 @@ struct DiagnosticAsciiAtlas {
     const GraphicsMenuSession &menu, UiExtent physical_target,
     GraphicsClock::time_point now, float ui_scale = 1.0F);
 [[nodiscard]] UiControl hit_test(const GraphicsMenuDrawList &list, float x,
-                                float y) noexcept;
-[[nodiscard]] bool validate_graphics_menu_draw_list(
-    const GraphicsMenuDrawList &list) noexcept;
+                                 float y) noexcept;
+[[nodiscard]] bool
+validate_graphics_menu_draw_list(const GraphicsMenuDrawList &list) noexcept;
 
 } // namespace off::ui

@@ -14,7 +14,7 @@ namespace {
 
 void usage(std::ostream &output) {
   output << "Usage: openfreedomfighters --data PATH [--mode original|modern] "
-            "[--verify-only] [--frame-limit COUNT]\n";
+            "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu]\n";
 }
 
 } // namespace
@@ -24,6 +24,7 @@ int main(int argc, char **argv) {
   auto mode = off::Mode::original;
   bool verify_only = false;
   std::size_t frame_limit = 0;
+  bool show_graphics_menu = false;
   for (int index = 1; index < argc; ++index) {
     const std::string_view argument{argv[index]};
     if (argument == "--data" && index + 1 < argc) {
@@ -46,6 +47,8 @@ int main(int argc, char **argv) {
         std::cerr << "Frame limit must be a positive integer.\n";
         return 2;
       }
+    } else if (argument == "--show-graphics-menu") {
+      show_graphics_menu = true;
     } else if (argument == "--help" || argument == "-h") {
       usage(std::cout);
       return 0;
@@ -83,8 +86,8 @@ int main(int argc, char **argv) {
     std::cerr << "Render-preview loading failed: " << error.what() << '\n';
     return 4;
   }
-  const auto runtime =
-      off::platform::run_sdl_gpu_runtime(mode, preview, frame_limit);
+  const auto runtime = off::platform::run_sdl_gpu_runtime(
+      mode, preview, frame_limit, show_graphics_menu);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';
     return 4;

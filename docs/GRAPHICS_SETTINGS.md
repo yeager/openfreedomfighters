@@ -95,9 +95,15 @@ Stage 2 now has a renderer-neutral, physical-pixel draw-list model with strict
 command, hit-target, and text-byte budgets. It emits the backdrop, centered
 panel, implemented setting rows, focus, Apply/Cancel, busy states, and timed
 Keep/Revert confirmation. The pure session owns wraparound keyboard focus and
-edits, so the view never invents interaction state. SDL GPU composition,
-rasterized glyph rendering, mouse/controller routing, and runtime display
-application remain Stage 3 work.
+edits, so the view never invents interaction state.
+
+Stage 3 now routes F10, arrows, Enter, Space, and Escape through SDL and renders
+the list after the scene in a physical-pixel, alpha-blended, depth-free GPU pass.
+The temporary diagnostic font is generated from the pinned BSD-2-Clause Spleen
+2.2.0 source; no retail fonts are used. The implemented window mode, size,
+presentation mode, and Original/Modern profile apply transactionally through
+SDL, including the Keep/Revert timeout. Mouse/controller routing, persistence,
+and the production Unicode text backend remain open.
 
 Hosted CI tests the pure model, menu state, event translation, draw-list bounds,
 and fallback resolution on every target. Real fullscreen, HDR, refresh switching,

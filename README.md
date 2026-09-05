@@ -81,9 +81,11 @@ Replace `original` with `modern` to verify the second runtime profile.
 Omit `--verify-only` to open the current native renderer prototype. Close the
 window or press Escape to exit. `--frame-limit COUNT` is available for bounded
 GPU smoke tests and still requires successful retail-data verification first.
+`--show-graphics-menu` opens the same overlay immediately for bounded visual
+smoke tests. During normal play, F10 opens and closes it.
 F10 is reserved for the in-game graphics-settings overlay. Its transactional
-state, keyboard focus/editing, bounded cross-platform layout, and timed display
-rollback are implemented; visible SDL GPU composition remains under development.
+state, keyboard focus/editing, bounded cross-platform layout, timed display
+rollback, and SDL GPU composition are implemented for the current settings.
 
 ## Repository rules
 
