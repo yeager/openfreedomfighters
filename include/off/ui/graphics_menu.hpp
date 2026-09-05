@@ -33,8 +33,12 @@ enum class GraphicsMenuRow : std::uint8_t {
   window_mode,
   window_size,
   present_mode,
+  render_scale,
+  upscaler,
+  shadows,
   apply,
-  cancel
+  cancel,
+  defaults
 };
 enum class GraphicsMenuEffect : std::uint8_t {
   none,
@@ -88,7 +92,8 @@ public:
   [[nodiscard]] settings::RequestedGraphicsSettings &draft() noexcept {
     return draft_;
   }
-  [[nodiscard]] const settings::RequestedGraphicsSettings &draft() const noexcept {
+  [[nodiscard]] const settings::RequestedGraphicsSettings &
+  draft() const noexcept {
     return draft_;
   }
   [[nodiscard]] std::optional<settings::GraphicsValidationError>

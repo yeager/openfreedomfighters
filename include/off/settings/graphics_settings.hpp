@@ -10,6 +10,8 @@ namespace off::settings {
 
 enum class WindowMode : std::uint8_t { windowed, borderless_desktop };
 enum class PresentMode : std::uint8_t { vsync, mailbox, immediate };
+enum class Upscaler : std::uint8_t { native, temporal, dlss };
+enum class ShadowQuality : std::uint8_t { reference, high, ultra };
 
 struct WindowSize {
   std::uint32_t width{1280};
@@ -22,6 +24,10 @@ struct RequestedGraphicsSettings {
   WindowMode window_mode{WindowMode::windowed};
   WindowSize windowed_size{};
   PresentMode present_mode{PresentMode::vsync};
+  bool modern_plus{false};
+  std::uint16_t render_scale_percent{100};
+  Upscaler upscaler{Upscaler::native};
+  ShadowQuality shadow_quality{ShadowQuality::reference};
   friend bool operator==(const RequestedGraphicsSettings &,
                          const RequestedGraphicsSettings &) = default;
 };
@@ -32,6 +38,9 @@ struct GraphicsCapabilities {
   bool borderless_desktop{true};
   bool mailbox_present{false};
   bool immediate_present{false};
+  bool modern_plus{true};
+  bool temporal_upscaler{true};
+  bool dlss_upscaler{false};
   WindowSize minimum_windowed_size{640, 360};
   WindowSize maximum_windowed_size{16384, 16384};
 };
@@ -40,13 +49,18 @@ enum class GraphicsField : std::uint8_t {
   profile,
   window_mode,
   windowed_size,
-  present_mode
+  present_mode,
+  modern_plus,
+  upscaler
 };
 enum class FallbackReason : std::uint8_t {
   profile_unavailable,
   borderless_unavailable,
   mailbox_unavailable,
-  immediate_unavailable
+  immediate_unavailable,
+  modern_plus_unavailable,
+  temporal_upscaler_unavailable,
+  dlss_upscaler_unavailable
 };
 
 struct GraphicsFallback {
@@ -61,6 +75,10 @@ struct EffectiveGraphicsSettings {
   WindowMode window_mode{WindowMode::windowed};
   WindowSize windowed_size{};
   PresentMode present_mode{PresentMode::vsync};
+  bool modern_plus{false};
+  std::uint16_t render_scale_percent{100};
+  Upscaler upscaler{Upscaler::native};
+  ShadowQuality shadow_quality{ShadowQuality::reference};
   std::vector<GraphicsFallback> fallbacks;
   friend bool operator==(const EffectiveGraphicsSettings &,
                          const EffectiveGraphicsSettings &) = default;
@@ -71,7 +89,8 @@ enum class GraphicsValidationError : std::uint8_t {
   zero_window_dimension,
   window_size_below_minimum,
   window_size_above_maximum,
-  no_supported_profile
+  no_supported_profile,
+  render_scale_out_of_range
 };
 
 struct GraphicsResolution {

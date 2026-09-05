@@ -75,6 +75,57 @@ int main() {
             off::settings::GraphicsValidationError::invalid_enum,
         "reject an invalid graphics enum representation");
 
+  auto advanced = requested;
+  advanced.modern_plus = true;
+  advanced.render_scale_percent = 67;
+  advanced.upscaler = off::settings::Upscaler::dlss;
+  advanced.shadow_quality = off::settings::ShadowQuality::ultra;
+  auto portable = capabilities;
+  portable.modern_plus = false;
+  portable.dlss_upscaler = false;
+  portable.temporal_upscaler = true;
+  const auto advanced_fallback =
+      off::settings::resolve_graphics_settings(advanced, portable);
+  check(advanced_fallback.effective.has_value() &&
+            !advanced_fallback.effective->modern_plus &&
+            advanced_fallback.effective->render_scale_percent == 67 &&
+            advanced_fallback.effective->upscaler ==
+                off::settings::Upscaler::temporal &&
+            advanced_fallback.effective->shadow_quality ==
+                off::settings::ShadowQuality::ultra &&
+            advanced_fallback.effective->fallbacks.size() == 3 &&
+            advanced_fallback.effective->fallbacks[0].reason ==
+                off::settings::FallbackReason::modern_plus_unavailable &&
+            advanced_fallback.effective->fallbacks[1].reason ==
+                off::settings::FallbackReason::dlss_upscaler_unavailable &&
+            advanced_fallback.effective->fallbacks[2].reason ==
+                off::settings::FallbackReason::mailbox_unavailable,
+        "preserve Modern+ intent while resolving portable advanced fallbacks");
+
+  advanced.profile = off::Mode::original;
+  const auto original_advanced =
+      off::settings::resolve_graphics_settings(advanced, capabilities);
+  check(original_advanced.effective.has_value() &&
+            !original_advanced.effective->modern_plus &&
+            original_advanced.effective->upscaler ==
+                off::settings::Upscaler::native &&
+            original_advanced.effective->shadow_quality ==
+                off::settings::ShadowQuality::reference &&
+            advanced.modern_plus &&
+            advanced.upscaler == off::settings::Upscaler::dlss,
+        "force reference rendering in Original without overwriting intent");
+  advanced.profile = off::Mode::modern;
+  advanced.render_scale_percent = 49;
+  check(
+      off::settings::resolve_graphics_settings(advanced, capabilities).error ==
+          off::settings::GraphicsValidationError::render_scale_out_of_range,
+      "reject render scales below the supported range");
+  advanced.render_scale_percent = 201;
+  check(
+      off::settings::resolve_graphics_settings(advanced, capabilities).error ==
+          off::settings::GraphicsValidationError::render_scale_out_of_range,
+      "reject render scales above the supported range");
+
   off::ui::GraphicsMenuSession menu{capabilities};
   const auto baseline = menu.confirmed_requested();
   check(menu.handle_key(off::ui::GraphicsMenuKey::f10, false, false) ==
@@ -89,6 +140,42 @@ int main() {
                 off::ui::GraphicsMenuEffect::closed &&
             menu.confirmed_requested() == baseline,
         "discard an edited draft when F10 closes the menu");
+
+  static_cast<void>(
+      menu.handle_key(off::ui::GraphicsMenuKey::f10, true, false));
+  check(menu.selected_row() == off::ui::GraphicsMenuRow::profile,
+        "reopen with profile focused");
+  static_cast<void>(
+      menu.handle_key(off::ui::GraphicsMenuKey::right, true, false));
+  check(menu.draft().profile == off::Mode::modern && !menu.draft().modern_plus,
+        "cycle from Original to Modern");
+  static_cast<void>(
+      menu.handle_key(off::ui::GraphicsMenuKey::right, true, false));
+  check(menu.draft().profile == off::Mode::modern && menu.draft().modern_plus,
+        "cycle from Modern to Modern+");
+  static_cast<void>(
+      menu.handle_key(off::ui::GraphicsMenuKey::right, true, false));
+  check(menu.draft().profile == off::Mode::original &&
+            !menu.draft().modern_plus,
+        "wrap the profile selector after Modern+");
+  static_cast<void>(menu.handle_key(off::ui::GraphicsMenuKey::up, true, false));
+  check(menu.selected_row() == off::ui::GraphicsMenuRow::defaults,
+        "wrap upward from the first row to Defaults");
+  menu.draft() = requested;
+  menu.draft().modern_plus = true;
+  menu.draft().render_scale_percent = 200;
+  menu.draft().upscaler = off::settings::Upscaler::dlss;
+  menu.draft().shadow_quality = off::settings::ShadowQuality::ultra;
+  static_cast<void>(
+      menu.handle_key(off::ui::GraphicsMenuKey::enter, true, false));
+  check(menu.draft() == off::settings::RequestedGraphicsSettings{} &&
+            menu.confirmed_requested() == baseline &&
+            menu.phase() == off::ui::GraphicsMenuPhase::editing,
+        "Defaults resets only the draft and waits for Apply");
+  check(menu.handle_key(off::ui::GraphicsMenuKey::escape, true, false) ==
+                off::ui::GraphicsMenuEffect::closed &&
+            menu.confirmed_requested() == baseline,
+        "cancel a default reset without changing confirmed settings");
 
   const auto start = off::ui::GraphicsClock::time_point{};
   static_cast<void>(

@@ -47,9 +47,11 @@ int main() {
     const auto list = off::ui::build_graphics_menu_draw_list(menu, size, now);
     check(list.status == off::ui::UiBuildStatus::ok &&
               off::ui::validate_graphics_menu_draw_list(list) &&
-              list.hit_targets.size() == 6 && has_text(list, "Modern") &&
+              list.hit_targets.size() == 10 && has_text(list, "Modern") &&
               has_text(list, "Borderless desktop") &&
-              has_text(list, "1920 x 1080") && has_text(list, "VSync"),
+              has_text(list, "1920 x 1080") && has_text(list, "VSync") &&
+              has_text(list, "100%") && has_text(list, "Native") &&
+              has_text(list, "Reference") && has_text(list, "Defaults"),
           "layout is bounded and truthful at every target size");
   }
   const auto first =

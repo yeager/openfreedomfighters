@@ -62,7 +62,7 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
   }
   if (phase_ == GraphicsMenuPhase::closed) {
     return key == GraphicsMenuKey::escape ? GraphicsMenuEffect::quit_requested
-                                           : GraphicsMenuEffect::none;
+                                          : GraphicsMenuEffect::none;
   }
   if (key == GraphicsMenuKey::escape) {
     return cancel_or_revert();
@@ -70,13 +70,16 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
   if (phase_ != GraphicsMenuPhase::editing) {
     return GraphicsMenuEffect::none;
   }
-  constexpr std::array rows{GraphicsMenuRow::profile,
-                            GraphicsMenuRow::window_mode,
-                            GraphicsMenuRow::window_size,
-                            GraphicsMenuRow::present_mode,
-                            GraphicsMenuRow::apply,
-                            GraphicsMenuRow::cancel};
-  auto index = static_cast<std::size_t>(selected_row_);
+  constexpr std::array rows{
+      GraphicsMenuRow::profile,      GraphicsMenuRow::window_mode,
+      GraphicsMenuRow::window_size,  GraphicsMenuRow::present_mode,
+      GraphicsMenuRow::apply,        GraphicsMenuRow::cancel,
+      GraphicsMenuRow::render_scale, GraphicsMenuRow::upscaler,
+      GraphicsMenuRow::shadows,      GraphicsMenuRow::defaults};
+  std::size_t index = 0;
+  for (std::size_t i = 0; i < rows.size(); ++i)
+    if (rows[i] == selected_row_)
+      index = i;
   if (key == GraphicsMenuKey::up) {
     index = (index + rows.size() - 1) % rows.size();
     selected_row_ = rows[index];
@@ -93,27 +96,34 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
     if (selected_row_ == GraphicsMenuRow::cancel) {
       return cancel_or_revert();
     }
+    if (selected_row_ == GraphicsMenuRow::defaults) {
+      draft_ = settings::RequestedGraphicsSettings{};
+      validation_error_.reset();
+      return GraphicsMenuEffect::none;
+    }
   }
   if (key != GraphicsMenuKey::left && key != GraphicsMenuKey::right) {
     return GraphicsMenuEffect::none;
   }
   const auto forward = key == GraphicsMenuKey::right;
   switch (selected_row_) {
-  case GraphicsMenuRow::profile:
-    draft_.profile = draft_.profile == Mode::original ? Mode::modern
-                                                       : Mode::original;
+  case GraphicsMenuRow::profile: {
+    unsigned value =
+        draft_.profile == Mode::original ? 0U : (draft_.modern_plus ? 2U : 1U);
+    value = forward ? (value + 1U) % 3U : (value + 2U) % 3U;
+    draft_.profile = value == 0U ? Mode::original : Mode::modern;
+    draft_.modern_plus = value == 2U;
     break;
+  }
   case GraphicsMenuRow::window_mode:
-    draft_.window_mode =
-        draft_.window_mode == settings::WindowMode::windowed
-            ? settings::WindowMode::borderless_desktop
-            : settings::WindowMode::windowed;
+    draft_.window_mode = draft_.window_mode == settings::WindowMode::windowed
+                             ? settings::WindowMode::borderless_desktop
+                             : settings::WindowMode::windowed;
     break;
   case GraphicsMenuRow::window_size: {
-    constexpr std::array sizes{settings::WindowSize{1280, 720},
-                               settings::WindowSize{1920, 1080},
-                               settings::WindowSize{2560, 1440},
-                               settings::WindowSize{3840, 2160}};
+    constexpr std::array sizes{
+        settings::WindowSize{1280, 720}, settings::WindowSize{1920, 1080},
+        settings::WindowSize{2560, 1440}, settings::WindowSize{3840, 2160}};
     std::size_t size_index = 0;
     for (std::size_t i = 0; i < sizes.size(); ++i) {
       if (sizes[i] == draft_.windowed_size) {
@@ -131,8 +141,33 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
     draft_.present_mode = static_cast<settings::PresentMode>(value);
     break;
   }
+  case GraphicsMenuRow::render_scale: {
+    constexpr std::array<std::uint16_t, 7> scales{50,  67,  75, 100,
+                                                  125, 150, 200};
+    std::size_t scale_index = 3;
+    for (std::size_t i = 0; i < scales.size(); ++i)
+      if (scales[i] == draft_.render_scale_percent)
+        scale_index = i;
+    scale_index = forward ? (scale_index + 1) % scales.size()
+                          : (scale_index + scales.size() - 1) % scales.size();
+    draft_.render_scale_percent = scales[scale_index];
+    break;
+  }
+  case GraphicsMenuRow::upscaler: {
+    auto value = static_cast<unsigned>(draft_.upscaler);
+    value = forward ? (value + 1U) % 3U : (value + 2U) % 3U;
+    draft_.upscaler = static_cast<settings::Upscaler>(value);
+    break;
+  }
+  case GraphicsMenuRow::shadows: {
+    auto value = static_cast<unsigned>(draft_.shadow_quality);
+    value = forward ? (value + 1U) % 3U : (value + 2U) % 3U;
+    draft_.shadow_quality = static_cast<settings::ShadowQuality>(value);
+    break;
+  }
   case GraphicsMenuRow::apply:
   case GraphicsMenuRow::cancel:
+  case GraphicsMenuRow::defaults:
     break;
   }
   validation_error_.reset();

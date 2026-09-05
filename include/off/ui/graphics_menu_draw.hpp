@@ -38,8 +38,12 @@ enum class UiControl : std::uint8_t {
   window_mode,
   window_size,
   present_mode,
+  render_scale,
+  upscaler,
+  shadows,
   apply,
   cancel,
+  defaults,
   keep,
   revert
 };

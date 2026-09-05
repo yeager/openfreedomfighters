@@ -28,8 +28,34 @@ bool inside(const UiRect &rect, UiExtent target) {
          rect.y + rect.height <= static_cast<float>(target.height);
 }
 
-std::string profile_name(Mode mode) {
-  return mode == Mode::modern ? "Modern" : "Original";
+std::string profile_name(const settings::RequestedGraphicsSettings &value) {
+  return value.profile == Mode::original
+             ? "Original"
+             : (value.modern_plus ? "Modern+" : "Modern");
+}
+
+std::string upscaler_name(settings::Upscaler value) {
+  switch (value) {
+  case settings::Upscaler::native:
+    return "Native";
+  case settings::Upscaler::temporal:
+    return "Temporal";
+  case settings::Upscaler::dlss:
+    return "DLSS";
+  }
+  return "Invalid";
+}
+
+std::string shadow_name(settings::ShadowQuality value) {
+  switch (value) {
+  case settings::ShadowQuality::reference:
+    return "Reference";
+  case settings::ShadowQuality::high:
+    return "High";
+  case settings::ShadowQuality::ultra:
+    return "Ultra";
+  }
+  return "Invalid";
 }
 
 std::string window_name(settings::WindowMode mode) {
@@ -177,17 +203,26 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
   }
 
   const auto &draft = menu.draft();
-  const std::array labels{"Profile", "Window mode", "Window size",
-                          "Present mode"};
-  const std::array values{profile_name(draft.profile),
+  const std::array labels{"Profile",      "Window mode",  "Resolution",
+                          "Present mode", "Render scale", "Upscaler",
+                          "Shadows"};
+  const std::array values{profile_name(draft),
                           window_name(draft.window_mode),
                           std::to_string(draft.windowed_size.width) + " x " +
                               std::to_string(draft.windowed_size.height),
-                          present_name(draft.present_mode)};
-  const std::array controls{UiControl::profile, UiControl::window_mode,
-                            UiControl::window_size, UiControl::present_mode};
+                          present_name(draft.present_mode),
+                          std::to_string(draft.render_scale_percent) + "%",
+                          upscaler_name(draft.upscaler),
+                          shadow_name(draft.shadow_quality)};
+  const std::array controls{UiControl::profile,      UiControl::window_mode,
+                            UiControl::window_size,  UiControl::present_mode,
+                            UiControl::render_scale, UiControl::upscaler,
+                            UiControl::shadows};
+  const float row_gap =
+      std::max(3.0F, std::min(8.0F * scale, panel_height * 0.015F));
   const float row_height = std::max(
-      34.0F, std::min(52.0F * scale, (panel_height - 170.0F * scale) / 6.0F));
+      20.0F, std::min(52.0F * scale,
+                      (panel_height - 140.0F * scale - 6.0F * row_gap) / 7.0F));
   float y = panel_rect.y + 70 * scale;
   for (std::size_t i = 0; i < labels.size(); ++i) {
     const UiRect bounds{panel_rect.x + pad, y, panel_width - 2 * pad,
@@ -201,23 +236,33 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
     if (static_cast<std::size_t>(menu.selected_row()) == i) {
       out.rectangles.push_back({UiLayer::focus, bounds, focus});
     }
-    y += row_height + 8 * scale;
+    y += row_height + row_gap;
   }
+  const float button_gap = std::min(20.0F * scale, panel_width * 0.03F);
+  const float button_width =
+      std::max(1.0F, (panel_width - 2.0F * pad - 2.0F * button_gap) / 3.0F);
   const UiRect apply{panel_rect.x + pad,
-                     panel_rect.y + panel_height - 62 * scale, 150 * scale,
+                     panel_rect.y + panel_height - 62 * scale, button_width,
                      40 * scale};
-  const UiRect cancel{apply.x + 170 * scale, apply.y, 150 * scale,
-                      apply.height};
+  const UiRect cancel{apply.x + button_width + button_gap, apply.y,
+                      button_width, apply.height};
+  const UiRect defaults{cancel.x + button_width + button_gap, apply.y,
+                        button_width, apply.height};
   out.hit_targets.push_back({apply, UiControl::apply, true});
   out.hit_targets.push_back({cancel, UiControl::cancel, true});
+  out.hit_targets.push_back({defaults, UiControl::defaults, true});
   add_text(UiLayer::content, apply.x + 12 * scale, apply.y + 11 * scale,
            "Apply");
   add_text(UiLayer::content, cancel.x + 12 * scale, cancel.y + 11 * scale,
            "Cancel");
+  add_text(UiLayer::content, defaults.x + 12 * scale, defaults.y + 11 * scale,
+           "Defaults");
   if (menu.selected_row() == GraphicsMenuRow::apply) {
     out.rectangles.push_back({UiLayer::focus, apply, focus});
   } else if (menu.selected_row() == GraphicsMenuRow::cancel) {
     out.rectangles.push_back({UiLayer::focus, cancel, focus});
+  } else if (menu.selected_row() == GraphicsMenuRow::defaults) {
+    out.rectangles.push_back({UiLayer::focus, defaults, focus});
   }
   return finish();
 }

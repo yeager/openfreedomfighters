@@ -5,6 +5,10 @@ than a separate native dialog, so the same interaction and presentation work on
 Windows, macOS, Linux, and Steam Deck. The scene remains visible behind it and
 gameplay input is consumed while it is open.
 
+The overlay is the single supported in-game entry point for display, rendering,
+quality, and advanced presentation controls. It is not a developer console and
+must remain usable when an optional renderer feature fails to initialize.
+
 ## Interaction contract
 
 - F10 opens the overlay and copies the confirmed requested settings into an
@@ -12,12 +16,24 @@ gameplay input is consumed while it is open.
 - Arrow keys navigate and edit rows. Enter or Space activates a row. Controller
   D-pad, A, and B provide the same operations; a controller menu shortcut will be
   finalized with the input system.
+- Focus is always visible. Disabled rows remain readable, cannot receive an
+  actionable focus state, and include a concise reason such as `Requires Modern+`
+  or `DLSS runtime unavailable`.
 - Escape cancels the overlay when it is open and must not also quit the game.
 - Apply is transactional. Validation and runtime reconfiguration must both
   succeed before requested settings are committed or persisted.
 - A display-mode change presents a 15-second confirmation. Timeout, Escape, or B
   restores the last known-good window, swapchain, and presentation settings.
 - F10 cannot hide a pending display confirmation. Quit events remain available.
+
+Mouse, controller, and localized text support are delivery requirements, not
+permission to make the current keyboard route inaccessible. The final overlay
+must support keyboard-only operation, controller-only operation, remappable
+shortcuts, high-contrast focus and selected states, non-color status cues,
+scalable text, safe-area padding, and reduced-motion descriptions. It must not
+depend on hover, tiny sliders, rapid key repeats, or color alone. Screen-reader
+and platform accessibility API integration remains an open design item and must
+not be claimed before it has been validated on each target.
 
 ## Requested and effective values
 
@@ -50,6 +66,12 @@ The complete overlay is organized into these sections:
   volumetrics, particles, bloom, motion blur, depth of field, film grain,
   chromatic aberration, tone mapping, and shader cache.
 
+Each row shows its requested value and, when different, its effective value and
+fallback reason. Destructive-looking actions such as clearing a shader cache
+require a separate confirmation and must not share the normal Apply action.
+Preset selection may populate individual rows, but later row edits mark the
+preset as Custom rather than silently changing those edits.
+
 Rows may appear before their renderer implementation is complete only when they
 are visibly disabled and explain the missing capability. A setting must never
 pretend to apply while doing nothing.
@@ -63,6 +85,42 @@ pretend to apply while doing nothing.
 | Renderer recreation | profile, upscaler, DLSS enablement | brief in-process renderer reload |
 | Scene reload | replacement-asset source | reload presentation assets only |
 | Application restart | explicit graphics API | persist and show restart-required badge |
+
+Apply uses a last-known-good transaction:
+
+1. Validate the entire draft without changing live state.
+2. Resolve requested values against current platform, adapter, display, driver,
+   and optional-runtime capabilities.
+3. Prepare all required resources before releasing the current working renderer.
+4. Switch atomically, or restore the complete previous effective state on any
+   failure.
+5. Request confirmation for risky display changes, then persist only after the
+   user keeps the result. A rejected or timed-out change is not persisted.
+
+Ordinary next-frame changes persist after successful application. Restart-bound
+changes persist the requested value with a clear `Restart required` state while
+the effective value continues to report the active renderer. Configuration is
+written atomically in the platform configuration directory. A malformed or
+incompatible file must be quarantined or ignored with a diagnostic and must not
+prevent startup; the last known-good configuration and conservative defaults are
+the recovery paths.
+
+## Platform and feature boundaries
+
+| Feature | Windows | Linux / Steam Deck | macOS |
+|---|---|---|---|
+| F10 overlay and portable settings | Required | Required | Required |
+| Native and portable temporal paths | Required | Required | Required |
+| Modern+ replacement assets | Portable asset contract | Portable asset contract | Portable asset contract |
+| DLSS 4.5 Super Resolution | Planned for supported NVIDIA RTX, D3D12, driver, and licensed runtime combinations | Exposed only if an official NVIDIA SDK explicitly supports the active native stack | Not expected; portable temporal fallback remains available |
+| DLSS 5 | Not a current setting or deliverable | Not a current setting or deliverable | Not a current setting or deliverable |
+
+DLSS labels must name the API version actually loaded. The overlay must never
+label a community shader, post-process filter, portable upscaler, or unavailable
+future SDK as DLSS. The `Merserk/dlss5-visual-enhancer` project is not an engine
+backend; see [DLSS.md](DLSS.md). If DLSS 4.5 cannot load, the retained request may
+resolve to portable temporal upscaling or native rendering with a visible reason.
+This fallback must not remove resolution controls or prevent Modern+ from running.
 
 Graphics settings cannot affect fixed simulation time, input timestamps, RNG,
 AI visibility, collision, damage, mission state, save/replay state, or authoritative
@@ -118,3 +176,23 @@ Hosted CI tests the pure model, menu state, event translation, draw-list bounds,
 and fallback resolution on every target. Real fullscreen, HDR, refresh switching,
 high-DPI resize, depth recreation, and GPU overlay composition remain hardware
 smoke gates.
+
+## Preview and screenshot procedure
+
+The current diagnostic overlay can be opened directly for a bounded capture:
+
+```sh
+./build/openfreedomfighters \
+  --data /path/to/FreedomFighters \
+  --mode modern \
+  --show-graphics-menu \
+  --frame-limit 1 \
+  --screenshot /path/outside/repository/f10-graphics-menu.bmp
+```
+
+The retail installation must validate first, and the destination must not exist.
+Use an absolute destination outside the source tree because the scene behind the
+overlay may contain retail-derived imagery. A release or CI artifact must never
+contain that capture. The screenshot demonstrates the current diagnostic layout,
+not completed advanced controls, DLSS integration, localization, accessibility,
+or final art direction.

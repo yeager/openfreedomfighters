@@ -93,6 +93,14 @@ outside this repository.
 F10 is reserved for the in-game graphics-settings overlay. Its transactional
 state, keyboard focus/editing, bounded cross-platform layout, timed display
 rollback, and SDL GPU composition are implemented for the current settings.
+The current panel exposes Original, Modern, and Modern+ intent; window mode;
+output resolution; presentation mode; 50–200% render scale; native, portable
+temporal, or DLSS upscaling intent; reference/high/ultra shadows; and
+Apply/Cancel/Defaults. Capability resolution keeps unsupported requests separate
+from effective runtime values. Advanced renderer paths, including a verified
+DLSS 4.5 backend on supported Windows/NVIDIA systems, remain capability-gated
+until their real implementations land; the menu does not establish DLSS support
+by itself.
 
 ## Repository rules
 
