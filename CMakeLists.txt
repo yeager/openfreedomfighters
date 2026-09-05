@@ -12,6 +12,7 @@ add_library(off_core
     src/crypto/sha256.cpp
     src/data/archive_vfs.cpp
     src/data/audio_bank_header.cpp
+    src/data/gms_image.cpp
     src/data/install.cpp
     src/data/packed_resource.cpp
     src/data/primitive_catalog.cpp
@@ -74,6 +75,10 @@ if(BUILD_TESTING)
     add_executable(off_packed_resource_tests tests/packed_resource_tests.cpp)
     target_link_libraries(off_packed_resource_tests PRIVATE off_core)
     add_test(NAME off_packed_resource_tests COMMAND off_packed_resource_tests)
+
+    add_executable(off_gms_image_tests tests/gms_image_tests.cpp)
+    target_link_libraries(off_gms_image_tests PRIVATE off_core)
+    add_test(NAME off_gms_image_tests COMMAND off_gms_image_tests)
 
     add_executable(off_render_map_tests tests/render_map_tests.cpp)
     target_link_libraries(off_render_map_tests PRIVATE off_core)

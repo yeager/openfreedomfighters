@@ -109,18 +109,6 @@ int main() {
     check(bundle.entries().size() == 2, "parse ZGF entry count");
     check(bundle.entries()[0].name == "Scenes/../Shared/First.bin", "parse ZGF entry name");
     check(bundle.entries()[1].payload_size == 14, "parse ZGF payload size");
-    const auto location = bundle.locate_payload_offset(
-        bundle.entries()[1].payload_offset + 3
-    );
-    check(
-        location.has_value() && location->entry_index == 1 &&
-            location->offset_within_payload == 3,
-        "locate an offset within an embedded payload"
-    );
-    check(
-        !bundle.locate_payload_offset(bundle.entries()[1].record_offset).has_value(),
-        "exclude record metadata from payload lookup"
-    );
     const auto second_payload = bundle.entry_payload(1);
     check(
         std::equal(

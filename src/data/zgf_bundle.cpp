@@ -200,20 +200,4 @@ std::span<const std::byte> ZgfBundle::entry_payload(std::size_t index) const {
     return resource_.payload().subspan(entry.payload_offset, entry.payload_size);
 }
 
-std::optional<ZgfPayloadLocation> ZgfBundle::locate_payload_offset(
-    std::uint32_t decoded_offset
-) const noexcept {
-    for (std::size_t index = 0; index < entries_.size(); ++index) {
-        const auto& entry = entries_[index];
-        if (decoded_offset >= entry.payload_offset &&
-            decoded_offset - entry.payload_offset < entry.payload_size) {
-            return ZgfPayloadLocation{
-                .entry_index = index,
-                .offset_within_payload = decoded_offset - entry.payload_offset,
-            };
-        }
-    }
-    return std::nullopt;
-}
-
 }  // namespace off::data

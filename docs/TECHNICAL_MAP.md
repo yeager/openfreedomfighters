@@ -31,7 +31,7 @@ Representative scene archives consistently expose a family of resource types:
 | `ZGF` | packed bundle of named scene resources | embedded `TTF`/`PPO` schemas and cross-bundle references |
 | `SUP` | `DLCF` dependency list | downstream loading semantics |
 | `BUF` | binary data buffers | offsets, alignment, ownership |
-| `GMS` | packed game/mission data | inner section and reference semantics |
+| `GMS` | decoded scene image addressed by RMC/RMI geometry references | inner section, relocation, and object semantics |
 | `TEX` | texture catalog with indexed image and sequence blocks | renderer upload and material references |
 | `SND` | sound event metadata | bank links, loop and spatial flags |
 | `LOC` | localization table | encoding, identifiers, plural rules |
@@ -112,7 +112,7 @@ Files named `.WAV` are often banks rather than conventional RIFF WAV files. All 
 ## Next probes
 
 1. Resolve runtime-computed dynamic module/API arguments and map load-config metadata.
-2. Decode embedded ZGF `TTF` records and resolve nonlocal packed references through `SUP` dependencies.
-3. Determine the `RMC`/`RMI` runtime distinction and bind their geometry references through `ZGF` to `PRM`, then bind decoded `TEX` pixels to renderable geometry.
+2. Infer GMS section boundaries and identify the object records reached by RMC/RMI geometry references.
+3. Determine the `RMC`/`RMI` runtime distinction and bind resolved GMS objects to `PRM`, then bind decoded `TEX` pixels to renderable geometry.
 4. Record black-box boot, menu, input, timing, and first-level traces from the retail game.
 5. Define golden screenshots/state traces stored locally as hashes and numeric measurements.

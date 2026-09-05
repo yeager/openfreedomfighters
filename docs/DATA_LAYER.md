@@ -20,7 +20,8 @@ The first Phase 1 component is a read-only ZIP archive reader and overlay virtua
 - Loose files expose bounded random-access views, allowing global audio banks and other large sources to be consumed in small chunks without whole-file allocation.
 - A random-access view detects replacement, resizing, or conversion of its source into a symbolic link before each read.
 - Packed `ZGF` and `GMS` envelopes are decoded from raw DEFLATE or stored representations with exact size and Adler-32 validation.
-- Decoded `ZGF` bundles expose named embedded payloads through owned, bounded views and map local decoded offsets back to their owning payload.
+- Decoded `ZGF` bundles expose named embedded payloads through owned, bounded views.
+- Packed RMC/RMI geometry references resolve to explicitly sized, bounds-checked views of the paired decoded `GMS` image.
 - Scene `SUP` resources are parsed as bounded `DLCF` dependency lists in both observed scalar and array layouts.
 - Scene `TEX` resources are parsed into image, mip, palette, and sequence models with bidirectional index validation, then decoded through portable CPU paths to RGBA8.
 - Scene `PRM` resources are parsed into indexed primitive descriptors, portable position/normal/color/texture-coordinate vertices, and bounds-checked topology batches. Optional auxiliary streams remain opaque.
@@ -38,7 +39,7 @@ No retail payload or filename inventory is embedded in the test fixtures.
 
 The installation verifier parses the single `SUP` member in each of all 90 scene archives, including decompression and CRC validation, and checks that the corpus shape matches the supported build. The format is documented in [SCENE_SUPPORT_FORMAT.md](SCENE_SUPPORT_FORMAT.md).
 
-It also decodes the single `ZGF` and `GMS` member in each archive. The resulting 180 payloads total 34,221,064 and 33,436,872 bytes respectively; all packed sizes, output sizes, and checksums are validated. The 90 decoded `ZGF` bundles contain 1,019 named entries and 34,161,792 embedded bytes. Of 3,002 present RMC/RMI geometry references, 2,872 map directly into an embedded payload in the paired bundle. See [PACKED_RESOURCE_FORMAT.md](PACKED_RESOURCE_FORMAT.md) and [ZGF_FORMAT.md](ZGF_FORMAT.md).
+It also decodes the single `ZGF` and `GMS` member in each archive. The resulting 180 payloads total 34,221,064 and 33,436,872 bytes respectively; all packed sizes, output sizes, and checksums are validated. The 90 decoded `ZGF` bundles contain 1,019 named entries and 34,161,792 embedded bytes. All 3,002 present RMC/RMI geometry references resolve to at least four bytes inside the paired GMS image. See [PACKED_RESOURCE_FORMAT.md](PACKED_RESOURCE_FORMAT.md), [ZGF_FORMAT.md](ZGF_FORMAT.md), and [GMS_FORMAT.md](GMS_FORMAT.md).
 
 The same full-corpus pass parses every `TEX` member and validates 23,522 image records and 19 sequence records. It decodes a retail reference from each of the four observed encoding families and discards the output immediately. Encoded and decoded mip bytes are held only in transient memory. See [TEXTURE_FORMAT.md](TEXTURE_FORMAT.md).
 

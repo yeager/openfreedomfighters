@@ -1,6 +1,6 @@
 # ZGF resource bundle format
 
-The decoded `ZGF` payload is a bounds-checked bundle of named embedded resources. This layer is structural: the portable reader preserves embedded bytes and names without assigning gameplay semantics to the bundled `TTF` and `PPO` extensions.
+The decoded `ZGF` payload is a bounds-checked bundle of named embedded resources. The portable reader preserves embedded bytes and names without extracting them to the host filesystem.
 
 ## Root envelope
 
@@ -30,16 +30,11 @@ An embedded-blob record begins with its exact payload size and an untagged recor
 
 The remaining entry bytes contain one printable ASCII, NUL-terminated logical path and zero alignment padding. These identifiers are never used as host filesystem paths. Parent segments are retained because they are present in valid logical references; absolute paths, drive-qualified paths, empty components, and single-dot components are rejected. Names must be unique after ASCII case folding and slash normalization.
 
-## Packed render references
+## Embedded resource families
 
-The low 30 bits of an `RMC` or `RMI` geometry reference can be tested against decoded bundle offsets without copying embedded data. Across the supported corpus there are 3,002 required or present optional references:
+The 430 bundled `TTF` payloads begin with the standard TrueType sfnt signature and are fonts. The 589 `PPO` payloads are compiled script objects whose internal schema remains a separate research target.
 
-- 2,872 point inside a local embedded payload;
-- 92 carry offset zero;
-- one points elsewhere inside local bundle metadata;
-- 37 lie beyond the paired local bundle and require later dependency-resolution research.
-
-This classification does not yet claim that every nonlocal reference is resolved through `SUP`; it records only the proven local address relationship. The runtime keeps the original packed value intact for the future scene resolver.
+RMC/RMI geometry references are not ZGF bundle offsets. All 3,002 such references resolve within the paired decoded `GMS` image instead. See [GMS_FORMAT.md](GMS_FORMAT.md).
 
 ## Validation coverage
 

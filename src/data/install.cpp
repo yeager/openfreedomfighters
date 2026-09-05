@@ -4,6 +4,7 @@
 #include "off/crypto/sha256.hpp"
 #include "off/data/archive_vfs.hpp"
 #include "off/data/audio_bank_header.hpp"
+#include "off/data/gms_image.hpp"
 #include "off/data/packed_resource.hpp"
 #include "off/data/primitive_catalog.hpp"
 #include "off/data/render_map.hpp"
@@ -26,8 +27,6 @@
 
 namespace off::data {
 namespace {
-
-constexpr std::uint32_t packed_reference_offset_mask = 0x3fffffffU;
 
 InstallVerification failure(
     InstallError error,
@@ -190,10 +189,7 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         std::size_t scene_graph_entry_payload_bytes = 0;
         std::size_t ttf_entry_count = 0;
         std::size_t ppo_entry_count = 0;
-        std::size_t local_scene_payload_reference_count = 0;
-        std::size_t zero_offset_scene_reference_count = 0;
-        std::size_t local_scene_metadata_reference_count = 0;
-        std::size_t nonlocal_scene_reference_count = 0;
+        std::size_t resolved_gms_reference_count = 0;
         std::size_t gms_resource_count = 0;
         std::size_t gms_payload_bytes = 0;
         std::size_t texture_catalog_count = 0;
@@ -227,7 +223,7 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             std::size_t primitive_files_in_archive = 0;
             std::size_t render_map_files_in_archive = 0;
             std::size_t render_instance_files_in_archive = 0;
-            std::optional<ZgfBundle> scene_bundle;
+            std::optional<GmsImage> gms_image;
             std::vector<std::uint32_t> scene_geometry_references;
             for (const auto& member : archive.entries()) {
                 const auto extension = lowercase(
@@ -258,11 +254,11 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                             ppo_entry_count += bundled_extension == ".ppo" ? 1U : 0U;
                         }
                         scene_graph_entry_count += bundle.entries().size();
-                        scene_bundle = std::move(bundle);
                         ++scene_graph_files_in_archive;
                         ++scene_graph_count;
                     } else {
                         gms_payload_bytes += resource.payload().size();
+                        gms_image = GmsImage::parse(std::move(resource));
                         ++gms_files_in_archive;
                         ++gms_resource_count;
                     }
@@ -345,22 +341,14 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             if (support_files_in_archive != 1 || scene_graph_files_in_archive != 1 ||
                 gms_files_in_archive != 1 || texture_files_in_archive != 1 ||
                 primitive_files_in_archive != 1 || render_map_files_in_archive != 1 ||
-                render_instance_files_in_archive != 1 || !scene_bundle.has_value()) {
+                render_instance_files_in_archive != 1 || !gms_image.has_value()) {
                 throw std::runtime_error(
                     "scene archive does not contain every required resource exactly once"
                 );
             }
             for (const auto reference : scene_geometry_references) {
-                const auto decoded_offset = reference & packed_reference_offset_mask;
-                if (decoded_offset == 0) {
-                    ++zero_offset_scene_reference_count;
-                } else if (scene_bundle->locate_payload_offset(decoded_offset).has_value()) {
-                    ++local_scene_payload_reference_count;
-                } else if (decoded_offset < scene_bundle->decoded_size()) {
-                    ++local_scene_metadata_reference_count;
-                } else {
-                    ++nonlocal_scene_reference_count;
-                }
+                static_cast<void>(gms_image->resolve_reference(reference, 4));
+                ++resolved_gms_reference_count;
             }
             ++scene_archive_count;
         }
@@ -370,10 +358,7 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             scene_graph_entry_count != 1'019 ||
             scene_graph_entry_payload_bytes != 34'161'792 ||
             ttf_entry_count != 430 || ppo_entry_count != 589 ||
-            local_scene_payload_reference_count != 2'872 ||
-            zero_offset_scene_reference_count != 92 ||
-            local_scene_metadata_reference_count != 1 ||
-            nonlocal_scene_reference_count != 37 ||
+            resolved_gms_reference_count != 3'002 ||
             gms_resource_count != scene_archive_count ||
             gms_payload_bytes != 33'436'872 ||
             texture_catalog_count != scene_archive_count || texture_image_count != 23'522 ||
