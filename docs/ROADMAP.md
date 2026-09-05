@@ -90,6 +90,7 @@ Gate: campaign completes in Original mode on all three targets with no compatibi
 - [ ] Message-ID catalog, Unicode shaping, fallback fonts, plural/select support.
 - [ ] 20 locale packs and in-context review, including Swedish.
 - [ ] Modern graphics feature set, presets, accessibility, and performance budgets.
+- [ ] Optional Modern+ replacement-asset contract and curated HD content pipeline.
 - [ ] Translation completeness and overflow automation.
 
 Gate: every locale passes completeness and UI-layout checks; Modern and Original simulations produce identical state hashes for shared settings.
