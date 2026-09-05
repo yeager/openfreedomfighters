@@ -58,6 +58,15 @@ Every ordinary descriptor in the supported corpus uses the same 36-byte primary 
 
 Vertex colors use the same packed channel masks confirmed for texture palettes and are converted to RGBA8. Floating-point components are preserved without normalization or coordinate-system conversion. Non-finite values are rejected. The complete corpus contains 2,820,961 decoded primary vertices; every 36-byte table fits before its owning descriptor.
 
+The renderer-facing model classifies each ordinary primitive from its decoded alpha
+values without assigning an unproven meaning to the selector flag. Of 61,424
+ordinary primitives, 46,140 have alpha 255 at every vertex, 2,533 have alpha zero
+at every vertex, and 12,751 have another or varying alpha range. Every primitive
+in the third class carries selector bit 11; the converse is not true. This is
+strong evidence that the flag permits an alpha-related path, but it does not yet
+prove whether the original runtime selects blending, alpha testing, sorting, or a
+combination of those states.
+
 ## Topology batches
 
 The topology table is an exact sequence of little-endian 16-bit words. Its first word is the batch count. Each batch then contains an index count followed by that many vertex indexes:

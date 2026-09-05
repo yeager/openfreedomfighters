@@ -203,6 +203,10 @@ InstallVerification verify_install(const std::filesystem::path &root) {
     std::size_t primitive_reference_count = 0;
     std::size_t primitive_texture_reference_count = 0;
     std::size_t flagged_texture_selector_count = 0;
+    std::size_t opaque_vertex_alpha_count = 0;
+    std::size_t variable_vertex_alpha_count = 0;
+    std::size_t fully_transparent_vertex_alpha_count = 0;
+    std::size_t unflagged_variable_vertex_alpha_count = 0;
     std::size_t gms_primitive_reference_count = 0;
     std::size_t primitive_vertex_count = 0;
     std::size_t primitive_batch_count = 0;
@@ -413,6 +417,19 @@ InstallVerification verify_install(const std::filesystem::path &root) {
             binding.texture_image_index.has_value() ? 1U : 0U;
         flagged_texture_selector_count +=
             binding.texture_selector_flagged ? 1U : 0U;
+        switch (binding.vertex_alpha_class) {
+        case graphics::VertexAlphaClass::opaque:
+          ++opaque_vertex_alpha_count;
+          break;
+        case graphics::VertexAlphaClass::variable:
+          ++variable_vertex_alpha_count;
+          unflagged_variable_vertex_alpha_count +=
+              binding.texture_selector_flagged ? 0U : 1U;
+          break;
+        case graphics::VertexAlphaClass::fully_transparent:
+          ++fully_transparent_vertex_alpha_count;
+          break;
+        }
       }
       for (const auto reference : scene_geometry_references) {
         static_cast<void>(GmsImage::decode_object_handle(reference));
@@ -449,6 +466,10 @@ InstallVerification verify_install(const std::filesystem::path &root) {
         primitive_entry_count != 61'451 || primitive_reference_count != 27 ||
         primitive_texture_reference_count != 40'071 ||
         flagged_texture_selector_count != 18'731 ||
+        opaque_vertex_alpha_count != 46'140 ||
+        variable_vertex_alpha_count != 12'751 ||
+        fully_transparent_vertex_alpha_count != 2'533 ||
+        unflagged_variable_vertex_alpha_count != 0 ||
         gms_primitive_reference_count != 115'977 ||
         primitive_vertex_count != 2'820'961 ||
         primitive_batch_count != 461'344 ||
