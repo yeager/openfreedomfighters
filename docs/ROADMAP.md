@@ -40,7 +40,9 @@ Gate: a new contributor can generate the same structural report from a supported
 - [x] Decode and corpus-validate the packed ZGF/GMS resource envelope.
 - [x] Parse ZGF embedded-resource directories and identify bundled font/script families.
 - [x] Parse GMS object-source and identifier directories.
+- [x] Reproduce GMS parent/child pool traversal and all 24 class assignments.
 - [x] Decode every RMC/RMI geometry reference as a runtime object-pool handle.
+- [x] Reverse-map every handle with a local GMS source and retain external handles explicitly.
 - [x] Parse and corpus-validate RMC/RMI spatial indexes and object descriptors.
 - [x] Decode and fully traverse RMC/RMI packed octrees.
 - [x] Implement bounds-checked world-space queries over RMC/RMI octrees.

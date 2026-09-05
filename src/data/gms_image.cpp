@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -20,6 +21,8 @@ constexpr std::size_t fixed_header_size = 32;
 constexpr std::size_t directory_entry_size = 8;
 constexpr std::size_t minimum_record_size = 48;
 constexpr std::size_t object_slot_size = 112;
+constexpr std::size_t pool_class_count = 24;
+constexpr std::size_t pool_group_size = pool_class_count * sizeof(std::uint32_t);
 
 [[nodiscard]] std::size_t checked_table_end(
     std::size_t offset,
@@ -34,6 +37,23 @@ constexpr std::size_t object_slot_size = 112;
     return offset + count * entry_size;
 }
 
+[[nodiscard]] std::uint8_t base_pool_class(std::uint32_t source_type) {
+    if (source_type == 0x04000022U) {
+        return 1;
+    }
+    if ((source_type & 0x00200000U) != 0U) {
+        if (source_type == 0x00200012U || source_type == 0x00200015U ||
+            source_type == 0x0020001cU) {
+            return 3;
+        }
+        return 1;
+    }
+    if ((source_type & 0x00100000U) != 0U) {
+        return 0;
+    }
+    return (source_type & 0x00800000U) != 0U ? 2 : 3;
+}
+
 }  // namespace
 
 GmsImage GmsImage::parse(PackedResource resource) {
@@ -46,11 +66,46 @@ GmsImage GmsImage::parse(PackedResource resource) {
     const ByteReader reader(payload);
     const auto directory_offset = static_cast<std::size_t>(reader.u32(0));
     const auto identifier_table_offset = static_cast<std::size_t>(reader.u32(4));
+    const auto pool_table_offset = static_cast<std::size_t>(reader.u32(20));
     if ((directory_offset & 3U) != 0U || (identifier_table_offset & 3U) != 0U ||
+        (pool_table_offset & 3U) != 0U ||
         directory_offset > payload.size() - sizeof(std::uint32_t) ||
         identifier_table_offset > payload.size() - sizeof(std::uint32_t) ||
+        pool_table_offset > payload.size() - sizeof(std::uint32_t) ||
         reader.u32(12) != 4U) {
         throw std::runtime_error("invalid GMS image header");
+    }
+
+    const auto pool_group_count = static_cast<std::size_t>(reader.u32(pool_table_offset));
+    const auto pool_table_start = pool_table_offset + sizeof(std::uint32_t);
+    static_cast<void>(checked_table_end(
+        pool_table_start,
+        pool_group_count,
+        pool_group_size,
+        payload.size(),
+        "GMS pool-count table exceeds the decoded image"
+    ));
+    result.pool_groups_.reserve(pool_group_count);
+    std::size_t declared_slot_count = 0;
+    for (std::size_t group_index = 0; group_index < pool_group_count; ++group_index) {
+        GmsPoolGroup group;
+        std::size_t group_slot_count = 0;
+        for (std::size_t class_index = 0; class_index < pool_class_count; ++class_index) {
+            const auto count = reader.u32(
+                pool_table_start + group_index * pool_group_size +
+                class_index * sizeof(std::uint32_t)
+            );
+            group.class_counts[class_index] = count;
+            group_slot_count += count;
+        }
+        if (group_slot_count > std::numeric_limits<std::uint32_t>::max() ||
+            declared_slot_count > std::numeric_limits<std::size_t>::max() -
+                group_slot_count) {
+            throw std::runtime_error("GMS pool counts overflow their portable model");
+        }
+        group.slot_count = static_cast<std::uint32_t>(group_slot_count);
+        declared_slot_count += group_slot_count;
+        result.pool_groups_.push_back(group);
     }
 
     const auto directory_count = static_cast<std::size_t>(reader.u32(directory_offset));
@@ -62,7 +117,26 @@ GmsImage GmsImage::parse(PackedResource resource) {
         payload.size(),
         "GMS object-source directory exceeds the decoded image"
     ));
+    if (result.pool_groups_.empty() || declared_slot_count != directory_count) {
+        throw std::runtime_error("GMS pool counts do not cover the object-source directory");
+    }
     result.directory_.reserve(directory_count);
+    result.local_slot_to_directory_.assign(
+        directory_count,
+        std::numeric_limits<std::size_t>::max()
+    );
+    std::vector<std::uint32_t> group_base_slots;
+    group_base_slots.reserve(pool_group_count);
+    std::uint32_t group_base_slot = 0;
+    for (const auto& group : result.pool_groups_) {
+        group_base_slots.push_back(group_base_slot);
+        group_base_slot += group.slot_count;
+    }
+    std::vector<std::array<std::uint32_t, pool_class_count>> observed_counts(
+        pool_group_count
+    );
+    std::vector<std::size_t> active_groups{0};
+    std::size_t next_group_ordinal = 1;
     for (std::size_t index = 0; index < directory_count; ++index) {
         const auto entry_offset = directory_start + index * directory_entry_size;
         const auto packed_record = reader.u32(entry_offset);
@@ -72,13 +146,77 @@ GmsImage GmsImage::parse(PackedResource resource) {
             minimum_record_size > payload.size() - record_offset) {
             throw std::runtime_error("GMS directory references a truncated object source");
         }
+        const auto parent_steps = static_cast<std::uint8_t>(packed_record >> 25U);
+        if (parent_steps >= active_groups.size()) {
+            throw std::runtime_error("GMS object-source hierarchy underflows its root");
+        }
+        active_groups.resize(active_groups.size() - parent_steps);
+        const auto pool_group = active_groups.back();
+        const auto source_type = reader.u32(record_offset + 16U);
+        const auto source_variant = std::to_integer<std::uint8_t>(
+            payload[record_offset + 45U]
+        );
+        const auto pool_class = static_cast<std::size_t>(
+            base_pool_class(source_type) + source_variant * 8U
+        );
+        if (pool_group >= result.pool_groups_.size() ||
+            pool_class >= pool_class_count) {
+            throw std::runtime_error("GMS object source selects an invalid pool class");
+        }
+        const auto class_ordinal = observed_counts[pool_group][pool_class]++;
+        if (class_ordinal >= result.pool_groups_[pool_group].class_counts[pool_class]) {
+            throw std::runtime_error("GMS object source exceeds its declared pool class");
+        }
+        std::uint32_t group_slot_index = class_ordinal;
+        for (std::size_t class_index = 0; class_index < pool_class; ++class_index) {
+            group_slot_index += result.pool_groups_[pool_group].class_counts[class_index];
+        }
+        const auto local_slot_index = group_base_slots[pool_group] + group_slot_index;
+        if (local_slot_index >= result.local_slot_to_directory_.size() ||
+            result.local_slot_to_directory_[local_slot_index] !=
+                std::numeric_limits<std::size_t>::max()) {
+            throw std::runtime_error("GMS pool assignment reuses a local slot");
+        }
+        result.local_slot_to_directory_[local_slot_index] = index;
+        const auto enters_child_pool = (packed_record & record_flag) != 0U;
         result.directory_.push_back({
             .packed_record_reference = packed_record,
             .auxiliary_value = reader.u32(entry_offset + sizeof(std::uint32_t)),
             .record_offset = static_cast<std::uint32_t>(record_offset),
-            .hierarchy_depth = static_cast<std::uint8_t>(packed_record >> 25U),
-            .flagged = (packed_record & record_flag) != 0U,
+            .source_type = source_type,
+            .class_ordinal = class_ordinal,
+            .group_slot_index = group_slot_index,
+            .local_slot_index = local_slot_index,
+            .pool_group = static_cast<std::uint32_t>(pool_group),
+            .parent_steps = parent_steps,
+            .source_variant = source_variant,
+            .pool_class = static_cast<std::uint8_t>(pool_class),
+            .enters_child_pool = enters_child_pool,
         });
+        if ((source_type & 0x00100000U) != 0U) {
+            ++next_group_ordinal;
+        }
+        if (enters_child_pool) {
+            if (next_group_ordinal == 0 ||
+                next_group_ordinal > result.pool_groups_.size()) {
+                throw std::runtime_error("GMS object-source hierarchy exceeds its pool groups");
+            }
+            active_groups.push_back(next_group_ordinal - 1U);
+        }
+    }
+    if (next_group_ordinal != result.pool_groups_.size()) {
+        throw std::runtime_error("GMS object-source hierarchy does not use every pool group");
+    }
+    for (std::size_t group_index = 0; group_index < pool_group_count; ++group_index) {
+        if (observed_counts[group_index] != result.pool_groups_[group_index].class_counts) {
+            throw std::runtime_error("GMS object-source classes do not match pool counts");
+        }
+    }
+    if (std::ranges::find(
+            result.local_slot_to_directory_,
+            std::numeric_limits<std::size_t>::max()
+        ) != result.local_slot_to_directory_.end()) {
+        throw std::runtime_error("GMS pool assignment leaves an unpopulated local slot");
     }
 
     result.identifier_count_ = reader.u32(identifier_table_offset);
@@ -115,6 +253,16 @@ GmsObjectHandle GmsImage::decode_object_handle(std::uint32_t packed_reference) {
         .byte_offset = offset,
         .slot_index = static_cast<std::uint32_t>(offset / object_slot_size),
     };
+}
+
+std::optional<std::size_t> GmsImage::local_source_for_handle(
+    std::uint32_t packed_reference
+) const {
+    const auto handle = decode_object_handle(packed_reference);
+    if (handle.slot_index >= local_slot_to_directory_.size()) {
+        return std::nullopt;
+    }
+    return local_slot_to_directory_[handle.slot_index];
 }
 
 }  // namespace off::data

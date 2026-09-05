@@ -112,7 +112,7 @@ Files named `.WAV` are often banks rather than conventional RIFF WAV files. All 
 ## Next probes
 
 1. Resolve runtime-computed dynamic module/API arguments and map load-config metadata.
-2. Reproduce GMS object-pool materialization and map runtime handles back to object-source records.
+2. Decode GMS object-source record fields and identify the four bootstrap handles external to empty local images.
 3. Determine the `RMC`/`RMI` runtime distinction and bind materialized objects to `PRM`, then bind decoded `TEX` pixels to renderable geometry.
 4. Record black-box boot, menu, input, timing, and first-level traces from the retail game.
 5. Define golden screenshots/state traces stored locally as hashes and numeric measurements.
