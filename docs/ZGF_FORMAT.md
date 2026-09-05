@@ -34,7 +34,7 @@ The remaining entry bytes contain one printable ASCII, NUL-terminated logical pa
 
 The 430 bundled `TTF` payloads begin with the standard TrueType sfnt signature and are fonts. The 589 `PPO` payloads are compiled script objects whose internal schema remains a separate research target.
 
-RMC/RMI geometry references are not ZGF bundle offsets. All 3,002 such references resolve within the paired decoded `GMS` image instead. See [GMS_FORMAT.md](GMS_FORMAT.md).
+RMC/RMI geometry references are not ZGF bundle offsets or raw GMS byte offsets. They identify 112-byte runtime object-pool slots populated from GMS object-source records. See [GMS_FORMAT.md](GMS_FORMAT.md).
 
 ## Validation coverage
 

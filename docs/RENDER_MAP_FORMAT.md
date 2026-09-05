@@ -63,7 +63,7 @@ For all 2,801 records in the supported installation, each minimum coordinate is 
 
 All 18 floating-point values are required to be finite. The matrix/vector names describe the strongly observed numeric shape and are sufficient for a portable spatial model; exact engine semantics, especially the auxiliary vector, remain an open research question.
 
-Executable query callbacks independently establish that offset 76 is passed to the engine's geometry-reference lookup and offset 80 selects an additional geometry for the relevant object form. Every primary reference in the supported corpus has tag bits `01`, a nonzero value, and a 16-byte-aligned 30-bit payload. Secondary references use the same representation when present; zero means absent. All 1,612 `RMC` descriptors have no secondary reference, while 201 of 1,189 `RMI` descriptors have one. Every present reference resolves within the paired decoded GMS image, including tagged references whose low 30-bit offset is zero. See [GMS_FORMAT.md](GMS_FORMAT.md).
+Executable query callbacks independently establish that offset 76 is passed to the engine's geometry-object lookup and offset 80 selects an additional object for the relevant descriptor form. Every primary reference in the supported corpus has tag bits `01` and a 112-byte-aligned 30-bit runtime-pool offset. Secondary references use the same representation when present; zero means absent. All 1,612 `RMC` descriptors have no secondary reference, while 201 of 1,189 `RMI` descriptors have one. The tagged value `0x40000000` identifies runtime slot zero and is distinct from an absent optional reference. These handles do not directly address bytes in the GMS resource. See [GMS_FORMAT.md](GMS_FORMAT.md).
 
 ## Validation coverage
 

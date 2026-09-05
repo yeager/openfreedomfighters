@@ -189,9 +189,11 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         std::size_t scene_graph_entry_payload_bytes = 0;
         std::size_t ttf_entry_count = 0;
         std::size_t ppo_entry_count = 0;
-        std::size_t resolved_gms_reference_count = 0;
+        std::size_t decoded_gms_object_handle_count = 0;
         std::size_t gms_resource_count = 0;
         std::size_t gms_payload_bytes = 0;
+        std::size_t gms_directory_entry_count = 0;
+        std::size_t gms_identifier_count = 0;
         std::size_t texture_catalog_count = 0;
         std::size_t texture_image_count = 0;
         std::size_t texture_sequence_count = 0;
@@ -259,6 +261,8 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                     } else {
                         gms_payload_bytes += resource.payload().size();
                         gms_image = GmsImage::parse(std::move(resource));
+                        gms_directory_entry_count += gms_image->directory().size();
+                        gms_identifier_count += gms_image->identifier_count();
                         ++gms_files_in_archive;
                         ++gms_resource_count;
                     }
@@ -347,8 +351,8 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                 );
             }
             for (const auto reference : scene_geometry_references) {
-                static_cast<void>(gms_image->resolve_reference(reference, 4));
-                ++resolved_gms_reference_count;
+                static_cast<void>(GmsImage::decode_object_handle(reference));
+                ++decoded_gms_object_handle_count;
             }
             ++scene_archive_count;
         }
@@ -358,9 +362,11 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             scene_graph_entry_count != 1'019 ||
             scene_graph_entry_payload_bytes != 34'161'792 ||
             ttf_entry_count != 430 || ppo_entry_count != 589 ||
-            resolved_gms_reference_count != 3'002 ||
+            decoded_gms_object_handle_count != 3'002 ||
             gms_resource_count != scene_archive_count ||
             gms_payload_bytes != 33'436'872 ||
+            gms_directory_entry_count != 179'838 ||
+            gms_identifier_count != 154'941 ||
             texture_catalog_count != scene_archive_count || texture_image_count != 23'522 ||
             texture_sequence_count != 19 || !decoded_dxt1_reference ||
             !decoded_dxt3_reference || !decoded_abgr_reference ||

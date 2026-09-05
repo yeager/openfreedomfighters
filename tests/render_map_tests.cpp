@@ -87,10 +87,10 @@ std::vector<std::byte> map_fixture() {
         set_u32(
             bytes,
             descriptor + 76,
-            0x40000100U + static_cast<std::uint32_t>(entry) * 0x100U
+            0x40000070U + static_cast<std::uint32_t>(entry) * 0x70U
         );
         if (entry == 1) {
-            set_u32(bytes, descriptor + 80, 0x40000300U);
+            set_u32(bytes, descriptor + 80, 0x40000150U);
         }
     }
     return bytes;
@@ -137,9 +137,9 @@ int main() {
     check(map.entries()[0].object.position[0] == 101.0F, "parse object position");
     check(map.entries()[0].object.extents == std::array{5.0F, 6.0F, 7.0F},
           "parse object extents");
-    check(map.entries()[0].object.primary_geometry_reference == 0x40000200U,
+    check(map.entries()[0].object.primary_geometry_reference == 0x400000e0U,
           "parse the primary geometry reference");
-    check(map.entries()[0].object.secondary_geometry_reference == 0x40000300U,
+    check(map.entries()[0].object.secondary_geometry_reference == 0x40000150U,
           "parse the optional secondary geometry reference");
     check(map.entries()[1].object.secondary_geometry_reference == 0,
           "preserve a null secondary geometry reference");
@@ -253,7 +253,7 @@ int main() {
         "reject an unsupported geometry-reference tag"
     );
     check_rejected(
-        [](auto& value) { set_u32(value, descriptor_start + 80, 0x40000304U); },
+        [](auto& value) { set_u32(value, descriptor_start + 80, 0x40000154U); },
         "reject a misaligned secondary geometry reference"
     );
 

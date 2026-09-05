@@ -29,6 +29,7 @@ constexpr std::uint16_t octant_mask = 0x0007U;
 constexpr std::uint32_t geometry_reference_flag_mask = 0xc0000000U;
 constexpr std::uint32_t geometry_reference_flag = 0x40000000U;
 constexpr std::uint32_t geometry_reference_value_mask = 0x3fffffffU;
+constexpr std::uint32_t geometry_object_slot_size = 112U;
 constexpr std::int32_t quantized_root_center = 0x8000;
 constexpr std::int32_t quantized_root_size = 0x10000;
 
@@ -71,7 +72,7 @@ void require_geometry_reference(std::uint32_t value, bool optional) {
         return;
     }
     if ((value & geometry_reference_flag_mask) != geometry_reference_flag ||
-        (value & geometry_reference_value_mask) % 16U != 0U) {
+        (value & geometry_reference_value_mask) % geometry_object_slot_size != 0U) {
         throw std::runtime_error("render-map descriptor contains an invalid geometry reference");
     }
 }

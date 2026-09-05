@@ -39,7 +39,8 @@ Gate: a new contributor can generate the same structural report from a supported
 - [x] Decode primary primitive vertices to portable attributes.
 - [x] Decode and corpus-validate the packed ZGF/GMS resource envelope.
 - [x] Parse ZGF embedded-resource directories and identify bundled font/script families.
-- [x] Resolve every RMC/RMI geometry reference into the paired decoded GMS image.
+- [x] Parse GMS object-source and identifier directories.
+- [x] Decode every RMC/RMI geometry reference as a runtime object-pool handle.
 - [x] Parse and corpus-validate RMC/RMI spatial indexes and object descriptors.
 - [x] Decode and fully traverse RMC/RMI packed octrees.
 - [x] Implement bounds-checked world-space queries over RMC/RMI octrees.
