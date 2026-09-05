@@ -1,4 +1,5 @@
 #include "off/graphics/render_preview.hpp"
+#include "off/graphics/scene_render.hpp"
 
 #include <array>
 #include <cstddef>
@@ -106,6 +107,85 @@ int main() {
             resolutions[1].source_directory_index == 0 &&
             resolutions[1].requested_handle_slot_index == 1,
         "resolve primary and additional secondary handles in stable order");
+
+  auto line_primitive = primitive;
+  line_primitive.packed_index = 44;
+  line_primitive.primitive_kind = 3;
+  line_primitive.texture_id.reset();
+  line_primitive.vertices.resize(2);
+  line_primitive.batches = {{{0, 1}}};
+  off::data::GmsDirectoryEntry line_source = object_source;
+  line_source.local_slot_index = 2;
+  line_source.primitive_reference = 44;
+  line_source.position = {70.0F, 80.0F, 90.0F};
+  auto line_map_entry = map_entry;
+  line_map_entry.descriptor_offset = 228;
+  line_map_entry.object.primary_geometry_reference = 0x400000e0U;
+  line_map_entry.object.secondary_geometry_reference = 0;
+  line_map_entry.object.position = {400.0F, 500.0F, 600.0F};
+  const std::array scene_primitives{primitive, line_primitive};
+  const std::array scene_sources{earlier_source, object_source, line_source};
+  const std::array line_map_entries{line_map_entry};
+  const std::array scene_maps{
+      off::graphics::SceneRenderMapView{
+          .kind = off::graphics::SceneRenderMapKind::rmc,
+          .entries = map_entries,
+      },
+      off::graphics::SceneRenderMapView{
+          .kind = off::graphics::SceneRenderMapKind::rmi,
+          .entries = line_map_entries,
+      },
+  };
+  const auto scene_asset = off::graphics::build_scene_render_asset(
+      scene_primitives, textures, scene_sources, scene_maps);
+  check(
+      scene_asset.resolutions.size() == 3 &&
+          scene_asset.instances.size() == 3 && scene_asset.meshes.size() == 2 &&
+          scene_asset.textures.size() == 1,
+      "build an owning scene asset and deduplicate mesh and texture resources");
+  check(scene_asset.instances[0].mesh_index ==
+                scene_asset.instances[1].mesh_index &&
+            scene_asset.instances[0].map_kind ==
+                off::graphics::SceneRenderMapKind::rmc &&
+            scene_asset.instances[1].role ==
+                off::graphics::SceneGeometryRole::secondary &&
+            scene_asset.instances[2].map_kind ==
+                off::graphics::SceneRenderMapKind::rmi &&
+            scene_asset.instances[2].source_position == line_source.position &&
+            scene_asset.instances[2].map_position ==
+                line_map_entry.object.position,
+        "preserve ordered RMC/RMI instance identity without composing "
+        "transforms");
+  check(scene_asset.meshes[1].primitive_packed_index == 44 &&
+            scene_asset.meshes[1].topology ==
+                off::graphics::PrimitiveTopology::line_list &&
+            !scene_asset.meshes[1].texture_index.has_value() &&
+            scene_asset.meshes[1].indices == std::vector<std::uint16_t>{0, 1},
+        "retain untextured line-list geometry outside preview filtering");
+  auto invalid_scene_primitives = scene_primitives;
+  invalid_scene_primitives[1].batches[0].indices[1] = 2;
+  bool invalid_scene_index_rejected = false;
+  try {
+    static_cast<void>(off::graphics::build_scene_render_asset(
+        invalid_scene_primitives, textures, scene_sources, scene_maps));
+  } catch (const std::runtime_error &) {
+    invalid_scene_index_rejected = true;
+  }
+  check(invalid_scene_index_rejected,
+        "reject an out-of-range scene mesh index before upload");
+
+  invalid_scene_primitives = scene_primitives;
+  invalid_scene_primitives[1].vertices[0].position[0] =
+      std::numeric_limits<float>::quiet_NaN();
+  bool non_finite_scene_vertex_rejected = false;
+  try {
+    static_cast<void>(off::graphics::build_scene_render_asset(
+        invalid_scene_primitives, textures, scene_sources, scene_maps));
+  } catch (const std::runtime_error &) {
+    non_finite_scene_vertex_rejected = true;
+  }
+  check(non_finite_scene_vertex_rejected,
+        "reject a non-finite scene vertex before upload");
   const auto instanced =
       off::graphics::build_first_primary_scene_render_preview(
           primitives, textures, object_sources, map_entries);

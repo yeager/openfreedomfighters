@@ -37,7 +37,10 @@ clean-room storage. The native C++ bootstrap now:
   images and classifies 46,140 opaque, 12,751 variable-alpha, and 2,533 fully
   transparent ordinary primitives; and
 - produces renderer-facing index buffers and draw ranges for 57,284 triangle-strip
-  and 4,140 line-list primitives while preserving every source batch.
+  and 4,140 line-list primitives while preserving every source batch; and
+- builds an owning multi-map scene asset that preserves every resolution outcome
+  and instance identity while deduplicating directly resolved PRM meshes and TEX
+  images.
 
 Texture, primary-vertex, topology, spatial, and supported audio data decode into
 portable representations. The executable now opens a resizable high-DPI native
@@ -45,8 +48,10 @@ window, loads a validated textured triangle-strip preview from `FF-StartUp.ZIP`,
 uploads its retail vertices, indexes, and decoded RGBA texture, and issues indexed
 draws through SDL GPU's Vulkan, Metal, or D3D12 backend path. Local runtime
 validation currently covers Vulkan; CI compiles and tests Windows and macOS without
-retail data or GPU hardware. A new scene binder follows RMC handles to exact GMS
-sources and PRM records while preserving both transform records. The startup RMC
+retail data or GPU hardware. A new scene asset builder follows ordered RMC/RMI
+handles to exact GMS sources and PRM records, preserves both transform records,
+retains unresolved outcomes, and includes line-list, untextured, and transparent
+geometry. The startup RMC
 source is not itself a primitive, so the visible preview still uses the documented
 GMS diagnostic fallback. Primary and secondary scene handles now receive explicit
 stable manifest outcomes instead of silently disappearing. The projection is not
@@ -126,6 +131,7 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [ZGF resource-bundle format](docs/ZGF_FORMAT.md)
 - [GMS object-source image and runtime handles](docs/GMS_FORMAT.md)
 - [RMC/RMI spatial-map format](docs/RENDER_MAP_FORMAT.md)
+- [Owning scene render asset](docs/SCENE_RENDER_ASSET.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Modern graphics specification](docs/MODERN_GRAPHICS.md)
 - [DLSS 4.5 integration plan](docs/DLSS.md)

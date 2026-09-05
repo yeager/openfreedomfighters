@@ -70,6 +70,13 @@ projection plane with the greatest indexed surface area and uses a neutral white
 texture tint until the startup material's zero-coded vertex-color semantics are
 confirmed.
 
+The next renderer boundary is the owning `SceneRenderAsset`. It consumes ordered
+RMC/RMI views and materializes every directly resolved local ordinary PRM while
+retaining all other resolution outcomes for diagnostics. Meshes are deduplicated
+by PRM catalog entry, decoded mip-zero textures by TEX catalog entry, and instances
+remain distinct. Source and map transforms remain separate until their composition
+is evidenced. See [SCENE_RENDER_ASSET.md](SCENE_RENDER_ASSET.md).
+
 ## Compatibility profiles
 
 **Original:** fixed simulation timing; original camera/FOV option; original material and lighting equations within measurable tolerance; aspect-correct UI; optional integer-like presentation constraints; bug-compatibility flags where required for saves or missions.

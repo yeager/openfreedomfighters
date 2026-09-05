@@ -60,6 +60,7 @@ add_library(off_core
     src/graphics/texture_decode.cpp
     src/graphics/render_assets.cpp
     src/graphics/render_preview.cpp
+    src/graphics/scene_render.cpp
 )
 target_include_directories(off_core PUBLIC include)
 target_compile_features(off_core PUBLIC cxx_std_23)

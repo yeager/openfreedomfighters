@@ -83,6 +83,12 @@ scenes. The supported corpus contains 3,002 results: 2,801 primary and 201
 secondary; 220 resolve to direct local primitives, four have no matching local
 source, and 2,778 resolve to local sources without direct primitives. No result
 references a missing PRM record or an unresolved flagged PRM alias.
+`SceneRenderAsset` then converts every direct local primitive result across an
+ordered set of RMC/RMI layers into owned renderer resources. It deduplicates PRM
+meshes and TEX images, never deduplicates instances, retains all resolution
+outcomes, and keeps GMS and map transforms separate. The corpus-derived capacity
+observations, defensive limits, and current rendering boundary are documented in
+[SCENE_RENDER_ASSET.md](SCENE_RENDER_ASSET.md).
 The platform layer applies `world = basis * local + position`, converts that owned
 asset to a bounds-normalized diagnostic projection, uploads vertex and 16-bit index
 buffers plus the RGBA8 texture, and submits every preserved range as an indexed
