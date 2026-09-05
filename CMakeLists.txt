@@ -63,6 +63,8 @@ add_library(off_core
     src/graphics/scene_render.cpp
     src/graphics/scene_gpu_plan.cpp
     src/settings/graphics_settings.cpp
+    src/simulation/fixed_step.cpp
+    src/simulation/input.cpp
     src/ui/graphics_menu.cpp
     src/ui/graphics_menu_draw.cpp
 )
@@ -169,4 +171,8 @@ if(BUILD_TESTING)
     add_executable(off_graphics_menu_draw_tests tests/graphics_menu_draw_tests.cpp)
     target_link_libraries(off_graphics_menu_draw_tests PRIVATE off_core)
     add_test(NAME off_graphics_menu_draw_tests COMMAND off_graphics_menu_draw_tests)
+
+    add_executable(off_simulation_runtime_tests tests/simulation_runtime_tests.cpp)
+    target_link_libraries(off_simulation_runtime_tests PRIVATE off_core)
+    add_test(NAME off_simulation_runtime_tests COMMAND off_simulation_runtime_tests)
 endif()

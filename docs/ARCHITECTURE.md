@@ -38,6 +38,15 @@ input -> deterministic simulation <-> script/mission runtime
 
 The deterministic simulation is shared by both modes. Presentation is downstream of immutable render snapshots so Modern mode cannot silently change gameplay.
 
+The portable runtime core now provides an integer-phase fixed-step scheduler and
+tick-addressed input snapshots. Platform code accumulates state changes between
+simulation ticks; held actions and quantized axes persist, while press and
+release edges are consumed exactly once. The scheduler represents a rational
+tick rate without rounding its period to nanoseconds, bounds long frame stalls,
+and exposes interpolation only to presentation. Original and Modern must feed
+the same snapshots into the same fixed-step simulation; display refresh,
+rendering mode, menus, and frame limits must not redefine simulation time.
+
 The F10 graphics-settings overlay is downstream of the same presentation boundary.
 Its platform-neutral session separates confirmed requested values, editable draft
 values, capability-resolved effective values, and the last-known-good rollback

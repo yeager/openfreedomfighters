@@ -20,6 +20,7 @@ This is a multi-year reverse-engineering effort. Dates are deliberately omitted 
 - [x] Produce aggregate archive/resource magic and size census.
 - [x] Complete the first three-scene field-level consistency report.
 - [x] Promote initial field hypotheses to corpus-wide validators.
+- [x] Document recovered variable-delta and frame-pacing evidence boundaries.
 - [ ] Infer and validate resource section schemas.
 - [ ] Capture black-box boot/menu/first-level behavior specifications.
 
@@ -83,7 +84,8 @@ Gate: deterministic camera fly-through matches structural and image-difference t
 
 ## Phase 3 - Simulation vertical slice
 
-- [ ] Fixed-step clock, entity/component lifetime, events, and serialization.
+- [x] Portable rational fixed-step scheduler and tick-addressed input snapshots.
+- [ ] Entity/component lifetime, simulation events, and serialization.
 - [ ] Script/mission runtime.
 - [ ] Character locomotion, camera, weapons, damage, interaction.
 - [ ] Navigation, AI, squad recruitment, orders, and morale/charisma mechanics.
