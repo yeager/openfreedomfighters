@@ -103,6 +103,10 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   convention before replacing the diagnostic projection with Original camera
   behavior.
 - [ ] Original-mode material/lighting reference path.
+- [x] Implement the recovered descriptor-emitter CPU geometry boundary with
+  exact corner/UV pairing, authored center/span inputs, bounded indexed batches
+  and packed-channel reduction. Final frame selection, projection and
+  compositing remain separate gates; this does not enable startup drawing.
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
 - [ ] Audio mixing, device output, streaming voices, and positional sound as
   specified by the [audio runtime contract](AUDIO_RUNTIME.md). Audio-bank

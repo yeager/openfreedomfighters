@@ -149,8 +149,8 @@ destruction.
 
 ## Pre-raster startup plan
 
-`StartupGraphicsPreparedPlan` is the maximum renderer-neutral plan constructible
-from current public evidence. It consumes the recovered visibility and live
+`StartupGraphicsPreparedPlan` is the owning pre-raster boundary. It consumes
+the recovered visibility and live
 traversal plan and preserves requested/effective state, picture identities,
 contiguous submission spans, ascending per-picture group emissions, and raw
 descriptor-backed quads. Every emission resolves by both catalog-local image
@@ -179,6 +179,11 @@ contains no generated transform, vertex order, indexes, topology, UV-to-corner
 pairing, winding, blend state, material scheduling, or physical-output mapping.
 Unavailable values are omitted rather than filled with zeroes or synthetic
 defaults.
+
+A separate [descriptor expansion contract](PICTURE_EXPANSION.md) now establishes
+CPU corner/UV pairing and vertex-color reduction when a justified transform is
+supplied. It does not supply missing startup transforms or final raster state,
+and does not change this prepared plan into a GPU plan.
 
 The recovered constructor's two `1.0` picture-extent scale defaults remain
 documented transform evidence, but are not fields in the composition model and

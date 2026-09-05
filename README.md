@@ -144,6 +144,11 @@ alongside derived bounds, avoiding lossy reconstruction. It preserves authored
 alpha, alignment enum, and optional extension control
 without generating transforms, vertices,
 indexes, topology, UV corner pairing, blending, or material state.
+A separate CPU-only descriptor expansion now implements recovered corner/UV
+pairing, indexed quads and per-channel color reduction for an explicitly
+supplied transform. It is not wired into the GPU runtime; final startup
+projection and compositing remain unresolved. See
+[Descriptor picture expansion](docs/PICTURE_EXPANSION.md).
 Recovered picture constructors default both extent scales to `1.0`; descriptor
 bounds are not substituted for the still-explicit runtime extent, matrix,
 visitor, or projection inputs.

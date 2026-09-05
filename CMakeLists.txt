@@ -79,6 +79,7 @@ add_library(off_core
     src/graphics/startup_graphics_asset.cpp
     src/graphics/startup_graphics_prepared_plan.cpp
     src/graphics/picture_transform.cpp
+    src/graphics/picture_expansion.cpp
     src/platform/startup_lifecycle.cpp
     src/settings/graphics_settings.cpp
     src/simulation/fixed_step.cpp
@@ -235,6 +236,10 @@ if(BUILD_TESTING)
     add_executable(off_picture_transform_tests tests/picture_transform_tests.cpp)
     target_link_libraries(off_picture_transform_tests PRIVATE off_core)
     add_test(NAME off_picture_transform_tests COMMAND off_picture_transform_tests)
+
+    add_executable(off_picture_expansion_tests tests/picture_expansion_tests.cpp)
+    target_link_libraries(off_picture_expansion_tests PRIVATE off_core)
+    add_test(NAME off_picture_expansion_tests COMMAND off_picture_expansion_tests)
 
     add_executable(off_startup_lifecycle_tests tests/startup_lifecycle_tests.cpp)
     target_link_libraries(off_startup_lifecycle_tests PRIVATE off_core)

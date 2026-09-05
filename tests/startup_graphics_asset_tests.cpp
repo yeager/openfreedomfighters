@@ -1,5 +1,6 @@
 #include "off/graphics/startup_graphics_asset.hpp"
 #include "off/graphics/startup_graphics_prepared_plan.hpp"
+#include "off/graphics/picture_expansion.hpp"
 
 #include <bit>
 #include <cstddef>
@@ -403,6 +404,17 @@ int main(int argc, char **argv) {
     check(retail_prepared.pictures().size() == 21 &&
               retail_prepared.submissions().size() == 77,
           "prepare the canonical retail startup pre-raster plan");
+    // Explicit test-only transform: validates descriptor compatibility, not
+    // recovered startup placement or final on-screen appearance.
+    const off::graphics::PictureCacheTransform compatibility_transform{
+        .basis = {0, 0, 1, 0, 1, 0, 1, 0, 0}, .translation = {0, 0, 0}};
+    for (const auto &quad : retail_prepared.quads()) {
+      const auto expanded = off::graphics::expand_picture_descriptors(
+          std::span{&quad.source, 1}, compatibility_transform);
+      check(expanded.size() == 1 && expanded[0].vertices.size() == 4 &&
+                expanded[0].indices.size() == 6,
+            "expand real startup descriptors with an explicit test transform");
+    }
     for (unsigned state = 0; state < 256; ++state) {
       const auto requested = static_cast<std::uint8_t>(state);
       const auto prepared_state =
