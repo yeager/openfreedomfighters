@@ -42,6 +42,30 @@ unique_member_with_extension(const data::ZipArchive &archive,
   return *match;
 }
 
+[[nodiscard]] bool
+has_nondegenerate_triangle(std::span<const data::PrimitiveVertex> vertices,
+                           std::span<const std::uint16_t> indices,
+                           std::span<const PrimitiveDrawRange> draws) {
+  for (const auto &draw : draws) {
+    for (std::size_t offset = 2; offset < draw.index_count; ++offset) {
+      const auto &a = vertices[indices[draw.first_index + offset - 2]].position;
+      const auto &b = vertices[indices[draw.first_index + offset - 1]].position;
+      const auto &c = vertices[indices[draw.first_index + offset]].position;
+      const std::array ab{b[0] - a[0], b[1] - a[1], b[2] - a[2]};
+      const std::array ac{c[0] - a[0], c[1] - a[1], c[2] - a[2]};
+      const std::array cross{ab[1] * ac[2] - ab[2] * ac[1],
+                             ab[2] * ac[0] - ab[0] * ac[2],
+                             ab[0] * ac[1] - ab[1] * ac[0]};
+      const auto area_squared =
+          cross[0] * cross[0] + cross[1] * cross[1] + cross[2] * cross[2];
+      if (area_squared > 1.0e-10F) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 } // namespace
 
 RenderPreviewAsset
@@ -55,7 +79,9 @@ build_render_preview(std::span<const data::PrimitiveEntry> primitives,
     }
     const auto &primitive = primitives[binding.primitive_entry_index];
     const auto &texture = textures[*binding.texture_image_index];
-    if (texture.mips.empty()) {
+    if (texture.mips.empty() ||
+        !has_nondegenerate_triangle(primitive.vertices, binding.indices,
+                                    binding.draws)) {
       continue;
     }
 
@@ -77,7 +103,8 @@ build_render_preview(std::span<const data::PrimitiveEntry> primitives,
                 std::numeric_limits<float>::lowest(),
             },
     };
-    for (const auto &vertex : result.vertices) {
+    for (const auto index : result.indices) {
+      const auto &vertex = result.vertices[index];
       for (std::size_t axis = 0; axis < 3; ++axis) {
         result.minimum_position[axis] =
             std::min(result.minimum_position[axis], vertex.position[axis]);

@@ -53,7 +53,10 @@ to RGBA8, and computes finite model bounds. It then creates the native shader
 pipeline, uploads vertex/index/texture resources through an SDL GPU copy pass,
 and submits each preserved range as an indexed triangle-strip draw. The current
 bounds-normalized projection is diagnostic; scene transforms, camera matrices,
-depth, and reconstructed materials remain separate milestones.
+depth, and reconstructed materials remain separate milestones. It selects the
+projection plane with the greatest indexed surface area and uses a neutral white
+texture tint until the startup material's zero-coded vertex-color semantics are
+confirmed.
 
 ## Compatibility profiles
 

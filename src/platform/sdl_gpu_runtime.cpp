@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -115,15 +116,36 @@ create_shader(SDL_GPUDevice *device, const unsigned char *bytes,
 
 [[nodiscard]] std::vector<PreviewVertex>
 make_preview_vertices(const graphics::RenderPreviewAsset &preview) {
-  std::array<std::pair<float, std::size_t>, 3> extents{};
-  for (std::size_t axis = 0; axis < extents.size(); ++axis) {
-    extents[axis] = {
-        preview.maximum_position[axis] - preview.minimum_position[axis], axis};
+  std::array<float, 3> projected_areas{};
+  for (const auto &draw : preview.draws) {
+    for (std::size_t offset = 2; offset < draw.index_count; ++offset) {
+      const auto &a =
+          preview.vertices[preview.indices[draw.first_index + offset - 2]]
+              .position;
+      const auto &b =
+          preview.vertices[preview.indices[draw.first_index + offset - 1]]
+              .position;
+      const auto &c =
+          preview.vertices[preview.indices[draw.first_index + offset]].position;
+      const std::array ab{b[0] - a[0], b[1] - a[1], b[2] - a[2]};
+      const std::array ac{c[0] - a[0], c[1] - a[1], c[2] - a[2]};
+      projected_areas[0] += std::abs(ab[1] * ac[2] - ab[2] * ac[1]);
+      projected_areas[1] += std::abs(ab[2] * ac[0] - ab[0] * ac[2]);
+      projected_areas[2] += std::abs(ab[0] * ac[1] - ab[1] * ac[0]);
+    }
   }
-  std::sort(extents.begin(), extents.end(), std::greater<>{});
-  const auto horizontal = extents[0].second;
-  const auto vertical = extents[1].second;
-  const auto scale = 1.6F / std::max(extents[0].first, extents[1].first);
+  const auto dropped_axis = static_cast<std::size_t>(std::distance(
+      projected_areas.begin(),
+      std::max_element(projected_areas.begin(), projected_areas.end())));
+  const std::array<std::array<std::size_t, 2>, 3> projection_axes{
+      std::array<std::size_t, 2>{1, 2}, {0, 2}, {0, 1}};
+  const auto horizontal = projection_axes[dropped_axis][0];
+  const auto vertical = projection_axes[dropped_axis][1];
+  const auto horizontal_extent = preview.maximum_position[horizontal] -
+                                 preview.minimum_position[horizontal];
+  const auto vertical_extent =
+      preview.maximum_position[vertical] - preview.minimum_position[vertical];
+  const auto scale = 1.6F / std::max(horizontal_extent, vertical_extent);
   const auto center_x = (preview.minimum_position[horizontal] +
                          preview.maximum_position[horizontal]) *
                         0.5F;
@@ -137,9 +159,7 @@ make_preview_vertices(const graphics::RenderPreviewAsset &preview) {
     result.push_back(
         {.position = {(source.position[horizontal] - center_x) * scale,
                       -(source.position[vertical] - center_y) * scale, 0.5F},
-         .color = {static_cast<float>(source.color_rgba[0]) / 255.0F,
-                   static_cast<float>(source.color_rgba[1]) / 255.0F,
-                   static_cast<float>(source.color_rgba[2]) / 255.0F, 1.0F},
+         .color = {1.0F, 1.0F, 1.0F, 1.0F},
          .uv = source.texture_coordinates});
   }
   return result;

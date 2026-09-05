@@ -65,7 +65,9 @@ The runtime preview loader applies that contract to `FF-StartUp.ZIP`. It chooses
 the first supported textured triangle strip, copies its vertices, flattened index
 buffer, and draw ranges into an owned render asset, decodes mip zero to RGBA8, and
 computes its model-space bounds. It rejects missing resources, missing texture
-bindings, empty mip chains, and degenerate geometry before SDL GPU is initialized.
+bindings, empty mip chains, and indexed meshes without a nondegenerate triangle
+before SDL GPU is initialized. Bounds include only referenced vertices so unused
+storage cannot distort the diagnostic projection.
 The platform layer converts that owned asset to a bounds-normalized diagnostic
 projection, uploads vertex and 16-bit index buffers plus the RGBA8 texture, and
 submits every preserved range as an indexed triangle-strip draw. Synthetic tests
