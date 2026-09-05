@@ -13,6 +13,7 @@
 #include "off/data/zgf_bundle.hpp"
 #include "off/data/zip_archive.hpp"
 #include "off/graphics/render_assets.hpp"
+#include "off/graphics/render_preview.hpp"
 #include "off/graphics/texture_decode.hpp"
 
 #include <algorithm>
@@ -221,6 +222,14 @@ InstallVerification verify_install(const std::filesystem::path &root) {
     std::size_t render_instance_map_count = 0;
     std::size_t render_instance_entry_count = 0;
     std::size_t render_instance_node_count = 0;
+    std::size_t scene_resolution_count = 0;
+    std::size_t primary_scene_resolution_count = 0;
+    std::size_t secondary_scene_resolution_count = 0;
+    std::size_t local_primitive_resolution_count = 0;
+    std::size_t no_local_source_resolution_count = 0;
+    std::size_t source_without_primitive_resolution_count = 0;
+    std::size_t missing_primitive_resolution_count = 0;
+    std::size_t unresolved_alias_resolution_count = 0;
     bool decoded_dxt1_reference = false;
     bool decoded_dxt3_reference = false;
     bool decoded_abgr_reference = false;
@@ -244,6 +253,8 @@ InstallVerification verify_install(const std::filesystem::path &root) {
       std::optional<std::vector<std::byte>> buf_resource;
       std::optional<TextureCatalog> texture_catalog;
       std::optional<PrimitiveCatalog> primitive_catalog;
+      std::optional<RenderMap> render_map;
+      std::optional<RenderMap> render_instance_map;
       std::unordered_set<std::uint32_t> primitive_indices;
       std::vector<std::uint32_t> scene_geometry_references;
       for (const auto &member : archive.entries()) {
@@ -362,7 +373,7 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           ++primitive_files_in_archive;
           ++primitive_catalog_count;
         } else if (extension == ".rmc" || extension == ".rmi") {
-          const auto map = RenderMap::parse(archive.read(member));
+          auto map = RenderMap::parse(archive.read(member));
           for (const auto &map_entry : map.entries()) {
             scene_geometry_references.push_back(
                 map_entry.object.primary_geometry_reference);
@@ -376,11 +387,13 @@ InstallVerification verify_install(const std::filesystem::path &root) {
             render_map_node_count += map.nodes().size();
             ++render_map_files_in_archive;
             ++render_map_count;
+            render_map = std::move(map);
           } else {
             render_instance_entry_count += map.entries().size();
             render_instance_node_count += map.nodes().size();
             ++render_instance_files_in_archive;
             ++render_instance_map_count;
+            render_instance_map = std::move(map);
           }
         }
       }
@@ -388,7 +401,8 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           gms_files_in_archive != 1 || texture_files_in_archive != 1 ||
           primitive_files_in_archive != 1 || render_map_files_in_archive != 1 ||
           render_instance_files_in_archive != 1 || !gms_image.has_value() ||
-          !texture_catalog.has_value() || !primitive_catalog.has_value()) {
+          !texture_catalog.has_value() || !primitive_catalog.has_value() ||
+          !render_map.has_value() || !render_instance_map.has_value()) {
         throw std::runtime_error("scene archive does not contain every "
                                  "required resource exactly once");
       }
@@ -416,6 +430,38 @@ InstallVerification verify_install(const std::filesystem::path &root) {
       }
       const auto render_assets = graphics::RenderAssetBindings::build(
           primitive_catalog->entries(), texture_catalog->images());
+      const auto count_scene_resolutions = [&](const RenderMap &map) {
+        const auto resolutions = graphics::resolve_scene_geometry_references(
+            primitive_catalog->entries(), gms_image->directory(),
+            map.entries());
+        scene_resolution_count += resolutions.size();
+        for (const auto &resolution : resolutions) {
+          if (resolution.role == graphics::SceneGeometryRole::primary) {
+            ++primary_scene_resolution_count;
+          } else {
+            ++secondary_scene_resolution_count;
+          }
+          switch (resolution.status) {
+          case graphics::SceneGeometryStatus::local_primitive:
+            ++local_primitive_resolution_count;
+            break;
+          case graphics::SceneGeometryStatus::no_local_source:
+            ++no_local_source_resolution_count;
+            break;
+          case graphics::SceneGeometryStatus::source_without_primitive:
+            ++source_without_primitive_resolution_count;
+            break;
+          case graphics::SceneGeometryStatus::missing_primitive:
+            ++missing_primitive_resolution_count;
+            break;
+          case graphics::SceneGeometryStatus::unresolved_primitive_alias:
+            ++unresolved_alias_resolution_count;
+            break;
+          }
+        }
+      };
+      count_scene_resolutions(*render_map);
+      count_scene_resolutions(*render_instance_map);
       for (const auto &binding : render_assets.primitives()) {
         primitive_texture_reference_count +=
             binding.texture_image_index.has_value() ? 1U : 0U;
@@ -482,8 +528,8 @@ InstallVerification verify_install(const std::filesystem::path &root) {
         fully_transparent_vertex_alpha_count != 2'533 ||
         unflagged_variable_vertex_alpha_count != 0 ||
         triangle_strip_primitive_count != 57'284 ||
-        line_list_primitive_count != 4'140 ||
-        render_draw_count != 461'344 || render_index_count != 4'412'738 ||
+        line_list_primitive_count != 4'140 || render_draw_count != 461'344 ||
+        render_index_count != 4'412'738 ||
         gms_primitive_reference_count != 115'977 ||
         primitive_vertex_count != 2'820'961 ||
         primitive_batch_count != 461'344 ||
@@ -492,7 +538,15 @@ InstallVerification verify_install(const std::filesystem::path &root) {
         render_map_entry_count != 1'612 || render_map_node_count != 2'587 ||
         render_instance_map_count != scene_archive_count ||
         render_instance_entry_count != 1'189 ||
-        render_instance_node_count != 1'359) {
+        render_instance_node_count != 1'359 ||
+        scene_resolution_count != 3'002 ||
+        primary_scene_resolution_count != 2'801 ||
+        secondary_scene_resolution_count != 201 ||
+        local_primitive_resolution_count != 220 ||
+        no_local_source_resolution_count != 4 ||
+        source_without_primitive_resolution_count != 2'778 ||
+        missing_primitive_resolution_count != 0 ||
+        unresolved_alias_resolution_count != 0) {
       return failure(
           InstallError::incomplete_game_data, root,
           "scene resource corpus does not match the supported build");

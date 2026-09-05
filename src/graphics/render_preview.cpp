@@ -8,6 +8,7 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 namespace off::graphics {
@@ -150,11 +151,7 @@ try_build_render_preview(std::span<const data::PrimitiveEntry> primitives,
         .source_type = source.source_type,
         .directory_index = index,
         .local_slot_index = source.local_slot_index,
-        .map_entry_index = 0,
-        .map_descriptor_offset = 0,
-        .geometry_reference = 0,
-        .map_orientation = {},
-        .map_position = {},
+        .map_instance = std::nullopt,
     };
     return preview;
   }
@@ -188,67 +185,126 @@ build_render_preview(std::span<const data::PrimitiveEntry> primitives,
       "startup resources contain no supported render-preview primitive");
 }
 
-RenderPreviewAsset build_first_scene_render_preview(
+std::vector<SceneGeometryResolution> resolve_scene_geometry_references(
+    std::span<const data::PrimitiveEntry> primitives,
+    std::span<const data::GmsDirectoryEntry> object_sources,
+    std::span<const data::RenderMapEntry> map_entries) {
+  std::unordered_map<std::uint32_t, std::size_t> source_by_slot;
+  source_by_slot.reserve(object_sources.size());
+  for (std::size_t index = 0; index < object_sources.size(); ++index) {
+    if (!source_by_slot.emplace(object_sources[index].local_slot_index, index)
+             .second) {
+      throw std::runtime_error(
+          "scene geometry handle resolves to duplicate GMS local slots");
+    }
+  }
+  std::unordered_map<std::uint32_t, std::size_t> primitive_by_reference;
+  primitive_by_reference.reserve(primitives.size());
+  for (std::size_t index = 0; index < primitives.size(); ++index) {
+    if (!primitive_by_reference.emplace(primitives[index].packed_index, index)
+             .second) {
+      throw std::runtime_error(
+          "scene geometry reference resolves to duplicate PRM indexes");
+    }
+  }
+  std::vector<SceneGeometryResolution> result;
+  result.reserve(map_entries.size() * 2U);
+  for (std::size_t entry_index = 0; entry_index < map_entries.size();
+       ++entry_index) {
+    const auto &entry = map_entries[entry_index];
+    const std::array references{
+        std::pair{SceneGeometryRole::primary,
+                  entry.object.primary_geometry_reference},
+        std::pair{SceneGeometryRole::secondary,
+                  entry.object.secondary_geometry_reference},
+    };
+    for (const auto &[role, reference] : references) {
+      if (role == SceneGeometryRole::secondary && reference == 0) {
+        continue;
+      }
+      SceneGeometryResolution resolution{
+          .map_entry_index = entry_index,
+          .map_descriptor_offset = entry.descriptor_offset,
+          .role = role,
+          .geometry_reference = reference,
+          .requested_handle_slot_index = 0,
+          .status = SceneGeometryStatus::no_local_source,
+          .source_directory_index = std::nullopt,
+          .source_local_slot_index = std::nullopt,
+          .primitive_reference = std::nullopt,
+          .primitive_entry_index = std::nullopt,
+      };
+      const auto handle = data::GmsImage::decode_object_handle(reference);
+      resolution.requested_handle_slot_index = handle.slot_index;
+      const auto source_lookup = source_by_slot.find(handle.slot_index);
+      if (source_lookup == source_by_slot.end()) {
+        result.push_back(std::move(resolution));
+        continue;
+      }
+      const auto source_index = source_lookup->second;
+      const auto &source = object_sources[source_index];
+      resolution.source_directory_index = source_index;
+      resolution.source_local_slot_index = source.local_slot_index;
+      if (!source.primitive_reference.has_value()) {
+        resolution.status = SceneGeometryStatus::source_without_primitive;
+        result.push_back(std::move(resolution));
+        continue;
+      }
+      const auto primitive_reference = *source.primitive_reference;
+      resolution.primitive_reference = primitive_reference;
+      const auto primitive_lookup =
+          primitive_by_reference.find(primitive_reference);
+      if (primitive_lookup == primitive_by_reference.end()) {
+        resolution.status = SceneGeometryStatus::missing_primitive;
+        result.push_back(std::move(resolution));
+        continue;
+      }
+      const auto primitive_index = primitive_lookup->second;
+      resolution.primitive_entry_index = primitive_index;
+      resolution.status = primitives[primitive_index].flagged_reference
+                              ? SceneGeometryStatus::unresolved_primitive_alias
+                              : SceneGeometryStatus::local_primitive;
+      result.push_back(std::move(resolution));
+    }
+  }
+  return result;
+}
+
+RenderPreviewAsset build_first_primary_scene_render_preview(
     std::span<const data::PrimitiveEntry> primitives,
     std::span<const data::TextureImage> textures,
     std::span<const data::GmsDirectoryEntry> object_sources,
     std::span<const data::RenderMapEntry> map_entries) {
-  for (std::size_t entry_index = 0; entry_index < map_entries.size();
-       ++entry_index) {
-    const auto &entry = map_entries[entry_index];
-    const auto handle = data::GmsImage::decode_object_handle(
-        entry.object.primary_geometry_reference);
-    const auto source_match =
-        std::ranges::find_if(object_sources, [&](const auto &source) {
-          return source.local_slot_index == handle.slot_index;
-        });
-    if (source_match != object_sources.end() &&
-        std::ranges::find_if(std::next(source_match), object_sources.end(),
-                             [&](const auto &source) {
-                               return source.local_slot_index ==
-                                      handle.slot_index;
-                             }) != object_sources.end()) {
-      throw std::runtime_error(
-          "scene geometry handle resolves to duplicate GMS local slots");
-    }
-    if (source_match == object_sources.end() ||
-        !source_match->primitive_reference.has_value()) {
+  const auto resolutions = resolve_scene_geometry_references(
+      primitives, object_sources, map_entries);
+  for (const auto &resolution : resolutions) {
+    if (resolution.role != SceneGeometryRole::primary ||
+        resolution.status != SceneGeometryStatus::local_primitive) {
       continue;
     }
-    const auto primitive_reference = *source_match->primitive_reference;
-    const auto first_primitive =
-        std::ranges::find_if(primitives, [&](const auto &primitive) {
-          return primitive.packed_index == primitive_reference;
-        });
-    if (first_primitive == primitives.end()) {
-      continue;
-    }
-    if (std::ranges::find_if(std::next(first_primitive), primitives.end(),
-                             [&](const auto &primitive) {
-                               return primitive.packed_index ==
-                                      primitive_reference;
-                             }) != primitives.end()) {
-      throw std::runtime_error(
-          "scene geometry reference resolves to duplicate PRM indexes");
-    }
+    const auto &entry = map_entries[resolution.map_entry_index];
+    const auto &source = object_sources[*resolution.source_directory_index];
+    const auto &primitive = primitives[*resolution.primitive_entry_index];
     auto candidate =
-        try_build_render_preview(std::span{&*first_primitive, 1}, textures);
+        try_build_render_preview(std::span{&primitive, 1}, textures);
     if (!candidate.has_value()) {
       continue;
     }
     auto preview = std::move(*candidate);
     preview.object_instance = RenderObjectInstance{
-        .basis = source_match->basis,
-        .position = source_match->position,
-        .source_type = source_match->source_type,
-        .directory_index = static_cast<std::size_t>(
-            std::distance(object_sources.begin(), source_match)),
-        .local_slot_index = source_match->local_slot_index,
-        .map_entry_index = entry_index,
-        .map_descriptor_offset = entry.descriptor_offset,
-        .geometry_reference = entry.object.primary_geometry_reference,
-        .map_orientation = entry.object.orientation,
-        .map_position = entry.object.position,
+        .basis = source.basis,
+        .position = source.position,
+        .source_type = source.source_type,
+        .directory_index = *resolution.source_directory_index,
+        .local_slot_index = *resolution.source_local_slot_index,
+        .map_instance =
+            RenderMapInstance{
+                .map_entry_index = resolution.map_entry_index,
+                .map_descriptor_offset = resolution.map_descriptor_offset,
+                .geometry_reference = resolution.geometry_reference,
+                .orientation = entry.object.orientation,
+                .position = entry.object.position,
+            },
     };
     return preview;
   }
@@ -273,9 +329,9 @@ load_startup_render_preview(const std::filesystem::path &install_root) {
       data::GmsImage::parse(data::PackedResource::parse(object_bytes));
   const auto map = data::RenderMap::parse(map_bytes);
   try {
-    return build_first_scene_render_preview(primitives.entries(),
-                                            textures.images(),
-                                            objects.directory(), map.entries());
+    return build_first_primary_scene_render_preview(
+        primitives.entries(), textures.images(), objects.directory(),
+        map.entries());
   } catch (const NoScenePreviewError &) {
   }
   return bind_diagnostic_source_instance(

@@ -28,6 +28,9 @@ clean-room storage. The native C++ bootstrap now:
 - decompresses all 180 ZGF/GMS resources and parses 1,019 embedded ZGF resources;
 - validates 179,838 GMS object sources, 115,977 PRM links, 154,941 identifiers,
   29,450 pool groups, and 2,998 locally resolved RMC/RMI runtime handles;
+- inventories all 3,002 RMC/RMI geometry uses as 2,801 primary and 201
+  secondary references, including 220 direct local primitives, four handles with
+  no local source, and 2,778 local non-primitive sources;
 - parses 23,522 texture images, 61,451 primitive records, 2,820,961 vertices,
   461,344 topology batches, and 4,412,738 range-checked indexes;
 - resolves all 40,071 nonzero primitive texture selectors into their paired TEX
@@ -45,8 +48,9 @@ validation currently covers Vulkan; CI compiles and tests Windows and macOS with
 retail data or GPU hardware. A new scene binder follows RMC handles to exact GMS
 sources and PRM records while preserving both transform records. The startup RMC
 source is not itself a primitive, so the visible preview still uses the documented
-GMS diagnostic fallback. The projection is not yet
-the scene camera or Original material model. Complete scene rendering, gameplay
+GMS diagnostic fallback. Primary and secondary scene handles now receive explicit
+stable manifest outcomes instead of silently disappearing. The projection is not
+yet the scene camera or Original material model. Complete scene rendering, gameplay
 simulation, menus, localization, and the complete native runtime remain under
 development; no playable build exists yet.
 

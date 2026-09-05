@@ -409,9 +409,12 @@ RuntimeResult run_sdl_gpu_runtime(Mode mode,
   }
 
   RuntimeResult result{.success = true,
-                       .message = std::string("Renderer: SDL GPU/") +
-                                  SDL_GetGPUDeviceDriver(device) +
-                                  " (instanced retail preview drawn)"};
+                       .message =
+                           std::string("Renderer: SDL GPU/") +
+                           SDL_GetGPUDeviceDriver(device) +
+                           (preview.object_instance->map_instance.has_value()
+                                ? " (scene-resolved retail preview drawn)"
+                                : " (diagnostic retail preview drawn)")};
   constexpr std::array<float, 32> matrices{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
                                            0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1,
                                            0, 0, 0, 0, 1, 0, 0, 0, 0, 1};

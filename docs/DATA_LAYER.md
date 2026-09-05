@@ -73,12 +73,24 @@ reference, preserving map-entry, descriptor, handle, source, and transform
 identity. Missing local sources and non-primitive sources are not guessed. Because
 the startup RMC source is not a primitive, the visible preview currently uses a
 separate deterministic first-GMS-match fallback.
+The resolver emits primary and present secondary references in stable map-entry
+order. Each result is classified as a local primitive, no matching local source,
+source without a primitive, missing PRM record, or unresolved flagged PRM alias,
+and retains the available map, GMS, and PRM indexes. Secondary references are
+additional objects and never substitute for an unresolved required primary.
+Installation verification applies this manifest to both RMC and RMI in all 90
+scenes. The supported corpus contains 3,002 results: 2,801 primary and 201
+secondary; 220 resolve to direct local primitives, four have no matching local
+source, and 2,778 resolve to local sources without direct primitives. No result
+references a missing PRM record or an unresolved flagged PRM alias.
 The platform layer applies `world = basis * local + position`, converts that owned
 asset to a bounds-normalized diagnostic projection, uploads vertex and 16-bit index
 buffers plus the RGBA8 texture, and submits every preserved range as an indexed
 triangle-strip draw. Synthetic tests
-cover exact high-bit references, duplicate first-match behavior, malformed indexes,
-construction, and failure without embedding retail content.
+cover primary and secondary ordering, tagged slot zero, absent local sources,
+non-primitive sources, missing and duplicate identities, unresolved high-bit PRM
+aliases, malformed indexes, construction, and failure without embedding retail
+content.
 
 Every `RMC` and `RMI` member is parsed as well. The supported corpus contains 2,587 nodes and 1,612 entries in `RMC`, plus 1,359 nodes and 1,189 entries in `RMI`. Every octree node is reached exactly once, every spatial element has exactly one owner, and every fixed-size descriptor reference and quantized bound is range checked. World-space bounds queries reproduce the recovered quantization, loose-cell, and half-open intersection rules. The final descriptor words are now confirmed as one required and one optional packed geometry reference rather than floating-point scale values. See [RENDER_MAP_FORMAT.md](RENDER_MAP_FORMAT.md).
 
