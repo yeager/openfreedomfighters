@@ -146,3 +146,26 @@ startup gate only; visible use remains blocked on the virtual-window transform
 producer and GPU draw integration. Partial initialization and every
 normal runtime exit release all created startup textures before device
 destruction.
+
+## Pre-raster startup plan
+
+`StartupGraphicsPreparedPlan` is the maximum renderer-neutral plan constructible
+from current public evidence. It consumes the recovered visibility and live
+traversal plan and preserves requested/effective state, picture identities,
+contiguous submission spans, ascending per-picture group emissions, and raw
+descriptor-backed quads. Every emission resolves by both catalog-local image
+index and TEX ID to one of the six owning startup resources. The plan copies
+resource metadata and raw quad values, but never image pixels.
+
+The canonical resting shape contains 21 visible picture instances and 77
+one-quad submissions. Recovered background-only states contain seven pictures
+and seven submissions. The builder rejects every other shape, duplicate
+resource or picture identity, discontinuous span, mismatched emission identity,
+missing texture identity, non-finite quad value, multi-quad group, or count over
+those bounds.
+
+This is intentionally a prepared/pre-raster plan, not a GPU or draw plan. It
+contains no generated transform, vertex order, indexes, topology, UV-to-corner
+pairing, winding, blend state, material scheduling, or physical-output mapping.
+Unavailable values are omitted rather than filled with zeroes or synthetic
+defaults.

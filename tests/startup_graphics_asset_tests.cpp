@@ -1,4 +1,5 @@
 #include "off/graphics/startup_graphics_asset.hpp"
+#include "off/graphics/startup_graphics_prepared_plan.hpp"
 
 #include <bit>
 #include <cstddef>
@@ -20,6 +21,17 @@ namespace {
 
 constexpr std::size_t index_bytes = 2048 * sizeof(std::uint32_t);
 static_assert(!std::is_default_constructible_v<off::graphics::StartupGraphicsAsset>);
+static_assert(
+    !std::is_default_constructible_v<off::graphics::StartupGraphicsPreparedPlan>);
+template <typename T>
+concept HasPixels = requires(T value) { value.pixels; };
+template <typename T>
+concept HasTopology = requires(T value) { value.topology; };
+template <typename T>
+concept HasBlend = requires(T value) { value.blend_enabled; };
+static_assert(!HasPixels<off::graphics::StartupGraphicsPreparedResource>);
+static_assert(!HasTopology<off::graphics::StartupGraphicsPreparedSubmission>);
+static_assert(!HasBlend<off::graphics::StartupGraphicsPreparedSubmission>);
 
 void check(bool value, const char *message) {
   if (!value) {
@@ -50,7 +62,8 @@ void append_text(std::vector<std::byte> &bytes, std::string_view value) {
   bytes.insert(bytes.end(), source.begin(), source.end());
 }
 
-off::data::PictureDrawPlan plan(std::size_t count, std::size_t image_bias) {
+off::data::PictureDrawPlan plan(std::size_t count, std::size_t image_bias,
+                                std::uint16_t texture_id_bias = 0) {
   std::vector<off::data::PictureResourceDescriptor> descriptors(count);
   std::vector<off::data::PictureDrawGroup> groups;
   std::vector<off::data::PictureTextureBinding> bindings;
@@ -60,16 +73,19 @@ off::data::PictureDrawPlan plan(std::size_t count, std::size_t image_bias) {
     descriptors[index].modulation_color = 0xffffffffU;
     groups.push_back({1, index});
     bindings.push_back({0, static_cast<std::uint16_t>(2048 + index),
-                        static_cast<std::uint16_t>(index), image_bias + index,
+                        static_cast<std::uint16_t>(texture_id_bias + index),
+                        image_bias + index,
                         off::data::TextureManagerKeyBank::upper});
   }
   return off::data::PictureDrawPlan::build(descriptors, groups, bindings);
 }
 
-off::data::StartupGraphicsComposition composition() {
+off::data::StartupGraphicsComposition composition(
+    std::uint16_t texture_id_bias = 0) {
   std::array<off::data::StartupGraphicsRowComposition, 8> rows;
-  const auto background = plan(1, 0);
-  const auto chrome = plan(5, 1);
+  const auto background = plan(1, 0, texture_id_bias);
+  const auto chrome =
+      plan(5, 1, static_cast<std::uint16_t>(texture_id_bias + 1));
   for (std::size_t row_index = 0; row_index < rows.size(); ++row_index) {
     auto &row = rows[row_index];
     row.owner_directory_index = 100 + row_index;
@@ -233,6 +249,58 @@ int main(int argc, char **argv) {
   check(asset.images()[5].mip_zero.pixels[0] == 6,
         "own decoded image bytes independently of source storage");
 
+  const auto prepared =
+      off::graphics::prepare_startup_graphics_plan(asset, 0x01U);
+  check(prepared.requested_state() == 0x01U &&
+            prepared.effective_state() == 0x01U &&
+            prepared.resources().size() == 6 &&
+            prepared.pictures().size() == 21 &&
+            prepared.quads().size() == 77 &&
+            prepared.submissions().size() == 77,
+        "prepare the bounded resting pre-raster plan");
+  for (std::size_t ordinal = 0; ordinal < prepared.submissions().size();
+       ++ordinal) {
+    const auto &submission = prepared.submissions()[ordinal];
+    check(submission.emission_ordinal == ordinal &&
+              submission.prepared_quad_index == ordinal &&
+              prepared.quads()[ordinal].emission_ordinal == ordinal &&
+              prepared.quads()[ordinal].resource_index < 6,
+          "preserve contiguous traversal emission identities");
+  }
+  check(prepared.pictures().front().row_index == 6 &&
+            prepared.pictures().front().picture_index == 1 &&
+            prepared.pictures().front().first_submission == 0 &&
+            prepared.pictures().front().submission_count == 5 &&
+            prepared.quads().front().source.local_x_min == -1.0F &&
+            prepared.quads().front().source.local_x_max == 1.0F,
+        "preserve first traversal picture and raw descriptor quad");
+  for (const auto state : {0x08U, 0x10U, 0x20U, 0x80U}) {
+    const auto active =
+        off::graphics::prepare_startup_graphics_plan(asset, state);
+    check(active.effective_state() == state &&
+              active.pictures().size() == 7 && active.quads().size() == 7 &&
+              active.submissions().size() == 7,
+          "prepare each canonical background-only state shape");
+  }
+  const auto fallback =
+      off::graphics::prepare_startup_graphics_plan(asset, 0x04U);
+  check(fallback.effective_state() == 0x01U &&
+            fallback.pictures().size() == 21 &&
+            fallback.quads().size() == 77,
+        "preserve recovered fallback state in the pre-raster plan");
+
+  const auto mismatched_asset = off::graphics::build_startup_graphics_asset(
+      composition(20), catalog);
+  bool identity_rejected = false;
+  try {
+    static_cast<void>(off::graphics::prepare_startup_graphics_plan(
+        mismatched_asset, 0x01U));
+  } catch (const std::runtime_error &) {
+    identity_rejected = true;
+  }
+  check(identity_rejected,
+        "reject disagreement between draw-group and asset texture IDs");
+
   bool budget_rejected = false;
   try {
     static_cast<void>(off::graphics::build_startup_graphics_asset(composition(),
@@ -287,6 +355,11 @@ int main(int argc, char **argv) {
     const auto retail = off::graphics::load_startup_graphics_asset(argv[1]);
     check(retail.images().size() == 6,
           "load six owned images from the verified retail startup archive");
+    const auto retail_prepared =
+        off::graphics::prepare_startup_graphics_plan(retail, 0x01U);
+    check(retail_prepared.pictures().size() == 21 &&
+              retail_prepared.submissions().size() == 77,
+          "prepare the canonical retail startup pre-raster plan");
   }
   std::cout << "startup graphics asset tests passed\n";
 }

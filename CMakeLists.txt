@@ -77,6 +77,7 @@ add_library(off_core
     src/graphics/scene_render.cpp
     src/graphics/scene_gpu_plan.cpp
     src/graphics/startup_graphics_asset.cpp
+    src/graphics/startup_graphics_prepared_plan.cpp
     src/graphics/picture_transform.cpp
     src/settings/graphics_settings.cpp
     src/simulation/fixed_step.cpp

@@ -124,7 +124,10 @@ recovered. A separate renderer-neutral plan now preserves duplicate identities,
 filters hidden instances, visits eligible rows in recovered live hierarchy
 order, emits both chrome instances before the persistent background, and keeps
 each picture's groups in ascending authored order. It does not promise GPU
-execution or completion order.
+execution or completion order. A bounded pre-raster plan now resolves those
+emissions to the six resources and retains raw one-quad descriptor records and
+contiguous submission ordinals without generating transforms, vertices,
+indexes, topology, UV corner pairing, blending, or material state.
 The visible focus marker and extended Modern/Modern+ rows
 remain project-authored diagnostic UI until this recovered composition is wired
 into the renderer.
