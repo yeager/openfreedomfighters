@@ -71,6 +71,8 @@ struct RenderPreviewAsset {
 transform_render_position(const RenderObjectInstance &instance,
                           const std::array<float, 3> &local_position);
 
+void validate_render_preview(const RenderPreviewAsset &preview);
+
 [[nodiscard]] RenderPreviewAsset
 build_render_preview(std::span<const data::PrimitiveEntry> primitives,
                      std::span<const data::TextureImage> textures);

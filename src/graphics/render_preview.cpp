@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <iterator>
 #include <limits>
 #include <stdexcept>
@@ -173,6 +174,61 @@ transform_render_position(const RenderObjectInstance &instance,
       basis[6] * local_position[0] + basis[7] * local_position[1] +
           basis[8] * local_position[2] + instance.position[2],
   };
+}
+
+void validate_render_preview(const RenderPreviewAsset &preview) {
+  if (preview.vertices.empty() || preview.indices.empty() ||
+      preview.draws.empty() || preview.texture.width == 0 ||
+      preview.texture.height == 0 || !preview.object_instance.has_value()) {
+    throw std::invalid_argument("render preview is incomplete");
+  }
+  const auto width = static_cast<std::size_t>(preview.texture.width);
+  const auto height = static_cast<std::size_t>(preview.texture.height);
+  if (width > std::numeric_limits<std::size_t>::max() / height ||
+      width * height > std::numeric_limits<std::size_t>::max() / 4U ||
+      preview.texture.pixels.size() != width * height * 4U) {
+    throw std::invalid_argument("render preview has invalid RGBA dimensions");
+  }
+  const auto finite = [](const auto &values) {
+    return std::ranges::all_of(
+        values, [](float value) { return std::isfinite(value); });
+  };
+  const auto &instance = *preview.object_instance;
+  if (!finite(instance.basis) || !finite(instance.position) ||
+      (instance.map_instance.has_value() &&
+       (!finite(instance.map_instance->orientation) ||
+        !finite(instance.map_instance->position)))) {
+    throw std::invalid_argument("render preview has a non-finite transform");
+  }
+  for (std::size_t axis = 0; axis < 3; ++axis) {
+    if (!std::isfinite(preview.minimum_position[axis]) ||
+        !std::isfinite(preview.maximum_position[axis]) ||
+        preview.minimum_position[axis] > preview.maximum_position[axis]) {
+      throw std::invalid_argument("render preview has invalid bounds");
+    }
+  }
+  for (const auto &vertex : preview.vertices) {
+    if (!finite(vertex.position) || !finite(vertex.texture_coordinates) ||
+        !finite(transform_render_position(instance, vertex.position))) {
+      throw std::invalid_argument(
+          "render preview has a non-finite vertex attribute");
+    }
+  }
+  std::size_t expected_first_index = 0;
+  for (const auto &draw : preview.draws) {
+    if (draw.first_index != expected_first_index || draw.index_count < 3U ||
+        draw.first_index > preview.indices.size() ||
+        draw.index_count > preview.indices.size() - draw.first_index) {
+      throw std::invalid_argument("render preview has an invalid draw range");
+    }
+    expected_first_index = draw.first_index + draw.index_count;
+  }
+  if (expected_first_index != preview.indices.size() ||
+      std::ranges::any_of(preview.indices, [&](const auto index) {
+        return index >= preview.vertices.size();
+      })) {
+    throw std::invalid_argument("render preview has an invalid vertex index");
+  }
 }
 
 RenderPreviewAsset

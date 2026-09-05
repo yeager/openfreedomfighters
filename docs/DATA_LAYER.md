@@ -86,7 +86,10 @@ references a missing PRM record or an unresolved flagged PRM alias.
 The platform layer applies `world = basis * local + position`, converts that owned
 asset to a bounds-normalized diagnostic projection, uploads vertex and 16-bit index
 buffers plus the RGBA8 texture, and submits every preserved range as an indexed
-triangle-strip draw. Synthetic tests
+triangle-strip draw. A centralized pre-upload validator rejects incomplete assets,
+non-contiguous or overflowing draw ranges, out-of-range indexes, inconsistent RGBA
+dimensions, invalid bounds, and non-finite source/map transforms, vertex attributes,
+or transformed positions before any SDL GPU indexing occurs. Synthetic tests
 cover primary and secondary ordering, tagged slot zero, absent local sources,
 non-primitive sources, missing and duplicate identities, unresolved high-bit PRM
 aliases, malformed indexes, construction, and failure without embedding retail

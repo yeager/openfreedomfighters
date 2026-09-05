@@ -58,12 +58,14 @@ GMS transforms separately. The startup RMC source has no direct primitive, so th
 visible first-draw path currently falls back to the first exact GMS reference for
 its diagnostic primitive. The recovered GMS basis is stored as three row vectors;
 the diagnostic world position is `basis * local_position + position`. It then
-creates the native shader pipeline, uploads vertex/index/texture resources through an SDL GPU copy pass,
-and submits each preserved range as an indexed triangle-strip draw. The current
-bounds-normalized projection applies that instance transform but is diagnostic;
+creates the native shader pipeline and uploads vertex/index/texture resources
+through an SDL GPU copy pass, then submits each preserved range as an indexed
+triangle-strip draw. Bounds, draw
+ranges, indexes, texture dimensions, and finite transforms are validated again at
+the CPU/GPU boundary before upload. The current bounds-normalized projection
+applies that instance transform but is diagnostic;
 RMC/RMI transform composition and multi-object materialization, camera matrices,
-depth, and reconstructed
-materials remain separate milestones. It selects the
+depth, and reconstructed materials remain separate milestones. It selects the
 projection plane with the greatest indexed surface area and uses a neutral white
 texture tint until the startup material's zero-coded vertex-color semantics are
 confirmed.

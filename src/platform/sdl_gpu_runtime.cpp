@@ -15,6 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <functional>
 #include <limits>
 #include <string>
@@ -365,10 +366,12 @@ make_preview_vertices(const graphics::RenderPreviewAsset &preview) {
 RuntimeResult run_sdl_gpu_runtime(Mode mode,
                                   const graphics::RenderPreviewAsset &preview,
                                   std::size_t frame_limit) {
-  if (preview.vertices.empty() || preview.indices.empty() ||
-      preview.draws.empty() || preview.texture.pixels.empty() ||
-      !preview.object_instance.has_value()) {
-    return {.success = false, .message = "render preview is incomplete"};
+  try {
+    graphics::validate_render_preview(preview);
+  } catch (const std::exception &error) {
+    return {.success = false,
+            .message = std::string("render preview validation failed: ") +
+                       error.what()};
   }
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
     return failure("SDL initialization failed");

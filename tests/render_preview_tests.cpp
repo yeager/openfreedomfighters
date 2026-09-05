@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -130,6 +131,48 @@ int main() {
                                                  {2.0F, 3.0F, 4.0F}) ==
             std::array{13.0F, 18.0F, 34.0F},
         "apply the GMS basis as rows before adding position");
+  bool valid_preview_accepted = true;
+  try {
+    off::graphics::validate_render_preview(instanced);
+  } catch (const std::invalid_argument &) {
+    valid_preview_accepted = false;
+  }
+  check(valid_preview_accepted, "accept a complete validated render preview");
+
+  const auto check_invalid_preview = [&](auto mutation, const char *message) {
+    auto invalid = instanced;
+    mutation(invalid);
+    bool rejected = false;
+    try {
+      off::graphics::validate_render_preview(invalid);
+    } catch (const std::invalid_argument &) {
+      rejected = true;
+    }
+    check(rejected, message);
+  };
+  check_invalid_preview(
+      [](auto &value) {
+        value.draws[0].first_index =
+            std::numeric_limits<std::size_t>::max() - 1U;
+        value.draws[0].index_count = 4;
+      },
+      "reject overflowing preview draw ranges");
+  check_invalid_preview([](auto &value) { value.indices[0] = 4; },
+                        "reject preview indexes outside the vertex buffer");
+  check_invalid_preview([](auto &value) { value.texture.pixels.pop_back(); },
+                        "reject mismatched preview RGBA dimensions");
+  check_invalid_preview(
+      [](auto &value) {
+        value.object_instance->basis[0] =
+            std::numeric_limits<float>::quiet_NaN();
+      },
+      "reject non-finite preview transforms");
+  check_invalid_preview(
+      [](auto &value) {
+        value.vertices[0].position[0] = std::numeric_limits<float>::max();
+        value.object_instance->basis[0] = std::numeric_limits<float>::max();
+      },
+      "reject non-finite transformed preview positions");
 
   auto slot_zero_source = object_source;
   slot_zero_source.local_slot_index = 0;
