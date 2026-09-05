@@ -50,7 +50,8 @@ unique_member(const data::ZipArchive &archive, std::string_view extension) {
   for (const auto &row : composition.rows()) {
     for (const auto &picture : row.pictures) {
       for (const auto &group : picture.draw_plan.groups()) {
-        if (!std::ranges::contains(indexes, group.texture.image_index))
+        if (std::ranges::find(indexes, group.texture.image_index) ==
+            indexes.end())
           indexes.push_back(group.texture.image_index);
       }
     }
