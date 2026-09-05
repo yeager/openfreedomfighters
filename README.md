@@ -13,7 +13,7 @@ This is an independent fan project and is not affiliated with or endorsed by IO 
 
 ## Status
 
-Phase 1, portable data layer. The Steam digital Windows build has been inventoried and fully disassembled in private clean-room storage. The native C++ executable verifies the supported user-owned installation, selects Original or Modern mode, provides a bounds-checked overlay VFS, parses all 23,522 texture images, 61,451 render primitives, and 2,801 RMC/RMI spatial entries, fully traverses and queries their 3,946 octree nodes, decodes texture, primary vertex, topology, and audio data to portable representations, and validates their complete corpora. No playable build exists yet.
+Phase 1, portable data layer. The Steam digital Windows build has been inventoried and fully disassembled in private clean-room storage. The native C++ executable verifies the supported user-owned installation, selects Original or Modern mode, provides a bounds-checked overlay VFS, decompresses all 180 ZGF/GMS resources, parses all 23,522 texture images, 61,451 render primitives, and 2,801 RMC/RMI spatial entries, fully traverses and queries their 3,946 octree nodes, decodes texture, primary vertex, topology, and audio data to portable representations, and validates their complete corpora. No playable build exists yet.
 
 ## Build the native bootstrap
 
@@ -76,6 +76,7 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [Scene-support dependency format](docs/SCENE_SUPPORT_FORMAT.md)
 - [Texture-catalog format](docs/TEXTURE_FORMAT.md)
 - [Primitive-catalog format](docs/PRIMITIVE_FORMAT.md)
+- [Packed ZGF/GMS resource envelope](docs/PACKED_RESOURCE_FORMAT.md)
 - [RMC/RMI spatial-map format](docs/RENDER_MAP_FORMAT.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap and acceptance gates](docs/ROADMAP.md)

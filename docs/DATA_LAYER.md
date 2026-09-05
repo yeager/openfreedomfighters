@@ -19,10 +19,11 @@ The first Phase 1 component is a read-only ZIP archive reader and overlay virtua
 - Directory mounts reject symbolic links, normalized-name collisions, files larger than 256 MiB, and declared totals larger than 1 GiB.
 - Loose files expose bounded random-access views, allowing global audio banks and other large sources to be consumed in small chunks without whole-file allocation.
 - A random-access view detects replacement, resizing, or conversion of its source into a symbolic link before each read.
+- Packed `ZGF` and `GMS` envelopes are decoded from raw DEFLATE or stored representations with exact size and Adler-32 validation.
 - Scene `SUP` resources are parsed as bounded `DLCF` dependency lists in both observed scalar and array layouts.
 - Scene `TEX` resources are parsed into image, mip, palette, and sequence models with bidirectional index validation, then decoded through portable CPU paths to RGBA8.
 - Scene `PRM` resources are parsed into indexed primitive descriptors, portable position/normal/color/texture-coordinate vertices, and bounds-checked topology batches. Optional auxiliary streams remain opaque.
-- Scene `RMC` and `RMI` resources are parsed into fully traversed and world-queryable quantized octrees, bounds, and portable object transform/extent descriptors.
+- Scene `RMC` and `RMI` resources are parsed into fully traversed and world-queryable quantized octrees, bounds, portable object transform/extent descriptors, and validated packed geometry references.
 
 These rules protect the native runtime from malformed user-supplied data. They do not yet define the complete game-data mount lifecycle or any resource-family schema.
 
@@ -36,10 +37,12 @@ No retail payload or filename inventory is embedded in the test fixtures.
 
 The installation verifier parses the single `SUP` member in each of all 90 scene archives, including decompression and CRC validation, and checks that the corpus shape matches the supported build. The format is documented in [SCENE_SUPPORT_FORMAT.md](SCENE_SUPPORT_FORMAT.md).
 
+It also decodes the single `ZGF` and `GMS` member in each archive. The resulting 180 payloads total 34,221,064 and 33,436,872 bytes respectively; all packed sizes, output sizes, and checksums are validated. See [PACKED_RESOURCE_FORMAT.md](PACKED_RESOURCE_FORMAT.md).
+
 The same full-corpus pass parses every `TEX` member and validates 23,522 image records and 19 sequence records. It decodes a retail reference from each of the four observed encoding families and discards the output immediately. Encoded and decoded mip bytes are held only in transient memory. See [TEXTURE_FORMAT.md](TEXTURE_FORMAT.md).
 
 Every `PRM` member is also parsed during installation verification. The supported corpus contains 61,451 entries, including 27 flagged references, plus 2,820,961 decoded primary vertices, 461,344 topology batches, and 4,412,738 individually range-checked vertex indexes. See [PRIMITIVE_FORMAT.md](PRIMITIVE_FORMAT.md).
 
-Every `RMC` and `RMI` member is parsed as well. The supported corpus contains 2,587 nodes and 1,612 entries in `RMC`, plus 1,359 nodes and 1,189 entries in `RMI`. Every octree node is reached exactly once, every spatial element has exactly one owner, and every fixed-size descriptor reference and quantized bound is range checked. World-space bounds queries reproduce the recovered quantization, loose-cell, and half-open intersection rules. See [RENDER_MAP_FORMAT.md](RENDER_MAP_FORMAT.md).
+Every `RMC` and `RMI` member is parsed as well. The supported corpus contains 2,587 nodes and 1,612 entries in `RMC`, plus 1,359 nodes and 1,189 entries in `RMI`. Every octree node is reached exactly once, every spatial element has exactly one owner, and every fixed-size descriptor reference and quantized bound is range checked. World-space bounds queries reproduce the recovered quantization, loose-cell, and half-open intersection rules. The final descriptor words are now confirmed as one required and one optional packed geometry reference rather than floating-point scale values. See [RENDER_MAP_FORMAT.md](RENDER_MAP_FORMAT.md).
 
 The audio format model is documented in [AUDIO_FORMAT.md](AUDIO_FORMAT.md).

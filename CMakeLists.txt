@@ -13,6 +13,7 @@ add_library(off_core
     src/data/archive_vfs.cpp
     src/data/audio_bank_header.cpp
     src/data/install.cpp
+    src/data/packed_resource.cpp
     src/data/primitive_catalog.cpp
     src/data/render_map.cpp
     src/data/scene_support.cpp
@@ -68,6 +69,10 @@ if(BUILD_TESTING)
     add_executable(off_primitive_catalog_tests tests/primitive_catalog_tests.cpp)
     target_link_libraries(off_primitive_catalog_tests PRIVATE off_core)
     add_test(NAME off_primitive_catalog_tests COMMAND off_primitive_catalog_tests)
+
+    add_executable(off_packed_resource_tests tests/packed_resource_tests.cpp)
+    target_link_libraries(off_packed_resource_tests PRIVATE off_core)
+    add_test(NAME off_packed_resource_tests COMMAND off_packed_resource_tests)
 
     add_executable(off_render_map_tests tests/render_map_tests.cpp)
     target_link_libraries(off_render_map_tests PRIVATE off_core)

@@ -58,10 +58,13 @@ For all 2,801 records in the supported installation, each minimum coordinate is 
 | 40 | 12 | position vector |
 | 52 | 12 | auxiliary position vector |
 | 64 | 12 | extents vector |
-| 76 | 8 | two scale terms |
+| 76 | 4 | required packed primary geometry reference |
+| 80 | 4 | optional packed secondary geometry reference |
 
-All 20 floating-point values are required to be finite. The matrix/vector names describe the strongly observed numeric shape and are sufficient for a portable spatial model; exact engine semantics, especially the auxiliary vector and scale terms, remain open research questions.
+All 18 floating-point values are required to be finite. The matrix/vector names describe the strongly observed numeric shape and are sufficient for a portable spatial model; exact engine semantics, especially the auxiliary vector, remain an open research question.
+
+Executable query callbacks independently establish that offset 76 is passed to the engine's geometry-reference lookup and offset 80 selects an additional geometry for the relevant object form. Every primary reference in the supported corpus has tag bits `01`, a nonzero value, and a 16-byte-aligned 30-bit payload. Secondary references use the same representation when present; zero means absent. All 1,612 `RMC` descriptors have no secondary reference, while 201 of 1,189 `RMI` descriptors have one. The parser retains packed references until the owning scene graph can resolve them.
 
 ## Validation coverage
 
-Installation verification parses 90 `RMC` files containing 2,587 octree nodes and 1,612 entries, plus 90 `RMI` files containing 1,359 nodes and 1,189 entries. Synthetic tests exercise whole-tree and octant-selective world queries and reject invalid query bounds, truncated or misaligned envelopes, invalid quantization factors, cyclic or reused nodes, repeated sibling octants, overlapping element ownership, excessive hierarchy padding, unsupported object kinds, duplicate or misaligned descriptor references, inverted bounds, and non-finite values.
+Installation verification parses 90 `RMC` files containing 2,587 octree nodes and 1,612 entries, plus 90 `RMI` files containing 1,359 nodes and 1,189 entries. Synthetic tests exercise whole-tree and octant-selective world queries and reject invalid query bounds, truncated or misaligned envelopes, invalid quantization factors, cyclic or reused nodes, repeated sibling octants, overlapping element ownership, excessive hierarchy padding, unsupported object kinds, duplicate or misaligned descriptor references, invalid geometry references, inverted bounds, and non-finite values.

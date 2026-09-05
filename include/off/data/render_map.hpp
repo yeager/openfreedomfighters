@@ -24,7 +24,8 @@ struct RenderMapObject {
     std::array<float, 3> position{};
     std::array<float, 3> auxiliary_position{};
     std::array<float, 3> extents{};
-    std::array<float, 2> scale_terms{};
+    std::uint32_t primary_geometry_reference{0};
+    std::uint32_t secondary_geometry_reference{0};
 };
 
 struct RenderMapEntry {

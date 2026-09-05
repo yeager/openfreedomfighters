@@ -26,6 +26,9 @@ constexpr std::uint32_t maximum_tree_depth = 16;
 constexpr std::uint16_t element_count_mask = 0x7ff8U;
 constexpr std::uint16_t last_sibling_mask = 0x8000U;
 constexpr std::uint16_t octant_mask = 0x0007U;
+constexpr std::uint32_t geometry_reference_flag_mask = 0xc0000000U;
+constexpr std::uint32_t geometry_reference_flag = 0x40000000U;
+constexpr std::uint32_t geometry_reference_value_mask = 0x3fffffffU;
 constexpr std::int32_t quantized_root_center = 0x8000;
 constexpr std::int32_t quantized_root_size = 0x10000;
 
@@ -61,6 +64,16 @@ constexpr std::int32_t quantized_root_size = 0x10000;
         }
     }
     return true;
+}
+
+void require_geometry_reference(std::uint32_t value, bool optional) {
+    if (optional && value == 0) {
+        return;
+    }
+    if ((value & geometry_reference_flag_mask) != geometry_reference_flag ||
+        (value & geometry_reference_value_mask) % 16U != 0U) {
+        throw std::runtime_error("render-map descriptor contains an invalid geometry reference");
+    }
 }
 
 [[nodiscard]] RenderMapNode read_node(const ByteReader& reader, std::size_t index) {
@@ -238,7 +251,10 @@ RenderMap RenderMap::parse(std::span<const std::byte> bytes) {
         entry.object.auxiliary_position =
             read_float_array<3>(reader, descriptor_offset + 52U);
         entry.object.extents = read_float_array<3>(reader, descriptor_offset + 64U);
-        entry.object.scale_terms = read_float_array<2>(reader, descriptor_offset + 76U);
+        entry.object.primary_geometry_reference = reader.u32(descriptor_offset + 76U);
+        entry.object.secondary_geometry_reference = reader.u32(descriptor_offset + 80U);
+        require_geometry_reference(entry.object.primary_geometry_reference, false);
+        require_geometry_reference(entry.object.secondary_geometry_reference, true);
         result.entries_.push_back(entry);
     }
     if (!std::ranges::all_of(referenced_descriptors, [](bool value) { return value; })) {

@@ -5,6 +5,7 @@
 #include "off/data/archive_vfs.hpp"
 #include "off/data/audio_bank_header.hpp"
 #include "off/data/byte_reader.hpp"
+#include "off/data/packed_resource.hpp"
 #include "off/data/primitive_catalog.hpp"
 #include "off/data/render_map.hpp"
 #include "off/data/scene_support.hpp"
@@ -176,6 +177,11 @@ InstallVerification verify_install(const std::filesystem::path& root) {
 
         std::size_t scene_archive_count = 0;
         std::size_t scene_support_count = 0;
+        std::size_t scene_graph_count = 0;
+        std::size_t scene_graph_payload_bytes = 0;
+        std::size_t stored_scene_graph_count = 0;
+        std::size_t gms_resource_count = 0;
+        std::size_t gms_payload_bytes = 0;
         std::size_t texture_catalog_count = 0;
         std::size_t texture_image_count = 0;
         std::size_t texture_sequence_count = 0;
@@ -201,6 +207,8 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             }
             const auto archive = ZipArchive::open(entry.path());
             std::size_t support_files_in_archive = 0;
+            std::size_t scene_graph_files_in_archive = 0;
+            std::size_t gms_files_in_archive = 0;
             std::size_t texture_files_in_archive = 0;
             std::size_t primitive_files_in_archive = 0;
             std::size_t render_map_files_in_archive = 0;
@@ -216,6 +224,19 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                     }
                     ++support_files_in_archive;
                     ++scene_support_count;
+                } else if (extension == ".zgf" || extension == ".gms") {
+                    const auto resource = PackedResource::parse(archive.read(member));
+                    if (extension == ".zgf") {
+                        scene_graph_payload_bytes += resource.payload().size();
+                        stored_scene_graph_count +=
+                            resource.encoding() == PackedResourceEncoding::stored ? 1U : 0U;
+                        ++scene_graph_files_in_archive;
+                        ++scene_graph_count;
+                    } else {
+                        gms_payload_bytes += resource.payload().size();
+                        ++gms_files_in_archive;
+                        ++gms_resource_count;
+                    }
                 } else if (extension == ".tex") {
                     const auto catalog = TextureCatalog::parse(archive.read(member));
                     for (const auto& image : catalog.images()) {
@@ -282,16 +303,21 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                     }
                 }
             }
-            if (support_files_in_archive != 1 || texture_files_in_archive != 1 ||
+            if (support_files_in_archive != 1 || scene_graph_files_in_archive != 1 ||
+                gms_files_in_archive != 1 || texture_files_in_archive != 1 ||
                 primitive_files_in_archive != 1 || render_map_files_in_archive != 1 ||
                 render_instance_files_in_archive != 1) {
                 throw std::runtime_error(
-                    "scene archive does not contain exactly one SUP, TEX, PRM, RMC, and RMI file"
+                    "scene archive does not contain every required resource exactly once"
                 );
             }
             ++scene_archive_count;
         }
         if (scene_archive_count != 90 || scene_support_count != scene_archive_count ||
+            scene_graph_count != scene_archive_count ||
+            scene_graph_payload_bytes != 34'221'064 || stored_scene_graph_count != 2 ||
+            gms_resource_count != scene_archive_count ||
+            gms_payload_bytes != 33'436'872 ||
             texture_catalog_count != scene_archive_count || texture_image_count != 23'522 ||
             texture_sequence_count != 19 || !decoded_dxt1_reference ||
             !decoded_dxt3_reference || !decoded_abgr_reference ||
@@ -327,6 +353,14 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                 InstallError::incomplete_game_data,
                 root,
                 "startup scene graph failed structural validation"
+            );
+        }
+        const auto unpacked_scene_graph = PackedResource::parse(payload);
+        if (unpacked_scene_graph.payload().size() != payload_reader.u32(0)) {
+            return failure(
+                InstallError::incomplete_game_data,
+                root,
+                "startup scene graph failed decompression validation"
             );
         }
     } catch (const std::exception& exception) {
