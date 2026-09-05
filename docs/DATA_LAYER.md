@@ -20,6 +20,7 @@ The first Phase 1 component is a read-only ZIP archive reader and overlay virtua
 - Loose files expose bounded random-access views, allowing global audio banks and other large sources to be consumed in small chunks without whole-file allocation.
 - A random-access view detects replacement, resizing, or conversion of its source into a symbolic link before each read.
 - Scene `SUP` resources are parsed as bounded `DLCF` dependency lists in both observed scalar and array layouts.
+- Scene `TEX` resources are parsed into image, mip, palette, and sequence models with bidirectional index validation.
 
 These rules protect the native runtime from malformed user-supplied data. They do not yet define the complete game-data mount lifecycle or any resource-family schema.
 
@@ -32,5 +33,7 @@ Private executable evidence reports that an older archive entry is invalidated w
 No retail payload or filename inventory is embedded in the test fixtures.
 
 The installation verifier parses the single `SUP` member in each of all 90 scene archives, including decompression and CRC validation, and checks that the corpus shape matches the supported build. The format is documented in [SCENE_SUPPORT_FORMAT.md](SCENE_SUPPORT_FORMAT.md).
+
+The same full-corpus pass parses every `TEX` member and validates 23,522 image records and 19 sequence records. Encoded mip bytes are held only in transient memory. See [TEXTURE_FORMAT.md](TEXTURE_FORMAT.md).
 
 The audio format model is documented in [AUDIO_FORMAT.md](AUDIO_FORMAT.md).

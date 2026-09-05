@@ -13,7 +13,7 @@ This is an independent fan project and is not affiliated with or endorsed by IO 
 
 ## Status
 
-Phase 1, portable data layer. The Steam digital Windows build has been inventoried and fully disassembled in private clean-room storage. The native C++ executable verifies the supported user-owned installation, selects Original or Modern mode, provides a bounds-checked overlay VFS, validates scene-support dependency lists and the complete audio-header corpus, and decodes its PCM, IMA ADPCM, and Ogg Vorbis stream families. No playable build exists yet.
+Phase 1, portable data layer. The Steam digital Windows build has been inventoried and fully disassembled in private clean-room storage. The native C++ executable verifies the supported user-owned installation, selects Original or Modern mode, provides a bounds-checked overlay VFS, parses all 23,522 texture images plus scene-support lists, validates the complete audio-header corpus, and decodes its PCM, IMA ADPCM, and Ogg Vorbis stream families. No playable build exists yet.
 
 ## Build the native bootstrap
 
@@ -74,6 +74,7 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [Portable data layer](docs/DATA_LAYER.md)
 - [Audio-bank header format](docs/AUDIO_FORMAT.md)
 - [Scene-support dependency format](docs/SCENE_SUPPORT_FORMAT.md)
+- [Texture-catalog format](docs/TEXTURE_FORMAT.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Roadmap and acceptance gates](docs/ROADMAP.md)
 - [Localization plan](docs/LOCALIZATION.md)

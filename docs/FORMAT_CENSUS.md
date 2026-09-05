@@ -43,7 +43,7 @@ Confirmed structural invariants (32-bit words are zero-indexed):
 - The sampled `ANM` begins with `MNA\0`, has total byte length in word 2, then values `12` and `10` in words 3 and 4. All 42 `ANM` files share only the four-byte signature, so later header fields vary.
 - `RMC` and `RMI` are byte-identical in both loader/startup scenes (132 bytes each) but diverge in the campaign scene. This supports paired render metadata with a shared empty/default representation.
 
-The rules above were then promoted to validators and checked against the full corpus. `ZGF`, `SUP`, `GMS`, `SND`, `PRM`, and `ANM` pass every stated rule in every observed file. `TEX` passes the size and `3,4` rules in all 90 files; word 1 has an 88-file normal variant (`word 0 + 8,192`) and a two-file empty variant (`word 0`). `SUP` has since graduated to a native parser with synthetic mutation tests; see [SCENE_SUPPORT_FORMAT.md](SCENE_SUPPORT_FORMAT.md). The next step for the remaining families is to locate section offsets from these length equations and test mutations against synthetic fixtures.
+The rules above were then promoted to validators and checked against the full corpus. `ZGF`, `SUP`, `GMS`, `SND`, `PRM`, and `ANM` pass every stated rule in every observed file. `TEX` passes the size and `3,4` rules in all 90 files; word 1 has an 88-file normal variant (`word 0 + 8,192`) and a two-file empty variant (`word 0`). `SUP` and `TEX` have since graduated to native parsers with synthetic mutation tests; see [SCENE_SUPPORT_FORMAT.md](SCENE_SUPPORT_FORMAT.md) and [TEXTURE_FORMAT.md](TEXTURE_FORMAT.md). The next step for the remaining families is to locate section offsets from these length equations and test mutations against synthetic fixtures.
 
 ## Reproduce
 

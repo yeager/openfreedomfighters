@@ -6,6 +6,7 @@
 #include "off/data/audio_bank_header.hpp"
 #include "off/data/byte_reader.hpp"
 #include "off/data/scene_support.hpp"
+#include "off/data/texture_catalog.hpp"
 #include "off/data/zip_archive.hpp"
 
 #include <algorithm>
@@ -172,33 +173,49 @@ InstallVerification verify_install(const std::filesystem::path& root) {
 
         std::size_t scene_archive_count = 0;
         std::size_t scene_support_count = 0;
+        std::size_t texture_catalog_count = 0;
+        std::size_t texture_image_count = 0;
+        std::size_t texture_sequence_count = 0;
         for (const auto& entry : std::filesystem::recursive_directory_iterator(root / "Scenes")) {
             if (!entry.is_regular_file() || lowercase(entry.path().extension().string()) != ".zip") {
                 continue;
             }
             const auto archive = ZipArchive::open(entry.path());
             std::size_t support_files_in_archive = 0;
+            std::size_t texture_files_in_archive = 0;
             for (const auto& member : archive.entries()) {
-                if (lowercase(std::filesystem::path(member.name).extension().string()) != ".sup") {
-                    continue;
+                const auto extension = lowercase(
+                    std::filesystem::path(member.name).extension().string()
+                );
+                if (extension == ".sup") {
+                    const auto support = SceneSupport::parse(archive.read(member));
+                    if (support.dependencies().empty()) {
+                        throw std::runtime_error("scene-support dependency list is empty");
+                    }
+                    ++support_files_in_archive;
+                    ++scene_support_count;
+                } else if (extension == ".tex") {
+                    const auto catalog = TextureCatalog::parse(archive.read(member));
+                    texture_image_count += catalog.images().size();
+                    texture_sequence_count += catalog.sequences().size();
+                    ++texture_files_in_archive;
+                    ++texture_catalog_count;
                 }
-                const auto support = SceneSupport::parse(archive.read(member));
-                if (support.dependencies().empty()) {
-                    throw std::runtime_error("scene-support dependency list is empty");
-                }
-                ++support_files_in_archive;
-                ++scene_support_count;
             }
-            if (support_files_in_archive != 1) {
-                throw std::runtime_error("scene archive does not contain exactly one support file");
+            if (support_files_in_archive != 1 || texture_files_in_archive != 1) {
+                throw std::runtime_error(
+                    "scene archive does not contain exactly one support and texture file"
+                );
             }
             ++scene_archive_count;
         }
-        if (scene_archive_count != 90 || scene_support_count != scene_archive_count) {
+        if (scene_archive_count != 90 || scene_support_count != scene_archive_count ||
+            texture_catalog_count != scene_archive_count || texture_image_count != 23'522 ||
+            texture_sequence_count != 19) {
             return failure(
                 InstallError::incomplete_game_data,
                 root,
-                "scene-support corpus does not match the supported build"
+                "scene resource corpus does not match the supported build"
             );
         }
 
