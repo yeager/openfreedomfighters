@@ -5,6 +5,13 @@
 
 namespace off::graphics {
 
+PictureAlphaMaterialTransition update_picture_alpha_material(
+    std::uint32_t material_word, std::uint32_t alpha_input) noexcept {
+  const auto updated = alpha_input == 255U ? material_word & ~1U
+                                         : material_word | 1U;
+  return {updated, updated != material_word};
+}
+
 std::uint32_t
 map_base_picture_material_property(std::uint32_t authored_property,
                                    bool add_material_bit_0x1) {

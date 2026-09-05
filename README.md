@@ -162,6 +162,11 @@ word and explicit pass/cache inputs, preserving unrequested states as inherited.
 It includes the recovered base-picture property mapping but does not use that
 mapping to guess final resource state. See
 [Picture material requests](docs/PICTURE_MATERIAL_STATE.md).
+The base-picture alpha-to-material-bit transition is also modeled separately;
+it does not invent a fade schedule or resolve shared-resource writes. The
+remaining first-draw evidence requires an
+[original Windows observation](docs/STARTUP_STATE_CAPTURE.md), not assumptions
+from constructor defaults.
 Recovered picture constructors default both extent scales to `1.0`; descriptor
 bounds are not substituted for the still-explicit runtime extent, matrix,
 visitor, or projection inputs.

@@ -213,5 +213,31 @@ int main() {
           "independent depth/culling/addressing masks with texture feature "
           "disabled");
   }
+  for (const auto original : {0U, 1U, 0x60010U, 0x60011U, 0xfffffffeU,
+                              0xffffffffU}) {
+    for (const auto alpha : {0U, 254U, 255U, 256U, 511U, 0xffffffffU}) {
+      const auto transition = update_picture_alpha_material(original, alpha);
+      check((transition.material_word & ~1U) == (original & ~1U),
+            "alpha transition preserves every unrelated material bit");
+      check((transition.material_word & 1U) == (alpha == 255U ? 0U : 1U),
+            "alpha transition compares the entire input, not its low byte");
+      check(transition.material_changed ==
+                (transition.material_word != original),
+            "alpha transition reports exactly a material change");
+      const auto repeated =
+          update_picture_alpha_material(transition.material_word, alpha);
+      check(!repeated.material_changed &&
+                repeated.material_word == transition.material_word,
+            "alpha transition is idempotent for repeated input");
+    }
+  }
+  const auto opaque = map_base_picture_material_property(0);
+  const auto faded = update_picture_alpha_material(opaque, 254);
+  check(resolve_picture_material_state(input(faded.material_word))
+            .material.blend_enabled == true &&
+            resolve_picture_material_state(input(
+                update_picture_alpha_material(faded.material_word, 255)
+                    .material_word)).material.blend_enabled == false,
+        "explicit alpha events change conditional blend requests without a fade default");
   return failures == 0 ? 0 : 1;
 }

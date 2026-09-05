@@ -90,4 +90,15 @@ resolve_picture_material_state(const PictureMaterialStateInput &input);
 map_base_picture_material_property(std::uint32_t authored_property,
                                    bool add_material_bit_0x1 = false);
 
+struct PictureAlphaMaterialTransition {
+  std::uint32_t material_word{};
+  bool material_changed{};
+};
+
+// Material-bit portion of the base-picture alpha setter only. Compare the
+// whole incoming integer with 255; do not clamp or truncate it to a byte.
+// Does not update alpha storage, propagate resource writes or schedule a fade.
+[[nodiscard]] PictureAlphaMaterialTransition update_picture_alpha_material(
+    std::uint32_t material_word, std::uint32_t alpha_input) noexcept;
+
 } // namespace off::graphics

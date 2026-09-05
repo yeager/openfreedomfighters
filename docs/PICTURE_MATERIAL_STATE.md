@@ -30,6 +30,13 @@ per-picture clones. Shared runtime identities observe the last write. The pure
 mapping therefore does not establish final draw-time material state: later
 refreshes, overrides, aliases and total write order remain separate inputs.
 
+The base-picture alpha setter has a separately modeled material-bit transition:
+an incoming integer exactly equal to 255 clears bit 0x1; every other integer
+sets it. The comparison uses the complete input, so 511 is not equivalent to
+255 despite sharing the low byte. `update_picture_alpha_material` returns the
+updated word and whether it changed, preserving all other bits. It does not
+model alpha/color storage, resource propagation or when the setter is invoked.
+
 ## Resource-binding requests
 
 Effective features are `(~(disable_mask_a | disable_mask_b)) & 3`.
@@ -88,6 +95,8 @@ Final startup pass masks, later material changes and alias/write order still
 need proof. Neither this model nor the authored record copies select those
 values. Original rendering remains gated until the full input and raster
 contract is established.
+The required private observation is documented in
+[Original startup state observation](STARTUP_STATE_CAPTURE.md).
 
 ## Validation
 
