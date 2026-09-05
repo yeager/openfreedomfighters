@@ -116,7 +116,10 @@ composition: eight row owners, each with one persistent background picture and
 two chrome pictures co-gated by the same recovered visibility-state mask. Their
 24 instances bind 88 draw groups to six retail images while preserving, but not
 composing, every authored inclusive root-to-instance construction and transform
-chain. A paired GMS/BUF/PRM/TEX loader now owns and decodes mip zero for only
+chain. The parser and composition also preserve each picture's opaque base
+render property, clamped alpha byte, validated alignment enum, and the presence
+and clamped value of its optional extension control. A paired GMS/BUF/PRM/TEX
+loader now owns and decodes mip zero for only
 those six composition-selected retail images. The native runtime uploads them
 to six validated GPU sampler textures after installation verification, but does
 not render them until the remaining transform and GPU integration contracts are
@@ -128,6 +131,9 @@ execution or completion order. A bounded pre-raster plan now resolves those
 emissions to the six resources and retains raw one-quad descriptor records and
 contiguous submission ordinals without generating transforms, vertices,
 indexes, topology, UV corner pairing, blending, or material state.
+Recovered picture constructors default both extent scales to `1.0`; descriptor
+bounds are not substituted for the still-explicit runtime extent, matrix,
+visitor, or projection inputs.
 The visible focus marker and extended Modern/Modern+ rows
 remain project-authored diagnostic UI until this recovered composition is wired
 into the renderer.

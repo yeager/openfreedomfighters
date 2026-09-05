@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -107,6 +108,13 @@ off::data::StartupGraphicsComposition composition(
       picture.transform_chain = {{row.owner_directory_index, {}, {}},
                                  {picture.directory_index, {}, {}}};
       picture.authored_state_mask = picture_index == 0 ? 0x80U : 0x01U;
+      picture.base_render_property = static_cast<std::uint32_t>(
+          0x2000U + row_index * 3U + picture_index);
+      picture.authored_alpha = static_cast<std::uint8_t>(220U + picture_index);
+      picture.alignment_enum = static_cast<std::uint8_t>(picture_index + 6U);
+      picture.extension_control = picture_index == 1
+                                      ? std::optional<std::uint8_t>{12U}
+                                      : std::nullopt;
       picture.draw_plan = picture_index == 0 ? background : chrome;
     }
   }
@@ -236,6 +244,11 @@ int main(int argc, char **argv) {
   const auto catalog = off::data::TextureCatalog::parse(catalog_bytes);
   auto asset =
       off::graphics::build_startup_graphics_asset(composition(), catalog);
+  const auto &authored = asset.composition().rows()[4].pictures[1];
+  check(authored.base_render_property == 0x200dU &&
+            authored.authored_alpha == 221U && authored.alignment_enum == 7U &&
+            authored.extension_control == 12U,
+        "asset ownership preserves authored window-picture controls");
   check(asset.images().size() == 6, "own exactly six decoded startup images");
   for (std::size_t index = 0; index < asset.images().size(); ++index) {
     check(asset.images()[index].catalog_image_index == index &&

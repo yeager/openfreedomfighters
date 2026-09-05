@@ -118,4 +118,14 @@ Corpus validation confirms that all 2,801 primary handles and all 201 present op
 
 ## Validation coverage
 
+The bounded startup window-picture stream has four required authored integer
+scalars followed by one conditionally present integer scalar. The parser
+preserves the first scalar as the state exponent and the second as an opaque
+base-render property. It clamps the third scalar to an alpha byte, validates
+the fourth as alignment enum `0..15`, and preserves whether the optional fifth
+scalar was present while clamping its value to `16`. The following structural
+tags and picture-resource reference remain mandatory. These authored controls
+are carried into startup composition without assigning rendering semantics to
+the opaque property or optional extension.
+
 Synthetic tests use a project-authored stored image. They cover directory, pool-count, identifier, transform, attachment, and BUF-relative bounds; finite transform decoding; object-name termination; auxiliary BUF extents; source-type diagnostics; parent/child pool traversal; class and local-slot assignment; local and external handle lookup; packed source-reference fields; tagged slot-zero and interior runtime handles; unsupported tags; handle misalignment; and bounded startup window-picture streams with and without the optional extension scalar. They preserve authored state exponents `0` and `7`, reject `8`, and also reject invalid block sizes, scalar tags, missing serialization, and trailing data. No retail GMS, BUF, identifier, or picture reference is present in the repository.

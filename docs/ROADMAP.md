@@ -106,7 +106,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [ ] Replace the diagnostic F10 skin with a retail-data-backed overlay matching
   the recovered original menu layout and visual language.
 - [x] Recover and bounds-check the startup tagged window-picture stream through
-  its picture asset reference.
+  its authored state exponent, opaque base-render property, clamped alpha,
+  validated alignment, presence-preserving optional extension, and picture
+  asset reference.
 - [x] Parse every startup PRM-backed picture resource with bounded descriptors,
   draw-group texture references, and portable descriptor spans.
 - [x] Recover the draw-group texture-resource allocation and its bounded TEX-image

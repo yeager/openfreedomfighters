@@ -255,11 +255,16 @@ void require_optional_offset(
     if (authored_state_exponent >= std::numeric_limits<std::uint8_t>::digits) {
         throw std::runtime_error("GMS window-picture state exponent is out of range");
     }
-    for (std::size_t index = 1; index < 4U; ++index) {
-        static_cast<void>(read_integer());
+    const auto base_render_property = read_integer();
+    const auto authored_alpha = read_integer();
+    const auto alignment_enum = read_integer();
+    if (alignment_enum > 15U) {
+        throw std::runtime_error("GMS window-picture alignment enum is out of range");
     }
+    std::optional<std::uint8_t> extension_control;
     if (current_type() == integer_tag_type) {
-        static_cast<void>(read_integer());
+        extension_control = static_cast<std::uint8_t>(
+            std::min(read_integer(), std::uint32_t{16}));
     }
     read_structure();
     const auto picture_asset_reference = read_integer();
@@ -275,6 +280,11 @@ void require_optional_offset(
     return {
         .authored_state_exponent =
             static_cast<std::uint8_t>(authored_state_exponent),
+        .base_render_property = base_render_property,
+        .authored_alpha = static_cast<std::uint8_t>(
+            std::min(authored_alpha, std::uint32_t{255})),
+        .alignment_enum = static_cast<std::uint8_t>(alignment_enum),
+        .extension_control = extension_control,
         .picture_asset_reference = picture_asset_reference,
     };
 }

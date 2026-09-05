@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -31,6 +32,10 @@ struct StartupGraphicsCompositionInstance {
     std::vector<StartupGraphicsLocalTransform> transform_chain;
     std::uint32_t picture_reference{0};
     std::uint8_t authored_state_mask{0};
+    std::uint32_t base_render_property{0};
+    std::uint8_t authored_alpha{255};
+    std::uint8_t alignment_enum{0};
+    std::optional<std::uint8_t> extension_control;
     PictureDrawPlan draw_plan;
 };
 

@@ -104,6 +104,13 @@ std::array<off::data::StartupGraphicsRowComposition, 8> valid_rows() {
                 {instance.directory_index, {}, {}}};
             instance.draw_plan = picture == 0 ? background : chrome;
             instance.authored_state_mask = picture == 0 ? 0x80U : 0x01U;
+            instance.base_render_property =
+                static_cast<std::uint32_t>(0x1000U + i * 3U + picture);
+            instance.authored_alpha = static_cast<std::uint8_t>(200U + picture);
+            instance.alignment_enum = static_cast<std::uint8_t>(picture + 3U);
+            instance.extension_control = picture == 2
+                ? std::optional<std::uint8_t>{16U}
+                : std::nullopt;
         }
     }
     return rows;
@@ -191,6 +198,12 @@ int main() {
     rows_value[0].slot_y = 999.0F;
     check(owned.rows()[0].slot_y == 0.0F,
           "factory owns row values independently of its input");
+    check(owned.rows()[3].pictures[2].base_render_property == 0x100bU &&
+              owned.rows()[3].pictures[2].authored_alpha == 202U &&
+              owned.rows()[3].pictures[2].alignment_enum == 5U &&
+              owned.rows()[3].pictures[2].extension_control == 16U &&
+              !owned.rows()[3].pictures[1].extension_control.has_value(),
+          "composition preserves authored window-picture controls");
     const auto resting = owned.visible_pictures(0x01U);
     check(resting.requested_state == 0x01U && resting.effective_state == 0x01U,
           "preserve the resting state identity");
@@ -306,6 +319,14 @@ int main() {
     bad_mask[0].pictures[1].authored_state_mask = 0x08U;
     check(factory_rejects(bad_mask),
           "factory rejects a noncanonical authored chrome state mask");
+    auto bad_alignment = valid_rows();
+    bad_alignment[0].pictures[0].alignment_enum = 16U;
+    check(factory_rejects(bad_alignment),
+          "factory rejects an authored alignment enum outside its recovered range");
+    auto bad_extension = valid_rows();
+    bad_extension[0].pictures[0].extension_control = 17U;
+    check(factory_rejects(bad_extension),
+          "factory rejects an authored extension control above its clamp bound");
     auto no_hidden_duplicate = valid_rows();
     no_hidden_duplicate[7].authored_hidden = false;
     check(factory_rejects(no_hidden_duplicate),

@@ -136,7 +136,11 @@ std::vector<std::byte> deep_hierarchy_fixture() {
 
 std::vector<std::byte> window_picture_fixture(
     bool has_extension = true,
-    std::uint32_t authored_state_exponent = 0
+    std::uint32_t authored_state_exponent = 0,
+    std::uint32_t base_render_property = 2,
+    std::uint32_t authored_alpha = 3,
+    std::uint32_t alignment_enum = 4,
+    std::uint32_t extension_control = 5
 ) {
     auto bytes = packed_fixture();
     constexpr std::size_t envelope_size = 9;
@@ -163,11 +167,11 @@ std::vector<std::byte> window_picture_fixture(
         cursor += 5U;
     };
     append_scalar(authored_state_exponent);
-    for (std::uint32_t value = 2; value <= 4; ++value) {
-        append_scalar(value);
-    }
+    append_scalar(base_render_property);
+    append_scalar(authored_alpha);
+    append_scalar(alignment_enum);
     if (has_extension) {
-        append_scalar(5);
+        append_scalar(extension_control);
     }
     bytes[cursor++] = std::byte{0x46};
     append_scalar(0x1234U);
@@ -313,6 +317,11 @@ int main() {
     );
     check(picture_image.startup_window_picture_source(1).authored_state_exponent ==
                   0U &&
+              picture_image.startup_window_picture_source(1).base_render_property ==
+                  2U &&
+              picture_image.startup_window_picture_source(1).authored_alpha == 3U &&
+              picture_image.startup_window_picture_source(1).alignment_enum == 4U &&
+              picture_image.startup_window_picture_source(1).extension_control == 5U &&
               picture_image.startup_window_picture_source(1).picture_asset_reference ==
                   0x1234U &&
               picture_image.startup_window_picture_source(2).authored_state_exponent ==
@@ -324,8 +333,21 @@ int main() {
         off::data::PackedResource::parse(window_picture_fixture(false))
     );
     check(picture_without_extension.startup_window_picture_source(1)
-                  .picture_asset_reference == 0x1234U,
-          "parse the shape without an optional extension scalar");
+                  .picture_asset_reference == 0x1234U &&
+              !picture_without_extension.startup_window_picture_source(1)
+                   .extension_control.has_value(),
+          "preserve absence of the optional extension scalar");
+    const auto clamped_picture_image = off::data::GmsImage::parse(
+        off::data::PackedResource::parse(
+            window_picture_fixture(true, 0U, 0xfedcba98U, 999U, 15U, 99U))
+    );
+    const auto clamped_source =
+        clamped_picture_image.startup_window_picture_source(1);
+    check(clamped_source.base_render_property == 0xfedcba98U &&
+              clamped_source.authored_alpha == 255U &&
+              clamped_source.alignment_enum == 15U &&
+              clamped_source.extension_control == 16U,
+          "preserve the neutral property and clamp recovered authored controls");
     const auto persistent_picture_image = off::data::GmsImage::parse(
         off::data::PackedResource::parse(window_picture_fixture(true, 7U))
     );
@@ -475,6 +497,16 @@ int main() {
             static_cast<void>(image.startup_window_picture_source(1));
         },
         "reject a window-picture state exponent outside a byte mask"
+    );
+    check_rejected(
+        [] {
+            const auto image = off::data::GmsImage::parse(
+                off::data::PackedResource::parse(
+                    window_picture_fixture(true, 0U, 0U, 0U, 16U))
+            );
+            static_cast<void>(image.startup_window_picture_source(1));
+        },
+        "reject a window-picture alignment enum outside its recovered range"
     );
     check_rejected(
         [] {

@@ -77,6 +77,13 @@ multipliers. Invalid enums, non-finite inputs, negative picture extents,
 non-positive viewports, and zero or non-finite values actually used as divisors
 fail closed.
 
+The recovered picture constructor initializes both picture-extent scale
+components to exactly `1.0`. They are runtime object state, distinct from PRM
+descriptor coordinate bounds. The portable startup path must therefore obtain
+picture and owner extents, object matrices, visitor values, and projection
+inputs from explicit prepared runtime state or an explicit project policy; it
+must not infer picture extents from descriptor minima or maxima.
+
 ## Startup viewport boundary
 
 The recovered transform functions contain no hardcoded reference dimensions,

@@ -294,12 +294,19 @@ StartupGraphicsComposition StartupGraphicsComposition::build(
                 picture.texture_resources(), textures, true);
             auto [chain, transforms] = make_chain(directory_index);
             row.pictures[picture_index] = {
-                picture_index == 0 ? StartupGraphicsCompositionRole::row_background
-                                   : StartupGraphicsCompositionRole::row_chrome,
-                directory_index, std::move(chain), std::move(transforms),
-                source.picture_asset_reference,
-                authored_state_mask,
-                PictureDrawPlan::build(picture, bindings)};
+                .role = picture_index == 0
+                    ? StartupGraphicsCompositionRole::row_background
+                    : StartupGraphicsCompositionRole::row_chrome,
+                .directory_index = directory_index,
+                .construction_chain = std::move(chain),
+                .transform_chain = std::move(transforms),
+                .picture_reference = source.picture_asset_reference,
+                .authored_state_mask = authored_state_mask,
+                .base_render_property = source.base_render_property,
+                .authored_alpha = source.authored_alpha,
+                .alignment_enum = source.alignment_enum,
+                .extension_control = source.extension_control,
+                .draw_plan = PictureDrawPlan::build(picture, bindings)};
         }
         built_rows[row_index] = std::move(row);
     }
@@ -338,6 +345,11 @@ StartupGraphicsComposition StartupGraphicsComposition::from_rows(
             row.pictures[2].authored_state_mask != resting_state)
             throw std::runtime_error("startup graphics picture state-mask contract mismatch");
         for (const auto& picture : row.pictures) {
+            if (picture.alignment_enum > 15U ||
+                (picture.extension_control.has_value() &&
+                 *picture.extension_control > 16U))
+                throw std::runtime_error(
+                    "startup graphics picture authored controls are out of range");
             if (!picture_identities.insert(picture.directory_index).second)
                 throw std::runtime_error("startup graphics picture identity is duplicated");
             for (std::size_t group_index = 0;
