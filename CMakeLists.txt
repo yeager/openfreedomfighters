@@ -17,6 +17,7 @@ add_library(off_core
     src/data/texture_catalog.cpp
     src/data/vfs_file_view.cpp
     src/data/zip_archive.cpp
+    src/graphics/texture_decode.cpp
 )
 target_include_directories(off_core PUBLIC include)
 target_compile_features(off_core PUBLIC cxx_std_23)
@@ -57,4 +58,8 @@ if(BUILD_TESTING)
     add_executable(off_texture_catalog_tests tests/texture_catalog_tests.cpp)
     target_link_libraries(off_texture_catalog_tests PRIVATE off_core)
     add_test(NAME off_texture_catalog_tests COMMAND off_texture_catalog_tests)
+
+    add_executable(off_texture_decode_tests tests/texture_decode_tests.cpp)
+    target_link_libraries(off_texture_decode_tests PRIVATE off_core)
+    add_test(NAME off_texture_decode_tests COMMAND off_texture_decode_tests)
 endif()

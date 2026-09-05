@@ -8,6 +8,7 @@
 #include "off/data/scene_support.hpp"
 #include "off/data/texture_catalog.hpp"
 #include "off/data/zip_archive.hpp"
+#include "off/graphics/texture_decode.hpp"
 
 #include <algorithm>
 #include <array>
@@ -176,6 +177,10 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         std::size_t texture_catalog_count = 0;
         std::size_t texture_image_count = 0;
         std::size_t texture_sequence_count = 0;
+        bool decoded_dxt1_reference = false;
+        bool decoded_dxt3_reference = false;
+        bool decoded_abgr_reference = false;
+        bool decoded_palette_reference = false;
         for (const auto& entry : std::filesystem::recursive_directory_iterator(root / "Scenes")) {
             if (!entry.is_regular_file() || lowercase(entry.path().extension().string()) != ".zip") {
                 continue;
@@ -196,6 +201,35 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                     ++scene_support_count;
                 } else if (extension == ".tex") {
                     const auto catalog = TextureCatalog::parse(archive.read(member));
+                    for (const auto& image : catalog.images()) {
+                        bool* decoded_reference = nullptr;
+                        switch (image.encoding) {
+                            case TextureEncoding::dxt1:
+                                decoded_reference = &decoded_dxt1_reference;
+                                break;
+                            case TextureEncoding::dxt3:
+                                decoded_reference = &decoded_dxt3_reference;
+                                break;
+                            case TextureEncoding::abgr32:
+                                decoded_reference = &decoded_abgr_reference;
+                                break;
+                            case TextureEncoding::paletted8:
+                                decoded_reference = &decoded_palette_reference;
+                                break;
+                        }
+                        if (*decoded_reference) {
+                            continue;
+                        }
+                        const auto decoded = graphics::decode_texture_mip(image, 0);
+                        const auto required_bytes =
+                            static_cast<std::size_t>(decoded.width) * decoded.height * 4U;
+                        if (decoded.pixels.size() != required_bytes) {
+                            throw std::runtime_error(
+                                "texture reference decoded to an invalid pixel count"
+                            );
+                        }
+                        *decoded_reference = true;
+                    }
                     texture_image_count += catalog.images().size();
                     texture_sequence_count += catalog.sequences().size();
                     ++texture_files_in_archive;
@@ -211,7 +245,9 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         }
         if (scene_archive_count != 90 || scene_support_count != scene_archive_count ||
             texture_catalog_count != scene_archive_count || texture_image_count != 23'522 ||
-            texture_sequence_count != 19) {
+            texture_sequence_count != 19 || !decoded_dxt1_reference ||
+            !decoded_dxt3_reference || !decoded_abgr_reference ||
+            !decoded_palette_reference) {
             return failure(
                 InstallError::incomplete_game_data,
                 root,

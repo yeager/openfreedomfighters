@@ -32,7 +32,7 @@ Representative scene archives consistently expose a family of resource types:
 | `SUP` | `DLCF` dependency list | downstream loading semantics |
 | `BUF` | binary data buffers | offsets, alignment, ownership |
 | `GMS` | game/mission scripting data | VM or declarative structure |
-| `TEX` | texture catalog with indexed image and sequence blocks | channel semantics and renderer upload |
+| `TEX` | texture catalog with indexed image and sequence blocks | renderer upload and material references |
 | `SND` | sound event metadata | bank links, loop and spatial flags |
 | `LOC` | localization table | encoding, identifiers, plural rules |
 | `OCT` | spatial octree | bounds and cell/object references |
@@ -45,7 +45,7 @@ This table is provisional. Every claim graduates only after cross-file validatio
 
 Aggregate sizes, header invariants, and the first three-scene comparison are recorded in [FORMAT_CENSUS.md](FORMAT_CENSUS.md).
 
-Across all 90 archives, each of `GMS`, `OCT`, `PRM`, `RMC`, `RMI`, `SGP`, `SND`, `SUP`, `TEX`, and `ZGF` occurs 90 times. `BUF` and `LOC` occur 88 times and `ANM` occurs 42 times. This regularity strongly supports a per-scene resource-family design. `SUP` is confirmed as a dependency list, and `TEX` is parsed into indexed images, mip chains, palettes, and sequences; the remaining family semantics are still hypotheses.
+Across all 90 archives, each of `GMS`, `OCT`, `PRM`, `RMC`, `RMI`, `SGP`, `SND`, `SUP`, `TEX`, and `ZGF` occurs 90 times. `BUF` and `LOC` occur 88 times and `ANM` occurs 42 times. This regularity strongly supports a per-scene resource-family design. `SUP` is confirmed as a dependency list, and `TEX` is parsed into indexed images, mip chains, palettes, and sequences and decoded to RGBA8; the remaining family semantics are still hypotheses.
 
 ## PE image map
 
@@ -113,6 +113,6 @@ Files named `.WAV` are often banks rather than conventional RIFF WAV files. All 
 
 1. Resolve runtime-computed dynamic module/API arguments and map load-config metadata.
 2. Promote three-scene resource invariants to corpus-wide validators and infer section tables.
-3. Decode the completed `TEX` image model to renderer-ready pixels, then map material references in `RMC`/`RMI` and geometry in `PRM`.
+3. Map material references in `RMC`/`RMI` and geometry in `PRM`, then upload decoded `TEX` pixels to the renderer.
 4. Record black-box boot, menu, input, timing, and first-level traces from the retail game.
 5. Define golden screenshots/state traces stored locally as hashes and numeric measurements.

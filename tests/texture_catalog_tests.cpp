@@ -218,6 +218,13 @@ int main() {
     );
     check_rejected(
         [](auto& value) {
+            const auto palette_index = value.image_offsets[3] + 4 + 32 + 8 + 4;
+            value.bytes[palette_index] = std::byte{2};
+        },
+        "reject an out-of-range palette index"
+    );
+    check_rejected(
+        [](auto& value) {
             set_u32(value.bytes, value.data_end + 200 * sizeof(std::uint32_t), 0);
         },
         "reject missing image-index entry"

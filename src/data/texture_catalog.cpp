@@ -234,6 +234,15 @@ TextureCatalog TextureCatalog::parse(std::span<const std::byte> bytes) {
                 image.palette.push_back(reader.u32(position + index * 4U));
             }
             position += static_cast<std::size_t>(palette_count) * 4U;
+            for (const auto& mip : image.mips) {
+                if (!std::all_of(mip.encoded.begin(), mip.encoded.end(), [palette_count](
+                        std::byte value
+                    ) {
+                        return std::to_integer<std::uint32_t>(value) < palette_count;
+                    })) {
+                    throw std::runtime_error("texture mip contains an invalid palette index");
+                }
+            }
         }
         if (position != block_end) {
             throw std::runtime_error("texture-image block has trailing data");

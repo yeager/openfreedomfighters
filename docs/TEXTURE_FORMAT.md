@@ -39,12 +39,20 @@ Four format tags occur in the corpus:
 
 Every mip is prefixed by its encoded byte count. Dimensions halve at each level and clamp to one. The parser independently derives the required size for every level and rejects mismatches. A `PALN` block ends with a palette count and one 32-bit value per entry; the observed palette range is 1 through 256 entries.
 
+## Portable pixel decoding
+
+The native CPU decoder converts every observed encoding to tightly packed RGBA8. `DXT1` follows BC1 color interpolation and transparent-selector rules. `DXT3` follows BC2 four-color interpolation and expands each explicit 4-bit alpha value to eight bits. Edge blocks are clipped to the declared mip dimensions.
+
+Uncompressed `ABGR` pixels are stored in byte order blue, green, red, alpha and are swizzled to RGBA8. Each `PALN` byte indexes a packed palette color with masks `0xff000000` for alpha, `0x00ff0000` for red, `0x0000ff00` for green, and `0x000000ff` for blue. The parser rejects an index outside the image's declared palette before decoded output can be requested.
+
+Invented golden vectors cover color interpolation, DXT1 transparency, DXT3 alpha expansion, channel order, palette expansion, clipped blocks, and malformed storage. Installation verification also decodes one user-owned mip from each encoding family during the complete corpus pass and discards the pixels immediately.
+
 ## Image sequences
 
 Sequence blocks contain a count followed by image IDs. Their owning sequence ID comes from the second index. All referenced IDs must exist in the image index, and the indexed sequence ID must occur in its own list. Repeated frame IDs remain valid because they encode timing through repetition in observed lists.
 
 ## Safety and clean-room evidence
 
-The parser caps files at 128 MiB, dimensions at 4,096, mip chains at 16 levels, names and individual sequence lists at 4,096 entries, palettes at 256 entries, and indexed objects at 2,048. Every offset, multiplication, block length, mip size, string terminator, palette, and reference is checked before use.
+The parser caps files at 128 MiB, dimensions at 4,096, mip chains at 16 levels, names and individual sequence lists at 4,096 entries, palettes at 256 entries, and indexed objects at 2,048. The decoder independently caps output at 16 million pixels. Every offset, multiplication, block length, mip size, string terminator, palette, and reference is checked before use.
 
-Corpus-derived size equations and index relationships pass all 90 retail files. Private executable analysis independently branches on the same four format tags and exposes matching bitmap-class boundaries. Only interoperability facts and invented test fixtures are present in the public repository.
+Corpus-derived size equations and index relationships pass all 90 retail files. Private executable analysis independently branches on the same four format tags, exposes matching bitmap-class boundaries, and confirms the packed channel masks. Only interoperability facts and invented test fixtures are present in the public repository.
