@@ -110,7 +110,7 @@ jobs:
         run: |
           set -euo pipefail
           requested_version="${RELEASE_VERSION#v}"
-          project_version=$(sed -n 's/^project(OpenFreedomFighters VERSION \([^ ]*\) LANGUAGES CXX).*/\1/p' CMakeLists.txt)
+          project_version=$(sed -n 's/^project(OpenFreedomFighters VERSION \([^ ]*\) LANGUAGES .*)/\1/p' CMakeLists.txt)
           test -n "$project_version"
           test "$requested_version" = "$project_version"
       - name: Verify artifacts contain no retail data
@@ -120,15 +120,15 @@ jobs:
           test -s artifacts/linux-x86_64/OpenFreedomFighters-linux-x86_64.tar.gz
           test -s artifacts/macos/OpenFreedomFighters-macos.tar.gz
           test -s artifacts/windows-x64/OpenFreedomFighters-windows-x64.zip
-          if tar -tzf artifacts/linux-x86_64/OpenFreedomFighters-linux-x86_64.tar.gz | grep -Eai '\.(exe|dll|zip|wav|ogg|whd|loc|tex|prm|zgf)$'; then
+          if tar -tzf artifacts/linux-x86_64/OpenFreedomFighters-linux-x86_64.tar.gz | grep -Eai '\.(exe|dll|zip|wav|ogg|whd|loc|tex|prm|zgf|gms|oct|anm|buf|rmc|rmi|sgp|snd|sup)$'; then
             echo 'Linux artifact contains a prohibited retail-data extension' >&2
             exit 1
           fi
-          if tar -tzf artifacts/macos/OpenFreedomFighters-macos.tar.gz | grep -Eai '\.(exe|dll|zip|wav|ogg|whd|loc|tex|prm|zgf)$'; then
+          if tar -tzf artifacts/macos/OpenFreedomFighters-macos.tar.gz | grep -Eai '\.(exe|dll|zip|wav|ogg|whd|loc|tex|prm|zgf|gms|oct|anm|buf|rmc|rmi|sgp|snd|sup)$'; then
             echo 'macOS artifact contains a prohibited retail-data extension' >&2
             exit 1
           fi
-          if unzip -Z1 artifacts/windows-x64/OpenFreedomFighters-windows-x64.zip | grep -Eai '\.(wav|ogg|whd|loc|tex|prm|zgf)$'; then
+          if unzip -Z1 artifacts/windows-x64/OpenFreedomFighters-windows-x64.zip | grep -Eai '\.(zip|wav|ogg|whd|loc|tex|prm|zgf|gms|oct|anm|buf|rmc|rmi|sgp|snd|sup)$'; then
             echo 'Windows artifact contains a prohibited retail-data extension' >&2
             exit 1
           fi
