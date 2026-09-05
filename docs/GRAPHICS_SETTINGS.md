@@ -91,6 +91,14 @@ success. It performs no SDL calls or persistence I/O. Modern+, DLSS, resolution
 scaling, and advanced rows remain specified but disabled until their broader
 settings fields and real renderer capability paths are implemented.
 
+Stage 2 now has a renderer-neutral, physical-pixel draw-list model with strict
+command, hit-target, and text-byte budgets. It emits the backdrop, centered
+panel, implemented setting rows, focus, Apply/Cancel, busy states, and timed
+Keep/Revert confirmation. The pure session owns wraparound keyboard focus and
+edits, so the view never invents interaction state. SDL GPU composition,
+rasterized glyph rendering, mouse/controller routing, and runtime display
+application remain Stage 3 work.
+
 Hosted CI tests the pure model, menu state, event translation, draw-list bounds,
 and fallback resolution on every target. Real fullscreen, HDR, refresh switching,
 high-DPI resize, depth recreation, and GPU overlay composition remain hardware

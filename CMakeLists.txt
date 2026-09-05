@@ -64,6 +64,7 @@ add_library(off_core
     src/graphics/scene_gpu_plan.cpp
     src/settings/graphics_settings.cpp
     src/ui/graphics_menu.cpp
+    src/ui/graphics_menu_draw.cpp
 )
 target_include_directories(off_core PUBLIC include)
 target_compile_features(off_core PUBLIC cxx_std_23)
@@ -156,4 +157,8 @@ if(BUILD_TESTING)
     add_executable(off_graphics_settings_tests tests/graphics_settings_tests.cpp)
     target_link_libraries(off_graphics_settings_tests PRIVATE off_core)
     add_test(NAME off_graphics_settings_tests COMMAND off_graphics_settings_tests)
+
+    add_executable(off_graphics_menu_draw_tests tests/graphics_menu_draw_tests.cpp)
+    target_link_libraries(off_graphics_menu_draw_tests PRIVATE off_core)
+    add_test(NAME off_graphics_menu_draw_tests COMMAND off_graphics_menu_draw_tests)
 endif()

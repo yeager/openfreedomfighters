@@ -1,5 +1,6 @@
 #include "off/ui/graphics_menu.hpp"
 
+#include <array>
 #include <stdexcept>
 #include <utility>
 
@@ -47,6 +48,7 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
     if (phase_ == GraphicsMenuPhase::closed) {
       draft_ = confirmed_requested_;
       validation_error_.reset();
+      selected_row_ = GraphicsMenuRow::profile;
       phase_ = GraphicsMenuPhase::editing;
       return GraphicsMenuEffect::opened;
     }
@@ -59,9 +61,82 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
     return GraphicsMenuEffect::none;
   }
   if (phase_ == GraphicsMenuPhase::closed) {
-    return GraphicsMenuEffect::quit_requested;
+    return key == GraphicsMenuKey::escape ? GraphicsMenuEffect::quit_requested
+                                           : GraphicsMenuEffect::none;
   }
-  return cancel_or_revert();
+  if (key == GraphicsMenuKey::escape) {
+    return cancel_or_revert();
+  }
+  if (phase_ != GraphicsMenuPhase::editing) {
+    return GraphicsMenuEffect::none;
+  }
+  constexpr std::array rows{GraphicsMenuRow::profile,
+                            GraphicsMenuRow::window_mode,
+                            GraphicsMenuRow::window_size,
+                            GraphicsMenuRow::present_mode,
+                            GraphicsMenuRow::apply,
+                            GraphicsMenuRow::cancel};
+  auto index = static_cast<std::size_t>(selected_row_);
+  if (key == GraphicsMenuKey::up) {
+    index = (index + rows.size() - 1) % rows.size();
+    selected_row_ = rows[index];
+    return GraphicsMenuEffect::none;
+  }
+  if (key == GraphicsMenuKey::down) {
+    selected_row_ = rows[(index + 1) % rows.size()];
+    return GraphicsMenuEffect::none;
+  }
+  if (key == GraphicsMenuKey::enter || key == GraphicsMenuKey::space) {
+    if (selected_row_ == GraphicsMenuRow::apply) {
+      return GraphicsMenuEffect::apply_requested;
+    }
+    if (selected_row_ == GraphicsMenuRow::cancel) {
+      return cancel_or_revert();
+    }
+  }
+  if (key != GraphicsMenuKey::left && key != GraphicsMenuKey::right) {
+    return GraphicsMenuEffect::none;
+  }
+  const auto forward = key == GraphicsMenuKey::right;
+  switch (selected_row_) {
+  case GraphicsMenuRow::profile:
+    draft_.profile = draft_.profile == Mode::original ? Mode::modern
+                                                       : Mode::original;
+    break;
+  case GraphicsMenuRow::window_mode:
+    draft_.window_mode =
+        draft_.window_mode == settings::WindowMode::windowed
+            ? settings::WindowMode::borderless_desktop
+            : settings::WindowMode::windowed;
+    break;
+  case GraphicsMenuRow::window_size: {
+    constexpr std::array sizes{settings::WindowSize{1280, 720},
+                               settings::WindowSize{1920, 1080},
+                               settings::WindowSize{2560, 1440},
+                               settings::WindowSize{3840, 2160}};
+    std::size_t size_index = 0;
+    for (std::size_t i = 0; i < sizes.size(); ++i) {
+      if (sizes[i] == draft_.windowed_size) {
+        size_index = i;
+      }
+    }
+    size_index = forward ? (size_index + 1) % sizes.size()
+                         : (size_index + sizes.size() - 1) % sizes.size();
+    draft_.windowed_size = sizes[size_index];
+    break;
+  }
+  case GraphicsMenuRow::present_mode: {
+    auto value = static_cast<unsigned>(draft_.present_mode);
+    value = forward ? (value + 1U) % 3U : (value + 2U) % 3U;
+    draft_.present_mode = static_cast<settings::PresentMode>(value);
+    break;
+  }
+  case GraphicsMenuRow::apply:
+  case GraphicsMenuRow::cancel:
+    break;
+  }
+  validation_error_.reset();
+  return GraphicsMenuEffect::none;
 }
 
 std::optional<GraphicsApplyProposal> GraphicsMenuSession::request_apply() {

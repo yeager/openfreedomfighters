@@ -17,7 +17,25 @@ enum class GraphicsMenuPhase : std::uint8_t {
   confirming,
   reverting
 };
-enum class GraphicsMenuKey : std::uint8_t { f10, escape, other };
+enum class GraphicsMenuKey : std::uint8_t {
+  f10,
+  escape,
+  up,
+  down,
+  left,
+  right,
+  enter,
+  space,
+  other
+};
+enum class GraphicsMenuRow : std::uint8_t {
+  profile,
+  window_mode,
+  window_size,
+  present_mode,
+  apply,
+  cancel
+};
 enum class GraphicsMenuEffect : std::uint8_t {
   none,
   opened,
@@ -52,6 +70,9 @@ public:
   [[nodiscard]] GraphicsMenuEffect acknowledge_revert(bool success);
 
   [[nodiscard]] GraphicsMenuPhase phase() const noexcept { return phase_; }
+  [[nodiscard]] GraphicsMenuRow selected_row() const noexcept {
+    return selected_row_;
+  }
   [[nodiscard]] const settings::RequestedGraphicsSettings &
   confirmed_requested() const noexcept {
     return confirmed_requested_;
@@ -65,6 +86,9 @@ public:
     return live_effective_;
   }
   [[nodiscard]] settings::RequestedGraphicsSettings &draft() noexcept {
+    return draft_;
+  }
+  [[nodiscard]] const settings::RequestedGraphicsSettings &draft() const noexcept {
     return draft_;
   }
   [[nodiscard]] std::optional<settings::GraphicsValidationError>
@@ -86,6 +110,7 @@ private:
   std::optional<GraphicsApplyProposal> pending_;
   std::optional<settings::GraphicsValidationError> validation_error_;
   std::optional<GraphicsClock::time_point> confirmation_deadline_;
+  GraphicsMenuRow selected_row_{GraphicsMenuRow::profile};
 };
 
 } // namespace off::ui
