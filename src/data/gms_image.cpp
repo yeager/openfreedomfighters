@@ -26,6 +26,135 @@ constexpr std::size_t object_slot_size = 112;
 constexpr std::size_t pool_class_count = 24;
 constexpr std::size_t pool_group_size = pool_class_count * sizeof(std::uint32_t);
 constexpr std::uint32_t auxiliary_size_mask = 0x3fffffffU;
+constexpr std::array<std::pair<std::uint32_t, std::string_view>, 102>
+    geometry_classes{{
+        {0x00000000U, "ZGEOM"},
+        {0x000000e3U, "ZDebugGeom"},
+        {0x00100001U, "ZGROUP"},
+        {0x00100020U, "ZTreeGroup"},
+        {0x00100021U, "ZROOM"},
+        {0x00100028U, "ZBOXGATEGROUP"},
+        {0x0010002eU, "ZWINGROUP"},
+        {0x00100030U, "ZWINDOWS"},
+        {0x00100031U, "ZWINDOW"},
+        {0x00100033U, "ZBUTTON"},
+        {0x00100034U, "ZSlider"},
+        {0x00100037U, "ZPANEL"},
+        {0x0010003bU, "ZScrollArea"},
+        {0x00100040U, "ZScrollbar"},
+        {0x00100042U, "ZEditControl"},
+        {0x00100047U, "ZWinGfxHandler"},
+        {0x001000caU, "ZAllocMany"},
+        {0x001000deU, "ZPATHGROUP"},
+        {0x001000e9U, "ZTemplate"},
+        {0x001000eaU, "ZInstance"},
+        {0x001000f0U, "ZMaterialDescGroup"},
+        {0x001007d1U, "ZItem"},
+        {0x001007d2U, "ZItemWeapon"},
+        {0x001007d3U, "ZItemTemplate"},
+        {0x001007d4U, "ZItemTemplateWeapon"},
+        {0x001007d5U, "ZItemTemplateAmmo"},
+        {0x001007d7U, "ZItemButton"},
+        {0x001007d8U, "ZItemAmmo"},
+        {0x001007d9U, "ZItemTemplateContainer"},
+        {0x001007daU, "ZItemContainer"},
+        {0x00100bbdU, "ZMoveOnSpline"},
+        {0x00100bbeU, "ZVehicle"},
+        {0x00100bbfU, "ZCar"},
+        {0x00100bc0U, "ZPmv"},
+        {0x00100bc1U, "ZTank"},
+        {0x00100bc2U, "ZHeli"},
+        {0x00101389U, "ZLanguageVersion"},
+        {0x00200002U, "ZSTDOBJ"},
+        {0x00200005U, "ZHELPER"},
+        {0x00200006U, "ZLNKOBJ"},
+        {0x0020000bU, "Z2DOBJ"},
+        {0x00200011U, "ZPICOBJ"},
+        {0x00200012U, "ZSNDOBJ"},
+        {0x00200015U, "ZGATE"},
+        {0x00200016U, "ZPlayerTest"},
+        {0x0020001cU, "ZBOUND"},
+        {0x00200027U, "ZIKLNKOBJ"},
+        {0x0020002cU, "ZWINOBJ"},
+        {0x0020002dU, "ZCHAROBJ"},
+        {0x0020002fU, "ZFONT"},
+        {0x00200038U, "ZLINEOBJ"},
+        {0x0020003aU, "ZTTFONT"},
+        {0x00200045U, "ZFRAME"},
+        {0x00200046U, "ZWINPIC"},
+        {0x00200070U, "ZBOXSTDOBJ"},
+        {0x00200073U, "ZLNKWHANDS"},
+        {0x00200074U, "ZCTRLIKLNKOBJ"},
+        {0x00200075U, "ZPathfinder3"},
+        {0x002000cbU, "ZLightOverlay"},
+        {0x002000e1U, "ZBoxPrimitive"},
+        {0x002000e2U, "ZParticleBox"},
+        {0x002000e4U, "ZParticleController"},
+        {0x002000e5U, "ZParticleTemplate"},
+        {0x002000e7U, "ZCubeGrid"},
+        {0x002000e8U, "ZCubeGridParticles"},
+        {0x002000ecU, "ZBreath"},
+        {0x002000edU, "ZBloodSpray"},
+        {0x002000eeU, "ZBulletMarks"},
+        {0x002000efU, "ZBloodStains"},
+        {0x002000f0U, "ZMaterialDesc"},
+        {0x002000f1U, "ZBloodSplatters"},
+        {0x002000f4U, "ZMotionBlur"},
+        {0x002000f6U, "ZCloth"},
+        {0x002000faU, "ZCameraOverlay"},
+        {0x002000fdU, "ZStdObjBox"},
+        {0x002003e8U, "ZFFHERO"},
+        {0x0020044cU, "ZTVNoise"},
+        {0x0020044dU, "ZCredits"},
+        {0x0020047eU, "ZOnScreenDisplay"},
+        {0x00200481U, "ZMapHelper"},
+        {0x00200482U, "ZFFPRIVATESTDOBJ"},
+        {0x002007d0U, "ZActor"},
+        {0x002007f9U, "ZFFActor"},
+        {0x00400003U, "ZCAMERA"},
+        {0x00400480U, "ZFFCameraClass"},
+        {0x0080000dU, "ZENVIRONMENT"},
+        {0x00800020U, "ZSPOTLIGHTSQUARE"},
+        {0x00800023U, "ZSPOTLIGHT"},
+        {0x00800024U, "ZOMNILIGHT"},
+        {0x008000e6U, "ZUSERLIGHT"},
+        {0x008000f2U, "ZGateLightSquareSpot"},
+        {0x008000f3U, "ZGateLightMaster"},
+        {0x008000f5U, "ZGateLightOmni"},
+        {0x008000f7U, "ZGateLightSquareSpotMaster"},
+        {0x008000f8U, "ZGateLightSpotMaster"},
+        {0x008000f9U, "ZGateLightSpot"},
+        {0x04000022U, "ZSHAPE"},
+        {0x0800001aU, "ZLIST"},
+        {0x08000049U, "ZWINOBJSPRITEHOLDER"},
+        {0x80100032U, "ZCONTROL"},
+        {0x80200014U, "ZPlayer"},
+        {0x80800004U, "ZLIGHT"},
+    }};
+constexpr std::array<std::uint32_t, 16> primitive_source_types{
+    0x00200002U,
+    0x0020000bU,
+    0x00200015U,
+    0x0020001cU,
+    0x0020002dU,
+    0x0020003aU,
+    0x00200046U,
+    0x00200075U,
+    0x002000cbU,
+    0x002000e1U,
+    0x002000e2U,
+    0x002000e5U,
+    0x002000eeU,
+    0x002000f6U,
+    0x002000fdU,
+    0x00200482U,
+};
+static_assert(std::ranges::is_sorted(
+    geometry_classes,
+    {},
+    &std::pair<std::uint32_t, std::string_view>::first
+));
+static_assert(std::ranges::is_sorted(primitive_source_types));
 
 [[nodiscard]] std::size_t checked_table_end(
     std::size_t offset,
@@ -174,10 +303,10 @@ GmsImage GmsImage::parse(PackedResource resource) {
         active_groups.resize(active_groups.size() - parent_steps);
         const auto pool_group = active_groups.back();
         const auto source_type = reader.u32(record_offset + 16U);
-        const auto buf_object_offset = reader.u32(record_offset);
+        const auto buf_name_offset = reader.u32(record_offset);
         const auto basis_offset = reader.u32(record_offset + 4U);
         const auto position_offset = reader.u32(record_offset + 8U);
-        const auto linked_object_value = reader.u32(record_offset + 12U);
+        const auto class_data_value = reader.u32(record_offset + 12U);
         const auto attachment_table_offset = reader.u32(record_offset + 20U);
         const auto object_flags = reader.u32(record_offset + 24U);
         const auto buf_auxiliary_offset = reader.u32(record_offset + 28U);
@@ -282,10 +411,10 @@ GmsImage GmsImage::parse(PackedResource resource) {
             .group_slot_index = group_slot_index,
             .local_slot_index = local_slot_index,
             .pool_group = static_cast<std::uint32_t>(pool_group),
-            .buf_object_offset = buf_object_offset,
+            .buf_name_offset = buf_name_offset,
             .basis_offset = basis_offset,
             .position_offset = position_offset,
-            .linked_object_value = linked_object_value,
+            .class_data_value = class_data_value,
             .attachment_table_offset = attachment_table_offset,
             .object_flags = object_flags,
             .buf_auxiliary_offset = buf_auxiliary_offset,
@@ -295,6 +424,11 @@ GmsImage GmsImage::parse(PackedResource resource) {
             .basis = basis,
             .position = position,
             .attachments = std::move(attachments),
+            .primitive_reference =
+                class_data_value != 0U &&
+                        std::ranges::binary_search(primitive_source_types, source_type)
+                    ? std::optional{class_data_value}
+                    : std::nullopt,
             .parent_steps = parent_steps,
             .source_variant = source_variant,
             .pool_class = static_cast<std::uint8_t>(pool_class),
@@ -354,8 +488,13 @@ void GmsImage::validate_buf(std::span<const std::byte> bytes) const {
     }
     const ByteReader reader(bytes);
     for (const auto& entry : directory_) {
-        if (entry.buf_object_offset >= bytes.size()) {
-            throw std::runtime_error("GMS object source exceeds its BUF resource");
+        if (entry.buf_name_offset >= bytes.size()) {
+            throw std::runtime_error("GMS object name exceeds its BUF resource");
+        }
+        const auto name_start = bytes.begin() +
+                                static_cast<std::ptrdiff_t>(entry.buf_name_offset);
+        if (std::find(name_start, bytes.end(), std::byte{0}) == bytes.end()) {
+            throw std::runtime_error("GMS object name is not NUL-terminated");
         }
         if (entry.buf_auxiliary_offset == 0U) {
             continue;
@@ -370,6 +509,21 @@ void GmsImage::validate_buf(std::span<const std::byte> bytes) const {
             throw std::runtime_error("GMS auxiliary BUF block exceeds its resource");
         }
     }
+}
+
+std::optional<std::string_view> GmsImage::source_class_name(
+    std::uint32_t source_type
+) noexcept {
+    const auto found = std::ranges::lower_bound(
+        geometry_classes,
+        source_type,
+        {},
+        &std::pair<std::uint32_t, std::string_view>::first
+    );
+    if (found == geometry_classes.end() || found->first != source_type) {
+        return std::nullopt;
+    }
+    return found->second;
 }
 
 GmsObjectHandle GmsImage::decode_object_handle(std::uint32_t packed_reference) {

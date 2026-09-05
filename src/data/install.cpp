@@ -22,6 +22,7 @@
 #include <optional>
 #include <stdexcept>
 #include <system_error>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -207,6 +208,7 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         std::size_t primitive_catalog_count = 0;
         std::size_t primitive_entry_count = 0;
         std::size_t primitive_reference_count = 0;
+        std::size_t gms_primitive_reference_count = 0;
         std::size_t primitive_vertex_count = 0;
         std::size_t primitive_batch_count = 0;
         std::size_t primitive_index_count = 0;
@@ -235,6 +237,7 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             std::size_t render_instance_files_in_archive = 0;
             std::optional<GmsImage> gms_image;
             std::optional<std::vector<std::byte>> buf_resource;
+            std::unordered_set<std::uint32_t> primitive_indices;
             std::vector<std::uint32_t> scene_geometry_references;
             for (const auto& member : archive.entries()) {
                 const auto extension = lowercase(
@@ -281,6 +284,11 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                         gms_image = GmsImage::parse(std::move(resource));
                         gms_directory_entry_count += gms_image->directory().size();
                         for (const auto& source : gms_image->directory()) {
+                            if (!GmsImage::source_class_name(source.source_type).has_value()) {
+                                throw std::runtime_error(
+                                    "GMS object source has an unknown geometry class"
+                                );
+                            }
                             if (!source.attachments.empty()) {
                                 ++gms_attachment_table_count;
                                 gms_attachment_count += source.attachments.size();
@@ -331,6 +339,7 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                 } else if (extension == ".prm") {
                     const auto catalog = PrimitiveCatalog::parse(archive.read(member));
                     for (const auto& primitive : catalog.entries()) {
+                        primitive_indices.insert(primitive.packed_index);
                         if (primitive.flagged_reference) {
                             ++primitive_reference_count;
                             continue;
@@ -391,6 +400,17 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                 }
                 gms_image->validate_buf(*buf_resource);
             }
+            for (const auto& source : gms_image->directory()) {
+                if (!source.primitive_reference.has_value()) {
+                    continue;
+                }
+                if (!primitive_indices.contains(*source.primitive_reference)) {
+                    throw std::runtime_error(
+                        "GMS object source references a missing PRM primitive"
+                    );
+                }
+                ++gms_primitive_reference_count;
+            }
             for (const auto reference : scene_geometry_references) {
                 static_cast<void>(GmsImage::decode_object_handle(reference));
                 ++decoded_gms_object_handle_count;
@@ -425,6 +445,7 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             !decoded_dxt3_reference || !decoded_abgr_reference ||
             !decoded_palette_reference || primitive_catalog_count != scene_archive_count ||
             primitive_entry_count != 61'451 || primitive_reference_count != 27 ||
+            gms_primitive_reference_count != 115'977 ||
             primitive_vertex_count != 2'820'961 || primitive_batch_count != 461'344 ||
             primitive_index_count != 4'412'738 || render_map_count != scene_archive_count ||
             render_map_entry_count != 1'612 ||

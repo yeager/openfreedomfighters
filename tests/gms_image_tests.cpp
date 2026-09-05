@@ -147,9 +147,12 @@ int main() {
               image.directory()[0].position ==
                   std::array<float, 3>{10.0F, 20.0F, 30.0F},
           "decode an object-source transform");
-    check(image.directory()[0].buf_object_offset == 32 &&
+    check(image.directory()[0].buf_name_offset == 32 &&
               image.directory()[0].buf_auxiliary_offset == 16,
           "retain object-source BUF offsets");
+    check(image.directory()[0].class_data_value == 0 &&
+              !image.directory()[0].primitive_reference.has_value(),
+          "retain class data without inventing a primitive reference");
     check(image.directory()[0].attachments.size() == 1 &&
               image.directory()[0].attachments[0].source_offset == 444 &&
               image.directory()[0].attachments[0].parameter == 2.0F,
@@ -157,6 +160,25 @@ int main() {
     std::vector<std::byte> buf(64);
     set_u32(buf, 20, 12);
     image.validate_buf(buf);
+    check(off::data::GmsImage::source_class_name(0x00200002U) == "ZSTDOBJ" &&
+              off::data::GmsImage::source_class_name(0x00100021U) == "ZROOM" &&
+              off::data::GmsImage::source_class_name(0x80800004U) == "ZLIGHT" &&
+              !off::data::GmsImage::source_class_name(0xffffffffU).has_value(),
+          "map source type codes to exported geometry classes");
+    auto primitive_source_bytes = packed_fixture();
+    set_u32(primitive_source_bytes, 9 + 336 + 12, 0x12345678U);
+    set_u32(primitive_source_bytes, 9 + 336 + 16, 0x00200002U);
+    set_u32(primitive_source_bytes, 9 + 128 + 4 + 4, 1);
+    set_u32(primitive_source_bytes, 9 + 128 + 4 + 12, 0);
+    set_u32(primitive_source_bytes, 9 + 128 + 4 + 24 * 4 + 4, 1);
+    set_u32(primitive_source_bytes, 9 + 128 + 4 + 24 * 4 + 12, 0);
+    const auto primitive_source_image = off::data::GmsImage::parse(
+        off::data::PackedResource::parse(primitive_source_bytes)
+    );
+    check(primitive_source_image.directory()[1].class_data_value == 0x12345678U &&
+              primitive_source_image.directory()[1].primitive_reference == 0x12345678U &&
+              primitive_source_image.directory()[2].primitive_reference == 0x12345678U,
+          "classify direct primitive references for geometry source types");
     check(image.directory()[1].pool_group == 1 &&
               image.directory()[1].pool_class == 3 &&
               image.directory()[1].group_slot_index == 0 &&
@@ -275,7 +297,15 @@ int main() {
             std::vector<std::byte> short_buf(16);
             image.validate_buf(short_buf);
         },
-        "reject an object source outside its BUF resource"
+        "reject an object name outside its BUF resource"
+    );
+    check_rejected(
+        [&image] {
+            std::vector<std::byte> unterminated_buf(64, std::byte{1});
+            set_u32(unterminated_buf, 20, 12);
+            image.validate_buf(unterminated_buf);
+        },
+        "reject a non-terminated BUF object name"
     );
     check_rejected(
         [&image] {

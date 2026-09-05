@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 namespace off::data {
@@ -25,10 +26,10 @@ struct GmsDirectoryEntry {
     std::uint32_t group_slot_index{0};
     std::uint32_t local_slot_index{0};
     std::uint32_t pool_group{0};
-    std::uint32_t buf_object_offset{0};
+    std::uint32_t buf_name_offset{0};
     std::uint32_t basis_offset{0};
     std::uint32_t position_offset{0};
-    std::uint32_t linked_object_value{0};
+    std::uint32_t class_data_value{0};
     std::uint32_t attachment_table_offset{0};
     std::uint32_t object_flags{0};
     std::uint32_t buf_auxiliary_offset{0};
@@ -38,6 +39,7 @@ struct GmsDirectoryEntry {
     std::array<float, 9> basis{};
     std::array<float, 3> position{};
     std::vector<GmsAttachment> attachments;
+    std::optional<std::uint32_t> primitive_reference;
     std::uint8_t parent_steps{0};
     std::uint8_t source_variant{0};
     std::uint8_t pool_class{0};
@@ -60,6 +62,9 @@ public:
     [[nodiscard]] static GmsObjectHandle decode_object_handle(
         std::uint32_t packed_reference
     );
+    [[nodiscard]] static std::optional<std::string_view> source_class_name(
+        std::uint32_t source_type
+    ) noexcept;
     [[nodiscard]] std::optional<std::size_t> local_source_for_handle(
         std::uint32_t packed_reference
     ) const;
