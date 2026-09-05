@@ -78,6 +78,7 @@ add_library(off_core
     src/graphics/scene_gpu_plan.cpp
     src/graphics/startup_graphics_asset.cpp
     src/graphics/startup_graphics_prepared_plan.cpp
+    src/graphics/startup_graphics_expanded_plan.cpp
     src/graphics/picture_transform.cpp
     src/graphics/picture_expansion.cpp
     src/platform/startup_lifecycle.cpp

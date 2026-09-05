@@ -107,6 +107,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   exact corner/UV pairing, authored center/span inputs, bounded indexed batches
   and packed-channel reduction. Final frame selection, projection and
   compositing remain separate gates; this does not enable startup drawing.
+- [x] Join prepared startup submissions to owning CPU geometry with explicit
+  identity-keyed picture transforms, retained texture identities and opaque
+  controls, and no inferred transforms or cross-resource reordering.
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
 - [ ] Audio mixing, device output, streaming voices, and positional sound as
   specified by the [audio runtime contract](AUDIO_RUNTIME.md). Audio-bank

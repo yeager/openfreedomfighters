@@ -149,6 +149,11 @@ pairing, indexed quads and per-channel color reduction for an explicitly
 supplied transform. It is not wired into the GPU runtime; final startup
 projection and compositing remain unresolved. See
 [Descriptor picture expansion](docs/PICTURE_EXPANSION.md).
+An owning expanded startup plan now joins that geometry to the prepared picture
+and texture identities. Every picture requires an explicit identity-keyed
+transform; missing or duplicated entries fail rather than generating defaults.
+The join preserves source submission order and opaque authored controls, and
+does not yet provide original startup transforms or GPU raster state.
 Recovered picture constructors default both extent scales to `1.0`; descriptor
 bounds are not substituted for the still-explicit runtime extent, matrix,
 visitor, or projection inputs.

@@ -1,8 +1,11 @@
 #include "off/graphics/startup_graphics_asset.hpp"
 #include "off/graphics/startup_graphics_prepared_plan.hpp"
 #include "off/graphics/picture_expansion.hpp"
+#include "off/graphics/startup_graphics_expanded_plan.hpp"
 
 #include <bit>
+#include <algorithm>
+#include <limits>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -333,6 +336,94 @@ int main(int argc, char **argv) {
             fallback.quads().size() == 77,
         "preserve recovered fallback state in the pre-raster plan");
 
+  const auto transforms_for = [](const auto &plan) {
+    std::vector<off::graphics::StartupGraphicsPictureTransform> transforms;
+    for (const auto &picture : plan.pictures())
+      transforms.push_back({picture.picture_directory_index,
+          {{0, 0, 1, 0, 1, 0, 1, 0, 0},
+           {static_cast<float>(picture.picture_directory_index), 0, 0}}});
+    std::reverse(transforms.begin(), transforms.end());
+    return transforms;
+  };
+  for (const auto state : {0x01U, 0x08U, 0x04U}) {
+    const auto input = off::graphics::prepare_startup_graphics_plan(asset, state);
+    auto transforms = transforms_for(input);
+    const auto expanded = off::graphics::expand_startup_graphics_plan(input, transforms);
+    check(expanded.requested_state() == state &&
+              expanded.effective_state() == input.effective_state() &&
+              expanded.resources().size() == 6 &&
+              expanded.pictures().size() == input.pictures().size() &&
+              expanded.submissions().size() == input.submissions().size(),
+          "expand 21/77 and 7/7 shapes while preserving requested and effective state");
+    for (std::size_t i = 0; i < expanded.pictures().size(); ++i) {
+      const auto &a = expanded.pictures()[i];
+      const auto &b = input.pictures()[i];
+      check(a.picture_directory_index == b.picture_directory_index &&
+                a.base_render_property == b.base_render_property &&
+                a.authored_alpha == b.authored_alpha &&
+                a.alignment_enum == b.alignment_enum &&
+                a.extension_control == b.extension_control &&
+                a.first_submission == b.first_submission &&
+                a.submission_count == b.submission_count,
+            "preserve opaque picture controls without applying them");
+    }
+    for (std::size_t i = 0; i < expanded.submissions().size(); ++i) {
+      const auto &output = expanded.submissions()[i];
+      const auto &source = input.quads()[i];
+      check(output.emission_ordinal == i &&
+                output.resource_index == source.resource_index &&
+                output.picture_directory_index == source.picture_directory_index &&
+                output.row_index == source.row_index && output.picture_index == source.picture_index &&
+                output.group_index == source.group_index && output.descriptor_index == source.descriptor_index &&
+                output.prepared_picture_index == input.submissions()[i].prepared_picture_index,
+            "preserve ordered submission and resource identities");
+      check(output.vertices[0].position[0] ==
+                static_cast<float>(source.picture_directory_index) - 1.0F &&
+                output.indices == std::array<std::uint16_t, 6>{0, 1, 3, 1, 2, 3} &&
+                output.vertices[0].color == ((source.source.modulation_color >> 1U) & 0x7f7f7f7fU),
+            "key shuffled transforms by directory identity with local topology and unchanged color policy");
+    }
+    const auto reject_transforms = [&](const auto &bad) {
+      bool rejected = false;
+      try { static_cast<void>(off::graphics::expand_startup_graphics_plan(input, bad)); }
+      catch (const std::runtime_error &) { rejected = true; }
+      check(rejected, "reject incomplete, duplicate, extra, unknown or non-finite transform mapping");
+    };
+    auto bad = transforms;
+    bad.pop_back();
+    reject_transforms(bad);
+    bad = transforms;
+    bad.push_back(transforms.front());
+    reject_transforms(bad);
+    bad = transforms;
+    bad[1].picture_directory_index = bad[0].picture_directory_index;
+    reject_transforms(bad);
+    bad = transforms;
+    bad[0].picture_directory_index = std::numeric_limits<std::size_t>::max();
+    reject_transforms(bad);
+    bad = transforms;
+    bad[0].transform.basis[4] = std::numeric_limits<float>::quiet_NaN();
+    reject_transforms(bad);
+    bad = transforms;
+    bad[0].transform.translation[0] = std::numeric_limits<float>::infinity();
+    reject_transforms(bad);
+  }
+  const auto owned_expanded = [&] {
+    auto bytes = texture_catalog();
+    const auto local_catalog = off::data::TextureCatalog::parse(bytes);
+    const auto local_asset = off::graphics::build_startup_graphics_asset(composition(), local_catalog);
+    const auto local_prepared = off::graphics::prepare_startup_graphics_plan(local_asset, 0x01U);
+    const auto local_transforms = transforms_for(local_prepared);
+    return off::graphics::expand_startup_graphics_plan(local_prepared, local_transforms);
+  }();
+  check(owned_expanded.resources().size() == 6 &&
+            owned_expanded.resources().front().texture_id == prepared.resources().front().texture_id &&
+            owned_expanded.pictures().front().authored_alpha == 221U &&
+            owned_expanded.submissions().size() == 77 &&
+            owned_expanded.submissions().front().vertices[0].position[0] ==
+                static_cast<float>(prepared.quads().front().picture_directory_index) - 1.0F,
+        "expanded metadata and geometry outlive all input assets, prepared plans and transforms");
+
   const auto mismatched_asset = off::graphics::build_startup_graphics_asset(
       composition(20), catalog);
   bool identity_rejected = false;
@@ -414,6 +505,27 @@ int main(int argc, char **argv) {
       check(expanded.size() == 1 && expanded[0].vertices.size() == 4 &&
                 expanded[0].indices.size() == 6,
             "expand real startup descriptors with an explicit test transform");
+    }
+    std::vector<off::graphics::StartupGraphicsPictureTransform>
+        retail_compatibility_transforms;
+    for (const auto &picture : retail_prepared.pictures())
+      retail_compatibility_transforms.push_back(
+          {picture.picture_directory_index, compatibility_transform});
+    const auto retail_expanded = off::graphics::expand_startup_graphics_plan(
+        retail_prepared, retail_compatibility_transforms);
+    check(retail_expanded.submissions().size() == 77 &&
+              retail_expanded.pictures().size() == 21 &&
+              retail_expanded.resources().size() == 6,
+          "expand the real startup plan using explicit test-only transforms");
+    for (std::size_t i = 0; i < retail_expanded.submissions().size(); ++i) {
+      const auto &output = retail_expanded.submissions()[i];
+      const auto &source = retail_prepared.quads()[i];
+      check(output.emission_ordinal == i &&
+                output.picture_directory_index == source.picture_directory_index &&
+                output.resource_index == source.resource_index &&
+                retail_expanded.resources()[output.resource_index].texture_id ==
+                    retail_prepared.resources()[source.resource_index].texture_id,
+            "preserve retail submission order, picture identity and resource pairing");
     }
     for (unsigned state = 0; state < 256; ++state) {
       const auto requested = static_cast<std::uint8_t>(state);

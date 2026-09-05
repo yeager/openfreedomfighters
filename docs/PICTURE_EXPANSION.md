@@ -77,3 +77,25 @@ startup asset compatibility test additionally expands every prepared retail
 descriptor with an explicitly test-only identity transform. That check proves
 the real descriptor data can cross this CPU boundary; it does not validate
 retail placement or final pixels, and writes no retail-derived output.
+
+## Owning startup expansion boundary
+
+`StartupGraphicsExpandedPlan` joins a prepared startup plan to explicitly
+provided picture transforms. Transform records are keyed by the exact picture
+directory identity, not their position in the caller's array. There must be
+exactly one transform for each prepared picture; missing, duplicated and
+unmatched identities are errors. No fallback transform is generated.
+
+The result owns resource metadata, picture metadata and expanded geometry.
+It preserves requested/effective state, immediate submission order, picture
+identity and each submission's resource identity. Each source submission is
+expanded independently, without merging across textures or reordering draws.
+The already validated 21-picture/77-submission and 7-picture/7-submission shapes
+bound this operation. No pixels, borrowed source pointers or GPU handles enter
+the result.
+
+Opaque picture controls are preserved, not interpreted as blending inputs.
+In particular, authored alpha is not silently combined with the descriptor's
+packed color. This boundary makes an explicitly transformed CPU plan available
+to a future renderer, but does not supply original runtime transforms or
+justify the still-missing final render state.
