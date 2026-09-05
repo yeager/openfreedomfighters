@@ -93,6 +93,13 @@ Replace `original` with `modern` to verify the second runtime profile.
 Omit `--verify-only` to open the current native renderer prototype. Close the
 window or press Escape to exit. `--frame-limit COUNT` is available for bounded
 GPU smoke tests and still requires successful retail-data verification first.
+Every normal launch first presents project-owned OpenFreedomFighters artwork for
+three seconds. Retail verification runs concurrently so the window remains
+responsive. Missing, invalid, unsupported, or omitted game data produces a
+native error dialog attached to that startup window. `--verify-only`, `--help`,
+and `--version` remain headless and never open the splash.
+The exact lifecycle and current window-handoff limitation are documented in
+[Native startup splash](docs/STARTUP_SPLASH.md).
 `--show-graphics-menu` opens the same overlay immediately for bounded visual
 smoke tests. During normal play, F10 opens and closes it.
 `--screenshot FILE.bmp` captures the final composed frame when `--frame-limit`

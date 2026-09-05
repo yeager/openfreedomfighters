@@ -63,6 +63,10 @@ Gate: a new contributor can generate the same structural report from a supported
   and 7/7 traversal shapes, raw quads, opaque authored picture controls,
   six-resource identities, and contiguous emission spans without generating
   unproven transforms or raster state.
+- [x] Present a project-owned three-second native splash on normal launches,
+  keep retail verification responsive on a worker, and report missing or
+  invalid game data in a window-parented native dialog. Verification-only and
+  informational CLI paths remain headless.
 - [x] Implement bounds-checked world-space queries over RMC/RMI octrees.
 - [x] Identify and validate packed geometry references in RMC/RMI descriptors.
 - [ ] Safe, bounds-checked readers for all required formats.

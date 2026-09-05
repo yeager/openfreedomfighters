@@ -79,6 +79,7 @@ add_library(off_core
     src/graphics/startup_graphics_asset.cpp
     src/graphics/startup_graphics_prepared_plan.cpp
     src/graphics/picture_transform.cpp
+    src/platform/startup_lifecycle.cpp
     src/settings/graphics_settings.cpp
     src/simulation/fixed_step.cpp
     src/simulation/input.cpp
@@ -103,6 +104,7 @@ add_executable(
     openfreedomfighters
     src/main.cpp
     src/platform/sdl_gpu_runtime.cpp
+    src/platform/sdl_startup.cpp
 )
 target_link_libraries(
     openfreedomfighters PRIVATE
@@ -111,6 +113,15 @@ target_link_libraries(
 target_include_directories(
     openfreedomfighters PRIVATE
     "${off_shader_assets_SOURCE_DIR}/examples"
+)
+add_custom_command(
+    TARGET openfreedomfighters POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_FILE_DIR:openfreedomfighters>/assets"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/branding/openfreedomfighters-splash.bmp"
+            "$<TARGET_FILE_DIR:openfreedomfighters>/assets/openfreedomfighters-splash.bmp"
+    VERBATIM
 )
 if(MSVC)
     target_compile_options(openfreedomfighters PRIVATE /W4 /permissive-)
@@ -122,6 +133,8 @@ else()
 endif()
 
 install(TARGETS openfreedomfighters RUNTIME DESTINATION bin)
+install(FILES assets/branding/openfreedomfighters-splash.bmp
+        DESTINATION bin/assets)
 
 if(BUILD_TESTING)
     add_executable(off_core_tests tests/core_tests.cpp)
@@ -222,6 +235,10 @@ if(BUILD_TESTING)
     add_executable(off_picture_transform_tests tests/picture_transform_tests.cpp)
     target_link_libraries(off_picture_transform_tests PRIVATE off_core)
     add_test(NAME off_picture_transform_tests COMMAND off_picture_transform_tests)
+
+    add_executable(off_startup_lifecycle_tests tests/startup_lifecycle_tests.cpp)
+    target_link_libraries(off_startup_lifecycle_tests PRIVATE off_core)
+    add_test(NAME off_startup_lifecycle_tests COMMAND off_startup_lifecycle_tests)
 
     add_executable(off_retail_ui_fonts_tests tests/retail_ui_fonts_tests.cpp)
     target_link_libraries(off_retail_ui_fonts_tests PRIVATE off_core)

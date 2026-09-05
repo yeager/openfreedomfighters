@@ -4,6 +4,7 @@
 #include "off/graphics/startup_graphics_asset.hpp"
 #include "off/mode.hpp"
 #include "off/platform/sdl_gpu_runtime.hpp"
+#include "off/platform/sdl_startup.hpp"
 #include "off/ui/retail_ui_fonts.hpp"
 #include "off/ui/retail_ui_textures.hpp"
 
@@ -70,7 +71,7 @@ int main(int argc, char **argv) {
       return 2;
     }
   }
-  if (data_path.empty()) {
+  if (data_path.empty() && verify_only) {
     std::cerr
         << "A legally purchased Freedom Fighters installation is required.\n";
     usage(std::cerr);
@@ -102,13 +103,34 @@ int main(int argc, char **argv) {
     }
   }
 
-  const auto verification = off::data::verify_install(data_path);
-  if (!verification) {
-    std::cerr << "Game-data verification failed: " << verification.message
+  std::optional<off::data::InstallVerification> verification;
+  if (!verify_only) {
+    const auto preflight = off::platform::run_sdl_startup_preflight(data_path);
+    if (preflight.outcome ==
+        off::platform::StartupPreflightOutcome::quit_requested)
+      return 0;
+    if (preflight.outcome ==
+        off::platform::StartupPreflightOutcome::data_error) {
+      std::cerr << "Game-data verification failed: "
+                << preflight.verification.message << '\n';
+      return 3;
+    }
+    if (preflight.outcome ==
+        off::platform::StartupPreflightOutcome::platform_error) {
+      std::cerr << "Native startup failed: " << preflight.message << '\n';
+      return 4;
+    }
+    verification = preflight.verification;
+  } else {
+    verification = off::data::verify_install(data_path);
+  }
+
+  if (!*verification) {
+    std::cerr << "Game-data verification failed: " << verification->message
               << '\n';
     return 3;
   }
-  std::cout << verification.message << '\n'
+  std::cout << verification->message << '\n'
             << "Mode: " << off::mode_name(mode) << '\n';
   if (verify_only) {
     return 0;
@@ -130,8 +152,7 @@ int main(int argc, char **argv) {
   }
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       mode, scene, *startup_graphics, ui_fonts, ui_textures, frame_limit,
-      show_graphics_menu,
-      screenshot_path);
+      show_graphics_menu, screenshot_path);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';
     return 4;
