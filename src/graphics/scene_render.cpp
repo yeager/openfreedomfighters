@@ -1,9 +1,15 @@
 #include "off/graphics/scene_render.hpp"
 
+#include "off/data/packed_resource.hpp"
+#include "off/data/zip_archive.hpp"
+
 #include <algorithm>
+#include <array>
+#include <cctype>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <utility>
 
@@ -28,6 +34,37 @@ void add_bounded(std::size_t &total, std::size_t value, std::size_t limit,
 [[nodiscard]] bool finite(const auto &values) {
   return std::ranges::all_of(values,
                              [](float value) { return std::isfinite(value); });
+}
+
+[[nodiscard]] std::string lowercase(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char character) {
+                   return static_cast<char>(std::tolower(character));
+                 });
+  return value;
+}
+
+[[nodiscard]] const data::ZipEntry &
+unique_member_with_extension(const data::ZipArchive &archive,
+                             const char *extension) {
+  const data::ZipEntry *match = nullptr;
+  for (const auto &entry : archive.entries()) {
+    const auto dot = entry.name.find_last_of('.');
+    if (dot == std::string::npos ||
+        lowercase(entry.name.substr(dot)) != extension) {
+      continue;
+    }
+    if (match != nullptr) {
+      throw std::runtime_error(
+          "startup archive contains duplicate scene-resource members");
+    }
+    match = &entry;
+  }
+  if (match == nullptr) {
+    throw std::runtime_error(
+        "startup archive does not contain the required scene resources");
+  }
+  return *match;
 }
 
 } // namespace
@@ -301,6 +338,37 @@ SceneRenderAsset build_scene_render_asset(
   }
   validate_scene_render_asset(result);
   return result;
+}
+
+SceneRenderAsset
+load_startup_scene_render_asset(const std::filesystem::path &install_root) {
+  const auto archive =
+      data::ZipArchive::open(install_root / "Scenes" / "FF-StartUp.ZIP");
+  const auto primitive_bytes =
+      archive.read(unique_member_with_extension(archive, ".prm"));
+  const auto texture_bytes =
+      archive.read(unique_member_with_extension(archive, ".tex"));
+  const auto object_bytes =
+      archive.read(unique_member_with_extension(archive, ".gms"));
+  const auto rmc_bytes =
+      archive.read(unique_member_with_extension(archive, ".rmc"));
+  const auto rmi_bytes =
+      archive.read(unique_member_with_extension(archive, ".rmi"));
+
+  const auto primitives = data::PrimitiveCatalog::parse(primitive_bytes);
+  const auto textures = data::TextureCatalog::parse(texture_bytes);
+  const auto objects =
+      data::GmsImage::parse(data::PackedResource::parse(object_bytes));
+  const auto rmc = data::RenderMap::parse(rmc_bytes);
+  const auto rmi = data::RenderMap::parse(rmi_bytes);
+  const std::array maps{
+      SceneRenderMapView{.kind = SceneRenderMapKind::rmc,
+                         .entries = rmc.entries()},
+      SceneRenderMapView{.kind = SceneRenderMapKind::rmi,
+                         .entries = rmi.entries()},
+  };
+  return build_scene_render_asset(primitives.entries(), textures.images(),
+                                  objects.directory(), maps);
 }
 
 } // namespace off::graphics

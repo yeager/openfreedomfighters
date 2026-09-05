@@ -29,6 +29,11 @@ diagnostic single-mesh preview's selection rules do not apply to scene assets.
 Textures are decoded to owned RGBA8 mip-zero images once per referenced TEX
 entry. Mesh vertices, indexes, and draw ranges are copied into owned storage.
 
+`load_startup_scene_render_asset` applies this contract to the startup scene. It
+requires the paired PRM, TEX, and GMS resources plus both RMC and RMI layers,
+preserves RMC before RMI in the map-layer order, and returns an asset with no
+references into archive or parser storage.
+
 ## Validation and limits
 
 Construction reuses `RenderAssetBindings` for cross-catalog identity and topology
@@ -66,7 +71,9 @@ The current source-only diagnostic transform is a presentation convention, not a
 recovered world-space formula. An aggregate audit found that only four of 2,801
 map positions fall inside their associated decoded spatial bounds under the
 currently documented quantization inverse, so naively treating those fields as
-world-space placement is specifically unsupported.
+world-space placement is specifically unsupported. The exact proven
+relationships, prohibited interpretations, and evidence gates are documented in
+[TRANSFORM_BOUNDARY.md](TRANSFORM_BOUNDARY.md).
 
 ## SDL-free GPU plan
 
@@ -78,7 +85,9 @@ command per preserved draw range. Opaque
 commands remain in stable instance order and use depth test/write; non-opaque
 commands follow in stable order with blending and depth test but no depth writes.
 Untextured commands retain an empty texture index so the backend can bind one
-explicit shared white fallback.
+explicit shared white fallback. Every GPU instance also retains its expected
+mesh index, and independent validation rejects draws that pair an otherwise
+valid instance with the wrong mesh resource.
 
 The diagnostic projection preserves a real third coordinate in SDL GPU's
 `[0, 1]` clip-depth convention rather than flattening every object to one plane.

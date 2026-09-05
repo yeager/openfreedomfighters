@@ -237,6 +237,8 @@ int main() {
         "accept an independently validated owning GPU plan");
   check(gpu_plan.draws.size() == 3 && gpu_plan.draws[0].instance_index == 0 &&
             gpu_plan.draws[1].instance_index == 1 &&
+            gpu_plan.instances[0].mesh_index == gpu_plan.draws[0].mesh_index &&
+            gpu_plan.instances[1].mesh_index == gpu_plan.draws[1].mesh_index &&
             gpu_plan.draws[0].mesh_index == gpu_plan.draws[1].mesh_index &&
             gpu_plan.draws[2].topology ==
                 off::graphics::PrimitiveTopology::line_list &&
@@ -281,6 +283,39 @@ int main() {
   }
   check(invalid_gpu_draw_rejected,
         "reject an invalid owning GPU-plan resource reference");
+
+  invalid_gpu_plan = gpu_plan;
+  invalid_gpu_plan.instances[0].mesh_index = 1;
+  bool mismatched_gpu_instance_mesh_rejected = false;
+  try {
+    off::graphics::validate_scene_gpu_plan(invalid_gpu_plan);
+  } catch (const std::invalid_argument &) {
+    mismatched_gpu_instance_mesh_rejected = true;
+  }
+  check(mismatched_gpu_instance_mesh_rejected,
+        "reject a draw paired with the wrong valid instance mesh");
+
+  invalid_gpu_plan = gpu_plan;
+  invalid_gpu_plan.instances[0].mesh_index = gpu_plan.meshes.size();
+  bool invalid_gpu_instance_mesh_rejected = false;
+  try {
+    off::graphics::validate_scene_gpu_plan(invalid_gpu_plan);
+  } catch (const std::invalid_argument &) {
+    invalid_gpu_instance_mesh_rejected = true;
+  }
+  check(invalid_gpu_instance_mesh_rejected,
+        "reject an invalid GPU instance mesh reference");
+
+  invalid_gpu_plan = gpu_plan;
+  invalid_gpu_plan.projection.minimum[0] -= 1.0F;
+  bool mismatched_projection_bounds_rejected = false;
+  try {
+    off::graphics::validate_scene_gpu_plan(invalid_gpu_plan);
+  } catch (const std::invalid_argument &) {
+    mismatched_projection_bounds_rejected = true;
+  }
+  check(mismatched_projection_bounds_rejected,
+        "reject diagnostic bounds that do not match indexed geometry");
 
   auto overflowing_gpu_instance = gpu_plan.instances[0];
   overflowing_gpu_instance.source_basis[0] = std::numeric_limits<float>::max();

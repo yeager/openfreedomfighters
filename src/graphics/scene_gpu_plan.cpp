@@ -82,6 +82,7 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
   for (std::size_t index = 0; index < plan.instances.size(); ++index) {
     const auto &instance = plan.instances[index];
     if (instance.scene_instance_index != index ||
+        instance.mesh_index >= plan.meshes.size() ||
         !std::ranges::all_of(
             instance.source_basis,
             [](float value) { return std::isfinite(value); }) ||
@@ -107,6 +108,31 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
         !std::isfinite(projection.xy_scale)) {
       throw std::invalid_argument("scene GPU diagnostic projection is invalid");
     }
+
+    std::array computed_minimum{std::numeric_limits<float>::max(),
+                                std::numeric_limits<float>::max(),
+                                std::numeric_limits<float>::max()};
+    std::array computed_maximum{std::numeric_limits<float>::lowest(),
+                                std::numeric_limits<float>::lowest(),
+                                std::numeric_limits<float>::lowest()};
+    for (const auto &instance : plan.instances) {
+      const auto &mesh = plan.meshes[instance.mesh_index];
+      for (const auto vertex_index : mesh.indices) {
+        const auto position = transform_scene_source_diagnostic_position(
+            instance, mesh.vertices[vertex_index].position);
+        for (std::size_t axis = 0; axis < 3; ++axis) {
+          computed_minimum[axis] =
+              std::min(computed_minimum[axis], position[axis]);
+          computed_maximum[axis] =
+              std::max(computed_maximum[axis], position[axis]);
+        }
+      }
+    }
+    if (computed_minimum != projection.minimum ||
+        computed_maximum != projection.maximum) {
+      throw std::invalid_argument(
+          "scene GPU diagnostic projection does not match indexed geometry");
+    }
   }
   std::uint8_t previous_bucket = 0;
   for (const auto &draw : plan.draws) {
@@ -115,7 +141,8 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
       throw std::invalid_argument("scene GPU draw reference is invalid");
     }
     const auto &mesh = plan.meshes[draw.mesh_index];
-    if (draw.texture_index != mesh.texture_index ||
+    if (draw.mesh_index != plan.instances[draw.instance_index].mesh_index ||
+        draw.texture_index != mesh.texture_index ||
         draw.topology != mesh.topology ||
         draw.alpha_class != mesh.alpha_class ||
         std::ranges::none_of(mesh.draws, [&](const auto &range) {
@@ -206,6 +233,7 @@ SceneGpuPlan prepare_scene_gpu_plan(const SceneRenderAsset &asset) {
   for (std::size_t index = 0; index < asset.instances.size(); ++index) {
     result.instances.push_back({
         .scene_instance_index = index,
+        .mesh_index = asset.instances[index].mesh_index,
         .source_basis = asset.instances[index].source_basis,
         .source_position = asset.instances[index].source_position,
     });

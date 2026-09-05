@@ -63,6 +63,10 @@ Gate: all startup and first-level assets load into validated portable models und
 - [x] Select SDL GPU and prove the native window/device/swapchain clear-pass lifecycle.
 - [x] Prepare a validated startup-scene mesh and texture for GPU upload.
 - [x] Upload and draw the first decoded retail mesh and texture.
+- [x] Preserve GMS and RMC/RMI transform records separately and enforce a
+  source-only diagnostic-rendering boundary.
+- [ ] Recover and corpus-validate faithful GMS hierarchy and RMC/RMI transform
+  composition before enabling world-space scene placement.
 - [ ] Original-mode material/lighting reference path.
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
 - [ ] Audio-bank decoding/mixing and positional sound.

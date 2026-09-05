@@ -39,6 +39,12 @@ The attachment table starts with a 32-bit count followed by eight-byte entries. 
 
 The parser decodes each basis and position to finite portable floats, checks every GMS-relative range, and retains the opaque values needed by later materialization. Executable control flow passes the first BUF reference to the common object constructor as a character pointer and stores it as the object's name. A separate cross-resource validator therefore checks both its range and NUL terminator. Across the 151,519 distinct source records, all referenced names terminate within their owning BUF; their lengths range from zero to 78 bytes.
 
+The current renderer's row-major `basis * local + position` calculation is an
+explicit source-only diagnostic convention, not an established world-transform
+formula. The parser does not infer hierarchy, parent-relative composition, map
+composition, handedness, or normal transformation from these stored values. See
+[TRANSFORM_BOUNDARY.md](TRANSFORM_BOUNDARY.md).
+
 Optional auxiliary BUF blocks contain their bounded byte size in the low 30 bits of their second word; both their eight-byte header and complete declared extent are checked. There are 5,765 directory uses of auxiliary data, 5,433 among distinct source records, and 2,986 distinct block locations within their archives. Only ten of the 71 source types used by the corpus carry such blocks. The first header word is zero in every observed block. Payload meaning remains opaque pending type-specific decoding.
 
 For 16 geometry source types, executable use and an exact corpus join establish record word 3 as a packed primitive reference. Zero means that the object has no direct primitive. Every one of the 115,977 present references across directory uses exactly matches an index value in the same archive's `PRM` catalog, including the high-bit reference form. The portable model exposes these references separately from the retained class-specific raw value, and installation verification rejects missing targets. Other source types use the same word for different class data and are not coerced into primitive references.

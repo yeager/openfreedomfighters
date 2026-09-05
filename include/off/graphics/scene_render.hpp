@@ -5,6 +5,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <span>
 #include <vector>
@@ -79,5 +80,8 @@ void validate_scene_render_asset(const SceneRenderAsset &asset);
     std::span<const data::TextureImage> textures,
     std::span<const data::GmsDirectoryEntry> object_sources,
     std::span<const SceneRenderMapView> maps);
+
+[[nodiscard]] SceneRenderAsset
+load_startup_scene_render_asset(const std::filesystem::path &install_root);
 
 } // namespace off::graphics

@@ -39,6 +39,7 @@ struct SceneGpuMesh {
 
 struct SceneGpuInstance {
   std::size_t scene_instance_index{0};
+  std::size_t mesh_index{0};
   std::array<float, 9> source_basis{};
   std::array<float, 3> source_position{};
 };

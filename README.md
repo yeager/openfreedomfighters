@@ -143,6 +143,7 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [ZGF resource-bundle format](docs/ZGF_FORMAT.md)
 - [GMS object-source image and runtime handles](docs/GMS_FORMAT.md)
 - [RMC/RMI spatial-map format](docs/RENDER_MAP_FORMAT.md)
+- [Scene-transform evidence boundary](docs/TRANSFORM_BOUNDARY.md)
 - [Owning scene render asset](docs/SCENE_RENDER_ASSET.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Modern graphics specification](docs/MODERN_GRAPHICS.md)
