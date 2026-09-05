@@ -2,7 +2,7 @@
 
 [![Build](https://github.com/yeager/openfreedomfighters/actions/workflows/build.yml/badge.svg)](https://github.com/yeager/openfreedomfighters/actions/workflows/build.yml)
 
-OpenFreedomFighters is a clean-room, native reimplementation and static-recompilation research project for the Windows version of *Freedom Fighters* (2003). The target platforms are macOS, Linux, and Steam Deck. A legally purchased PC installation is required at runtime; this repository contains no game assets, original executable code, or encryption keys.
+OpenFreedomFighters is a clean-room, native reimplementation and static-recompilation research project for the Windows version of *Freedom Fighters* (2003). The target platforms are Windows, macOS, Linux, and Steam Deck. A legally purchased PC installation is required at runtime; this repository contains no game assets, original executable code, or encryption keys.
 
 The project has two runtime profiles:
 
@@ -10,9 +10,10 @@ The project has two runtime profiles:
 - **Modern** uses the same gameplay simulation and user-supplied data, with modern rendering, scalable resolution, improved lighting and shadows, higher-quality filtering, accessibility options, and unlocked presentation frame rates where simulation safety permits.
 
 An optional future **Modern+** layer targets independently licensed HD assets and
-DLSS 5 on supported NVIDIA RTX hardware once an official redistributable SDK is
-available. Retail assets and portable native/temporal rendering always remain the
-fallback, and no replacement pack is distributed from this engine repository.
+DLSS 4.5 on supported NVIDIA RTX hardware. A later DLSS generation will be
+considered only after NVIDIA publishes its official SDK and documentation. Retail
+assets and portable native/temporal rendering always remain the fallback, and no
+replacement pack is distributed from this engine repository.
 
 This is an independent fan project and is not affiliated with or endorsed by IO Interactive, Electronic Arts, or the relevant rights holders. *Freedom Fighters* and related names and assets belong to their respective owners.
 
@@ -117,6 +118,7 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [RMC/RMI spatial-map format](docs/RENDER_MAP_FORMAT.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Modern graphics specification](docs/MODERN_GRAPHICS.md)
+- [DLSS 4.5 integration plan](docs/DLSS.md)
 - [Roadmap and acceptance gates](docs/ROADMAP.md)
 - [Localization plan](docs/LOCALIZATION.md)
 - [Clean-room protocol](CLEAN_ROOM.md)

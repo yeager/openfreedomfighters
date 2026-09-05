@@ -65,7 +65,7 @@ Gate: all startup and first-level assets load into validated portable models und
 - [ ] Original-mode material/lighting reference path.
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
 - [ ] Audio-bank decoding/mixing and positional sound.
-- [ ] Startup/menu and one static level render on Linux, Steam Deck, and macOS.
+- [ ] Startup/menu and one static level render on Windows, Linux, Steam Deck, and macOS.
 
 Gate: deterministic camera fly-through matches structural and image-difference tolerances on all target platforms.
 
@@ -86,7 +86,7 @@ Gate: first playable mission segment completes from recorded inputs with determi
 - [ ] Original input semantics and controller mappings.
 - [ ] Regression traces for campaign-critical state transitions.
 
-Gate: campaign completes in Original mode on all three targets with no compatibility-critical divergence.
+Gate: campaign completes in Original mode on all four targets with no compatibility-critical divergence.
 
 ## Phase 5 - Localization and Modern mode
 
@@ -94,7 +94,8 @@ Gate: campaign completes in Original mode on all three targets with no compatibi
 - [ ] 20 locale packs and in-context review, including Swedish.
 - [ ] Modern graphics feature set, presets, accessibility, and performance budgets.
 - [ ] Optional Modern+ replacement-asset contract and curated HD content pipeline.
-- [ ] Optional Modern+ DLSS 5 backend with portable temporal and native fallbacks.
+- [ ] Optional Modern+ DLSS 4.5 backend with portable temporal and native fallbacks.
+- [ ] Evaluate later DLSS generations only from published NVIDIA SDKs and documentation.
 - [ ] Translation completeness and overflow automation.
 
 Gate: every locale passes completeness and UI-layout checks; Modern and Original simulations produce identical state hashes for shared settings.
@@ -102,7 +103,7 @@ Gate: every locale passes completeness and UI-layout checks; Modern and Original
 ## Phase 6 - Release engineering
 
 - [ ] Signed/notarized packages, crash reports with opt-in privacy, migration and diagnostics.
-- [ ] CI across Linux/macOS architectures and Steam Deck hardware validation.
+- [ ] CI across Windows, Linux, and macOS architectures plus Steam Deck hardware validation.
 - [ ] Automated release audit proving absence of retail content.
 - [ ] User documentation, troubleshooting, contributor specifications.
 

@@ -15,7 +15,7 @@ or save-state results.
 | Widescreen and ultrawide | Corrected projection | Native | Native |
 | Presentation frame rate | Reference-compatible option | Unlocked where safe | Unlocked where safe |
 | Texture filtering | Reference path | Anisotropic and stable mip selection | Same, with replacement maps |
-| Anti-aliasing | Reference-compatible | Temporal or high-quality spatial AA | Same, plus optional DLSS 5 on supported RTX hardware |
+| Anti-aliasing | Reference-compatible | Temporal or high-quality spatial AA | Same, plus optional DLSS 4.5 on supported RTX hardware |
 | Lighting and shadows | Reproduced original model | Higher-resolution dynamic path | Optional authored relighting |
 | Color output | SDR reference transform | SDR/HDR tone mapping | SDR/HDR tone mapping |
 | Effects | Reference particles and blending | Improved particles, water, glass, smoke, and explosions | Optional authored effects |
@@ -65,8 +65,8 @@ versioned local cache with safe invalidation.
 
 Quality validation uses deterministic camera paths, image comparisons for the
 Original reference, GPU captures for pass and resource correctness, and frametime
-budgets rather than average FPS alone. Linux, macOS, and Steam Deck must render
-the same material semantics even when their native graphics backends differ.
+budgets rather than average FPS alone. Windows, Linux, macOS, and Steam Deck must
+render the same material semantics even when their native graphics backends differ.
 
 ## Temporal upscaling and DLSS
 
@@ -76,14 +76,20 @@ exposure, jitter, reactive-mask, and HUD-less inputs; UI is composed afterward a
 output resolution. This contract allows quality-equivalent fallbacks on AMD,
 Intel, Apple, and Steam Deck hardware without affecting simulation state.
 
-Modern+ targets DLSS 5 as an optional NVIDIA RTX backend once NVIDIA publishes an
-official, redistributable SDK under that name. Until then, the implementation may
-use the newest supported official DLSS release, but must report its actual version
-and must never label it DLSS 5. Capability checks choose between DLSS, the portable
-temporal path, or native rendering at runtime. Original mode does not enable DLSS
-by default.
+Modern+ targets the documented DLSS 4.5 release as an optional NVIDIA RTX backend.
+The integration must use NVIDIA's official SDK and redistributable binaries, expose
+the supported quality presets, and report the loaded runtime version exactly.
+Capability checks choose between DLSS 4.5, the portable temporal path, or native
+rendering at runtime. Original mode does not enable DLSS by default. macOS and
+non-RTX devices use the equivalent portable controls and never lose a quality or
+resolution option merely because DLSS is unavailable.
 
-DLSS frame generation is a later, independently selectable feature. It requires
+A future DLSS 5 backend is not a current deliverable. It may replace or supplement
+4.5 only after NVIDIA publishes official documentation, an SDK, platform support,
+and redistribution terms that fit the project. No speculative API or mislabeled
+older implementation belongs in the engine.
+
+DLSS frame generation remains a later, independently selectable feature. It requires
 validated depth and motion vectors, a HUD-less color buffer, correct UI separation,
 latency controls, and robust frame pacing before it can ship. Generated frames and
 upscaling are presentation-only and may not influence input sampling, physics,

@@ -40,6 +40,7 @@ The deterministic simulation is shared by both modes. Presentation is downstream
 
 | Target | Architecture | Packaging | First-class input |
 |---|---|---|---|
+| Windows | x86-64 | signed installer and portable archive | keyboard/mouse, XInput and SDL gamepads |
 | Linux | x86-64, arm64 later | AppImage/Flatpak and tarball | keyboard/mouse, SDL gamepads |
 | Steam Deck | x86-64 | Steam-compatible Linux build | Deck controls, glyph switching |
 | macOS | arm64, x86-64 if feasible | notarizable `.app`/DMG | keyboard/mouse, controllers |
