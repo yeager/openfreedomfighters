@@ -25,6 +25,8 @@ Executable control flow and cross-file relationships confirm these fields for an
 |---:|---|---|
 | 0 | `u16` | format flags |
 | 2 | `u16` | primitive kind, observed as 0 or 3 |
+| 4 | `u16` | packed texture selector |
+| 6 | `u16` | zero padding |
 | 8 | `u32` | optional secondary-data offset |
 | 14 | `u16` | vertex count |
 | 16 | `u32` | auxiliary-data offset |
@@ -33,6 +35,13 @@ Executable control flow and cross-file relationships confirm these fields for an
 | 64 | `u32` | topology size in 16-bit words |
 
 All four data offsets are file-relative, even, and point backward from the descriptor. Optional secondary and auxiliary streams vary with the format flags and remain deliberately opaque until their roles are independently confirmed.
+
+The texture selector uses bits 0–10 as a texture-image ID, with zero meaning no
+texture, and bit 11 as an independently preserved selector flag. Bits 12–15 and
+the following 16-bit word are zero throughout the supported corpus. Every one of
+the 40,071 nonzero IDs resolves to an image in the paired `TEX` catalog; 18,731
+selectors carry bit 11. The flag's rendering effect remains deliberately unnamed
+until its runtime use is independently confirmed.
 
 ## Vertex records
 
