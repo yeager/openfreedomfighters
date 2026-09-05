@@ -25,6 +25,7 @@ original-data/
 # Generated local reports and build output.
 build/
 build-*/
+CMakeFiles/
 out/
 reports/private/
 __pycache__/

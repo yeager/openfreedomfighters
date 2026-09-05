@@ -1,6 +1,9 @@
 #include "off/data/install.hpp"
 #include "off/mode.hpp"
+#include "off/platform/sdl_gpu_runtime.hpp"
 
+#include <charconv>
+#include <cstddef>
 #include <filesystem>
 #include <iostream>
 #include <string_view>
@@ -8,7 +11,8 @@
 namespace {
 
 void usage(std::ostream& output) {
-    output << "Usage: openfreedomfighters --data PATH [--mode original|modern] [--verify-only]\n";
+    output << "Usage: openfreedomfighters --data PATH [--mode original|modern] "
+              "[--verify-only] [--frame-limit COUNT]\n";
 }
 
 }  // namespace
@@ -17,6 +21,7 @@ int main(int argc, char** argv) {
     std::filesystem::path data_path;
     auto mode = off::Mode::original;
     bool verify_only = false;
+    std::size_t frame_limit = 0;
     for (int index = 1; index < argc; ++index) {
         const std::string_view argument{argv[index]};
         if (argument == "--data" && index + 1 < argc) {
@@ -30,6 +35,16 @@ int main(int argc, char** argv) {
             mode = *parsed;
         } else if (argument == "--verify-only") {
             verify_only = true;
+        } else if (argument == "--frame-limit" && index + 1 < argc) {
+            const std::string_view value{argv[++index]};
+            const auto [end, error] = std::from_chars(
+                value.data(), value.data() + value.size(), frame_limit
+            );
+            if (error != std::errc{} || end != value.data() + value.size() ||
+                frame_limit == 0) {
+                std::cerr << "Frame limit must be a positive integer.\n";
+                return 2;
+            }
         } else if (argument == "--help" || argument == "-h") {
             usage(std::cout);
             return 0;
@@ -58,7 +73,11 @@ int main(int argc, char** argv) {
     if (verify_only) {
         return 0;
     }
-    std::cerr << "The native runtime is not implemented yet. Use --verify-only during Phase 0.\n";
-    return 4;
+    const auto runtime = off::platform::run_sdl_gpu_runtime(mode, frame_limit);
+    if (!runtime.success) {
+        std::cerr << "Native runtime failed: " << runtime.message << '\n';
+        return 4;
+    }
+    std::cout << runtime.message << '\n';
+    return 0;
 }
-

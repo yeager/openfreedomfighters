@@ -34,12 +34,17 @@ and fully disassembled in private clean-room storage. The native C++ bootstrap n
   and 4,140 line-list primitives while preserving every source batch.
 
 Texture, primary-vertex, topology, spatial, and supported audio data decode into
-portable representations. The renderer, gameplay simulation, menus, localization,
-and complete native runtime remain under development; no playable build exists yet.
+portable representations. The executable now opens a resizable high-DPI native
+window and submits its first SDL GPU render pass through Vulkan, Metal, or D3D12.
+Retail geometry rendering, gameplay simulation, menus, localization, and the
+complete native runtime remain under development; no playable build exists yet.
 
 ## Build the native bootstrap
 
-A C++23 compiler, CMake 3.25 or newer, zlib development files, and libogg/libvorbis development files are required.
+A C++23 compiler, CMake 3.25 or newer, zlib development files, and
+libogg/libvorbis development files are required. A compatible SDL 3.2+ development
+package is used when available; otherwise CMake downloads the checksum-pinned SDL
+3.4.10 source release during configuration.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
@@ -48,7 +53,11 @@ ctest --test-dir build --output-on-failure
 ./build/openfreedomfighters --data /path/to/FreedomFighters --mode original --verify-only
 ```
 
-Replace `original` with `modern` to verify the second runtime profile. Omitting `--verify-only` intentionally stops after validation until the native runtime is implemented.
+Replace `original` with `modern` to verify the second runtime profile.
+
+Omit `--verify-only` to open the current native renderer prototype. Close the
+window or press Escape to exit. `--frame-limit COUNT` is available for bounded
+GPU smoke tests and still requires successful retail-data verification first.
 
 ## Repository rules
 

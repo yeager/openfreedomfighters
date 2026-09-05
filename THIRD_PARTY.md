@@ -4,6 +4,7 @@ OpenFreedomFighters uses established portable libraries through their public API
 
 | Dependency | Purpose | Upstream license | Integration |
 |---|---|---|---|
+| [SDL3](https://github.com/libsdl-org/SDL) | native window, input, gamepad, audio-device, and Vulkan/Metal/D3D12 GPU portability | zlib License | system package when compatible; checksum-pinned 3.4.10 source fallback |
 | [zlib](https://github.com/madler/zlib) | ZIP deflate and CRC-32 | zlib License | system development package; commit-pinned source build on Windows CI |
 | [libogg](https://github.com/xiph/ogg) | Ogg container support | BSD-style license | system development package; commit-pinned source build on Windows CI |
 | [libvorbis](https://github.com/xiph/vorbis) | Vorbis decode and synthetic test encoding | BSD-style license | system development package; commit-pinned source build on Windows CI |

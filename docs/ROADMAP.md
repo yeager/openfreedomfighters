@@ -59,7 +59,8 @@ Gate: all startup and first-level assets load into validated portable models und
 ## Phase 2 - Render/audio/input vertical slice
 
 - [ ] SDL3 platform layer and controller action map.
-- [ ] Backend prototype and renderer decision.
+- [x] Select SDL GPU and prove the native window/device/swapchain clear-pass lifecycle.
+- [ ] Upload and draw the first decoded retail mesh and texture.
 - [ ] Original-mode material/lighting reference path.
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
 - [ ] Audio-bank decoding/mixing and positional sound.

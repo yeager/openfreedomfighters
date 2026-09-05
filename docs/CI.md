@@ -7,11 +7,20 @@ The workflow structure follows the sibling [OpenCaptive](https://github.com/yeag
 Every push to `main`, pull request targeting `main`, and manual dispatch runs:
 
 - a tracked-file extension audit plus full-history and working-tree Gitleaks scans using a checksum-pinned CLI;
-- CMake/Ninja builds with zlib and Xiph Vorbis dependencies, followed by CTest on Ubuntu 24.04 and macOS 14;
-- a CMake/MSVC build and CTest on Windows Server 2022 using source-built, commit-pinned native dependencies;
+- CMake/Ninja builds with SDL3, zlib, and Xiph Vorbis dependencies, followed by CTest on Ubuntu 24.04 and macOS 14;
+- a CMake/MSVC build and CTest on Windows Server 2022 using source-built or checksum-pinned native dependencies;
 - Python analysis-tool tests and ASan/UBSan tests on Linux.
 
 All CI tests use synthetic fixtures. GitHub-hosted runners never receive a retail installation, extracted resources, private disassembly, or decoded game audio.
+
+CMake accepts a compatible system SDL3 package and otherwise downloads the
+official 3.4.10 release archive with a required SHA-256 checksum. SDL is linked
+statically for fallback builds. CI does not open a window because hosted runners
+do not contain retail data or represent target GPU hardware; the native clear-pass
+smoke test is run locally and hardware validation remains an explicit release gate.
+The repository Gitleaks configuration excludes only ignored CMake build products;
+tracked history and all source, documentation, configuration, and other untracked
+working files remain in scope.
 
 ## Release workflow
 

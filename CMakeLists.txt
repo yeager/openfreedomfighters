@@ -3,9 +3,32 @@ cmake_minimum_required(VERSION 3.25)
 project(OpenFreedomFighters VERSION 0.1.0 LANGUAGES C CXX)
 
 include(CTest)
+include(FetchContent)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(Vorbis REQUIRED)
 find_package(ZLIB REQUIRED)
+
+find_package(SDL3 3.2 CONFIG QUIET)
+if(NOT SDL3_FOUND)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        SDL3
+        URL https://github.com/libsdl-org/SDL/releases/download/release-3.4.10/SDL3-3.4.10.tar.gz
+        URL_HASH SHA256=12b34280415ec8418c864408b93d008a20a6530687ee613d60bfbd20411f2785
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    )
+    FetchContent_MakeAvailable(SDL3)
+endif()
+
+if(TARGET SDL3::SDL3-static)
+    set(OFF_SDL3_TARGET SDL3::SDL3-static)
+else()
+    set(OFF_SDL3_TARGET SDL3::SDL3)
+endif()
 
 add_library(off_core
     src/audio/decode.cpp
@@ -36,8 +59,12 @@ else()
     target_compile_options(off_core PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
 endif()
 
-add_executable(openfreedomfighters src/main.cpp)
-target_link_libraries(openfreedomfighters PRIVATE off_core)
+add_executable(
+    openfreedomfighters
+    src/main.cpp
+    src/platform/sdl_gpu_runtime.cpp
+)
+target_link_libraries(openfreedomfighters PRIVATE off_core ${OFF_SDL3_TARGET})
 
 install(TARGETS openfreedomfighters RUNTIME DESTINATION bin)
 
