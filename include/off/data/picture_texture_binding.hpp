@@ -4,6 +4,7 @@
 #include "off/data/texture_catalog.hpp"
 
 #include <cstddef>
+#include <array>
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -20,6 +21,8 @@ struct PictureTextureBinding {
     std::uint16_t texture_id{0};
     std::size_t image_index{0};
     TextureManagerKeyBank bank{TextureManagerKeyBank::direct};
+    // Owned opaque initial authored record, not later mutable runtime material.
+    std::array<std::byte, 32> authored_texture_resource_record{};
 };
 
 class PictureTextureBindings final {

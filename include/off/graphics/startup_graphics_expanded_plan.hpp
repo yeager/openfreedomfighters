@@ -28,6 +28,9 @@ struct StartupGraphicsExpandedSubmission {
   std::array<ExpandedPictureVertex, 4> vertices{};
   // Local to this submission's four vertices. No resource-crossing batching.
   std::array<std::uint16_t, 6> indices{};
+  // Opaque initial authored per-group provenance, not a final runtime material.
+  std::uint32_t texture_resource_prm_offset{};
+  std::array<std::byte, 32> authored_texture_resource_record{};
 };
 
 class StartupGraphicsExpandedPlan final {

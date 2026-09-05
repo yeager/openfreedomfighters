@@ -68,7 +68,8 @@ void append_text(std::vector<std::byte> &bytes, std::string_view value) {
 }
 
 off::data::PictureDrawPlan plan(std::size_t count, std::size_t image_bias,
-                                std::uint16_t texture_id_bias = 0) {
+                                std::uint16_t texture_id_bias = 0,
+                                std::uint8_t record_tag = 0) {
   std::vector<off::data::PictureResourceDescriptor> descriptors(count);
   std::vector<off::data::PictureDrawGroup> groups;
   std::vector<off::data::PictureTextureBinding> bindings;
@@ -81,6 +82,10 @@ off::data::PictureDrawPlan plan(std::size_t count, std::size_t image_bias,
                         static_cast<std::uint16_t>(texture_id_bias + index),
                         image_bias + index,
                         off::data::TextureManagerKeyBank::upper});
+    bindings.back().prm_offset = static_cast<std::uint32_t>(32 * (index + 1) + record_tag);
+    for (std::size_t byte = 0; byte < 32; ++byte)
+      bindings.back().authored_texture_resource_record[byte] =
+          static_cast<std::byte>(record_tag + byte);
   }
   return off::data::PictureDrawPlan::build(descriptors, groups, bindings);
 }
@@ -125,7 +130,9 @@ off::data::StartupGraphicsComposition composition(
         picture.alignment_enum = 15U;
         picture.extension_control = 16U;
       }
-      picture.draw_plan = picture_index == 0 ? background : chrome;
+      picture.draw_plan = picture_index == 0 ? background :
+          (picture_index == 1 ? chrome :
+              plan(5, 1, static_cast<std::uint16_t>(texture_id_bias + 1), 64));
     }
   }
   return off::data::StartupGraphicsComposition::from_rows(std::move(rows));
@@ -310,6 +317,12 @@ int main(int argc, char **argv) {
             prepared.pictures()[1].alignment_enum == 15U &&
             prepared.pictures()[1].extension_control == 16U,
         "preserve clamped authored picture-control maxima");
+  check(prepared.quads()[0].resource_index == prepared.quads()[5].resource_index &&
+            prepared.quads()[0].texture_resource_prm_offset == 32 &&
+            prepared.quads()[5].texture_resource_prm_offset == 96 &&
+            prepared.quads()[0].authored_texture_resource_record[0] == std::byte{0} &&
+            prepared.quads()[5].authored_texture_resource_record[0] == std::byte{64},
+        "prepared groups retain distinct authored records sharing a decoded image");
   const auto owned_controls = [] {
     auto bytes = texture_catalog();
     const auto local_catalog = off::data::TextureCatalog::parse(bytes);
@@ -370,6 +383,13 @@ int main(int argc, char **argv) {
     for (std::size_t i = 0; i < expanded.submissions().size(); ++i) {
       const auto &output = expanded.submissions()[i];
       const auto &source = input.quads()[i];
+      const auto &binding = asset.composition().rows()[source.row_index]
+          .pictures[source.picture_index].draw_plan.groups()[source.group_index].texture;
+      check(source.texture_resource_prm_offset == binding.prm_offset &&
+                source.authored_texture_resource_record == binding.authored_texture_resource_record &&
+                output.texture_resource_prm_offset == binding.prm_offset &&
+                output.authored_texture_resource_record == binding.authored_texture_resource_record,
+            "prepared and expanded submissions retain all initial per-group record bytes");
       check(output.emission_ordinal == i &&
                 output.resource_index == source.resource_index &&
                 output.picture_directory_index == source.picture_directory_index &&
@@ -423,6 +443,9 @@ int main(int argc, char **argv) {
             owned_expanded.submissions().front().vertices[0].position[0] ==
                 static_cast<float>(prepared.quads().front().picture_directory_index) - 1.0F,
         "expanded metadata and geometry outlive all input assets, prepared plans and transforms");
+  check(owned_expanded.submissions()[5].texture_resource_prm_offset == 96 &&
+            owned_expanded.submissions()[5].authored_texture_resource_record[31] == std::byte{95},
+        "expanded initial resource provenance outlives all input owners");
 
   const auto mismatched_asset = off::graphics::build_startup_graphics_asset(
       composition(20), catalog);
@@ -520,6 +543,13 @@ int main(int argc, char **argv) {
     for (std::size_t i = 0; i < retail_expanded.submissions().size(); ++i) {
       const auto &output = retail_expanded.submissions()[i];
       const auto &source = retail_prepared.quads()[i];
+      const auto &binding = retail.composition().rows()[source.row_index]
+          .pictures[source.picture_index].draw_plan.groups()[source.group_index].texture;
+      check(source.texture_resource_prm_offset == binding.prm_offset &&
+                source.authored_texture_resource_record == binding.authored_texture_resource_record &&
+                output.texture_resource_prm_offset == binding.prm_offset &&
+                output.authored_texture_resource_record == binding.authored_texture_resource_record,
+            "retain real initial resource records and PRM identity through both CPU plans");
       check(output.emission_ordinal == i &&
                 output.picture_directory_index == source.picture_directory_index &&
                 output.resource_index == source.resource_index &&

@@ -99,3 +99,6 @@ In particular, authored alpha is not silently combined with the descriptor's
 packed color. This boundary makes an explicitly transformed CPU plan available
 to a future renderer, but does not supply original runtime transforms or
 justify the still-missing final render state.
+Each prepared quad and expanded submission also owns the original texture
+resource record and its PRM-relative identity. These remain per-group even
+when image identity is shared, and are not treated as final runtime material.

@@ -118,7 +118,8 @@ prepare_startup_graphics_plan(const StartupGraphicsAsset &asset,
           {emission_ordinal, emission.row_index, emission.picture_index,
            emission.picture_directory_index, emission.group_index,
            group.quads.front().descriptor_index, resource->resource_index,
-           group.quads.front()});
+           group.quads.front(), group.texture.prm_offset,
+           group.texture.authored_texture_resource_record});
       result.submissions_.push_back(
           {emission_ordinal, picture_ordinal, prepared_quad});
     }

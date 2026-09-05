@@ -140,6 +140,30 @@ int main() {
         off::data::PictureDrawGroup{.descriptor_span_count = 1,
                                     .first_descriptor_index = 2},
     };
+    const auto owned_records_plan = [&] {
+        std::array records{resource(2055), resource(2055)};
+        records[0].prm_offset = 96;
+        records[1].prm_offset = 128;
+        for (std::size_t i = 0; i < 32; ++i) {
+            records[0].encoded[i] = static_cast<std::byte>(i);
+            records[1].encoded[i] = static_cast<std::byte>(255 - i);
+        }
+        const auto bindings = off::data::PictureTextureBindings::build(records, catalog, true);
+        records[0].encoded.fill(std::byte{0});
+        records[1].encoded.fill(std::byte{0});
+        check(bindings.entries()[0].image_index == bindings.entries()[1].image_index &&
+                  bindings.entries()[0].authored_texture_resource_record[31] == std::byte{31} &&
+                  bindings.entries()[1].authored_texture_resource_record[31] == std::byte{224},
+              "bindings own distinct opaque records sharing the same image");
+        return off::data::PictureDrawPlan::build(descriptors, groups, bindings.entries());
+    }();
+    check(owned_records_plan.groups()[0].texture.prm_offset == 96 &&
+              owned_records_plan.groups()[1].texture.prm_offset == 128,
+          "draw plan owns per-group PRM identity beyond binding lifetime");
+    for (std::size_t i = 0; i < 32; ++i)
+        check(owned_records_plan.groups()[0].texture.authored_texture_resource_record[i] == static_cast<std::byte>(i) &&
+                  owned_records_plan.groups()[1].texture.authored_texture_resource_record[i] == static_cast<std::byte>(255 - i),
+              "draw plan owns every opaque resource byte without image deduplication");
     const std::array plan_textures{
         direct_join.entries()[0], upper_join.entries()[0]};
     const auto plan = off::data::PictureDrawPlan::build(

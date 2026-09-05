@@ -61,6 +61,7 @@ PictureTextureBindings PictureTextureBindings::build(
             .texture_id = id,
             .image_index = *images[id],
             .bank = bank,
+            .authored_texture_resource_record = resource.encoded,
         });
     }
     return result;

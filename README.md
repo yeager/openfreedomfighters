@@ -154,6 +154,9 @@ and texture identities. Every picture requires an explicit identity-keyed
 transform; missing or duplicated entries fail rather than generating defaults.
 The join preserves source submission order and opaque authored controls, and
 does not yet provide original startup transforms or GPU raster state.
+The original texture-resource bytes and PRM-relative identity now survive the
+image join per draw group; shared texture images do not merge distinct resource
+records. These authored records are not substituted for mutable runtime state.
 Recovered picture constructors default both extent scales to `1.0`; descriptor
 bounds are not substituted for the still-explicit runtime extent, matrix,
 visitor, or projection inputs.

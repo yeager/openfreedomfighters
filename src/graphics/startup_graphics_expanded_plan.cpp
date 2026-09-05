@@ -76,7 +76,9 @@ StartupGraphicsExpandedPlan expand_startup_graphics_plan(
         .descriptor_index = quad.descriptor_index,
         .resource_index = quad.resource_index,
         .vertices = {},
-        .indices = {}};
+        .indices = {},
+        .texture_resource_prm_offset = quad.texture_resource_prm_offset,
+        .authored_texture_resource_record = quad.authored_texture_resource_record};
     std::copy(expanded.front().vertices.begin(),
               expanded.front().vertices.end(), output.vertices.begin());
     std::copy(expanded.front().indices.begin(), expanded.front().indices.end(),

@@ -4,6 +4,7 @@
 #include "off/graphics/startup_graphics_asset.hpp"
 
 #include <cstddef>
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <vector>
@@ -46,6 +47,10 @@ struct StartupGraphicsPreparedQuad {
   std::size_t descriptor_index{};
   std::size_t resource_index{};
   data::PictureQuad source;
+  // Initial authored per-group provenance, not later mutable runtime material.
+  // Records sharing an image may still differ.
+  std::uint32_t texture_resource_prm_offset{};
+  std::array<std::byte, 32> authored_texture_resource_record{};
 };
 
 struct StartupGraphicsPreparedSubmission {

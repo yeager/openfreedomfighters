@@ -116,6 +116,14 @@ reverse before use. Out-of-range keys, missing images, cross-bank aliases, and
 sequence-bearing slots fail closed; behavior for sequence-bearing scenes is not
 claimed without matching corpus validation.
 
+The image join also preserves an owning copy of each original 32-byte texture
+resource record and its PRM-relative identity. These belong to the draw group,
+not the decoded image: distinct records may resolve to the same TEX image and
+must not be collapsed into one material record. Prepared and expanded startup
+submissions retain this provenance for later material-state work.
+The bytes remain opaque authored input, not a claim about the resource's mutable
+runtime material state. No blend or sampler defaults are inferred from them.
+
 `PictureTextureBindings` owns its neutral binding records; their image indexes
 remain meaningful only for the catalog used to build them. Callers must retain
 that catalog and invalidate bindings on scene replacement. This identity join
