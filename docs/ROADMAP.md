@@ -37,6 +37,7 @@ Gate: a new contributor can generate the same structural report from a supported
 - [x] Decode all observed texture encodings to portable RGBA8.
 - [x] Parse primitive catalogs, descriptor indexes, and grouped mesh topology.
 - [x] Decode primary primitive vertices to portable attributes.
+- [x] Parse and corpus-validate RMC/RMI spatial indexes and object descriptors.
 - [ ] Safe, bounds-checked readers for all required formats.
 - [ ] Texture, mesh, material, skeleton, animation, audio, localization, and spatial data models.
 - [ ] Fuzz targets and synthetic fixtures for every parser.

@@ -6,6 +6,7 @@
 #include "off/data/audio_bank_header.hpp"
 #include "off/data/byte_reader.hpp"
 #include "off/data/primitive_catalog.hpp"
+#include "off/data/render_map.hpp"
 #include "off/data/scene_support.hpp"
 #include "off/data/texture_catalog.hpp"
 #include "off/data/zip_archive.hpp"
@@ -184,6 +185,10 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         std::size_t primitive_vertex_count = 0;
         std::size_t primitive_batch_count = 0;
         std::size_t primitive_index_count = 0;
+        std::size_t render_map_count = 0;
+        std::size_t render_map_entry_count = 0;
+        std::size_t render_instance_map_count = 0;
+        std::size_t render_instance_entry_count = 0;
         bool decoded_dxt1_reference = false;
         bool decoded_dxt3_reference = false;
         bool decoded_abgr_reference = false;
@@ -196,6 +201,8 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             std::size_t support_files_in_archive = 0;
             std::size_t texture_files_in_archive = 0;
             std::size_t primitive_files_in_archive = 0;
+            std::size_t render_map_files_in_archive = 0;
+            std::size_t render_instance_files_in_archive = 0;
             for (const auto& member : archive.entries()) {
                 const auto extension = lowercase(
                     std::filesystem::path(member.name).extension().string()
@@ -258,12 +265,24 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                     primitive_entry_count += catalog.entries().size();
                     ++primitive_files_in_archive;
                     ++primitive_catalog_count;
+                } else if (extension == ".rmc" || extension == ".rmi") {
+                    const auto map = RenderMap::parse(archive.read(member));
+                    if (extension == ".rmc") {
+                        render_map_entry_count += map.entries().size();
+                        ++render_map_files_in_archive;
+                        ++render_map_count;
+                    } else {
+                        render_instance_entry_count += map.entries().size();
+                        ++render_instance_files_in_archive;
+                        ++render_instance_map_count;
+                    }
                 }
             }
             if (support_files_in_archive != 1 || texture_files_in_archive != 1 ||
-                primitive_files_in_archive != 1) {
+                primitive_files_in_archive != 1 || render_map_files_in_archive != 1 ||
+                render_instance_files_in_archive != 1) {
                 throw std::runtime_error(
-                    "scene archive does not contain exactly one SUP, TEX, and PRM file"
+                    "scene archive does not contain exactly one SUP, TEX, PRM, RMC, and RMI file"
                 );
             }
             ++scene_archive_count;
@@ -275,7 +294,10 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             !decoded_palette_reference || primitive_catalog_count != scene_archive_count ||
             primitive_entry_count != 61'451 || primitive_reference_count != 27 ||
             primitive_vertex_count != 2'820'961 || primitive_batch_count != 461'344 ||
-            primitive_index_count != 4'412'738) {
+            primitive_index_count != 4'412'738 || render_map_count != scene_archive_count ||
+            render_map_entry_count != 1'612 ||
+            render_instance_map_count != scene_archive_count ||
+            render_instance_entry_count != 1'189) {
             return failure(
                 InstallError::incomplete_game_data,
                 root,

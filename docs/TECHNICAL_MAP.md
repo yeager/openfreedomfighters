@@ -37,15 +37,15 @@ Representative scene archives consistently expose a family of resource types:
 | `LOC` | localization table | encoding, identifiers, plural rules |
 | `OCT` | spatial octree | bounds and cell/object references |
 | `SGP` | scene/game parameters | determine semantics |
-| `RMC`/`RMI` | render material/index metadata | relation to PRM/TEX |
+| `RMC`/`RMI` | validated spatial maps with packed hierarchies, quantized bounds, and fixed object descriptors | hierarchy encoding and exact runtime distinction |
 | `PRM` | indexed render primitives with decoded primary vertices and grouped topology | materials and auxiliary/skinning streams |
 | `ANM` | animation data (42 observed) | clips, tracks, time units, skeleton binding |
 
-This table is provisional. Every claim graduates only after cross-file validation against at least three scenes and a synthetic parser test.
+This table is provisional. Every claim graduates only after corpus-wide validation and a synthetic parser test.
 
 Aggregate sizes, header invariants, and the first three-scene comparison are recorded in [FORMAT_CENSUS.md](FORMAT_CENSUS.md).
 
-Across all 90 archives, each of `GMS`, `OCT`, `PRM`, `RMC`, `RMI`, `SGP`, `SND`, `SUP`, `TEX`, and `ZGF` occurs 90 times. `BUF` and `LOC` occur 88 times and `ANM` occurs 42 times. This regularity strongly supports a per-scene resource-family design. `SUP` is confirmed as a dependency list, `TEX` is decoded to RGBA8, and `PRM` primary vertices and grouped topology are decoded; the remaining family semantics are still hypotheses.
+Across all 90 archives, each of `GMS`, `OCT`, `PRM`, `RMC`, `RMI`, `SGP`, `SND`, `SUP`, `TEX`, and `ZGF` occurs 90 times. `BUF` and `LOC` occur 88 times and `ANM` occurs 42 times. This regularity strongly supports a per-scene resource-family design. `SUP` is confirmed as a dependency list, `TEX` is decoded to RGBA8, `PRM` primary vertices and grouped topology are decoded, and the common `RMC`/`RMI` spatial envelope is parsed; the remaining family semantics are still hypotheses.
 
 ## PE image map
 
@@ -113,6 +113,6 @@ Files named `.WAV` are often banks rather than conventional RIFF WAV files. All 
 
 1. Resolve runtime-computed dynamic module/API arguments and map load-config metadata.
 2. Promote three-scene resource invariants to corpus-wide validators and infer section tables.
-3. Map the `RMC`/`RMI` relationship and `PRM` auxiliary streams, then bind decoded `TEX` pixels to renderable geometry.
+3. Decode the packed `RMC`/`RMI` hierarchy and `PRM` auxiliary streams, then bind decoded `TEX` pixels to renderable geometry.
 4. Record black-box boot, menu, input, timing, and first-level traces from the retail game.
 5. Define golden screenshots/state traces stored locally as hashes and numeric measurements.
