@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace off::graphics {
@@ -26,6 +27,10 @@ struct StartupGraphicsPreparedPicture {
   std::size_t row_directory_index{};
   std::size_t picture_directory_index{};
   data::StartupGraphicsCompositionRole role{};
+  std::uint32_t base_render_property{};
+  std::uint8_t authored_alpha{255};
+  std::uint8_t alignment_enum{};
+  std::optional<std::uint8_t> extension_control;
   std::size_t first_submission{};
   std::size_t submission_count{};
 };

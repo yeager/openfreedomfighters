@@ -76,6 +76,10 @@ prepare_startup_graphics_plan(const StartupGraphicsAsset &asset,
         picture.role != source_picture.role ||
         picture.draw_group_count != source_picture.draw_plan.groups().size())
       throw std::runtime_error("startup prepared picture identity is invalid");
+    if (source_picture.alignment_enum > 15U ||
+        (source_picture.extension_control.has_value() &&
+         *source_picture.extension_control > 16U))
+      throw std::runtime_error("startup prepared picture control is invalid");
     for (const auto &previous : result.pictures_)
       if (previous.picture_directory_index == picture.picture_directory_index)
         throw std::runtime_error(
@@ -84,7 +88,9 @@ prepare_startup_graphics_plan(const StartupGraphicsAsset &asset,
     result.pictures_.push_back(
         {picture.row_index, picture.picture_index,
          picture.row_directory_index, picture.picture_directory_index,
-         picture.role, picture.first_group_emission,
+         picture.role, source_picture.base_render_property,
+         source_picture.authored_alpha, source_picture.alignment_enum,
+         source_picture.extension_control, picture.first_group_emission,
          picture.draw_group_count});
     for (std::size_t relative = 0; relative < picture.draw_group_count;
          ++relative) {

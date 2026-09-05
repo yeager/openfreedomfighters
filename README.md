@@ -129,7 +129,9 @@ order, emits both chrome instances before the persistent background, and keeps
 each picture's groups in ascending authored order. It does not promise GPU
 execution or completion order. A bounded pre-raster plan now resolves those
 emissions to the six resources and retains raw one-quad descriptor records and
-contiguous submission ordinals without generating transforms, vertices,
+contiguous submission ordinals. It also owns each picture's uninterpreted base
+render property, authored alpha, alignment enum, and optional extension control
+without generating transforms, vertices,
 indexes, topology, UV corner pairing, blending, or material state.
 Recovered picture constructors default both extent scales to `1.0`; descriptor
 bounds are not substituted for the still-explicit runtime extent, matrix,

@@ -155,7 +155,10 @@ traversal plan and preserves requested/effective state, picture identities,
 contiguous submission spans, ascending per-picture group emissions, and raw
 descriptor-backed quads. Every emission resolves by both catalog-local image
 index and TEX ID to one of the six owning startup resources. The plan copies
-resource metadata and raw quad values, but never image pixels.
+resource metadata and raw quad values, but never image pixels. Each prepared
+picture also owns the authored base render property, clamped alpha byte,
+validated alignment enum, and optional clamped extension control as opaque
+values; this stage assigns no material or blend meaning to them.
 
 The canonical resting shape contains 21 visible picture instances and 77
 one-quad submissions. Recovered background-only states contain seven pictures
@@ -169,3 +172,8 @@ contains no generated transform, vertex order, indexes, topology, UV-to-corner
 pairing, winding, blend state, material scheduling, or physical-output mapping.
 Unavailable values are omitted rather than filled with zeroes or synthetic
 defaults.
+
+The recovered constructor's two `1.0` picture-extent scale defaults remain
+documented transform evidence, but are not fields in the composition model and
+are therefore not synthesized into this plan. Runtime picture and owner extents
+remain explicit inputs for the later transform stage.

@@ -115,6 +115,12 @@ off::data::StartupGraphicsComposition composition(
       picture.extension_control = picture_index == 1
                                       ? std::optional<std::uint8_t>{12U}
                                       : std::nullopt;
+      if (row_index == 6 && picture_index == 2) {
+        picture.base_render_property = 0xfedcba98U;
+        picture.authored_alpha = 255U;
+        picture.alignment_enum = 15U;
+        picture.extension_control = 16U;
+      }
       picture.draw_plan = picture_index == 0 ? background : chrome;
     }
   }
@@ -282,11 +288,31 @@ int main(int argc, char **argv) {
   }
   check(prepared.pictures().front().row_index == 6 &&
             prepared.pictures().front().picture_index == 1 &&
+            prepared.pictures().front().base_render_property == 0x2013U &&
+            prepared.pictures().front().authored_alpha == 221U &&
+            prepared.pictures().front().alignment_enum == 7U &&
+            prepared.pictures().front().extension_control == 12U &&
             prepared.pictures().front().first_submission == 0 &&
             prepared.pictures().front().submission_count == 5 &&
             prepared.quads().front().source.local_x_min == -1.0F &&
             prepared.quads().front().source.local_x_max == 1.0F,
         "preserve first traversal picture and raw descriptor quad");
+  check(prepared.pictures()[1].base_render_property == 0xfedcba98U &&
+            prepared.pictures()[1].authored_alpha == 255U &&
+            prepared.pictures()[1].alignment_enum == 15U &&
+            prepared.pictures()[1].extension_control == 16U,
+        "preserve clamped authored picture-control maxima");
+  const auto owned_controls = [] {
+    auto bytes = texture_catalog();
+    const auto local_catalog = off::data::TextureCatalog::parse(bytes);
+    return off::graphics::prepare_startup_graphics_plan(
+        off::graphics::build_startup_graphics_asset(composition(),
+                                                     local_catalog),
+        0x80U);
+  }();
+  check(owned_controls.pictures().front().picture_index == 0 &&
+            !owned_controls.pictures().front().extension_control.has_value(),
+        "own an absent optional picture control beyond source lifetimes");
   for (const auto state : {0x08U, 0x10U, 0x20U, 0x80U}) {
     const auto active =
         off::graphics::prepare_startup_graphics_plan(asset, state);
