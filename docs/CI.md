@@ -16,8 +16,10 @@ All CI tests use synthetic fixtures. GitHub-hosted runners never receive a retai
 CMake accepts a compatible system SDL3 package and otherwise downloads the
 official 3.4.10 release archive with a required SHA-256 checksum. SDL is linked
 statically for fallback builds. CI does not open a window because hosted runners
-do not contain retail data or represent target GPU hardware; the native clear-pass
-smoke test is run locally and hardware validation remains an explicit release gate.
+do not contain retail data or represent target GPU hardware; the instanced
+retail-mesh draw smoke test is run locally and hardware validation remains an
+explicit release gate. The Linux x86-64 release artifact is intended to become the
+Steam Deck build, but validation on Deck hardware remains pending.
 The repository Gitleaks configuration excludes only ignored CMake build products;
 tracked history and all source, documentation, configuration, and other untracked
 working files remain in scope.

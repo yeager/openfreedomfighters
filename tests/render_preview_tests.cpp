@@ -37,6 +37,7 @@ int main() {
   });
 
   off::data::PrimitiveEntry primitive;
+  primitive.packed_index = 0x8000002aU;
   primitive.primitive_kind = 0;
   primitive.texture_id = 7;
   primitive.vertices.resize(4);
@@ -65,6 +66,56 @@ int main() {
   check(preview.minimum_position == std::array{-2.0F, -1.0F, -3.0F} &&
             preview.maximum_position == std::array{3.0F, 5.0F, 4.0F},
         "calculate indexed preview bounds and ignore unused vertices");
+  check(preview.primitive_packed_index == 0x8000002aU &&
+            !preview.object_instance.has_value(),
+        "preserve preview primitive identity before instance binding");
+
+  off::data::GmsDirectoryEntry object_source;
+  object_source.primitive_reference = 0x8000002aU;
+  object_source.source_type = 0x00200002U;
+  object_source.local_slot_index = 9;
+  object_source.basis = {0.0F, 1.0F, 0.0F, -1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F};
+  object_source.position = {10.0F, 20.0F, 30.0F};
+  auto duplicate_source = object_source;
+  duplicate_source.position = {40.0F, 50.0F, 60.0F};
+  const std::array object_sources{object_source, duplicate_source};
+  const auto instanced = off::graphics::bind_first_render_preview_instance(
+      preview, object_sources);
+  check(instanced.object_instance.has_value() &&
+            instanced.object_instance->basis == object_source.basis &&
+            instanced.object_instance->position == object_source.position &&
+            instanced.object_instance->source_type ==
+                object_source.source_type &&
+            instanced.object_instance->directory_index == 0 &&
+            instanced.object_instance->local_slot_index == 9,
+        "bind the first exact GMS object-source match and its identity");
+  check(off::graphics::transform_render_position(*instanced.object_instance,
+                                                 {2.0F, 3.0F, 4.0F}) ==
+            std::array{13.0F, 18.0F, 34.0F},
+        "apply the GMS basis as rows before adding position");
+
+  bool missing_instance_rejected = false;
+  try {
+    const std::array<off::data::GmsDirectoryEntry, 0> no_objects{};
+    static_cast<void>(
+        off::graphics::bind_first_render_preview_instance(preview, no_objects));
+  } catch (const std::runtime_error &) {
+    missing_instance_rejected = true;
+  }
+  check(missing_instance_rejected,
+        "reject preview primitives without a GMS object instance");
+
+  auto malformed = primitive;
+  malformed.batches = {{{0, 1, 4}}};
+  bool malformed_rejected = false;
+  try {
+    const std::array malformed_primitives{malformed};
+    static_cast<void>(
+        off::graphics::build_render_preview(malformed_primitives, textures));
+  } catch (const std::runtime_error &) {
+    malformed_rejected = true;
+  }
+  check(malformed_rejected, "reject out-of-range preview vertex indexes");
 
   auto degenerate = primitive;
   degenerate.vertices[0].position = {0.0F, 0.0F, 0.0F};

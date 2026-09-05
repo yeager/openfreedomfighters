@@ -4,7 +4,7 @@
 
 OpenFreedomFighters is a clean-room, native reimplementation and static-recompilation research project for the Windows version of *Freedom Fighters* (2003). The target platforms are Windows, macOS, Linux, and Steam Deck. A legally purchased PC installation is required at runtime; this repository contains no game assets, original executable code, or encryption keys.
 
-The project has two runtime profiles:
+The project has two runtime profiles plus an optional presentation layer:
 
 - **Original** preserves gameplay, timing, presentation, and content while adding a portable renderer, modern input, stable widescreen output, and localization infrastructure for 20 languages including Swedish.
 - **Modern** uses the same gameplay simulation and user-supplied data, with modern rendering, scalable resolution, improved lighting and shadows, higher-quality filtering, accessibility options, and unlocked presentation frame rates where simulation safety permits.
@@ -39,7 +39,9 @@ Texture, primary-vertex, topology, spatial, and supported audio data decode into
 portable representations. The executable now opens a resizable high-DPI native
 window, loads a validated textured triangle-strip preview from `FF-StartUp.ZIP`,
 uploads its retail vertices, indexes, and decoded RGBA texture, and issues indexed
-draws through Vulkan, Metal, or D3D12. This first diagnostic projection is not yet
+draws through Vulkan, Metal, or D3D12. The loader binds the first exact GMS
+object-source match and applies its recovered basis and position. This diagnostic
+choice is not yet authoritative scene placement, and the projection is not yet
 the scene camera or Original material model. Complete scene rendering, gameplay
 simulation, menus, localization, and the complete native runtime remain under
 development; no playable build exists yet.

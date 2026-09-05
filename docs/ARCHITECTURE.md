@@ -46,15 +46,18 @@ The deterministic simulation is shared by both modes. Presentation is downstream
 | macOS | arm64, x86-64 if feasible | notarizable `.app`/DMG | keyboard/mouse, controllers |
 
 The current runtime creates a resizable high-DPI SDL window, selects the native
-SDL GPU driver, claims its swapchain, records a color clear render pass, submits
-the command buffer, and exits cleanly on window close or Escape. Before creating
+SDL GPU driver, claims its swapchain, records render passes, submits command
+buffers, and exits cleanly on window close or Escape. Before creating
 the GPU device it selects a textured triangle-strip primitive from the startup
 scene, copies its validated vertices, indexes, and draw ranges, decodes mip zero
-to RGBA8, and computes finite model bounds. It then creates the native shader
-pipeline, uploads vertex/index/texture resources through an SDL GPU copy pass,
+to RGBA8, computes finite model bounds, and joins the primitive to the first exact
+GMS object-source reference. The recovered basis is stored as three row vectors;
+the diagnostic world position is `basis * local_position + position`. It then
+creates the native shader pipeline, uploads vertex/index/texture resources through an SDL GPU copy pass,
 and submits each preserved range as an indexed triangle-strip draw. The current
-bounds-normalized projection is diagnostic; scene transforms, camera matrices,
-depth, and reconstructed materials remain separate milestones. It selects the
+bounds-normalized projection applies that instance transform but is diagnostic;
+RMC/RMI scene selection and hierarchy, camera matrices, depth, and reconstructed
+materials remain separate milestones. It selects the
 projection plane with the greatest indexed surface area and uses a neutral white
 texture tint until the startup material's zero-coded vertex-color semantics are
 confirmed.

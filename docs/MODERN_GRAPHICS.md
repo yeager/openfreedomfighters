@@ -1,8 +1,8 @@
 # Modern graphics specification
 
-OpenFreedomFighters keeps one authoritative gameplay simulation and exposes three
-presentation targets. `Original` is the compatibility reference. `Modern`
-improves rendering while using the retail installation's assets. `Modern+` is a
+OpenFreedomFighters keeps one authoritative gameplay simulation, two runtime
+profiles, and an optional third presentation layer. `Original` is the compatibility
+reference. `Modern` improves rendering while using the retail installation's assets. `Modern+` is a
 future optional layer for separately distributed, legally clean replacement
 assets. A graphics setting must not change mission logic, collision, AI, damage,
 or save-state results.
@@ -108,9 +108,12 @@ AI perception or simulation state.
 
 The portable data layer already decodes retail texture formats, mip levels,
 palettes, UVs, vertex colors, grouped topology, and 40,071 validated
-primitive-to-texture links. The SDL GPU platform and clear-pass lifecycle are
-operational; confirmed material semantics, render-state reconstruction, mesh
-upload, the Original reference shaders, and then the Modern render graph remain.
+primitive-to-texture links. The SDL GPU platform now uploads a validated retail
+triangle strip, index ranges, and decoded RGBA texture, applies the first matching
+GMS object-source transform, and submits textured indexed draws through Vulkan,
+Metal, or D3D12. Authoritative scene-instance selection, confirmed material
+semantics, render-state reconstruction, the Original reference shaders, and then
+the Modern render graph remain.
 A renderer-facing binding table resolves every ordinary primitive to its optional TEX image while
 preserving the still-opaque selector flag. It also supplies validated vertex-alpha
 classes and GPU-oriented triangle-strip or line-list index buffers with explicit

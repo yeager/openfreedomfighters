@@ -116,17 +116,23 @@ create_shader(SDL_GPUDevice *device, const unsigned char *bytes,
 
 [[nodiscard]] std::vector<PreviewVertex>
 make_preview_vertices(const graphics::RenderPreviewAsset &preview) {
+  const auto &instance = *preview.object_instance;
+  std::vector<std::array<float, 3>> world_positions;
+  world_positions.reserve(preview.vertices.size());
+  for (const auto &vertex : preview.vertices) {
+    world_positions.push_back(
+        graphics::transform_render_position(instance, vertex.position));
+  }
+
   std::array<float, 3> projected_areas{};
   for (const auto &draw : preview.draws) {
     for (std::size_t offset = 2; offset < draw.index_count; ++offset) {
       const auto &a =
-          preview.vertices[preview.indices[draw.first_index + offset - 2]]
-              .position;
+          world_positions[preview.indices[draw.first_index + offset - 2]];
       const auto &b =
-          preview.vertices[preview.indices[draw.first_index + offset - 1]]
-              .position;
+          world_positions[preview.indices[draw.first_index + offset - 1]];
       const auto &c =
-          preview.vertices[preview.indices[draw.first_index + offset]].position;
+          world_positions[preview.indices[draw.first_index + offset]];
       const std::array ab{b[0] - a[0], b[1] - a[1], b[2] - a[2]};
       const std::array ac{c[0] - a[0], c[1] - a[1], c[2] - a[2]};
       projected_areas[0] += std::abs(ab[1] * ac[2] - ab[2] * ac[1]);
@@ -141,26 +147,39 @@ make_preview_vertices(const graphics::RenderPreviewAsset &preview) {
       std::array<std::size_t, 2>{1, 2}, {0, 2}, {0, 1}};
   const auto horizontal = projection_axes[dropped_axis][0];
   const auto vertical = projection_axes[dropped_axis][1];
-  const auto horizontal_extent = preview.maximum_position[horizontal] -
-                                 preview.minimum_position[horizontal];
+  std::array minimum_position{std::numeric_limits<float>::max(),
+                              std::numeric_limits<float>::max(),
+                              std::numeric_limits<float>::max()};
+  std::array maximum_position{std::numeric_limits<float>::lowest(),
+                              std::numeric_limits<float>::lowest(),
+                              std::numeric_limits<float>::lowest()};
+  for (const auto index : preview.indices) {
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+      minimum_position[axis] =
+          std::min(minimum_position[axis], world_positions[index][axis]);
+      maximum_position[axis] =
+          std::max(maximum_position[axis], world_positions[index][axis]);
+    }
+  }
+  const auto horizontal_extent =
+      maximum_position[horizontal] - minimum_position[horizontal];
   const auto vertical_extent =
-      preview.maximum_position[vertical] - preview.minimum_position[vertical];
+      maximum_position[vertical] - minimum_position[vertical];
   const auto scale = 1.6F / std::max(horizontal_extent, vertical_extent);
-  const auto center_x = (preview.minimum_position[horizontal] +
-                         preview.maximum_position[horizontal]) *
-                        0.5F;
-  const auto center_y = (preview.minimum_position[vertical] +
-                         preview.maximum_position[vertical]) *
-                        0.5F;
+  const auto center_x =
+      (minimum_position[horizontal] + maximum_position[horizontal]) * 0.5F;
+  const auto center_y =
+      (minimum_position[vertical] + maximum_position[vertical]) * 0.5F;
 
   std::vector<PreviewVertex> result;
   result.reserve(preview.vertices.size());
-  for (const auto &source : preview.vertices) {
-    result.push_back(
-        {.position = {(source.position[horizontal] - center_x) * scale,
-                      -(source.position[vertical] - center_y) * scale, 0.5F},
-         .color = {1.0F, 1.0F, 1.0F, 1.0F},
-         .uv = source.texture_coordinates});
+  for (std::size_t index = 0; index < preview.vertices.size(); ++index) {
+    const auto &source = preview.vertices[index];
+    const auto &world = world_positions[index];
+    result.push_back({.position = {(world[horizontal] - center_x) * scale,
+                                   -(world[vertical] - center_y) * scale, 0.5F},
+                      .color = {1.0F, 1.0F, 1.0F, 1.0F},
+                      .uv = source.texture_coordinates});
   }
   return result;
 }
@@ -347,7 +366,8 @@ RuntimeResult run_sdl_gpu_runtime(Mode mode,
                                   const graphics::RenderPreviewAsset &preview,
                                   std::size_t frame_limit) {
   if (preview.vertices.empty() || preview.indices.empty() ||
-      preview.draws.empty() || preview.texture.pixels.empty()) {
+      preview.draws.empty() || preview.texture.pixels.empty() ||
+      !preview.object_instance.has_value()) {
     return {.success = false, .message = "render preview is incomplete"};
   }
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
@@ -391,7 +411,7 @@ RuntimeResult run_sdl_gpu_runtime(Mode mode,
   RuntimeResult result{.success = true,
                        .message = std::string("Renderer: SDL GPU/") +
                                   SDL_GetGPUDeviceDriver(device) +
-                                  " (retail preview drawn)"};
+                                  " (instanced retail preview drawn)"};
   constexpr std::array<float, 32> matrices{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
                                            0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1,
                                            0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
