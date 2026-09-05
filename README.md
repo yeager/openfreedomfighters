@@ -147,6 +147,7 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [GMS object-source image and runtime handles](docs/GMS_FORMAT.md)
 - [RMC/RMI spatial-map format](docs/RENDER_MAP_FORMAT.md)
 - [Scene-transform evidence boundary](docs/TRANSFORM_BOUNDARY.md)
+- [Camera and projection evidence boundary](docs/CAMERA_EVIDENCE.md)
 - [Owning scene render asset](docs/SCENE_RENDER_ASSET.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Modern graphics specification](docs/MODERN_GRAPHICS.md)

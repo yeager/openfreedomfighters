@@ -71,6 +71,9 @@ Gate: all startup and first-level assets load into validated portable models und
   without treating archive order or identity as gameplay semantics.
 - [ ] Recover and corpus-validate faithful GMS hierarchy and RMC/RMI transform
   composition before enabling world-space scene placement.
+- [ ] Establish camera matrix layout, handedness, depth mapping, and view
+  convention before replacing the diagnostic projection with Original camera
+  behavior.
 - [ ] Original-mode material/lighting reference path.
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
 - [ ] Audio-bank decoding/mixing and positional sound.

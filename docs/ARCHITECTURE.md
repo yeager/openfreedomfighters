@@ -88,6 +88,13 @@ is evidenced. The planned SDL integration is a multi-instance source-only
 diagnostic scene, not a reconstructed level or faithful world placement. See
 [SCENE_RENDER_ASSET.md](SCENE_RENDER_ASSET.md).
 
+Clean-room evidence establishes configurable perspective FOV, near/far planes,
+viewport-derived aspect scaling with an explicit multiplier, six normalized
+frustum planes, top-left screen-Y inversion, and a 4:3 compatibility policy. It
+does not yet establish final GPU matrix layout, handedness, depth mapping, or the
+view versus inverse-view convention. The exact boundary is documented in
+[CAMERA_EVIDENCE.md](CAMERA_EVIDENCE.md).
+
 ## Compatibility profiles
 
 **Original:** fixed simulation timing; original camera/FOV option; original material and lighting equations within measurable tolerance; aspect-correct UI; optional integer-like presentation constraints; bug-compatibility flags where required for saves or missions.

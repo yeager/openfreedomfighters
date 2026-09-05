@@ -117,6 +117,12 @@ remains a source-only diagnostic scene: it is not evidence for camera behavior,
 RMC/RMI world placement, or Original material semantics. Faithful transform
 composition, confirmed material semantics, render-state reconstruction, the
 Original reference shaders, and then the Modern render graph remain.
+A future camera path may reuse the established configurable FOV, near/far,
+viewport/aspect, frustum-plane, and screen-conversion behavior. Modern ultrawide
+output must not inherit the observed 4:3 compatibility multiplier
+unconditionally, and Original camera fidelity remains gated on the unresolved
+matrix, handedness, depth, and view conventions in
+[CAMERA_EVIDENCE.md](CAMERA_EVIDENCE.md).
 A renderer-facing binding table resolves every ordinary primitive to its optional TEX image while
 preserving the still-opaque selector flag. It also supplies validated vertex-alpha
 classes and GPU-oriented triangle-strip or line-list index buffers with explicit
