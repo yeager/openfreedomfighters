@@ -1,0 +1,99 @@
+# Conditional picture material requests
+
+This renderer-neutral model describes state requests from the recovered
+picture-resource binding and descriptor-emitter material paths. It does not
+choose the final startup material word, execute GPU calls or evaluate pixels.
+Resource binding and material requests remain separate ordered phases: the
+latter can override the former. Missing requests mean leave inherited state
+unchanged, never select an implicit default.
+
+## Base-picture property expansion
+
+The base picture expands unsigned authored properties as follows:
+
+| Property | Material word |
+| --- | --- |
+| 0 | 0x60010 |
+| 1 | 0x60012 |
+| 2 | 0x60014 |
+| 3 | 0x60011 |
+| 4 | 0x60018 |
+| 5 | 0x60210 |
+| 6 | 0x60211 |
+
+Values at least 7 pass through unchanged. The alternate setter mode ORs bit
+0x1 into the result; standard loading uses no additional override. This
+base-class mapping does not use authored alpha.
+
+Loading writes the expanded word into existing paired resource records, not
+per-picture clones. Shared runtime identities observe the last write. The pure
+mapping therefore does not establish final draw-time material state: later
+refreshes, overrides, aliases and total write order remain separate inputs.
+
+## Resource-binding requests
+
+Effective features are `(~(disable_mask_a | disable_mask_b)) & 3`.
+Only an explicit resource transition requests this binding phase:
+
+| Features | Requests |
+| --- | --- |
+| 0 or 2 | None |
+| 1 | Bind texture; RGB and alpha select texture |
+| 3 | Bind texture; RGB and alpha use doubled texture/diffuse modulation |
+
+No request binds a fallback texture. Texture identity is supplied by the
+separate resource plan. When both features are enabled, the doubled modulation
+explains the geometry stage's channel reduction: its ideal component multiplier
+is `2*floor(authored_channel/2)/255`. For 255 this is 254/255, not exact unity.
+The operation semantics are described by
+[Microsoft's texture-operation reference](https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dtextureop);
+that reference does not establish the game's runtime feature selection.
+
+## Material requests and cache
+
+The caller supplies the resolved runtime material word. The picture path uses
+secondary word `0xffffffff` and alpha threshold zero. Nonzero suppression or
+an exact cached triple produces no material requests and leaves the cache
+unchanged. Otherwise the cache is replaced, even when effective features are
+zero. Features are not part of the cache key.
+The active special-material branch subsequently changes the cached material
+word to `0xffffffff`, retaining the secondary word and threshold. The returned
+cache replacement records that post-request value, not merely the input triple.
+
+With features zero, only mode selector 1 requests texture factor `0xffffffff`;
+other selectors request nothing. With any nonzero features:
+
+- Blending is enabled exactly when `material & 0x402607` is nonzero. When
+  disabled, blend factors are not rewritten.
+- Ordinary enabled blending requests source alpha and inverse source alpha,
+  except bit 0x2 with bit 0x400 clear requests destination factor one.
+- Bit 0x2000 requests the special override: source zero, destination source
+  color, RGB texture-plus-diffuse addition and disabled alpha operation.
+  These are requests only, not a defined final pixel equation.
+- Alpha testing is disabled for this zero-threshold picture path.
+- Bit 0x40000 disables depth writes; otherwise they are enabled. Bit 0x20000
+  chooses always depth comparison; otherwise less-or-equal.
+- Bit 0x80000 disables culling; otherwise clockwise culling is requested.
+- Bits 0x4000 and 0x8000 independently select U and V clamp when set, wrap
+  when clear.
+
+These material requests can occur with feature 2 even though texture binding
+was omitted. Suppression/cache hits do not undo preceding resource binding.
+Blend operation, depth-test enable, filtering, later texture stages, clipping,
+projection and output transfer are not established here and are not defaulted.
+
+## Remaining integration evidence
+
+Final startup pass masks, later material changes and alias/write order still
+need proof. Neither this model nor the authored record copies select those
+values. Original rendering remains gated until the full input and raster
+contract is established.
+
+## Validation
+
+Unit tests cover the complete small property table, unsigned passthrough and
+bitwise override, all four effective feature combinations, ordered suppression
+and cache guards, special sentinel hits, zero-feature cache replacement,
+blend selection, and depth/cull/address requests. The optional local startup
+asset test checks the observed authored property domain and its load-time
+mapping against the user's data, without treating it as final resource state.

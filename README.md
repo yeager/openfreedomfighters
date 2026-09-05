@@ -157,6 +157,11 @@ does not yet provide original startup transforms or GPU raster state.
 The original texture-resource bytes and PRM-relative identity now survive the
 image join per draw group; shared texture images do not merge distinct resource
 records. These authored records are not substituted for mutable runtime state.
+A separate conditional material-request model accepts the resolved runtime
+word and explicit pass/cache inputs, preserving unrequested states as inherited.
+It includes the recovered base-picture property mapping but does not use that
+mapping to guess final resource state. See
+[Picture material requests](docs/PICTURE_MATERIAL_STATE.md).
 Recovered picture constructors default both extent scales to `1.0`; descriptor
 bounds are not substituted for the still-explicit runtime extent, matrix,
 visitor, or projection inputs.

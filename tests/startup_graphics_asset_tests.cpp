@@ -1,6 +1,7 @@
 #include "off/graphics/startup_graphics_asset.hpp"
 #include "off/graphics/startup_graphics_prepared_plan.hpp"
 #include "off/graphics/picture_expansion.hpp"
+#include "off/graphics/picture_material_state.hpp"
 #include "off/graphics/startup_graphics_expanded_plan.hpp"
 
 #include <bit>
@@ -518,6 +519,15 @@ int main(int argc, char **argv) {
     check(retail_prepared.pictures().size() == 21 &&
               retail_prepared.submissions().size() == 77,
           "prepare the canonical retail startup pre-raster plan");
+    for (const auto &picture : retail_prepared.pictures()) {
+      const auto property = picture.base_render_property;
+      check(property == 0 || property == 1 || property == 5,
+            "retain the observed retail base-picture property domain");
+      const auto mapped = off::graphics::map_base_picture_material_property(property);
+      check(mapped == (property == 0 ? 0x60010U :
+                       property == 1 ? 0x60012U : 0x60210U),
+            "map real authored properties without claiming final resource state");
+    }
     // Explicit test-only transform: validates descriptor compatibility, not
     // recovered startup placement or final on-screen appearance.
     const off::graphics::PictureCacheTransform compatibility_transform{

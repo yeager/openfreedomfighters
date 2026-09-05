@@ -110,6 +110,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Join prepared startup submissions to owning CPU geometry with explicit
   identity-keyed picture transforms, retained texture identities and opaque
   controls, and no inferred transforms or cross-resource reordering.
+- [x] Model conditional picture resource-binding and material-state requests,
+  base-property expansion, and cache/suppression behavior without inferring
+  draw-time material words, inherited states or final startup pass inputs.
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
 - [ ] Audio mixing, device output, streaming voices, and positional sound as
   specified by the [audio runtime contract](AUDIO_RUNTIME.md). Audio-bank

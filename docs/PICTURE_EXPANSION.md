@@ -39,8 +39,9 @@ local corner separately would produce a different result.
 Triangles use (0,1,3) and (1,2,3). Every byte of the packed ARGB modulation
 word is independently floor-divided by two, including alpha, then copied to
 all four vertices. This vertex-stage reduction does not prove half brightness
-or opacity in the final image; downstream texture and blend operations remain
-unresolved.
+or opacity in the final image. Conditional downstream operations are described
+in [Picture material requests](PICTURE_MATERIAL_STATE.md); their final startup
+inputs remain unresolved.
 
 ## Portable policy and limits
 
