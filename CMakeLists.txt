@@ -19,6 +19,7 @@ add_library(off_core
     src/data/scene_support.cpp
     src/data/texture_catalog.cpp
     src/data/vfs_file_view.cpp
+    src/data/zgf_bundle.cpp
     src/data/zip_archive.cpp
     src/graphics/texture_decode.cpp
 )
@@ -77,4 +78,8 @@ if(BUILD_TESTING)
     add_executable(off_render_map_tests tests/render_map_tests.cpp)
     target_link_libraries(off_render_map_tests PRIVATE off_core)
     add_test(NAME off_render_map_tests COMMAND off_render_map_tests)
+
+    add_executable(off_zgf_bundle_tests tests/zgf_bundle_tests.cpp)
+    target_link_libraries(off_zgf_bundle_tests PRIVATE off_core)
+    add_test(NAME off_zgf_bundle_tests COMMAND off_zgf_bundle_tests)
 endif()

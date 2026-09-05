@@ -22,7 +22,7 @@ Encoding 1 contains exactly the declared number of uncompressed bytes and has no
 
 Installation verification decodes all 90 `ZGF` and all 90 `GMS` resources in the supported Steam build. Eighty-eight `ZGF` resources use raw DEFLATE and two use stored bytes; every `GMS` resource uses raw DEFLATE. Their decompressed sizes total 34,221,064 bytes for `ZGF` and 33,436,872 bytes for `GMS`.
 
-Every decoded `ZGF` payload begins with the same four-byte inner signature. The public parser deliberately stops at the outer envelope until the inner object directory and its reference rules have been independently established across the corpus.
+Every decoded `ZGF` payload begins with the same four-byte inner signature. Its embedded-resource directory is parsed separately and documented in [ZGF_FORMAT.md](ZGF_FORMAT.md). The decoded `GMS` payload schema remains a research target.
 
 ## Validation coverage
 

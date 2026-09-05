@@ -4,12 +4,12 @@
 #include "off/crypto/sha256.hpp"
 #include "off/data/archive_vfs.hpp"
 #include "off/data/audio_bank_header.hpp"
-#include "off/data/byte_reader.hpp"
 #include "off/data/packed_resource.hpp"
 #include "off/data/primitive_catalog.hpp"
 #include "off/data/render_map.hpp"
 #include "off/data/scene_support.hpp"
 #include "off/data/texture_catalog.hpp"
+#include "off/data/zgf_bundle.hpp"
 #include "off/data/zip_archive.hpp"
 #include "off/graphics/texture_decode.hpp"
 
@@ -17,11 +17,17 @@
 #include <array>
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <system_error>
+#include <utility>
+#include <vector>
 
 namespace off::data {
 namespace {
+
+constexpr std::uint32_t packed_reference_offset_mask = 0x3fffffffU;
 
 InstallVerification failure(
     InstallError error,
@@ -180,6 +186,14 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         std::size_t scene_graph_count = 0;
         std::size_t scene_graph_payload_bytes = 0;
         std::size_t stored_scene_graph_count = 0;
+        std::size_t scene_graph_entry_count = 0;
+        std::size_t scene_graph_entry_payload_bytes = 0;
+        std::size_t ttf_entry_count = 0;
+        std::size_t ppo_entry_count = 0;
+        std::size_t local_scene_payload_reference_count = 0;
+        std::size_t zero_offset_scene_reference_count = 0;
+        std::size_t local_scene_metadata_reference_count = 0;
+        std::size_t nonlocal_scene_reference_count = 0;
         std::size_t gms_resource_count = 0;
         std::size_t gms_payload_bytes = 0;
         std::size_t texture_catalog_count = 0;
@@ -213,6 +227,8 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             std::size_t primitive_files_in_archive = 0;
             std::size_t render_map_files_in_archive = 0;
             std::size_t render_instance_files_in_archive = 0;
+            std::optional<ZgfBundle> scene_bundle;
+            std::vector<std::uint32_t> scene_geometry_references;
             for (const auto& member : archive.entries()) {
                 const auto extension = lowercase(
                     std::filesystem::path(member.name).extension().string()
@@ -225,11 +241,24 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                     ++support_files_in_archive;
                     ++scene_support_count;
                 } else if (extension == ".zgf" || extension == ".gms") {
-                    const auto resource = PackedResource::parse(archive.read(member));
+                    auto resource = PackedResource::parse(archive.read(member));
                     if (extension == ".zgf") {
                         scene_graph_payload_bytes += resource.payload().size();
                         stored_scene_graph_count +=
                             resource.encoding() == PackedResourceEncoding::stored ? 1U : 0U;
+                        auto bundle = ZgfBundle::parse(std::move(resource));
+                        for (std::size_t index = 0; index < bundle.entries().size(); ++index) {
+                            const auto& bundled_entry = bundle.entries()[index];
+                            scene_graph_entry_payload_bytes +=
+                                bundle.entry_payload(index).size();
+                            const auto bundled_extension = lowercase(
+                                std::filesystem::path(bundled_entry.name).extension().string()
+                            );
+                            ttf_entry_count += bundled_extension == ".ttf" ? 1U : 0U;
+                            ppo_entry_count += bundled_extension == ".ppo" ? 1U : 0U;
+                        }
+                        scene_graph_entry_count += bundle.entries().size();
+                        scene_bundle = std::move(bundle);
                         ++scene_graph_files_in_archive;
                         ++scene_graph_count;
                     } else {
@@ -290,6 +319,16 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                     ++primitive_catalog_count;
                 } else if (extension == ".rmc" || extension == ".rmi") {
                     const auto map = RenderMap::parse(archive.read(member));
+                    for (const auto& map_entry : map.entries()) {
+                        scene_geometry_references.push_back(
+                            map_entry.object.primary_geometry_reference
+                        );
+                        if (map_entry.object.secondary_geometry_reference != 0) {
+                            scene_geometry_references.push_back(
+                                map_entry.object.secondary_geometry_reference
+                            );
+                        }
+                    }
                     if (extension == ".rmc") {
                         render_map_entry_count += map.entries().size();
                         render_map_node_count += map.nodes().size();
@@ -306,16 +345,35 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             if (support_files_in_archive != 1 || scene_graph_files_in_archive != 1 ||
                 gms_files_in_archive != 1 || texture_files_in_archive != 1 ||
                 primitive_files_in_archive != 1 || render_map_files_in_archive != 1 ||
-                render_instance_files_in_archive != 1) {
+                render_instance_files_in_archive != 1 || !scene_bundle.has_value()) {
                 throw std::runtime_error(
                     "scene archive does not contain every required resource exactly once"
                 );
+            }
+            for (const auto reference : scene_geometry_references) {
+                const auto decoded_offset = reference & packed_reference_offset_mask;
+                if (decoded_offset == 0) {
+                    ++zero_offset_scene_reference_count;
+                } else if (scene_bundle->locate_payload_offset(decoded_offset).has_value()) {
+                    ++local_scene_payload_reference_count;
+                } else if (decoded_offset < scene_bundle->decoded_size()) {
+                    ++local_scene_metadata_reference_count;
+                } else {
+                    ++nonlocal_scene_reference_count;
+                }
             }
             ++scene_archive_count;
         }
         if (scene_archive_count != 90 || scene_support_count != scene_archive_count ||
             scene_graph_count != scene_archive_count ||
             scene_graph_payload_bytes != 34'221'064 || stored_scene_graph_count != 2 ||
+            scene_graph_entry_count != 1'019 ||
+            scene_graph_entry_payload_bytes != 34'161'792 ||
+            ttf_entry_count != 430 || ppo_entry_count != 589 ||
+            local_scene_payload_reference_count != 2'872 ||
+            zero_offset_scene_reference_count != 92 ||
+            local_scene_metadata_reference_count != 1 ||
+            nonlocal_scene_reference_count != 37 ||
             gms_resource_count != scene_archive_count ||
             gms_payload_bytes != 33'436'872 ||
             texture_catalog_count != scene_archive_count || texture_image_count != 23'522 ||
@@ -347,22 +405,7 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             );
         }
         const auto payload = startup_archive.read(*scene_graph);
-        const ByteReader payload_reader(payload);
-        if (payload_reader.u32(4) != payload.size()) {
-            return failure(
-                InstallError::incomplete_game_data,
-                root,
-                "startup scene graph failed structural validation"
-            );
-        }
-        const auto unpacked_scene_graph = PackedResource::parse(payload);
-        if (unpacked_scene_graph.payload().size() != payload_reader.u32(0)) {
-            return failure(
-                InstallError::incomplete_game_data,
-                root,
-                "startup scene graph failed decompression validation"
-            );
-        }
+        static_cast<void>(ZgfBundle::parse(PackedResource::parse(payload)));
     } catch (const std::exception& exception) {
         return failure(
             InstallError::incomplete_game_data,

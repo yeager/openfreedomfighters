@@ -28,7 +28,7 @@ Representative scene archives consistently expose a family of resource types:
 
 | Extension | Working hypothesis | Verification needed |
 |---|---|---|
-| `ZGF` | packed scene graph or zone graph | inner header, references, node traversal |
+| `ZGF` | packed bundle of named scene resources | embedded `TTF`/`PPO` schemas and cross-bundle references |
 | `SUP` | `DLCF` dependency list | downstream loading semantics |
 | `BUF` | binary data buffers | offsets, alignment, ownership |
 | `GMS` | packed game/mission data | inner section and reference semantics |
@@ -45,7 +45,7 @@ This table is provisional. Every claim graduates only after corpus-wide validati
 
 Aggregate sizes, header invariants, and the first three-scene comparison are recorded in [FORMAT_CENSUS.md](FORMAT_CENSUS.md).
 
-Across all 90 archives, each of `GMS`, `OCT`, `PRM`, `RMC`, `RMI`, `SGP`, `SND`, `SUP`, `TEX`, and `ZGF` occurs 90 times. `BUF` and `LOC` occur 88 times and `ANM` occurs 42 times. This regularity strongly supports a per-scene resource-family design. The common `ZGF`/`GMS` compression envelope is decoded, `SUP` is confirmed as a dependency list, `TEX` is decoded to RGBA8, `PRM` primary vertices and grouped topology are decoded, and the common `RMC`/`RMI` spatial envelope is parsed; the remaining family semantics are still hypotheses.
+Across all 90 archives, each of `GMS`, `OCT`, `PRM`, `RMC`, `RMI`, `SGP`, `SND`, `SUP`, `TEX`, and `ZGF` occurs 90 times. `BUF` and `LOC` occur 88 times and `ANM` occurs 42 times. This regularity strongly supports a per-scene resource-family design. The common `ZGF`/`GMS` compression envelope and the inner ZGF resource bundle are decoded, `SUP` is confirmed as a dependency list, `TEX` is decoded to RGBA8, `PRM` primary vertices and grouped topology are decoded, and the common `RMC`/`RMI` spatial envelope is parsed; the remaining family semantics are still hypotheses.
 
 ## PE image map
 
@@ -112,7 +112,7 @@ Files named `.WAV` are often banks rather than conventional RIFF WAV files. All 
 ## Next probes
 
 1. Resolve runtime-computed dynamic module/API arguments and map load-config metadata.
-2. Parse the inner `ZGF` object directory and resolve packed scene references through `SUP` dependencies.
+2. Decode embedded ZGF `TTF` records and resolve nonlocal packed references through `SUP` dependencies.
 3. Determine the `RMC`/`RMI` runtime distinction and bind their geometry references through `ZGF` to `PRM`, then bind decoded `TEX` pixels to renderable geometry.
 4. Record black-box boot, menu, input, timing, and first-level traces from the retail game.
 5. Define golden screenshots/state traces stored locally as hashes and numeric measurements.
