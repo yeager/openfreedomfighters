@@ -38,6 +38,13 @@ input -> deterministic simulation <-> script/mission runtime
 
 The deterministic simulation is shared by both modes. Presentation is downstream of immutable render snapshots so Modern mode cannot silently change gameplay.
 
+The F10 graphics-settings overlay is downstream of the same presentation boundary.
+Its platform-neutral session separates confirmed requested values, editable draft
+values, capability-resolved effective values, and the last-known-good rollback
+state. SDL owns only event translation and transactional window/GPU application;
+the overlay draw list renders after scene scaling so UI remains at output
+resolution. See [GRAPHICS_SETTINGS.md](GRAPHICS_SETTINGS.md).
+
 ## Platform matrix
 
 | Target | Architecture | Packaging | First-class input |

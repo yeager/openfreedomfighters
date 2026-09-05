@@ -81,6 +81,8 @@ Replace `original` with `modern` to verify the second runtime profile.
 Omit `--verify-only` to open the current native renderer prototype. Close the
 window or press Escape to exit. `--frame-limit COUNT` is available for bounded
 GPU smoke tests and still requires successful retail-data verification first.
+F10 is reserved for the in-game graphics-settings overlay; its transactional
+cross-platform implementation is now specified and under development.
 
 ## Repository rules
 
@@ -137,6 +139,7 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [Owning scene render asset](docs/SCENE_RENDER_ASSET.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Modern graphics specification](docs/MODERN_GRAPHICS.md)
+- [F10 graphics-settings overlay](docs/GRAPHICS_SETTINGS.md)
 - [DLSS 4.5 integration plan](docs/DLSS.md)
 - [Roadmap and acceptance gates](docs/ROADMAP.md)
 - [Localization plan](docs/LOCALIZATION.md)
