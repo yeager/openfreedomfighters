@@ -35,6 +35,7 @@ Gate: a new contributor can generate the same structural report from a supported
 - [x] Parse and corpus-validate scene-support dependency lists.
 - [x] Parse texture catalogs, mip chains, palettes, indexes, and image sequences.
 - [x] Decode all observed texture encodings to portable RGBA8.
+- [x] Parse primitive catalogs, descriptor indexes, and grouped mesh topology.
 - [ ] Safe, bounds-checked readers for all required formats.
 - [ ] Texture, mesh, material, skeleton, animation, audio, localization, and spatial data models.
 - [ ] Fuzz targets and synthetic fixtures for every parser.

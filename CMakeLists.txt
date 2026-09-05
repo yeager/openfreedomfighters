@@ -13,6 +13,7 @@ add_library(off_core
     src/data/archive_vfs.cpp
     src/data/audio_bank_header.cpp
     src/data/install.cpp
+    src/data/primitive_catalog.cpp
     src/data/scene_support.cpp
     src/data/texture_catalog.cpp
     src/data/vfs_file_view.cpp
@@ -62,4 +63,8 @@ if(BUILD_TESTING)
     add_executable(off_texture_decode_tests tests/texture_decode_tests.cpp)
     target_link_libraries(off_texture_decode_tests PRIVATE off_core)
     add_test(NAME off_texture_decode_tests COMMAND off_texture_decode_tests)
+
+    add_executable(off_primitive_catalog_tests tests/primitive_catalog_tests.cpp)
+    target_link_libraries(off_primitive_catalog_tests PRIVATE off_core)
+    add_test(NAME off_primitive_catalog_tests COMMAND off_primitive_catalog_tests)
 endif()

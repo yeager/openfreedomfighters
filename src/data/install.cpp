@@ -5,6 +5,7 @@
 #include "off/data/archive_vfs.hpp"
 #include "off/data/audio_bank_header.hpp"
 #include "off/data/byte_reader.hpp"
+#include "off/data/primitive_catalog.hpp"
 #include "off/data/scene_support.hpp"
 #include "off/data/texture_catalog.hpp"
 #include "off/data/zip_archive.hpp"
@@ -177,6 +178,11 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         std::size_t texture_catalog_count = 0;
         std::size_t texture_image_count = 0;
         std::size_t texture_sequence_count = 0;
+        std::size_t primitive_catalog_count = 0;
+        std::size_t primitive_entry_count = 0;
+        std::size_t primitive_reference_count = 0;
+        std::size_t primitive_batch_count = 0;
+        std::size_t primitive_index_count = 0;
         bool decoded_dxt1_reference = false;
         bool decoded_dxt3_reference = false;
         bool decoded_abgr_reference = false;
@@ -188,6 +194,7 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             const auto archive = ZipArchive::open(entry.path());
             std::size_t support_files_in_archive = 0;
             std::size_t texture_files_in_archive = 0;
+            std::size_t primitive_files_in_archive = 0;
             for (const auto& member : archive.entries()) {
                 const auto extension = lowercase(
                     std::filesystem::path(member.name).extension().string()
@@ -234,11 +241,27 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                     texture_sequence_count += catalog.sequences().size();
                     ++texture_files_in_archive;
                     ++texture_catalog_count;
+                } else if (extension == ".prm") {
+                    const auto catalog = PrimitiveCatalog::parse(archive.read(member));
+                    for (const auto& primitive : catalog.entries()) {
+                        if (primitive.flagged_reference) {
+                            ++primitive_reference_count;
+                            continue;
+                        }
+                        primitive_batch_count += primitive.batches.size();
+                        for (const auto& batch : primitive.batches) {
+                            primitive_index_count += batch.indices.size();
+                        }
+                    }
+                    primitive_entry_count += catalog.entries().size();
+                    ++primitive_files_in_archive;
+                    ++primitive_catalog_count;
                 }
             }
-            if (support_files_in_archive != 1 || texture_files_in_archive != 1) {
+            if (support_files_in_archive != 1 || texture_files_in_archive != 1 ||
+                primitive_files_in_archive != 1) {
                 throw std::runtime_error(
-                    "scene archive does not contain exactly one support and texture file"
+                    "scene archive does not contain exactly one SUP, TEX, and PRM file"
                 );
             }
             ++scene_archive_count;
@@ -247,7 +270,9 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             texture_catalog_count != scene_archive_count || texture_image_count != 23'522 ||
             texture_sequence_count != 19 || !decoded_dxt1_reference ||
             !decoded_dxt3_reference || !decoded_abgr_reference ||
-            !decoded_palette_reference) {
+            !decoded_palette_reference || primitive_catalog_count != scene_archive_count ||
+            primitive_entry_count != 61'451 || primitive_reference_count != 27 ||
+            primitive_batch_count != 461'344 || primitive_index_count != 4'412'738) {
             return failure(
                 InstallError::incomplete_game_data,
                 root,
