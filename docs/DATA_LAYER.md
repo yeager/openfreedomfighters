@@ -46,6 +46,12 @@ The same full-corpus pass parses every `TEX` member and validates 23,522 image r
 
 Every `PRM` member is also parsed during installation verification. The supported corpus contains 61,451 entries, including 27 flagged references, plus 40,071 primitive-to-texture links, 2,820,961 decoded primary vertices, 461,344 topology batches, and 4,412,738 individually range-checked vertex indexes. Every nonzero primitive texture ID is resolved against the paired `TEX` catalog. See [PRIMITIVE_FORMAT.md](PRIMITIVE_FORMAT.md).
 
+`RenderAssetBindings` converts the parsed pair into a renderer-facing table. Each
+ordinary PRM entry maps to its primitive index, optional TEX image index, and the
+preserved selector flag; special PRM references are excluded until their indirection
+semantics are known. Construction rejects missing or duplicate texture IDs, so the
+render backend never performs unchecked cross-file ID lookup.
+
 Every `RMC` and `RMI` member is parsed as well. The supported corpus contains 2,587 nodes and 1,612 entries in `RMC`, plus 1,359 nodes and 1,189 entries in `RMI`. Every octree node is reached exactly once, every spatial element has exactly one owner, and every fixed-size descriptor reference and quantized bound is range checked. World-space bounds queries reproduce the recovered quantization, loose-cell, and half-open intersection rules. The final descriptor words are now confirmed as one required and one optional packed geometry reference rather than floating-point scale values. See [RENDER_MAP_FORMAT.md](RENDER_MAP_FORMAT.md).
 
 The audio format model is documented in [AUDIO_FORMAT.md](AUDIO_FORMAT.md).

@@ -12,6 +12,7 @@
 #include "off/data/texture_catalog.hpp"
 #include "off/data/zgf_bundle.hpp"
 #include "off/data/zip_archive.hpp"
+#include "off/graphics/render_assets.hpp"
 #include "off/graphics/texture_decode.hpp"
 
 #include <algorithm>
@@ -233,9 +234,9 @@ InstallVerification verify_install(const std::filesystem::path &root) {
       std::size_t render_instance_files_in_archive = 0;
       std::optional<GmsImage> gms_image;
       std::optional<std::vector<std::byte>> buf_resource;
+      std::optional<TextureCatalog> texture_catalog;
+      std::optional<PrimitiveCatalog> primitive_catalog;
       std::unordered_set<std::uint32_t> primitive_indices;
-      std::unordered_set<std::uint16_t> texture_image_ids;
-      std::vector<std::uint16_t> primitive_texture_references;
       std::vector<std::uint32_t> scene_geometry_references;
       for (const auto &member : archive.entries()) {
         const auto extension =
@@ -300,9 +301,8 @@ InstallVerification verify_install(const std::filesystem::path &root) {
             ++gms_resource_count;
           }
         } else if (extension == ".tex") {
-          const auto catalog = TextureCatalog::parse(archive.read(member));
+          auto catalog = TextureCatalog::parse(archive.read(member));
           for (const auto &image : catalog.images()) {
-            texture_image_ids.insert(static_cast<std::uint16_t>(image.id));
             bool *decoded_reference = nullptr;
             switch (image.encoding) {
             case TextureEncoding::dxt1:
@@ -332,21 +332,17 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           }
           texture_image_count += catalog.images().size();
           texture_sequence_count += catalog.sequences().size();
+          texture_catalog = std::move(catalog);
           ++texture_files_in_archive;
           ++texture_catalog_count;
         } else if (extension == ".prm") {
-          const auto catalog = PrimitiveCatalog::parse(archive.read(member));
+          auto catalog = PrimitiveCatalog::parse(archive.read(member));
           for (const auto &primitive : catalog.entries()) {
             primitive_indices.insert(primitive.packed_index);
             if (primitive.flagged_reference) {
               ++primitive_reference_count;
               continue;
             }
-            if (primitive.texture_id.has_value()) {
-              primitive_texture_references.push_back(*primitive.texture_id);
-            }
-            flagged_texture_selector_count +=
-                primitive.texture_selector_flagged ? 1U : 0U;
             primitive_vertex_count += primitive.vertices.size();
             primitive_batch_count += primitive.batches.size();
             for (const auto &batch : primitive.batches) {
@@ -354,6 +350,7 @@ InstallVerification verify_install(const std::filesystem::path &root) {
             }
           }
           primitive_entry_count += catalog.entries().size();
+          primitive_catalog = std::move(catalog);
           ++primitive_files_in_archive;
           ++primitive_catalog_count;
         } else if (extension == ".rmc" || extension == ".rmi") {
@@ -382,7 +379,8 @@ InstallVerification verify_install(const std::filesystem::path &root) {
       if (support_files_in_archive != 1 || scene_graph_files_in_archive != 1 ||
           gms_files_in_archive != 1 || texture_files_in_archive != 1 ||
           primitive_files_in_archive != 1 || render_map_files_in_archive != 1 ||
-          render_instance_files_in_archive != 1 || !gms_image.has_value()) {
+          render_instance_files_in_archive != 1 || !gms_image.has_value() ||
+          !texture_catalog.has_value() || !primitive_catalog.has_value()) {
         throw std::runtime_error("scene archive does not contain every "
                                  "required resource exactly once");
       }
@@ -408,12 +406,13 @@ InstallVerification verify_install(const std::filesystem::path &root) {
         }
         ++gms_primitive_reference_count;
       }
-      for (const auto texture_id : primitive_texture_references) {
-        if (!texture_image_ids.contains(texture_id)) {
-          throw std::runtime_error(
-              "PRM primitive references a missing TEX image");
-        }
-        ++primitive_texture_reference_count;
+      const auto render_assets = graphics::RenderAssetBindings::build(
+          primitive_catalog->entries(), texture_catalog->images());
+      for (const auto &binding : render_assets.primitives()) {
+        primitive_texture_reference_count +=
+            binding.texture_image_index.has_value() ? 1U : 0U;
+        flagged_texture_selector_count +=
+            binding.texture_selector_flagged ? 1U : 0U;
       }
       for (const auto reference : scene_geometry_references) {
         static_cast<void>(GmsImage::decode_object_handle(reference));

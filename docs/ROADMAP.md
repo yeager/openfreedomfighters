@@ -37,6 +37,7 @@ Gate: a new contributor can generate the same structural report from a supported
 - [x] Decode all observed texture encodings to portable RGBA8.
 - [x] Parse primitive catalogs, descriptor indexes, and grouped mesh topology.
 - [x] Decode primary primitive vertices to portable attributes.
+- [x] Resolve ordinary primitive texture selectors into paired TEX image bindings.
 - [x] Decode and corpus-validate the packed ZGF/GMS resource envelope.
 - [x] Parse ZGF embedded-resource directories and identify bundled font/script families.
 - [x] Parse GMS object-source and identifier directories.

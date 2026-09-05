@@ -82,6 +82,7 @@ The portable data layer already decodes retail texture formats, mip levels,
 palettes, UVs, vertex colors, grouped topology, and 40,071 validated
 primitive-to-texture links. The remaining prerequisites are confirmed material
 flag semantics, render-state reconstruction, a portable GPU backend, the Original
-reference shader path, and then the Modern render graph. Unknown fields remain
-explicitly opaque until corpus evidence and private executable analysis agree.
-
+reference shader path, and then the Modern render graph. A renderer-facing binding
+table now resolves every ordinary primitive to its optional TEX image while
+preserving the still-opaque selector flag. Unknown fields remain explicitly opaque
+until corpus evidence and private executable analysis agree.

@@ -41,7 +41,9 @@ texture, and bit 11 as an independently preserved selector flag. Bits 12–15 an
 the following 16-bit word are zero throughout the supported corpus. Every one of
 the 40,071 nonzero IDs resolves to an image in the paired `TEX` catalog; 18,731
 selectors carry bit 11. The flag's rendering effect remains deliberately unnamed
-until its runtime use is independently confirmed.
+until its runtime use is independently confirmed. It is primitive-local rather
+than image metadata: within individual archives, 516 texture images are referenced
+by both flagged and unflagged primitives.
 
 ## Vertex records
 
