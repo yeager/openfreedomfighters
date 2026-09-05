@@ -171,6 +171,11 @@ it does not invent a fade schedule or resolve shared-resource writes. The
 remaining first-draw evidence requires an
 [original Windows observation](docs/STARTUP_STATE_CAPTURE.md), not assumptions
 from constructor defaults.
+A CPU-only projection boundary now accepts explicit resolved frustum values
+and an established integer viewport. It preserves perspective division by
+emitted Z and does not repeat the picture transform. It neither selects the
+original startup camera nor replaces the diagnostic renderer's projection.
+See [Conditional picture projection](docs/PICTURE_PROJECTION.md).
 Recovered picture constructors default both extent scales to `1.0`; descriptor
 bounds are not substituted for the still-explicit runtime extent, matrix,
 visitor, or projection inputs.

@@ -66,6 +66,9 @@ conventional XYZ layout. A caller must still supply a justified transform.
 The cache producer has already composed the object matrix and inverted the
 translation Y component; expansion must not repeat either operation.
 This function does not derive runtime owner extents or projection inputs.
+The separate [picture projection boundary](PICTURE_PROJECTION.md) consumes
+explicit resolved projection inputs after expansion, with identity WORLD/VIEW.
+It supplies no missing startup camera defaults.
 Final frame renderer selection, draw-list scheduling, depth/culling/clipping,
 sampler state, texture-stage and blend behavior, and physical-output mapping
 must be resolved before presenting this as faithful startup rendering.

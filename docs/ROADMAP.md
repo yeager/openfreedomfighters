@@ -113,6 +113,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Model conditional picture resource-binding and material-state requests,
   base-property expansion, and cache/suppression behavior without inferring
   draw-time material words, inherited states or final startup pass inputs.
+- [x] Implement ordinary picture projection and viewport mapping from explicit
+  resolved frustum values and an established integer viewport, preserving
+  clip W=Z without repeating the picture basis or inventing camera defaults.
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
 - [ ] Audio mixing, device output, streaming voices, and positional sound as
   specified by the [audio runtime contract](AUDIO_RUNTIME.md). Audio-bank
