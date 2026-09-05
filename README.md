@@ -24,7 +24,9 @@ This is an independent fan project and is not affiliated with or endorsed by IO 
 
 ## Status
 
-Phase 1 data layer, with the Phase 2 renderer vertical slice underway. The Steam
+Phase 0 and Phase 1 gates remain open, while the Phase 2 render, audio, input,
+and menu vertical slice is underway and foundational Phase 3 simulation work has
+landed. No phase gate has passed. The Steam
 digital Windows build has been inventoried and fully disassembled in private
 clean-room storage. The native C++ bootstrap now:
 
@@ -155,6 +157,7 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [2003 versus digital-build provenance](docs/BUILD_PROVENANCE.md)
 - [Private disassembly status](docs/DISASSEMBLY_STATUS.md)
 - [Portable data layer](docs/DATA_LAYER.md)
+- [Campaign compatibility contract](docs/CAMPAIGN_COMPATIBILITY.md)
 - [Audio-bank header format](docs/AUDIO_FORMAT.md)
 - [Scene-support dependency format](docs/SCENE_SUPPORT_FORMAT.md)
 - [Texture-catalog format](docs/TEXTURE_FORMAT.md)

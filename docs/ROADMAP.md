@@ -59,9 +59,11 @@ Gate: a new contributor can generate the same structural report from a supported
 - [ ] Fuzz targets and synthetic fixtures for every parser.
 - [ ] Local derived-cache format with versioning and invalidation.
 
-Gate: all startup and first-level assets load into validated portable models under ASan/UBSan; no retail data enters test artifacts.
+Gate: every startup and first-level asset parses into validated portable models
+under ASan/UBSan; public malformed-input and resource-limit tests pass; and CI
+artifacts, fuzz corpora, caches, and logs contain no retail data.
 
-## Phase 2 - Render/audio/input vertical slice
+## Phase 2 - Render, audio, input, and menu vertical slice
 
 - [x] SDL3 window, event, and GPU platform bootstrap.
 - [ ] Controller action map.
@@ -86,7 +88,9 @@ Gate: all startup and first-level assets load into validated portable models und
 - [ ] Replace the diagnostic F10 skin with a retail-data-backed overlay matching
   the recovered original menu layout and visual language.
 
-Gate: deterministic camera fly-through matches structural and image-difference tolerances on all target platforms.
+Gate: a deterministic camera trace meets structural and image-difference
+tolerances on Windows, Linux, Steam Deck hardware, and macOS, with audio/input
+smoke evidence and a retail-data-backed F10 comparison.
 
 ## Phase 3 - Simulation vertical slice
 
@@ -99,7 +103,9 @@ Gate: deterministic camera fly-through matches structural and image-difference t
 - [ ] Navigation, AI, squad recruitment, orders, and morale/charisma mechanics.
 - [ ] Animation state machine and collision/physics behavior.
 
-Gate: first playable mission segment completes from recorded inputs with deterministic checkpoints.
+Gate: recorded inputs replay from a declared initial state with versioned
+deterministic checkpoints on every target platform, and Original and Modern
+produce identical authoritative hashes.
 
 ## Phase 4 - Campaign compatibility
 
@@ -108,9 +114,10 @@ Gate: first playable mission segment completes from recorded inputs with determi
 - [ ] Original input semantics and controller mappings.
 - [ ] Regression traces for campaign-critical state transitions.
 
-Gate: campaign completes in Original mode on all four targets with no compatibility-critical divergence.
+Gate: a fresh-start campaign completes in Original mode on Windows, Linux, Steam
+Deck hardware, and macOS with no compatibility-critical divergence.
 
-## Phase 5 - Localization and Modern mode
+## Phase 5 - Localization, Modern, and Modern+
 
 - [ ] Message-ID catalog, Unicode shaping, fallback fonts, plural/select support.
 - [ ] 20 locale packs and in-context review, including Swedish.
@@ -120,7 +127,10 @@ Gate: campaign completes in Original mode on all four targets with no compatibil
 - [ ] Evaluate later DLSS generations only from published NVIDIA SDKs and documentation.
 - [ ] Translation completeness and overflow automation.
 
-Gate: every locale passes completeness and UI-layout checks; Modern and Original simulations produce identical state hashes for shared settings.
+Gate: every locale passes catalog completeness, placeholder, pseudo-localization
+overflow, and in-context layout checks; Modern meets per-platform performance
+requirements; and Modern and Original produce identical simulation hashes for
+shared settings.
 
 ## Phase 6 - Release engineering
 
@@ -129,15 +139,23 @@ Gate: every locale passes completeness and UI-layout checks; Modern and Original
 - [ ] Automated release audit proving absence of retail content.
 - [ ] User documentation, troubleshooting, contributor specifications.
 
-Gate: fresh installs locate user-owned data and complete the campaign without Wine, Proton, Rosetta, or another emulator/compatibility layer.
+Gate: every release package passes dependency/license, Gitleaks, source-history,
+retail-content, signature, and clean-install audits, locates or requests
+user-owned data, and completes the campaign natively on every target platform.
 
 ## Cross-cutting acceptance criteria
 
-- No original game data in Git history, CI, releases, or issue attachments.
-- User-visible compatibility paths consume verified retail data when it exists;
-  synthetic fixtures are restricted to tests, fuzzing, security regressions, and
-  explicitly labelled developer diagnostics.
-- Untrusted asset input is bounds checked and fuzzed.
-- Original and Modern share one authoritative gameplay simulation.
-- Performance target: stable 60 fps at native Deck resolution in Modern mode; Original supports the reference timing profile.
-- Save format is documented and versioned; retail-save import is optional and isolated.
+1. No retail payload, identifiers unnecessary for interoperability, screenshots,
+   extracted text, private analysis, credentials, or proprietary runtimes enter
+   Git history, CI, caches, logs, releases, or issue attachments.
+2. Every untrusted-input parser has explicit byte/count/allocation/decompression
+   limits, negative tests, fuzz coverage, and sanitizer evidence.
+3. Presentation profiles consume one authoritative simulation and cannot affect
+   timing, input, RNG, AI, collision, damage, mission state, saves, or checkpoints.
+4. Performance evidence records frame-time distributions and test conditions;
+   the target is stable 60 fps at native Steam Deck resolution in Modern mode.
+5. Save data is documented, versioned, bounded, atomically written, migration
+   tested, and recoverable. Retail-save import, if implemented, is isolated.
+6. Runtime compatibility uses verified retail data when available. Synthetic
+   fixtures remain test-only or conspicuously diagnostic, and optional Modern+
+   replacements are independently licensed and removable.

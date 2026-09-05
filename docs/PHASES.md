@@ -99,7 +99,8 @@ documented expected checkpoint.
 The gate is a fresh-start campaign completion on Windows, Linux, Steam Deck
 hardware, and macOS with no compatibility-critical divergence. Failures are
 tracked by mission, checkpoint, platform, and reproducible input trace; completion
-cannot be inferred from asset coverage alone.
+cannot be inferred from asset coverage alone. See the
+[campaign compatibility contract](CAMPAIGN_COMPATIBILITY.md).
 
 ## Phase 5 - Localization, Modern, and Modern+
 
@@ -127,10 +128,11 @@ support documentation, and reproducible release provenance.
 
 The release gate runs dependency/license, Gitleaks, source-history, package
 content/signature, and retail-fingerprint audits; installs each package in a clean
-environment; locates or requests the user-owned data; and completes platform
-startup and campaign smoke matrices without Wine, Proton, Rosetta, or another
-compatibility layer. Steam Deck requires a native Linux runtime hardware result,
-not only an x86-64 Linux CI build. See the [CI specification](CI.md) and
+environment; locates or requests the user-owned data; and completes the campaign
+natively on Windows, Linux, Steam Deck hardware, and macOS without Wine, Proton,
+Rosetta, or another compatibility layer. Steam Deck requires a native Linux
+runtime hardware result, not only an x86-64 Linux CI build. See the
+[CI specification](CI.md) and
 [third-party policy](../THIRD_PARTY.md).
 
 ## Cross-cutting gates
