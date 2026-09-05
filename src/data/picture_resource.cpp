@@ -146,6 +146,8 @@ PictureResource PictureResource::parse(
         result.frame_texture_references_.push_back(texture_resource_reference);
         PictureFrameTextureResource texture_resource{
             .prm_offset = texture_resource_reference,
+            .manager_key = reader.u16(
+                static_cast<std::size_t>(texture_resource_reference) + 4U),
         };
         const auto texture_source = reader.slice(
             static_cast<std::size_t>(texture_resource_reference),

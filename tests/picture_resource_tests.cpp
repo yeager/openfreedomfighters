@@ -100,6 +100,7 @@ int main() {
           "preserve the frame texture-reference array");
     check(picture.frame_texture_resources().size() == 2 &&
               picture.frame_texture_resources()[0].prm_offset == 128 &&
+              picture.frame_texture_resources()[0].manager_key == 0x5151 &&
               picture.frame_texture_resources()[0].encoded[4] ==
                   std::byte{0x51} &&
               picture.frame_texture_resources()[1].prm_offset == 160 &&

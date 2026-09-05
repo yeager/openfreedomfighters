@@ -42,7 +42,9 @@ clean-room storage. The native C++ bootstrap now:
   461,344 topology batches, and 4,412,738 range-checked indexes;
 - resolves all 40,071 nonzero primitive texture selectors into their paired TEX
   images and classifies 46,140 opaque, 12,751 variable-alpha, and 2,533 fully
-  transparent ordinary primitives; and
+  transparent ordinary primitives;
+- resolves all 1,144 startup picture frames through their bounded PRM manager
+  keys to 334 distinct startup TEX images, with exact reverse-key validation; and
 - produces renderer-facing index buffers and draw ranges for 57,284 triangle-strip
   and 4,140 line-list primitives while preserving every source batch; and
 - builds an owning multi-map scene asset that preserves every resolution outcome

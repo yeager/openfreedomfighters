@@ -56,10 +56,19 @@ frame record; the descriptor supplies presentation geometry rather than texture
 identity. The bounded [picture-resource parser](PICTURE_RESOURCE.md) models this
 association without converting runtime indexes into pointers.
 
-The remaining missing join is from each frame texture-resource reference through
-its runtime resource to raw TEX image storage. That allocation producer and final
-TEX mapping remain unresolved, so candidate values must not be interpreted as
-retail texture identifiers and cannot yet produce `RetailUiTextureBinding`.
+The final identity join is now recovered. Each frame reference resolves a typed
+PRM record whose manager key selects one of 2,048 scene-local slots. The startup
+path uses the upper key bank, normalized by subtracting 2,048; the resulting ID
+must exist exactly once in the paired TEX catalog, and the reverse operation must
+reproduce the original key. All 1,144 startup frames resolve to 334 distinct
+images. The recovered consumer supplies selection zero, but startup contains no
+texture sequences, so sequence redirection cannot be validated against this
+corpus. The startup-scoped join therefore rejects sequence-bearing slots rather
+than claiming behavior for other scenes.
+
+This proves image identity but does not assign semantic menu roles. Role binding
+still requires window hierarchy, state, frame, transform, and composition
+evidence and may not use names, dimensions, catalog order, or pixel similarity.
 
 Public unit tests supply explicit project-authored bindings and generated pixel
 buffers. A retail smoke test must obtain bindings from the recovered picture

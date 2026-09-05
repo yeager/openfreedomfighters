@@ -97,8 +97,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   its picture asset reference.
 - [x] Parse every startup PRM-backed picture resource with bounded descriptors,
   frame texture references, and portable descriptor indexes.
-- [ ] Recover the frame texture-resource allocation and its final TEX-image join
-  before binding F10 picture frames to TEX images.
+- [x] Recover the frame texture-resource allocation and its bounded TEX-image
+  join; all 1,144 startup frames resolve to 334 distinct images in both
+  directions without names, dimensions, catalog order, or pixel heuristics.
 
 Gate: a deterministic camera trace meets structural and image-difference
 tolerances on Windows, Linux, Steam Deck hardware, and macOS, with audio/input

@@ -75,15 +75,23 @@ the repository.
 Private compatibility validation joins every startup window-picture source to
 the user-owned raw PRM and parses all 124 distinct picture resources. Installation
 verification repeats that bounded join, requires 124 unique picture references,
-and resolves all 1,144 frame resource records. Its aggregate corpus gate records
-no offsets, identifiers, or retail bytes.
+resolves all 1,144 frame resource records, and joins them to 334 distinct startup
+TEX images. Its aggregate corpus gate records no offsets, identifiers, or retail
+bytes.
 
-## Remaining boundary
+## Texture-manager key join
 
-A frame texture-resource reference is now proven to target the bounded typed
-record described above. The record fields used after retail runtime
-materialization have not yet been tied bidirectionally to a raw TEX image or
-sequence. Until that producer and consumer join is recovered, no frame reference
-may become a semantic UI texture binding through names, dimensions, catalog
-order, numeric coincidence, or pixel similarity. See the
-[retail UI texture boundary](RETAIL_UI_TEXTURES.md).
+The typed record's little-endian word at byte offset four is an unsigned manager
+key. The manager has 2,048 image slots and two key banks: keys below 2,048 select
+the same-numbered slot, while keys from 2,048 through 4,095 select the slot after
+subtracting 2,048. The startup picture path requires the upper bank. Its paired
+TEX catalog has no sequences, so the consumer's selection zero resolves directly
+to the image whose ID equals the normalized slot. Every binding is checked in
+reverse before use. Out-of-range keys, missing images, cross-bank aliases, and
+sequence-bearing slots fail closed; behavior for sequence-bearing scenes is not
+claimed without matching corpus validation.
+
+`PictureTextureBindings` owns its neutral binding records; their image indexes
+remain meaningful only for the catalog used to build them. Callers must retain
+that catalog and invalidate bindings on scene replacement. This identity join
+does not assign semantic UI roles. See the [retail UI texture boundary](RETAIL_UI_TEXTURES.md).

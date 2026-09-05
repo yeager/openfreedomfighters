@@ -19,6 +19,7 @@ struct PictureResourceFrame {
 
 struct PictureFrameTextureResource {
     std::uint32_t prm_offset{0};
+    std::uint16_t manager_key{0};
     std::array<std::byte, 32> encoded{};
 };
 

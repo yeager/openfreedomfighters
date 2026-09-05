@@ -7,6 +7,7 @@
 #include "off/data/gms_image.hpp"
 #include "off/data/packed_resource.hpp"
 #include "off/data/picture_resource.hpp"
+#include "off/data/picture_texture_binding.hpp"
 #include "off/data/primitive_catalog.hpp"
 #include "off/data/render_map.hpp"
 #include "off/data/scene_support.hpp"
@@ -222,6 +223,10 @@ InstallVerification verify_install(const std::filesystem::path &root) {
     std::unordered_set<std::uint32_t> startup_picture_references;
     std::unordered_set<std::uint32_t>
         startup_picture_frame_texture_references;
+    std::size_t startup_picture_texture_join_count = 0;
+    std::unordered_set<std::uint16_t> startup_picture_manager_keys;
+    std::unordered_set<std::uint16_t> startup_picture_texture_ids;
+    std::unordered_set<std::size_t> startup_picture_texture_image_indices;
     std::size_t render_map_count = 0;
     std::size_t render_map_entry_count = 0;
     std::size_t render_map_node_count = 0;
@@ -445,6 +450,14 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           }
           const auto picture = PictureResource::parse(
               *primitive_resource, picture_source.picture_asset_reference);
+          const auto picture_textures = PictureTextureBindings::build(
+              picture.frame_texture_resources(), *texture_catalog, true);
+          startup_picture_texture_join_count += picture_textures.entries().size();
+          for (const auto& binding : picture_textures.entries()) {
+            startup_picture_manager_keys.insert(binding.manager_key);
+            startup_picture_texture_ids.insert(binding.texture_id);
+            startup_picture_texture_image_indices.insert(binding.image_index);
+          }
           startup_picture_frame_texture_resource_count +=
               picture.frame_texture_resources().size();
           for (const auto &texture_resource :
@@ -574,6 +587,10 @@ InstallVerification verify_install(const std::filesystem::path &root) {
         startup_picture_resource_count != 124 ||
         startup_picture_references.size() != startup_picture_resource_count ||
         startup_picture_frame_texture_resource_count != 1'144 ||
+        startup_picture_texture_join_count != 1'144 ||
+        startup_picture_manager_keys.size() != 334 ||
+        startup_picture_texture_ids.size() != 334 ||
+        startup_picture_texture_image_indices.size() != 334 ||
         startup_picture_frame_texture_references.size() !=
             startup_picture_frame_texture_resource_count ||
         render_map_count != scene_archive_count ||

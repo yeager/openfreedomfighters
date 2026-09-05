@@ -44,6 +44,13 @@ It also decodes the single `ZGF` and `GMS` member in each archive. The resulting
 
 The same full-corpus pass parses every `TEX` member and validates 23,522 image records and 19 sequence records. It decodes a retail reference from each of the four observed encoding families and discards the output immediately. Encoded and decoded mip bytes are held only in transient memory. See [TEXTURE_FORMAT.md](TEXTURE_FORMAT.md).
 
+For the startup archive, the verifier also resolves all 1,144 PRM-backed picture
+frame manager keys to 334 distinct TEX images. It validates the bounded upper-bank
+normalization and exact reverse mapping using IDs alone; diagnostics expose only
+aggregate counts. The consumer supplies selection zero, but sequence slots fail
+closed because startup has no sequences and broader sequence-bearing scene
+behavior is not corpus-validated.
+
 Every `PRM` member is also parsed during installation verification. The supported corpus contains 61,451 entries, including 27 flagged references, plus 40,071 primitive-to-texture links, 2,820,961 decoded primary vertices, 461,344 topology batches, and 4,412,738 individually range-checked vertex indexes. Every nonzero primitive texture ID is resolved against the paired `TEX` catalog. See [PRIMITIVE_FORMAT.md](PRIMITIVE_FORMAT.md).
 
 `RenderAssetBindings` converts the parsed pair into a renderer-facing table. Each
