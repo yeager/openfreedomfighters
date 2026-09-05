@@ -52,12 +52,14 @@ The returned resource has a descriptor count, 40-byte presentation descriptors,
 a draw-group count, a parallel array of draw-group texture-resource references,
 and eight-byte draw-group records. Each record contains a descriptor span count
 and first descriptor index. The
-renderer submits each texture-resource reference together with its corresponding
-frame record; the descriptor supplies presentation geometry rather than texture
-identity. The bounded [picture-resource parser](PICTURE_RESOURCE.md) models this
-association without converting runtime indexes into pointers.
+the recovered consumer associates each texture-resource reference with its
+corresponding draw-group record; the descriptor supplies presentation geometry
+rather than texture identity. The bounded
+[picture-resource parser](PICTURE_RESOURCE.md) models this association without
+converting runtime indexes into pointers. This association does not establish
+GPU draw scheduling.
 
-The final identity join is now recovered. Each frame reference resolves a typed
+The identity join is now recovered. Each draw-group texture reference resolves a typed
 PRM record whose manager key selects one of 2,048 scene-local slots. The startup
 path uses the upper key bank, normalized by subtracting 2,048; the resulting ID
 must exist exactly once in the paired TEX catalog, and the reverse operation must
@@ -67,11 +69,35 @@ texture sequences, so sequence redirection cannot be validated against this
 corpus. The startup-scoped join therefore rejects sequence-bearing slots rather
 than claiming behavior for other scenes.
 
-This proves image identity but does not assign semantic menu roles. Role binding
-still requires window hierarchy, state, frame, transform, and composition
-evidence and may not use names, dimensions, catalog order, or pixel similarity.
+The startup graphics-row role is now bound by window hierarchy, authored local
+coordinates, class nesting, and picture composition shape. Exactly one subtree
+must match. It yields 24 picture instances, 88 one-quad groups, and six distinct
+TEX images: eight persistent one-group backgrounds and sixteen five-group chrome
+instances. The two chrome children carry the same authored exponent zero and
+runtime mask `0x01`; the recovered state dispatcher therefore reveals or hides
+them together. This is a visibility/co-gating fact, not a claim that the GPU
+schedules both for drawing. The extractor retains inclusive root-to-instance
+construction and transform chains without composing them. It does not label
+chrome as focused/normal, distinguish
+the two duplicate-Y rows, or map the same-anchor action controls. No role binding
+uses names, image dimensions, catalog order, or pixel similarity.
+
+This decoder is startup-scoped: callers must first establish that the GMS, raw
+PRM allocation, and TEX catalog are paired members of the verified supported
+startup archive. Locator X/Y values are compared as exact finite binary32
+values. IEEE negative zero is equivalent to positive zero; an adjacent
+`nextafter` value is a mismatch. Z is retained in each raw transform but is not
+used for selection because no Z-role predicate has been established. Every
+returned texture image index is an identity relative to the supplied paired TEX
+catalog, not a global or cross-archive image identifier.
 
 Public unit tests supply explicit project-authored bindings and generated pixel
 buffers. A retail smoke test must obtain bindings from the recovered picture
 resource resolver and read the player's archive in memory; it must not write
 decoded textures to disk or commit runtime evidence containing retail identifiers.
+The composition factory is tested separately with owned project-authored row
+values and draw plans, including group shape, canonical signatures, construction
+chains, slot identity, rejection cases, and independence from caller storage.
+Malformed picture-resource parsing and texture-catalog joins remain covered by
+their lower-layer unit tests; the composition tests do not duplicate those
+parser and resolver contracts.

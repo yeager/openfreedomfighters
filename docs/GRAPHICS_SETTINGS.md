@@ -155,7 +155,7 @@ snapshot.
 3. F10 SDL event routing, keyboard navigation, overlay rendering, and safe
    window/present application.
 4. Recover behavior-only retail menu layout/style measurements and bind the
-   overlay to menu fonts, interface art, focus states, and audio read from the
+   overlay to menu fonts, interface art, control-state gating, and audio read from the
    verified installation at runtime.
 5. Gamepad lifecycle, atomic persistence in the platform configuration directory,
    and a Unicode text backend for all supported localizations.
@@ -188,11 +188,16 @@ presentation mode, and Original/Modern profile apply transactionally through
 SDL, including the Keep/Revert timeout. Mouse/controller routing, persistence,
 font fallback, complex-script shaping, and recovered retail styling remain open.
 
-Stage 4 has recovered and implemented the authored 640x480 coordinate space,
-title and two-column anchors, seven-slot row rhythm, focused-state marker, and
-shared action anchor. Widescreen output centers that coordinate space without
-stretching it. Retail background tiles, borders, scanlines, arrows, exact colors,
-draw order, motion, and sound cues are not yet composed, so visual fidelity is
+Stage 4 has recovered the authored coordinate space, title and two-column
+anchors, row rhythm, and shared action anchor. A fail-closed startup extractor
+now identifies eight neutral row owners and binds each to one persistent
+one-group background plus two five-group chrome instances co-gated by the same
+visibility-state mask. This does not establish GPU draw scheduling. It
+preserves complete inclusive root-to-instance construction and local-transform
+chains without composing them.
+The current focus rectangle remains explicitly project-authored diagnostic UI;
+the two chrome siblings are not focused/normal alternatives. Retail draw order,
+GPU transform composition, motion, sound cues, and action behavior mapping are
 still incomplete.
 
 The `--screenshot FILE.bmp` diagnostic path captures the final bounded frame

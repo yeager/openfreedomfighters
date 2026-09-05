@@ -110,6 +110,15 @@ from effective runtime values. Advanced renderer paths, including a verified
 DLSS 4.5 backend on supported Windows/NVIDIA systems, remain capability-gated
 until their real implementations land; the menu does not establish DLSS support
 by itself.
+
+The verified startup data now supplies a fail-closed neutral graphics-row
+composition: eight row owners, each with one persistent background picture and
+two chrome pictures co-gated by the same recovered visibility-state mask. Their
+24 instances bind 88 draw groups to six retail images while preserving, but not
+composing, every authored inclusive root-to-instance construction and transform
+chain. The visible focus marker and extended Modern/Modern+ rows
+remain project-authored diagnostic UI until this recovered composition is wired
+into the renderer.
 The current skin is a labelled diagnostic implementation. The production F10
 overlay must recover the original menu's layout and visual language and load its
 applicable fonts and interface resources from the user's verified installation at

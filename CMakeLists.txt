@@ -63,6 +63,7 @@ add_library(off_core
     src/data/packed_resource.cpp
     src/data/picture_resource.cpp
     src/data/picture_texture_binding.cpp
+    src/data/startup_graphics_composition.cpp
     src/data/primitive_catalog.cpp
     src/data/render_map.cpp
     src/data/scene_support.cpp
@@ -200,6 +201,12 @@ if(BUILD_TESTING)
     add_executable(off_graphics_menu_draw_tests tests/graphics_menu_draw_tests.cpp)
     target_link_libraries(off_graphics_menu_draw_tests PRIVATE off_core)
     add_test(NAME off_graphics_menu_draw_tests COMMAND off_graphics_menu_draw_tests)
+
+    add_executable(off_startup_graphics_composition_tests
+        tests/startup_graphics_composition_tests.cpp)
+    target_link_libraries(off_startup_graphics_composition_tests PRIVATE off_core)
+    add_test(NAME off_startup_graphics_composition_tests
+        COMMAND off_startup_graphics_composition_tests)
 
     add_executable(off_retail_ui_fonts_tests tests/retail_ui_fonts_tests.cpp)
     target_link_libraries(off_retail_ui_fonts_tests PRIVATE off_core)

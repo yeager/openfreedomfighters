@@ -11,6 +11,7 @@
 #include "off/data/primitive_catalog.hpp"
 #include "off/data/render_map.hpp"
 #include "off/data/scene_support.hpp"
+#include "off/data/startup_graphics_composition.hpp"
 #include "off/data/texture_catalog.hpp"
 #include "off/data/zgf_bundle.hpp"
 #include "off/data/zip_archive.hpp"
@@ -229,6 +230,10 @@ InstallVerification verify_install(const std::filesystem::path &root) {
     std::unordered_set<std::uint16_t> startup_picture_manager_keys;
     std::unordered_set<std::uint16_t> startup_picture_texture_ids;
     std::unordered_set<std::size_t> startup_picture_texture_image_indices;
+    std::size_t startup_graphics_composition_instance_count = 0;
+    std::size_t startup_graphics_composition_group_count = 0;
+    std::size_t startup_graphics_composition_quad_count = 0;
+    std::unordered_set<std::size_t> startup_graphics_composition_image_indices;
     std::size_t render_map_count = 0;
     std::size_t render_map_entry_count = 0;
     std::size_t render_map_node_count = 0;
@@ -490,6 +495,18 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           }
           ++startup_picture_resource_count;
         }
+        const auto graphics_composition = StartupGraphicsComposition::build(
+            *gms_image, *primitive_resource, *texture_catalog);
+        for (const auto& row : graphics_composition.rows()) {
+          for (const auto& instance : row.pictures) {
+            ++startup_graphics_composition_instance_count;
+            startup_graphics_composition_group_count += instance.draw_plan.groups().size();
+            for (const auto& group : instance.draw_plan.groups()) {
+              startup_graphics_composition_quad_count += group.quads.size();
+              startup_graphics_composition_image_indices.insert(group.texture.image_index);
+            }
+          }
+        }
       }
       for (const auto &source : gms_image->directory()) {
         if (!source.primitive_reference.has_value()) {
@@ -616,6 +633,10 @@ InstallVerification verify_install(const std::filesystem::path &root) {
         startup_picture_manager_keys.size() != 334 ||
         startup_picture_texture_ids.size() != 334 ||
         startup_picture_texture_image_indices.size() != 334 ||
+        startup_graphics_composition_instance_count != 24 ||
+        startup_graphics_composition_group_count != 88 ||
+        startup_graphics_composition_quad_count != 88 ||
+        startup_graphics_composition_image_indices.size() != 6 ||
         startup_picture_draw_group_texture_references.size() !=
             startup_picture_draw_group_texture_resource_count ||
         render_map_count != scene_archive_count ||

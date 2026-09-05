@@ -250,16 +250,16 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
     add_text(UiLayer::content, point_x(400.0F), point_y(reference_y),
              values[i]);
     if (static_cast<std::size_t>(menu.selected_row()) == i) {
-      // The retail menu swaps a 16x16 focused child at the row-state anchor.
-      // This rectangle is only a draw-list marker until that retail image is
-      // decoded and uploaded; it deliberately does not cover the row.
+      // This project-authored rectangle is only a diagnostic focus marker.
+      // Recovered row chrome consists of two simultaneously gated picture
+      // instances; neither is a behavior-proven focused/normal alternative.
       out.rectangles.push_back(
           {UiLayer::focus,
            reference_rect(44.0F, reference_y - 2.0F, 16.0F, 16.0F), focus});
     }
   }
-  // Retail Apply and Back occupy the same authored anchor and are selected as
-  // states, rather than being laid out as simultaneous horizontal buttons.
+  // Two retail action controls share this anchor, but their apply/back behavior
+  // mapping is not yet proven. The portable action selection below is synthetic.
   auto action = UiControl::apply;
   auto action_text = std::string{"Apply"};
   if (menu.selected_row() == GraphicsMenuRow::cancel) {
