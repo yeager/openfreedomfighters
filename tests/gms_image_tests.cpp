@@ -94,6 +94,46 @@ std::vector<std::byte> packed_fixture() {
     return bytes;
 }
 
+std::vector<std::byte> deep_hierarchy_fixture() {
+    std::vector<std::byte> payload(768);
+    auto write = [&payload](std::size_t offset, std::uint32_t value) {
+        for (unsigned int shift = 0; shift < 32; shift += 8) {
+            payload[offset++] = static_cast<std::byte>((value >> shift) & 0xffU);
+        }
+    };
+    write(0, 32); write(4, 744); write(12, 4); write(20, 128);
+    write(32, 4);
+    write(36, (1U << 24U) | 20U); write(40, 0);
+    write(44, (1U << 24U) | 140U); write(48, 0);
+    write(52, 155U); write(56, 0);
+    write(60, (2U << 25U) | 155U); write(64, 0);
+    write(744, 1); write(748, 752);
+    payload[752] = std::byte{'x'};
+
+    write(80 + 4, 680); write(80 + 8, 716);
+    write(80 + 16, 0x00100000U);
+    write(560 + 4, 680); write(560 + 8, 716);
+    write(560 + 16, 0x00100000U);
+    write(620 + 4, 680); write(620 + 8, 716);
+
+    write(128, 3);
+    write(128 + 4, 1);
+    write(128 + 4 + 3 * 4, 1);
+    write(128 + 4 + 24 * 4, 1);
+    write(128 + 4 + 2 * 24 * 4 + 3 * 4, 1);
+    for (std::size_t component = 0; component < 9; ++component) {
+        write(680 + component * 4,
+              std::bit_cast<std::uint32_t>(component % 4 == 0 ? 1.0F : 0.0F));
+    }
+
+    std::vector<std::byte> bytes;
+    append_u32(bytes, static_cast<std::uint32_t>(payload.size()));
+    append_u32(bytes, static_cast<std::uint32_t>(payload.size() + 9));
+    bytes.push_back(std::byte{1});
+    bytes.insert(bytes.end(), payload.begin(), payload.end());
+    return bytes;
+}
+
 std::vector<std::byte> window_picture_fixture(bool has_extension = true) {
     auto bytes = packed_fixture();
     constexpr std::size_t envelope_size = 9;
@@ -170,6 +210,53 @@ int main() {
               image.pool_groups()[0].slot_count == 2 &&
               image.pool_groups()[1].slot_count == 1,
           "parse the pool-count table");
+    check(image.hierarchy().size() == 3 &&
+              image.hierarchy()[0].directory_index == 0 &&
+              !image.hierarchy()[0].parent_directory_index.has_value() &&
+              image.hierarchy()[0].children_in_directory_order ==
+                  std::vector<std::size_t>{1} &&
+              image.hierarchy()[1].parent_directory_index == 0 &&
+              image.hierarchy()[1].children_in_directory_order.empty() &&
+              !image.hierarchy()[2].parent_directory_index.has_value(),
+          "materialize a nested child and pop back to a root sibling");
+    std::size_t root_count = 0;
+    std::size_t child_reference_count = 0;
+    for (const auto& node : image.hierarchy()) {
+        root_count += !node.parent_directory_index.has_value() ? 1U : 0U;
+        if (node.parent_directory_index.has_value()) {
+            check(*node.parent_directory_index < node.directory_index,
+                  "require every hierarchy parent to precede its child");
+        }
+        child_reference_count += node.children_in_directory_order.size();
+        check(std::ranges::is_sorted(node.children_in_directory_order),
+              "preserve directory order among hierarchy siblings");
+    }
+    check(root_count == 2 && child_reference_count == 1,
+          "represent every node exactly once as a root or child");
+
+    auto sibling_bytes = packed_fixture();
+    set_u32(sibling_bytes, 9 + 52, 84U);
+    set_u32(sibling_bytes, 9 + 128 + 4 + 3 * 4, 0);
+    set_u32(sibling_bytes, 9 + 128 + 4 + 24 * 4 + 3 * 4, 2);
+    const auto sibling_image = off::data::GmsImage::parse(
+        off::data::PackedResource::parse(sibling_bytes));
+    check(sibling_image.hierarchy()[0].children_in_directory_order ==
+              std::vector<std::size_t>({1, 2}) &&
+              sibling_image.hierarchy()[1].parent_directory_index == 0 &&
+              sibling_image.hierarchy()[2].parent_directory_index == 0,
+          "preserve two nested siblings in serialized directory order");
+
+    const auto deep_image = off::data::GmsImage::parse(
+        off::data::PackedResource::parse(deep_hierarchy_fixture()));
+    check(deep_image.directory()[3].parent_steps == 2 &&
+              deep_image.hierarchy()[0].children_in_directory_order ==
+                  std::vector<std::size_t>{1} &&
+              deep_image.hierarchy()[1].parent_directory_index == 0 &&
+              deep_image.hierarchy()[1].children_in_directory_order ==
+                  std::vector<std::size_t>{2} &&
+              deep_image.hierarchy()[2].parent_directory_index == 1 &&
+              !deep_image.hierarchy()[3].parent_directory_index.has_value(),
+          "pop pool and construction-parent stacks twice in lockstep");
     check(image.directory()[0].record_offset == 80 &&
               image.directory()[0].parent_steps == 0 &&
               image.directory()[0].pool_group == 0 &&

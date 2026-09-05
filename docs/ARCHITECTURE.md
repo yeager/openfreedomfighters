@@ -36,6 +36,11 @@ input -> deterministic simulation <-> script/mission runtime
                   +---------> UI + l10n
 ```
 
+GMS format readers materialize the validated construction hierarchy separately from
+render scheduling: every directory entry has a neutral hierarchy node with an
+optional construction parent and ordered direct children. This representation does not
+compose transforms, infer visibility, or treat construction order as draw order.
+
 The deterministic simulation is shared by both modes. Presentation is downstream of immutable render snapshots so Modern mode cannot silently change gameplay.
 
 The portable runtime core now provides an integer-phase fixed-step scheduler and

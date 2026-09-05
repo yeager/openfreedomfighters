@@ -338,6 +338,7 @@ GmsImage GmsImage::parse(PackedResource resource) {
         throw std::runtime_error("GMS pool counts do not cover the object-source directory");
     }
     result.directory_.reserve(directory_count);
+    result.hierarchy_.reserve(directory_count);
     result.local_slot_to_directory_.assign(
         directory_count,
         std::numeric_limits<std::size_t>::max()
@@ -353,6 +354,7 @@ GmsImage GmsImage::parse(PackedResource resource) {
         pool_group_count
     );
     std::vector<std::size_t> active_groups{0};
+    std::vector<std::optional<std::size_t>> active_parents{std::nullopt};
     std::size_t next_group_ordinal = 1;
     for (std::size_t index = 0; index < directory_count; ++index) {
         const auto entry_offset = directory_start + index * directory_entry_size;
@@ -368,7 +370,9 @@ GmsImage GmsImage::parse(PackedResource resource) {
             throw std::runtime_error("GMS object-source hierarchy underflows its root");
         }
         active_groups.resize(active_groups.size() - parent_steps);
+        active_parents.resize(active_parents.size() - parent_steps);
         const auto pool_group = active_groups.back();
+        const auto parent_directory_index = active_parents.back();
         const auto source_type = reader.u32(record_offset + 16U);
         const auto buf_name_offset = reader.u32(record_offset);
         const auto basis_offset = reader.u32(record_offset + 4U);
@@ -501,6 +505,19 @@ GmsImage GmsImage::parse(PackedResource resource) {
             .pool_class = static_cast<std::uint8_t>(pool_class),
             .enters_child_pool = enters_child_pool,
         });
+        result.hierarchy_.push_back({
+            .directory_index = index,
+            .parent_directory_index = parent_directory_index,
+            .children_in_directory_order = {},
+        });
+        if (parent_directory_index.has_value()) {
+            if (*parent_directory_index >= index) {
+                throw std::runtime_error(
+                    "GMS object-source hierarchy has a non-preceding parent");
+            }
+            result.hierarchy_[*parent_directory_index]
+                .children_in_directory_order.push_back(index);
+        }
         if ((source_type & 0x00100000U) != 0U) {
             ++next_group_ordinal;
         }
@@ -510,6 +527,7 @@ GmsImage GmsImage::parse(PackedResource resource) {
                 throw std::runtime_error("GMS object-source hierarchy exceeds its pool groups");
             }
             active_groups.push_back(next_group_ordinal - 1U);
+            active_parents.push_back(index);
         }
     }
     if (next_group_ordinal != result.pool_groups_.size()) {

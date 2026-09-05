@@ -82,6 +82,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   without treating archive order or identity as gameplay semantics.
 - [ ] Recover and corpus-validate faithful GMS hierarchy and RMC/RMI transform
   composition before enabling world-space scene placement.
+- [x] Materialize the validated GMS construction hierarchy as neutral parent
+  links and direct children in serialized directory order; transform
+  composition, visibility propagation, and draw scheduling remain separate.
 - [ ] Establish camera matrix layout, handedness, depth mapping, and view
   convention before replacing the diagnostic projection with Original camera
   behavior.

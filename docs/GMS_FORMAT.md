@@ -15,6 +15,15 @@ The object-source directory begins with a 32-bit entry count followed by eight-b
 
 Bits 23-0 of the packed reference are a word offset to a source record and therefore become a byte offset after multiplication by four. Bits 31-25 tell the loader how many parent pool contexts to leave before processing the entry. Bit 24 enters a child pool context after the current object is created. The loader reads a 48-byte source record; the public parser validates its complete range.
 
+The parser also materializes this validated construction traversal as one
+`GmsHierarchyNode` per directory entry. Each node retains its directory index,
+an optional preceding construction-parent directory index, and its direct children in
+serialized directory order. Multiple roots are valid. Parent-step underflow is
+rejected while parsing; the forward-only construction makes cycles and
+non-preceding parents unrepresentable. This is a construction relation, not a
+claim about runtime ownership, final GPU draw order, inherited visibility, or transform
+composition.
+
 ## Object-source records
 
 Executable control flow establishes the resource domain and use of the following fields. Names remain deliberately conservative where the target structure is not decoded yet.

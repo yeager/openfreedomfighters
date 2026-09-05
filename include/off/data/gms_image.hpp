@@ -60,6 +60,12 @@ struct GmsObjectHandle {
     std::uint32_t slot_index{0};
 };
 
+struct GmsHierarchyNode {
+    std::size_t directory_index{0};
+    std::optional<std::size_t> parent_directory_index;
+    std::vector<std::size_t> children_in_directory_order;
+};
+
 class GmsImage final {
 public:
     [[nodiscard]] static GmsImage parse(PackedResource resource);
@@ -85,6 +91,9 @@ public:
     [[nodiscard]] const std::vector<GmsPoolGroup>& pool_groups() const noexcept {
         return pool_groups_;
     }
+    [[nodiscard]] const std::vector<GmsHierarchyNode>& hierarchy() const noexcept {
+        return hierarchy_;
+    }
     [[nodiscard]] std::size_t identifier_count() const noexcept {
         return identifier_count_;
     }
@@ -96,6 +105,7 @@ private:
     PackedResource resource_;
     std::vector<GmsDirectoryEntry> directory_;
     std::vector<GmsPoolGroup> pool_groups_;
+    std::vector<GmsHierarchyNode> hierarchy_;
     std::vector<std::size_t> local_slot_to_directory_;
     std::size_t identifier_count_{0};
 };
