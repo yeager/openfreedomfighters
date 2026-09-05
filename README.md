@@ -43,7 +43,7 @@ clean-room storage. The native C++ bootstrap now:
 - resolves all 40,071 nonzero primitive texture selectors into their paired TEX
   images and classifies 46,140 opaque, 12,751 variable-alpha, and 2,533 fully
   transparent ordinary primitives;
-- resolves all 1,144 startup picture frames through their bounded PRM manager
+- resolves all 1,144 startup picture draw groups through their bounded PRM manager
   keys to 334 distinct startup TEX images, with exact reverse-key validation; and
 - produces renderer-facing index buffers and draw ranges for 57,284 triangle-strip
   and 4,140 line-list primitives while preserving every source batch; and

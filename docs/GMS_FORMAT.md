@@ -59,7 +59,7 @@ For 16 geometry source types, executable use and an exact corpus join establish 
 Window-picture sources use a separate class loader and do not carry a direct
 primitive in that field. Their loader reads a picture asset reference from the
 deferred class-specific serialization stream, resolves it through the texture
-resource manager, and receives a frame count and frame descriptors. The public
+resource manager, and receives an ordered draw-group count and draw-group records. The public
 model provides an explicitly startup-scoped, on-demand decoder for the exact
 startup picture stream. Callers must first establish archive provenance. It
 checks the block's masked byte size, four required base scalars, optional

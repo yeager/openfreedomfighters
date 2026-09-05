@@ -219,11 +219,13 @@ InstallVerification verify_install(const std::filesystem::path &root) {
     std::size_t primitive_batch_count = 0;
     std::size_t primitive_index_count = 0;
     std::size_t startup_picture_resource_count = 0;
-    std::size_t startup_picture_frame_texture_resource_count = 0;
+    std::size_t startup_picture_draw_group_texture_resource_count = 0;
     std::unordered_set<std::uint32_t> startup_picture_references;
     std::unordered_set<std::uint32_t>
-        startup_picture_frame_texture_references;
+        startup_picture_draw_group_texture_references;
     std::size_t startup_picture_texture_join_count = 0;
+    std::size_t startup_picture_draw_plan_group_count = 0;
+    std::size_t startup_picture_draw_plan_quad_count = 0;
     std::unordered_set<std::uint16_t> startup_picture_manager_keys;
     std::unordered_set<std::uint16_t> startup_picture_texture_ids;
     std::unordered_set<std::size_t> startup_picture_texture_image_indices;
@@ -450,19 +452,40 @@ InstallVerification verify_install(const std::filesystem::path &root) {
           }
           const auto picture = PictureResource::parse(
               *primitive_resource, picture_source.picture_asset_reference);
+          std::size_t expected_descriptor = 0;
+          for (const auto& group : picture.draw_groups()) {
+            if (group.first_descriptor_index != expected_descriptor ||
+                group.descriptor_span_count >
+                    picture.descriptors().size() - expected_descriptor) {
+              throw std::runtime_error(
+                  "startup picture draw groups do not form an ordered partition");
+            }
+            expected_descriptor += group.descriptor_span_count;
+          }
+          if (expected_descriptor != picture.descriptors().size()) {
+            throw std::runtime_error(
+                "startup picture draw groups do not cover every descriptor");
+          }
           const auto picture_textures = PictureTextureBindings::build(
-              picture.frame_texture_resources(), *texture_catalog, true);
+              picture.texture_resources(), *texture_catalog, true);
+          const auto picture_draw_plan =
+              PictureDrawPlan::build(picture, picture_textures);
+          startup_picture_draw_plan_group_count +=
+              picture_draw_plan.groups().size();
+          for (const auto& group : picture_draw_plan.groups()) {
+            startup_picture_draw_plan_quad_count += group.quads.size();
+          }
           startup_picture_texture_join_count += picture_textures.entries().size();
           for (const auto& binding : picture_textures.entries()) {
             startup_picture_manager_keys.insert(binding.manager_key);
             startup_picture_texture_ids.insert(binding.texture_id);
             startup_picture_texture_image_indices.insert(binding.image_index);
           }
-          startup_picture_frame_texture_resource_count +=
-              picture.frame_texture_resources().size();
+          startup_picture_draw_group_texture_resource_count +=
+              picture.texture_resources().size();
           for (const auto &texture_resource :
-               picture.frame_texture_resources()) {
-            startup_picture_frame_texture_references.insert(
+               picture.texture_resources()) {
+            startup_picture_draw_group_texture_references.insert(
                 texture_resource.prm_offset);
           }
           ++startup_picture_resource_count;
@@ -586,13 +609,15 @@ InstallVerification verify_install(const std::filesystem::path &root) {
         primitive_index_count != 4'412'738 ||
         startup_picture_resource_count != 124 ||
         startup_picture_references.size() != startup_picture_resource_count ||
-        startup_picture_frame_texture_resource_count != 1'144 ||
+        startup_picture_draw_group_texture_resource_count != 1'144 ||
         startup_picture_texture_join_count != 1'144 ||
+        startup_picture_draw_plan_group_count != 1'144 ||
+        startup_picture_draw_plan_quad_count != 1'840 ||
         startup_picture_manager_keys.size() != 334 ||
         startup_picture_texture_ids.size() != 334 ||
         startup_picture_texture_image_indices.size() != 334 ||
-        startup_picture_frame_texture_references.size() !=
-            startup_picture_frame_texture_resource_count ||
+        startup_picture_draw_group_texture_references.size() !=
+            startup_picture_draw_group_texture_resource_count ||
         render_map_count != scene_archive_count ||
         render_map_entry_count != 1'612 || render_map_node_count != 2'587 ||
         render_instance_map_count != scene_archive_count ||

@@ -19,24 +19,36 @@ At the referenced PRM-relative byte offset, the resource is:
 | Relative field | Type | Meaning |
 |---|---|---|
 | 0 | `u32` | descriptor count |
-| 4 | `descriptor[count]` | opaque 40-byte presentation descriptors |
-| after descriptors | `u32` | frame count |
-| after frame count | `u32[frame count]` | frame texture-resource references |
-| after references | `frame[frame count]` | eight-byte frame records |
+| 4 | `descriptor[count]` | 40-byte presentation descriptors |
+| after descriptors | `u32` | ordered draw-group count |
+| after draw-group count | `u32[draw-group count]` | draw-group texture-resource references |
+| after references | `draw_group[draw-group count]` | eight-byte draw-group records |
 
-Each frame record contains one opaque 32-bit value followed by a 32-bit index
-into the descriptor array. The retail loader rebases that index to a process
-pointer in place; the portable model deliberately retains and validates the
-index. The renderer associates `frame_texture_reference[i]` with `frame[i]`.
-Presentation descriptor fields feed geometry and extents, not texture selection.
+Each draw-group record contains a 32-bit descriptor span count followed by the
+32-bit index of its first descriptor. The retail loader rebases that index to a
+process pointer in place; the portable model deliberately retains and validates
+the index. The renderer associates `texture_reference[i]` with `draw_group[i]`
+and submits every group in serialized order. These records do not select an
+animation frame or UI state.
 
-Each frame texture-resource reference is itself an unsigned PRM-relative byte
+Each descriptor is ten little-endian words: local centre X, local centre Y,
+local Z, U minimum, U maximum, V maximum, V minimum, horizontal edge span,
+vertical edge span, and packed modulation colour. All fields except colour are
+IEEE-754 binary32. A neutral quad uses `centre +/- 0.5 * edge_span`, preserves
+the serialized UV endpoints and local Z, and carries the packed colour unchanged.
+The renderer-neutral plan names those bounds `local_x_min`, `local_x_max`,
+`local_y_min`, and `local_y_max`; the names intentionally make no screen-axis
+or transform-orientation claim.
+The owning window/scene transform is external and remains the caller's
+responsibility.
+
+Each draw-group texture-resource reference is itself an unsigned PRM-relative byte
 displacement. It resolves to a neutral 32-byte typed resource record embedded
 in the bounded PRM data region. The portable model retains the displacement and
 owns an opaque copy of the complete record; it never retains a process pointer.
 The record's type marker is validated, but its remaining fields deliberately
 have no public semantic names yet. Retail materialization consumes record fields
-and replaces copied frame references with renderer handles; the producer
+and replaces copied draw-group references with renderer handles; the producer
 semantics remain unresolved, so raw values must not be interpreted as TEX
 identities.
 
@@ -44,29 +56,31 @@ identities.
 
 The parser checks the PRM envelope and duplicated primitive-index boundary, the
 relocation alignment and range, both count words, every count-by-stride
-calculation, all array extents, and every descriptor index before allocating its
-own values. Every frame texture-resource displacement is independently checked
+calculation, all array extents, and every descriptor span before allocating its
+own values. Descriptor floats must be finite and edge spans non-negative. Every
+draw-group texture-resource displacement is independently checked
 for two-byte alignment, a complete 32-byte extent before the primitive-index
 boundary, and the recovered type marker. Descriptors, frame data, and resolved
 opaque resource records are copied, so no result points into the source PRM
-buffer. Multiple frames may safely share one valid resource displacement. The
+buffer. Multiple draw groups may safely share one valid resource displacement. The
 format has no proven resource-length word; `encoded_size`
 reports the exact parsed prefix, and unrelated bytes before the primitive index
 are allowed.
 
 Project safety limits cap one picture resource at 4,096 descriptors and 4,096
-frames. These are implementation resource limits, not claims about a retail
+draw groups. These are implementation resource limits, not claims about a retail
 format maximum; the supported startup corpus ranges from 1 to 201 descriptors
-and 1 to 159 frames.
+and 1 to 159 draw groups.
 
 Zero counts are structurally representable by the low-level parser. A higher-level
 consumer may impose a non-empty requirement only when that invariant is proven
 for its supported path.
 
-Synthetic tests cover relocation, ownership, multiple descriptors and frames,
+Synthetic tests cover relocation, ownership, descriptor decoding and draw groups,
 exact consumed size, unrelated trailing PRM bytes, zero counts, truncation at
 every byte boundary, odd or out-of-range relocation keys, hostile counts, and
-early and late invalid descriptor indexes. Frame-resource coverage additionally
+early and late invalid descriptor spans, hostile arithmetic, zero-length bounded
+spans, non-finite floats, and negative edge spans. Draw-group resource coverage additionally
 includes odd, header-relative, boundary-truncated, and wrong-type references,
 owned-record lifetime, and a legal shared reference. No retail
 PRM bytes, picture references, descriptors, or texture references are present in
@@ -75,7 +89,8 @@ the repository.
 Private compatibility validation joins every startup window-picture source to
 the user-owned raw PRM and parses all 124 distinct picture resources. Installation
 verification repeats that bounded join, requires 124 unique picture references,
-resolves all 1,144 frame resource records, and joins them to 334 distinct startup
+resolves all 1,144 draw-group resource records, requires each picture's groups
+to form an ordered gap-free descriptor partition, and joins them to 334 distinct startup
 TEX images. Its aggregate corpus gate records no offsets, identifiers, or retail
 bytes.
 

@@ -7,7 +7,7 @@
 namespace off::data {
 
 PictureTextureBindings PictureTextureBindings::build(
-    std::span<const PictureFrameTextureResource> resources,
+    std::span<const PictureTextureResource> resources,
     const TextureCatalog& catalog,
     bool require_upper_bank
 ) {
@@ -62,6 +62,63 @@ PictureTextureBindings PictureTextureBindings::build(
             .image_index = *images[id],
             .bank = bank,
         });
+    }
+    return result;
+}
+
+PictureDrawPlan PictureDrawPlan::build(
+    const PictureResource& picture,
+    const PictureTextureBindings& textures
+) {
+    return build(picture.descriptors(), picture.draw_groups(), textures.entries());
+}
+
+PictureDrawPlan PictureDrawPlan::build(
+    std::span<const PictureResourceDescriptor> descriptors,
+    std::span<const PictureDrawGroup> groups,
+    std::span<const PictureTextureBinding> textures
+) {
+    if (groups.size() != textures.size()) {
+        throw std::runtime_error(
+            "picture draw-group and texture-binding counts do not match"
+        );
+    }
+
+    PictureDrawPlan result;
+    result.groups_.reserve(groups.size());
+    for (std::size_t group_index = 0;
+         group_index < groups.size(); ++group_index) {
+        const auto& group = groups[group_index];
+        if (group.first_descriptor_index > descriptors.size() ||
+            group.descriptor_span_count >
+                descriptors.size() - group.first_descriptor_index) {
+            throw std::runtime_error(
+                "picture draw-group descriptor span is out of range"
+            );
+        }
+        BoundPictureDrawGroup bound{.texture = textures[group_index], .quads = {}};
+        bound.quads.reserve(group.descriptor_span_count);
+        for (std::size_t relative = 0;
+             relative < group.descriptor_span_count; ++relative) {
+            const auto descriptor_index = group.first_descriptor_index + relative;
+            const auto& descriptor = descriptors[descriptor_index];
+            const auto half_width = descriptor.horizontal_edge_span * 0.5F;
+            const auto half_height = descriptor.vertical_edge_span * 0.5F;
+            bound.quads.push_back({
+                .local_x_min = descriptor.local_center_x - half_width,
+                .local_x_max = descriptor.local_center_x + half_width,
+                .local_y_min = descriptor.local_center_y - half_height,
+                .local_y_max = descriptor.local_center_y + half_height,
+                .local_z = descriptor.local_z,
+                .u_min = descriptor.u_min,
+                .u_max = descriptor.u_max,
+                .v_max = descriptor.v_max,
+                .v_min = descriptor.v_min,
+                .modulation_color = descriptor.modulation_color,
+                .descriptor_index = descriptor_index,
+            });
+        }
+        result.groups_.push_back(std::move(bound));
     }
     return result;
 }

@@ -52,7 +52,7 @@ Gate: a new contributor can generate the same structural report from a supported
 - [x] Decode GMS object transforms and attachment tables and validate their BUF ranges.
 - [x] Parse and corpus-validate RMC/RMI spatial indexes and object descriptors.
 - [x] Decode and fully traverse RMC/RMI packed octrees.
-- [x] Resolve every startup picture frame to its bounded PRM texture-resource record.
+- [x] Resolve every startup picture draw group to its bounded PRM texture-resource record.
 - [x] Implement bounds-checked world-space queries over RMC/RMI octrees.
 - [x] Identify and validate packed geometry references in RMC/RMI descriptors.
 - [ ] Safe, bounds-checked readers for all required formats.
@@ -96,9 +96,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Recover and bounds-check the startup tagged window-picture stream through
   its picture asset reference.
 - [x] Parse every startup PRM-backed picture resource with bounded descriptors,
-  frame texture references, and portable descriptor indexes.
-- [x] Recover the frame texture-resource allocation and its bounded TEX-image
-  join; all 1,144 startup frames resolve to 334 distinct images in both
+  draw-group texture references, and portable descriptor spans.
+- [x] Recover the draw-group texture-resource allocation and its bounded TEX-image
+  join; all 1,144 startup draw groups resolve to 334 distinct images in both
   directions without names, dimensions, catalog order, or pixel heuristics.
 
 Gate: a deterministic camera trace meets structural and image-difference

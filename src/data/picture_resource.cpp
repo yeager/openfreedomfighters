@@ -3,19 +3,31 @@
 #include "off/data/byte_reader.hpp"
 
 #include <algorithm>
+#include <bit>
+#include <cmath>
 #include <stdexcept>
 
 namespace off::data {
 namespace {
 
 constexpr std::size_t descriptor_size = 40;
-constexpr std::size_t frame_value_size = 4;
-constexpr std::size_t frame_record_size = 8;
-constexpr std::size_t frame_texture_resource_size = 32;
-constexpr std::uint32_t frame_texture_resource_marker = 0x00020100U;
+constexpr std::size_t texture_reference_size = 4;
+constexpr std::size_t draw_group_record_size = 8;
+constexpr std::size_t texture_resource_size = 32;
+constexpr std::uint32_t texture_resource_marker = 0x00020100U;
 constexpr std::size_t prm_header_size = 16;
 constexpr std::size_t maximum_descriptor_count = 4'096;
-constexpr std::size_t maximum_frame_count = 4'096;
+constexpr std::size_t maximum_draw_group_count = 4'096;
+
+[[nodiscard]] float finite_float(
+    const ByteReader& reader, std::size_t offset
+) {
+    const auto value = std::bit_cast<float>(reader.u32(offset));
+    if (!std::isfinite(value)) {
+        throw std::runtime_error("picture descriptor contains a non-finite value");
+    }
+    return value;
+}
 
 [[nodiscard]] std::size_t checked_array_end(
     std::size_t offset,
@@ -75,54 +87,56 @@ PictureResource PictureResource::parse(
     );
     if (descriptor_end > primitive_index_offset ||
         sizeof(std::uint32_t) > primitive_index_offset - descriptor_end) {
-        throw std::runtime_error("picture resource is missing its frame count");
+        throw std::runtime_error("picture resource is missing its draw-group count");
     }
-    const auto frame_count = static_cast<std::size_t>(reader.u32(descriptor_end));
-    if (frame_count > maximum_frame_count) {
-        throw std::runtime_error("picture resource frame count exceeds its limit");
+    const auto draw_group_count = static_cast<std::size_t>(reader.u32(descriptor_end));
+    if (draw_group_count > maximum_draw_group_count) {
+        throw std::runtime_error("picture resource draw-group count exceeds its limit");
     }
-    const auto frame_value_start = descriptor_end + sizeof(std::uint32_t);
-    const auto frame_value_end = checked_array_end(
-        frame_value_start,
-        frame_count,
-        frame_value_size,
+    const auto texture_reference_start = descriptor_end + sizeof(std::uint32_t);
+    const auto texture_reference_end = checked_array_end(
+        texture_reference_start,
+        draw_group_count,
+        texture_reference_size,
         primitive_index_offset,
-        "picture resource frame-value array exceeds its allocation"
+        "picture resource texture-reference array exceeds its allocation"
     );
-    const auto frame_end = checked_array_end(
-        frame_value_end,
-        frame_count,
-        frame_record_size,
+    const auto draw_group_end = checked_array_end(
+        texture_reference_end,
+        draw_group_count,
+        draw_group_record_size,
         primitive_index_offset,
-        "picture resource frame array exceeds its allocation"
+        "picture resource draw-group array exceeds its allocation"
     );
 
-    for (std::size_t index = 0; index < frame_count; ++index) {
+    for (std::size_t index = 0; index < draw_group_count; ++index) {
         const auto texture_resource_offset = static_cast<std::size_t>(
-            reader.u32(frame_value_start + index * frame_value_size)
+            reader.u32(texture_reference_start + index * texture_reference_size)
         );
         if ((texture_resource_offset & 1U) != 0U ||
             texture_resource_offset < prm_header_size ||
             texture_resource_offset > primitive_index_offset ||
-            frame_texture_resource_size >
+            texture_resource_size >
                 primitive_index_offset - texture_resource_offset) {
             throw std::runtime_error(
-                "picture frame texture-resource reference is out of range"
+                "picture draw-group texture-resource reference is out of range"
             );
         }
         if (reader.u32(texture_resource_offset) !=
-            frame_texture_resource_marker) {
+            texture_resource_marker) {
             throw std::runtime_error(
-                "picture frame texture-resource marker is invalid"
+                "picture draw-group texture-resource marker is invalid"
             );
         }
-        const auto frame_offset = frame_value_end + index * frame_record_size;
-        const auto descriptor_index = static_cast<std::size_t>(
-            reader.u32(frame_offset + sizeof(std::uint32_t))
+        const auto group_offset = texture_reference_end + index * draw_group_record_size;
+        const auto span_count = static_cast<std::size_t>(reader.u32(group_offset));
+        const auto first_index = static_cast<std::size_t>(
+            reader.u32(group_offset + sizeof(std::uint32_t))
         );
-        if (descriptor_index >= descriptor_count) {
+        if (first_index > descriptor_count ||
+            span_count > descriptor_count - first_index) {
             throw std::runtime_error(
-                "picture resource frame descriptor index is out of range"
+                "picture resource draw-group descriptor span is out of range"
             );
         }
     }
@@ -131,42 +145,54 @@ PictureResource PictureResource::parse(
     result.descriptors_.reserve(descriptor_count);
     for (std::size_t index = 0; index < descriptor_count; ++index) {
         PictureResourceDescriptor descriptor;
+        const auto offset = descriptor_start + index * descriptor_size;
+        descriptor.local_center_x = finite_float(reader, offset + 0U);
+        descriptor.local_center_y = finite_float(reader, offset + 4U);
+        descriptor.local_z = finite_float(reader, offset + 8U);
+        descriptor.u_min = finite_float(reader, offset + 12U);
+        descriptor.u_max = finite_float(reader, offset + 16U);
+        descriptor.v_max = finite_float(reader, offset + 20U);
+        descriptor.v_min = finite_float(reader, offset + 24U);
+        descriptor.horizontal_edge_span = finite_float(reader, offset + 28U);
+        descriptor.vertical_edge_span = finite_float(reader, offset + 32U);
+        descriptor.modulation_color = reader.u32(offset + 36U);
+        if (descriptor.horizontal_edge_span < 0.0F ||
+            descriptor.vertical_edge_span < 0.0F) {
+            throw std::runtime_error("picture descriptor contains a negative edge span");
+        }
         const auto source = reader.slice(
             descriptor_start + index * descriptor_size, descriptor_size
         );
         std::ranges::copy(source, descriptor.encoded.begin());
         result.descriptors_.push_back(descriptor);
     }
-    result.frame_texture_references_.reserve(frame_count);
-    result.frame_texture_resources_.reserve(frame_count);
-    result.frames_.reserve(frame_count);
-    for (std::size_t index = 0; index < frame_count; ++index) {
+    result.texture_references_.reserve(draw_group_count);
+    result.texture_resources_.reserve(draw_group_count);
+    result.draw_groups_.reserve(draw_group_count);
+    for (std::size_t index = 0; index < draw_group_count; ++index) {
         const auto texture_resource_reference =
-            reader.u32(frame_value_start + index * frame_value_size);
-        result.frame_texture_references_.push_back(texture_resource_reference);
-        PictureFrameTextureResource texture_resource{
+            reader.u32(texture_reference_start + index * texture_reference_size);
+        result.texture_references_.push_back(texture_resource_reference);
+        PictureTextureResource texture_resource{
             .prm_offset = texture_resource_reference,
             .manager_key = reader.u16(
                 static_cast<std::size_t>(texture_resource_reference) + 4U),
         };
         const auto texture_source = reader.slice(
             static_cast<std::size_t>(texture_resource_reference),
-            frame_texture_resource_size
+            texture_resource_size
         );
         std::ranges::copy(
             texture_source, texture_resource.encoded.begin()
         );
-        result.frame_texture_resources_.push_back(texture_resource);
-        const auto frame_offset = frame_value_end + index * frame_record_size;
-        const auto descriptor_index = static_cast<std::size_t>(
-            reader.u32(frame_offset + sizeof(std::uint32_t))
-        );
-        result.frames_.push_back({
-            .opaque_value = reader.u32(frame_offset),
-            .descriptor_index = descriptor_index,
+        result.texture_resources_.push_back(texture_resource);
+        const auto group_offset = texture_reference_end + index * draw_group_record_size;
+        result.draw_groups_.push_back({
+            .descriptor_span_count = reader.u32(group_offset),
+            .first_descriptor_index = reader.u32(group_offset + 4U),
         });
     }
-    result.encoded_size_ = frame_end - resource_offset;
+    result.encoded_size_ = draw_group_end - resource_offset;
     return result;
 }
 

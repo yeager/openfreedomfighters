@@ -53,7 +53,7 @@ std::vector<std::byte> catalog_bytes(
     set32(bytes, 8, 3); set32(bytes, 12, 4);
     return bytes;
 }
-off::data::PictureFrameTextureResource resource(std::uint16_t key) {
+off::data::PictureTextureResource resource(std::uint16_t key) {
     return {.prm_offset = 32, .manager_key = key};
 }
 template<class F> bool rejects(F&& call) {
@@ -116,5 +116,64 @@ int main() {
     const auto sequence_catalog = off::data::TextureCatalog::parse(sequence_data);
     check(rejects([&]{ static_cast<void>(off::data::PictureTextureBindings::build(direct, sequence_catalog)); }),
           "reject unresolved sequence selection");
+
+    const std::array descriptors{
+        off::data::PictureResourceDescriptor{
+            .local_center_x = 10.0F, .local_center_y = 20.0F, .local_z = 3.0F,
+            .u_min = 0.1F, .u_max = 0.4F, .v_max = 0.8F, .v_min = 0.2F,
+            .horizontal_edge_span = 8.0F, .vertical_edge_span = 6.0F,
+            .modulation_color = 0xff010203U},
+        off::data::PictureResourceDescriptor{
+            .local_center_x = 30.0F, .local_center_y = 40.0F,
+            .horizontal_edge_span = 2.0F, .vertical_edge_span = 4.0F,
+            .modulation_color = 0xffaabbccU},
+        off::data::PictureResourceDescriptor{
+            .local_center_x = 50.0F, .local_center_y = 60.0F,
+            .u_min = 0.3F, .u_max = 0.7F, .v_max = 0.9F, .v_min = 0.4F,
+            .horizontal_edge_span = 10.0F, .vertical_edge_span = 12.0F,
+            .modulation_color = 0xff556677U},
+    };
+    const std::array groups{
+        off::data::PictureDrawGroup{.descriptor_span_count = 2,
+                                    .first_descriptor_index = 0},
+        off::data::PictureDrawGroup{.descriptor_span_count = 1,
+                                    .first_descriptor_index = 2},
+    };
+    const std::array plan_textures{
+        direct_join.entries()[0], upper_join.entries()[0]};
+    const auto plan = off::data::PictureDrawPlan::build(
+        descriptors, groups, plan_textures);
+    check(plan.groups().size() == 2 &&
+              plan.groups()[0].texture.bank ==
+                  off::data::TextureManagerKeyBank::direct &&
+              plan.groups()[1].texture.bank ==
+                  off::data::TextureManagerKeyBank::upper &&
+              plan.groups()[0].quads.size() == 2 &&
+              plan.groups()[0].quads[0].descriptor_index == 0 &&
+              plan.groups()[0].quads[1].descriptor_index == 1 &&
+              plan.groups()[1].quads[0].descriptor_index == 2 &&
+              plan.groups()[0].quads[0].local_x_min == 6.0F &&
+              plan.groups()[0].quads[0].local_x_max == 14.0F &&
+              plan.groups()[0].quads[0].local_y_min == 17.0F &&
+              plan.groups()[0].quads[0].local_y_max == 23.0F &&
+              plan.groups()[0].quads[0].local_z == 3.0F &&
+              plan.groups()[0].quads[0].u_min == 0.1F &&
+              plan.groups()[0].quads[0].u_max == 0.4F &&
+              plan.groups()[0].quads[0].v_max == 0.8F &&
+              plan.groups()[0].quads[0].v_min == 0.2F &&
+              plan.groups()[0].quads[0].modulation_color == 0xff010203U,
+          "preserve serialized group and descriptor order in the neutral quad plan");
+    check(rejects([&]{
+              static_cast<void>(off::data::PictureDrawPlan::build(
+                  descriptors, groups, std::span<const off::data::PictureTextureBinding>{}));
+          }), "reject mismatched draw-group and texture-binding counts");
+    const std::array bad_group{off::data::PictureDrawGroup{
+        .descriptor_span_count = static_cast<std::size_t>(-1),
+        .first_descriptor_index = 1}};
+    const std::array one_texture{direct_join.entries()[0]};
+    check(rejects([&]{
+              static_cast<void>(off::data::PictureDrawPlan::build(
+                  descriptors, bad_group, one_texture));
+          }), "reject hostile draw-plan spans without addition overflow");
     return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -19,7 +19,7 @@ numbers describe recovered sequence slots, not spatial corner claims.
 
 Large menu backgrounds are intentionally absent from this contract. Retail
 evidence shows that they are heterogeneous multi-tile compositions. They must be
-added only after the picture-resource and frame-descriptor join proves the exact
+added only after the picture-resource draw-group/descriptor join proves the exact
 tile family, order, transforms, UVs, state selection, and compositing behavior.
 Selecting one plausible-looking catalog image would not reproduce the game.
 
@@ -29,7 +29,7 @@ The retail window-picture class does not use the ordinary geometry path from GMS
 class data through a PRM primitive and its texture selector. It first loads its
 base window-object state, reads a class-specific scalar picture asset reference
 through the engine's tagged serializer, resolves that reference through the
-texture-resource manager, and receives a frame count plus frame descriptors. A
+texture-resource manager, and receives an ordered draw-group count plus draw-group records. A
 descriptor index addresses a 40-byte record within that resolved resource.
 
 The startup picture block has a bounded 24-bit byte size and a proven sequence of
@@ -49,8 +49,9 @@ The reference is therefore a PRM-base-relative byte displacement, but it is not
 a packed primitive index, TEX image ID, catalog ordinal, or raw TEX offset.
 
 The returned resource has a descriptor count, 40-byte presentation descriptors,
-a frame count, a parallel array of frame texture-resource references, and
-eight-byte frame records. Each frame record contains a descriptor index. The
+a draw-group count, a parallel array of draw-group texture-resource references,
+and eight-byte draw-group records. Each record contains a descriptor span count
+and first descriptor index. The
 renderer submits each texture-resource reference together with its corresponding
 frame record; the descriptor supplies presentation geometry rather than texture
 identity. The bounded [picture-resource parser](PICTURE_RESOURCE.md) models this
@@ -60,7 +61,7 @@ The final identity join is now recovered. Each frame reference resolves a typed
 PRM record whose manager key selects one of 2,048 scene-local slots. The startup
 path uses the upper key bank, normalized by subtracting 2,048; the resulting ID
 must exist exactly once in the paired TEX catalog, and the reverse operation must
-reproduce the original key. All 1,144 startup frames resolve to 334 distinct
+reproduce the original key. All 1,144 startup draw groups resolve to 334 distinct
 images. The recovered consumer supplies selection zero, but startup contains no
 texture sequences, so sequence redirection cannot be validated against this
 corpus. The startup-scoped join therefore rejects sequence-bearing slots rather

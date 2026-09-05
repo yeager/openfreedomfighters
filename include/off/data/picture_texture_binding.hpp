@@ -25,7 +25,7 @@ struct PictureTextureBinding {
 class PictureTextureBindings final {
 public:
     [[nodiscard]] static PictureTextureBindings build(
-        std::span<const PictureFrameTextureResource> resources,
+        std::span<const PictureTextureResource> resources,
         const TextureCatalog& catalog,
         bool require_upper_bank = false
     );
@@ -36,6 +36,45 @@ public:
 
 private:
     std::vector<PictureTextureBinding> entries_;
+};
+
+struct PictureQuad {
+    float local_x_min{0.0F};
+    float local_x_max{0.0F};
+    float local_y_min{0.0F};
+    float local_y_max{0.0F};
+    float local_z{0.0F};
+    float u_min{0.0F};
+    float u_max{0.0F};
+    float v_max{0.0F};
+    float v_min{0.0F};
+    std::uint32_t modulation_color{0};
+    std::size_t descriptor_index{0};
+};
+
+struct BoundPictureDrawGroup {
+    PictureTextureBinding texture{};
+    std::vector<PictureQuad> quads;
+};
+
+class PictureDrawPlan final {
+public:
+    [[nodiscard]] static PictureDrawPlan build(
+        const PictureResource& picture,
+        const PictureTextureBindings& textures
+    );
+    [[nodiscard]] static PictureDrawPlan build(
+        std::span<const PictureResourceDescriptor> descriptors,
+        std::span<const PictureDrawGroup> groups,
+        std::span<const PictureTextureBinding> textures
+    );
+
+    [[nodiscard]] std::span<const BoundPictureDrawGroup> groups() const noexcept {
+        return groups_;
+    }
+
+private:
+    std::vector<BoundPictureDrawGroup> groups_;
 };
 
 }  // namespace off::data
