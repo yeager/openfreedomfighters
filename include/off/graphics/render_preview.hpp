@@ -67,9 +67,9 @@ struct RenderPreviewAsset {
   std::optional<RenderObjectInstance> object_instance;
 };
 
-[[nodiscard]] std::array<float, 3>
-transform_render_position(const RenderObjectInstance &instance,
-                          const std::array<float, 3> &local_position);
+[[nodiscard]] std::array<float, 3> transform_source_diagnostic_position(
+    const RenderObjectInstance &instance,
+    const std::array<float, 3> &local_position);
 
 void validate_render_preview(const RenderPreviewAsset &preview);
 

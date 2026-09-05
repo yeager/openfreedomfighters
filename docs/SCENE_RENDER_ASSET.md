@@ -39,6 +39,14 @@ vertices, 32,000,000 deduplicated indexes, 4,000,000 deduplicated draw ranges,
 and 1 GiB of decoded mip-zero RGBA data. These are defensive implementation
 limits, not claims about the file format.
 
+`validate_scene_render_asset` independently repeats the GPU-boundary invariants
+for an already owned asset. It checks all mesh, texture, resolution, and instance
+references; exact RGBA8 storage; finite attributes and transforms; topology-aware
+contiguous draw ranges; vertex indexes; provenance links; and the same cumulative
+budgets. Upload code must call this validator even when the asset originally came
+from the builder, because future cache and tooling paths may construct or mutate
+the public aggregate directly.
+
 A read-only audit of all 90 supported scenes observed 220 directly
 materializable instances in total and a per-scene maximum of 106. Independent
 per-scene maxima were 97 deduplicated PRMs, two deduplicated textures, 1,923
@@ -54,4 +62,8 @@ Uploading the scene asset, applying evidenced transform composition, reconstruct
 materials, selecting the scene camera, adding depth, and resolving indirect or
 non-primitive GMS sources are later milestones. Modern and Modern+ render paths
 must consume the same instance identity and gameplay snapshot as Original mode.
-
+The current source-only diagnostic transform is a presentation convention, not a
+recovered world-space formula. An aggregate audit found that only four of 2,801
+map positions fall inside their associated decoded spatial bounds under the
+currently documented quantization inverse, so naively treating those fields as
+world-space placement is specifically unsupported.

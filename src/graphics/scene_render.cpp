@@ -25,7 +25,133 @@ void add_bounded(std::size_t &total, std::size_t value, std::size_t limit,
   total += value;
 }
 
+[[nodiscard]] bool finite(const auto &values) {
+  return std::ranges::all_of(values,
+                             [](float value) { return std::isfinite(value); });
+}
+
 } // namespace
+
+void validate_scene_render_asset(const SceneRenderAsset &asset) {
+  if (asset.resolutions.size() > maximum_scene_instances ||
+      asset.instances.size() > maximum_scene_instances) {
+    throw std::invalid_argument("scene render asset exceeds instance budget");
+  }
+
+  std::size_t total_vertices = 0;
+  std::size_t total_indices = 0;
+  std::size_t total_draws = 0;
+  std::size_t total_rgba_bytes = 0;
+  for (const auto &texture : asset.textures) {
+    if (texture.mip_zero.width == 0 || texture.mip_zero.height == 0 ||
+        texture.mip_zero.width > std::numeric_limits<std::size_t>::max() / 4U ||
+        texture.mip_zero.height >
+            std::numeric_limits<std::size_t>::max() /
+                (static_cast<std::size_t>(texture.mip_zero.width) * 4U)) {
+      throw std::invalid_argument(
+          "scene render texture has invalid dimensions");
+    }
+    const auto expected_bytes =
+        static_cast<std::size_t>(texture.mip_zero.width) *
+        texture.mip_zero.height * 4U;
+    if (texture.mip_zero.pixels.size() != expected_bytes) {
+      throw std::invalid_argument(
+          "scene render texture has inconsistent RGBA storage");
+    }
+    add_bounded(total_rgba_bytes, expected_bytes, maximum_scene_rgba_bytes,
+                "scene render asset exceeds decoded texture budget");
+  }
+
+  for (const auto &mesh : asset.meshes) {
+    if (mesh.vertices.empty() || mesh.indices.empty() || mesh.draws.empty() ||
+        (mesh.texture_index.has_value() &&
+         *mesh.texture_index >= asset.textures.size())) {
+      throw std::invalid_argument("scene render mesh has incomplete resources");
+    }
+    add_bounded(total_vertices, mesh.vertices.size(), maximum_scene_vertices,
+                "scene render asset exceeds vertex budget");
+    add_bounded(total_indices, mesh.indices.size(), maximum_scene_indices,
+                "scene render asset exceeds index budget");
+    add_bounded(total_draws, mesh.draws.size(), maximum_scene_draws,
+                "scene render asset exceeds draw budget");
+    for (const auto &vertex : mesh.vertices) {
+      if (!finite(vertex.position) || !finite(vertex.normal) ||
+          !finite(vertex.texture_coordinates)) {
+        throw std::invalid_argument(
+            "scene render mesh has a non-finite vertex attribute");
+      }
+    }
+    if (std::ranges::any_of(mesh.indices, [&](const auto index) {
+          return index >= mesh.vertices.size();
+        })) {
+      throw std::invalid_argument(
+          "scene render mesh contains an invalid vertex index");
+    }
+    std::size_t expected_first_index = 0;
+    for (const auto &draw : mesh.draws) {
+      const auto minimum_count =
+          mesh.topology == PrimitiveTopology::triangle_strip ? 3U : 2U;
+      if (draw.first_index != expected_first_index ||
+          draw.index_count < minimum_count ||
+          (mesh.topology == PrimitiveTopology::line_list &&
+           draw.index_count != 2U) ||
+          draw.first_index > mesh.indices.size() ||
+          draw.index_count > mesh.indices.size() - draw.first_index) {
+        throw std::invalid_argument(
+            "scene render mesh has an invalid draw range");
+      }
+      expected_first_index += draw.index_count;
+    }
+    if (expected_first_index != mesh.indices.size() ||
+        mesh.minimum_vertex_alpha > mesh.maximum_vertex_alpha) {
+      throw std::invalid_argument("scene render mesh metadata is inconsistent");
+    }
+  }
+
+  for (const auto &resolution : asset.resolutions) {
+    if (resolution.map_layer_index >= maximum_map_layers) {
+      throw std::invalid_argument(
+          "scene render resolution has an invalid map layer");
+    }
+  }
+  for (const auto &instance : asset.instances) {
+    if (instance.resolution_index >= asset.resolutions.size() ||
+        instance.mesh_index >= asset.meshes.size() ||
+        instance.map_layer_index >= maximum_map_layers ||
+        !finite(instance.source_basis) || !finite(instance.source_position) ||
+        !finite(instance.map_orientation) || !finite(instance.map_position) ||
+        !finite(instance.map_auxiliary_position) ||
+        !finite(instance.map_extents)) {
+      throw std::invalid_argument(
+          "scene render instance has invalid references or values");
+    }
+    const auto &resolution = asset.resolutions[instance.resolution_index];
+    const auto &mesh = asset.meshes[instance.mesh_index];
+    if (resolution.geometry.status != SceneGeometryStatus::local_primitive ||
+        resolution.map_kind != instance.map_kind ||
+        resolution.map_layer_index != instance.map_layer_index ||
+        resolution.geometry.role != instance.role ||
+        resolution.geometry.map_entry_index != instance.map_entry_index ||
+        resolution.geometry.map_descriptor_offset !=
+            instance.map_descriptor_offset ||
+        resolution.geometry.geometry_reference != instance.geometry_reference ||
+        !resolution.geometry.source_directory_index.has_value() ||
+        *resolution.geometry.source_directory_index !=
+            instance.source_directory_index ||
+        !resolution.geometry.source_local_slot_index.has_value() ||
+        *resolution.geometry.source_local_slot_index !=
+            instance.source_local_slot_index ||
+        !resolution.geometry.primitive_reference.has_value() ||
+        *resolution.geometry.primitive_reference !=
+            mesh.primitive_packed_index ||
+        !resolution.geometry.primitive_entry_index.has_value() ||
+        *resolution.geometry.primitive_entry_index !=
+            mesh.primitive_entry_index) {
+      throw std::invalid_argument(
+          "scene render instance provenance is inconsistent");
+    }
+  }
+}
 
 SceneRenderAsset build_scene_render_asset(
     std::span<const data::PrimitiveEntry> primitives,
@@ -95,10 +221,6 @@ SceneRenderAsset build_scene_render_asset(
                     "scene render asset exceeds index budget");
         add_bounded(total_draws, binding.draws.size(), maximum_scene_draws,
                     "scene render asset exceeds draw budget");
-        const auto finite = [](const auto &values) {
-          return std::ranges::all_of(
-              values, [](float value) { return std::isfinite(value); });
-        };
         for (const auto &vertex : primitive.vertices) {
           if (!finite(vertex.position) || !finite(vertex.normal) ||
               !finite(vertex.texture_coordinates)) {
@@ -147,10 +269,6 @@ SceneRenderAsset build_scene_render_asset(
       const auto source_index = *geometry.source_directory_index;
       const auto &source = object_sources[source_index];
       const auto &entry = map.entries[geometry.map_entry_index];
-      const auto finite = [](const auto &values) {
-        return std::ranges::all_of(
-            values, [](float value) { return std::isfinite(value); });
-      };
       if (!finite(source.basis) || !finite(source.position) ||
           !finite(entry.object.orientation) || !finite(entry.object.position) ||
           !finite(entry.object.auxiliary_position) ||
@@ -181,6 +299,7 @@ SceneRenderAsset build_scene_render_asset(
       });
     }
   }
+  validate_scene_render_asset(result);
   return result;
 }
 

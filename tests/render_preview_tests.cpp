@@ -138,6 +138,14 @@ int main() {
   };
   const auto scene_asset = off::graphics::build_scene_render_asset(
       scene_primitives, textures, scene_sources, scene_maps);
+  bool valid_scene_asset_accepted = true;
+  try {
+    off::graphics::validate_scene_render_asset(scene_asset);
+  } catch (const std::exception &) {
+    valid_scene_asset_accepted = false;
+  }
+  check(valid_scene_asset_accepted,
+        "accept an independently validated owning scene asset");
   check(
       scene_asset.resolutions.size() == 3 &&
           scene_asset.instances.size() == 3 && scene_asset.meshes.size() == 2 &&
@@ -186,6 +194,28 @@ int main() {
   }
   check(non_finite_scene_vertex_rejected,
         "reject a non-finite scene vertex before upload");
+
+  auto invalid_scene_asset = scene_asset;
+  invalid_scene_asset.instances[0].mesh_index = scene_asset.meshes.size();
+  bool invalid_scene_reference_rejected = false;
+  try {
+    off::graphics::validate_scene_render_asset(invalid_scene_asset);
+  } catch (const std::invalid_argument &) {
+    invalid_scene_reference_rejected = true;
+  }
+  check(invalid_scene_reference_rejected,
+        "reject an invalid scene instance resource reference");
+
+  invalid_scene_asset = scene_asset;
+  invalid_scene_asset.textures[0].mip_zero.pixels.clear();
+  bool invalid_scene_texture_rejected = false;
+  try {
+    off::graphics::validate_scene_render_asset(invalid_scene_asset);
+  } catch (const std::invalid_argument &) {
+    invalid_scene_texture_rejected = true;
+  }
+  check(invalid_scene_texture_rejected,
+        "reject inconsistent scene RGBA storage before upload");
   const auto instanced =
       off::graphics::build_first_primary_scene_render_preview(
           primitives, textures, object_sources, map_entries);
@@ -207,10 +237,10 @@ int main() {
           instanced.object_instance->map_instance->position ==
               map_entry.object.position,
       "resolve the scene handle to its exact GMS source and retain identities");
-  check(off::graphics::transform_render_position(*instanced.object_instance,
-                                                 {2.0F, 3.0F, 4.0F}) ==
+  check(off::graphics::transform_source_diagnostic_position(
+            *instanced.object_instance, {2.0F, 3.0F, 4.0F}) ==
             std::array{13.0F, 18.0F, 34.0F},
-        "apply the GMS basis as rows before adding position");
+        "apply the explicit source-only diagnostic transform convention");
   bool valid_preview_accepted = true;
   try {
     off::graphics::validate_render_preview(instanced);

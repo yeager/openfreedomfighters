@@ -56,8 +56,9 @@ to RGBA8 and computes finite model bounds. A scene binder now resolves a require
 RMC primary handle to its exact GMS source and PRM record, retaining the RMC and
 GMS transforms separately. The startup RMC source has no direct primitive, so the
 visible first-draw path currently falls back to the first exact GMS reference for
-its diagnostic primitive. The recovered GMS basis is stored as three row vectors;
-the diagnostic world position is `basis * local_position + position`. It then
+its diagnostic primitive. The current diagnostic convention treats the GMS basis
+as three rows and computes `basis * local_position + position`; this has not been
+established as the game's world-transform semantics. It then
 creates the native shader pipeline and uploads vertex/index/texture resources
 through an SDL GPU copy pass, then submits each preserved range as an indexed
 triangle-strip draw. Bounds, draw

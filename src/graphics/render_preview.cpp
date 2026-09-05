@@ -162,9 +162,9 @@ try_build_render_preview(std::span<const data::PrimitiveEntry> primitives,
 
 } // namespace
 
-std::array<float, 3>
-transform_render_position(const RenderObjectInstance &instance,
-                          const std::array<float, 3> &local_position) {
+std::array<float, 3> transform_source_diagnostic_position(
+    const RenderObjectInstance &instance,
+    const std::array<float, 3> &local_position) {
   const auto &basis = instance.basis;
   return {
       basis[0] * local_position[0] + basis[1] * local_position[1] +
@@ -209,7 +209,8 @@ void validate_render_preview(const RenderPreviewAsset &preview) {
   }
   for (const auto &vertex : preview.vertices) {
     if (!finite(vertex.position) || !finite(vertex.texture_coordinates) ||
-        !finite(transform_render_position(instance, vertex.position))) {
+        !finite(
+            transform_source_diagnostic_position(instance, vertex.position))) {
       throw std::invalid_argument(
           "render preview has a non-finite vertex attribute");
     }

@@ -121,8 +121,8 @@ make_preview_vertices(const graphics::RenderPreviewAsset &preview) {
   std::vector<std::array<float, 3>> world_positions;
   world_positions.reserve(preview.vertices.size());
   for (const auto &vertex : preview.vertices) {
-    world_positions.push_back(
-        graphics::transform_render_position(instance, vertex.position));
+    world_positions.push_back(graphics::transform_source_diagnostic_position(
+        instance, vertex.position));
   }
 
   std::array<float, 3> projected_areas{};

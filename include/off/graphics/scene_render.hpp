@@ -72,6 +72,8 @@ struct SceneRenderAsset {
   std::vector<SceneRenderResolution> resolutions;
 };
 
+void validate_scene_render_asset(const SceneRenderAsset &asset);
+
 [[nodiscard]] SceneRenderAsset build_scene_render_asset(
     std::span<const data::PrimitiveEntry> primitives,
     std::span<const data::TextureImage> textures,

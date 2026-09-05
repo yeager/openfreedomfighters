@@ -89,8 +89,12 @@ meshes and TEX images, never deduplicates instances, retains all resolution
 outcomes, and keeps GMS and map transforms separate. The corpus-derived capacity
 observations, defensive limits, and current rendering boundary are documented in
 [SCENE_RENDER_ASSET.md](SCENE_RENDER_ASSET.md).
-The platform layer applies `world = basis * local + position`, converts that owned
-asset to a bounds-normalized diagnostic projection, uploads vertex and 16-bit index
+An independent validator protects the later cache/GPU boundary from mutated or
+otherwise externally constructed assets, including invalid cross-resource indexes,
+draw ranges, RGBA dimensions, provenance, and non-finite values.
+The platform layer applies the explicit source-only diagnostic convention
+`basis * local + position`, converts that owned asset to a bounds-normalized
+projection, uploads vertex and 16-bit index
 buffers plus the RGBA8 texture, and submits every preserved range as an indexed
 triangle-strip draw. A centralized pre-upload validator rejects incomplete assets,
 non-contiguous or overflowing draw ranges, out-of-range indexes, inconsistent RGBA
