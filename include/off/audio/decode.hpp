@@ -12,6 +12,7 @@ namespace off::audio {
 enum class Encoding {
     pcm_s16le,
     ima_adpcm,
+    vorbis,
 };
 
 struct DecodedAudio {

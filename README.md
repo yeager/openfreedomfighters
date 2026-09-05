@@ -13,11 +13,11 @@ This is an independent fan project and is not affiliated with or endorsed by IO 
 
 ## Status
 
-Phase 1, portable data layer. The Steam digital Windows build has been inventoried and fully disassembled in private clean-room storage. The native C++ executable verifies the supported user-owned installation, selects Original or Modern mode, provides a bounds-checked overlay VFS, validates the complete audio-header corpus, and decodes confirmed PCM and IMA ADPCM streams. No playable build exists yet.
+Phase 1, portable data layer. The Steam digital Windows build has been inventoried and fully disassembled in private clean-room storage. The native C++ executable verifies the supported user-owned installation, selects Original or Modern mode, provides a bounds-checked overlay VFS, validates the complete audio-header corpus, and decodes its PCM, IMA ADPCM, and Ogg Vorbis stream families. No playable build exists yet.
 
 ## Build the native bootstrap
 
-A C++23 compiler, CMake 3.25 or newer, and zlib development files are required.
+A C++23 compiler, CMake 3.25 or newer, zlib development files, and libogg/libvorbis development files are required.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
@@ -78,3 +78,4 @@ Full instruction listings are private research artifacts. `tools/private_disasse
 - [Localization plan](docs/LOCALIZATION.md)
 - [Clean-room protocol](CLEAN_ROOM.md)
 - [Continuous integration and releases](docs/CI.md)
+- [Third-party dependencies](THIRD_PARTY.md)

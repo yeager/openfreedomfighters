@@ -1,8 +1,10 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(OpenFreedomFighters VERSION 0.1.0 LANGUAGES CXX)
+project(OpenFreedomFighters VERSION 0.1.0 LANGUAGES C CXX)
 
 include(CTest)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+find_package(Vorbis REQUIRED)
 find_package(ZLIB REQUIRED)
 
 add_library(off_core
@@ -16,7 +18,7 @@ add_library(off_core
 )
 target_include_directories(off_core PUBLIC include)
 target_compile_features(off_core PUBLIC cxx_std_23)
-target_link_libraries(off_core PUBLIC ZLIB::ZLIB)
+target_link_libraries(off_core PUBLIC Vorbis::vorbisfile ZLIB::ZLIB)
 set_target_properties(off_core PROPERTIES CXX_EXTENSIONS OFF)
 
 if(MSVC)
@@ -43,6 +45,6 @@ if(BUILD_TESTING)
     add_test(NAME off_audio_bank_header_tests COMMAND off_audio_bank_header_tests)
 
     add_executable(off_audio_decode_tests tests/audio_decode_tests.cpp)
-    target_link_libraries(off_audio_decode_tests PRIVATE off_core)
+    target_link_libraries(off_audio_decode_tests PRIVATE off_core Vorbis::vorbisenc)
     add_test(NAME off_audio_decode_tests COMMAND off_audio_decode_tests)
 endif()

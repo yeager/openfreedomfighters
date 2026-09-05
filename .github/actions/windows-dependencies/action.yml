@@ -1,0 +1,28 @@
+name: Windows native dependencies
+description: Build pinned zlib, libogg, and libvorbis dependencies for MSVC
+
+runs:
+  using: composite
+  steps:
+    - name: Build zlib, libogg, and libvorbis
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        git clone --filter=blob:none https://github.com/madler/zlib.git zlib-src
+        git -C zlib-src checkout da607da739fa6047df13e66a2af6b8bec7c2a498
+        cmake -S zlib-src -B zlib-build -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/zlib-install"
+        cmake --build zlib-build --config Release --parallel 2
+        cmake --install zlib-build --config Release
+
+        git clone --filter=blob:none https://github.com/xiph/ogg.git ogg-src
+        git -C ogg-src checkout be05b13e98b048f0b5a0f5fa8ce514d56db5f822
+        cmake -S ogg-src -B ogg-build -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF -DINSTALL_DOCS=OFF -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/ogg-install"
+        cmake --build ogg-build --config Release --parallel 2
+        cmake --install ogg-build --config Release
+
+        git clone --filter=blob:none https://github.com/xiph/vorbis.git vorbis-src
+        git -C vorbis-src checkout 0657aee69dec8508a0011f47f3b69d7538e9d262
+        cmake -S vorbis-src -B vorbis-build -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF -DCMAKE_PREFIX_PATH="${{ github.workspace }}/ogg-install" -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/vorbis-install"
+        cmake --build vorbis-build --config Release --parallel 2
+        cmake --install vorbis-build --config Release

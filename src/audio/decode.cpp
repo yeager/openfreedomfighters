@@ -3,8 +3,13 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cstdio>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
+
+#define OV_EXCLUDE_STATIC_CALLBACKS
+#include <vorbis/vorbisfile.h>
 
 namespace off::audio {
 namespace {
@@ -12,6 +17,8 @@ namespace {
 constexpr std::uint32_t global_bank_flag = 0x80000000U;
 constexpr std::uint32_t pcm_format = 0x00000001U;
 constexpr std::uint32_t ima_adpcm_format = 0x00000011U;
+constexpr std::uint32_t vorbis_format = 0x00001000U;
+constexpr std::uint64_t maximum_encoded_audio_bytes = 64ULL * 1024ULL * 1024ULL;
 constexpr std::uint64_t maximum_decoded_sample_values = 64ULL * 1024ULL * 1024ULL;
 
 constexpr std::array<int, 16> index_adjustment{
@@ -33,6 +40,74 @@ struct ImaState {
     int predictor{0};
     int step_index{0};
 };
+
+struct MemorySource {
+    std::span<const std::byte> bytes;
+    std::size_t position{0};
+};
+
+std::size_t memory_read(
+    void* destination,
+    std::size_t element_size,
+    std::size_t element_count,
+    void* opaque
+) {
+    auto& source = *static_cast<MemorySource*>(opaque);
+    if (element_size == 0 || element_count == 0) {
+        return 0;
+    }
+    const auto available_elements = (source.bytes.size() - source.position) / element_size;
+    const auto copied_elements = std::min(element_count, available_elements);
+    const auto copied_bytes = copied_elements * element_size;
+    if (copied_bytes != 0) {
+        std::memcpy(destination, source.bytes.data() + source.position, copied_bytes);
+    }
+    source.position += copied_bytes;
+    return copied_elements;
+}
+
+int memory_seek(void* opaque, ogg_int64_t offset, int origin) {
+    auto& source = *static_cast<MemorySource*>(opaque);
+    std::size_t base = 0;
+    switch (origin) {
+        case SEEK_SET:
+            break;
+        case SEEK_CUR:
+            base = source.position;
+            break;
+        case SEEK_END:
+            base = source.bytes.size();
+            break;
+        default:
+            return -1;
+    }
+    if (offset >= 0) {
+        const auto delta = static_cast<std::uint64_t>(offset);
+        if (delta > source.bytes.size() - base) {
+            return -1;
+        }
+        source.position = base + static_cast<std::size_t>(delta);
+        return 0;
+    }
+    const auto magnitude = static_cast<std::uint64_t>(-(offset + 1)) + 1;
+    if (magnitude > base) {
+        return -1;
+    }
+    source.position = base - static_cast<std::size_t>(magnitude);
+    return 0;
+}
+
+int memory_close(void*) {
+    return 0;
+}
+
+long memory_tell(void* opaque) {
+    const auto& source = *static_cast<MemorySource*>(opaque);
+    if (source.position > static_cast<std::size_t>(std::numeric_limits<long>::max())) {
+        return -1;
+    }
+    return static_cast<long>(source.position);
+}
 
 [[nodiscard]] std::uint16_t little_u16(const std::byte* bytes) noexcept {
     return static_cast<std::uint16_t>(
@@ -190,6 +265,97 @@ void decode_stereo_block(
     return result;
 }
 
+[[nodiscard]] DecodedAudio decode_vorbis(
+    const data::AudioStreamRecord& record,
+    std::span<const std::byte> encoded
+) {
+    if (record.bits_per_sample != 16 || (record.channels != 1 && record.channels != 2) ||
+        record.block_align != record.channels * 2 || record.samples_per_block != 1) {
+        throw std::runtime_error("unsupported Vorbis output layout");
+    }
+
+    MemorySource source{.bytes = encoded};
+    OggVorbis_File file{};
+    const ov_callbacks callbacks{
+        .read_func = memory_read,
+        .seek_func = memory_seek,
+        .close_func = memory_close,
+        .tell_func = memory_tell,
+    };
+    if (ov_open_callbacks(&source, &file, nullptr, 0, callbacks) != 0) {
+        throw std::runtime_error("invalid Ogg Vorbis stream");
+    }
+
+    try {
+        if (ov_streams(&file) != 1) {
+            throw std::runtime_error("chained Ogg Vorbis streams are not supported");
+        }
+        const auto* info = ov_info(&file, -1);
+        if (info == nullptr || info->channels != static_cast<int>(record.channels) ||
+            info->rate <= 0 || static_cast<std::uint64_t>(info->rate) != record.sample_rate) {
+            throw std::runtime_error("Vorbis identification header disagrees with WHD metadata");
+        }
+        const auto total_frames = ov_pcm_total(&file, -1);
+        if (total_frames <= 0) {
+            throw std::runtime_error("Vorbis stream has no decodable frames");
+        }
+        const auto frame_count = static_cast<std::uint64_t>(total_frames);
+        if (frame_count > maximum_decoded_sample_values / record.channels) {
+            throw std::runtime_error("decoded Vorbis stream exceeds the safety limit");
+        }
+        const auto sample_values = frame_count * record.channels;
+        if (sample_values > maximum_decoded_sample_values ||
+            sample_values > std::numeric_limits<std::size_t>::max()) {
+            throw std::runtime_error("decoded Vorbis stream exceeds the safety limit");
+        }
+
+        DecodedAudio result{
+            .encoding = Encoding::vorbis,
+            .sample_rate = record.sample_rate,
+            .channels = record.channels,
+            .interleaved_samples = {},
+        };
+        result.interleaved_samples.reserve(static_cast<std::size_t>(sample_values));
+        std::array<char, 8'192> buffer{};
+        while (true) {
+            int bitstream = 0;
+            const auto decoded_bytes = ov_read(
+                &file,
+                buffer.data(),
+                static_cast<int>(buffer.size()),
+                0,
+                2,
+                1,
+                &bitstream
+            );
+            if (decoded_bytes == 0) {
+                break;
+            }
+            const auto frame_bytes = static_cast<long>(record.channels * 2);
+            if (decoded_bytes < 0 || bitstream != 0 || decoded_bytes % frame_bytes != 0) {
+                throw std::runtime_error("Vorbis decoder reported a corrupt packet");
+            }
+            const auto added_values = static_cast<std::size_t>(decoded_bytes) / 2;
+            if (added_values > maximum_decoded_sample_values - result.interleaved_samples.size()) {
+                throw std::runtime_error("decoded Vorbis stream exceeds the safety limit");
+            }
+            for (std::size_t offset = 0; offset < static_cast<std::size_t>(decoded_bytes); offset += 2) {
+                result.interleaved_samples.push_back(
+                    little_i16(reinterpret_cast<const std::byte*>(buffer.data() + offset))
+                );
+            }
+        }
+        if (result.interleaved_samples.size() != sample_values) {
+            throw std::runtime_error("Vorbis decoded length disagrees with its granule position");
+        }
+        ov_clear(&file);
+        return result;
+    } catch (...) {
+        ov_clear(&file);
+        throw;
+    }
+}
+
 }  // namespace
 
 DecodedAudio decode_stream(
@@ -199,11 +365,16 @@ DecodedAudio decode_stream(
     if (encoded.size() != record.encoded_size) {
         throw std::runtime_error("encoded audio size does not match its WHD record");
     }
+    if (encoded.size() > maximum_encoded_audio_bytes) {
+        throw std::runtime_error("encoded audio stream exceeds the safety limit");
+    }
     switch (record.format_flags & ~global_bank_flag) {
         case pcm_format:
             return decode_pcm(record, encoded);
         case ima_adpcm_format:
             return decode_ima_adpcm(record, encoded);
+        case vorbis_format:
+            return decode_vorbis(record, encoded);
         default:
             throw std::runtime_error("unsupported audio encoding");
     }

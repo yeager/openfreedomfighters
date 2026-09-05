@@ -31,7 +31,7 @@ The following interpretations are supported by corpus-wide relations:
 | 10 | block alignment | consistent with the format families below |
 | 11 | samples per block | consistent with the format families below |
 
-The `0x11` family uses 4-bit mono blocks. Its 512-byte/1,017-sample and 256-byte/505-sample pairs satisfy the standard IMA ADPCM samples-per-block equation, making IMA ADPCM a high-confidence decoding hypothesis. The `0x80000001` family has PCM-like 16-bit mono/stereo alignment. The `0x80001000` family remains deliberately unnamed until decoded audio is compared privately against a reference.
+The `0x11` family uses 4-bit mono blocks. Its 512-byte/1,017-sample and 256-byte/505-sample pairs satisfy the standard IMA ADPCM samples-per-block equation. The `0x80000001` family has signed 16-bit PCM alignment. Every `0x80001000` payload starts with an Ogg capture page and passes an Ogg Vorbis identification header, confirming the third family as Ogg Vorbis.
 
 Bit 31 is a global-bank selector: all 111,264 `0x80000011`, 379 `0x80000001`, and 2,051 `0x80001000` records fit the global stream bank. All 7,493 records without bit 31 fit their paired local banks. No payload bytes are included in the repository or test fixtures.
 
@@ -44,8 +44,9 @@ Installation verification parses all 45 headers, requires the expected aggregate
 The portable decoder currently supports the two confirmed families:
 
 - signed 16-bit little-endian PCM, mono or stereo;
-- Microsoft-layout IMA ADPCM, including per-block predictor/index reset, low-nibble-first mono samples, and four-byte stereo channel groups.
+- Microsoft-layout IMA ADPCM, including per-block predictor/index reset, low-nibble-first mono samples, and four-byte stereo channel groups;
+- single-link Ogg Vorbis decoded through Xiph libvorbisfile with an in-memory callback source.
 
-The decoder verifies encoded size, channel count, bit depth, block alignment, samples per block, ADPCM step indices, reserved header bytes, and a 64-million-sample output limit before or during decoding. Synthetic golden vectors cover signed PCM endpoints, mono nibble order, stereo interleaving, malformed metadata, and unsupported formats. Installation verification also decodes one user-owned PCM record and one IMA ADPCM record as private compatibility probes; decoded samples are immediately discarded and never written to the repository.
+The decoder verifies encoded size, channel count, sample rate, bit depth, block alignment, samples per block, ADPCM step indices, reserved header bytes, Vorbis link count, final granule length, and a 64-million-sample output limit before or during decoding. Synthetic golden vectors cover signed PCM endpoints, mono nibble order, stereo interleaving, malformed metadata, and unsupported formats. A synthetic stereo Vorbis stream is generated entirely in memory during testing and decoded back to PCM. Installation verification also decodes one user-owned record from each of the three families as private compatibility probes; decoded samples are immediately discarded and never written to the repository.
 
-The `0x80001000` family is rejected rather than guessed. Support will be added only after its codec and framing have independent evidence.
+The 2,051 Vorbis references resolve to 72 unique payload ranges in the global stream bank. This confirms that scene headers reuse streamed music or dialogue objects rather than embedding independent copies.

@@ -26,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          forbidden=$(git ls-files | grep -Eai '\.(exe|dll|zip|wav|whd|loc|tex|prm|zgf|gms|oct|anm|buf|rmc|rmi|sgp|snd|sup)$' || true)
+          forbidden=$(git ls-files | grep -Eai '\.(exe|dll|zip|wav|ogg|whd|loc|tex|prm|zgf|gms|oct|anm|buf|rmc|rmi|sgp|snd|sup)$' || true)
           if [ -n "$forbidden" ]; then
             echo "Tracked files use prohibited retail-data extensions:" >&2
             echo "$forbidden" >&2
@@ -48,7 +48,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build zlib1g-dev
+          sudo apt-get install -y cmake ninja-build libvorbis-dev zlib1g-dev
       - name: Build
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
@@ -73,11 +73,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies
-        run: brew install cmake ninja zlib
+        run: brew install cmake libvorbis ninja zlib
       - name: Build
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_PREFIX_PATH="$(brew --prefix zlib)"
+            -DCMAKE_PREFIX_PATH="$(brew --prefix zlib);$(brew --prefix libogg);$(brew --prefix libvorbis)"
           ninja -C build
       - name: Test
         run: ctest --test-dir build -j4 --output-on-failure
@@ -87,17 +87,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-      - name: Build zlib
-        shell: pwsh
-        run: |
-          git clone --depth 1 https://github.com/madler/zlib.git zlib-src
-          cmake -S zlib-src -B zlib-build -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/zlib-install"
-          cmake --build zlib-build --config Release --parallel 2
-          cmake --install zlib-build --config Release
+      - name: Build dependencies
+        uses: ./.github/actions/windows-dependencies
       - name: Build
         shell: pwsh
         run: |
-          cmake -S . -B build -DCMAKE_PREFIX_PATH="${{ github.workspace }}/zlib-install"
+          cmake -S . -B build -DCMAKE_PREFIX_PATH="${{ github.workspace }}/zlib-install;${{ github.workspace }}/ogg-install;${{ github.workspace }}/vorbis-install"
           cmake --build build --config Release --parallel 2
       - name: Test
         shell: pwsh

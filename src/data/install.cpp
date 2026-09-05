@@ -119,6 +119,7 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         std::size_t audio_record_count = 0;
         bool decoded_pcm_reference = false;
         bool decoded_ima_reference = false;
+        bool decoded_vorbis_reference = false;
         for (const auto& entry : std::filesystem::recursive_directory_iterator(root / "Scenes")) {
             if (!entry.is_regular_file() || lowercase(entry.path().extension().string()) != ".whd") {
                 continue;
@@ -139,7 +140,8 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                 const auto format = record.format_flags & 0x7fffffffU;
                 const auto needs_reference =
                     (format == 1 && !decoded_pcm_reference) ||
-                    (format == 0x11 && !decoded_ima_reference);
+                    (format == 0x11 && !decoded_ima_reference) ||
+                    (format == 0x1000 && !decoded_vorbis_reference);
                 if (!needs_reference) {
                     continue;
                 }
@@ -153,12 +155,13 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                 }
                 decoded_pcm_reference = decoded_pcm_reference || format == 1;
                 decoded_ima_reference = decoded_ima_reference || format == 0x11;
+                decoded_vorbis_reference = decoded_vorbis_reference || format == 0x1000;
             }
             ++audio_header_count;
             audio_record_count += header.records().size();
         }
         if (audio_header_count != 45 || audio_record_count != 121'187 ||
-            !decoded_pcm_reference || !decoded_ima_reference) {
+            !decoded_pcm_reference || !decoded_ima_reference || !decoded_vorbis_reference) {
             return failure(
                 InstallError::incomplete_game_data,
                 root,
