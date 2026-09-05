@@ -105,6 +105,15 @@ presentation mode, and Original/Modern profile apply transactionally through
 SDL, including the Keep/Revert timeout. Mouse/controller routing, persistence,
 and the production Unicode text backend remain open.
 
+The `--screenshot FILE.bmp` diagnostic path captures the final bounded frame
+(or the first frame without a frame limit), renders it into an application-owned
+color target, blits it into SDL's write-only swapchain, and
+downloads the same target through a 256-byte-row-aligned transfer buffer after
+a GPU fence. SDL writes the local lossless BMP without another image dependency.
+The writer uses a sibling `.part` file, never overwrites an existing result, and
+renames only after a complete save. Captures made with retail data must remain
+outside the repository and are never CI or release artifacts.
+
 Hosted CI tests the pure model, menu state, event translation, draw-list bounds,
 and fallback resolution on every target. Real fullscreen, HDR, refresh switching,
 high-DPI resize, depth recreation, and GPU overlay composition remain hardware

@@ -28,6 +28,7 @@ build-*/
 CMakeFiles/
 out/
 reports/private/
+screenshots/
 __pycache__/
 *.pyc
 .test-work/

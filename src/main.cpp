@@ -14,7 +14,8 @@ namespace {
 
 void usage(std::ostream &output) {
   output << "Usage: openfreedomfighters --data PATH [--mode original|modern] "
-            "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu]\n";
+            "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
+            "[--screenshot FILE.bmp]\n";
 }
 
 } // namespace
@@ -25,6 +26,7 @@ int main(int argc, char **argv) {
   bool verify_only = false;
   std::size_t frame_limit = 0;
   bool show_graphics_menu = false;
+  std::filesystem::path screenshot_path;
   for (int index = 1; index < argc; ++index) {
     const std::string_view argument{argv[index]};
     if (argument == "--data" && index + 1 < argc) {
@@ -49,6 +51,8 @@ int main(int argc, char **argv) {
       }
     } else if (argument == "--show-graphics-menu") {
       show_graphics_menu = true;
+    } else if (argument == "--screenshot" && index + 1 < argc) {
+      screenshot_path = argv[++index];
     } else if (argument == "--help" || argument == "-h") {
       usage(std::cout);
       return 0;
@@ -66,6 +70,31 @@ int main(int argc, char **argv) {
         << "A legally purchased Freedom Fighters installation is required.\n";
     usage(std::cerr);
     return 2;
+  }
+  if (!screenshot_path.empty() && screenshot_path.extension() != ".bmp") {
+    std::cerr << "Screenshot output must use the .bmp extension.\n";
+    return 2;
+  }
+  if (verify_only && !screenshot_path.empty()) {
+    std::cerr << "A screenshot cannot be captured in verify-only mode.\n";
+    return 2;
+  }
+  if (!screenshot_path.empty()) {
+    auto temporary = screenshot_path;
+    temporary += ".part";
+    if (std::filesystem::exists(screenshot_path) ||
+        std::filesystem::exists(temporary)) {
+      std::cerr
+          << "Screenshot output already exists; refusing to overwrite it.\n";
+      return 2;
+    }
+    const auto parent = screenshot_path.has_parent_path()
+                            ? screenshot_path.parent_path()
+                            : std::filesystem::current_path();
+    if (!std::filesystem::is_directory(parent)) {
+      std::cerr << "Screenshot output directory does not exist.\n";
+      return 2;
+    }
   }
 
   const auto verification = off::data::verify_install(data_path);
@@ -87,7 +116,7 @@ int main(int argc, char **argv) {
     return 4;
   }
   const auto runtime = off::platform::run_sdl_gpu_runtime(
-      mode, preview, frame_limit, show_graphics_menu);
+      mode, preview, frame_limit, show_graphics_menu, screenshot_path);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';
     return 4;

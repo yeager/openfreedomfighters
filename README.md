@@ -83,6 +83,10 @@ window or press Escape to exit. `--frame-limit COUNT` is available for bounded
 GPU smoke tests and still requires successful retail-data verification first.
 `--show-graphics-menu` opens the same overlay immediately for bounded visual
 smoke tests. During normal play, F10 opens and closes it.
+`--screenshot FILE.bmp` captures the final composed frame when `--frame-limit`
+is present, or the first frame otherwise, by GPU readback. The destination must
+not exist. Retail-derived screenshots are local artifacts and must be written
+outside this repository.
 F10 is reserved for the in-game graphics-settings overlay. Its transactional
 state, keyboard focus/editing, bounded cross-platform layout, timed display
 rollback, and SDL GPU composition are implemented for the current settings.

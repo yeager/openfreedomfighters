@@ -678,10 +678,10 @@ apply_graphics(SDL_GPUDevice *device, SDL_Window *window,
 
 } // namespace
 
-RuntimeResult run_sdl_gpu_runtime(Mode mode,
-                                  const graphics::RenderPreviewAsset &preview,
-                                  std::size_t frame_limit,
-                                  bool show_graphics_menu) {
+RuntimeResult
+run_sdl_gpu_runtime(Mode mode, const graphics::RenderPreviewAsset &preview,
+                    std::size_t frame_limit, bool show_graphics_menu,
+                    const std::filesystem::path &screenshot_path) {
   try {
     graphics::validate_render_preview(preview);
   } catch (const std::exception &error) {
@@ -765,6 +765,7 @@ RuntimeResult run_sdl_gpu_runtime(Mode mode,
                                            0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1,
                                            0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
   bool running = true;
+  bool screenshot_captured = screenshot_path.empty();
   std::size_t frames = 0;
   while (running) {
     SDL_Event event;
@@ -838,6 +839,61 @@ RuntimeResult run_sdl_gpu_runtime(Mode mode,
         SDL_CancelGPUCommandBuffer(command);
       break;
     }
+    SDL_GPUTexture *capture_texture = nullptr;
+    SDL_GPUTransferBuffer *capture_transfer = nullptr;
+    Uint32 capture_row_pitch = 0;
+    SDL_PixelFormat capture_pixel_format = SDL_PIXELFORMAT_UNKNOWN;
+    const bool capture_this_frame =
+        !screenshot_captured && swapchain != nullptr &&
+        (frame_limit == 0 || frames + 1 >= frame_limit);
+    if (capture_this_frame) {
+      const auto format = SDL_GetGPUSwapchainTextureFormat(device, window);
+      const Uint32 texel_bytes = SDL_GPUTextureFormatTexelBlockSize(format);
+      capture_pixel_format = SDL_GetPixelFormatFromGPUTextureFormat(format);
+      const std::uint64_t tight_row =
+          static_cast<std::uint64_t>(swapchain_width) * texel_bytes;
+      const std::uint64_t aligned_row =
+          (tight_row + 255U) & ~std::uint64_t{255U};
+      const std::uint64_t transfer_bytes = aligned_row * swapchain_height;
+      if (texel_bytes != 4 || capture_pixel_format == SDL_PIXELFORMAT_UNKNOWN ||
+          aligned_row > std::numeric_limits<Uint32>::max() ||
+          transfer_bytes > std::numeric_limits<Uint32>::max() ||
+          !SDL_GPUTextureSupportsFormat(device, format, SDL_GPU_TEXTURETYPE_2D,
+                                        SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
+                                            SDL_GPU_TEXTUREUSAGE_SAMPLER)) {
+        result = {.success = false,
+                  .message = "screenshot format or dimensions are unsupported"};
+        SDL_SubmitGPUCommandBuffer(command);
+        break;
+      }
+      capture_row_pitch = static_cast<Uint32>(aligned_row);
+      const SDL_GPUTextureCreateInfo texture_info{
+          .type = SDL_GPU_TEXTURETYPE_2D,
+          .format = format,
+          .usage =
+              SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER,
+          .width = swapchain_width,
+          .height = swapchain_height,
+          .layer_count_or_depth = 1,
+          .num_levels = 1,
+          .sample_count = SDL_GPU_SAMPLECOUNT_1};
+      const SDL_GPUTransferBufferCreateInfo transfer_info{
+          .usage = SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD,
+          .size = static_cast<Uint32>(transfer_bytes)};
+      capture_texture = SDL_CreateGPUTexture(device, &texture_info);
+      capture_transfer = SDL_CreateGPUTransferBuffer(device, &transfer_info);
+      if (capture_texture == nullptr || capture_transfer == nullptr) {
+        result = failure("screenshot resource creation failed");
+        SDL_SubmitGPUCommandBuffer(command);
+        if (capture_transfer != nullptr)
+          SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
+        if (capture_texture != nullptr)
+          SDL_ReleaseGPUTexture(device, capture_texture);
+        break;
+      }
+    }
+    SDL_GPUTexture *frame_target =
+        capture_texture != nullptr ? capture_texture : swapchain;
     const auto draw_list = ui::build_graphics_menu_draw_list(
         menu, {swapchain_width, swapchain_height}, ui::GraphicsClock::now());
     const auto overlay_batch = draw_list.status == ui::UiBuildStatus::ok
@@ -847,14 +903,14 @@ RuntimeResult run_sdl_gpu_runtime(Mode mode,
     if (!upload_overlay(device, command, overlay_batch, overlay,
                         overlay_transfer)) {
       result = failure("graphics overlay frame upload failed");
-      SDL_CancelGPUCommandBuffer(command);
+      SDL_SubmitGPUCommandBuffer(command);
       if (overlay_transfer != nullptr)
         SDL_ReleaseGPUTransferBuffer(device, overlay_transfer);
       break;
     }
     if (swapchain != nullptr) {
       const SDL_GPUColorTargetInfo target{
-          .texture = swapchain,
+          .texture = frame_target,
           .clear_color = active_mode == Mode::original
                              ? SDL_FColor{0, 0, 0, 1}
                              : SDL_FColor{0.015F, 0.025F, 0.05F, 1},
@@ -886,7 +942,7 @@ RuntimeResult run_sdl_gpu_runtime(Mode mode,
 
       if (!overlay_batch.vertices.empty()) {
         const SDL_GPUColorTargetInfo overlay_target{
-            .texture = swapchain,
+            .texture = frame_target,
             .load_op = SDL_GPU_LOADOP_LOAD,
             .store_op = SDL_GPU_STOREOP_STORE};
         SDL_GPURenderPass *overlay_pass =
@@ -932,10 +988,97 @@ RuntimeResult run_sdl_gpu_runtime(Mode mode,
         }
         SDL_EndGPURenderPass(overlay_pass);
       }
+      if (capture_texture != nullptr) {
+        const SDL_GPUBlitInfo blit{.source = {.texture = capture_texture,
+                                              .w = swapchain_width,
+                                              .h = swapchain_height},
+                                   .destination = {.texture = swapchain,
+                                                   .w = swapchain_width,
+                                                   .h = swapchain_height},
+                                   .load_op = SDL_GPU_LOADOP_DONT_CARE,
+                                   .flip_mode = SDL_FLIP_NONE,
+                                   .filter = SDL_GPU_FILTER_NEAREST,
+                                   .cycle = false};
+        SDL_BlitGPUTexture(command, &blit);
+        SDL_GPUCopyPass *capture_copy = SDL_BeginGPUCopyPass(command);
+        if (capture_copy == nullptr) {
+          result = failure("screenshot copy-pass creation failed");
+          SDL_SubmitGPUCommandBuffer(command);
+          SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
+          SDL_ReleaseGPUTexture(device, capture_texture);
+          break;
+        }
+        const SDL_GPUTextureRegion source{.texture = capture_texture,
+                                          .w = swapchain_width,
+                                          .h = swapchain_height,
+                                          .d = 1};
+        const SDL_GPUTextureTransferInfo destination{
+            .transfer_buffer = capture_transfer,
+            .pixels_per_row = capture_row_pitch / 4U,
+            .rows_per_layer = swapchain_height};
+        SDL_DownloadFromGPUTexture(capture_copy, &source, &destination);
+        SDL_EndGPUCopyPass(capture_copy);
+      }
     }
-    if (!SDL_SubmitGPUCommandBuffer(command)) {
+    SDL_GPUFence *capture_fence = nullptr;
+    const bool submitted =
+        capture_texture != nullptr
+            ? (capture_fence = SDL_SubmitGPUCommandBufferAndAcquireFence(
+                   command)) != nullptr
+            : SDL_SubmitGPUCommandBuffer(command);
+    if (!submitted) {
       result = failure("SDL GPU command-buffer submission failed");
+      if (capture_transfer != nullptr)
+        SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
+      if (capture_texture != nullptr)
+        SDL_ReleaseGPUTexture(device, capture_texture);
       break;
+    }
+    if (capture_fence != nullptr) {
+      SDL_GPUFence *fences[]{capture_fence};
+      if (!SDL_WaitForGPUFences(device, true, fences, 1)) {
+        result = failure("screenshot fence wait failed");
+      } else {
+        void *pixels =
+            SDL_MapGPUTransferBuffer(device, capture_transfer, false);
+        if (pixels == nullptr) {
+          result = failure("screenshot transfer mapping failed");
+        } else {
+          SDL_Surface *surface = SDL_CreateSurfaceFrom(
+              static_cast<int>(swapchain_width),
+              static_cast<int>(swapchain_height), capture_pixel_format, pixels,
+              static_cast<int>(capture_row_pitch));
+          auto temporary_path = screenshot_path;
+          temporary_path += ".part";
+          const auto utf8_path = temporary_path.u8string();
+          if (surface == nullptr ||
+              !SDL_SaveBMP(surface,
+                           reinterpret_cast<const char *>(utf8_path.c_str()))) {
+            result = failure("screenshot BMP save failed");
+          } else {
+            std::error_code rename_error;
+            std::filesystem::rename(temporary_path, screenshot_path,
+                                    rename_error);
+            if (rename_error) {
+              std::filesystem::remove(temporary_path);
+              result = {.success = false,
+                        .message = "screenshot finalization failed: " +
+                                   rename_error.message()};
+            } else {
+              screenshot_captured = true;
+              result.message += " (screenshot saved)";
+            }
+          }
+          if (surface != nullptr)
+            SDL_DestroySurface(surface);
+          SDL_UnmapGPUTransferBuffer(device, capture_transfer);
+        }
+      }
+      SDL_ReleaseGPUFence(device, capture_fence);
+      SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
+      SDL_ReleaseGPUTexture(device, capture_texture);
+      if (!result.success)
+        break;
     }
     if (overlay_transfer != nullptr) {
       SDL_WaitForGPUIdle(device);
