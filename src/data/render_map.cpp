@@ -13,13 +13,17 @@
 namespace off::data {
 namespace {
 
-constexpr std::size_t header_size = 32;
+constexpr std::size_t fixed_header_size = 20;
+constexpr std::size_t minimum_index_offset = 32;
+constexpr std::size_t node_size = 6;
 constexpr std::size_t index_entry_size = 16;
 constexpr std::size_t descriptor_size = 84;
 constexpr std::size_t bytes_per_entry = index_entry_size + descriptor_size;
 constexpr std::size_t maximum_file_size = 16U * 1024U * 1024U;
 constexpr std::size_t maximum_entries = 65'536;
-constexpr std::uint32_t supported_quantization_scale = 0x00010000U;
+constexpr std::uint16_t element_count_mask = 0x7ff8U;
+constexpr std::uint16_t last_sibling_mask = 0x8000U;
+constexpr std::uint16_t octant_mask = 0x0007U;
 
 [[nodiscard]] float read_finite_float(const ByteReader& reader, std::size_t offset) {
     const auto value = std::bit_cast<float>(reader.u32(offset));
@@ -27,6 +31,21 @@ constexpr std::uint32_t supported_quantization_scale = 0x00010000U;
         throw std::runtime_error("render-map descriptor contains a non-finite value");
     }
     return value;
+}
+
+[[nodiscard]] RenderMapNode read_node(const ByteReader& reader, std::size_t index) {
+    const auto offset = fixed_header_size + index * node_size;
+    const auto flags = reader.u16(offset);
+    return {
+        .raw_flags = flags,
+        .octant = static_cast<std::uint8_t>(flags & octant_mask),
+        .last_sibling = (flags & last_sibling_mask) != 0U,
+        .child_index = reader.u16(offset + 2U),
+        .element_offset = reader.u16(offset + 4U),
+        .element_count = static_cast<std::uint16_t>(
+            (flags & element_count_mask) >> 3U
+        ),
+    };
 }
 
 template <std::size_t Size>
@@ -44,12 +63,13 @@ template <std::size_t Size>
 }  // namespace
 
 RenderMap RenderMap::parse(std::span<const std::byte> bytes) {
-    if (bytes.size() < header_size + bytes_per_entry || bytes.size() > maximum_file_size) {
+    if (bytes.size() < minimum_index_offset + bytes_per_entry ||
+        bytes.size() > maximum_file_size) {
         throw std::runtime_error("invalid render-map file size");
     }
     const ByteReader reader(bytes);
     const auto index_offset = reader.u32(0);
-    if (index_offset < header_size || index_offset > bytes.size() ||
+    if (index_offset < minimum_index_offset || index_offset > bytes.size() ||
         (index_offset & 0x0fU) != 0U ||
         (bytes.size() - index_offset) % bytes_per_entry != 0U) {
         throw std::runtime_error("invalid render-map envelope");
@@ -62,15 +82,82 @@ RenderMap RenderMap::parse(std::span<const std::byte> bytes) {
 
     RenderMap result;
     result.index_offset_ = index_offset;
-    result.root_parameters_ = read_float_array<4>(reader, 4);
-    result.quantization_scale_ = reader.u32(20);
-    result.hierarchy_flags_ = reader.u32(24);
-    result.hierarchy_parameter_ = reader.u32(28);
-    if (result.quantization_scale_ != supported_quantization_scale) {
-        throw std::runtime_error("unsupported render-map quantization scale");
+    result.center_ = read_float_array<3>(reader, 4);
+    result.quantization_factor_ = read_finite_float(reader, 16);
+    if (result.quantization_factor_ <= 0.0F) {
+        throw std::runtime_error("render-map contains an invalid quantization factor");
     }
-    result.packed_hierarchy_.assign(
-        bytes.begin() + static_cast<std::ptrdiff_t>(header_size),
+
+    const auto node_capacity = (index_offset - fixed_header_size) / node_size;
+    if (node_capacity == 0) {
+        throw std::runtime_error("render-map does not contain a root node");
+    }
+    std::vector<bool> visited_nodes(node_capacity, false);
+    std::vector<bool> referenced_elements(entry_count, false);
+    std::vector<std::size_t> pending_nodes{0};
+    std::size_t highest_node_index = 0;
+    while (!pending_nodes.empty()) {
+        const auto node_index = pending_nodes.back();
+        pending_nodes.pop_back();
+        if (node_index >= node_capacity || visited_nodes[node_index]) {
+            throw std::runtime_error("render-map hierarchy contains a cycle or reused node");
+        }
+        visited_nodes[node_index] = true;
+        highest_node_index = std::max(highest_node_index, node_index);
+        const auto node = read_node(reader, node_index);
+        const auto element_end =
+            static_cast<std::size_t>(node.element_offset) + node.element_count;
+        if (element_end > entry_count) {
+            throw std::runtime_error("render-map node references elements outside the index");
+        }
+        for (std::size_t element = node.element_offset; element < element_end; ++element) {
+            if (referenced_elements[element]) {
+                throw std::runtime_error("render-map element is referenced by multiple nodes");
+            }
+            referenced_elements[element] = true;
+        }
+        if (node.child_index == 0) {
+            continue;
+        }
+        std::array<bool, 8> occupied_octants{};
+        auto child_index = static_cast<std::size_t>(node.child_index);
+        while (true) {
+            if (child_index >= node_capacity) {
+                throw std::runtime_error("render-map child list exceeds the node region");
+            }
+            const auto child = read_node(reader, child_index);
+            if (occupied_octants[child.octant]) {
+                throw std::runtime_error("render-map child list repeats an octant");
+            }
+            occupied_octants[child.octant] = true;
+            pending_nodes.push_back(child_index);
+            if (child.last_sibling) {
+                break;
+            }
+            ++child_index;
+        }
+    }
+    const auto node_count = highest_node_index + 1U;
+    if (!std::ranges::all_of(
+            visited_nodes.begin(),
+            visited_nodes.begin() + static_cast<std::ptrdiff_t>(node_count),
+            [](bool value) { return value; }
+        )) {
+        throw std::runtime_error("render-map hierarchy contains an unreachable node");
+    }
+    if (!std::ranges::all_of(referenced_elements, [](bool value) { return value; })) {
+        throw std::runtime_error("render-map hierarchy does not cover every element");
+    }
+    const auto hierarchy_end = fixed_header_size + node_count * node_size;
+    if (index_offset - hierarchy_end >= 16U) {
+        throw std::runtime_error("render-map hierarchy contains excessive trailing data");
+    }
+    result.nodes_.reserve(node_count);
+    for (std::size_t node_index = 0; node_index < node_count; ++node_index) {
+        result.nodes_.push_back(read_node(reader, node_index));
+    }
+    result.alignment_padding_.assign(
+        bytes.begin() + static_cast<std::ptrdiff_t>(hierarchy_end),
         bytes.begin() + static_cast<std::ptrdiff_t>(index_offset)
     );
     result.entries_.reserve(entry_count);

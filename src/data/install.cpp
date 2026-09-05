@@ -187,8 +187,10 @@ InstallVerification verify_install(const std::filesystem::path& root) {
         std::size_t primitive_index_count = 0;
         std::size_t render_map_count = 0;
         std::size_t render_map_entry_count = 0;
+        std::size_t render_map_node_count = 0;
         std::size_t render_instance_map_count = 0;
         std::size_t render_instance_entry_count = 0;
+        std::size_t render_instance_node_count = 0;
         bool decoded_dxt1_reference = false;
         bool decoded_dxt3_reference = false;
         bool decoded_abgr_reference = false;
@@ -269,10 +271,12 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                     const auto map = RenderMap::parse(archive.read(member));
                     if (extension == ".rmc") {
                         render_map_entry_count += map.entries().size();
+                        render_map_node_count += map.nodes().size();
                         ++render_map_files_in_archive;
                         ++render_map_count;
                     } else {
                         render_instance_entry_count += map.entries().size();
+                        render_instance_node_count += map.nodes().size();
                         ++render_instance_files_in_archive;
                         ++render_instance_map_count;
                     }
@@ -296,8 +300,10 @@ InstallVerification verify_install(const std::filesystem::path& root) {
             primitive_vertex_count != 2'820'961 || primitive_batch_count != 461'344 ||
             primitive_index_count != 4'412'738 || render_map_count != scene_archive_count ||
             render_map_entry_count != 1'612 ||
+            render_map_node_count != 2'587 ||
             render_instance_map_count != scene_archive_count ||
-            render_instance_entry_count != 1'189) {
+            render_instance_entry_count != 1'189 ||
+            render_instance_node_count != 1'359) {
             return failure(
                 InstallError::incomplete_game_data,
                 root,

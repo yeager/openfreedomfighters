@@ -1,6 +1,6 @@
 # RMC and RMI spatial-map format
 
-Every supported scene archive contains one `RMC` and one `RMI` member. Both use the same validated envelope: a spatial header and packed hierarchy, an array of quantized bounds and descriptor references, and a fixed-size object-descriptor region. Their exact runtime distinction is not yet established, so the parser deliberately shares one neutral data model.
+Every supported scene archive contains one `RMC` and one `RMI` member. Both use the same validated envelope: a quantized octree, an array of bounds and descriptor references, and a fixed-size object-descriptor region. Their exact runtime distinction is not yet established, so the parser deliberately shares one neutral data model.
 
 ## File envelope
 
@@ -9,15 +9,27 @@ All integers and floats are little-endian. Offsets are relative to the start of 
 | Offset | Size | Meaning |
 |---:|---:|---|
 | 0 | 4 | index-table offset |
-| 4 | 16 | four finite root-space parameters |
-| 20 | 4 | quantization scale; `0x00010000` in the supported corpus |
-| 24 | 4 | hierarchy flags, preserved without interpretation |
-| 28 | 4 | hierarchy parameter, preserved without interpretation |
-| 32 | variable | packed hierarchy bytes |
+| 4 | 12 | finite world-space octree center |
+| 16 | 4 | positive floating-point world-to-quantized-space factor |
+| 20 | variable | packed 6-byte octree nodes followed by less than 16 bytes of alignment padding |
 | index offset | `16 * count` | spatial index records |
 | descriptor start | `84 * count` | object descriptors |
 
 The bytes following the index offset are exactly divisible into 100 bytes per entry: a 16-byte index record and one 84-byte descriptor. Consequently, the entry count and descriptor boundary can be derived without trusting an embedded count. Every descriptor slot must be referenced exactly once.
+
+## Packed octree node
+
+The node array begins at offset 20 and node zero is the root. Nodes are addressed by array index, not byte offset.
+
+| Offset | Size | Meaning |
+|---:|---:|---|
+| 0 | 2 | packed flags and element count |
+| 2 | 2 | first-child node index, or zero when there are no children |
+| 4 | 2 | first spatial-index element |
+
+Bits 0-2 of the packed word select an octant. Bits 3-14 hold the number of consecutive elements owned by the node, and bit 15 marks the final node in a contiguous sibling list. A nonzero child index selects the first sibling; traversal continues through consecutive nodes until the final-sibling bit is encountered.
+
+The parser follows the tree from node zero and requires every referenced node to be in range and reachable exactly once. Sibling octants must be unique. Node element ranges must remain inside the spatial index and cover every element exactly once without overlap. This traversal also determines the true end of the node array, separating it from alignment bytes without interpreting padding as nodes.
 
 ## Spatial index record
 
@@ -44,4 +56,4 @@ All 20 floating-point values are required to be finite. The matrix/vector names 
 
 ## Validation coverage
 
-Installation verification parses 90 `RMC` files containing 1,612 entries and 90 `RMI` files containing 1,189 entries. Synthetic tests reject truncated or misaligned envelopes, unsupported quantization scales and kinds, duplicate or misaligned descriptor references, inverted bounds, and non-finite values. Packed hierarchy bytes are retained but not traversed until their encoding is independently established.
+Installation verification parses 90 `RMC` files containing 2,587 octree nodes and 1,612 entries, plus 90 `RMI` files containing 1,359 nodes and 1,189 entries. Synthetic tests reject truncated or misaligned envelopes, invalid quantization factors, cyclic or reused nodes, repeated sibling octants, overlapping element ownership, excessive hierarchy padding, unsupported object kinds, duplicate or misaligned descriptor references, inverted bounds, and non-finite values.

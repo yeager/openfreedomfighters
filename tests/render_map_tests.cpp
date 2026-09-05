@@ -40,13 +40,23 @@ void set_f32(std::vector<std::byte>& bytes, std::size_t offset, float value) {
 std::vector<std::byte> map_fixture() {
     std::vector<std::byte> bytes(table_offset + 2 * (16 + descriptor_size), std::byte{0});
     set_u32(bytes, 0, table_offset);
-    for (std::size_t index = 0; index < 4; ++index) {
+    for (std::size_t index = 0; index < 3; ++index) {
         set_f32(bytes, 4 + index * 4, static_cast<float>(index + 1));
     }
-    set_u32(bytes, 20, 0x00010000U);
-    set_u32(bytes, 24, 0x80020000U);
-    set_u32(bytes, 28, 3);
-    bytes[32] = std::byte{0x42};
+    set_f32(bytes, 16, 0.25F);
+    set_u16(bytes, 20, 0);
+    set_u16(bytes, 22, 1);
+    set_u16(bytes, 24, 0);
+    set_u16(bytes, 26, 0x000bU);
+    set_u16(bytes, 28, 3);
+    set_u16(bytes, 30, 0);
+    set_u16(bytes, 32, 0x800dU);
+    set_u16(bytes, 34, 0);
+    set_u16(bytes, 36, 1);
+    set_u16(bytes, 38, 0x8002U);
+    set_u16(bytes, 40, 0);
+    set_u16(bytes, 42, 0);
+    bytes[44] = std::byte{0x42};
 
     set_u32(bytes, table_offset, descriptor_start + descriptor_size);
     set_u32(bytes, table_offset + 16, descriptor_start);
@@ -89,12 +99,15 @@ int main() {
     const auto bytes = map_fixture();
     const auto map = off::data::RenderMap::parse(bytes);
     check(map.index_offset() == table_offset, "parse index offset");
-    check(map.root_parameters() == std::array{1.0F, 2.0F, 3.0F, 4.0F},
-          "parse root parameters");
-    check(map.quantization_scale() == 0x00010000U, "parse quantization scale");
-    check(map.hierarchy_flags() == 0x80020000U, "preserve hierarchy flags");
-    check(map.hierarchy_parameter() == 3, "preserve hierarchy parameter");
-    check(map.packed_hierarchy().size() == 16, "preserve packed hierarchy");
+    check(map.center() == std::array{1.0F, 2.0F, 3.0F}, "parse octree center");
+    check(map.quantization_factor() == 0.25F, "parse quantization factor");
+    check(map.nodes().size() == 4, "traverse the complete packed octree");
+    check(map.nodes()[1].octant == 3, "decode node octant");
+    check(map.nodes()[1].element_count == 1, "decode node element count");
+    check(map.nodes()[1].child_index == 3, "decode node child index");
+    check(!map.nodes()[1].last_sibling, "decode non-terminal sibling flag");
+    check(map.nodes()[2].last_sibling, "decode terminal sibling flag");
+    check(map.alignment_padding().size() == 4, "preserve alignment padding");
     check(map.entries().size() == 2, "parse map entries");
     check(map.entries()[0].descriptor_offset == descriptor_start + descriptor_size,
           "follow permuted descriptor index");
@@ -112,8 +125,31 @@ int main() {
         "reject a misaligned index offset"
     );
     check_rejected(
-        [](auto& value) { set_u32(value, 20, 2); },
-        "reject an unsupported quantization scale"
+        [](auto& value) { set_f32(value, 16, 0.0F); },
+        "reject a non-positive quantization factor"
+    );
+    check_rejected(
+        [](auto& value) { set_u16(value, 28, 1); },
+        "reject a reused hierarchy node"
+    );
+    check_rejected(
+        [](auto& value) { set_u16(value, 32, 0x800bU); },
+        "reject duplicate child octants"
+    );
+    check_rejected(
+        [](auto& value) { set_u16(value, 38, 0x800aU); },
+        "reject multiply referenced elements"
+    );
+    check_rejected(
+        [](auto& value) {
+            set_u16(value, 20, 0x0010U);
+            set_u16(value, 22, 0);
+        },
+        "reject excessive hierarchy padding"
+    );
+    check_rejected(
+        [](auto& value) { set_u16(value, 32, 0x8005U); },
+        "reject an element missing from the hierarchy"
     );
     check_rejected(
         [](auto& value) { set_u32(value, table_offset + 16, descriptor_start + descriptor_size); },

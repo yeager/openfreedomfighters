@@ -37,7 +37,7 @@ Representative scene archives consistently expose a family of resource types:
 | `LOC` | localization table | encoding, identifiers, plural rules |
 | `OCT` | spatial octree | bounds and cell/object references |
 | `SGP` | scene/game parameters | determine semantics |
-| `RMC`/`RMI` | validated spatial maps with packed hierarchies, quantized bounds, and fixed object descriptors | hierarchy encoding and exact runtime distinction |
+| `RMC`/`RMI` | validated quantized octrees, bounds, and fixed object descriptors | exact runtime distinction and binding to scene objects |
 | `PRM` | indexed render primitives with decoded primary vertices and grouped topology | materials and auxiliary/skinning streams |
 | `ANM` | animation data (42 observed) | clips, tracks, time units, skeleton binding |
 
@@ -113,6 +113,6 @@ Files named `.WAV` are often banks rather than conventional RIFF WAV files. All 
 
 1. Resolve runtime-computed dynamic module/API arguments and map load-config metadata.
 2. Promote three-scene resource invariants to corpus-wide validators and infer section tables.
-3. Decode the packed `RMC`/`RMI` hierarchy and `PRM` auxiliary streams, then bind decoded `TEX` pixels to renderable geometry.
+3. Determine the `RMC`/`RMI` runtime distinction and decode `PRM` auxiliary streams, then bind decoded `TEX` pixels to renderable geometry.
 4. Record black-box boot, menu, input, timing, and first-level traces from the retail game.
 5. Define golden screenshots/state traces stored locally as hashes and numeric measurements.
