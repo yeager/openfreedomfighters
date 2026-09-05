@@ -17,6 +17,11 @@ struct PictureResourceFrame {
     std::size_t descriptor_index{0};
 };
 
+struct PictureFrameTextureResource {
+    std::uint32_t prm_offset{0};
+    std::array<std::byte, 32> encoded{};
+};
+
 class PictureResource final {
 public:
     [[nodiscard]] static PictureResource parse(
@@ -32,6 +37,10 @@ public:
     frame_texture_references() const noexcept {
         return frame_texture_references_;
     }
+    [[nodiscard]] std::span<const PictureFrameTextureResource>
+    frame_texture_resources() const noexcept {
+        return frame_texture_resources_;
+    }
     [[nodiscard]] std::span<const PictureResourceFrame> frames() const noexcept {
         return frames_;
     }
@@ -42,6 +51,7 @@ public:
 private:
     std::vector<PictureResourceDescriptor> descriptors_;
     std::vector<std::uint32_t> frame_texture_references_;
+    std::vector<PictureFrameTextureResource> frame_texture_resources_;
     std::vector<PictureResourceFrame> frames_;
     std::size_t encoded_size_{0};
 };

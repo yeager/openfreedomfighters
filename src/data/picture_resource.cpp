@@ -11,6 +11,8 @@ namespace {
 constexpr std::size_t descriptor_size = 40;
 constexpr std::size_t frame_value_size = 4;
 constexpr std::size_t frame_record_size = 8;
+constexpr std::size_t frame_texture_resource_size = 32;
+constexpr std::uint32_t frame_texture_resource_marker = 0x00020100U;
 constexpr std::size_t prm_header_size = 16;
 constexpr std::size_t maximum_descriptor_count = 4'096;
 constexpr std::size_t maximum_frame_count = 4'096;
@@ -96,6 +98,24 @@ PictureResource PictureResource::parse(
     );
 
     for (std::size_t index = 0; index < frame_count; ++index) {
+        const auto texture_resource_offset = static_cast<std::size_t>(
+            reader.u32(frame_value_start + index * frame_value_size)
+        );
+        if ((texture_resource_offset & 1U) != 0U ||
+            texture_resource_offset < prm_header_size ||
+            texture_resource_offset > primitive_index_offset ||
+            frame_texture_resource_size >
+                primitive_index_offset - texture_resource_offset) {
+            throw std::runtime_error(
+                "picture frame texture-resource reference is out of range"
+            );
+        }
+        if (reader.u32(texture_resource_offset) !=
+            frame_texture_resource_marker) {
+            throw std::runtime_error(
+                "picture frame texture-resource marker is invalid"
+            );
+        }
         const auto frame_offset = frame_value_end + index * frame_record_size;
         const auto descriptor_index = static_cast<std::size_t>(
             reader.u32(frame_offset + sizeof(std::uint32_t))
@@ -118,11 +138,23 @@ PictureResource PictureResource::parse(
         result.descriptors_.push_back(descriptor);
     }
     result.frame_texture_references_.reserve(frame_count);
+    result.frame_texture_resources_.reserve(frame_count);
     result.frames_.reserve(frame_count);
     for (std::size_t index = 0; index < frame_count; ++index) {
-        result.frame_texture_references_.push_back(
-            reader.u32(frame_value_start + index * frame_value_size)
+        const auto texture_resource_reference =
+            reader.u32(frame_value_start + index * frame_value_size);
+        result.frame_texture_references_.push_back(texture_resource_reference);
+        PictureFrameTextureResource texture_resource{
+            .prm_offset = texture_resource_reference,
+        };
+        const auto texture_source = reader.slice(
+            static_cast<std::size_t>(texture_resource_reference),
+            frame_texture_resource_size
         );
+        std::ranges::copy(
+            texture_source, texture_resource.encoded.begin()
+        );
+        result.frame_texture_resources_.push_back(texture_resource);
         const auto frame_offset = frame_value_end + index * frame_record_size;
         const auto descriptor_index = static_cast<std::size_t>(
             reader.u32(frame_offset + sizeof(std::uint32_t))

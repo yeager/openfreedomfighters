@@ -30,13 +30,27 @@ pointer in place; the portable model deliberately retains and validates the
 index. The renderer associates `frame_texture_reference[i]` with `frame[i]`.
 Presentation descriptor fields feed geometry and extents, not texture selection.
 
+Each frame texture-resource reference is itself an unsigned PRM-relative byte
+displacement. It resolves to a neutral 32-byte typed resource record embedded
+in the bounded PRM data region. The portable model retains the displacement and
+owns an opaque copy of the complete record; it never retains a process pointer.
+The record's type marker is validated, but its remaining fields deliberately
+have no public semantic names yet. Retail materialization consumes record fields
+and replaces copied frame references with renderer handles; the producer
+semantics remain unresolved, so raw values must not be interpreted as TEX
+identities.
+
 ## Validation and ownership
 
 The parser checks the PRM envelope and duplicated primitive-index boundary, the
 relocation alignment and range, both count words, every count-by-stride
 calculation, all array extents, and every descriptor index before allocating its
-own values. Descriptors and frame data are copied, so no result points into the
-source PRM buffer. The format has no proven resource-length word; `encoded_size`
+own values. Every frame texture-resource displacement is independently checked
+for two-byte alignment, a complete 32-byte extent before the primitive-index
+boundary, and the recovered type marker. Descriptors, frame data, and resolved
+opaque resource records are copied, so no result points into the source PRM
+buffer. Multiple frames may safely share one valid resource displacement. The
+format has no proven resource-length word; `encoded_size`
 reports the exact parsed prefix, and unrelated bytes before the primitive index
 are allowed.
 
@@ -52,20 +66,24 @@ for its supported path.
 Synthetic tests cover relocation, ownership, multiple descriptors and frames,
 exact consumed size, unrelated trailing PRM bytes, zero counts, truncation at
 every byte boundary, odd or out-of-range relocation keys, hostile counts, and
-early and late invalid descriptor indexes. No retail
+early and late invalid descriptor indexes. Frame-resource coverage additionally
+includes odd, header-relative, boundary-truncated, and wrong-type references,
+owned-record lifetime, and a legal shared reference. No retail
 PRM bytes, picture references, descriptors, or texture references are present in
 the repository.
 
 Private compatibility validation joins every startup window-picture source to
 the user-owned raw PRM and parses all 124 distinct picture resources. Installation
-verification repeats that bounded join, requires 124 unique references, and does
-not extract or log retail data.
+verification repeats that bounded join, requires 124 unique picture references,
+and resolves all 1,144 frame resource records. Its aggregate corpus gate records
+no offsets, identifiers, or retail bytes.
 
 ## Remaining boundary
 
-A frame texture-resource reference is another renderer relocation key. The clone
-and rendering paths prove its role, but its target allocation has not yet been
-tied bidirectionally to a raw TEX image or sequence. Until that producer and
-consumer join is recovered, no frame reference may become a semantic UI texture
-binding through names, dimensions, catalog order, numeric coincidence, or pixel
-similarity. See the [retail UI texture boundary](RETAIL_UI_TEXTURES.md).
+A frame texture-resource reference is now proven to target the bounded typed
+record described above. The record fields used after retail runtime
+materialization have not yet been tied bidirectionally to a raw TEX image or
+sequence. Until that producer and consumer join is recovered, no frame reference
+may become a semantic UI texture binding through names, dimensions, catalog
+order, numeric coincidence, or pixel similarity. See the
+[retail UI texture boundary](RETAIL_UI_TEXTURES.md).

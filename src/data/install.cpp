@@ -218,7 +218,10 @@ InstallVerification verify_install(const std::filesystem::path &root) {
     std::size_t primitive_batch_count = 0;
     std::size_t primitive_index_count = 0;
     std::size_t startup_picture_resource_count = 0;
+    std::size_t startup_picture_frame_texture_resource_count = 0;
     std::unordered_set<std::uint32_t> startup_picture_references;
+    std::unordered_set<std::uint32_t>
+        startup_picture_frame_texture_references;
     std::size_t render_map_count = 0;
     std::size_t render_map_entry_count = 0;
     std::size_t render_map_node_count = 0;
@@ -440,8 +443,15 @@ InstallVerification verify_install(const std::filesystem::path &root) {
             throw std::runtime_error(
                 "startup picture sources reuse a PRM resource reference");
           }
-          static_cast<void>(PictureResource::parse(
-              *primitive_resource, picture_source.picture_asset_reference));
+          const auto picture = PictureResource::parse(
+              *primitive_resource, picture_source.picture_asset_reference);
+          startup_picture_frame_texture_resource_count +=
+              picture.frame_texture_resources().size();
+          for (const auto &texture_resource :
+               picture.frame_texture_resources()) {
+            startup_picture_frame_texture_references.insert(
+                texture_resource.prm_offset);
+          }
           ++startup_picture_resource_count;
         }
       }
@@ -563,6 +573,9 @@ InstallVerification verify_install(const std::filesystem::path &root) {
         primitive_index_count != 4'412'738 ||
         startup_picture_resource_count != 124 ||
         startup_picture_references.size() != startup_picture_resource_count ||
+        startup_picture_frame_texture_resource_count != 1'144 ||
+        startup_picture_frame_texture_references.size() !=
+            startup_picture_frame_texture_resource_count ||
         render_map_count != scene_archive_count ||
         render_map_entry_count != 1'612 || render_map_node_count != 2'587 ||
         render_instance_map_count != scene_archive_count ||
