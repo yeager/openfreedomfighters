@@ -65,8 +65,10 @@ Gate: all startup and first-level assets load into validated portable models und
 - [x] Upload and draw the first decoded retail mesh and texture.
 - [x] Preserve GMS and RMC/RMI transform records separately and enforce a
   source-only diagnostic-rendering boundary.
-- [ ] Submit every validated scene GPU-plan command through SDL GPU as a
+- [x] Submit every validated scene GPU-plan command through SDL GPU as a
   multi-instance source-only diagnostic scene.
+- [x] Select a non-empty diagnostic scene by deterministic validated structure,
+  without treating archive order or identity as gameplay semantics.
 - [ ] Recover and corpus-validate faithful GMS hierarchy and RMC/RMI transform
   composition before enabling world-space scene placement.
 - [ ] Original-mode material/lighting reference path.

@@ -29,10 +29,50 @@ diagnostic single-mesh preview's selection rules do not apply to scene assets.
 Textures are decoded to owned RGBA8 mip-zero images once per referenced TEX
 entry. Mesh vertices, indexes, and draw ranges are copied into owned storage.
 
-`load_startup_scene_render_asset` applies this contract to the startup scene. It
-requires the paired PRM, TEX, and GMS resources plus both RMC and RMI layers,
+`load_scene_render_asset` applies this contract to any supplied scene archive.
+It requires the paired PRM, TEX, and GMS resources plus both RMC and RMI layers,
 preserves RMC before RMI in the map-layer order, and returns an asset with no
-references into archive or parser storage.
+references into archive or parser storage. `load_startup_scene_render_asset`
+retains the explicit startup-scene convenience path.
+
+The current diagnostic runtime uses
+`load_diagnostic_scene_render_asset`. It enumerates non-symlink ZIP files
+below the installation's scene directory, applies a case-independent relative
+path sort with an exact-path tie break, ignores archives that do not contain a
+complete scene resource set, validates complete candidates, and selects the
+first asset with at least one directly materialized instance. Invalid complete
+scene archives remain fatal rather than being silently skipped. The selected
+retail archive name is not logged or incorporated into public output.
+
+## Diagnostic archive selection
+
+Automatically choosing an archive with at least one directly materializable
+instance is permitted only as a renderer-development policy. It does not recover
+the retail startup sequence, level order, scene hierarchy, or camera. A public
+selector should therefore use a neutral name such as
+`load_diagnostic_scene_render_asset`, not `load_first_level` or
+`load_gameplay_scene`.
+
+Selection must be deterministic over the verified installation and based only on
+validated structural results: required scene-resource families parse, the owning
+scene asset validates, and its instance and draw-command sets are non-empty.
+Malformed candidates are errors rather than reasons to skip silently. A valid but
+empty candidate may be skipped, and failure to find an eligible candidate must be
+reported without falling back to unrelated geometry. The chosen archive path may
+remain transient local provenance, but it must not become a stable gameplay ID.
+
+Public logs should say `selected a structurally eligible source-only diagnostic
+scene` and may include aggregate mesh, instance, texture, and draw counts. They
+must not print a retail archive name, path, member name, object identifier, or a
+claim that the scene is the first, startup, campaign, or representative level.
+Tests should use project-authored archives whose ordering, empty candidates,
+malformed candidates, and selected counts are controlled explicitly.
+
+Aggregate selection measurements are safe to publish under the repository's
+clean-room policy when they reveal only counts or boolean coverage across the
+supported corpus. The identity, ordinal, filename, path, hashes, and extracted
+content of the selected retail archive are unnecessary for interoperability and
+should remain out of public selection reports.
 
 ## Validation and limits
 

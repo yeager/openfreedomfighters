@@ -150,6 +150,14 @@ if(BUILD_TESTING)
     target_link_libraries(off_render_preview_tests PRIVATE off_core)
     add_test(NAME off_render_preview_tests COMMAND off_render_preview_tests)
 
+    add_executable(off_scene_archive_selection_tests
+        tests/scene_archive_selection_tests.cpp)
+    target_link_libraries(off_scene_archive_selection_tests PRIVATE off_core)
+    target_compile_definitions(off_scene_archive_selection_tests PRIVATE
+        OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/scene-archive-selection-work")
+    add_test(NAME off_scene_archive_selection_tests
+        COMMAND off_scene_archive_selection_tests)
+
     add_executable(off_zgf_bundle_tests tests/zgf_bundle_tests.cpp)
     target_link_libraries(off_zgf_bundle_tests PRIVATE off_core)
     add_test(NAME off_zgf_bundle_tests COMMAND off_zgf_bundle_tests)

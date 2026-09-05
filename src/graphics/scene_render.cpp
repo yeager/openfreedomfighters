@@ -22,6 +22,10 @@ constexpr std::size_t maximum_scene_vertices = 16'000'000;
 constexpr std::size_t maximum_scene_indices = 32'000'000;
 constexpr std::size_t maximum_scene_draws = 4'000'000;
 constexpr std::size_t maximum_scene_rgba_bytes = 1024U * 1024U * 1024U;
+constexpr std::size_t maximum_scene_archives = 4096;
+constexpr std::size_t maximum_scene_directory_entries = 1024;
+constexpr std::array required_scene_extensions{".prm", ".tex", ".gms", ".rmc",
+                                               ".rmi"};
 
 void add_bounded(std::size_t &total, std::size_t value, std::size_t limit,
                  const char *message) {
@@ -56,15 +60,61 @@ unique_member_with_extension(const data::ZipArchive &archive,
     }
     if (match != nullptr) {
       throw std::runtime_error(
-          "startup archive contains duplicate scene-resource members");
+          "scene archive contains duplicate scene-resource members");
     }
     match = &entry;
   }
   if (match == nullptr) {
     throw std::runtime_error(
-        "startup archive does not contain the required scene resources");
+        "scene archive does not contain the required scene resources");
   }
   return *match;
+}
+
+[[nodiscard]] bool is_complete_scene_archive(const data::ZipArchive &archive) {
+  std::array<std::size_t, required_scene_extensions.size()> counts{};
+  for (const auto &entry : archive.entries()) {
+    const auto dot = entry.name.find_last_of('.');
+    if (dot == std::string::npos)
+      continue;
+    const auto extension = lowercase(entry.name.substr(dot));
+    const auto found = std::ranges::find(required_scene_extensions, extension);
+    if (found != required_scene_extensions.end()) {
+      ++counts[static_cast<std::size_t>(
+          std::distance(required_scene_extensions.begin(), found))];
+    }
+  }
+  return std::ranges::all_of(counts,
+                             [](std::size_t count) { return count != 0; });
+}
+
+[[nodiscard]] SceneRenderAsset
+build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
+  const auto primitive_bytes =
+      archive.read(unique_member_with_extension(archive, ".prm"));
+  const auto texture_bytes =
+      archive.read(unique_member_with_extension(archive, ".tex"));
+  const auto object_bytes =
+      archive.read(unique_member_with_extension(archive, ".gms"));
+  const auto rmc_bytes =
+      archive.read(unique_member_with_extension(archive, ".rmc"));
+  const auto rmi_bytes =
+      archive.read(unique_member_with_extension(archive, ".rmi"));
+
+  const auto primitives = data::PrimitiveCatalog::parse(primitive_bytes);
+  const auto textures = data::TextureCatalog::parse(texture_bytes);
+  const auto objects =
+      data::GmsImage::parse(data::PackedResource::parse(object_bytes));
+  const auto rmc = data::RenderMap::parse(rmc_bytes);
+  const auto rmi = data::RenderMap::parse(rmi_bytes);
+  const std::array maps{
+      SceneRenderMapView{.kind = SceneRenderMapKind::rmc,
+                         .entries = rmc.entries()},
+      SceneRenderMapView{.kind = SceneRenderMapKind::rmi,
+                         .entries = rmi.entries()},
+  };
+  return build_scene_render_asset(primitives.entries(), textures.images(),
+                                  objects.directory(), maps);
 }
 
 } // namespace
@@ -341,34 +391,68 @@ SceneRenderAsset build_scene_render_asset(
 }
 
 SceneRenderAsset
-load_startup_scene_render_asset(const std::filesystem::path &install_root) {
-  const auto archive =
-      data::ZipArchive::open(install_root / "Scenes" / "FF-StartUp.ZIP");
-  const auto primitive_bytes =
-      archive.read(unique_member_with_extension(archive, ".prm"));
-  const auto texture_bytes =
-      archive.read(unique_member_with_extension(archive, ".tex"));
-  const auto object_bytes =
-      archive.read(unique_member_with_extension(archive, ".gms"));
-  const auto rmc_bytes =
-      archive.read(unique_member_with_extension(archive, ".rmc"));
-  const auto rmi_bytes =
-      archive.read(unique_member_with_extension(archive, ".rmi"));
+load_scene_render_asset(const std::filesystem::path &archive_path) {
+  return build_scene_render_asset_from_archive(
+      data::ZipArchive::open(archive_path));
+}
 
-  const auto primitives = data::PrimitiveCatalog::parse(primitive_bytes);
-  const auto textures = data::TextureCatalog::parse(texture_bytes);
-  const auto objects =
-      data::GmsImage::parse(data::PackedResource::parse(object_bytes));
-  const auto rmc = data::RenderMap::parse(rmc_bytes);
-  const auto rmi = data::RenderMap::parse(rmi_bytes);
-  const std::array maps{
-      SceneRenderMapView{.kind = SceneRenderMapKind::rmc,
-                         .entries = rmc.entries()},
-      SceneRenderMapView{.kind = SceneRenderMapKind::rmi,
-                         .entries = rmi.entries()},
+SceneRenderAsset
+load_startup_scene_render_asset(const std::filesystem::path &install_root) {
+  return load_scene_render_asset(install_root / "Scenes" / "FF-StartUp.ZIP");
+}
+
+SceneRenderAsset
+load_diagnostic_scene_render_asset(const std::filesystem::path &install_root) {
+  const auto scenes_root = install_root / "Scenes";
+  std::vector<std::filesystem::path> candidates;
+  std::error_code error;
+  std::filesystem::recursive_directory_iterator iterator{
+      scenes_root, std::filesystem::directory_options::none, error};
+  const std::filesystem::recursive_directory_iterator end;
+  if (error)
+    throw std::runtime_error("could not enumerate the scene directory");
+  std::size_t entries = 0;
+  for (; iterator != end; iterator.increment(error)) {
+    if (error)
+      throw std::runtime_error("could not enumerate the scene directory");
+    if (++entries > maximum_scene_directory_entries)
+      throw std::runtime_error(
+          "scene archive directory exceeds the safety entry limit");
+    const auto status = iterator->symlink_status(error);
+    if (error)
+      throw std::runtime_error("could not inspect a scene directory entry");
+    if (std::filesystem::is_symlink(status) ||
+        !std::filesystem::is_regular_file(status) ||
+        lowercase(iterator->path().extension().string()) != ".zip") {
+      continue;
+    }
+    if (candidates.size() == maximum_scene_archives) {
+      throw std::runtime_error("scene archive count exceeds selection budget");
+    }
+    candidates.push_back(iterator->path());
+  }
+  if (error)
+    throw std::runtime_error("could not enumerate the scene directory");
+  const auto ordering_key = [&](const std::filesystem::path &path) {
+    return lowercase(path.lexically_relative(scenes_root).generic_string());
   };
-  return build_scene_render_asset(primitives.entries(), textures.images(),
-                                  objects.directory(), maps);
+  std::ranges::sort(candidates, [&](const auto &left, const auto &right) {
+    const auto left_key = ordering_key(left);
+    const auto right_key = ordering_key(right);
+    return left_key == right_key
+               ? left.generic_string() < right.generic_string()
+               : left_key < right_key;
+  });
+  for (const auto &path : candidates) {
+    const auto archive = data::ZipArchive::open(path);
+    if (!is_complete_scene_archive(archive))
+      continue;
+    auto asset = build_scene_render_asset_from_archive(archive);
+    if (!asset.instances.empty())
+      return asset;
+  }
+  throw std::runtime_error(
+      "installation contains no renderable direct-local scene archive");
 }
 
 } // namespace off::graphics

@@ -82,6 +82,12 @@ void validate_scene_render_asset(const SceneRenderAsset &asset);
     std::span<const SceneRenderMapView> maps);
 
 [[nodiscard]] SceneRenderAsset
+load_scene_render_asset(const std::filesystem::path &archive_path);
+
+[[nodiscard]] SceneRenderAsset
 load_startup_scene_render_asset(const std::filesystem::path &install_root);
+
+[[nodiscard]] SceneRenderAsset
+load_diagnostic_scene_render_asset(const std::filesystem::path &install_root);
 
 } // namespace off::graphics

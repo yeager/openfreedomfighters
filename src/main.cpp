@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
   off::graphics::SceneGpuPlan scene;
   try {
     scene = off::graphics::prepare_scene_gpu_plan(
-        off::graphics::load_startup_scene_render_asset(data_path));
+        off::graphics::load_diagnostic_scene_render_asset(data_path));
   } catch (const std::exception &error) {
     std::cerr << "Scene loading failed: " << error.what() << '\n';
     return 4;
