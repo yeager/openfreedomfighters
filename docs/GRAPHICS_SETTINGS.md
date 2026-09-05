@@ -167,9 +167,9 @@ The resolver preserves requested intent, emits deterministic capability fallback
 and rejects invalid enums and dimensions. The menu session implements non-repeated
 F10 open/close, draft cancellation, runtime apply acknowledgement, a 15-second
 confirmation deadline, explicit rollback acknowledgement, and commit only after
-success. It performs no SDL calls or persistence I/O. Modern+, DLSS, resolution
-scaling, and advanced rows remain specified but disabled until their broader
-settings fields and real renderer capability paths are implemented.
+success. It performs no SDL calls or persistence I/O. Modern+, DLSS intent,
+render scaling, upscaling, and shadow-quality rows are represented in the model;
+their real renderer implementations remain capability-gated and incomplete.
 
 Stage 2 now has a renderer-neutral, physical-pixel draw-list model with strict
 command, hit-target, and text-byte budgets. It emits the backdrop, centered
@@ -179,11 +179,21 @@ edits, so the view never invents interaction state.
 
 Stage 3 now routes F10, arrows, Enter, Space, and Escape through SDL and renders
 the list after the scene in a physical-pixel, alpha-blended, depth-free GPU pass.
-The temporary diagnostic font is generated from the pinned BSD-2-Clause Spleen
-2.2.0 source; no retail fonts are used. The implemented window mode, size,
+The runtime opens an embedded retail font directly from the validated startup
+archive bytes and rasterizes the current UTF-8 labels through checksum-pinned
+SDL_ttf without extracting or publishing the font. Bundle-order selection is
+provisional until the original font-role semantics are recovered. The implemented
+window mode, size,
 presentation mode, and Original/Modern profile apply transactionally through
 SDL, including the Keep/Revert timeout. Mouse/controller routing, persistence,
-and the production Unicode text backend remain open.
+font fallback, complex-script shaping, and recovered retail styling remain open.
+
+Stage 4 has recovered and implemented the authored 640x480 coordinate space,
+title and two-column anchors, seven-slot row rhythm, focused-state marker, and
+shared action anchor. Widescreen output centers that coordinate space without
+stretching it. Retail background tiles, borders, scanlines, arrows, exact colors,
+draw order, motion, and sound cues are not yet composed, so visual fidelity is
+still incomplete.
 
 The `--screenshot FILE.bmp` diagnostic path captures the final bounded frame
 (or the first frame without a frame limit), renders it into an application-owned

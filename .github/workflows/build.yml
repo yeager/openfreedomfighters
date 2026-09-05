@@ -48,7 +48,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build libvorbis-dev zlib1g-dev \
+          sudo apt-get install -y cmake ninja-build libvorbis-dev zlib1g-dev libfreetype-dev \
             libasound2-dev libpulse-dev libfribidi-dev libx11-dev libxext-dev \
             libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev \
             libxtst-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev \
@@ -79,11 +79,11 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install dependencies
-        run: brew install cmake libvorbis ninja zlib
+        run: brew install cmake freetype libvorbis ninja zlib
       - name: Build
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_PREFIX_PATH="$(brew --prefix zlib);$(brew --prefix libogg);$(brew --prefix libvorbis)"
+            -DCMAKE_PREFIX_PATH="$(brew --prefix zlib);$(brew --prefix freetype);$(brew --prefix libogg);$(brew --prefix libvorbis)"
           ninja -C build
       - name: Test
         run: ctest --test-dir build -j4 --output-on-failure
@@ -98,7 +98,7 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
-          cmake -S . -B build -DCMAKE_PREFIX_PATH="${{ github.workspace }}/zlib-install;${{ github.workspace }}/ogg-install;${{ github.workspace }}/vorbis-install"
+          cmake -S . -B build -DCMAKE_PREFIX_PATH="${{ github.workspace }}/zlib-install;${{ github.workspace }}/freetype-install;${{ github.workspace }}/ogg-install;${{ github.workspace }}/vorbis-install"
           cmake --build build --config Release --parallel 2
       - name: Test
         shell: pwsh

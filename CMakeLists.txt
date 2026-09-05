@@ -24,9 +24,8 @@ if(NOT SDL3_FOUND)
     FetchContent_MakeAvailable(SDL3)
 endif()
 
-# SDL_ttf's zlib-licensed GPU example provides one small, precompiled shader
-# pair in every SDL GPU format. Fetch only its source tree; SDL_ttf itself is
-# neither configured nor linked.
+# SDL_ttf provides both the portable in-memory retail-font rasterizer and one
+# small, zlib-licensed precompiled shader pair in every SDL GPU format.
 FetchContent_Declare(
     off_shader_assets
     URL https://github.com/libsdl-org/SDL_ttf/releases/download/release-3.2.2/SDL3_ttf-3.2.2.tar.gz
@@ -35,6 +34,18 @@ FetchContent_Declare(
     SOURCE_SUBDIR off-no-cmake-project
 )
 FetchContent_MakeAvailable(off_shader_assets)
+
+set(SDLTTF_INSTALL OFF CACHE BOOL "" FORCE)
+set(SDLTTF_SAMPLES OFF CACHE BOOL "" FORCE)
+set(SDLTTF_HARFBUZZ OFF CACHE BOOL "" FORCE)
+set(SDLTTF_PLUTOSVG OFF CACHE BOOL "" FORCE)
+set(SDLTTF_VENDORED OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+add_subdirectory(
+    "${off_shader_assets_SOURCE_DIR}"
+    "${CMAKE_CURRENT_BINARY_DIR}/off-sdl3-ttf"
+    EXCLUDE_FROM_ALL
+)
 
 if(TARGET SDL3::SDL3-static)
     set(OFF_SDL3_TARGET SDL3::SDL3-static)
@@ -86,7 +97,10 @@ add_executable(
     src/main.cpp
     src/platform/sdl_gpu_runtime.cpp
 )
-target_link_libraries(openfreedomfighters PRIVATE off_core ${OFF_SDL3_TARGET})
+target_link_libraries(
+    openfreedomfighters PRIVATE
+    off_core ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
+)
 target_include_directories(
     openfreedomfighters PRIVATE
     "${off_shader_assets_SOURCE_DIR}/examples"

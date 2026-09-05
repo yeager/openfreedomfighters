@@ -1,10 +1,10 @@
 name: Windows native dependencies
-description: Build pinned zlib, libogg, and libvorbis dependencies for MSVC
+description: Build pinned zlib, FreeType, libogg, and libvorbis dependencies for MSVC
 
 runs:
   using: composite
   steps:
-    - name: Build zlib, libogg, and libvorbis
+    - name: Build zlib, FreeType, libogg, and libvorbis
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
@@ -14,6 +14,12 @@ runs:
         cmake -S zlib-src -B zlib-build -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/zlib-install"
         cmake --build zlib-build --config Release --parallel 2
         cmake --install zlib-build --config Release
+
+        git clone --filter=blob:none https://github.com/freetype/freetype.git freetype-src
+        git -C freetype-src checkout 42608f77f20749dd6ddc9e0536788eaad70ea4b5
+        cmake -S freetype-src -B freetype-build -DBUILD_SHARED_LIBS=OFF -DFT_DISABLE_BZIP2=ON -DFT_DISABLE_BROTLI=ON -DFT_DISABLE_HARFBUZZ=ON -DFT_DISABLE_PNG=ON -DFT_DISABLE_ZLIB=ON -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/freetype-install"
+        cmake --build freetype-build --config Release --parallel 2
+        cmake --install freetype-build --config Release
 
         git clone --filter=blob:none https://github.com/xiph/ogg.git ogg-src
         git -C ogg-src checkout be05b13e98b048f0b5a0f5fa8ce514d56db5f822

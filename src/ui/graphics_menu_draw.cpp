@@ -13,6 +13,9 @@ constexpr UiColor row{38, 45, 58, 255};
 constexpr UiColor focus{232, 176, 55, 255};
 constexpr UiColor white{240, 243, 248, 255};
 constexpr UiColor muted{166, 174, 187, 255};
+constexpr float reference_width = 640.0F;
+constexpr float reference_height = 480.0F;
+constexpr std::size_t visible_option_slots = 7;
 
 bool contains(const UiRect &rect, float x, float y) {
   return x >= rect.x && y >= rect.y && x < rect.x + rect.width &&
@@ -126,14 +129,24 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
 
   const float width = static_cast<float>(target.width);
   const float height = static_cast<float>(target.height);
-  const float margin = std::min(16.0F * scale, std::min(width, height) * 0.1F);
-  const float panel_width =
-      std::max(1.0F, std::min(720.0F * scale, width - 2 * margin));
-  const float panel_height =
-      std::max(1.0F, std::min(500.0F * scale, height - 2 * margin));
-  const UiRect panel_rect{(width - panel_width) * 0.5F,
-                          (height - panel_height) * 0.5F, panel_width,
-                          panel_height};
+  const float fit =
+      std::min(width / reference_width, height / reference_height);
+  const float physical_scale = std::min(fit * scale, fit);
+  const float viewport_width = reference_width * physical_scale;
+  const float viewport_height = reference_height * physical_scale;
+  const float origin_x = (width - viewport_width) * 0.5F;
+  const float origin_y = (height - viewport_height) * 0.5F;
+  const UiRect panel_rect{origin_x, origin_y, viewport_width, viewport_height};
+  const auto point_x = [&](float value) {
+    return origin_x + value * physical_scale;
+  };
+  const auto point_y = [&](float value) {
+    return origin_y + value * physical_scale;
+  };
+  const auto reference_rect = [&](float x, float y, float w, float h) {
+    return UiRect{point_x(x), point_y(y), w * physical_scale,
+                  h * physical_scale};
+  };
   out.rectangles.push_back({UiLayer::backdrop, {0, 0, width, height}, dim});
   out.rectangles.push_back({UiLayer::panel, panel_rect, panel});
 
@@ -159,8 +172,7 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
     }
     return out;
   };
-  const float pad = std::min(28.0F * scale, panel_width * 0.08F);
-  if (!add_text(UiLayer::content, panel_rect.x + pad, panel_rect.y + pad,
+  if (!add_text(UiLayer::content, point_x(60.0F), point_y(155.0F),
                 "GRAPHICS SETTINGS")) {
     out.rectangles.clear();
     out.texts.clear();
@@ -177,25 +189,22 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
               .count();
       seconds = (milliseconds + 999) / 1000;
     }
-    add_text(UiLayer::modal, panel_rect.x + pad, panel_rect.y + 100 * scale,
+    add_text(UiLayer::modal, point_x(60.0F), point_y(185.0F),
              "Keep these display settings?");
-    add_text(UiLayer::modal, panel_rect.x + pad, panel_rect.y + 130 * scale,
+    add_text(UiLayer::modal, point_x(60.0F), point_y(203.0F),
              "Reverting in " + std::to_string(seconds) + " seconds");
-    const UiRect keep{panel_rect.x + pad,
-                      panel_rect.y + panel_height - 70 * scale, 150 * scale,
-                      42 * scale};
-    const UiRect revert{keep.x + 170 * scale, keep.y, 150 * scale, keep.height};
+    const UiRect keep = reference_rect(60.0F, 400.0F, 150.0F, 18.0F);
+    const UiRect revert = reference_rect(230.0F, 400.0F, 150.0F, 18.0F);
     out.hit_targets.push_back({keep, UiControl::keep, seconds > 0});
     out.hit_targets.push_back({revert, UiControl::revert, true});
-    add_text(UiLayer::modal, keep.x + 12 * scale, keep.y + 12 * scale, "Keep");
-    add_text(UiLayer::modal, revert.x + 12 * scale, revert.y + 12 * scale,
-             "Revert");
+    add_text(UiLayer::modal, keep.x, keep.y, "Keep");
+    add_text(UiLayer::modal, revert.x, revert.y, "Revert");
     return finish();
   }
 
   if (menu.phase() == GraphicsMenuPhase::applying ||
       menu.phase() == GraphicsMenuPhase::reverting) {
-    add_text(UiLayer::modal, panel_rect.x + pad, panel_rect.y + 110 * scale,
+    add_text(UiLayer::modal, point_x(60.0F), point_y(185.0F),
              menu.phase() == GraphicsMenuPhase::applying
                  ? "Applying settings..."
                  : "Restoring settings...");
@@ -218,51 +227,46 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
                             UiControl::window_size,  UiControl::present_mode,
                             UiControl::render_scale, UiControl::upscaler,
                             UiControl::shadows};
-  const float row_gap =
-      std::max(3.0F, std::min(8.0F * scale, panel_height * 0.015F));
-  const float row_height = std::max(
-      20.0F, std::min(52.0F * scale,
-                      (panel_height - 140.0F * scale - 6.0F * row_gap) / 7.0F));
-  float y = panel_rect.y + 70 * scale;
-  for (std::size_t i = 0; i < labels.size(); ++i) {
-    const UiRect bounds{panel_rect.x + pad, y, panel_width - 2 * pad,
-                        row_height};
-    out.rectangles.push_back({UiLayer::content, bounds, row});
+  static_assert(labels.size() == visible_option_slots);
+  for (std::size_t i = 0; i < visible_option_slots; ++i) {
+    const float reference_y = 185.0F + static_cast<float>(i) * 18.0F;
+    // The broad pointer target is a portable accessibility policy. Retail
+    // evidence supplies the anchors and rhythm, but not the final hit box.
+    const UiRect bounds =
+        reference_rect(60.0F, reference_y - 2.0F, 520.0F, 18.0F);
     out.hit_targets.push_back({bounds, controls[i], true});
-    add_text(UiLayer::content, bounds.x + 12 * scale, bounds.y + 12 * scale,
-             labels[i], muted);
-    add_text(UiLayer::content, bounds.x + bounds.width * 0.52F,
-             bounds.y + 12 * scale, values[i]);
+    add_text(UiLayer::content, point_x(60.0F), point_y(reference_y), labels[i],
+             muted);
+    add_text(UiLayer::content, point_x(400.0F), point_y(reference_y),
+             values[i]);
     if (static_cast<std::size_t>(menu.selected_row()) == i) {
-      out.rectangles.push_back({UiLayer::focus, bounds, focus});
+      // The retail menu swaps a 16x16 focused child at the row-state anchor.
+      // This rectangle is only a draw-list marker until that retail image is
+      // decoded and uploaded; it deliberately does not cover the row.
+      out.rectangles.push_back(
+          {UiLayer::focus,
+           reference_rect(44.0F, reference_y - 2.0F, 16.0F, 16.0F), focus});
     }
-    y += row_height + row_gap;
   }
-  const float button_gap = std::min(20.0F * scale, panel_width * 0.03F);
-  const float button_width =
-      std::max(1.0F, (panel_width - 2.0F * pad - 2.0F * button_gap) / 3.0F);
-  const UiRect apply{panel_rect.x + pad,
-                     panel_rect.y + panel_height - 62 * scale, button_width,
-                     40 * scale};
-  const UiRect cancel{apply.x + button_width + button_gap, apply.y,
-                      button_width, apply.height};
-  const UiRect defaults{cancel.x + button_width + button_gap, apply.y,
-                        button_width, apply.height};
-  out.hit_targets.push_back({apply, UiControl::apply, true});
-  out.hit_targets.push_back({cancel, UiControl::cancel, true});
-  out.hit_targets.push_back({defaults, UiControl::defaults, true});
-  add_text(UiLayer::content, apply.x + 12 * scale, apply.y + 11 * scale,
-           "Apply");
-  add_text(UiLayer::content, cancel.x + 12 * scale, cancel.y + 11 * scale,
-           "Cancel");
-  add_text(UiLayer::content, defaults.x + 12 * scale, defaults.y + 11 * scale,
-           "Defaults");
-  if (menu.selected_row() == GraphicsMenuRow::apply) {
-    out.rectangles.push_back({UiLayer::focus, apply, focus});
-  } else if (menu.selected_row() == GraphicsMenuRow::cancel) {
-    out.rectangles.push_back({UiLayer::focus, cancel, focus});
+  // Retail Apply and Back occupy the same authored anchor and are selected as
+  // states, rather than being laid out as simultaneous horizontal buttons.
+  auto action = UiControl::apply;
+  auto action_text = std::string{"Apply"};
+  if (menu.selected_row() == GraphicsMenuRow::cancel) {
+    action = UiControl::cancel;
+    action_text = "Back";
   } else if (menu.selected_row() == GraphicsMenuRow::defaults) {
-    out.rectangles.push_back({UiLayer::focus, defaults, focus});
+    action = UiControl::defaults;
+    action_text = "Defaults";
+  }
+  const UiRect action_bounds = reference_rect(60.0F, 398.0F, 160.0F, 18.0F);
+  out.hit_targets.push_back({action_bounds, action, true});
+  add_text(UiLayer::content, point_x(60.0F), point_y(400.0F), action_text);
+  if (menu.selected_row() == GraphicsMenuRow::apply ||
+      menu.selected_row() == GraphicsMenuRow::cancel ||
+      menu.selected_row() == GraphicsMenuRow::defaults) {
+    out.rectangles.push_back(
+        {UiLayer::focus, reference_rect(44.0F, 398.0F, 16.0F, 16.0F), focus});
   }
   return finish();
 }
