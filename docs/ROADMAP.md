@@ -116,6 +116,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Implement ordinary picture projection and viewport mapping from explicit
   resolved frustum values and an established integer viewport, preserving
   clip W=Z without repeating the picture basis or inventing camera defaults.
+- [x] Implement both explicit camera half-extent producers and the normalized
+  viewport-request producer, including distinct zero-dimension rules. Actual
+  startup camera selection and GPU integration remain unverified.
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
 - [ ] Audio mixing, device output, streaming voices, and positional sound as
   specified by the [audio runtime contract](AUDIO_RUNTIME.md). Audio-bank

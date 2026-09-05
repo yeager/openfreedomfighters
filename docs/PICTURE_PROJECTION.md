@@ -68,10 +68,9 @@ These are project safety constraints, not recovered error diagnostics.
 
 ## Remaining integration requirements
 
-This operation does not select the startup camera, derive half-extents from
-camera parameters or choose final draw-time pass state. Raw viewport conversion
-accepts explicit requests; their upstream camera/rectangle arithmetic and edge cases
-remain separate from this explicit mathematical boundary. No guessed near,
+The resolved-input operation does not select the startup camera or choose
+final draw-time pass state. The separate producer below derives half-extents
+and raw viewport requests from explicit camera/rectangle inputs. No guessed near,
 far, field of view or backbuffer rectangle is supplied to the native renderer.
 GPU integration, clipping, rasterizer sample locations and final compositing
 still require matching evidence.
@@ -83,3 +82,51 @@ These are conditional mathematical tests, not original camera or pixel-fidelity
 evidence.
 Raw-conversion tests separately cover all four fields, fractional signs,
 subnormal values, modulo wrap and both signed64 domain boundaries.
+
+## Explicit camera/view producer
+
+The separate view-parameter producer accepts a pass rectangle, raw near,
+selected far, renderer dimension-query values D0/D1 and camera virtual aspect
+A. These are supplied inputs, not dimensions inferred from texture images or
+the host display. The near value is lower-bounded at 5 in this producer only.
+
+For projection arithmetic, rectangle width W and height H are right-left and
+bottom-top; a zero dimension is replaced with 1. Signed nonzero dimensions
+remain signed. Define R=D0/D1, V=W/H and K=A*(R/V). The ordinary camera branch
+uses explicit angle in radians and scalar E:
+
+```text
+h0 = tan(angle/2) * n
+h1 = ((h0 * (1/R)) * K) * E
+```
+
+The alternate camera branch takes two separately named scalars p0/p1:
+
+```text
+h0 = 1/(2*p0)
+h1 = ((1/(2*p1*(1/R))) * (1/R)) * K
+f  = 2 * selected_far
+```
+
+The repeated ratio operations are not algebraically cancelled. The alternate
+branch still constructs the ordinary perspective-shaped matrix with clip W=Z;
+it is not labeled orthographic. E is explicit in the ordinary branch, although
+the inspected D3D8 facade returns 1. No upstream camera-angle conversion or
+final startup branch selection is inferred.
+
+The portable producer uses ordered double arithmetic and checked binary32
+resolved values before matrix construction. All consumed inputs must be finite;
+zero divisors, nonfinite intermediates and unrepresentable outputs are errors.
+The existing resolved projection checks far>near and nonzero half-extents still
+apply. These numerical/valid-frustum policies do not emulate original exception
+handling or claim bit-exact intermediate rounding. Tangent uses the host math
+library; signed-zero clamp results are not a fidelity guarantee. Failure does
+not return partial output.
+
+A separate normalized viewport-request producer uses the original rectangle
+dimensions, with no zero-dimension substitution. It lower-bounds a/b at zero
+and upper-bounds c/d at one, then computes `(L+W*a,T+H*b,W*c,H*d)`.
+It does not fully clamp all four components or treat c/d as endpoints. The
+binary32 result is a raw request for the previously described conversion,
+not proof of a valid viewport. Actual startup inputs and their event history
+remain unverified.

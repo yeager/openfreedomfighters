@@ -106,6 +106,9 @@ Later CPU-loading failures also show a diagnostic over the artwork and exit
 with runtime-error status 4, without falling back to placeholder assets.
 The exact lifecycle and current window-handoff limitation are documented in
 [Native startup splash](docs/STARTUP_SPLASH.md).
+The refreshed red, ivory and black splash is generated project branding at
+1672×941 native resolution, aspect-fitted without stretching; see
+[artwork and generation provenance](assets/branding/README.md).
 `--show-graphics-menu` opens the same overlay immediately for bounded visual
 smoke tests. During normal play, F10 opens and closes it.
 `--screenshot FILE.bmp` captures the final composed frame when `--frame-limit`
@@ -179,6 +182,10 @@ See [Conditional picture projection](docs/PICTURE_PROJECTION.md).
 The raw viewport setter conversion also preserves truncation and low-32-bit
 wrapping, with unsupported math-error cases rejected explicitly. Conversion
 does not itself establish a usable viewport or select the original camera.
+An explicit-input camera producer now covers both ordinary and alternate
+half-extent formulas, the near lower bound, and one-sided normalized viewport
+bounds. It feeds the validated projection boundary without assuming which
+camera or pass rectangle the startup frame selects.
 Recovered picture constructors default both extent scales to `1.0`; descriptor
 bounds are not substituted for the still-explicit runtime extent, matrix,
 visitor, or projection inputs.
