@@ -9,6 +9,7 @@ The first Phase 1 component is a read-only ZIP archive reader and overlay virtua
 - ZIP64, encrypted members, split archives, unsupported compression methods, and inconsistent directories are rejected.
 - The engine-specific footer observed after 89 of the 90 retail ZIP end records is accepted up to a strict 4 KiB trailing-data limit.
 - Absolute paths, drive-qualified paths, NUL bytes, empty path segments, and `.` or `..` segments are rejected.
+- Safe, empty ZIP directory records are validated and omitted from the file index; directory records carrying payload bytes are rejected.
 - Paths are normalized to forward slashes and compared case-insensitively. Duplicate normalized member names within one archive are rejected.
 - Local and central headers must agree on flags, compression method, and normalized filename.
 - Every extracted payload is checked against its declared size and CRC-32.
@@ -18,6 +19,7 @@ The first Phase 1 component is a read-only ZIP archive reader and overlay virtua
 - Directory mounts reject symbolic links, normalized-name collisions, files larger than 256 MiB, and declared totals larger than 1 GiB.
 - Loose files expose bounded random-access views, allowing global audio banks and other large sources to be consumed in small chunks without whole-file allocation.
 - A random-access view detects replacement, resizing, or conversion of its source into a symbolic link before each read.
+- Scene `SUP` resources are parsed as bounded `DLCF` dependency lists in both observed scalar and array layouts.
 
 These rules protect the native runtime from malformed user-supplied data. They do not yet define the complete game-data mount lifecycle or any resource-family schema.
 
@@ -29,4 +31,6 @@ Private executable evidence reports that an older archive entry is invalidated w
 
 No retail payload or filename inventory is embedded in the test fixtures.
 
-The first format model above the VFS is documented in [AUDIO_FORMAT.md](AUDIO_FORMAT.md).
+The installation verifier parses the single `SUP` member in each of all 90 scene archives, including decompression and CRC validation, and checks that the corpus shape matches the supported build. The format is documented in [SCENE_SUPPORT_FORMAT.md](SCENE_SUPPORT_FORMAT.md).
+
+The audio format model is documented in [AUDIO_FORMAT.md](AUDIO_FORMAT.md).

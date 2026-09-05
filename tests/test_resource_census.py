@@ -26,6 +26,19 @@ class ResourceCensusTests(unittest.TestCase):
                     struct.pack("<III", 0x00414E4D, 1, 16) + b"a" * 4,
                 )
                 archive.writestr("SCENES/ONE.PRM", b"PRM!" + b"b" * 4)
+                archive.writestr(
+                    "SCENES/ONE.SUP",
+                    struct.pack(
+                        "<IIIIII",
+                        0,
+                        0x80000024,
+                        36,
+                        1,
+                        0x46434C44,
+                        20,
+                    )
+                    + b"fixture.dlc\0",
+                )
             with zipfile.ZipFile(root / "two.ZIP", "w") as archive:
                 archive.writestr(
                     "SCENES/TWO.ANM",
@@ -34,7 +47,7 @@ class ResourceCensusTests(unittest.TestCase):
             result = MODULE.census(root)
 
         self.assertEqual(result["archive_count"], 2)
-        self.assertEqual(result["member_count"], 3)
+        self.assertEqual(result["member_count"], 4)
         animation = result["formats"][".anm"]
         self.assertEqual(animation["count"], 2)
         self.assertEqual(animation["common_prefix_hex"], "4d4e4100")
@@ -47,6 +60,20 @@ class ResourceCensusTests(unittest.TestCase):
             animation["known_invariants"]["word_2_is_file_size"],
             {"passed": 2, "failed": 0},
         )
+        support = result["formats"][".sup"]
+        for invariant in (
+            "word_0_is_zero",
+            "word_1_is_flagged_file_size",
+            "word_2_is_file_size",
+            "word_3_is_one",
+            "word_4_is_DLCF",
+            "DLCF_descriptor_size_matches",
+            "DLCF_layout_is_scalar_or_array",
+        ):
+            self.assertEqual(
+                support["known_invariants"][invariant],
+                {"passed": 1, "failed": 0},
+            )
 
 
 if __name__ == "__main__":

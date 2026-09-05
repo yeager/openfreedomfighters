@@ -35,7 +35,7 @@ Confirmed structural invariants (32-bit words are zero-indexed):
 
 - All three archives contain the same 12 base resource families. The campaign scene adds `ANM`.
 - `ZGF` word 1 exactly equals total `ZGF` byte length in all three.
-- `SUP` word 0 is zero and word 2 equals total `SUP` byte length in all three.
+- `SUP` word 0 is zero, word 1 is the byte length with bit 31 set, word 2 is the byte length, word 3 is one, and word 4 is the `DLCF` tag. The low 30 bits of word 5 equal the byte length minus 16; its top bits select the scalar or array dependency-list representation.
 - `GMS` word 1 exactly equals total `GMS` byte length in all three.
 - `TEX` word 0 equals total length minus 16,384 bytes; word 1 equals word 0 plus 8,192; words 2 and 3 are consistently `3` and `4`.
 - `SND` word 0 equals total length minus 48 bytes; word 1 equals total byte length; words 2 and 3 are consistently `3` and `4`.
@@ -43,7 +43,7 @@ Confirmed structural invariants (32-bit words are zero-indexed):
 - The sampled `ANM` begins with `MNA\0`, has total byte length in word 2, then values `12` and `10` in words 3 and 4. All 42 `ANM` files share only the four-byte signature, so later header fields vary.
 - `RMC` and `RMI` are byte-identical in both loader/startup scenes (132 bytes each) but diverge in the campaign scene. This supports paired render metadata with a shared empty/default representation.
 
-The rules above were then promoted to validators and checked against the full corpus. `ZGF`, `SUP`, `GMS`, `SND`, `PRM`, and `ANM` pass every stated rule in every observed file. `TEX` passes the size and `3,4` rules in all 90 files; word 1 has an 88-file normal variant (`word 0 + 8,192`) and a two-file empty variant (`word 0`). The next step is to locate section offsets from these length equations and test mutations against synthetic fixtures.
+The rules above were then promoted to validators and checked against the full corpus. `ZGF`, `SUP`, `GMS`, `SND`, `PRM`, and `ANM` pass every stated rule in every observed file. `TEX` passes the size and `3,4` rules in all 90 files; word 1 has an 88-file normal variant (`word 0 + 8,192`) and a two-file empty variant (`word 0`). `SUP` has since graduated to a native parser with synthetic mutation tests; see [SCENE_SUPPORT_FORMAT.md](SCENE_SUPPORT_FORMAT.md). The next step for the remaining families is to locate section offsets from these length equations and test mutations against synthetic fixtures.
 
 ## Reproduce
 

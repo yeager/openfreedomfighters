@@ -170,6 +170,22 @@ void test_zip_reader() {
     check(!off::data::is_safe_archive_path("C:/drive"), "reject drive archive path");
     check(!off::data::is_safe_archive_path("empty//segment"), "reject empty archive path segment");
 
+    const auto directory_path = work / "directory.zip";
+    write_test_zip(directory_path, "SCENES/", "", 0, false);
+    check(
+        off::data::ZipArchive::open(directory_path).entries().empty(),
+        "accept and omit a safe empty ZIP directory entry"
+    );
+    const auto directory_data_path = work / "directory-data.zip";
+    write_test_zip(directory_data_path, "SCENES/", "x", 0, false);
+    bool directory_data_rejected = false;
+    try {
+        static_cast<void>(off::data::ZipArchive::open(directory_data_path));
+    } catch (const std::runtime_error&) {
+        directory_data_rejected = true;
+    }
+    check(directory_data_rejected, "reject ZIP directory entries containing data");
+
     const auto corrupt_path = work / "corrupt.zip";
     constexpr std::string_view corrupt_name = "SCENES/Corrupt.ZGF";
     write_test_zip(corrupt_path, corrupt_name, "synthetic-payload", 0, false);

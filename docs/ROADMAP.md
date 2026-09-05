@@ -32,6 +32,7 @@ Gate: a new contributor can generate the same structural report from a supported
 - [x] Add bounded streaming views for global audio banks and other large files.
 - [x] Parse all audio-bank headers and validate local/global payload ranges.
 - [x] Decode confirmed PCM, IMA ADPCM, and Ogg Vorbis stream families.
+- [x] Parse and corpus-validate scene-support dependency lists.
 - [ ] Safe, bounds-checked readers for all required formats.
 - [ ] Texture, mesh, material, skeleton, animation, audio, localization, and spatial data models.
 - [ ] Fuzz targets and synthetic fixtures for every parser.

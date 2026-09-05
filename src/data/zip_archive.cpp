@@ -33,6 +33,13 @@ constexpr std::uint64_t maximum_total_size = 1024ULL * 1024ULL * 1024ULL;
     return result;
 }
 
+[[nodiscard]] bool is_safe_directory_path(std::string_view name) noexcept {
+    if (name.size() < 2 || (name.back() != '/' && name.back() != '\\')) {
+        return false;
+    }
+    return is_safe_archive_path(name.substr(0, name.size() - 1));
+}
+
 [[nodiscard]] std::vector<std::byte> read_file(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary | std::ios::ate);
     if (!input) {
@@ -146,10 +153,14 @@ ZipArchive ZipArchive::open(const std::filesystem::path& path) {
         const auto record_size = static_cast<std::size_t>(46) + name_size + extra_size + comment_size;
         const auto name_bytes = reader.slice(position + 46, name_size);
         std::string name(reinterpret_cast<const char*>(name_bytes.data()), name_bytes.size());
-        if (!is_safe_archive_path(name)) {
+        const auto directory = is_safe_directory_path(name);
+        if (!directory && !is_safe_archive_path(name)) {
             throw std::runtime_error("unsafe path in ZIP archive");
         }
-        if (!normalized_names.insert(normalized(name)).second) {
+        const auto identity = directory
+            ? normalized(std::string_view{name}.substr(0, name.size() - 1))
+            : normalized(name);
+        if (!normalized_names.insert(identity).second) {
             throw std::runtime_error("duplicate normalized path in ZIP archive");
         }
         if (disk != 0 || (flags & 1U) != 0U) {
@@ -157,6 +168,13 @@ ZipArchive ZipArchive::open(const std::filesystem::path& path) {
         }
         if (method != 0 && method != 8) {
             throw std::runtime_error("unsupported ZIP compression method");
+        }
+        if (directory) {
+            if (method != 0 || compressed_size != 0 || uncompressed_size != 0) {
+                throw std::runtime_error("ZIP directory entry contains file data");
+            }
+            position += record_size;
+            continue;
         }
         if (uncompressed_size > maximum_entry_size) {
             throw std::runtime_error("ZIP entry exceeds the safety size limit");

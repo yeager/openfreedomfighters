@@ -42,10 +42,23 @@ def _known_invariants(extension: str, size: int, prefix: bytes) -> dict[str, boo
             "words_2_and_3_are_3_4": words[2:4] == [3, 4],
         }
     if extension == ".sup" and len(words) >= 3:
-        return {
+        invariants = {
             "word_0_is_zero": words[0] == 0,
+            "word_1_is_flagged_file_size": words[1] == (size | 0x80000000),
             "word_2_is_file_size": words[2] == size,
         }
+        if len(words) >= 6:
+            invariants.update(
+                {
+                    "word_3_is_one": words[3] == 1,
+                    "word_4_is_DLCF": words[4] == 0x46434C44,
+                    "DLCF_descriptor_size_matches":
+                        (words[5] & 0x3FFFFFFF) == size - 16,
+                    "DLCF_layout_is_scalar_or_array":
+                        (words[5] & 0xC0000000) in (0, 0x40000000),
+                }
+            )
+        return invariants
     if extension == ".tex" and len(words) >= 4:
         return {
             "word_0_is_file_size_minus_16384": words[0] == size - 16384,

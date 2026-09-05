@@ -5,6 +5,7 @@
 #include "off/data/archive_vfs.hpp"
 #include "off/data/audio_bank_header.hpp"
 #include "off/data/byte_reader.hpp"
+#include "off/data/scene_support.hpp"
 #include "off/data/zip_archive.hpp"
 
 #include <algorithm>
@@ -166,6 +167,38 @@ InstallVerification verify_install(const std::filesystem::path& root) {
                 InstallError::incomplete_game_data,
                 root,
                 "audio header corpus does not match the supported build"
+            );
+        }
+
+        std::size_t scene_archive_count = 0;
+        std::size_t scene_support_count = 0;
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(root / "Scenes")) {
+            if (!entry.is_regular_file() || lowercase(entry.path().extension().string()) != ".zip") {
+                continue;
+            }
+            const auto archive = ZipArchive::open(entry.path());
+            std::size_t support_files_in_archive = 0;
+            for (const auto& member : archive.entries()) {
+                if (lowercase(std::filesystem::path(member.name).extension().string()) != ".sup") {
+                    continue;
+                }
+                const auto support = SceneSupport::parse(archive.read(member));
+                if (support.dependencies().empty()) {
+                    throw std::runtime_error("scene-support dependency list is empty");
+                }
+                ++support_files_in_archive;
+                ++scene_support_count;
+            }
+            if (support_files_in_archive != 1) {
+                throw std::runtime_error("scene archive does not contain exactly one support file");
+            }
+            ++scene_archive_count;
+        }
+        if (scene_archive_count != 90 || scene_support_count != scene_archive_count) {
+            return failure(
+                InstallError::incomplete_game_data,
+                root,
+                "scene-support corpus does not match the supported build"
             );
         }
 

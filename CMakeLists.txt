@@ -13,6 +13,7 @@ add_library(off_core
     src/data/archive_vfs.cpp
     src/data/audio_bank_header.cpp
     src/data/install.cpp
+    src/data/scene_support.cpp
     src/data/vfs_file_view.cpp
     src/data/zip_archive.cpp
 )
@@ -47,4 +48,8 @@ if(BUILD_TESTING)
     add_executable(off_audio_decode_tests tests/audio_decode_tests.cpp)
     target_link_libraries(off_audio_decode_tests PRIVATE off_core Vorbis::vorbisenc)
     add_test(NAME off_audio_decode_tests COMMAND off_audio_decode_tests)
+
+    add_executable(off_scene_support_tests tests/scene_support_tests.cpp)
+    target_link_libraries(off_scene_support_tests PRIVATE off_core)
+    add_test(NAME off_scene_support_tests COMMAND off_scene_support_tests)
 endif()
