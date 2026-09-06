@@ -10,6 +10,15 @@ namespace {
 constexpr std::array<float,9> engine_identity{0,0,1,0,1,0,1,0,0};
 }
 
+audio::SoundRecord& IntroRuntimeSound::record() {
+  if (failed_) throw std::runtime_error("Intro sound owner is failed");
+  return lease_.get();
+}
+const audio::SoundRecord& IntroRuntimeSound::record() const {
+  if (failed_) throw std::runtime_error("Intro sound owner is failed");
+  return lease_.get();
+}
+
 IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::ApplicationServices& application,
                            runtime::SceneComponentSequence& component_sequence)
     : application_(application), resources_(std::move(resources)), components_(component_sequence),
@@ -84,6 +93,82 @@ IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::Applicat
     picture->cache_.invalidate();
     picture->colors_->refresh_material(source->source.base_render_property);
     pictures_.push_back(std::move(picture));
+  }
+  // Normal, non-restore source loading under the explicit native logical-backend
+  // policy. This allocates records but neither publishes owner bindings nor
+  // runs owner/component initialization, opens a device, or starts a channel.
+  sounds_.reserve(resources_.sounds().size());
+  for (const auto& source : resources_.sounds()) {
+    auto owner = std::make_unique<IntroRuntimeSound>();
+    owner->source_ = &source;
+    owner->handle_ = source_handle(source.directory_index);
+    owner->lease_ = application_.sound_records().create(owner->handle_.value);
+    application_.sound_records().apply_source(owner->lease_.get(),source.source);
+    sounds_.push_back(std::move(owner));
+  }
+}
+
+IntroRuntimeSound& IntroRuntime::sound_for_source(std::size_t source) {
+  for (auto& sound : sounds_) if (sound->source_index() == source) return *sound;
+  throw std::runtime_error("Intro source has no retained sound owner");
+}
+
+void IntroRuntime::stop_sound_owner(std::size_t source) {
+  if (sound_preparation_busy_) throw std::runtime_error("Reentrant intro sound control is unsupported");
+  auto& owner=sound_for_source(source);
+  static_cast<void>(owner.record());
+  if (owner.active_) {
+    application_.sound_records().stop(owner.owner_binding_);
+    owner.active_=false;
+  }
+}
+
+void IntroRuntime::prepare_sound_owner(std::size_t source,
+    const IntroSoundPreparationServices& services) {
+  if (sound_preparation_busy_) throw std::runtime_error("Reentrant intro sound preparation is unsupported");
+  if (!services.resource_flags || !services.parent_owner || !services.spatial_state ||
+      !services.owner_enable_requested || !services.enable_owner)
+    throw std::runtime_error("Missing live intro sound-owner preparation service");
+  if (!application_.clock().ready() || application_.clock().failed())
+    throw std::runtime_error("Intro sound preparation requires a valid application clock");
+  auto& owner = sound_for_source(source);
+  auto& record = owner.record();
+  const auto& bank = resources_.sound_bank();
+  if (!bank || !record.active_source)
+    throw std::runtime_error("Intro sound preparation requires an assigned SND source");
+  struct BusyGuard {
+    bool& flag;
+    explicit BusyGuard(bool& value) : flag(value) { flag=true; }
+    ~BusyGuard() { flag=false; }
+  } guard(sound_preparation_busy_);
+  try {
+    record.start_time = std::bit_cast<std::uint32_t>(application_.clock().state().raw_integer);
+    record.parent = services.parent_owner(owner.handle_).value;
+    owner.owner_binding_ = owner.lease_.binding();
+    record.alternate_source = *record.active_source;
+    if ((services.resource_flags(owner.handle_) & 0x400U) != 0) return;
+    record.playback_state = 3;
+    if (!application_.sound_records().prepare(owner.owner_binding_,*bank,
+          std::bit_cast<std::uint32_t>(application_.clock().state().raw_integer))) {
+      record.flags &= 0x2U;
+      if (record.flags != 0)
+        throw std::runtime_error("Failed intro sound preparation requires unsupported owner disposal");
+      return;
+    }
+    const auto spatial = services.spatial_state(owner.handle_);
+    for (float value : spatial.position)
+      if (!std::isfinite(value)) throw std::runtime_error("Invalid live sound position");
+    for (float value : spatial.direction)
+      if (!std::isfinite(value)) throw std::runtime_error("Invalid live sound direction");
+    record.position = spatial.position;
+    record.direction = spatial.direction;
+    if (services.owner_enable_requested()) services.enable_owner(owner.handle_);
+    owner.active_ = true;
+  } catch (...) {
+    // Preserve completed mutations for diagnosis, but prohibit further owner
+    // callbacks. Whole-host destruction releases leases after component captures.
+    owner.failed_ = true;
+    throw;
   }
 }
 

@@ -1,14 +1,14 @@
 # Application clock and sound preferences
 
-`ApplicationServices` owns the clock, application text configuration and sound
-preferences. `IntroRuntime` borrows it: constructing a scene does not reset the
+`ApplicationServices` owns the clock, application text configuration, sound
+preferences and canonical sound-record registry. `IntroRuntime` borrows it: constructing a scene does not reset the
 application. The owner must outlive the scene and all callbacks bound from it.
 
 Normal startup resets this clock before CPU resource loading. The retained
 intro controller's phase-two entry point binds clock and volume operations to
 this same owner, preserving caller-supplied input, global numeric-property and
 renderer services. Normal startup does not invoke phase two or run the scene
-update loop yet. The current application has no audio backend.
+update loop yet. The logical sound backend has no output device or channel pump.
 
 ## Clock
 
@@ -57,8 +57,12 @@ completed effects; the setter does not promise rollback or recovery.
 
 These text stores are not the global numeric properties used by controller
 initialization. Backend absence does not imply absent global properties and does
-not emit a sound-ready event. No linear gain approximation replaces the original
-backend's unresolved response curve. There is no disk writer or music playback.
+not emit a sound-ready event. By default, requests now reach the same backend
+that retains intro sound records. Its mode-2 response is independently
+reconstructed, including category selection and pending-update state; see
+[intro sound runtime](INTRO_SOUND_RUNTIME.md). An explicitly supplied resolver
+remains available for external service injection. There is no disk writer or
+music playback.
 
 ## Verification
 

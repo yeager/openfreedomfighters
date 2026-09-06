@@ -46,7 +46,7 @@ struct GmsIntroSoundOwnerPrefix {
     std::uint32_t legacy_integer{};
     std::uint32_t loop_option{};
     float gain_multiplier{};
-    float pitch_scalar{};
+    float range_input_scalar{};
     std::uint32_t category{};
     std::uint32_t enabled_option{};
     float final_scalar{};

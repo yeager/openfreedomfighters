@@ -903,7 +903,7 @@ GmsIntroSoundOwnerPrefix GmsImage::intro_sound_owner_prefix(std::size_t index) c
     result.legacy_integer=scalar(0x03);
     result.loop_option=scalar(0x03);
     result.gain_multiplier=real();
-    result.pitch_scalar=real();
+    result.range_input_scalar=real();
     result.category=scalar(0x03);
     result.enabled_option=scalar(0x03);
     result.final_scalar=real();

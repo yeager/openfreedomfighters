@@ -21,6 +21,44 @@ struct IntroRuntimeHandle {
   bool operator==(const IntroRuntimeHandle&) const = default;
 };
 
+// Canonical record lease, not an audio channel. Owner binding is published by
+// the explicit pre-hook; source construction must not mark this owner active.
+class IntroRuntimeSound final {
+public:
+  [[nodiscard]] std::size_t source_index() const noexcept { return source_->directory_index; }
+  [[nodiscard]] IntroRuntimeHandle handle() const noexcept { return handle_; }
+  [[nodiscard]] audio::SoundRecord& record();
+  [[nodiscard]] const audio::SoundRecord& record() const;
+  [[nodiscard]] std::uint64_t owner_binding() const noexcept { return owner_binding_; }
+  [[nodiscard]] bool active() const noexcept { return active_; }
+  [[nodiscard]] bool failed() const noexcept { return failed_; }
+private:
+  friend class IntroRuntime;
+  const IntroPreparedSound* source_{};
+  IntroRuntimeHandle handle_;
+  audio::SoundRecordLease lease_;
+  std::uint64_t owner_binding_{};
+  bool active_{}, failed_{};
+};
+
+struct IntroSoundSpatialState {
+  std::array<float,3> position;
+  std::array<float,3> direction;
+};
+
+struct IntroSoundPreparationServices {
+  // Required live resource services. These are not authored source flags or a
+  // guessed camera transform. The last callback performs status |= 0x1 on the
+  // actual owner only when the preceding live scene gate is true.
+  // Callbacks must keep this host and its borrowed application alive. Recursive
+  // preparation/stop through this host is rejected, not a mutation-safe traversal.
+  std::function<std::uint32_t(IntroRuntimeHandle)> resource_flags;
+  std::function<IntroRuntimeHandle(IntroRuntimeHandle)> parent_owner;
+  std::function<IntroSoundSpatialState(IntroRuntimeHandle)> spatial_state;
+  std::function<bool()> owner_enable_requested;
+  std::function<void(IntroRuntimeHandle)> enable_owner;
+};
+
 class IntroRuntimePicture final {
 public:
   [[nodiscard]] std::size_t source_index() const noexcept { return source_->directory_index; }
@@ -62,6 +100,16 @@ public:
   [[nodiscard]] runtime::ApplicationServices& application() noexcept { return application_; }
   [[nodiscard]] runtime::ComponentLifecycle& components() noexcept { return components_; }
   [[nodiscard]] const runtime::ComponentLifecycle& components() const noexcept { return components_; }
+  [[nodiscard]] std::span<const std::unique_ptr<IntroRuntimeSound>> sounds() const noexcept { return sounds_; }
+  [[nodiscard]] IntroRuntimeSound& sound_for_source(std::size_t source);
+  // A concrete owner pre-hook, not the complete global traversal. All owner
+  // pre-hooks must finish before either component phase; normal startup does
+  // not call this until the live resource services exist. Failure poisons the
+  // sound owner and reports unsupported disposal instead of leaving callbacks
+  // able to continue as though owner destruction had succeeded.
+  void prepare_sound_owner(std::size_t source, const IntroSoundPreparationServices& services);
+  // Binding-stop request only, not the original deleting-disposal operation.
+  void stop_sound_owner(std::size_t source);
   // Catalog membership includes unconstructed/removed entries, not a live
   // owner attachment collection suitable for runtime lookup or disposal.
   [[nodiscard]] std::span<const std::size_t> owner_components(IntroRuntimeHandle owner) const;
@@ -102,6 +150,8 @@ public:
 private:
   runtime::ApplicationServices& application_;
   IntroPreparedResources resources_;
+  // Declared before components so their captures are destroyed before leases.
+  std::vector<std::unique_ptr<IntroRuntimeSound>> sounds_;
   runtime::ComponentLifecycle components_;
   std::vector<std::vector<std::size_t>> owner_components_;
   std::size_t controller_component_{};
@@ -118,5 +168,6 @@ private:
   PictureOrderedCoordinator ordered_;
   PictureViewTransition view_;
   bool projected_{false};
+  bool sound_preparation_busy_{};
 };
 } // namespace off::graphics

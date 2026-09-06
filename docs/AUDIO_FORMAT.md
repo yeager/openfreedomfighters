@@ -75,8 +75,9 @@ individual sound on demand; loading does not decode every stream.
 The two owned intro definitions resolve to Vorbis streams. Their decoded frame
 counts and sample rates reproduce the stored duration floats in private checks.
 The stored floats remain authoritative metadata; neither decoding nor binding
-creates a playback acknowledgement or `SoundReady` event. Mutable sound records,
-component callbacks, and actual playback still need to be connected.
+creates a playback acknowledgement or `SoundReady` event. Mutable sound records
+and explicit preparation now exist in the [retained backend](INTRO_SOUND_RUNTIME.md);
+component callbacks and actual playback still need to be connected.
 
 The sound-owner reader validates its fixed prefix and attachment identities,
 not the attached component payloads. The SND parser has a 1 MiB native budget

@@ -267,7 +267,7 @@ int main() {
             "SND offset, logical identifier, opaque link and authored duration retain distinct domains");
       check(sound.source.cone_scalars[0]==271 && std::signbit(sound.source.cone_scalars[2]) &&
             sound.source.legacy_integer==123 && sound.source.loop_option==6 &&
-            sound.source.gain_multiplier==66 && sound.source.pitch_scalar==0.5F &&
+            sound.source.gain_multiplier==66 && sound.source.range_input_scalar==0.5F &&
             sound.source.category==7 && sound.source.enabled_option==9 &&
             std::signbit(sound.source.final_scalar) &&
             sound.source.component_groups_offset==sound_fixture.block_offsets[9]+70,
@@ -298,6 +298,104 @@ int main() {
         off::runtime::ClockExecutionPolicy::no_recording_or_replay,
         {[] { return std::int64_t{99}; },[&] { return clock_sample; }},
         []() -> off::audio::SoundVolumeBackend* { return nullptr; });
+    {
+      off::runtime::ApplicationServices sound_application(
+          off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[] { return std::int64_t{1}; },[&] { return clock_sample; }});
+      sound_application.reset_clock();
+      sound_application.clock().assign_crt_mode(true);
+      Fixture input(true);
+      const auto block=input.block_offsets[9];
+      set(input.payload,block+40,0); // Independent non-looping source.
+      set(input.payload,block+55,0); // Same category targeted by sound preferences.
+      set(input.payload,block+60,1);
+      std::uint64_t stale{};
+      {
+        off::graphics::IntroRuntime sound_host(input.build(),sound_application,component_sequence);
+        auto& owner=sound_host.sound_for_source(9);
+        auto& record=owner.record();
+        stale=record.binding;
+        check(sound_host.sounds().size()==1 && sound_application.sound_records().size()==1 &&
+              sound_application.sound_records().resolve(stale)==&record &&
+              record.active_source==128 && record.alternate_source==0 &&
+              owner.owner_binding()==0 && !owner.active() && record.duration==0 && record.progress==0,
+              "source-backed host owns one canonical record without invented preinit/playback");
+        check(record.range==50 && record.gain_multiplier==66 &&
+              record.derived_range==static_cast<float>((66.0F/0.78125F)*50.0F),
+              "authored range input is not a pitch setter");
+        std::vector<std::string> calls;
+        std::uint32_t owner_status=0x80, flags=0x400;
+        off::graphics::IntroSoundPreparationServices services{
+          [&](auto handle) {
+            check(handle==owner.handle(),"live sound flags owner"); calls.push_back("flags");
+            rejects([&] { sound_host.stop_sound_owner(9); });
+            return flags;
+          },
+          [&](auto) { calls.push_back("parent"); return sound_host.root_handle(); },
+          [&](auto) { calls.push_back("spatial"); return off::graphics::IntroSoundSpatialState{{3,4,5},{1,0,0}}; },
+          [&] { calls.push_back("gate"); return true; },
+          [&](auto) { calls.push_back("enable"); owner_status|=1; }
+        };
+        sound_host.prepare_sound_owner(9,services);
+        check(calls==std::vector<std::string>{"parent","flags"} && owner.owner_binding()==stale &&
+              record.parent==sound_host.root_handle().value && record.alternate_source==128 &&
+              !owner.active() && record.duration==0 && sound_application.sound_records().prepared().empty(),
+              "hidden owner retains ordered prehook prefix but skips backend preparation");
+        flags=0; calls.clear(); clock_sample=1250;
+        sound_application.advance_crt();
+        sound_host.prepare_sound_owner(9,services);
+        check(calls==std::vector<std::string>{"parent","flags","spatial","gate","enable"} &&
+              owner.active() && owner_status==0x81 && record.start_time==256 &&
+              record.duration==12.375F && record.progress==0 && record.playback_state==7 &&
+              record.direction==std::array<float,3>{1,0,0},
+              "preparation preserves SND float and uses canonical raw clock/live resources without readiness");
+        sound_application.sound().set_volume(91);
+        check(record.playback_state==5 && sound_application.sound_records().categories()[0].selected &&
+              sound_application.sound_records().pending_volume_update() && record.progress==0,
+              "default application preferences mutate the SAME sound record backend");
+        const auto& const_owner=owner;
+        check(&const_owner.record()==&record,"const consumers share canonical record, not metadata copies");
+        {
+          off::graphics::IntroRuntime second(input.build(),sound_application,component_sequence);
+          check(second.sound_for_source(9).record().binding!=stale && sound_application.sound_records().size()==2,
+                "simultaneous scenes have distinct sound bindings despite equal local owner handles");
+        }
+        check(sound_application.sound_records().size()==1,"second scene releases only its own sound lease");
+        sound_host.stop_sound_owner(9);
+        check(!owner.active() && record.playback_state==3 && record.active_source==128 &&
+              sound_application.sound_records().pending_stops().size()==1 &&
+              sound_application.sound_records().resolve(stale)==&record,
+              "binding stop changes canonical membership/state but does not dispose the owner");
+        auto broken=services;
+        broken.spatial_state=[](auto)->off::graphics::IntroSoundSpatialState { throw std::runtime_error("live spatial unavailable"); };
+        rejects([&] { sound_host.prepare_sound_owner(9,broken); });
+        check(owner.failed(),"failed callback stops further owner use without fake disposal");
+        rejects([&] { (void)owner.record(); });
+      }
+      check(sound_application.sound_records().size()==0 && !sound_application.sound_records().resolve(stale) &&
+            sound_application.sound_records().prepared().empty() && sound_application.sound_records().pending_stops().empty(),
+            "whole-scene teardown invalidates bindings and removes pending memberships");
+      sound_application.sound_records().acknowledge_started(stale,512);
+      {
+        off::graphics::IntroRuntime missing(input.build(),sound_application,component_sequence);
+        auto& owner=missing.sound_for_source(9);
+        auto& record=owner.record();
+        record.active_source=0;
+        off::graphics::IntroSoundPreparationServices services{
+          [](auto) { return 0U; }, [&](auto) { return missing.root_handle(); },
+          [](auto)->off::graphics::IntroSoundSpatialState { throw std::runtime_error("must not reach spatial after failed prepare"); },
+          [] { return false; }, [](auto) { throw std::runtime_error("must not enable failed owner"); }
+        };
+        auto incomplete=services; incomplete.parent_owner={};
+        rejects([&] { missing.prepare_sound_owner(9,incomplete); });
+        check(!owner.failed() && owner.owner_binding()==0,"missing service rejects before prehook mutations");
+        rejects([&] { missing.prepare_sound_owner(9,services); });
+        check(owner.failed() && record.flags==2 && !owner.active(),
+              "failed prepare preserves destructive-branch flag mutation and halts owner execution");
+      }
+      check(sound_application.sound_records().size()==0,"failed owner lease is released by scene teardown");
+      clock_sample=1000;
+    }
     {
       off::graphics::IntroRuntime host(fixture.build(),application,component_sequence);
       check(host.components().size()==11 && component_sequence.next_identity()==0,

@@ -1,5 +1,6 @@
 #pragma once
 #include "off/audio/sound_preferences.hpp"
+#include "off/audio/sound_records.hpp"
 #include "off/graphics/intro_controller_initialization.hpp"
 #include "off/runtime/application_clock.hpp"
 #include <utility>
@@ -11,12 +12,17 @@ namespace off::runtime {
 class ApplicationServices final {
 public:
   ApplicationServices(ClockExecutionPolicy policy, ClockSamplingServices sampling,
-                      std::function<audio::SoundVolumeBackend*()> live_backend)
+                      std::function<audio::SoundVolumeBackend*()> live_backend = {})
     : sampling_(std::move(sampling)), clock_(policy),
-      sound_({configuration_,std::move(live_backend)}) {}
+      sound_({configuration_,live_backend ? std::move(live_backend) :
+          std::function<audio::SoundVolumeBackend*()>{[this] { return &sound_records_; }}}) {}
   [[nodiscard]] ApplicationClock& clock() noexcept { return clock_; }
   [[nodiscard]] const ApplicationClock& clock() const noexcept { return clock_; }
   [[nodiscard]] audio::SoundPreferences& sound() noexcept { return sound_; }
+  // Canonical logical records survive across scene loads. This store alone is
+  // not an output device or a producer of playback-start acknowledgements.
+  [[nodiscard]] audio::SoundRecordRegistry& sound_records() noexcept { return sound_records_; }
+  [[nodiscard]] const audio::SoundRecordRegistry& sound_records() const noexcept { return sound_records_; }
   [[nodiscard]] audio::SoundTextConfiguration& configuration() noexcept { return configuration_; }
   void reset_clock() { clock_.reset(sampling_); }
   void rebase_clock() { clock_.rebase(sampling_); }
@@ -34,6 +40,7 @@ private:
   ClockSamplingServices sampling_;
   ApplicationClock clock_;
   audio::SoundTextConfiguration configuration_;
+  audio::SoundRecordRegistry sound_records_;
   audio::SoundPreferences sound_;
 };
 } // namespace off::runtime

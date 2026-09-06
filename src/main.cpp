@@ -110,12 +110,11 @@ int main(int argc, char **argv) {
   }
 
   std::optional<off::data::InstallVerification> verification;
-  // One application owner survives scene construction. No sound backend exists
-  // yet; this is not a successful stub backend or a fabricated ready event.
+  // One application owner retains logical sound records and category state.
+  // No output device/channel service exists yet; no start event is fabricated.
   off::runtime::ApplicationServices application(
       off::runtime::ClockExecutionPolicy::no_recording_or_replay,
-      off::runtime::make_monotonic_clock_samples(),
-      []() -> off::audio::SoundVolumeBackend* { return nullptr; });
+      off::runtime::make_monotonic_clock_samples());
   std::optional<off::graphics::SceneGpuPlan> scene;
   // Scene-manager identity lifetime, independent of source archive catalogs.
   off::runtime::SceneComponentSequence component_sequence;
@@ -197,6 +196,9 @@ int main(int argc, char **argv) {
   if (intro)
     std::cout << "Source-bound intro sound definitions: " << intro->resources().sounds().size()
               << "; retained authored metadata, no playback or readiness event.\n";
+  if (intro)
+    std::cout << "Canonical intro sound records: " << intro->sounds().size()
+              << "; logical backend retained, owner preparation and playback not activated.\n";
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       startup_window, mode, scene ? &*scene : nullptr, *startup_graphics,
       ui_fonts, ui_textures, intro.get(),
