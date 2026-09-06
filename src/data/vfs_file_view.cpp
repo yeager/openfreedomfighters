@@ -37,6 +37,15 @@ void VfsFileReader::read_at(std::uint64_t offset,std::span<std::byte> destinatio
         destination.size()>static_cast<std::uint64_t>(std::numeric_limits<std::streamsize>::max()))
         throw std::runtime_error("retained streaming VFS read exceeds bounds");
     if (destination.empty()) return;
+    // Recheck the retained handle, not its possibly replaced pathname. Some
+    // standard-library file buffers can retain bytes across an external
+    // truncation; gcount alone does not reliably detect that size change.
+    impl_->input.seekg(0,std::ios::end);
+    const auto current_end=impl_->input.tellg();
+    if (current_end<0 || static_cast<std::uint64_t>(current_end)!=impl_->size) {
+        impl_->failed=true;
+        throw std::runtime_error("retained streaming VFS source size changed");
+    }
     impl_->input.seekg(static_cast<std::streamoff>(offset));
     impl_->input.read(reinterpret_cast<char*>(destination.data()),
                       static_cast<std::streamsize>(destination.size()));

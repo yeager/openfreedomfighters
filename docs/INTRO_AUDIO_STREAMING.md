@@ -36,8 +36,10 @@ thread; they are not real-time-safe audio callbacks. File opening and teardown
 can block. This implementation uses one asynchronous job per request, not a
 finished mixer worker pool or original refill scheduler.
 
-The retained VFS reader checks the size of the opened file, bounds every read,
-and fails on short input. Reads keep using that opened file when its path is
+The retained VFS reader checks the size of the opened file before each nonempty
+read, bounds every read, and fails on size changes or short input. The size check
+uses the retained handle, not the pathname; buffered bytes must not hide an
+external truncation. Reads keep using that opened file when its path is
 replaced. It is not an immutable snapshot: in-place writes and the pre-open
 path-check race are not eliminated. Installation files must remain unchanged
 after startup verification.

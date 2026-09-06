@@ -3,14 +3,16 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <source_location>
 #include <stdexcept>
 #include <utility>
 
 namespace {
 void check(bool value,const char* message) { if (!value) throw std::runtime_error(message); }
-template<class F> void rejects(F f) {
+template<class F> void rejects(F f, std::source_location location=std::source_location::current()) {
   bool rejected=false; try { f(); } catch (const std::runtime_error&) { rejected=true; }
-  check(rejected,"expected retained reader rejection");
+  if (!rejected) throw std::runtime_error("expected retained reader rejection at line "+
+                                         std::to_string(location.line()));
 }
 void write(const std::filesystem::path& path,std::size_t count,char value) {
   std::ofstream file(path,std::ios::binary|std::ios::trunc);
@@ -67,6 +69,9 @@ int main() {
     static_cast<void>(short_vfs.mount_directory(work));
     {
       auto short_reader=short_vfs.open_stream("short-read.bin").open_reader();
+      std::array<std::byte,8> initial{};
+      short_reader.read_at(0,initial);
+      check(initial[0]==std::byte{'d'},"prime retained stream buffer before truncation");
       std::error_code error;
       std::filesystem::resize_file(short_path,2,error);
       if (!error) {
