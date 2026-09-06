@@ -42,7 +42,7 @@ struct IntroSynthesizedCameraMetadata {
   std::uint32_t class_identifier;
 };
 enum class IntroResourceLoadStage {
-  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, failed
+  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, failed
 };
 struct IntroAuthoredGroupOwner {
   IntroRuntimeHandle owner;
@@ -51,10 +51,28 @@ struct IntroAuthoredGroupOwner {
   std::uint32_t class_identifier{0x00100001U},flags{0x03000000U},sentinel{0xffffffffU};
   float scalar{1.0F};
   std::uint32_t source_word{};
+  std::uint32_t aggregate_flags{},component_mask{};
+  IntroRuntimeHandle auxiliary{};
 };
 struct IntroDeferredReaderWork {
   IntroRuntimeResourceHandle resource;
   std::uint32_t source_offset;
+};
+struct IntroWindowOwner {
+  IntroAuthoredGroupOwner group;
+  IntroRuntimeHandle enclosing_window{},selected_camera{},cursor{},auxiliary{};
+  std::vector<IntroRuntimeHandle> cameras;
+  float input_scalar{1.0F},pending_visibility{0.0F};
+  std::uint32_t input_mode{1},tracking_timer{},local_counter{};
+  bool option_a{},option_b{},option_c{true},owned_action_map_cleanup{};
+  bool input_suppression_held{true},local_input_tracking{true},auxiliary_terminal{};
+  std::uint8_t tracking_sentinel{0xfe};
+  // Storage precedes its lease so removal happens before the scalar dies.
+  runtime::LiveVariableLease show_2d;
+};
+struct IntroSceneResourceProperty {
+  std::uint32_t type{16};
+  IntroRuntimeResourceHandle resource;
 };
 struct IntroSourceResourceScope {
   std::uint32_t count_group{};
@@ -169,11 +187,20 @@ public:
   // retained scene progress once, execute first-row progress, then allocate.
   // This is not evidence of the original cold reset caller or renderer timing.
   void begin_source_loading_without_engine_renderer();
+  // Pre-row operation for the next unconstructed directory entry. Requires
+  // genuinely absent engine renderer, not merely a failed readiness check.
+  float advance_source_loading_progress_without_engine_renderer(std::size_t source);
   [[nodiscard]] std::optional<float> loading_progress() const noexcept {return loading_progress_;}
   // Actual first-scope batch only. Later scopes must be interleaved with real
   // owner construction and attachment; this never constructs all source rows.
   void allocate_initial_source_scope();
   void construct_first_authored_group();
+  void construct_window_language_groups_without_engine_renderer();
+  [[nodiscard]] const std::unique_ptr<IntroWindowOwner>& window_owner() const noexcept {return window_owner_;}
+  [[nodiscard]] const std::optional<IntroAuthoredGroupOwner>& language_owner() const noexcept {return language_owner_;}
+  [[nodiscard]] IntroRuntimeHandle current_source_parent() const noexcept {return current_source_parent_.value?current_source_parent_:root_handle();}
+  [[nodiscard]] std::optional<IntroSceneResourceProperty> scene_resource_property(std::string_view key) const;
+  void set_scene_resource_property_native(std::string key,IntroRuntimeResourceHandle resource);
   [[nodiscard]] const std::optional<IntroAuthoredGroupOwner>& first_authored_group() const noexcept {return first_authored_group_;}
   [[nodiscard]] std::uint32_t group_class_instance_count() const {return application_.group_class_instance_count();}
   [[nodiscard]] bool manager_row_edit() const noexcept {return manager_row_edit_;}
@@ -332,6 +359,11 @@ private:
   std::vector<std::optional<IntroRuntimeResourceState>> resource_states_;
   IntroResourceLoadStage resource_load_stage_{IntroResourceLoadStage::prepared};
   std::optional<float> loading_progress_;
+  void allocate_source_scope(std::uint32_t count_group);
+  std::unique_ptr<IntroWindowOwner> window_owner_;
+  std::optional<IntroAuthoredGroupOwner> language_owner_;
+  IntroRuntimeHandle current_source_parent_{};
+  std::map<std::string,IntroSceneResourceProperty,std::less<>> scene_resource_properties_;
   std::optional<IntroRootOwnerState> root_owner_state_;
   std::vector<std::size_t> root_attachments_;
   bool resource_allocation_enabled_{}; // Actual scene-constructor mode starts off.

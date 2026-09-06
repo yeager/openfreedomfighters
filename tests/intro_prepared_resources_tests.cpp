@@ -149,7 +149,8 @@ struct Fixture {
     Bytes payload, names, prm, tex, snd;
     std::array<std::size_t, 10> block_offsets{};
     std::array<std::size_t, 10> attachment_offsets{};
-    explicit Fixture(bool include_sound=false,bool leading_group=false) : payload(1024), snd(16) {
+    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false) : payload(1024), snd(16) {
+        if(language_group && !leading_group) throw std::runtime_error("language fixture requires leading group");
         // Deliberately permuted directory roles; no retail source indices.
         set(payload, 0, 32); set(payload, 4, 128); set(payload, 12, 4); set(payload, 20, 176);
         set(payload, 32, include_sound?10:9); set(payload, 128, 1); set(payload, 132, 144);
@@ -188,7 +189,9 @@ struct Fixture {
                    {"ZLIST_CutSequenceCommand", 1}, {"ZLIST_CutSequenceCommand", 1}});
         if(include_sound) attach(9,{{"ZSNDOBJ_SoundExtend",0},{"ZSNDOBJ_SoundNotify",0},
                                   {"ZSNDOBJ_SoundSegment",1},{"ZGEOM_ZSetZDefine",0}});
-        const std::uint32_t bias=leading_group?1U:0U;
+        // All nonnull references emitted below target original rows after the
+        // first window, so both inserted rows precede those referenced owners.
+        const std::uint32_t bias=leading_group?(language_group?2U:1U):0U;
         const std::array<Bytes, 10> blocks{camera(), picture(false), controller(bias), picture(true), member(bias), list({8, 8},bias), list({4, 2, 4},bias), first_cut(bias), window(bias),sound_owner(bias)};
         for (std::size_t i = 0; i < node_count; ++i) {
             block_offsets[i] = payload.size(); set(payload, 512 + 48 * i + 32, static_cast<std::uint32_t>(payload.size()));
@@ -205,17 +208,38 @@ struct Fixture {
             Bytes deferred_blob(4);scalar(deferred_blob,3,12345U);finish(deferred_blob);
             payload.insert(payload.end(),deferred_blob.begin(),deferred_blob.end());
             while(payload.size()%4) payload.push_back(std::byte{0});
+            const auto language_record=payload.size();
+            if(language_group) {
+                payload.resize(language_record+48);
+                set(payload,language_record,static_cast<std::uint32_t>(names.size()));text(names,"IndependentLanguageGroup");
+                set(payload,language_record+4,384);set(payload,language_record+8,420);
+                set(payload,language_record+16,0x00101389U);set(payload,language_record+24,0x03000000U);
+                set(payload,language_record+32,static_cast<std::uint32_t>(payload.size()));
+                payload.insert(payload.end(),deferred_blob.begin(),deferred_blob.end());
+                while(payload.size()%4) payload.push_back(std::byte{0});
+                set(payload,512+48*8+24,0x03000000U);
+                // Return from Language to Window before the next original row.
+                set(payload,36+8*2,(1U<<25U)|static_cast<std::uint32_t>((512+48*2)/4));
+            }
             const auto directory=payload.size();
-            word(payload,static_cast<std::uint32_t>(node_count+1));
+            word(payload,static_cast<std::uint32_t>(node_count+1+(language_group?1:0)));
             word(payload,static_cast<std::uint32_t>(record/4));word(payload,0);
             const Bytes entries(payload.begin()+36,payload.begin()+static_cast<std::ptrdiff_t>(36+8*node_count));
-            payload.insert(payload.end(),entries.begin(),entries.end());
+            if(language_group) {
+                payload.insert(payload.end(),entries.begin(),entries.begin()+8);
+                word(payload,(1U<<24U)|static_cast<std::uint32_t>(language_record/4));word(payload,0);
+                payload.insert(payload.end(),entries.begin()+8,entries.end());
+            } else payload.insert(payload.end(),entries.begin(),entries.end());
             set(payload,0,static_cast<std::uint32_t>(directory));
-            const auto pools=payload.size();word(payload,3);
-            payload.resize(payload.size()+3*24*4);
+            const auto pools=payload.size();word(payload,language_group?4U:3U);
+            payload.resize(payload.size()+(language_group?4U:3U)*24*4);
             set(payload,pools+4,2); // First group and window share category zero.
-            set(payload,pools+4+2*24*4+4,2);
+            set(payload,pools+4+2*24*4+4,language_group?1U:2U);
             set(payload,pools+4+2*24*4+12,include_sound?7U:6U);
+            if(language_group) {
+                set(payload,pools+4+2*24*4,1);
+                set(payload,pools+4+3*24*4+4,1);
+            }
             set(payload,20,static_cast<std::uint32_t>(pools));
         }
         prm.resize(16); word(prm, 1);
@@ -292,6 +316,100 @@ int main() {
     using off::graphics::IntroPreparedResources;
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
     Fixture fixture;
+    {
+      Fixture nested(false,true,true);
+      const auto prepared=nested.build();
+      check(prepared.sources().directory().size()==11 &&
+            prepared.sources().directory()[2].source_type==0x00101389U &&
+            prepared.sources().directory()[2].pool_group==2 &&
+            prepared.sources().directory()[3].pool_group==3 &&
+            prepared.sources().directory()[4].pool_group==2 &&
+            prepared.sources().pool_groups()[2].slot_count==8 &&
+            prepared.controller_index()==4 && prepared.first_cut_index()==9 && prepared.camera_index()==10,
+            "independent nested language fixture preserves references and allocation scope entry/pop");
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      app.initialize_native_group_registration();
+      off::runtime::SceneComponentSequence sequence{[&]{return *app.component_dispatch_time();}};
+      float existing_show_value=4.0F;
+      auto existing_show=app.live_variables().bind("Show2d",existing_show_value);
+      off::runtime::LiveVariableHandle retired_show;
+      {
+        off::graphics::IntroRuntime host(nested.build(),app,sequence);
+        rejects([&]{host.construct_window_language_groups_without_engine_renderer();});
+        host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+        rejects([&]{host.construct_window_language_groups_without_engine_renderer();});
+        check(!host.window_owner() && host.loaded_resource_handles().size()==1 &&
+              host.source_resource_scopes().size()==1,"missing concrete registrations do not fabricate specialized owners");
+        app.initialize_native_window_language_registration();
+        const auto root=host.root_handle();
+        const auto root_resource=host.resource_handle(root);
+        host.set_scene_resource_property_native("rWindows",root_resource);
+        host.set_scene_resource_property_native("IndependentProperty",root_resource);
+        host.set_scene_resource_property_native("rwindows",root_resource);
+        rejects([&]{host.set_scene_resource_property_native(std::string("bad\0key",7),root_resource);});
+        host.construct_window_language_groups_without_engine_renderer();
+        const auto& window=host.window_owner();
+        const auto& language=host.language_owner();
+        check(window && language && window->group.owner==host.source_handle(1) &&
+              language->owner==host.source_handle(2) && window->group.class_identifier==0x00100030U &&
+              language->class_identifier==0x00101389U && language->name=="IndependentLanguageGroup" &&
+              window->group.flags==0x03000000U && language->flags==0x03000000U,
+              "specialized Window and Language factories retain concrete identities and group defaults");
+        check(window->pending_visibility==0.0F && !std::signbit(window->pending_visibility) &&
+              window->input_scalar==1.0F && window->input_mode==1 && window->option_c &&
+              !window->option_a && !window->option_b && !window->owned_action_map_cleanup &&
+              window->input_suppression_held && window->local_input_tracking && window->tracking_sentinel==0xfe &&
+              !window->tracking_timer && !window->local_counter && !window->auxiliary_terminal &&
+              !window->enclosing_window.value && !window->selected_camera.value && !window->cursor.value &&
+              !window->auxiliary.value && window->cameras.empty(),
+              "Window constructor state does not import deferred options or later input initialization");
+        retired_show=window->show_2d.handle();
+        check(app.live_variables().enumerate("Show2d")==std::vector<off::runtime::LiveVariableHandle>{existing_show.handle(),retired_show} &&
+              app.live_variables().read_float(retired_show)==0.0F && existing_show_value==4.0F,
+              "real Show2d console descriptor binds the Window pending-visibility scalar without writing it");
+        app.live_variables().write_float(retired_show,2.5F);
+        check(window->pending_visibility==2.5F && existing_show_value==4.0F,
+              "console writes reach canonical Window storage without overwriting a prior same-name descriptor");
+        const auto property=host.scene_resource_property("rWindows");
+        check(property && property->type==16 && property->resource==window->group.resource &&
+              host.scene_resource_property("IndependentProperty")->resource==root_resource &&
+              host.scene_resource_property("rwindows")->resource==root_resource &&
+              !host.scene_resource_property("AbsentProperty"),
+              "Window replaces its typed scene property while preserving unrelated and differently cased keys");
+        check(host.child_owners(root)==std::vector<off::graphics::IntroRuntimeHandle>{host.source_handle(0),window->group.owner} &&
+              host.child_owners(window->group.owner)==std::vector<off::graphics::IntroRuntimeHandle>{language->owner} &&
+              host.child_owners(language->owner).empty() &&
+              host.resource_parent(language->owner)==window->group.resource &&
+              host.current_source_parent()==language->owner,
+              "actual attachment order and current scope parent survive nested group entry");
+        const auto scopes=host.source_resource_scopes();
+        check(scopes.size()==2 && scopes[0].count_group==0 && scopes[0].resources.size()==2 &&
+              scopes[0].next_in_partition[0]==2 && scopes[1].count_group==2 &&
+              scopes[1].resources.size()==8 && scopes[1].next_in_partition[0]==1 &&
+              !host.allocated_source_resource(3) && host.count_group_selector()==3,
+              "only entered allocation scope two is constructed; pending scope three stays unallocated");
+        for(std::size_t row=0;row<3;++row) {
+          const auto resource=*host.allocated_source_resource(row);
+          check(host.loaded_resource_handles()[row]==resource && host.directory_resource_mapping()[row]==resource &&
+                host.deferred_reader_work()[row].resource==resource &&
+                host.deferred_reader_work()[row].source_offset==prepared.sources().directory()[row].deferred_source_offset &&
+                host.resource_state_for_handle(resource)->flags==0x09000000U &&
+                !host.resource_state_for_handle(resource)->context.value,
+                "three directory owners share canonical resource identities and ordered unconsumed reader work");
+        }
+        check(host.loaded_resource_handles().size()==3 && host.deferred_reader_work().size()==3 &&
+              host.components().construction_order().size()==1 && sequence.live_count()==1 &&
+              host.resource_state(root)->flags==0x09000000U && !host.manager_row_edit() && !host.scene_resource_edit() &&
+              app.class_notification_sequence(0x00100030U)==1 && app.class_notification_sequence(0x00101389U)==1 &&
+              host.resource_load_stage()==off::graphics::IntroResourceLoadStage::window_language_ready,
+              "specialized group stage stops before Picture construction and deferred initialization");
+        rejects([&]{host.construct_window_language_groups_without_engine_renderer();});
+      }
+      check(!app.live_variables().contains(retired_show) &&
+            app.live_variables().enumerate("Show2d")==std::vector<off::runtime::LiveVariableHandle>{existing_show.handle()},
+            "scene destruction releases the live console lease before Window scalar storage");
+    }
     {
       Fixture leading(false,true);
       const auto prepared=leading.build();
@@ -417,6 +535,14 @@ int main() {
             "repeated first-row construction cannot allocate, attach or queue duplicates");
       host.construct_root();
       check(host.child_owners(root).size()==1,"root reuse preserves the attached authored group");
+      rejects([&]{(void)host.advance_source_loading_progress_without_engine_renderer(0);});
+      rejects([&]{(void)host.advance_source_loading_progress_without_engine_renderer(2);});
+      const auto next_progress=host.advance_source_loading_progress_without_engine_renderer(1);
+      check(next_progress==0.81F && host.loading_progress()==next_progress &&
+            host.advance_source_loading_progress_without_engine_renderer(1)==next_progress &&
+            host.loaded_resource_handles().size()==1 && host.deferred_reader_work().size()==1 &&
+            host.source_resource_scopes()[0].next_in_partition[0]==1,
+            "next-row progress uses directory count, retains thresholded state and does not construct the next owner");
       {
         off::graphics::IntroRuntime second(leading.build(),app,sequence);
         check(second.group_class_instance_count()==1,"new host preserves application class notification sequence");

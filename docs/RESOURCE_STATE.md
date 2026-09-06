@@ -52,6 +52,11 @@ the separate splash renderer does not supply that identity. A future loader
 running with an engine renderer must execute its real progress drawing and
 presentation services, not reuse this absent-renderer entry point.
 
+Every subsequent row uses the same retained progress and its actual directory
+index/count. Stage three spans binary32 `0.8` to `0.9`; each arithmetic step is
+rounded to binary32. A new candidate must exceed retained progress plus `0.002`.
+Progress is not reset between rows and does not itself construct an owner.
+
 The owned intro's first scope contains 20 resources, partitioned by its count
 table. Inactive batch construction gives each a distinct native resource ID,
 identity pose, positive-zero position, no parent/context and flags `0x09000000`.
@@ -59,7 +64,7 @@ They remain ownerless. Reserved source catalog handles are not live owners;
 owner/resource lookup and camera registration reject unconstructed owners.
 Canonical flag mutation still works on an allocated ownerless resource.
 
-Only this first scope is allocated. Its partition cursors remain unconsumed
+At that boundary only the first scope is allocated. Its partition cursors remain unconsumed
 until owner construction starts. Later batches must be interleaved with source
 factories and attachments, not eagerly constructed for the entire directory.
 `allocate_initial_source_scope` is also exposed as an explicit stage operation;
@@ -88,6 +93,31 @@ missing registration rejects before slot consumption. This limited registration
 policy does not implement the original pre-GMS class-list preparation, which
 resets all registered sequences and resolves base-class links. It must not be
 mistaken for a per-host reset or a count of currently living owners.
+
+## Window and Language groups
+
+Normal startup next constructs the distinct Window and Language classes. Window
+consumes the next resource in the initial scope and attaches after the first
+group under ROOT. Entering it advances the count selector to two. Only after
+the next row's progress operation does the loader allocate count-group two;
+Language consumes that scope's first group slot and attaches to Window. The
+current hierarchy parent becomes Language, while count-group three remains
+pending. The owned intro has 23 resources across the two constructed scopes,
+three attached owners and three deferred-reader items at this point.
+
+Window's canonical pending-visibility float starts at positive zero. Its real
+`Show2d` console lease binds that storage; registration does not write `-1` or
+execute input setup. The scene's `rWindows` property stores the same canonical
+Window resource handle as type 16. Insertion removes an existing exact key and
+replaces it, preserving unrelated properties. Native typed handles replace the
+original four-byte payload representation; they are not authored references.
+Embedded NUL keys are rejected by the native API.
+
+Window and Language have separate application-owned construction notification
+sequences. Their factories do not run deferred readers, create input maps or
+construct Picture components. Resource flags remain `0x09000000` on this bounded
+path, distinct from each group's owner flags. The remaining directory and loader
+tail are still required before scene activation.
 
 RootGroup retains its `DisplayName` floating-point descriptor and `RootControl`
 input-map registration. Its ordinary membership remains pending, not merged.

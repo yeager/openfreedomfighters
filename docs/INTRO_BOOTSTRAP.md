@@ -18,9 +18,10 @@ completed in that same host. Normal startup now executes the actual fresh
 initializer and retained console/input-map registrations.
 CPU preflight also executes first-row loading progress under an explicit native
 load-begin reset policy and allocates the first scope's 20 ownerless resources.
-It then constructs the first authored group, attaches its existing resource to
-ROOT and queues its deferred reader. The other 19 resources remain ownerless;
-later batches and deferred readers do not run at this boundary.
+It then constructs the first group, Window and Language owners. Their two
+allocation scopes contain 23 resources; only three have constructed owners.
+Window registers its real console descriptor and scene resource property.
+The three deferred readers remain queued; the next Picture scope is not allocated.
 The conditional DefaultCam factory now constructs its real PreviewCamera and
 ordinary membership in that host. Its callback writes directly into the scene
 hierarchy after the complete global initializer. The post-load root state and
@@ -100,6 +101,13 @@ partition slot and queues exactly one deferred reader. The other 19 initial
 resources remain ownerless. All 86 local tests and the focused ASan/UBSan run
 pass with this stage, and normal startup reaches SDL/Vulkan after constructing
 the group. No deferred reader, later authored owner or intro draw is claimed.
+
+Window/Language integration also passes all 86 tests and the focused ASan/UBSan
+run. Independent fixtures check nested scope allocation, property replacement,
+same-name console descriptors and lease cleanup. The owned-data probe verifies
+23 resources, three canonical attached owners, `rWindows`, `Show2d` and three
+queued readers. Normal startup reaches SDL/Vulkan after this stage. Picture
+construction, deferred reading and intro playback remain pending.
 
 ## Retained controller initialization
 

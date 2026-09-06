@@ -117,7 +117,10 @@ int main(int argc, char **argv) {
       off::runtime::make_monotonic_clock_samples());
   // Native registration of the currently implemented concrete factory;
   // not the original complete class-list/base-class preparation.
-  if(!verify_only && !diagnostic_scene) application.initialize_native_group_registration();
+  if(!verify_only && !diagnostic_scene) {
+    application.initialize_native_group_registration();
+    application.initialize_native_window_language_registration();
+  }
   std::optional<off::graphics::SceneGpuPlan> scene;
   // Scene-manager identity lifetime, independent of source archive catalogs.
   off::runtime::SceneComponentSequence component_sequence{[&application] {
@@ -157,6 +160,7 @@ int main(int argc, char **argv) {
         // the native staging policy, then construct only the first scope.
         intro->begin_source_loading_without_engine_renderer();
         intro->construct_first_authored_group();
+        intro->construct_window_language_groups_without_engine_renderer();
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -202,17 +206,20 @@ int main(int argc, char **argv) {
                  "This is not gameplay or a faithful rendered startup menu.\n";
   if (intro)
     std::cout << "Source-backed intro runtime retained: "
-              << intro->pictures().size() << " picture owners, "
+              << intro->pictures().size() << " picture definitions, "
               << intro->resources().images().size()
               << " images; automatic scene activation remains pending.\n";
   if (intro)
     std::cout << "Retained component catalog: " << intro->components().size()
               << " entries; " << intro->components().construction_order().size()
-              << " constructed. ROOT/RootGroup initialized; authored factories and loader tail pending.\n";
-  if (intro && !intro->source_resource_scopes().empty())
-    std::cout << "Initial source scope: " << intro->source_resource_scopes().front().resources.size()
+              << " constructed. ROOT/RootGroup initialized; remaining authored factories and loader tail pending.\n";
+  if (intro && !intro->source_resource_scopes().empty()) {
+    std::size_t allocated=0;
+    for(const auto& scope:intro->source_resource_scopes()) allocated+=scope.resources.size();
+    std::cout << "Source loading: " << intro->source_resource_scopes().size() << " scopes, " << allocated
               << " resources allocated; " << intro->loaded_resource_handles().size()
-              << " authored owner constructed and attached; deferred readers pending.\n";
+              << " authored owners constructed and attached; deferred readers pending.\n";
+  }
   if (intro)
     std::cout << "Source-bound intro sound definitions: " << intro->resources().sounds().size()
               << "; retained authored metadata, no playback or readiness event.\n";

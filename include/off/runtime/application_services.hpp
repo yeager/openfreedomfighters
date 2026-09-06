@@ -10,6 +10,7 @@
 #include <utility>
 #include <stdexcept>
 #include <limits>
+#include <map>
 
 namespace off::runtime {
 // Application-lifetime state, borrowed by scenes rather than reset when each
@@ -32,18 +33,36 @@ public:
   // This is not the original full registry preparation/base-class resolution.
   // Host creation/destruction does not reset or decrement the notification word.
   void initialize_native_group_registration() {
-    if(group_registration_) throw std::runtime_error("Native group class is already registered");
-    group_registration_=GroupRegistration{0x00100001U,0U};
+    if(!class_sequences_.emplace(0x00100001U,0U).second)
+      throw std::runtime_error("Native group class is already registered");
   }
-  [[nodiscard]] bool has_group_registration() const noexcept {return group_registration_.has_value();}
+  void initialize_native_window_language_registration() {
+    if(has_class_registration(0x00100030U) || has_class_registration(0x00101389U))
+      throw std::runtime_error("Native window or language class is already registered");
+    auto updated=class_sequences_;
+    updated.emplace(0x00100030U,0U);
+    updated.emplace(0x00101389U,0U);
+    class_sequences_.swap(updated);
+  }
+  [[nodiscard]] bool has_class_registration(std::uint32_t identity) const noexcept {
+    return class_sequences_.contains(identity);
+  }
+  [[nodiscard]] std::uint32_t class_notification_sequence(std::uint32_t identity) const {
+    const auto found=class_sequences_.find(identity);
+    if(found==class_sequences_.end()) throw std::runtime_error("Concrete class is not registered");
+    return found->second;
+  }
+  std::uint32_t register_class_instance(std::uint32_t identity) {
+    const auto previous=class_notification_sequence(identity);
+    class_sequences_.at(identity)=previous+std::uint32_t{1};
+    return previous;
+  }
+  [[nodiscard]] bool has_group_registration() const noexcept {return has_class_registration(0x00100001U);}
   [[nodiscard]] std::uint32_t group_class_instance_count() const {
-    if(!group_registration_) throw std::runtime_error("Concrete group class is not registered");
-    return group_registration_->notification_sequence;
+    return class_notification_sequence(0x00100001U);
   }
   std::uint32_t register_group_instance() {
-    const auto previous=group_class_instance_count();
-    group_registration_->notification_sequence=previous+std::uint32_t{1};
-    return previous;
+    return register_class_instance(0x00100001U);
   }
   [[nodiscard]] OrdinarySortingState& ordinary_sorting() noexcept {return ordinary_sorting_;}
   void assign_component_dispatch_time(std::uint32_t time) noexcept {component_dispatch_time_=time;}
@@ -103,10 +122,7 @@ private:
   graphics::PreviewCameraUpdate preview_camera_update_;
   LiveVariableRegistry live_variables_;
   InputMapRegistry input_maps_;
-  struct GroupRegistration {
-    std::uint32_t class_identifier,notification_sequence;
-  };
-  std::optional<GroupRegistration> group_registration_;
+  std::map<std::uint32_t,std::uint32_t> class_sequences_;
   OrdinarySortingState ordinary_sorting_;
   // Actual application-constructor producer; later ordinary passes update it.
   std::optional<std::uint32_t> component_dispatch_time_{0U};
