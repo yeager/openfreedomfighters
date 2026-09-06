@@ -11,7 +11,7 @@ enum class PictureStageOperation {
   add,
   disable
 };
-enum class PictureStageArgument { texture, diffuse };
+enum class PictureStageArgument { texture, diffuse, current, texture_factor };
 enum class PictureBlendFactor {
   zero,
   one,

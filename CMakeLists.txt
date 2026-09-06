@@ -96,6 +96,7 @@ add_library(off_core
     src/graphics/picture_view_parameters.cpp
     src/graphics/picture_view_transition.cpp
     src/graphics/picture_ordered_draw_loop.cpp
+    src/graphics/picture_draw_reset.cpp
     src/graphics/intro_camera_state.cpp
     src/graphics/fresh_intro_camera.cpp
     src/graphics/intro_picture_transform.cpp
@@ -374,6 +375,9 @@ if(BUILD_TESTING)
     add_executable(off_picture_ordered_draw_loop_tests tests/picture_ordered_draw_loop_tests.cpp)
     target_link_libraries(off_picture_ordered_draw_loop_tests PRIVATE off_core)
     add_test(NAME off_picture_ordered_draw_loop_tests COMMAND off_picture_ordered_draw_loop_tests)
+    add_executable(off_picture_draw_reset_tests tests/picture_draw_reset_tests.cpp)
+    target_link_libraries(off_picture_draw_reset_tests PRIVATE off_core)
+    add_test(NAME off_picture_draw_reset_tests COMMAND off_picture_draw_reset_tests)
 
     add_executable(off_startup_lifecycle_tests tests/startup_lifecycle_tests.cpp)
     target_link_libraries(off_startup_lifecycle_tests PRIVATE off_core)

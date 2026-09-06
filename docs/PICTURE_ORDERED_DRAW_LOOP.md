@@ -58,9 +58,9 @@ operation once per round, including exhausted states, repeating if any returns
 more work. It does not drain one state before moving to the next. First-round
 special services and final cleanup are separate real operations.
 
-This adapter does not replace those services with no-ops, implement the complete
-ordinary backend reset, or admit the intro. The explicit reset hook is an
-integration obligation. View hooks can use `PictureViewTransition`; resource
+This adapter does not replace those services with no-ops or admit the intro.
+The reset hook can call [PictureDrawReset](PICTURE_DRAW_RESET.md) using the same
+live context and an actual backend command sink. View hooks can use `PictureViewTransition`; resource
 and emission hooks still need the real GPU executor and current material state.
 
 ## Verification
