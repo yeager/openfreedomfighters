@@ -29,8 +29,10 @@ an implementation-ready contract.
 
 The retained smoothed value is stored before the final 100 ms clamp. A separate
 selectable path exposes a scaled millisecond-resolution process-clock delta
-without this high-resolution smoothing. The available evidence does not yet
-establish which modes select that path, so it is not described as a fixed step.
+without this high-resolution smoothing. Intro controller phase two selects this
+CRT delta path with an assignment-only mode change. It does not sample or reset
+time. This does not establish the selected path for every gameplay mode and does
+not make either path a fixed step.
 
 The timing service also has a one-shot suppression operation. On the next
 update it skips increment selection and accumulation, retaining the previous
@@ -55,8 +57,10 @@ guaranteed wall-clock interpretation.
 
 The signed deadline comparison is not a wrap-safe elapsed-time test. Observed
 32-bit additions do not establish portable behavior for the upstream
-out-of-range floating-to-integer conversion. Startup clock mode/rate, lifecycle
-ordering and overflow policy remain unresolved; these observations do not yet
+out-of-range floating-to-integer conversion. Controller phase two assigns the
+deadline after selecting CRT mode and running the audio-volume helper. Startup
+rate, ordinary update admission and upstream conversion policy remain unresolved;
+these observations do not yet
 constitute a complete native clock implementation contract.
 
 ## Frame pacing is not a simulation rate

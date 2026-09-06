@@ -29,8 +29,9 @@ executable code are included here.
 - A separate geometry preview is available with `--diagnostic-scene`. It is not
   a loaded level or a gameplay demo.
 
-Graphics have been tested locally on Linux/Vulkan. CI builds and tests on
-Windows, macOS and Linux using independent fixtures, not retail assets.
+The picture renderer has passed GPU tests on Linux/Vulkan, Windows/Direct3D 12
+and macOS/Metal. CI uses independent fixtures, not retail assets; these tests
+do not establish complete intro playback.
 
 Next: make normal startup render the original intro and reach its main menu.
 This takes priority over graphics polish and more isolated helpers. Details

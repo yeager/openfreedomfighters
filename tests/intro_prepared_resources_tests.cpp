@@ -222,6 +222,9 @@ int main() {
     Fixture fixture;
     {
       off::graphics::IntroRuntime host(fixture.build());
+      check(host.controller_initialization().deadline()==0 &&
+            !host.controller_initialization().phase_two_completed(),
+            "retained controller starts uninitialized; resource construction does not invoke phase two");
       static_assert(!std::is_move_constructible_v<off::graphics::IntroRuntime>);
       check(host.hierarchy().size() == 10 && !host.source_index(host.root_handle()),
             "runtime retains synthesized root distinct from all source objects");

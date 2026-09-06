@@ -46,4 +46,6 @@ channels while retaining RGB. Original images and captures stay private.
 That probe explicitly supplies Center completion, picture admission, dimensions,
 the undefined-Y replacement policy and raster/sampler/depth state. It proves a
 source-backed GPU path, not the original first frame's layout, timing or automatic
-playback. Windows/Metal execution is checked separately in CI.
+playback. CI run 34042124079 at commit `f373d3b` also executed the 64-pixel
+renderer oracle and all 14 stage-shader cases on Windows/Direct3D 12 and
+macOS/Metal. Both backend runs passed without skipping these tests.

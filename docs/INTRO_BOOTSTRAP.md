@@ -41,6 +41,31 @@ four picture owners are retained and all 26 intro images upload on SDL/Vulkan.
 The run exits after two presentation frames. This proves the verified-data →
 retained-host → GPU-upload path, not intro draw submission or playback.
 
+## Retained controller initialization
+
+`IntroRuntime` owns `IntroControllerInitialization`, including the controller's
+deadline and phase-two progress. Its explicit admitted callback runs the input,
+clock-mode, global-property/audio and renderer services in the recovered order
+described below. Audio callbacks finish before the live deadline sample; each
+clear and presentation resolves the current first renderer separately.
+
+Missing services reject before effects. A callback or unsupported presentation
+recovery failure preserves completed effects and prevents retry on that instance.
+Successful invocation does not prevent another explicitly admitted phase-two
+call, matching the global pass rather than imposing a once-only lifecycle rule.
+The recorded mode-assignment completion is not a second copy of engine clock mode.
+
+This callback is not invoked automatically by the window runtime. The host still
+needs real global lifecycle admission, clock/audio services and the ordinary
+update path. It does not fabricate readiness, run `RendererFrame`, or prove that
+the first cut can start.
+
+Independent fixtures check ordered live service calls, audio/property branches,
+wrapping deadlines, repeated invocation, and failure-prefix retention. The full
+68-test local suite and targeted ASan/UBSan run pass. Renderer callbacks in these
+initialization fixtures are test doubles, not proof of SDL presentation or an
+admitted original scene.
+
 ## Owning first-cut preparation in normal startup
 
 Normal graphical startup now retains `graphics::IntroPreparedResources` from the
@@ -248,13 +273,25 @@ components, commits the activation latch, records engine-clock state and advance
 the first cut. The activation update then returns without also running the
 ordinary active-controller update. Equality with the deadline does not activate.
 
-The constructor initializes the deadline to zero, but a separate lifecycle
-routine assigns an engine-clock-relative deadline. Its call ordering is not yet
-established, so constructor zero does not prove immediate activation in a real
-scene. The clock scale is now established as 1024 units per accumulated engine-time
-second, making the delay nominally two engine-time seconds, not two wall-clock
-seconds. Startup rate/mode and portable wrap behavior remain unverified. The readiness
-producer remains untraced; neither start route may be replaced by splash expiry.
+The deadline assignment belongs to the controller's global phase-two callback,
+after the complete reverse-construction phase-one pass. It registers the input
+action map when an input manager exists, selects CRT clock mode without sampling
+or resetting time, runs the global audio-volume helper, then stores the live
+scene clock plus 2048 with 32-bit wrapping addition. Global audio properties are
+separate from scene camera/reference properties.
+
+The renderer tail reads live height before width, sets the full viewport, then
+performs clear → present → clear → present. Each clear/present resolves the first
+renderer again. Clear requests zero color and depth one, with stencil zero only
+when stencil is present. These presentations neither traverse the scene nor
+advance `RendererFrameClock`. Device loss and pending configuration reset require
+explicit lifecycle handling; successful presentation does not prove recovery.
+
+The clock scale is 1024 units per accumulated engine-time second, making the
+delay nominally two engine-time seconds, not two wall-clock seconds. Startup
+rate, portable clock sampling and ordinary controller-update admission remain
+unresolved. The readiness producer remains untraced; neither start route may be
+replaced by splash expiry.
 This corrects the earlier description of readiness as an exclusive start gate.
 
 A later intro wait branch reuses the deadline and can resume through either the
@@ -404,8 +441,8 @@ limits catch-up steps and drops excess time. Those policies are not the
 [recovered variable-delta service](TIMING_EVIDENCE.md).
 
 The cut-player boundary must take explicit compatibility-time inputs until its
-actual producer is established. Research must identify the selected clock
-branch, start/reset/update ordering, completion comparison, scaling and
+actual producer is integrated. Controller phase two selects the CRT delta branch;
+research must still establish start/reset/update ordering, completion comparison and
 pause/load/focus suppression, as well as synchronous versus deferred delivery.
 Do not convert authored durations to a guessed number of 60 Hz ticks. Original
 and Modern should consume the same established compatibility clock and event

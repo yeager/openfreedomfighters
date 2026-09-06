@@ -84,6 +84,7 @@ add_library(off_core
     src/graphics/startup_graphics_asset.cpp
     src/graphics/intro_prepared_resources.cpp
     src/graphics/intro_runtime.cpp
+    src/graphics/intro_controller_initialization.cpp
     src/graphics/startup_graphics_prepared_plan.cpp
     src/graphics/startup_graphics_expanded_plan.cpp
     src/graphics/picture_transform.cpp
@@ -223,6 +224,9 @@ if(BUILD_TESTING)
     add_test(NAME off_shader_source_hash_tests COMMAND ${CMAKE_COMMAND}
         "-DOFF_TEST_WORK_DIR=${CMAKE_BINARY_DIR}/test-work/shader-source-hash"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_source_hash_tests.cmake")
+    add_executable(off_intro_controller_initialization_tests tests/intro_controller_initialization_tests.cpp)
+    target_link_libraries(off_intro_controller_initialization_tests PRIVATE off_core)
+    add_test(NAME off_intro_controller_initialization_tests COMMAND off_intro_controller_initialization_tests)
     add_executable(off_sdl_intro_renderer_tests tests/sdl_intro_renderer_tests.cpp)
     target_link_libraries(off_sdl_intro_renderer_tests PRIVATE off_sdl_intro_renderer)
     add_test(NAME off_sdl_intro_renderer_tests COMMAND off_sdl_intro_renderer_tests)

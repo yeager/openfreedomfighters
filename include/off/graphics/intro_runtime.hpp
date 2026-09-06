@@ -2,6 +2,7 @@
 
 #include "off/graphics/fresh_intro_camera.hpp"
 #include "off/graphics/intro_prepared_resources.hpp"
+#include "off/graphics/intro_controller_initialization.hpp"
 #include "off/graphics/picture_color_state.hpp"
 #include "off/graphics/picture_submission_cache.hpp"
 #include "off/graphics/picture_view_transition.hpp"
@@ -53,6 +54,8 @@ public:
   IntroRuntime(IntroRuntime&&) = delete;
   IntroRuntime& operator=(IntroRuntime&&) = delete;
   [[nodiscard]] const IntroPreparedResources& resources() const noexcept { return resources_; }
+  [[nodiscard]] IntroControllerInitialization& controller_initialization() noexcept { return controller_initialization_; }
+  [[nodiscard]] const IntroControllerInitialization& controller_initialization() const noexcept { return controller_initialization_; }
   [[nodiscard]] FreshIntroCamera& camera() noexcept { return camera_; }
   [[nodiscard]] const FreshIntroCamera& camera() const noexcept { return camera_; }
   [[nodiscard]] IntroRuntimeHandle root_handle() const noexcept { return {1}; }
@@ -78,6 +81,7 @@ public:
   [[nodiscard]] PictureViewTransition& view_transition() noexcept { return view_; }
 private:
   IntroPreparedResources resources_;
+  IntroControllerInitialization controller_initialization_;
   FreshIntroCamera camera_;
   std::vector<PictureHierarchyNode> hierarchy_;
   std::vector<IntroRuntimeHandle> additional_;
