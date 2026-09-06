@@ -2,12 +2,11 @@
 
 [![Build](https://github.com/yeager/openfreedomfighters/actions/workflows/build.yml/badge.svg)](https://github.com/yeager/openfreedomfighters/actions/workflows/build.yml)
 
-A clean-room project to bring *Freedom Fighters* to Windows, macOS, Linux and
-Steam Deck, running natively without an emulator.
+A clean-room native reimplementation of *Freedom Fighters*, targeting Windows,
+macOS, Linux and Steam Deck.
 
-**Not playable yet.** The current build verifies game files, opens a native
-window and loads startup resources. The original intro, menus and gameplay do
-not run yet.
+**Not playable yet.** The build opens a window and loads startup data, but does
+not render the original intro or run the menus and gameplay.
 
 You need your own copy of the game. The supported data set is the Steam Windows
 release; other editions have not been validated. No original game files or
@@ -19,36 +18,31 @@ executable code are included here.
 - Archive, texture, geometry and supported audio formats have working readers.
 - Startup shows the project splash for three seconds. Missing or invalid game
   data produces an error dialog over it.
-- The first intro sequence's source records, camera, pictures and textures are
-  loaded from the installation. Activation and rendering are still being connected.
+- The first intro sequence's camera, pictures and textures load from game data.
+  Camera state is constructed on the CPU; activation and drawing are not connected.
 - F10 opens a working graphics-settings panel. Its current appearance is
   diagnostic; matching the game's menu design is still on the roadmap.
 - A separate geometry preview is available with `--diagnostic-scene`. It is not
   a loaded level or a gameplay demo.
 
-Local graphics testing currently covers Linux/Vulkan. CI builds and runs tests
-on Windows, macOS and Linux, without retail assets. Those checks do not establish
-playability or visual accuracy.
+Graphics have been tested locally on Linux/Vulkan. CI builds and tests on
+Windows, macOS and Linux using independent fixtures, not retail assets.
 
-The current focus is getting the original startup sequence running from real
-game data. See the [intro notes](docs/INTRO_BOOTSTRAP.md) and
-[roadmap](docs/ROADMAP.md) for the remaining work.
+Next: connect intro activation, camera registration and picture drawing. Details
+are in the [intro notes](docs/INTRO_BOOTSTRAP.md) and [roadmap](docs/ROADMAP.md).
 
 ## Planned modes
 
-**Original:** preserve the game's gameplay and presentation, with native platform
-support and localization in 20 languages, including Swedish.
+These are targets, not working renderers:
 
-**Modern:** the same gameplay with higher resolutions, improved lighting,
-shadows and filtering.
+- **Original:** the original gameplay and presentation.
+- **Modern:** higher resolutions, improved lighting, shadows and filtering.
+- **Modern+:** optional HD assets and DLSS 4.5 on supported hardware.
 
-**Modern+:** an optional extension for separately licensed HD assets and DLSS 4.5
-on supported hardware. DLSS is not implemented. A later version will only be
-considered when official SDK documentation is available.
-
-The mode selector already exists, but it does not mean these rendering features
-are finished. See [Modern graphics](docs/MODERN_GRAPHICS.md) and
-[DLSS](docs/DLSS.md).
+The settings panel has a mode selector; DLSS and HD asset support are not
+implemented. See [Modern graphics](docs/MODERN_GRAPHICS.md) and [DLSS](docs/DLSS.md)
+for scope and licensing. Localization in 20 languages, including Swedish, is
+also planned.
 
 ## Build and run
 
@@ -72,7 +66,7 @@ Use the executable path produced by your build configuration; Windows builds
 use `openfreedomfighters.exe`. Replace `original` with `modern` to select the
 other profile.
 
-F10 toggles settings; Escape or closing the window exits. For development:
+F10 toggles settings. Close the window to exit. For development:
 
 - `--frame-limit N` exits after a bounded number of rendered frames.
 - `--show-graphics-menu` opens settings immediately.
