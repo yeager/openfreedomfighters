@@ -93,6 +93,7 @@ add_library(off_core
     src/simulation/world.cpp
     src/ui/graphics_menu.cpp
     src/ui/graphics_menu_draw.cpp
+    src/ui/graphics_menu_pointer.cpp
     src/ui/retail_ui_fonts.cpp
     src/ui/retail_ui_textures.cpp
 )
@@ -225,6 +226,10 @@ if(BUILD_TESTING)
     add_executable(off_graphics_menu_draw_tests tests/graphics_menu_draw_tests.cpp)
     target_link_libraries(off_graphics_menu_draw_tests PRIVATE off_core)
     add_test(NAME off_graphics_menu_draw_tests COMMAND off_graphics_menu_draw_tests)
+
+    add_executable(off_graphics_menu_pointer_tests tests/graphics_menu_pointer_tests.cpp)
+    target_link_libraries(off_graphics_menu_pointer_tests PRIVATE off_core)
+    add_test(NAME off_graphics_menu_pointer_tests COMMAND off_graphics_menu_pointer_tests)
 
     add_executable(off_startup_graphics_composition_tests
         tests/startup_graphics_composition_tests.cpp)

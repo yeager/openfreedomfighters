@@ -58,7 +58,7 @@ int main() {
     const auto list = off::ui::build_graphics_menu_draw_list(menu, size, now);
     check(list.status == off::ui::UiBuildStatus::ok &&
               off::ui::validate_graphics_menu_draw_list(list) &&
-              list.hit_targets.size() == 8 && has_text(list, "Modern") &&
+              list.hit_targets.size() == 10 && has_text(list, "Modern") &&
               has_text(list, "Borderless desktop") &&
               has_text(list, "1920 x 1080") && has_text(list, "VSync") &&
               has_text(list, "100%") && has_text(list, "Native") &&
@@ -120,12 +120,12 @@ int main() {
   const auto *apply_text = find_text(apply_state, "Apply");
   const auto *back_text = find_text(back_state, "Back");
   check(apply_text != nullptr && back_text != nullptr &&
-            near(apply_text->x, 60.0F) && near(back_text->x, 60.0F) &&
+            near(apply_text->x, 60.0F) && near(back_text->x, 240.0F) &&
             near(apply_text->y, 400.0F) && near(back_text->y, 400.0F) &&
-            apply_state.hit_targets.back().control ==
-                off::ui::UiControl::apply &&
-            back_state.hit_targets.back().control == off::ui::UiControl::cancel,
-        "Apply and Back are mutually selected states at the retail anchor");
+            apply_state.hit_targets[7].control == off::ui::UiControl::apply &&
+            back_state.hit_targets[8].control == off::ui::UiControl::cancel &&
+            back_state.hit_targets[9].control == off::ui::UiControl::defaults,
+        "diagnostic actions remain simultaneously accessible to pointer input");
   static_cast<void>(menu.handle_key(off::ui::GraphicsMenuKey::up, true, false));
 
   menu.draft().windowed_size = {1920, 1080};

@@ -116,6 +116,9 @@ The current controller menu mapping is Start to toggle, D-pad to navigate or
 adjust, south face button to activate/confirm, and east face button to cancel.
 Hotplug and focus handling guard against stale confirmations. These are project
 menu controls, not recovered original gameplay mappings.
+Primary mouse clicks select and advance option values; Apply/Back/Defaults and
+Keep/Revert are clickable. Hit testing accounts for window pixel density and
+checks confirmation expiry before accepting a click.
 `--screenshot FILE.bmp` captures the final composed frame when `--frame-limit`
 is present, or the first frame otherwise, by GPU readback. The destination must
 not exist. Retail-derived screenshots are local artifacts and must be written

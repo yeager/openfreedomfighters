@@ -65,6 +65,8 @@ public:
 
   [[nodiscard]] GraphicsMenuEffect handle_key(GraphicsMenuKey key,
                                               bool key_down, bool repeat);
+  // Project pointer-navigation policy; selection is valid only while editing.
+  [[nodiscard]] bool select_row(GraphicsMenuRow row) noexcept;
   [[nodiscard]] std::optional<GraphicsApplyProposal> request_apply();
   [[nodiscard]] GraphicsMenuEffect
   acknowledge_apply(bool success, GraphicsClock::time_point now);

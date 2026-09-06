@@ -9,7 +9,6 @@ namespace {
 
 constexpr UiColor dim{0, 0, 0, 170};
 constexpr UiColor panel{20, 25, 35, 245};
-constexpr UiColor row{38, 45, 58, 255};
 constexpr UiColor focus{232, 176, 55, 255};
 constexpr UiColor white{240, 243, 248, 255};
 constexpr UiColor muted{166, 174, 187, 255};
@@ -258,25 +257,18 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
            reference_rect(44.0F, reference_y - 2.0F, 16.0F, 16.0F), focus});
     }
   }
-  // Two retail action controls share this anchor, but their apply/back behavior
-  // mapping is not yet proven. The portable action selection below is synthetic.
-  auto action = UiControl::apply;
-  auto action_text = std::string{"Apply"};
-  if (menu.selected_row() == GraphicsMenuRow::cancel) {
-    action = UiControl::cancel;
-    action_text = "Back";
-  } else if (menu.selected_row() == GraphicsMenuRow::defaults) {
-    action = UiControl::defaults;
-    action_text = "Defaults";
-  }
-  const UiRect action_bounds = reference_rect(60.0F, 398.0F, 160.0F, 18.0F);
-  out.hit_targets.push_back({action_bounds, action, true});
-  add_text(UiLayer::content, point_x(60.0F), point_y(400.0F), action_text);
-  if (menu.selected_row() == GraphicsMenuRow::apply ||
-      menu.selected_row() == GraphicsMenuRow::cancel ||
-      menu.selected_row() == GraphicsMenuRow::defaults) {
-    out.rectangles.push_back(
-        {UiLayer::focus, reference_rect(44.0F, 398.0F, 16.0F, 16.0F), focus});
+  // Project diagnostic extension: expose all actions for pointer access.
+  // Only the first anchor comes from retail layout evidence; these three
+  // simultaneously accessible controls are not a recovered retail layout.
+  constexpr std::array actions{UiControl::apply, UiControl::cancel, UiControl::defaults};
+  constexpr std::array action_rows{GraphicsMenuRow::apply, GraphicsMenuRow::cancel, GraphicsMenuRow::defaults};
+  constexpr std::array action_labels{"Apply", "Back", "Defaults"};
+  for (std::size_t i = 0; i < actions.size(); ++i) {
+    const float x = 60.0F + static_cast<float>(i) * 180.0F;
+    out.hit_targets.push_back({reference_rect(x, 398.0F, 160.0F, 18.0F), actions[i], true});
+    add_text(UiLayer::content, point_x(x), point_y(400.0F), action_labels[i]);
+    if (menu.selected_row() == action_rows[i])
+      out.rectangles.push_back({UiLayer::focus, reference_rect(x - 16.0F, 398.0F, 16.0F, 16.0F), focus});
   }
   return finish();
 }

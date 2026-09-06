@@ -1,6 +1,7 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/platform/sdl_menu_gamepad.hpp"
 #include "off/ui/graphics_menu_draw.hpp"
+#include "off/ui/graphics_menu_pointer.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
@@ -1209,9 +1210,36 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         pressed = event.type == SDL_EVENT_KEY_DOWN;
         repeated = event.key.repeat;
       }
-      if (translated_key) {
+      // Deadline wins over every simultaneous keyboard, gamepad or pointer
+      // action; rollback goes through the same effect handler exactly once.
+      ui::GraphicsMenuEffect effect = menu.tick(ui::GraphicsClock::now());
+      const bool expired = effect == ui::GraphicsMenuEffect::revert_requested;
+      bool pointer_dispatched = false;
+      if (!expired && event.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
+          event.button.windowID == SDL_GetWindowID(window) &&
+          event.button.which != SDL_TOUCH_MOUSEID &&
+          event.button.button == SDL_BUTTON_LEFT && event.button.clicks == 1 &&
+          (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0) {
+        int logical_width{}, logical_height{}, pixel_width{}, pixel_height{};
+        if (SDL_GetWindowSize(window, &logical_width, &logical_height) &&
+            SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height) &&
+            logical_width > 0 && logical_height > 0 && pixel_width > 0 &&
+            pixel_height > 0) {
+          const ui::UiExtent pixels{static_cast<std::uint32_t>(pixel_width),
+                                    static_cast<std::uint32_t>(pixel_height)};
+          const auto point = ui::map_graphics_menu_pointer_to_pixels(
+              event.button.x, event.button.y,
+              {static_cast<std::uint32_t>(logical_width),
+               static_cast<std::uint32_t>(logical_height)}, pixels);
+          if (point) {
+            effect = ui::dispatch_graphics_menu_pointer(
+                menu, pixels, (*point)[0], (*point)[1], ui::GraphicsClock::now());
+            pointer_dispatched = true;
+          }
+        }
+      }
+      if (!expired && translated_key) {
         const auto key = *translated_key;
-        ui::GraphicsMenuEffect effect = ui::GraphicsMenuEffect::none;
         if (menu.phase() == ui::GraphicsMenuPhase::confirming &&
             pressed && !repeated &&
             (key == ui::GraphicsMenuKey::enter ||
@@ -1220,6 +1248,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         } else {
           effect = menu.handle_key(key, pressed, repeated);
         }
+      }
+      if (expired || translated_key || pointer_dispatched) {
         if (effect == ui::GraphicsMenuEffect::quit_requested) {
           running = false;
         } else if (effect == ui::GraphicsMenuEffect::apply_requested) {

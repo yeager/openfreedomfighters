@@ -46,6 +46,24 @@ content. See [Game-data policy](../DATA_POLICY.md).
 - A display-mode change presents a 15-second confirmation. Timeout, Escape, or B
   restores the last known-good window, swapchain, and presentation settings.
 - F10 cannot hide a pending display confirmation. Quit events remain available.
+- A primary mouse click on an editable option selects it and advances its value
+  once. Apply, Back and Defaults have separate diagnostic action targets;
+  Keep/Revert clicks use the same confirmation transaction. These pointer hit
+  areas and click-to-cycle behavior are portable policy, not recovered retail
+  interaction or final visual layout.
+
+Mouse hit testing rebuilds the draw list from current menu state and physical
+window size. SDL window-coordinate positions are converted to physical pixels
+before testing, including high-density displays. Only focused, same-window
+primary-button presses are accepted; touch-generated mouse events and extra
+multi-click activations are ignored. Outside clicks do nothing. Confirmation
+expiry is evaluated before the click, so an expired Keep button cannot commit.
+The same deadline-first ordering now applies to keyboard and controller input.
+Pointer tests cover physical-coordinate conversion, letterboxing, direct action
+access and confirmation boundaries. An ARM64 Linux Vulkan launch using verified
+Steam data produced a private screenshot with all three action labels visible.
+This confirms rendering/layout integration, not a physical pointer-device test
+or retail visual fidelity.
 
 Mouse, controller, and localized text support are delivery requirements, not
 permission to make the current keyboard route inaccessible. The final overlay
@@ -187,7 +205,8 @@ SDL_ttf without extracting or publishing the font. Bundle-order selection is
 provisional until the original font-role semantics are recovered. The implemented
 window mode, size,
 presentation mode, and Original/Modern profile apply transactionally through
-SDL, including the Keep/Revert timeout. Mouse routing, persistence,
+SDL, including the Keep/Revert timeout. Mouse clicks now share that dispatcher;
+persistence,
 font fallback, complex-script shaping, and recovered retail styling remain open.
 
 Stage 4 has recovered the authored coordinate space, title and two-column

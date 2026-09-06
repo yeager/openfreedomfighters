@@ -39,6 +39,14 @@ void GraphicsMenuSession::set_confirmed(
   draft_ = confirmed_requested_;
 }
 
+bool GraphicsMenuSession::select_row(GraphicsMenuRow row) noexcept {
+  if (phase_ != GraphicsMenuPhase::editing ||
+      row < GraphicsMenuRow::profile || row > GraphicsMenuRow::defaults)
+    return false;
+  selected_row_ = row;
+  return true;
+}
+
 GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
                                                    bool key_down, bool repeat) {
   if (!key_down || repeat || key == GraphicsMenuKey::other) {
