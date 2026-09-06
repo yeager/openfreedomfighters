@@ -7,6 +7,13 @@
 #include <stdexcept>
 
 namespace off::graphics {
+bool query_zero_renderer_resource_bounds(std::uint64_t, std::uint64_t renderer_resource_id,
+                                         std::array<float,3>&, std::array<float,3>&) {
+    if (renderer_resource_id != 0U)
+        throw std::runtime_error("renderer bounds query requires the verified zero-identifier path");
+    return false;
+}
+
 namespace {
 float finite(float value) {
     if (!std::isfinite(value)) throw std::runtime_error("picture bounds arithmetic must be finite");

@@ -22,6 +22,13 @@ struct ResourceBounds {
     float radius;
 };
 
+// Concrete zero-identifier renderer-query path: no lookup or output writes.
+// Caller proves retained ordinary runtime identity; nonzero identifiers are not
+// supported by this adapter and reject rather than becoming guessed failures.
+[[nodiscard]] bool query_zero_renderer_resource_bounds(
+    std::uint64_t runtime_identity, std::uint64_t renderer_resource_id,
+    std::array<float,3>& center, std::array<float,3>& extents);
+
 class PictureBoundsApplication final {
 public:
     using Query = std::function<bool(std::uint64_t, std::uint64_t,

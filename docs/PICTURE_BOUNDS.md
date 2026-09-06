@@ -74,11 +74,31 @@ Current ancestor bounds must retain other children; the root cannot be rebuilt
 from only the legal picture. Source hierarchy and identity bases are useful
 provenance, but do not prove unchanged runtime transforms, bounds, flags or
 suppression. No zero ancestor initialization or automatic propagation is inferred
-by this helper. The actual renderer-query outcome and original materialization
-caller scheduling remain unproved; both query branches are tested explicitly with
-the real owned descriptors. Actual first-frame admission remains incomplete until
+by this helper. Original materialization caller scheduling remains unproved;
+both query branches are tested explicitly with the real owned descriptors.
+Actual first-frame admission remains incomplete until
 the remaining state transitions are connected.
 
 All 49 local CTest executables pass after this addition. The geometry and
 application tests also pass with GCC and targeted ASan/UBSan, and the private
 owned-resource probe validates both explicit query outcomes and real enclosure.
+
+## Actual ordinary legal-picture query
+
+The common resource constructor copies the checked GMS `class_data_value` word
+into the runtime renderer-resource identifier on this path. The verified legal
+picture supplies zero. Its PRM picture-reference key is resolved separately and
+does not replace that identifier during ordinary materialization.
+
+`query_zero_renderer_resource_bounds` implements the concrete zero-ID query:
+return false without lookup or output writes. It rejects nonzero identifiers
+instead of treating unsupported resources as missing. The caller must retain the
+ordinary, unreassigned runtime identity; clones, replacements and reassignment
+require their own admission. This does not rename the source field or infer its
+meaning for unrelated object families.
+
+The private probe now connects the real checked source identifier to this query
+and the ordered bounds application. The base failure branch is therefore grounded
+in the actual producer/consumer path, not a synthetic failed query. The base call
+and subsequent descriptor replacement remain intact. Scene scheduling and ancestor
+updates are still separate requirements.

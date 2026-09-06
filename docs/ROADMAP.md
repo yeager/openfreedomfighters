@@ -178,6 +178,10 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   explicit scale, binary32 boundaries and separate raw/clamped extents.
 - [x] Apply materialized picture bounds after the explicit renderer-resource
   base query, preserving both result branches and ordered runtime writes.
+- [x] Connect the ordinary legal picture's retained renderer ID to the concrete
+  zero-ID bounds query without substituting its PRM key or invented query data.
+- [x] Recompute group resource and child-only owner bounds from ordered live
+  children, preserving filters, root fallback conditions and distinct extent rules.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

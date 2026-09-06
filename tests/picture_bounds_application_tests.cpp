@@ -1,6 +1,7 @@
 #include "off/graphics/picture_bounds.hpp"
 
 #include <array>
+#include <bit>
 #include <cfenv>
 #include <cmath>
 #include <cstdint>
@@ -40,6 +41,32 @@ int main() {
                   !std::is_move_assignable_v<PictureBoundsApplication>);
     const int saved = std::fegetround();
     if (std::fesetround(FE_TONEAREST) != 0) return 1;
+    {
+        std::array<float, 3> center{-0.0F, std::numeric_limits<float>::quiet_NaN(), 17};
+        std::array<float, 3> extents{std::numeric_limits<float>::infinity(), -0.0F, -5};
+        const auto center_bits = std::bit_cast<std::array<std::uint32_t, 3>>(center);
+        const auto extent_bits = std::bit_cast<std::array<std::uint32_t, 3>>(extents);
+        for (std::uint64_t identity : {std::uint64_t{0}, std::uint64_t{41},
+                                      std::numeric_limits<std::uint64_t>::max()}) {
+            check(!query_zero_renderer_resource_bounds(identity, 0, center, extents),
+                  "guarded zero renderer identifier returns false independently of opaque owner identity");
+            check(std::bit_cast<std::array<std::uint32_t, 3>>(center) == center_bits &&
+                  std::bit_cast<std::array<std::uint32_t, 3>>(extents) == extent_bits,
+                  "zero renderer query neither validates nor changes output bits");
+        }
+        for (std::uint64_t identifier : {std::uint64_t{1}, std::numeric_limits<std::uint64_t>::max()}) {
+            rejects([&] { (void)query_zero_renderer_resource_bounds(41, identifier, center, extents); });
+            check(std::bit_cast<std::array<std::uint32_t, 3>>(center) == center_bits &&
+                  std::bit_cast<std::array<std::uint32_t, 3>>(extents) == extent_bits,
+                  "unsupported renderer identifier rejects before output mutation");
+        }
+        ResourceBounds bounds{center, extents, -3};
+        std::uint32_t flags = 0x400U;
+        PictureBoundsApplication app;
+        app.apply(bounds, flags, 41, 0, descriptors, groups, {1, 1}, query_zero_renderer_resource_bounds);
+        check(final_bounds(bounds) && flags == 0x100400U && !app.failed(),
+              "concrete zero-query failure is followed by complete materialized descriptor application");
+    }
     for (bool success : {false, true}) {
         PictureBoundsApplication app;
         ResourceBounds bounds{{11, 12, 13}, {14, 15, 16}, 17};

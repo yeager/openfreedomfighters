@@ -132,7 +132,10 @@ mixed owner classes remain explicit, and preceding bounds work is not skipped.
 The [local picture-bounds calculation](docs/PICTURE_BOUNDS.md) now consumes real
 PRM groups with preserved rounding, scaled extents and pre-clamp radius inputs.
 Its ordered application preserves the explicit renderer-bounds query before
-descriptor replacement; ancestor updates and actual query admission remain separate.
+descriptor replacement. The ordinary legal picture's retained zero renderer ID
+now selects its verified concrete query path; ancestor updates remain separate.
+The [group-bounds callback](docs/GROUP_BOUNDS.md) now recomputes separate resource
+and child-only owner bounds from explicitly admitted live children.
 
 ## Build the native bootstrap
 
