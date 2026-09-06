@@ -1,5 +1,28 @@
 # Intro bootstrap evidence and implementation gates
 
+## Next runnable integration
+
+The missing layer is scene execution, not another image-upload path. A private
+inventory through the public parser finds 470 source objects and 383 attachment
+instances across 22 component types in the owned intro archive. Of those,
+106 attachments across 20 types have no authored hide bit in their own or ancestor
+source records. This is not an active-component count: live resource flags,
+bypass masks, lifecycle callbacks and later mutations still determine admission.
+It does show why a controller-and-five-commands-only initializer is insufficient.
+
+The next implementation must retain resource flags, component instances and
+registry membership in the same host that already owns the decoded pictures.
+Global lifecycle order and ordinary update order are different. Both must execute
+against that retained state, with separate global/scene properties and shared
+scene/dispatch clocks. An unsupported admitted component must be identified by
+type and source identity, not silently replaced by an empty callback.
+
+Controller activation must then update the actual group, camera, view and picture
+registries before the same update's ordered GPU submission. `sdl_gpu_runtime.cpp`
+currently uploads intro images but calls neither an intro update nor intro draw.
+Its loop is the integration point for the completed host, not evidence that the
+scene is already running.
+
 ## Retained native host
 
 Normal startup now constructs one nonmoving `IntroRuntime` and passes it to the

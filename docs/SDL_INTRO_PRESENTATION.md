@@ -44,6 +44,12 @@ warnings. That run is not clean; library stack attribution alone does not rule
 out a contributing application lifecycle issue. Tests print both video and GPU
 drivers so these results remain distinguishable.
 
+CI run 34043926700 at commit `942b2c4` completed this test on Cocoa/Metal and
+Windows/Direct3D 12, with two submissions on each backend and no test skip.
+The Linux CI presentation test was skipped because its required platform path
+was unavailable; it is not Linux presentation evidence. Local Wayland/Vulkan
+testing remains separate.
+
 This bridge is linked into the executable but is not automatically invoked by
 normal startup. Connecting the real admitted lifecycle and shared scene services
 remains necessary; the bridge alone does not start the intro.

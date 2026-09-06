@@ -49,6 +49,6 @@ the undefined-Y replacement policy and raster/sampler/depth state. It proves a
 source-backed GPU path, not the original first frame's layout, timing or automatic
 playback. CI run 34042124079 at commit `f373d3b` also executed the 64-pixel
 renderer oracle and all 14 stage-shader cases on Windows/Direct3D 12 and
-macOS/Metal. Both backend runs passed without skipping these tests. That run
-predates the distinct-offset fixture; its cross-platform coverage is separate
-from the newer local Vulkan check.
+macOS/Metal. Both backend runs passed without skipping these tests. The later
+run 34043926700 at commit `942b2c4` also passed the distinct-offset fixture and
+all 14 shader cases on both backends, without skipping them.

@@ -33,8 +33,9 @@ The picture renderer has passed GPU tests on Linux/Vulkan, Windows/Direct3D 12
 and macOS/Metal. CI uses independent fixtures, not retail assets; these tests
 do not establish complete intro playback.
 
-Next: make normal startup render the original intro and reach its main menu.
-This takes priority over graphics polish and more isolated helpers. Details
+Next: connect the scene's component lifecycle and update loop so normal startup
+renders the original intro and reaches its main menu. This takes priority over
+graphics polish and more isolated helpers. Details
 are in the [intro notes](docs/INTRO_BOOTSTRAP.md) and [roadmap](docs/ROADMAP.md).
 
 ## Planned modes
