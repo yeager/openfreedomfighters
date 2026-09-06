@@ -24,7 +24,8 @@ map_base_picture_material_property(std::uint32_t authored_property,
 }
 
 PictureMaterialStateRequests
-resolve_picture_material_state(const PictureMaterialStateInput &input) {
+resolve_picture_material_state(const PictureMaterialStateInput &input,
+                               const PictureRendererFogState& fog) {
   PictureMaterialStateRequests result;
   result.effective_features = static_cast<std::uint8_t>(
       ~(input.pass_disable_mask_a | input.pass_disable_mask_b) & 3U);
@@ -80,6 +81,15 @@ resolve_picture_material_state(const PictureMaterialStateInput &input) {
               : PictureBlendFactor::inverse_source_alpha;
     }
   }
+  auto fog_color = fog.base_color;
+  if (*material.blend_enabled) {
+    if ((word & 0x2U) != 0)
+      fog_color = fog.additive_color;
+    else if ((word & 0x2000U) != 0)
+      fog_color = fog.special_color;
+  }
+  if (fog_color != fog.tracked_color)
+    material.fog_color = fog_color;
   material.depth_write_enabled = (word & 0x40000U) == 0;
   material.depth_comparison = (word & 0x20000U) != 0
                                   ? PictureDepthComparison::always

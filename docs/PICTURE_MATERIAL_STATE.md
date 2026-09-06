@@ -94,6 +94,11 @@ other selectors request nothing. With any nonzero features:
   color, RGB texture-plus-diffuse addition and disabled alpha operation.
   These are requests only, not a defined final pixel equation.
 - Alpha testing is disabled for this zero-threshold picture path.
+- Fog color uses the current renderer's additive color when bit `0x2` is set,
+  otherwise its special color for bit `0x2000`, otherwise its base color.
+  This selection also runs after the special cache-word replacement. An
+  unblended material selects base color. A request is emitted only when the
+  selected packed word differs from the renderer's tracked fog color.
 - Bit 0x40000 disables depth writes; otherwise they are enabled. Bit 0x20000
   chooses always depth comparison; otherwise less-or-equal.
 - Bit 0x80000 disables culling; otherwise clockwise culling is requested.
@@ -104,6 +109,27 @@ These material requests can occur with feature 2 even though texture binding
 was omitted. Suppression/cache hits do not undo preceding resource binding.
 Blend operation, depth-test enable, filtering, later texture stages, clipping,
 projection and output transfer are not established here and are not defaulted.
+
+## Fog context and ordering
+
+`resolve_picture_material_state` requires `PictureRendererFogState`: current
+base, additive, special and tracked color words. None is a per-material default.
+The optional fog-color request follows blend/stage/alpha handling and precedes
+depth, culling and addressing. Applying it replaces the tracked word before
+submitting the backend color. A packed zero request is distinct from no request.
+Suppression, a cache hit or zero effective features skip fog entirely.
+
+Tracked fog color is not necessarily actual GPU fog color. The separate fog
+configuration setter submits its opaque base color without updating that tracked
+word. Collapsing them into one effective-state field would change the original
+comparison behavior. Likewise, a camera disabling fog does not erase the
+material's fog-color requests.
+
+The normal loop's reset initializes base/additive/special/tracked colors to
+`0`, `0xff000000`, `0xffffffff`, `0` and submits fog color zero. Those values are
+established at that reset boundary, not inferred for arbitrary material calls.
+Fog enable and vertex/table modes are separate states; this request model does
+not select their final values.
 
 ## Remaining integration evidence
 
@@ -122,3 +148,9 @@ and cache guards, special sentinel hits, zero-feature cache replacement,
 blend selection, and depth/cull/address requests. The optional local startup
 asset test checks the observed authored property domain and its load-time
 mapping against the user's data, without treating it as final resource state.
+
+Fog tests cover all feature combinations, additive-over-special precedence,
+suppression, cache hits, packed-zero requests and sequential tracked-color
+updates. The private probe uses real fade material/color updates with an
+explicit conditional renderer context; it does not claim observed first-frame
+fog history. All 54 local CTest executables pass with this correction.

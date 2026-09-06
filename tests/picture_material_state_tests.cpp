@@ -23,15 +23,69 @@ bool empty(const PictureMaterialRequests &state) {
          !state.destination_blend && !state.alpha_test_enabled &&
          !state.depth_write_enabled && !state.depth_comparison &&
          !state.cull_mode && !state.address_u && !state.address_v &&
-         !state.texture_factor && empty(state.stage_zero);
+         !state.texture_factor && !state.fog_color && empty(state.stage_zero);
 }
 PictureMaterialStateInput input(std::uint32_t word = 0, unsigned features = 3) {
   return {word, static_cast<std::uint32_t>(~features), 0, 0, std::nullopt, 0,
           true};
 }
+// Explicit independent renderer context for the pre-existing request tests;
+// production callers must supply their live context, not use this fixture.
+PictureMaterialStateRequests resolve_picture_material_state(const PictureMaterialStateInput& request) {
+  return off::graphics::resolve_picture_material_state(request,
+      {0x12345678U, 0x87654321U, 0xabcdefffU, 0x12345678U});
+}
 } // namespace
 
 int main() {
+  {
+    const PictureRendererFogState fog{0x12345678U, 0x87654321U, 0xabcdefffU, 0};
+    for (unsigned features = 0; features < 4; ++features) {
+      for (const std::uint32_t word : {0U, 1U, 2U, 0x400U, 0x402U, 0x2000U, 0x2002U, 0xffffffffU}) {
+        auto request = input(word, features);
+        const auto result = off::graphics::resolve_picture_material_state(request, fog);
+        const auto expected = (word & 2U) ? fog.additive_color :
+                              (word & 0x2000U) ? fog.special_color : fog.base_color;
+        check(features == 0 ? !result.material.fog_color : result.material.fog_color == expected,
+              "fog uses additive before special before base on nonzero-feature material miss");
+        auto matching = fog; matching.tracked_color = expected;
+        check(!off::graphics::resolve_picture_material_state(request, matching).material.fog_color,
+              "matching tracked color omits fog request without clearing backend state");
+        request.cached_key = PictureMaterialCacheKey{word, 0xffffffffU, 0};
+        check(!off::graphics::resolve_picture_material_state(request, fog).material.fog_color,
+              "cache hit skips fog even when renderer colors have changed");
+        request.cached_key.reset();
+        for (const std::uint8_t suppression : {std::uint8_t{1}, std::uint8_t{255}}) {
+          request.suppression_byte = suppression;
+          const auto suppressed = off::graphics::resolve_picture_material_state(request, fog);
+          check(!suppressed.material.fog_color && !suppressed.cache_replacement,
+                "suppression skips fog and material cache writes");
+          check(suppressed.resource_binding.bind_selected_texture.has_value() == ((features & 1U) != 0),
+                "fog suppression does not suppress preceding admitted texture binding");
+        }
+      }
+    }
+    auto request = input(0x2000U);
+    const auto special = off::graphics::resolve_picture_material_state(request, fog);
+    check(special.cache_replacement == PictureMaterialCacheKey{0xffffffffU, 0xffffffffU, 0} &&
+          special.material.fog_color == fog.special_color,
+          "special cache-word replacement does not bypass fog request");
+    const PictureRendererFogState zero_base{0, 7, 8, 1};
+    check(off::graphics::resolve_picture_material_state(input(0), zero_base).material.fog_color == 0U,
+          "packed zero is a real fog-color request, not absence");
+    auto tracked = fog;
+    // Apply only this documented tracked-color effect in a sequential fixture.
+    // No backend initialization, full pass reset or draw admission is implied.
+    for (const std::uint32_t word : {2U, 2U, 0x2000U, 0U}) {
+      const auto next = off::graphics::resolve_picture_material_state(input(word), tracked);
+      if (next.material.fog_color) tracked.tracked_color = *next.material.fog_color;
+      check(tracked.tracked_color == ((word & 2U) ? fog.additive_color :
+            (word & 0x2000U) ? fog.special_color : fog.base_color),
+            "ordered material calls retain and replace explicit tracked fog");
+    }
+    check(tracked.base_color == fog.base_color && tracked.additive_color == fog.additive_color &&
+          tracked.special_color == fog.special_color, "material selection never rewrites configured fog colors");
+  }
   constexpr std::array<std::uint32_t, 7> mapped{
       0x60010, 0x60012, 0x60014, 0x60011, 0x60018, 0x60210, 0x60211};
   for (std::uint32_t i = 0; i < mapped.size(); ++i) {

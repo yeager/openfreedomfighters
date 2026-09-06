@@ -43,6 +43,10 @@ struct PictureMaterialRequests {
   std::optional<PictureBlendFactor> source_blend;
   std::optional<PictureBlendFactor> destination_blend;
   std::optional<bool> alpha_test_enabled;
+  // After blend/stage/alpha handling and before depth/cull/address requests.
+  // When present, replace renderer tracked fog first, then request this backend
+  // color. Absence leaves BOTH untouched; tracked color need not equal GPU color.
+  std::optional<std::uint32_t> fog_color;
   std::optional<bool> depth_write_enabled;
   std::optional<PictureDepthComparison> depth_comparison;
   std::optional<PictureCullMode> cull_mode;
@@ -67,7 +71,19 @@ struct PictureMaterialStateInput {
   std::uint8_t suppression_byte;
   std::optional<PictureMaterialCacheKey> cached_key;
   std::uint32_t mode_selector;
+  // Admitted binding-helper call after packed-key field change, nonnull
+  // resource and backing selection checks; not decoded texture inequality.
   bool resource_transition;
+};
+
+// Current renderer words, not immutable material defaults or necessarily the
+// actual GPU color. The separate fog configuration setter may submit a backend
+// color without updating tracked_color. Supply the real caller-owned context.
+struct PictureRendererFogState {
+  std::uint32_t base_color;
+  std::uint32_t additive_color;
+  std::uint32_t special_color;
+  std::uint32_t tracked_color;
 };
 
 struct PictureMaterialStateRequests {
@@ -82,7 +98,8 @@ struct PictureMaterialStateRequests {
 // Conditional CPU requests only. Omitted states remain inherited. The picture
 // call uses secondary 0xffffffff and threshold zero. No GPU state is mutated.
 [[nodiscard]] PictureMaterialStateRequests
-resolve_picture_material_state(const PictureMaterialStateInput &input);
+resolve_picture_material_state(const PictureMaterialStateInput &input,
+                               const PictureRendererFogState& fog);
 
 // Base-picture load-time mapping only, not a final resource-state derivation.
 // Runtime aliases and subsequent writers are deliberately not resolved here.
