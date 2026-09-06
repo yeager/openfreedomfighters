@@ -139,6 +139,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Decode the restricted first-cut component settings, ordered command fields
   and subordinate sequence payload; resolve authored event names separately
   from source references and verify the full route privately on owned data.
+- [x] Convert explicit scene-clock words to cut timeline coordinates with the
+  reviewed low-word retention and float rounding, without a guessed clock source.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

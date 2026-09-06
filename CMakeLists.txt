@@ -54,6 +54,7 @@ else()
 endif()
 
 add_library(off_core
+    src/cutscene/timeline_position.cpp
     src/audio/decode.cpp
     src/crypto/sha256.cpp
     src/data/archive_vfs.cpp
@@ -194,6 +195,10 @@ if(BUILD_TESTING)
     add_executable(off_gms_image_tests tests/gms_image_tests.cpp)
     target_link_libraries(off_gms_image_tests PRIVATE off_core)
     add_test(NAME off_gms_image_tests COMMAND off_gms_image_tests)
+
+    add_executable(off_cut_timeline_tests tests/cut_timeline_tests.cpp)
+    target_link_libraries(off_cut_timeline_tests PRIVATE off_core)
+    add_test(NAME off_cut_timeline_tests COMMAND off_cut_timeline_tests)
 
     add_executable(off_render_map_tests tests/render_map_tests.cpp)
     target_link_libraries(off_render_map_tests PRIVATE off_core)

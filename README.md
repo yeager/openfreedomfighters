@@ -85,6 +85,8 @@ first-cut readers also decode its settings, commands and referenced sequence
 resource, including event-name and target-source joins. They do not yet initialize
 sequence players or activate the intro; see
 [intro bootstrap evidence](docs/INTRO_BOOTSTRAP.md).
+An [explicit-clock timeline converter](docs/CUT_TIMELINE.md) now preserves the
+recovered arithmetic without supplying a clock source or executing commands.
 
 ## Build the native bootstrap
 

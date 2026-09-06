@@ -205,6 +205,9 @@ pause/load/focus suppression, as well as synchronous versus deferred delivery.
 Do not convert authored durations to a guessed number of 60 Hz ticks. Original
 and Modern should consume the same established compatibility clock and event
 state; sharing graphics modes does not justify changing intro timing.
+The [explicit-clock timeline conversion](CUT_TIMELINE.md) is now implemented
+without a host-clock adapter or command executor. It preserves the reviewed
+integer and float boundaries; it does not resolve the remaining scheduling gates.
 
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
