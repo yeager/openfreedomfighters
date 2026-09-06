@@ -86,7 +86,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [ ] Controller action map and SDL device routing specified in the
   [input runtime contract](INPUT_RUNTIME.md).
 - [x] Select SDL GPU and prove the native window/device/swapchain clear-pass lifecycle.
-- [x] Prepare a validated startup-scene mesh and texture for GPU upload.
+- [x] Prepare a validated diagnostic-scene mesh and texture for GPU upload;
+  the startup UI archive has no directly resolved mesh in the current parser.
 - [x] Upload and draw the first decoded retail mesh and texture.
 - [x] Preserve GMS and RMC/RMI transform records separately and enforce a
   source-only diagnostic-rendering boundary.
@@ -127,6 +128,12 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   specified by the [audio runtime contract](AUDIO_RUNTIME.md). Audio-bank
   decoding is implemented; runtime playback is not.
 - [ ] Startup/menu and one static level render on Windows, Linux, Steam Deck, and macOS.
+- [ ] Decode the authored intro controller and sequence resources with bounded
+  class-stream readers; preserve source references until their lookup contract
+  is established.
+- [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
+  transitions, initial cut activation and natural completion events before
+  enabling the intro-to-menu path. The project splash is not an intro timer.
 - [ ] Replace the diagnostic F10 skin with a retail-data-backed overlay matching
   the recovered original menu layout and visual language.
 - [x] Recover and bounds-check the startup tagged window-picture stream through

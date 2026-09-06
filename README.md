@@ -99,6 +99,8 @@ GPU smoke tests and still requires successful retail-data verification first.
 Normal startup currently clears the window and can show F10; the original intro
 and menu are not yet activated or rendered. Add `--diagnostic-scene` only to
 inspect the separate geometry preview. It is never a normal-startup fallback.
+The [intro bootstrap evidence and gates](docs/INTRO_BOOTSTRAP.md) distinguish
+recovered controller behavior from the remaining decoding and activation work.
 Every normal launch first presents project-owned OpenFreedomFighters artwork for
 three seconds. Retail verification and subsequent CPU asset preparation run on
 a worker so the window remains responsive. Preparation begins only after
