@@ -109,6 +109,9 @@ an active camera, apply aspect policy or assume a fullscreen viewport.
 The reviewed mode-zero camera conversion now feeds explicit view calculations,
 preserving angle rounding and separate near-plane clamps without selecting a
 camera or inventing renderer dimensions.
+An ordered admitted-view pass now preserves cached signed-priority ordering and
+visits every enabled, non-null view. Startup registration and concrete render-pass
+preparation still need to be connected; it is not an active-camera shortcut.
 
 ## Build the native bootstrap
 

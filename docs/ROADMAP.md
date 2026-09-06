@@ -158,6 +158,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   privately verify all authored fields through the real member reference.
 - [x] Convert the supported new-camera mode-zero fields with reviewed binary32
   boundaries and connect them to view helpers using explicit renderer inputs.
+- [x] Execute the bounded admitted-view phase with cached signed-priority order,
+  stable ties and begin/traversal/end callbacks for every eligible view.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

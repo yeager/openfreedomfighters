@@ -81,3 +81,39 @@ ASan/UBSan executable pass. The GMS and conversion tests also pass with GCC.
 The preceding camera-reader CI run exposed a missing direct standard-library
 include in its test; this revision fixes that portability error rather than
 depending on Clang's transitive includes.
+
+## Ordered admitted views
+
+`graphics::AdmittedViewPass` implements the reviewed conditional view phase over
+explicitly admitted records. It is not the renderer's separate camera-handle
+registry and does not create startup admission. The constructor copies insertion
+records and caches their ordering. Each key is the signed interpretation of
+two's-complement negated priority, computed with unsigned arithmetic to avoid C++
+overflow. Entries precede strictly smaller keys and follow equal keys. This gives
+stable ascending camera priority except the signed-minimum wrap case; no float
+priority conversion or per-frame priority re-sort occurs here.
+
+The native policy rejects more than sixteen records. Duplicate view identities
+remain distinct entries at this boundary. Per-frame camera associations and enabled
+query results are explicit inputs indexed by original insertion position; absent
+association is separate from identity zero. After the required frame-preparation
+callback, every non-null enabled view receives begin, traversal and end callbacks
+in that order. There is no single highest-priority winner or break after one view.
+
+The original consumer walks a live array. This native subset instead requires
+fixed admitted records and stable, immutable camera inputs/lifetimes throughout
+the pass, with reentry rejected. It does not claim the original snapshots state
+or safely permits callback destruction. Required callbacks and input sizes are
+checked before the first effect. A callback exception propagates after its prefix;
+no synthetic end hook or rollback occurs, and a retry starts the pass again.
+
+The caller provides actual frame preparation, camera transform preparation,
+component traversal and backend state. The helper does not implement those by
+substituting empty backend operations. The private real-camera probe explicitly
+assumes admission and enabled state using local identity tokens, then verifies
+ordered stages and view calculations with declared test pass inputs. That is not
+proof that startup invokes this pass or that its rectangle is fullscreen.
+
+All 42 local CTest executables pass. The admitted-view tests also pass under GCC
+and targeted ASan/UBSan, and the conditional owned-camera probe passes through
+the ordered view callbacks without inventing startup admission.
