@@ -125,6 +125,8 @@ Camera enable/disable transitions now preserve renderer notification before the
 runtime flag change; registration is not used as an implicit enable operation.
 The legal picture's Center callback now updates local position, runtime dirty
 flags, the explicit resource service, picture cache and component status in order.
+Its [position update service](docs/POSITION_UPDATE_SERVICE.md) now preserves shared
+deferred queuing, validated handle resolution and ordered downstream callbacks.
 
 ## Build the native bootstrap
 

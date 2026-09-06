@@ -165,9 +165,39 @@ without rolling back effects already performed by the renderer hook.
 This is not a camera-selection or registration operation. Although recovered
 construction sets the enabled bit, copying and subsequent lifecycle operations
 can change runtime flags. No complete constructor flag word or actual first-frame
-enabled state is inferred here. The first-cut camera setup's named-service lookup
-and surrounding application admission remain separate proof obligations.
+enabled state is inferred here. Actual scene-property population and the resulting
+first-cut query value, plus application admission, remain separate proof obligations.
 
 All 45 local CTest executables pass after this addition. The enable-transition
 tests also pass with GCC and ASan/UBSan, including disabled-view skipping and
 reenabling under explicitly supplied admission and identity inputs.
+
+## First registration and scene-property lookup
+
+The camera setup's named-camera query reads a scene property, not the authored
+resource directory or the registered-camera list. The caller initializes its
+output handle to zero; a missing property leaves that value unchanged. An
+existing valid handle property containing zero takes the same branch. A future
+native property reader must validate the expected type and four-byte payload
+before copying; the original diagnostic-and-copy behavior is not a safe parser
+contract. This query is not implemented by searching display names.
+
+The reviewed first-cut setup flag enters the registered-camera sweep when that
+query produces zero, then registers the requested camera. The actual intro
+camera's authored renderer selector is zero, for which the source reader skips
+registration. Therefore a freshly constructed, unmodified and not previously
+registered camera is outside the sweep and can retain its enabled state through
+its subsequent registration. No synthetic enable operation is needed for that
+bounded path.
+
+Load completion can create a separate built-in fallback camera when registered
+index zero is absent. It does not pick the first authored camera or automatically
+populate the named-camera property. The two identities and collections must not
+be conflated. The selected camera's generic member-start hook is a no-op, not an
+additional enable operation.
+
+Private inspection found no literal named-camera property key in the owned intro
+GMS/BUF payloads, and a fresh property store is empty. Neither observation proves
+the runtime query result: generic insertion, copying/restoration and intervening
+lifecycle activity still require tracing. Thus these findings narrow the actual
+startup path but do not yet establish an unconditional first-frame enabled state.

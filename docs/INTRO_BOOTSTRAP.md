@@ -82,8 +82,9 @@ observes the new position and flags but the prior cache/status state.
 
 The service remains an explicit required integration boundary on changed paths;
 this adapter does not implement hierarchy propagation or invent a once-only
-lifecycle latch. The admitted service must not throw, mutate the inputs, reenter
-or destroy the owner. Unexpected C++ exceptions propagate with position/flags
+lifecycle latch. The admitted service must not throw, mutate inputs except for
+its declared runtime-flag effects, reenter or destroy the owner. Unexpected C++
+exceptions propagate with position/flags
 already committed and without forcing later cache/status writes. No atomic
 rollback or original retry behavior is claimed. Runtime flags and component
 status must be distinct state words.
@@ -94,6 +95,9 @@ engine dimensions and service callback are test conditions, not an observed
 original frame or a complete scene-transform implementation.
 All 46 local CTest executables pass with this composition, along with targeted
 Center ASan/UBSan and GCC tests and the private owned-resource probe.
+The [shared position service](POSITION_UPDATE_SERVICE.md) now supplies the
+reviewed immediate/deferred scheduling behind this callback. Actual lifecycle
+mode admission and downstream scene propagation remain separate integration work.
 
 ## Current runtime boundary
 

@@ -1,0 +1,64 @@
+# Position update service
+
+`graphics::PositionUpdateService` implements the independently reviewed scheduling
+boundary behind the picture position setter. It is shared by a scene manager,
+not recreated for each picture. `CenterPicturePosition` can notify it using the
+same live resource flag word. It is not a complete scene manager or a replacement
+for the downstream spatial, bounds and maintenance operations.
+
+## Immediate and deferred notifications
+
+Mode, collection enablement and signed suppression are explicit per-operation
+inputs. Immediate mode calls the optional spatial-change hook and then bounds
+propagation with no incoming child. It does not inspect or flush the queue and
+does not use the deferred collection or resource-flag gates.
+
+Deferred mode returns when collection is disabled or resource flags intersect
+`0x20200000`. Otherwise an exactly full, 50-entry queue is flushed first. The
+original admission checks are not repeated after that flush. The resource flags
+are ORed with `0x23000000`, then its opaque manager handle is obtained and appended.
+Zero handles are retained too; resolution decides whether they represent a live
+resource. The service does not invent a universal generation or pointer format.
+
+## Flush order
+
+1. Resolve every queued handle once in order. Missing resources are dropped.
+   Clear only `0x20000000` on each survivor before retaining its live identity.
+   The original queue count remains visible throughout this first pass.
+2. If collection is disabled, clear the count and return. Otherwise publish the
+   survivor count before processing them in their preserved order.
+3. Read each survivor's current flags. `0x200000` skips per-resource work;
+   otherwise `0x40000` selects maintenance; otherwise bounds propagation runs
+   only when signed suppression is nonpositive.
+4. Invoke final-batch processing with all survivors, including those skipped in
+   step three. Invoke it for empty batches too. Clear the count only after it
+   returns. The retained `0x03000000` bits are not silently removed.
+
+Operation hooks may make their declared resource-flag changes. Later predicates
+read those changed flags, not a stale snapshot. Original loops observe live queue
+counts; the native boundary prohibits queue mutation and reentry, making its
+bounded traversal equivalent without claiming original snapshot semantics.
+
+## Safety and remaining integration
+
+The caller owns resources and keeps identities, registry and modes stable during
+an operation. Required hooks are validated before effects; spatial notification
+is optional. Hooks must not throw on admitted paths. An unexpected exception
+retains completed effects and poisons the service, which rejects subsequent
+operations. This explicit native failure policy avoids claiming an original
+rollback or valid retry after partial resolution and compaction.
+
+The default intro filename selects deferred rather than immediate mode in the
+reviewed scene constructor. Loading disables collection early and enables it near
+completion. That does not yet prove the first Center callback's placement relative
+to completion or exclude configuration overrides and intervening controls.
+These states therefore remain explicit until that lifecycle join is established.
+
+The private owned-data probe connects the real legal picture's authored position
+through Center to this queue and checks its deferred processing order. Supplied
+engine dimensions, mode and native identity are test conditions. Bounds and batch
+hooks remain visible integration boundaries; counting their calls is not proof
+of complete scene propagation or a rendered intro frame.
+
+All 47 local CTest executables pass after this integration, along with targeted
+service ASan/UBSan and GCC tests and the private owned-resource probe.

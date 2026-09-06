@@ -20,7 +20,8 @@ public:
 
     // Explicit engine dimensions, not texture or viewport extents. Finite
     // position, positive dimensions, nearest rounding and no reentry/alias
-    // mutation/destruction are native admission policies. Status and flags
+    // mutation/destruction are native admission policies, except the service may
+    // apply its declared runtime-flag effects. Status and flags
     // must be distinct words. A changed position requires a synchronous service.
     // That service sees committed position/flags before cache/status updates.
     // It must not throw on the admitted path; unexpected exceptions propagate

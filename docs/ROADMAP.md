@@ -170,6 +170,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   runtime flags and renderer notification before the enabled-bit write.
 - [x] Connect admitted Center phase one to authored-derived local position,
   ordered resource-service notification, cache invalidation and component status.
+- [x] Implement the shared position-service immediate/deferred scheduling and
+  bounded handle queue, with explicit downstream bounds/maintenance operations.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.
