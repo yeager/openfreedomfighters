@@ -162,6 +162,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   stable ties and begin/traversal/end callbacks for every eligible view.
 - [x] Decode the distinct Center-attached first-cut legal picture and privately
   verify its real multi-piece picture and complete texture bindings.
+- [x] Connect explicit renderer/backend admission to ordered state-frame snapshots,
+  nested view phases and subsequent state/backend maintenance.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

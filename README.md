@@ -115,6 +115,9 @@ preparation still need to be connected; it is not an active-camera shortcut.
 The first-cut legal picture also has its own guarded reader and verified real
 PRM/TEX joins. Its multi-piece authored content is preserved; visibility is not
 inferred merely from its member reference or centering component.
+The renderer-frame orchestration now snapshots matching states, executes their
+view phases, then performs ordered state/backend maintenance with explicit
+admission inputs. This does not yet force or establish application startup readiness.
 
 ## Build the native bootstrap
 

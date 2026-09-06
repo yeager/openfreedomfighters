@@ -92,6 +92,7 @@ add_library(off_core
     src/graphics/picture_view_parameters.cpp
     src/graphics/intro_camera_state.cpp
     src/graphics/admitted_view_pass.cpp
+    src/graphics/renderer_frame_pass.cpp
     src/platform/startup_lifecycle.cpp
     src/platform/startup_preparation.cpp
     src/settings/graphics_settings.cpp
@@ -229,6 +230,10 @@ if(BUILD_TESTING)
     add_executable(off_admitted_view_pass_tests tests/admitted_view_pass_tests.cpp)
     target_link_libraries(off_admitted_view_pass_tests PRIVATE off_core)
     add_test(NAME off_admitted_view_pass_tests COMMAND off_admitted_view_pass_tests)
+
+    add_executable(off_renderer_frame_pass_tests tests/renderer_frame_pass_tests.cpp)
+    target_link_libraries(off_renderer_frame_pass_tests PRIVATE off_core)
+    add_test(NAME off_renderer_frame_pass_tests COMMAND off_renderer_frame_pass_tests)
 
     add_executable(off_render_map_tests tests/render_map_tests.cpp)
     target_link_libraries(off_render_map_tests PRIVATE off_core)

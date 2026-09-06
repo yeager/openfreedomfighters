@@ -117,3 +117,37 @@ proof that startup invokes this pass or that its rectangle is fullscreen.
 All 42 local CTest executables pass. The admitted-view tests also pass under GCC
 and targeted ASan/UBSan, and the conditional owned-camera probe passes through
 the ordered view callbacks without inventing startup admission.
+
+## Renderer-to-state frame connection
+
+`graphics::RendererFramePass` connects the reviewed outer renderer/backend phase
+to caller-supplied state frame operations. Renderer admission and backend readiness
+are explicit results, not forced-success defaults. Non-admission does nothing;
+an admitted renderer whose backend is not ready skips state frames but still
+reaches the outer backend-maintenance operation.
+
+For a ready backend, the pass selects states by renderer identity and snapshots
+their state identities in storage order before callbacks. It runs every selected
+state frame, then every selected state's maintenance in the same order, then
+backend maintenance. Duplicates are preserved. This outer snapshot is distinct
+from the original inner live-view walk. Registration-list changes during callbacks
+do not change the selected set, but the caller must retain the referenced states;
+identity tokens do not confer ownership or represent authored source references.
+
+Required hooks are validated before effects on admitted paths. Reentry is rejected
+as a native policy. Exceptions propagate after their observed prefix without
+forcing later state/backend maintenance; retry starts a new selection and frame.
+Tests and the private actual-camera probe nest `AdmittedViewPass` under this state
+callback boundary. They explicitly assume admission and stable local identities,
+not an observed original application frame.
+
+Further disassembly closes the two projection modes in concrete view preparation:
+the boolean distinguishes finite-depth and infinite-far matrices, independently
+of ordinary versus alternate camera shape. The traced geometry path consumes the
+finite matrix. The existing finite projection helper is therefore the appropriate
+conditional consumer; an unproved infinite-far use is not substituted into it.
+Application-frame admission and the camera's runtime capability/enable state still
+need their own integration evidence.
+All 43 local CTest executables pass after this connection. The nested renderer/view
+tests also pass under GCC and targeted ASan/UBSan, and the private owned-camera
+probe verifies the conditional outer-to-inner phase order.
