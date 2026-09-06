@@ -144,6 +144,10 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Execute an already-admitted bounded command phase with explicit registration
   order and synchronous visitors, preserving cached insertion, strict boundaries
   and callback-before-cursor updates. Verify its conditional trace on owned data.
+- [x] Implement the reviewed conditional picture-fade CPU receiver with explicit
+  clocks, ordered owner effects and strict completion; no guessed initial color.
+- [ ] Join intro picture owners and resource lifecycle to actual fade rendering;
+  CPU alpha requests alone do not establish visible intro playback.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

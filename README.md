@@ -90,6 +90,10 @@ recovered arithmetic. A bounded command pass now invokes synchronous visitors in
 the reviewed conditional order, verified with real first-cut data and explicit
 test-clock inputs. Neither supplies a startup clock nor applies rendered/audio
 effects; the complete intro player remains unimplemented.
+A [conditional picture-fade receiver](docs/PICTURE_FADE.md) now emits the reviewed
+alpha and owner-control effects with explicit clocks, strict completion and
+synchronous callback ordering. It does not yet apply those effects to rendered
+intro pictures or establish initial owner state and draw admission.
 
 ## Build the native bootstrap
 
