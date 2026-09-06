@@ -104,7 +104,8 @@ Archive integrity errors now identify the affected installation-relative archive
 and member when known, while preserving the underlying validation failure.
 Later CPU-loading failures also show a diagnostic over the artwork and exit
 with runtime-error status 4, without falling back to placeholder assets.
-The exact lifecycle and current window-handoff limitation are documented in
+The same native window now survives the transition from splash to GPU runtime,
+with its software surface released before GPU use. The exact lifecycle is in
 [Native startup splash](docs/STARTUP_SPLASH.md).
 The refreshed red, ivory and black splash is generated project branding at
 1672×941 native resolution, aspect-fitted without stretching; see

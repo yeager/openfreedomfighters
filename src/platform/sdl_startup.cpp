@@ -13,6 +13,14 @@
 #include <string>
 
 namespace off::platform {
+
+void StartupWindowDeleter::operator()(SDL_Window *window) const noexcept {
+  if (window != nullptr) {
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+  }
+}
+
 namespace {
 
 constexpr int startup_width = 1280;
@@ -22,7 +30,11 @@ struct SdlSession {
   SdlSession() = default;
   SdlSession(const SdlSession &) = delete;
   SdlSession &operator=(const SdlSession &) = delete;
-  ~SdlSession() { SDL_Quit(); }
+  bool owns_lifetime{true};
+  ~SdlSession() {
+    if (owns_lifetime)
+      SDL_Quit();
+  }
 };
 
 struct WindowDeleter {
@@ -99,7 +111,7 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
     return {.outcome = StartupPreflightOutcome::platform_error,
             .message =
                 "SDL initialization failed: " + std::string{SDL_GetError()}};
-  const SdlSession session;
+  SdlSession session;
 
   Window window{
       SDL_CreateWindow("OpenFreedomFighters", startup_width, startup_height,
@@ -198,6 +210,8 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
   } else {
     result.outcome = StartupPreflightOutcome::ready;
     result.message = preparation.message;
+    result.window.reset(window.release());
+    session.owns_lifetime = false;
   }
 
   return result;

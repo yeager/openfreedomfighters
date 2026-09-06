@@ -50,21 +50,31 @@ none escape the public preflight boundary.
 usable without a display. Argument syntax and output-path validation also remain
 CLI diagnostics.
 
-The current integration destroys the startup window after successful
-verification and CPU preparation, then lets the SDL GPU runtime create its own
-window. This
-can produce a short platform-dependent transition. A later ownership refactor
-will reuse one window after destroying its CPU surface. This limitation does not
-change the splash deadline or the missing-data dialog path.
+After successful verification and CPU preparation, a move-only owner transfers
+the existing window and SDL lifetime to the main entry point. The GPU runtime
+borrows that same window; it does not create a replacement or restart SDL video.
+It explicitly destroys the SDL-owned window surface before claiming the window
+for GPU use, and checks that transition for failure. GPU resources and the
+window claim are released before the final owner destroys the window and quits
+SDL. Gamepad initialization has a separate balanced subsystem lifetime.
+This removes the deliberate window destruction/recreation transition; it does
+not promise uninterrupted pixels while a platform creates its swapchain.
+Cancellation and error paths retain their original teardown and popup behavior.
 
 ## Verification evidence
 
 The orchestration tests cover verifier failure/exception, skipped preparation,
 preparation exceptions, successful owned output and cooperative cancellation
 before, between and during stages. A targeted ASan/UBSan run passes.
+An SDL dummy-driver test checks move-only ownership, unchanged window identity
+through both handoffs, preserved software surface, surface release without
+window destruction, and final SDL shutdown. It does not emulate a GPU swapchain.
 On the ARM64 Linux development host, a real supported-install launch with
 `--frame-limit 1` completed successfully through this worker pipeline and the
 SDL GPU Vulkan diagnostic renderer: six startup images uploaded and four
 retail fonts loaded. This is a startup smoke test, not a faithful menu or
 gameplay pass. A headless verification run with an intentionally unavailable
 SDL video driver also succeeded without creating a window.
+The supported-install launch was repeated successfully after the single-window
+handoff change. Host GTK/libdecor and EGL driver warnings remain; successful
+Vulkan completion does not establish a warning-free desktop environment.

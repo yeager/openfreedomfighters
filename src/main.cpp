@@ -15,6 +15,7 @@
 #include <iostream>
 #include <optional>
 #include <string_view>
+#include <utility>
 
 namespace {
 
@@ -108,8 +109,9 @@ int main(int argc, char **argv) {
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
   off::ui::RetailUiFontSet ui_fonts;
   off::ui::RetailUiTextureSet ui_textures;
+  off::platform::StartupWindow startup_window;
   if (!verify_only) {
-    const auto preflight = off::platform::run_sdl_startup_preflight(data_path, [&] {
+    auto preflight = off::platform::run_sdl_startup_preflight(data_path, [&] {
       scene = off::graphics::prepare_scene_gpu_plan(
           off::graphics::load_diagnostic_scene_render_asset(data_path));
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
@@ -132,6 +134,7 @@ int main(int argc, char **argv) {
       return 4;
     }
     verification = preflight.verification;
+    startup_window = std::move(preflight.window);
   } else {
     verification = off::data::verify_install(data_path);
   }
@@ -147,8 +150,8 @@ int main(int argc, char **argv) {
     return 0;
   }
   const auto runtime = off::platform::run_sdl_gpu_runtime(
-      mode, scene, *startup_graphics, ui_fonts, ui_textures, frame_limit,
-      show_graphics_menu, screenshot_path);
+      startup_window, mode, scene, *startup_graphics, ui_fonts, ui_textures,
+      frame_limit, show_graphics_menu, screenshot_path);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';
     return 4;

@@ -266,6 +266,11 @@ if(BUILD_TESTING)
     target_link_libraries(off_startup_preparation_tests PRIVATE off_core)
     add_test(NAME off_startup_preparation_tests COMMAND off_startup_preparation_tests)
 
+    add_executable(off_startup_window_tests
+        tests/startup_window_tests.cpp src/platform/sdl_startup.cpp)
+    target_link_libraries(off_startup_window_tests PRIVATE off_core ${OFF_SDL3_TARGET})
+    add_test(NAME off_startup_window_tests COMMAND off_startup_window_tests)
+
     add_executable(off_retail_ui_fonts_tests tests/retail_ui_fonts_tests.cpp)
     target_link_libraries(off_retail_ui_fonts_tests PRIVATE off_core)
     target_compile_definitions(off_retail_ui_fonts_tests PRIVATE

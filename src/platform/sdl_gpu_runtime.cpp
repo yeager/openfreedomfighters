@@ -28,6 +28,13 @@
 namespace off::platform {
 namespace {
 
+struct GamepadSession {
+  GamepadSession() = default;
+  GamepadSession(const GamepadSession &) = delete;
+  GamepadSession &operator=(const GamepadSession &) = delete;
+  ~GamepadSession() { SDL_QuitSubSystem(SDL_INIT_GAMEPAD); }
+};
+
 struct PreviewVertex {
   std::array<float, 3> position;
   std::array<float, 4> color;
@@ -1071,7 +1078,8 @@ upload_overlay_retail_textures(SDL_GPUDevice *device,
 } // namespace
 
 RuntimeResult
-run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
+run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
+                    const graphics::SceneGpuPlan &scene,
                     const graphics::StartupGraphicsAsset &startup_graphics,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,
@@ -1086,16 +1094,16 @@ run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
             .message = std::string("scene GPU plan validation failed: ") +
                        error.what()};
   }
-  if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
-    return failure("SDL initialization failed");
-  SDL_Window *window =
-      SDL_CreateWindow("OpenFreedomFighters", 1280, 720,
-                       SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
-  if (window == nullptr) {
-    const auto result = failure("SDL window creation failed");
-    SDL_Quit();
-    return result;
-  }
+  SDL_Window *window = startup_window.get();
+  if (window == nullptr)
+    return {.success = false, .message = "Startup window is missing"};
+  if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
+    return failure("SDL gamepad initialization failed");
+  const GamepadSession gamepad_session;
+  // SDL's software window surface and a 3D swapchain cannot coexist. Release
+  // the splash surface on its creator thread before claiming this SAME window.
+  if (SDL_WindowHasSurface(window) && !SDL_DestroyWindowSurface(window))
+    return failure("Startup window surface release failed");
   constexpr SDL_GPUShaderFormat formats = SDL_GPU_SHADERFORMAT_SPIRV |
                                           SDL_GPU_SHADERFORMAT_DXIL |
                                           SDL_GPU_SHADERFORMAT_MSL;
@@ -1109,8 +1117,6 @@ run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
     const auto result = failure("SDL GPU device or swapchain creation failed");
     if (device != nullptr)
       SDL_DestroyGPUDevice(device);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
     return result;
   }
   GpuScene gpu;
@@ -1119,8 +1125,6 @@ run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
     release_scene(device, gpu);
     SDL_ReleaseWindowFromGPUDevice(device, window);
     SDL_DestroyGPUDevice(device);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
     return result;
   }
   GpuOverlay overlay;
@@ -1130,8 +1134,6 @@ run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
     release_scene(device, gpu);
     SDL_ReleaseWindowFromGPUDevice(device, window);
     SDL_DestroyGPUDevice(device);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
     return result;
   }
   if (!upload_overlay_retail_textures(device, ui_textures, overlay)) {
@@ -1140,8 +1142,6 @@ run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
     release_scene(device, gpu);
     SDL_ReleaseWindowFromGPUDevice(device, window);
     SDL_DestroyGPUDevice(device);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
     return result;
   }
   GpuStartupImages gpu_startup;
@@ -1152,8 +1152,6 @@ run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
     release_scene(device, gpu);
     SDL_ReleaseWindowFromGPUDevice(device, window);
     SDL_DestroyGPUDevice(device);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
     return result;
   }
 
@@ -1612,8 +1610,6 @@ run_sdl_gpu_runtime(Mode mode, const graphics::SceneGpuPlan &scene,
   release_scene(device, gpu);
   SDL_ReleaseWindowFromGPUDevice(device, window);
   SDL_DestroyGPUDevice(device);
-  SDL_DestroyWindow(window);
-  SDL_Quit();
   return result;
 }
 
