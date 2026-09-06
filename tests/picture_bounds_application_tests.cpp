@@ -1,4 +1,5 @@
 #include "off/graphics/picture_bounds.hpp"
+#include "off/graphics/picture_submission_cache.hpp"
 
 #include <array>
 #include <bit>
@@ -41,6 +42,53 @@ int main() {
                   !std::is_move_assignable_v<PictureBoundsApplication>);
     const int saved = std::fegetround();
     if (std::fesetround(FE_TONEAREST) != 0) return 1;
+    {
+        PictureBoundsApplication app;
+        ResourceBounds bounds{{11, 12, 13}, {14, 15, 16}, 17};
+        std::uint32_t flags = 0x400U;
+        std::array<float, 2> alignment{77, 88};
+        PictureSubmissionCache cache;
+        const PictureCacheTransformInput input{
+            .virtual_window_scale = {0, 0, 1, 1},
+            .cached_basis = {0, 0, 1, 0, 1, 0, 1, 0, 0},
+            .object_matrix = {0, 0, 1, 0, 1, 0, 1, 0, 0},
+            .viewport_width = 100, .viewport_height = 100,
+            .picture_width = 1, .picture_height = 1,
+            .owner_projection_scalar = 1, .external_y_basis_scale = 1};
+        const auto clean = [&] {
+            cache.submit(std::span<const off::data::BoundPictureDrawGroup>{}, input, 0, {});
+            check(!cache.dirty(), "prepare a clean cache before materialization");
+        };
+        clean();
+        int queries = 0;
+        const auto query = [&](std::uint64_t, std::uint64_t, auto&, auto&) {
+            ++queries;
+            check(!cache.dirty() && alignment == std::array<float, 2>{77, 88},
+                  "alignment and cache writes follow renderer query and bounds writes");
+            return false;
+        };
+        rejects([&] { app.apply_materialized(bounds, flags, 41, 0, descriptors, groups,
+                                            {1, 1}, query, 16, alignment, cache); });
+        check(queries == 0 && !cache.dirty() && bounds.radius == 17 && !app.failed(),
+              "invalid alignment rejects before query or state writes");
+        app.apply_materialized(bounds, flags, 41, 0, descriptors, groups,
+                               {1, 1}, query, 0, alignment, cache);
+        check(final_bounds(bounds) && alignment == std::array<float, 2>{0, 8} && cache.dirty(),
+              "complete callback aligns from own signed center and clamped extents then invalidates cache");
+        clean();
+        app.apply_materialized(bounds, flags, 41, 0, descriptors, groups,
+                               {2, 3}, query_zero_renderer_resource_bounds, 8, alignment, cache);
+        check(alignment == std::array<float, 2>{-6, 12} && cache.dirty(),
+              "repeat materialization uses current scale and center-only alignment");
+        clean();
+        const auto saved_alignment = alignment;
+        rejects([&] { app.apply_materialized(bounds, flags, 41, 0, descriptors, groups,
+            {1, 1}, [](std::uint64_t, std::uint64_t, auto&, auto&) -> bool {
+                throw std::runtime_error("query failed before alignment");
+            }, 0, alignment, cache); });
+        check(app.failed() && alignment == saved_alignment && !cache.dirty(),
+              "failed query leaves alignment/cache tail unapplied and poisons callback");
+    }
     {
         std::array<float, 3> center{-0.0F, std::numeric_limits<float>::quiet_NaN(), 17};
         std::array<float, 3> extents{std::numeric_limits<float>::infinity(), -0.0F, -5};

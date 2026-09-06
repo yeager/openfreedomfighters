@@ -31,7 +31,7 @@ original square-root implementation.
 
 ## Ordered materialized application
 
-`PictureBoundsApplication` now implements the local callback around this geometry.
+`PictureBoundsApplication::apply` implements the bounds-only part of the local callback.
 It always calls the explicit renderer-resource query using the live resource
 identity, distinct renderer identifier and actual writable center/extent storage.
 The query is not replaced with a guessed failure or an authored PRM-key lookup.
@@ -45,16 +45,25 @@ state. Both paths preserve the required runtime dirty-flag writes.
 The descriptor-derived center, extents and radius then replace the base bounds
 in their reviewed order. Extent clamping and runtime flag updates remain distinct;
 radius uses the pre-clamp extents. No ancestor update is inserted between base
-initialization and descriptor replacement. This callback does not invalidate the
-picture transform cache, mark component status, notify the position service or
-mirror ancestor-owner bounds; those are separate caller operations.
+initialization and descriptor replacement.
+
+`apply_materialized` completes that same callback: after the bounds writes, it
+stores XY alignment using the picture's new center and clamped extents, then
+invalidates its `PictureSubmissionCache`. It leaves object translation unchanged.
+The previous claim that the full callback did not dirty this cache was incorrect;
+the bounds-only implementation stopped before that tail. Component status,
+position-service notification and ancestor-owner propagation remain separate.
+See [alignment](PICTURE_TRANSFORM.md#alignment) for the input correction.
 
 As a native safety policy, descriptor geometry is prevalidated before invoking
 the query, whose inputs and descriptor storage must remain stable. Missing hooks
-or unsupported descriptor inputs reject without effects. Unexpected query
+or unsupported descriptor/alignment inputs reject without effects. Unexpected query
 exceptions or invalid successful-query arithmetic retain the query's live writes
 and poison the application; further calls reject. No rollback or original retry
 behavior is invented. False query output is overwritten even when nonfinite.
+Alignment is precomputed from the same stable descriptor inputs as native
+prevalidation, but is committed only after the ordered bounds operation succeeds;
+a failed query leaves alignment and cache state untouched.
 
 ## Admission and remaining state work
 
@@ -79,9 +88,12 @@ both query branches are tested explicitly with the real owned descriptors.
 Actual first-frame admission remains incomplete until
 the remaining state transitions are connected.
 
-All 49 local CTest executables pass after this addition. The geometry and
-application tests also pass with GCC and targeted ASan/UBSan, and the private
-owned-resource probe validates both explicit query outcomes and real enclosure.
+The 53-test CTest suite passes with the completed alignment/cache tail. Targeted
+application tests also pass with GCC and ASan/UBSan. They cover signed centers,
+current scale, invalid alignment before effects, repeated preparation and query
+failure before the tail. The private owned-resource probe checks real legal and
+fade descriptors, decoded alignment enums and cache invalidation; its explicit
+fade viewport input is a test condition, not a measured original resolution.
 
 ## Actual ordinary legal-picture query
 

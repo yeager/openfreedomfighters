@@ -9,6 +9,8 @@
 
 namespace off::graphics {
 
+class PictureSubmissionCache;
+
 struct PictureBounds {
     std::array<float, 3> center;
     std::array<float, 3> raw_extents;
@@ -51,6 +53,17 @@ public:
                std::span<const data::PictureResourceDescriptor> descriptors,
                std::span<const data::PictureDrawGroup> groups,
                std::array<float,2> scale, const Query& query);
+    // Complete local picture callback: the bounds-only operation above, then
+    // stored XY alignment from those bounds, then cache invalidation. Object
+    // translation, component status and ancestors are not changed. Alignment is
+    // prevalidated before query effects under the same stable-input policy.
+    void apply_materialized(ResourceBounds& bounds, std::uint32_t& runtime_flags,
+               std::uint64_t runtime_identity, std::uint64_t renderer_resource_id,
+               std::span<const data::PictureResourceDescriptor> descriptors,
+               std::span<const data::PictureDrawGroup> groups,
+               std::array<float,2> scale, const Query& query,
+               std::uint32_t alignment_enum, std::array<float,2>& alignment,
+               PictureSubmissionCache& cache);
     [[nodiscard]] bool failed() const noexcept { return failed_; }
 private:
     bool running_{false};

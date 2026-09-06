@@ -7,23 +7,27 @@
 namespace off::graphics {
 
 struct PictureAlignmentOffsetInput {
-  float picture_half_width{};
-  float picture_half_height{};
-  float owner_half_width{};
-  float owner_half_height{};
+  float center_x{};
+  float center_y{};
+  float extent_x{};
+  float extent_y{};
 };
 
 // Decodes the serialized window alignment enum to the runtime axis-bit mask.
 // Throws std::runtime_error for values outside the recovered 0..15 domain.
 [[nodiscard]] std::uint8_t decode_picture_alignment(std::uint32_t value);
 
-// Reproduces the window alignment arithmetic. The returned Z component is zero.
+// Uses the same picture's completed center and CLAMPED extents, not parent
+// bounds or object translation. Stores an XY offset; returned Z is always zero.
+// Finite inputs, nonnegative extents and nearest rounding are native policy.
 [[nodiscard]] std::array<float, 3>
 picture_alignment_offset(std::uint32_t alignment,
                          const PictureAlignmentOffsetInput &input);
 
 struct PictureCacheTransformInput {
   std::array<float, 3> submission_position{};
+  // Original picture adapters supply the stored XY alignment with Z exactly
+  // zero. A nonzero Z here is a native extension, not a recovered input.
   std::array<float, 3> aligned_local_position{};
   std::array<float, 4> virtual_window_scale{};
   std::array<float, 9> cached_basis{};

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cmath>
+#include <cfenv>
 #include <cstdint>
 #include <iostream>
 #include <limits>
@@ -71,7 +72,7 @@ int main() {
   rejects(
       [] {
         static_cast<void>(off::graphics::picture_alignment_offset(
-            0, {-1.0F, 1.0F, 1.0F, 1.0F}));
+            0, {1.0F, 1.0F, -1.0F, 1.0F}));
       },
       "reject a negative alignment extent");
   rejects(
@@ -80,6 +81,24 @@ int main() {
             0, {1.0F, std::numeric_limits<float>::infinity(), 1.0F, 1.0F}));
       },
       "reject a non-finite alignment extent");
+  check(off::graphics::picture_alignment_offset(0, {-3, -4, 3, 4}) ==
+            std::array<float, 3>{6, 8, 0},
+        "negative picture centers are valid and are not half extents");
+  check(off::graphics::picture_alignment_offset(8, {-3, 4, 99, 99}) ==
+            std::array<float, 3>{3, -4, 0},
+        "center-only alignment ignores the same picture extents");
+  check(off::graphics::picture_alignment_offset(0, {0x1p-12F, 0, 0x1p-13F, 0x1p-13F}) ==
+            std::array<float, 3>{0, 0, 0},
+        "alignment consumes clamped extents before the rounding bias");
+  check(off::graphics::picture_alignment_offset(8, {0.25F, -0.25F, 1, 1}) ==
+            std::array<float, 3>{-1, 0, 0},
+        "alignment floors fractional signed centers rather than truncating");
+  const int rounding = std::fegetround();
+  if (std::fesetround(FE_UPWARD) == 0) {
+    rejects([] { (void)off::graphics::picture_alignment_offset(0, {1, 2, 3, 4}); },
+            "reject unsupported alignment rounding mode");
+    check(std::fesetround(rounding) == 0, "restore alignment rounding mode");
+  }
 
   constexpr std::array<float, 9> helper_identity{0.0F, 0.0F, 1.0F, 0.0F, 1.0F,
                                                  0.0F, 1.0F, 0.0F, 0.0F};

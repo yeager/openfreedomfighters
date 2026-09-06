@@ -17,11 +17,18 @@ the range 0 through 15. It maps to independent three-choice X and Y masks:
 | 15 | `00` |
 
 The low nibble controls X and the high nibble controls Y. For each nonzero
-axis, the implementation starts at the negative picture half extent, adds the
-owner half extent for bit `1`, subtracts it for bit `2`, and applies
-`floor(value + 1/8192)`. Bit `4` performs neither owner-extent adjustment. A
-zero nibble yields zero. Public names intentionally describe the arithmetic
-rather than assigning unproven left/right or top/bottom labels.
+axis, the implementation starts at the negative picture bound center, adds the
+same picture's clamped extent for bit `1`, subtracts it for bit `2`, and applies
+`floor(value + 1/8192)`. Bit `4` performs neither extent adjustment. A zero nibble
+yields zero. These are the completed picture's own bounds, not parent/window
+dimensions. Centers may be negative. Each arithmetic stage rounds to binary32;
+floor consumes the double-promoted result. Nearest rounding and finite results
+are required by the native implementation.
+
+The bounds callback stores exactly two alignment components and invalidates the
+picture cache after writing its center, extents and radius. Object translation
+is not part of this offset and must not be added twice. Earlier descriptions of
+these inputs as two sets of half extents were incorrect.
 
 ## Hierarchy producer
 
@@ -52,7 +59,7 @@ non-finite values, and picture/owner chains ending at different roots.
 `prepare_picture_cache_transform` accepts all values produced outside the
 picture object explicitly. It reproduces the recovered operation order,
 including the half-unit X/Y offset, viewport centring, fixed local depth
-increment, aligned local position, perspective denominator, independent basis
+increment, stored XY alignment, perspective denominator, independent basis
 scales, the engine's nine-float vector convention, object-matrix composition,
 and final translation-Y inversion.
 
@@ -69,8 +76,10 @@ in a basis. Describing these bytes as a conventional row-major or column-major
 matrix would lose the recovered ordering.
 
 Picture descriptor local Z remains part of the neutral quad and must reach the
-eventual picture visitor unchanged. Cache preparation also retains the input
-and aligned-local Z values. A zero picture width sets normalized X and its
+eventual picture visitor unchanged. Original-data callers supply zero in the
+generic alignment container's third component: the original alignment has no
+Z field. Nonzero aligned Z is a native extension, not recovered behavior.
+A zero picture width sets normalized X and its
 resulting X basis scale to zero; a zero picture height does the same for Y.
 Zero virtual-window Y scale and zero external Y basis scale are valid
 multipliers. Invalid enums, non-finite inputs, negative picture extents,
@@ -80,7 +89,7 @@ fail closed.
 The recovered picture constructor initializes both picture-extent scale
 components to exactly `1.0`. They are runtime object state, distinct from PRM
 descriptor coordinate bounds. The portable startup path must therefore obtain
-picture and owner extents, object matrices, visitor values, and projection
+picture scale controls, object matrices, visitor values, and projection
 inputs from explicit prepared runtime state or an explicit project policy; it
 must not infer picture extents from descriptor minima or maxima.
 
@@ -103,5 +112,9 @@ used by picture preparation indeterminate. Separately, the concrete startup
 chain produces no stable x87 value before the multiply represented by
 `external_y_basis_scale`. Neither undefined state is treated as retail data.
 Callers must provide explicit initialized virtual-window, external-Y-scale,
-and `q` policies. The module does not invent `(1,1)`, attribute the external Y
+and `q` policies for that base-window path. The selected intro camera traversal
+instead supplies the camera's retained normalized viewport and signed extents
+of the pass rectangle; its service receiver is the camera, not the window.
+This resolves `q` for that path, but not the undefined external Y operand.
+The module does not invent `(1,1)`, attribute the external Y
 operand to a renderer query, or supply any other fallback.

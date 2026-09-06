@@ -1,6 +1,7 @@
 #include "off/graphics/picture_transform.hpp"
 
 #include <cmath>
+#include <cfenv>
 #include <limits>
 #include <stdexcept>
 #include <vector>
@@ -75,18 +76,21 @@ validated_chain(const std::vector<PictureHierarchyNode> &nodes,
   return chain;
 }
 
-[[nodiscard]] float aligned_axis(float half_extent, float owner_half_extent,
+[[nodiscard]] float aligned_axis(float center, float extent,
                                  std::uint8_t mask, std::uint8_t axis_mask,
                                  std::uint8_t positive_bit,
                                  std::uint8_t negative_bit) {
   if ((mask & axis_mask) == 0)
     return 0.0F;
-  auto result = -half_extent;
+  volatile float result = -center;
+  // The supported enum mapping never sets both extent-adjustment bits on one
+  // axis; this helper is not an API for arbitrary raw runtime masks.
   if ((mask & positive_bit) != 0)
-    result += owner_half_extent;
+    result = result + extent;
   if ((mask & negative_bit) != 0)
-    result -= owner_half_extent;
-  result = std::floor(result + alignment_rounding_bias);
+    result = result - extent;
+  result = result + alignment_rounding_bias;
+  result = static_cast<float>(std::floor(static_cast<double>(result)));
   if (!std::isfinite(result))
     throw std::runtime_error("picture alignment result is not finite");
   return result;
@@ -142,17 +146,18 @@ std::uint8_t decode_picture_alignment(std::uint32_t value) {
 std::array<float, 3>
 picture_alignment_offset(std::uint32_t alignment,
                          const PictureAlignmentOffsetInput &input) {
-  const std::array values{input.picture_half_width, input.picture_half_height,
-                          input.owner_half_width, input.owner_half_height};
+  if (std::fegetround() != FE_TONEAREST)
+    throw std::runtime_error("picture alignment requires nearest rounding");
+  const std::array values{input.center_x, input.center_y,
+                          input.extent_x, input.extent_y};
   require_finite(values, "picture alignment input is not finite");
-  if (input.picture_half_width < 0.0F || input.picture_half_height < 0.0F ||
-      input.owner_half_width < 0.0F || input.owner_half_height < 0.0F)
+  if (input.extent_x < 0.0F || input.extent_y < 0.0F)
     throw std::runtime_error("picture alignment extents must not be negative");
 
   const auto mask = decode_picture_alignment(alignment);
-  return {aligned_axis(input.picture_half_width, input.owner_half_width, mask,
+  return {aligned_axis(input.center_x, input.extent_x, mask,
                        0x0f, 0x01, 0x02),
-          aligned_axis(input.picture_half_height, input.owner_half_height, mask,
+          aligned_axis(input.center_y, input.extent_y, mask,
                        0xf0, 0x10, 0x20),
           0.0F};
 }

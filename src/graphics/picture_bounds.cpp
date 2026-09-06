@@ -1,4 +1,5 @@
 #include "off/graphics/picture_bounds.hpp"
+#include "off/graphics/picture_submission_cache.hpp"
 
 #include <bit>
 #include <cfenv>
@@ -126,6 +127,25 @@ void PictureBoundsApplication::apply(ResourceBounds& bounds, std::uint32_t& runt
     if (bounds.extents[2] < minimum_extent) bounds.extents[2] = minimum_extent;
     runtime_flags |= 0x100000U;
     bounds.radius = computed.radius;
+}
+
+void PictureBoundsApplication::apply_materialized(
+    ResourceBounds& bounds, std::uint32_t& runtime_flags,
+    std::uint64_t runtime_identity, std::uint64_t renderer_resource_id,
+    std::span<const data::PictureResourceDescriptor> descriptors,
+    std::span<const data::PictureDrawGroup> groups, std::array<float,2> scale,
+    const Query& query, std::uint32_t alignment_enum,
+    std::array<float,2>& alignment, PictureSubmissionCache& cache) {
+    if (running_ || failed_ || !query)
+        throw std::runtime_error("picture bounds application state or query is unsupported");
+    const auto computed = compute_picture_bounds(descriptors, groups, scale);
+    const auto offset = picture_alignment_offset(alignment_enum,
+        {computed.center[0], computed.center[1], computed.extents[0], computed.extents[1]});
+    apply(bounds, runtime_flags, runtime_identity, renderer_resource_id,
+          descriptors, groups, scale, query);
+    alignment[0] = offset[0];
+    alignment[1] = offset[1];
+    cache.invalidate();
 }
 
 } // namespace off::graphics
