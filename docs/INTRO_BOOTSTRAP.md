@@ -23,6 +23,41 @@ work. This source reader does not register a fade controller on the legal pictur
 All 42 local CTest executables pass after this addition, along with the targeted
 GMS ASan/UBSan and GCC tests and the private owned-resource probe.
 
+### Conditional existing-picture activation prefix
+
+`cutscene::PictureActivationPrefix` now implements the reviewed plain-picture
+prefix after the caller proves a new tracking entry, an existing live target,
+empty matching caches and no replacement object. It does not implement the full
+name resolver, cache-hit reuse, clone/replacement policy or group recursion.
+
+The tracking-append callback occurs first. If the target's runtime authored-hide
+bit is clear, the prefix records that activation was not requested. Otherwise,
+a hidden parent produces a diagnostic callback without clearing the target. With
+an unhidden parent, only the target's authored-hide bit is cleared. Conditional
+registration-class handling, owner activation notification and normal resource
+registration then follow in the recovered order. Remaining dynamic-hide and
+resource-eligibility bits are preserved and still gate registration.
+
+After either the successful or parent-blocked hide-control return, the prefix
+requests lifecycle phase one, then records that activation was requested. The
+record therefore does not mean the object became visible. Owner activation
+notification is a separate operation from that explicit phase-one dispatch.
+The registration-class callback represents the entire existing resource helper;
+the prefix does not invent record-allocation or resource-maintenance internals.
+
+Inputs are runtime flags, not raw source words. Stable target/parent lifetime,
+non-mutating callbacks and no reentry are explicit native constraints. A missing
+required parent or visitor is rejected before effects. Callback failures retain
+their prefix, including an already-cleared target flag, and do not force subsequent
+phase-one or tracking callbacks. Later object-start and event-dispatch operations
+remain outside this prefix, as do original application admission and GPU drawing.
+
+The private probe exercises the real legal source's low-bit hide contribution
+under explicitly supplied runtime/parent conditions, including the blocked-parent
+case. It does not treat those test conditions as a captured original lifecycle.
+All 44 local CTest executables pass with this prefix, as do its targeted
+ASan/UBSan and GCC tests and the private owned-resource probe.
+
 ## Current runtime boundary
 
 The original intro is not yet activated by the native runtime. Normal startup

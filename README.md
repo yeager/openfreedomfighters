@@ -118,6 +118,9 @@ inferred merely from its member reference or centering component.
 The renderer-frame orchestration now snapshots matching states, executes their
 view phases, then performs ordered state/backend maintenance with explicit
 admission inputs. This does not yet force or establish application startup readiness.
+A conditional existing-picture activation prefix now preserves parent-guarded
+authored-hide clearing, phase-one requests and tracking order. A recorded request
+is not treated as proof that the legal picture became visible.
 
 ## Build the native bootstrap
 

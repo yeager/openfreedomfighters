@@ -57,6 +57,7 @@ add_library(off_core
     src/cutscene/timeline_position.cpp
     src/cutscene/command_pass.cpp
     src/cutscene/picture_fade.cpp
+    src/cutscene/picture_activation_prefix.cpp
     src/audio/decode.cpp
     src/crypto/sha256.cpp
     src/data/archive_vfs.cpp
@@ -234,6 +235,10 @@ if(BUILD_TESTING)
     add_executable(off_renderer_frame_pass_tests tests/renderer_frame_pass_tests.cpp)
     target_link_libraries(off_renderer_frame_pass_tests PRIVATE off_core)
     add_test(NAME off_renderer_frame_pass_tests COMMAND off_renderer_frame_pass_tests)
+
+    add_executable(off_picture_activation_prefix_tests tests/picture_activation_prefix_tests.cpp)
+    target_link_libraries(off_picture_activation_prefix_tests PRIVATE off_core)
+    add_test(NAME off_picture_activation_prefix_tests COMMAND off_picture_activation_prefix_tests)
 
     add_executable(off_render_map_tests tests/render_map_tests.cpp)
     target_link_libraries(off_render_map_tests PRIVATE off_core)
