@@ -86,6 +86,10 @@ must not infer picture extents from descriptor minima or maxima.
 
 ## Startup viewport boundary
 
+The separate [submission cache](PICTURE_SUBMISSION_CACHE.md) controls when these
+equations are evaluated. Reusing its transform still visits every supplied
+group; dependencies outside the submission position require explicit invalidation.
+
 The recovered transform functions contain no hardcoded reference dimensions,
 and the executable picture-cache path does not yet prove visitor values of 640
 and 480. The portable startup consumer explicitly selects a logical 640×480

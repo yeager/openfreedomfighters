@@ -187,6 +187,10 @@ An explicit-input camera producer now covers both ordinary and alternate
 half-extent formulas, the near lower bound, and one-sided normalized viewport
 bounds. It feeds the validated projection boundary without assuming which
 camera or pass rectangle the startup frame selects.
+The CPU picture submission cache now distinguishes absent and empty group
+tables, recomputes on dirty/changed-position input, and still visits every
+group on reuse. Other dependency changes require explicit invalidation; see
+[Picture submission cache](docs/PICTURE_SUBMISSION_CACHE.md).
 Recovered picture constructors default both extent scales to `1.0`; descriptor
 bounds are not substituted for the still-explicit runtime extent, matrix,
 visitor, or projection inputs.

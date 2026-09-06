@@ -119,6 +119,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Implement both explicit camera half-extent producers and the normalized
   viewport-request producer, including distinct zero-dimension rules. Actual
   startup camera selection and GPU integration remain unverified.
+- [x] Implement conditional picture submission-cache lifecycle and ordered
+  group visitation on both recomputation and reuse. Runtime invalidation
+  propagation and original first-frame cache state remain unverified.
 - [ ] Modern render graph, shadows, scaling, and post-processing baseline.
 - [ ] Audio mixing, device output, streaming voices, and positional sound as
   specified by the [audio runtime contract](AUDIO_RUNTIME.md). Audio-bank

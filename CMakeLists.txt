@@ -80,6 +80,7 @@ add_library(off_core
     src/graphics/startup_graphics_prepared_plan.cpp
     src/graphics/startup_graphics_expanded_plan.cpp
     src/graphics/picture_transform.cpp
+    src/graphics/picture_submission_cache.cpp
     src/graphics/picture_expansion.cpp
     src/graphics/picture_material_state.cpp
     src/graphics/picture_projection.cpp
@@ -241,6 +242,10 @@ if(BUILD_TESTING)
     add_executable(off_picture_transform_tests tests/picture_transform_tests.cpp)
     target_link_libraries(off_picture_transform_tests PRIVATE off_core)
     add_test(NAME off_picture_transform_tests COMMAND off_picture_transform_tests)
+
+    add_executable(off_picture_submission_cache_tests tests/picture_submission_cache_tests.cpp)
+    target_link_libraries(off_picture_submission_cache_tests PRIVATE off_core)
+    add_test(NAME off_picture_submission_cache_tests COMMAND off_picture_submission_cache_tests)
 
     add_executable(off_picture_expansion_tests tests/picture_expansion_tests.cpp)
     target_link_libraries(off_picture_expansion_tests PRIVATE off_core)

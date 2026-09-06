@@ -2,6 +2,7 @@
 #include "off/graphics/startup_graphics_prepared_plan.hpp"
 #include "off/graphics/picture_expansion.hpp"
 #include "off/graphics/picture_material_state.hpp"
+#include "off/graphics/picture_submission_cache.hpp"
 #include "off/graphics/startup_graphics_expanded_plan.hpp"
 
 #include <bit>
@@ -532,6 +533,40 @@ int main(int argc, char **argv) {
     // recovered startup placement or final on-screen appearance.
     const off::graphics::PictureCacheTransform compatibility_transform{
         .basis = {0, 0, 1, 0, 1, 0, 1, 0, 0}, .translation = {0, 0, 0}};
+    // Deliberately explicit TEST inputs, not measured startup placement.
+    const off::graphics::PictureCacheTransformInput cache_test_input{
+        .submission_position = {0.5F, 1.5F, 4.0F},
+        .aligned_local_position = {50, 40, 0},
+        .virtual_window_scale = {7, 9, 1, 1},
+        .cached_basis = compatibility_transform.basis,
+        .object_matrix = compatibility_transform.basis,
+        .viewport_width = 100, .viewport_height = 80,
+        .picture_width = 20, .picture_height = 10,
+        .owner_projection_scalar = 2, .external_y_basis_scale = 2};
+    for (const auto &row : retail.composition().rows()) {
+      for (const auto &picture : row.pictures) {
+        off::graphics::PictureSubmissionCache cache;
+        const auto groups = picture.draw_plan.groups();
+        for (std::uint32_t pass = 0; pass < 2; ++pass) {
+          std::size_t visited = 0;
+          cache.submit(groups, cache_test_input, pass,
+                       [&](std::size_t index, const auto &group,
+                           const auto &transform, std::uint32_t control) {
+            check(index == visited && &group == &groups[index] && control == pass,
+                  "real groups retain order, paired resource and current control on reuse");
+            const auto expanded = off::graphics::expand_picture_descriptors(
+                group.quads, transform);
+            std::size_t vertices = 0;
+            for (const auto &batch : expanded)
+              vertices += batch.vertices.size();
+            check(vertices == group.quads.size() * 4,
+                  "real descriptors reach expansion on both cache miss and hit");
+            ++visited;
+          });
+          check(visited == groups.size(), "cache reuse visits every real group");
+        }
+      }
+    }
     for (const auto &quad : retail_prepared.quads()) {
       const auto expanded = off::graphics::expand_picture_descriptors(
           std::span{&quad.source, 1}, compatibility_transform);
