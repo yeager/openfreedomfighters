@@ -59,13 +59,14 @@ struct FixtureReferenceMap {
     bool camera_row{};
     bool second_window{};
     bool full_second_scope{};
+    bool following_visual_scope{};
     std::uint32_t operator()(std::uint32_t value) const {
         if(!value) return 0;
         if(picture_order) {
             if(camera_row) {
                 if(value==9) return 6;
-                if(value==3) return full_second_scope?43U:second_window?9U:7U;
-                if(value>=5 && value<=8) return value+(full_second_scope?39U:second_window?5U:3U);
+                if(value==3) return following_visual_scope?49U:full_second_scope?43U:second_window?9U:7U;
+                if(value>=5 && value<=8) return value+(following_visual_scope?45U:full_second_scope?39U:second_window?5U:3U);
             }
             if(value==2) return 5;
             if(value==3) return 6;
@@ -170,11 +171,12 @@ struct Fixture {
     Bytes payload, names, prm, tex, snd;
     std::array<std::size_t, 10> block_offsets{};
     std::array<std::size_t, 10> attachment_offsets{};
-    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false) : payload(1024), snd(16) {
+    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false) : payload(1024), snd(16) {
         if(language_group && !leading_group) throw std::runtime_error("language fixture requires leading group");
         if(camera_row && !language_group) throw std::runtime_error("camera row fixture requires language group");
         if(second_window && !camera_row) throw std::runtime_error("second Window fixture requires Camera row");
         if(full_second_scope && !second_window) throw std::runtime_error("full second scope requires second Window");
+        if(following_visual_scope && !full_second_scope) throw std::runtime_error("following visual scope requires full second scope");
         // Deliberately permuted directory roles; no retail source indices.
         set(payload, 0, 32); set(payload, 4, 128); set(payload, 12, 4); set(payload, 20, 176);
         set(payload, 32, include_sound?10:9); set(payload, 128, 1); set(payload, 132, 144);
@@ -215,7 +217,7 @@ struct Fixture {
                                   {"ZSNDOBJ_SoundSegment",1},{"ZGEOM_ZSetZDefine",0}});
         // All nonnull references emitted below target original rows after the
         // first window, so both inserted rows precede those referenced owners.
-        const FixtureReferenceMap bias{leading_group?(language_group?2U:1U):0U,language_group,camera_row,second_window,full_second_scope};
+        const FixtureReferenceMap bias{leading_group?(language_group?2U:1U):0U,language_group,camera_row,second_window,full_second_scope,following_visual_scope};
         const std::array<Bytes, 10> blocks{camera(), picture(false), controller(bias), picture(true), member(bias), list({8, 8},bias), list({4, 2, 4},bias), first_cut(bias,include_events), window(bias),sound_owner(bias)};
         for (std::size_t i = 0; i < node_count; ++i) {
             block_offsets[i] = payload.size(); set(payload, 512 + 48 * i + 32, static_cast<std::uint32_t>(payload.size()));
@@ -297,8 +299,21 @@ struct Fixture {
                 }
                 while(payload.size()%4) payload.push_back(std::byte{0});
             }
+            const auto visual_scope_records=payload.size();
+            if(following_visual_scope) {
+                payload.resize(payload.size()+6*48);
+                for(std::size_t slot=0;slot<6;++slot) {
+                    const auto at=visual_scope_records+slot*48;
+                    set(payload,at,static_cast<std::uint32_t>(names.size()));text(names,"IndependentVisualScope"+std::to_string(slot));
+                    set(payload,at+4,384);set(payload,at+8,420);
+                    set(payload,at+12,slot==0 || slot==2?0U:static_cast<std::uint32_t>(0x1000+slot*16));
+                    set(payload,at+16,slot==0?0x00100001U:0x0020003aU);
+                    set(payload,at+24,slot==0?0x03000000U:slot<=2?0x00200000U:0U);
+                    set(payload,at+32,static_cast<std::uint32_t>(deferred));
+                }
+            }
             const auto directory=payload.size();
-            word(payload,static_cast<std::uint32_t>(node_count+1+(language_group?1:0)+(second_window?2:0)+(full_second_scope?34:0)));
+            word(payload,static_cast<std::uint32_t>(node_count+1+(language_group?1:0)+(second_window?2:0)+(full_second_scope?34:0)+(following_visual_scope?6:0)));
             word(payload,static_cast<std::uint32_t>(record/4));word(payload,0);
             const Bytes entries(payload.begin()+36,payload.begin()+static_cast<std::ptrdiff_t>(36+8*node_count));
             if(language_group) {
@@ -317,6 +332,12 @@ struct Fixture {
                     for(std::size_t row=0;row<34;++row) {
                         word(payload,static_cast<std::uint32_t>((full_scope_records+row*48)/4));word(payload,0);
                     }
+                    if(following_visual_scope) {
+                        word(payload,(1U<<25U)|(1U<<24U)|static_cast<std::uint32_t>(visual_scope_records/4));word(payload,0);
+                        for(std::size_t slot=1;slot<6;++slot) {
+                            word(payload,static_cast<std::uint32_t>((visual_scope_records+slot*48)/4));word(payload,0);
+                        }
+                    }
                     word(payload,(1U<<25U)|static_cast<std::uint32_t>((512+48*2)/4));word(payload,0);
                 } else payload.insert(payload.end(),entries.begin()+16,entries.begin()+24);
                 if(camera_row) {
@@ -325,10 +346,10 @@ struct Fixture {
                 } else payload.insert(payload.end(),entries.begin()+32,entries.end());
             } else payload.insert(payload.end(),entries.begin(),entries.end());
             set(payload,0,static_cast<std::uint32_t>(directory));
-            const auto pool_count=second_window?5U:language_group?4U:3U;
+            const auto pool_count=following_visual_scope?6U:second_window?5U:language_group?4U:3U;
             const auto pools=payload.size();word(payload,pool_count);
             payload.resize(payload.size()+pool_count*24*4);
-            set(payload,pools+4,second_window?3U:2U); // ROOT's group/Window category.
+            set(payload,pools+4,following_visual_scope?4U:second_window?3U:2U); // ROOT's group/Window category.
             if(full_second_scope) set(payload,pools+4+12,include_sound?6U:5U);
             set(payload,pools+4+2*24*4+4,language_group?1U:2U);
             set(payload,pools+4+2*24*4+12,second_window?1U:include_sound?7U:6U);
@@ -340,6 +361,7 @@ struct Fixture {
                 set(payload,pools+4+4*24*4+4,full_second_scope?16U:1U);
                 set(payload,pools+4+4*24*4+12,full_second_scope?19U:include_sound?6U:5U);
             }
+            if(following_visual_scope) set(payload,pools+4+5*24*4+4,5);
             set(payload,20,static_cast<std::uint32_t>(pools));
         }
         prm.resize(16); word(prm, 1);
@@ -427,6 +449,79 @@ int main() {
     using off::graphics::IntroPreparedResources;
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
     Fixture fixture;
+    {
+      Fixture visual_fixture(false,true,true,true,true,true,true,true);
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
+      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+      app.initialize_native_second_window_scope_registration();
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{80};}};
+      off::graphics::IntroRuntime host(visual_fixture.build(),app,sequence);
+      check(host.resources().controller_index()==48 && host.resources().first_cut_index()==52 &&
+            host.resources().sources().directory().size()==53,
+            "following visual fixture independently shifts all selected first-cut references");
+      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+      host.construct_window_language_groups_without_engine_renderer();
+      host.construct_picture_component_prefix_without_engine_renderer();host.construct_authored_camera_without_engine_renderer();
+      host.construct_second_window_picture_without_engine_renderer();host.construct_second_window_scope_without_engine_renderer();
+      const auto* first_group=&*host.first_authored_group();
+      const auto* first_window=host.window_owner();
+      const auto serial=sequence.next_identity();
+      const auto phase=sequence.scheduling_phase();
+      const auto event_counter=host.scene_event_names().counter();
+      rejects([&]{host.construct_following_visual_scope_without_engine_renderer();});
+      check(host.loaded_resource_handles().size()==42 && !host.constructed_group_owner(42),
+            "missing visual factory rejects before group or count-scope consumption");
+      app.initialize_native_visual_registration();
+      rejects([&]{app.initialize_native_visual_registration();});
+      for(int i=0;i<3;++i) static_cast<void>(app.register_class_instance(0x0020003aU));
+      host.construct_following_visual_scope_without_engine_renderer();
+      const auto* group=host.constructed_group_owner(42);
+      check(group && group->class_identifier==0x00100001U && group->flags==0x03000000U &&
+            group->owner==host.source_handle(42) && group->resource==host.resource_handle(group->owner) &&
+            &*host.first_authored_group()==first_group && host.window_owner()==first_window &&
+            host.scene_resource_property("rWindows")->resource==host.resource_handle(host.source_handle(6)) &&
+            app.class_notification_sequence(0x00100001U)==2,
+            "new ordinary group retains earlier group and Window identities without replacing rWindows");
+      check(host.current_source_parent()==host.source_handle(42) && host.count_group_selector()==5 &&
+            host.loaded_resource_handles().size()==48 && host.deferred_reader_work().size()==48 &&
+            host.source_resource_scopes().size()==5 && host.source_resource_scopes()[0].next_in_partition[0]==4 &&
+            host.source_resource_scopes()[4].resources.size()==5 && host.source_resource_scopes()[4].next_in_partition[1]==5 &&
+            host.child_owners(host.root_handle())==std::vector<off::graphics::IntroRuntimeHandle>{
+                host.source_handle(0),host.source_handle(1),host.source_handle(6),host.source_handle(42)} &&
+            !host.directory_resource_mapping()[48],
+            "following group allocates and exhausts only its five-slot category-one scope in directory order");
+      std::vector<off::graphics::IntroRuntimeHandle> children;
+      for(std::size_t row=43;row<=47;++row) {
+        const auto* visual=host.constructed_visual_owner(row);
+        const auto owner=host.source_handle(row);
+        const auto& source=host.resources().sources().directory()[row];
+        children.push_back(owner);
+        check(visual && visual->owner==owner && visual->resource==host.resource_handle(owner) &&
+              visual->class_identifier==0x0020003aU && visual->packed_color==0xffffffffU && visual->alpha==255 &&
+              visual->material_selector==0 && visual->size_scale==std::array<float,2>{1,1} &&
+              !visual->backing_available && !visual->submission_transform_dirty && !visual->submission_cache_available &&
+              visual->attachments.empty() && !host.constructed_picture_owner(row) && !host.constructed_character_owner(row),
+              "generic visual factory specializes real class without substituting Picture or decoded geometry");
+        check(host.resource_state(owner)->metadata==source.class_data_value &&
+              host.resource_state(owner)->flags==(row==44?0x09000000U:0x09100000U) &&
+              !host.resource_state(owner)->context.value &&
+              host.resource_parent(owner)==group->resource && host.directory_resource_mapping()[row]==visual->resource &&
+              host.deferred_reader_work()[row].resource==visual->resource &&
+              host.deferred_reader_work()[row].source_offset==source.deferred_source_offset &&
+              host.hierarchy()[host.resource_index(visual->resource)].position==std::array<float,3>{0,0,0},
+              "fresh metadata dirtying is independent of unchanged transforms and retains canonical reader mapping");
+      }
+      check(host.child_owners(group->owner)==children && app.class_notification_sequence(0x0020003aU)==8 &&
+            sequence.next_identity()==serial && sequence.scheduling_phase()==phase && sequence.live_count()==50 &&
+            host.components().construction_order().size()==50 && host.ordinary_components()->pending().size()==15 &&
+            host.scene_event_names().counter()==event_counter && host.position_updates().pending_count()==0 &&
+            host.directory_position_mode().suppression==1 && !host.manager_row_edit() && !host.scene_resource_edit() &&
+            host.resource_load_stage()==off::graphics::IntroResourceLoadStage::following_visual_scope_ready,
+            "metadata-only scope preserves component clocks, events, pending queues and loader controls");
+      rejects([&]{host.construct_following_visual_scope_without_engine_renderer();});
+    }
     {
       Fixture full_fixture(false,true,true,true,true,true,true);
       const auto prepared=full_fixture.build();

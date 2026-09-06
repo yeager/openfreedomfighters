@@ -53,6 +53,10 @@ public:
     if(!class_sequences_.emplace(0x00400003U,0U).second)
       throw std::runtime_error("Native camera class is already registered");
   }
+  void initialize_native_visual_registration() {
+    if(!class_sequences_.emplace(0x0020003aU,0U).second)
+      throw std::runtime_error("Native visual class is already registered");
+  }
   void initialize_native_picture_registration() {
     if(has_class_registration(0x00200046U) || has_component_class_registration("ZGEOM_Center") ||
         has_component_class_registration("ZWINPIC_FadeToBlack"))

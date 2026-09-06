@@ -227,6 +227,31 @@ initial resource counts and independently authored names/data. Position-service
 tests also check that disabled notifications preserve an existing nonempty queue.
 The readers, global initialization, camera registration and rendering remain
 pending; these counts are construction evidence, not a playable-intro claim.
+
+## Following visual scope
+
+The next complete scope constructs an ordinary Group at row 42 and five visual
+owners of concrete class `0x0020003a` at rows 43–47. The Group joins ROOT after
+the second Window. Its five-slot batch is allocated only when entering its first
+child; prior scope cursors and owner identities remain intact.
+
+These visual owners use the shared visual-base defaults but are not Pictures.
+No source geometry, material, attachment or rendering state is produced by their
+constructor. Their separate class notification counter advances for each owner.
+
+The directory metadata setter runs before transform setup. For a fresh resource,
+the old metadata word is zero, so there is no renderer cleanup. A changed word
+sets resource dirty bit `0x00100000`; an unchanged word preserves flags. Metadata
+does not notify the position service. All five transforms are unchanged here,
+so four nonzero-metadata resources retain `0x09100000` while the zero-metadata
+resource retains `0x09000000`, without any position queue activity.
+
+Owned-data verification now reaches 64 batch resources plus ROOT and 48 source
+owners/readers. Component count, events, scheduling phase and ordinary pending
+additions are unchanged from the second Window scope. Independent fixtures use
+different names, metadata words and initial allocation counts. Row 48 begins
+the next nested scope; its Room/context, collection and animation behavior is
+not admitted by the preceding non-room construction path.
 The real source path must preserve its first setter, attachment, then second
 setter using the post-attachment word. Remaining source readers and loader
 services are not replaced by constructor constants or empty callbacks.

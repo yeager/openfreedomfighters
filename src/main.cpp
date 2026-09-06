@@ -123,6 +123,7 @@ int main(int argc, char **argv) {
     application.initialize_native_picture_registration();
     application.initialize_native_camera_registration();
     application.initialize_native_second_window_scope_registration();
+    application.initialize_native_visual_registration();
   }
   std::optional<off::graphics::SceneGpuPlan> scene;
   // Scene-manager identity lifetime, independent of source archive catalogs.
@@ -168,6 +169,7 @@ int main(int argc, char **argv) {
         intro->construct_authored_camera_without_engine_renderer();
         intro->construct_second_window_picture_without_engine_renderer();
         intro->construct_second_window_scope_without_engine_renderer();
+        intro->construct_following_visual_scope_without_engine_renderer();
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));

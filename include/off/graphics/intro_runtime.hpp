@@ -44,7 +44,7 @@ struct IntroSynthesizedCameraMetadata {
   std::uint32_t class_identifier;
 };
 enum class IntroResourceLoadStage {
-  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, authored_camera_ready, second_window_picture_ready, second_window_scope_ready, failed
+  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, authored_camera_ready, second_window_picture_ready, second_window_scope_ready, following_visual_scope_ready, failed
 };
 struct IntroConstructedCameraOwner {
   IntroRuntimeHandle owner;
@@ -250,6 +250,9 @@ public:
   void construct_authored_camera_without_engine_renderer();
   void construct_second_window_picture_without_engine_renderer();
   void construct_second_window_scope_without_engine_renderer();
+  void construct_following_visual_scope_without_engine_renderer();
+  [[nodiscard]] const IntroConstructedPictureOwner* constructed_visual_owner(std::size_t source) const noexcept;
+  [[nodiscard]] const IntroAuthoredGroupOwner* constructed_group_owner(std::size_t source) const noexcept;
   [[nodiscard]] PositionServiceMode directory_position_mode() const noexcept {return position_mode_;}
   [[nodiscard]] const PositionUpdateService& position_updates() const noexcept {return position_updates_;}
   [[nodiscard]] const IntroConstructedCharacterOwner* constructed_character_owner(std::size_t source) const noexcept;
@@ -435,6 +438,8 @@ private:
   IntroWindowOwner* window_owner_{}; // Non-owning first-cut convenience, never latest Window.
   std::optional<IntroAuthoredGroupOwner> language_owner_;
   std::map<std::size_t,IntroConstructedPictureOwner> constructed_picture_owners_;
+  std::map<std::size_t,IntroConstructedPictureOwner> constructed_visual_owners_;
+  std::map<std::size_t,IntroAuthoredGroupOwner> constructed_group_owners_;
   std::map<std::size_t,IntroConstructedCharacterOwner> constructed_character_owners_;
   std::map<std::size_t,IntroConstructedListOwner> constructed_list_owners_;
   std::map<std::size_t,IntroConstructedPictureComponent> constructed_picture_components_;
@@ -454,6 +459,7 @@ private:
   void construct_non_group_row_without_engine_renderer(std::size_t row);
   void construct_owner_attachments(std::size_t row,std::uint32_t& mask,std::vector<std::uint64_t>& attachments);
   void apply_directory_transform(std::size_t row,IntroRuntimeResourceHandle resource);
+  void assign_fresh_directory_metadata(IntroRuntimeResourceHandle resource,std::uint32_t metadata);
   PositionUpdateService position_updates_;
   std::string selected_scene_filename_;
   PositionServiceMode position_mode_{false,false,0};

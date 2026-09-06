@@ -18,15 +18,15 @@ completed in that same host. Normal startup now executes the actual fresh
 initializer and retained console/input-map registrations.
 CPU preflight also executes first-row loading progress under an explicit native
 load-begin reset policy and allocates the first scope's 20 ownerless resources.
-It then constructs the first 42 source owners through the second Window scope.
-Four allocated scopes contain 59 resources, separate from ROOT. Each Window
+It then constructs the first 48 source owners through the second Window and
+following visual scope. Five allocated scopes contain 64 resources, separate from ROOT. Each Window
 retains its own console descriptor; the scene property points to the latest one.
 The two cameras keep separate storage and ROOT contexts, with their respective
 Window parents. Neither has renderer membership or source-reader effects yet.
 Center, FadeToBlack, CharFader, LogoFade and external-command attachments bring
 the constructed component count to 50 including RootGroup. The event table is
 prepared before ROOT; CharFader reuses Fade events, while LogoFade declares none.
-All 42 deferred readers remain queued. No later owner or global initialization
+All 48 deferred readers remain queued. No later owner or global initialization
 is executed. See [second Window construction](RESOURCE_STATE.md#second-window-scope).
 The conditional DefaultCam factory now constructs its real PreviewCamera and
 ordinary membership in that host. Its callback writes directly into the scene

@@ -41,11 +41,11 @@ executable code are included here.
   [startup audio lifecycle](docs/INTRO_AUDIO_STARTUP_ORDER.md) is not connected.
 - Normal startup constructs the scene's ROOT and its RootGroup component,
   including the shared construction clock and control-map registration.
-  It now constructs the first 42 authored objects, including two Windows and
-  cameras, Picture and Character owners, and Lists. The loader allocates 59
+  It now constructs the first 48 authored objects, including two Windows and
+  cameras, Picture and Character owners, Lists and the next visual group. The loader allocates 64
   resources plus ROOT in scene order and constructs 50 components. Window
   console/property bindings and the scene event-name table are live.
-  The 42 queued readers, remaining object factories and initialization are still
+  The 48 queued readers, remaining object factories and initialization are still
   pending. Neither camera is registered for rendering yet.
   Most authored attachments remain a catalog; their factories and the full
   two-phase initialization path still need to be connected.
