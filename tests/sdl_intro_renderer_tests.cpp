@@ -87,13 +87,21 @@ int main() {
     rejects([&] { (void)gpu.renderer->prepare(gpu.command,std::span(&bad,1)); });
     auto corrupt=batches; corrupt[0].indices[0]=99; bad=draw; bad.batches=corrupt;
     rejects([&] { (void)gpu.renderer->prepare(gpu.command,std::span(&bad,1)); });
-    // Two overlapping draws with different textures and scissor prove ordered
-    // binding, batch-local index offsets, and per-draw state restoration.
-    auto second=draw; second.catalog_image_index=9; second.scissor={4,0,4,8};
+    // The second batch has distinct geometry AND indices. Its unused first
+    // quad is offscreen; drawing indices 4..7 must select the narrow second
+    // quad. Reusing either draw's zero buffer offset produces different pixels.
+    auto decoy=quad; decoy.local_center_x=100;
+    auto narrow=quad; narrow.local_center_x=1; narrow.vertical_edge_span=1;
+    const std::array second_quads{decoy,narrow};
+    auto second_batches=expand_picture_descriptors(second_quads,transform);
+    second_batches[0].indices.erase(second_batches[0].indices.begin(),
+                                   second_batches[0].indices.begin()+6);
+    auto second=draw; second.batches=second_batches;
+    second.catalog_image_index=9; second.scissor={4,0,3,8};
     const std::array draws{draw,second};
     gpu.frame=gpu.renderer->prepare(gpu.command,draws);
     require(gpu.frame->indexed_draw_count()==2,"two indexed draws");
-    batches.clear(); gpu.renderer.reset(); // frame retains geometry and image owner
+    batches.clear(); second_batches.clear(); gpu.renderer.reset(); // frame retains geometry and image owner
     SDL_GPUColorTargetInfo color{}; color.texture=gpu.target; color.load_op=SDL_GPU_LOADOP_CLEAR; color.store_op=SDL_GPU_STOREOP_STORE;
     color.clear_color={0,0,0,1};
     auto* pass=SDL_BeginGPURenderPass(gpu.command,&color,1,nullptr); require(pass,"begin render pass");
@@ -107,12 +115,13 @@ int main() {
     auto* pixels=static_cast<unsigned char*>(SDL_MapGPUTransferBuffer(gpu.device,gpu.download,false)); require(pixels,"map readback");
     unsigned mismatches=0;
     for(unsigned y=0;y<8;++y) for(unsigned x=0;x<8;++x) {
-      bool inside=x>=2&&x<6&&y>=2&&y<6;
-      std::array<unsigned char,4> expected{static_cast<unsigned char>(inside&&x<4?255:0),static_cast<unsigned char>(inside&&x>=4?255:0),0,255};
+      const bool red=x>=2&&x<6&&y>=2&&y<6;
+      const bool green=x>=4&&x<7&&y>=3&&y<5;
+      std::array<unsigned char,4> expected{static_cast<unsigned char>(red&&!green?255:0),static_cast<unsigned char>(green?255:0),0,255};
       for(unsigned c=0;c<4;++c) if(pixels[(y*64+x)*4+c]!=expected[c]) ++mismatches;
     }
     SDL_UnmapGPUTransferBuffer(gpu.device,gpu.download); require(!mismatches,"perspective indexed image/scissor/order pixel oracle");
-    std::cout<<"Verified indexed expansion, perspective projection, image ownership, ordering and scissor on 64 pixels.\n";
+    std::cout<<"Verified distinct vertex/index offsets, perspective projection, image ownership, ordering and scissor on 64 pixels.\n";
     return 0;
   } catch(const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
 }

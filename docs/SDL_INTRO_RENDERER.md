@@ -32,10 +32,11 @@ frame; caching is deferred until the complete startup path works.
 
 ## Evidence
 
-All 67 local tests pass. The Vulkan GPU test checks a nonidentity perspective
-projection against an independent 64-pixel oracle, texture selection, overlapping
-draw order, scissor and retained ownership. Its repeated geometry does not
-independently distinguish every possible index-offset error.
+The Vulkan GPU test checks a nonidentity perspective projection against an
+independent 64-pixel oracle, texture selection, overlapping draw order, scissor
+and retained ownership. The second draw uses different geometry and indices:
+unused offscreen vertices precede its narrow visible quad. Reusing the first
+draw's vertex or index buffer offset now produces different pixels.
 
 A private integration probe loads the owned intro archive into `IntroRuntime`,
 uses its legal-picture hierarchy, decoded geometry/textures, bounds, alignment,
@@ -48,4 +49,6 @@ the undefined-Y replacement policy and raster/sampler/depth state. It proves a
 source-backed GPU path, not the original first frame's layout, timing or automatic
 playback. CI run 34042124079 at commit `f373d3b` also executed the 64-pixel
 renderer oracle and all 14 stage-shader cases on Windows/Direct3D 12 and
-macOS/Metal. Both backend runs passed without skipping these tests.
+macOS/Metal. Both backend runs passed without skipping these tests. That run
+predates the distinct-offset fixture; its cross-platform coverage is separate
+from the newer local Vulkan check.

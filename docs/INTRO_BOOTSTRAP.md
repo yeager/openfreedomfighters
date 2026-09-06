@@ -64,7 +64,9 @@ Independent fixtures check ordered live service calls, audio/property branches,
 wrapping deadlines, repeated invocation, and failure-prefix retention. The full
 68-test local suite and targeted ASan/UBSan run pass. Renderer callbacks in these
 initialization fixtures are test doubles, not proof of SDL presentation or an
-admitted original scene.
+admitted original scene. The separate [SDL presentation bridge](SDL_INTRO_PRESENTATION.md)
+now runs the renderer tail through SDL window/swapchain operations in its Vulkan test;
+the remaining services and lifecycle admission are still supplied test conditions.
 
 ## Owning first-cut preparation in normal startup
 
@@ -289,8 +291,8 @@ explicit lifecycle handling; successful presentation does not prove recovery.
 
 The clock scale is 1024 units per accumulated engine-time second, making the
 delay nominally two engine-time seconds, not two wall-clock seconds. Startup
-rate, portable clock sampling and ordinary controller-update admission remain
-unresolved. The readiness producer remains untraced; neither start route may be
+rate, portable clock sampling and admission through the complete initialization
+history remain unresolved. The readiness producer remains untraced; neither start route may be
 replaced by splash expiry.
 This corrects the earlier description of readiness as an exclusive start gate.
 
@@ -298,6 +300,32 @@ A later intro wait branch reuses the deadline and can resume through either the
 clock comparison or readiness notification. Later readiness events therefore
 cannot simply be discarded after first activation. Its event prerequisites and
 full integration remain research work.
+
+### Ordinary update enrollment and ordering
+
+The owned scene's controller attaches directly to the synthesized root. Its
+concrete component factory, owner assignment and source reader preserve a zero
+script/resource reference, selecting the ordinary manager's direct component
+route. Source flags are not runtime flags: only their low 20 bits participate in
+the loader merge.
+
+With the owner's live hide bit clear, attachment creation enables ordinary event
+`16` and appends the controller to the manager's pending additions. Its requested
+mask `0x37` and fresh admitted mask zero yield `0x10` through the enable mask
+`0x158`. This does not register scheduled event `8`. Enrollment precedes global
+initialization; the ordinary wrapper still requires phase-one completion.
+
+The scene runs scheduled processing, then ordinary updates, then bounds/resource
+maintenance and optional drawing. Ordinary updates capture pause/filter state
+and copy the scene clock into the dispatch clock; they do not advance time or
+apply a per-component due-time test. MovieControl has no pause bypass. An admitted
+deadline update can therefore change the camera and groups before the same scene
+update's drawing pass.
+
+The enrollment producer and ordinary caller are established, but the full live
+hide history, later membership mutations and manager merge/tie ordering still
+need integration. The ordinary list must not reuse global reverse-construction
+order. None of these facts authorizes forcing a callback after splash expiry.
 
 The first cut has attached sequence-player and command components. It is not an
 attachment-free reference list, even though it shares the same base source

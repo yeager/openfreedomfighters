@@ -120,8 +120,8 @@ jobs:
           ninja -C build
       - name: Test
         run: ctest --test-dir build -j4 --output-on-failure
-      - name: Verify picture shader on Metal when available
-        run: OFF_PICTURE_SHADER_TEST_DRIVER=metal ctest --test-dir build -R '^off_sdl_(picture_stage_shader|intro_renderer)_tests$' -V
+      - name: Verify intro GPU rendering and presentation on Metal when available
+        run: OFF_PICTURE_SHADER_TEST_DRIVER=metal ctest --test-dir build -R '^off_sdl_(picture_stage_shader|intro_renderer|intro_presentation)_tests$' -V
 
   build-windows:
     runs-on: windows-2022
@@ -140,9 +140,9 @@ jobs:
         run: |
           $env:PATH = "${{ github.workspace }}/zlib-install/bin;$env:PATH"
           ctest --test-dir build -C Release -j4 --output-on-failure
-      - name: Verify picture shader on D3D12 when available
+      - name: Verify intro GPU rendering and presentation on D3D12 when available
         shell: pwsh
         run: |
           $env:PATH = "${{ github.workspace }}/zlib-install/bin;$env:PATH"
           $env:OFF_PICTURE_SHADER_TEST_DRIVER = "direct3d12"
-          ctest --test-dir build -C Release -R '^off_sdl_(picture_stage_shader|intro_renderer)_tests$' -V
+          ctest --test-dir build -C Release -R '^off_sdl_(picture_stage_shader|intro_renderer|intro_presentation)_tests$' -V
