@@ -26,6 +26,7 @@ public:
     // This is not full frustum preparation. Reentry from set_enabled rejects.
     void clear_picture_preparation_bit();
 private:
+    friend class FreshIntroCamera;
     std::uint32_t flags_;
     bool changing_{false};
 };

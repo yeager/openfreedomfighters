@@ -37,6 +37,10 @@ public:
   // Failure preserves the previous snapshot; the caller must stop the failed
   // frame rather than submit using that stale snapshot.
   void prepare_picture_services(const PictureVisitorRectangle& rectangle);
+  // Explicit camera-only projection of an admitted selected-window initializer.
+  // Input/scheduler work and renderer registration remain caller responsibilities.
+  void apply_window_state_projection(bool option_a, bool option_b,
+                                     std::uint64_t window_handle);
   [[nodiscard]] const std::optional<PictureCameraServices>& picture_services() const noexcept {
     return picture_services_;
   }

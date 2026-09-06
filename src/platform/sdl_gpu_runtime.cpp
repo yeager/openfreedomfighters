@@ -808,11 +808,11 @@ upload_overlay_retail_textures(SDL_GPUDevice *device,
   return uploaded;
 }
 
-[[nodiscard]] bool upload_startup_images(
-    SDL_GPUDevice *device, const graphics::StartupGraphicsAsset &source,
+template<class Images>
+[[nodiscard]] bool upload_picture_images(
+    SDL_GPUDevice *device, const Images &images, std::size_t byte_budget,
     GpuStartupImages &result) {
-  const auto &images = source.images();
-  if (images.size() != graphics::startup_graphics_image_count)
+  if (images.empty())
     return false;
 
   std::size_t aggregate_bytes = 0;
@@ -839,8 +839,8 @@ upload_overlay_retail_textures(SDL_GPUDevice *device,
     const auto byte_count = static_cast<std::uint64_t>(width) * height * 4U;
     if (width == 0 || height == 0 || byte_count == 0 ||
         byte_count > std::numeric_limits<Uint32>::max() ||
-        byte_count > graphics::startup_graphics_decoded_byte_budget ||
-        aggregate_bytes > graphics::startup_graphics_decoded_byte_budget -
+        byte_count > byte_budget ||
+        aggregate_bytes > byte_budget -
                               static_cast<std::size_t>(byte_count) ||
         image.mip_zero.pixels.size() != byte_count) {
       release_transfers();
@@ -1085,10 +1085,14 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     const graphics::StartupGraphicsAsset &startup_graphics,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,
+                    graphics::IntroRuntime *intro,
                     std::size_t frame_limit, bool show_graphics_menu,
                     const std::filesystem::path &screenshot_path) {
   if (ui_fonts.fonts.empty())
     return failure("retail UI font set is empty");
+  if ((scene != nullptr) == (intro != nullptr))
+    return {.success = false,
+            .message = "Select exactly one retained intro host or diagnostic scene"};
   try {
     if (scene)
       graphics::validate_scene_gpu_plan(*scene);
@@ -1148,8 +1152,26 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     return result;
   }
   GpuStartupImages gpu_startup;
-  if (!upload_startup_images(device, startup_graphics, gpu_startup)) {
+  if (startup_graphics.images().size() != graphics::startup_graphics_image_count ||
+      !upload_picture_images(device, startup_graphics.images(),
+          graphics::startup_graphics_decoded_byte_budget, gpu_startup)) {
     const auto result = failure("startup graphics image GPU upload failed");
+    release_startup_images(device, gpu_startup);
+    release_overlay(device, overlay);
+    release_scene(device, gpu);
+    SDL_ReleaseWindowFromGPUDevice(device, window);
+    SDL_DestroyGPUDevice(device);
+    return result;
+  }
+
+  // These are the retained FF-Intro images, not the separate startup UI set.
+  // Keep allocation/image identities through the entire window lifetime. Upload
+  // is not scene admission: unresolved cut start must not become a fake draw.
+  GpuStartupImages gpu_intro;
+  if (intro && !upload_picture_images(device, intro->resources().images(),
+          graphics::intro_decoded_byte_budget, gpu_intro)) {
+    const auto result = failure("intro runtime image GPU upload failed");
+    release_startup_images(device, gpu_intro);
     release_startup_images(device, gpu_startup);
     release_overlay(device, overlay);
     release_scene(device, gpu);
@@ -1651,6 +1673,10 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       running = false;
   }
   SDL_WaitForGPUIdle(device);
+  if (result.success && intro)
+    result.message += " (" + std::to_string(gpu_intro.images.size()) +
+        " source-backed intro images uploaded; automatic intro playback pending)";
+  release_startup_images(device, gpu_intro);
   release_overlay(device, overlay);
   release_startup_images(device, gpu_startup);
   release_scene(device, gpu);

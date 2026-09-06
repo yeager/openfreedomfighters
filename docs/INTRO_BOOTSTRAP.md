@@ -1,5 +1,46 @@
 # Intro bootstrap evidence and implementation gates
 
+## Retained native host
+
+Normal startup now constructs one nonmoving `IntroRuntime` and passes it to the
+SDL window runtime. It owns the immutable prepared resources, a synthesized root
+separate from authored objects, source-backed transform hierarchy, native handle
+mapping, one canonical camera and mutable picture storage. Source construction
+order is retained for future additional-owner initialization; storing a handle
+does not execute that owner's factory or lifecycle callbacks.
+
+Exact PRM descriptor aliases share writable storage. Different descriptor ranges
+that overlap are rejected explicitly. Paired frame-resource materials share by
+their scene-local PRM offsets, not texture IDs. Picture material refresh runs in
+source order. Authored alpha and white owner color remain separate from authored
+descriptor colors; ordinary construction does not invoke the alpha setter.
+Explicit alpha writes reach current draw plans while immutable source data stays
+unchanged. Parent-transform changes invalidate the retained submission caches.
+
+The selected-window camera projection is an explicit, restricted operation, not
+a constructor side effect or a claim of full window initialization. Input-map
+and generic scheduling work remain pending. The native projection rejects repeat
+calls, nonnull auxiliary references and any change in all nine stored identity
+basis words; this is stricter than the original six-word comparison. It modifies
+the canonical camera state rather than maintaining another enabled flag.
+
+The window uploads the retained intro images once per device lifetime, separately
+from startup UI images, and releases them after GPU completion. Normal intro and
+diagnostic-scene ownership are mutually exclusive. Frame and view state remain
+owned by the host; they are not reset on each presentation frame. Automatic cut
+admission and actual intro draw submission are still missing. Unknown runtime
+resource flags are explicit, not copied from source flags or replaced by zero.
+
+The existing synthetic integration suite now checks hierarchy identities, shared
+descriptor/material writes, live draw snapshots, immutable source preservation
+and canonical camera projection. All 66 local tests pass. These fixtures do not
+establish the original scene's activation history.
+
+A bounded native startup run with the owned Steam installation also completes:
+four picture owners are retained and all 26 intro images upload on SDL/Vulkan.
+The run exits after two presentation frames. This proves the verified-data →
+retained-host → GPU-upload path, not intro draw submission or playback.
+
 ## Owning first-cut preparation in normal startup
 
 Normal graphical startup now retains `graphics::IntroPreparedResources` from the

@@ -1,6 +1,5 @@
 #include "off/data/install.hpp"
-#include "off/graphics/intro_prepared_resources.hpp"
-#include "off/graphics/fresh_intro_camera.hpp"
+#include "off/graphics/intro_runtime.hpp"
 #include "off/graphics/scene_gpu_plan.hpp"
 #include "off/graphics/scene_render.hpp"
 #include "off/graphics/startup_graphics_asset.hpp"
@@ -15,6 +14,7 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -113,8 +113,7 @@ int main(int argc, char **argv) {
   std::optional<off::graphics::SceneGpuPlan> scene;
   std::optional<off::graphics::SceneRenderAsset> startup_ui_scene_resources;
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
-  std::optional<off::graphics::IntroPreparedResources> intro_resources;
-  std::optional<off::graphics::FreshIntroCamera> intro_camera;
+  std::unique_ptr<off::graphics::IntroRuntime> intro;
   off::ui::RetailUiFontSet ui_fonts;
   off::ui::RetailUiTextureSet ui_textures;
   off::platform::StartupWindow startup_window;
@@ -130,11 +129,9 @@ int main(int argc, char **argv) {
             off::graphics::load_startup_scene_render_asset(data_path));
         // Prepare authored first-cut resources without admitting a scene or
         // manufacturing lifecycle state. Keep ownership through the runtime.
-        intro_resources.emplace(off::graphics::load_intro_prepared_resources(
-            data_path / "Scenes" / "FF-Intro.ZIP"));
-        // Fresh CPU state only. Renderer registration and window initialization
-        // remain separate; an enabled bit alone does not admit a draw.
-        intro_camera.emplace(intro_resources->camera());
+        intro = std::make_unique<off::graphics::IntroRuntime>(
+            off::graphics::load_intro_prepared_resources(
+                data_path / "Scenes" / "FF-Intro.ZIP"));
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -178,16 +175,14 @@ int main(int argc, char **argv) {
   if (!diagnostic_scene)
     std::cout << "Authored startup resources loaded; world rendering pending. "
                  "This is not gameplay or a faithful rendered startup menu.\n";
-  if (intro_resources)
-    std::cout << "Intro first-cut CPU resources retained: "
-              << intro_resources->pictures().size() << " pictures, "
-              << intro_resources->images().size()
-              << " images; lifecycle and rendering not activated.\n";
-  if (intro_camera)
-    std::cout << "Fresh intro camera CPU state constructed; renderer registration pending.\n";
+  if (intro)
+    std::cout << "Source-backed intro runtime retained: "
+              << intro->pictures().size() << " picture owners, "
+              << intro->resources().images().size()
+              << " images; automatic scene activation remains pending.\n";
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       startup_window, mode, scene ? &*scene : nullptr, *startup_graphics,
-      ui_fonts, ui_textures,
+      ui_fonts, ui_textures, intro.get(),
       frame_limit, show_graphics_menu, screenshot_path);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';

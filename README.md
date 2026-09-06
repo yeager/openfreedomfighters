@@ -21,7 +21,8 @@ executable code are included here.
 - Game files are checked against a SHA-256 manifest at startup. Soundtrack files
   are optional; music playback is not implemented yet.
 - The first intro sequence's camera, pictures and textures load from game data.
-  Camera state is constructed on the CPU; activation and drawing are not connected.
+  One retained runtime owns their hierarchy and mutable picture state; intro
+  textures upload to the GPU. Activation and drawing are not connected yet.
 - F10 opens a working graphics-settings panel. Its current appearance is
   diagnostic; matching the game's menu design is still on the roadmap.
 - A separate geometry preview is available with `--diagnostic-scene`. It is not

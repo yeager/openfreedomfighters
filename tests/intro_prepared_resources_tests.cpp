@@ -1,4 +1,5 @@
 #include "off/graphics/intro_prepared_resources.hpp"
+#include "off/graphics/intro_runtime.hpp"
 #include "off/data/packed_resource.hpp"
 
 #include <algorithm>
@@ -6,6 +7,7 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -218,6 +220,56 @@ int main() {
     using off::graphics::IntroPreparedResources;
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
     Fixture fixture;
+    {
+      off::graphics::IntroRuntime host(fixture.build());
+      static_assert(!std::is_move_constructible_v<off::graphics::IntroRuntime>);
+      check(host.hierarchy().size() == 10 && !host.source_index(host.root_handle()),
+            "runtime retains synthesized root distinct from all source objects");
+      check(host.hierarchy()[0].parent == off::graphics::no_picture_transform_parent &&
+            host.hierarchy()[0].position == std::array<float,3>{0,0,0} &&
+            !std::signbit(host.hierarchy()[0].position[0]),
+            "runtime root has positive zero translation and no parent");
+      check(host.additional_owner_order().size() == 9 &&
+            host.additional_owner_order()[8] == host.source_handle(8) &&
+            host.hierarchy()[host.hierarchy_index(host.source_handle(8))].parent ==
+                host.hierarchy_index(host.source_handle(0)),
+            "runtime construction retains directory order and actual window parent");
+      auto& first = host.picture_for_source(1);
+      auto& second = host.picture_for_source(3);
+      check(first.descriptors().data() == second.descriptors().data() &&
+            first.descriptors()[0].modulation_color == 0xA1B2C3D4U &&
+            first.color_state().alpha() == 137 && first.color_state().color() == 0xffffffffU,
+            "shared PRM descriptors preserve authored colors independently of owner alpha");
+      const auto authored = host.resources().pictures()[0].picture.descriptors()[0].modulation_color;
+      first.color_state().set_alpha(17);
+      check(second.draw_plan().groups()[0].quads[0].modulation_color == 0x11ffffffU &&
+            host.resources().pictures()[0].picture.descriptors()[0].modulation_color == authored &&
+            host.paired_material(76) == first.color_state().material(),
+            "runtime alias writes reach draw snapshots and paired material without changing sources");
+      check(!first.runtime_resource_flags() && host.frame_clock().value() == 1 &&
+            host.view_transition().last_clear_frame() == 0 && !host.camera().associated_target(),
+            "construction preserves unknown admission and fresh canonical state");
+      host.set_local_transform(host.root_handle(),host.hierarchy()[0].matrix,{2,3,4});
+      check(host.hierarchy()[0].position == std::array<float,3>{2,3,4} && first.submission_cache().dirty(),
+            "live root transforms persist and invalidate picture submissions");
+      rejects([&] { (void)host.source_index({0}); });
+      rejects([&] { (void)host.picture_for_source(0); });
+      rejects([&] { host.project_selected_window_camera_state(); });
+      check(!host.camera().associated_target(), "unsupported window projection has no camera effects");
+    }
+    {
+      auto projection_fixture = fixture;
+      set(projection_fixture.payload, projection_fixture.block_offsets[8]+42,0);
+      off::graphics::IntroRuntime host(projection_fixture.build());
+      const auto old_flags = host.camera().flags();
+      host.project_selected_window_camera_state();
+      check(host.window_camera_projection_applied() &&
+            host.camera().associated_target() == host.source_handle(0).value &&
+            host.camera().flags() == ((old_flags & ~0x8000U) | 0x210000U) &&
+            host.camera().render_control() == 0 && host.camera().enabled(),
+            "explicit window projection updates the same canonical camera without registration");
+      rejects([&] { host.project_selected_window_camera_state(); });
+    }
     auto asset = fixture.build();
     check(asset.controller_index() == 2 && asset.first_cut_index() == 7 && asset.member_index() == 4 && asset.camera_index() == 8,
           "preparation follows authored directory references rather than fixed retail indices or pool slots");

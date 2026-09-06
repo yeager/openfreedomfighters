@@ -1,4 +1,5 @@
 #include "off/graphics/fresh_intro_camera.hpp"
+#include <stdexcept>
 
 namespace off::graphics {
 namespace {
@@ -27,6 +28,17 @@ void FreshIntroCamera::set_enabled(bool requested, bool renderer_present,
 
 void FreshIntroCamera::prepare_picture_services(const PictureVisitorRectangle& rectangle) {
   picture_services_ = prepare_picture_camera_services(enabled_state_, parameters_, rectangle);
+}
+
+void FreshIntroCamera::apply_window_state_projection(bool option_a, bool option_b,
+                                                    std::uint64_t window_handle) {
+  if (window_handle == 0 || enabled_state_.changing_)
+    throw std::runtime_error("window camera projection requires a live nonreentrant target");
+  render_control_ = option_b ? 0U : 5U;
+  if (option_a && !option_b) enabled_state_.flags_ |= 0x8000U;
+  else enabled_state_.flags_ &= ~0x8000U;
+  associated_target_ = window_handle;
+  enabled_state_.flags_ |= 0x210000U;
 }
 
 } // namespace off::graphics

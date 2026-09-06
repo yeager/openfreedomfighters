@@ -83,6 +83,7 @@ add_library(off_core
     src/graphics/scene_gpu_plan.cpp
     src/graphics/startup_graphics_asset.cpp
     src/graphics/intro_prepared_resources.cpp
+    src/graphics/intro_runtime.cpp
     src/graphics/startup_graphics_prepared_plan.cpp
     src/graphics/startup_graphics_expanded_plan.cpp
     src/graphics/picture_transform.cpp
