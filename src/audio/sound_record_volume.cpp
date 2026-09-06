@@ -26,9 +26,10 @@ float response(std::int32_t volume) {
 
 void SoundRecordRegistry::request_category_volume(std::uint32_t category,
     std::int32_t volume, std::uint32_t mode) {
-  if (mode != 2 || category >= categories_.size())
+  if ((mode != 0 && mode != 2) || category >= categories_.size())
     throw std::runtime_error("Unsupported sound category volume mode or category");
-  float gain = rounded(response(volume) * 0.01F);
+  const float requested = mode == 0 ? static_cast<float>(volume) : response(volume);
+  float gain = rounded(requested * 0.01F);
   constexpr std::array<float,3> multipliers{0.56F,0.49F,0.89F};
   if (category < multipliers.size()) gain = rounded(gain * multipliers[category]);
   auto& entry = categories_[category];

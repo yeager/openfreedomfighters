@@ -50,6 +50,7 @@ state-5 traversal, not a separate copy of that state.
 ## Volume, stop and acknowledgement
 
 The application's default sound-preference resolver targets this same registry.
+Mode 0 uses the signed volume directly as a linear response; it does not clamp.
 Mode 2 uses an independently reconstructed integer response, verified against
 all 101 inputs from 0 through 100. Values outside that range are not clamped.
 Category multipliers use separate binary32 operations. A positive selection
@@ -57,6 +58,13 @@ transition can change matching prepared records to state 5. The backend retains
 the pending-volume flag for its future consumer; this is not an audio command.
 Explicitly supplied external preference backends remain an injection boundary,
 not a second canonical record store.
+
+The backend initialization contract requests sound-effects, music and speech
+categories (0, 1, 2), in that order, using mode 0 when preferences are present.
+It then attempts device initialization. The registry supports those volume
+operations, but the startup caller and output-device initialization are not yet
+connected. Category 3 is not implicitly initialized, and a volume request never
+opens a device or enables command processing.
 
 Binding stop and owner disposal are different operations. Stop can append a
 pending stop, remove one prepared entry and return the live record to state 3;

@@ -26,6 +26,19 @@ int main() {
     rejects([&] { backend.request_category_volume(0,90,1); });
     check(!backend.pending_volume_update() && backend.categories()[0].gain==1,
           "unsupported request has no mutations");
+    rejects([&] { backend.request_category_volume(8,90,0); });
+    for (std::uint32_t category=0;category<8;++category) {
+      const float multiplier=category==0?0.56F:category==1?0.49F:category==2?0.89F:1.0F;
+      for (const auto volume:{std::numeric_limits<std::int32_t>::min(),-1,0,1,3,44,90,100,101,
+                             std::numeric_limits<std::int32_t>::max()}) {
+        backend.request_category_volume(category,volume,0);
+        const float base=rounded(static_cast<float>(volume)*0.01F);
+        const float expected=category<3?rounded(base*multiplier):base;
+        check(backend.categories()[category].gain==expected &&
+              backend.categories()[category].selected==(volume>0) && backend.pending_volume_update(),
+              "mode zero preserves linear signed input and separate category scaling");
+      }
+    }
     backend.request_category_volume(0,90,2);
     check(backend.categories()[0].gain==rounded(rounded(74.99F*0.01F)*0.56F) &&
           backend.categories()[0].selected && backend.pending_volume_update(),
@@ -83,5 +96,19 @@ int main() {
     live.set_special_mode(false);
     live.request_category_volume(0,1,2);
     check(first.get().playback_state==5,"new positive transition uses current registry state");
+    live.request_category_volume(0,0,0);
+    first.get().playback_state=7;
+    live.request_category_volume(0,90,0);
+    check(first.get().playback_state==5 && other.get().playback_state==7 &&
+          first.get().progress==0 && first.get().duration==9.25F && live.prepared().size()==2,
+          "mode zero traverses matching canonical records without a playback acknowledgement");
+    first.get().playback_state=12;
+    live.request_category_volume(0,90,0);
+    check(first.get().playback_state==12,"mode zero selected category skips repeat traversal");
+    live.request_category_volume(0,-1,0);
+    live.set_special_mode(true);
+    live.request_category_volume(0,90,0);
+    check(first.get().playback_state==12 && live.categories()[0].selected,
+          "mode zero obeys the same special-mode suppression");
   } catch (const std::exception& error) { std::cerr<<error.what()<<'\n'; return 1; }
 }

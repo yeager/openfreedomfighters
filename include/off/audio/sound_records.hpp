@@ -72,6 +72,8 @@ public:
   // category-volume state-5 traversal. Preparation while true is unsupported.
   void set_special_mode(bool value) noexcept { special_mode_=value; }
   [[nodiscard]] bool pending_volume_update() const noexcept { return pending_volume_update_; }
+  // Mode 0 is linear; mode 2 uses the integer response curve. Neither clamps.
+  // These mutate retained state, not device initialization or playback ACKs.
   void request_category_volume(std::uint32_t category,std::int32_t volume,std::uint32_t mode) override;
 private:
   friend class SoundRecordLease;
