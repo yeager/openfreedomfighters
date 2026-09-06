@@ -110,6 +110,10 @@ public:
   void prepare_sound_owner(std::size_t source, const IntroSoundPreparationServices& services);
   // Binding-stop request only, not the original deleting-disposal operation.
   void stop_sound_owner(std::size_t source);
+  // Reader-completion/phase-one parameter operation on the SAME canonical
+  // owner binding. No binding means no writes. Only the approved unchanged
+  // intro Extend subset is supported; this is not lifecycle admission.
+  void apply_sound_extension(std::size_t source);
   // Catalog membership includes unconstructed/removed entries, not a live
   // owner attachment collection suitable for runtime lookup or disposal.
   [[nodiscard]] std::span<const std::size_t> owner_components(IntroRuntimeHandle owner) const;

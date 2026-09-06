@@ -172,6 +172,30 @@ void IntroRuntime::prepare_sound_owner(std::size_t source,
   }
 }
 
+void IntroRuntime::apply_sound_extension(std::size_t source) {
+  if (sound_preparation_busy_)
+    throw std::runtime_error("sound extension cannot reenter owner preparation");
+  auto& owner=sound_for_source(source);
+  if (owner.failed_) throw std::runtime_error("sound owner is unavailable");
+  if (owner.owner_binding_==0) return;
+  const auto& parameters=owner.source_->attachments.extend;
+  if (parameters.scalars!=std::array<float,6>{-1,0,0,0,0,0} ||
+      parameters.integers!=std::array<std::uint32_t,4>{0,0,0,0} ||
+      parameters.option || parameters.category!=2 || parameters.option_a!=1 ||
+      parameters.option_b!=1 || parameters.authored_output_mode!=0)
+    throw std::runtime_error("intro sound extension requires unsupported parameter branches");
+  auto& record=owner.record();
+  if (record.binding!=owner.owner_binding_)
+    throw std::runtime_error("sound extension binding is not the canonical owner record");
+  // Keep the binary32 division before the double-precision power operation.
+  volatile float exponent=parameters.scalars[0]/-20.0F;
+  record.gain_multiplier=static_cast<float>(100.0/std::pow(10.0,static_cast<double>(exponent)));
+  record.flags|=0x80U;
+  record.category=parameters.category;
+  // Authored options 1 preserve the current option bits; they do not force on.
+  record.output_mode=2;
+}
+
 std::span<const std::size_t> IntroRuntime::owner_components(IntroRuntimeHandle owner) const {
   return owner_components_.at(hierarchy_index(owner));
 }

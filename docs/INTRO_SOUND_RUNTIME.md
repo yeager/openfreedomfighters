@@ -27,6 +27,16 @@ resolve runtime identities, apply Extend parameters, convert segment times,
 register events, insert properties or send SoundReady. Wider nonzero control
 branches still need their real runtime services before they can execute.
 
+`IntroRuntime::apply_sound_extension` implements the verified unchanged intro
+parameter subset against the owner's published canonical binding. A zero binding
+skips all writes. A present binding applies the specified gain multiplier,
+category-selection bit/category and output mode; authored option values of one
+preserve the current option bits rather than forcing them on. Other parameter
+branches reject before mutation. The method rejects reentry during owner
+preparation and never announces readiness. Reader-completion and phase-one
+lifecycle admission are still separate; normal startup does not call this method
+automatically before those boundaries are connected.
+
 ## Ownership
 
 The registry retains at most 1,024 records. Native bindings are monotonically

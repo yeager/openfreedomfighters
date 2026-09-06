@@ -383,6 +383,8 @@ int main() {
         auto& owner=sound_host.sound_for_source(9);
         auto& record=owner.record();
         stale=record.binding;
+        sound_host.apply_sound_extension(9);
+        check(record.gain_multiplier==66,"unpublished binding skips extension even with unsupported source values");
         check(sound_host.sounds().size()==1 && sound_application.sound_records().size()==1 &&
               sound_application.sound_records().resolve(stale)==&record &&
               record.active_source==128 && record.alternate_source==0 &&
@@ -397,6 +399,7 @@ int main() {
           [&](auto handle) {
             check(handle==owner.handle(),"live sound flags owner"); calls.push_back("flags");
             rejects([&] { sound_host.stop_sound_owner(9); });
+            rejects([&] { sound_host.apply_sound_extension(9); });
             return flags;
           },
           [&](auto) { calls.push_back("parent"); return sound_host.root_handle(); },
@@ -409,6 +412,9 @@ int main() {
               record.parent==sound_host.root_handle().value && record.alternate_source==128 &&
               !owner.active() && record.duration==0 && sound_application.sound_records().prepared().empty(),
               "hidden owner retains ordered prehook prefix but skips backend preparation");
+        rejects([&] { sound_host.apply_sound_extension(9); });
+        check(record.gain_multiplier==66 && record.category==0 && record.progress==0,
+              "unsupported extension branches reject before canonical writes");
         flags=0; calls.clear(); clock_sample=1250;
         sound_application.advance_crt();
         sound_host.prepare_sound_owner(9,services);
@@ -424,9 +430,31 @@ int main() {
         const auto& const_owner=owner;
         check(&const_owner.record()==&record,"const consumers share canonical record, not metadata copies");
         {
-          off::graphics::IntroRuntime second(input.build(),sound_application,component_sequence);
+          auto supported=input;
+          const auto extend=supported.block_offsets[9]+70;
+          for(std::size_t field=0;field<15;++field) set(supported.payload,extend+field*5+1,0);
+          set(supported.payload,extend+1,std::bit_cast<std::uint32_t>(-1.0F));
+          set(supported.payload,extend+11*5+1,2);
+          set(supported.payload,extend+12*5+1,1); set(supported.payload,extend+13*5+1,1);
+          off::graphics::IntroRuntime second(supported.build(),sound_application,component_sequence);
           check(second.sound_for_source(9).record().binding!=stale && sound_application.sound_records().size()==2,
                 "simultaneous scenes have distinct sound bindings despite equal local owner handles");
+          second.prepare_sound_owner(9,{
+            [](auto) { return 0x400U; },[&](auto) { return second.root_handle(); },
+            [](auto) { return off::graphics::IntroSoundSpatialState{{0,0,0},{0,0,1}}; },
+            [] { return false; },[](auto) { throw std::runtime_error("unexpected owner enable"); }
+          });
+          auto& other=second.sound_for_source(9).record();
+          volatile float exponent=-1.0F/-20.0F;
+          const float expected=static_cast<float>(100.0/std::pow(10.0,static_cast<double>(exponent)));
+          for(const auto bits:{0U,2U,4U,6U}) {
+            other.flags=0x100U|bits; other.output_mode=99;
+            second.apply_sound_extension(9);
+            check(other.gain_multiplier==expected && other.flags==(0x180U|bits) &&
+                  other.category==2 && other.output_mode==2 && other.progress==0 && other.duration==0 &&
+                  !second.sound_for_source(9).active() && record.gain_multiplier==66 && record.category==0,
+                  "source-backed extension preserves current option bits and changes only its canonical record");
+          }
         }
         check(sound_application.sound_records().size()==1,"second scene releases only its own sound lease");
         sound_host.stop_sound_owner(9);
