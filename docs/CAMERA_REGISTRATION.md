@@ -57,13 +57,17 @@ producer, not the original flag setter and not permission to substitute authored
 flags or a constructor constant. Failed construction keeps its completed prefix
 and cannot be resumed as though it had succeeded.
 
+The retained state supports the reviewed [resource flag mutations](RESOURCE_STATE.md).
+Those mutations feed subsequent camera inheritance; they do not supply the
+missing source-reader or attachment operations.
+
 The real Preview payload is admitted through the shared [ordinary component
 manager](ORDINARY_COMPONENTS.md). Its resource view refers directly to the host
 hierarchy, so keyboard/mouse writes, renderer traversal and listener selection
 share the same owner and pose. The owned-data probe still rejects fallback while
 the real root's post-load state is unavailable; it creates no substitute camera.
 
-Normal startup still needs the preceding root/resource loader operations, the
+Normal startup constructs the fresh root, but still needs authored resource loading, the
 remaining concrete component population, real platform input/frame dispatch and
 backend view creation. Synthetic integration tests exercise the complete fallback
 ordering and subsequent Preview callback but do not prove retail intro playback.

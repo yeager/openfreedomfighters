@@ -12,11 +12,14 @@
 #include "off/graphics/renderer_frame_pass.hpp"
 #include "off/graphics/renderer_camera_registry.hpp"
 #include "off/graphics/preview_camera_component.hpp"
+#include "off/graphics/root_group_component.hpp"
 #include "off/graphics/picture_ordered_coordinator.hpp"
 #include <map>
 #include <memory>
 
 namespace off::graphics {
+
+class IntroRuntime;
 
 struct IntroRuntimeHandle {
   std::uint64_t value{};
@@ -35,6 +38,14 @@ struct IntroRuntimeResourceState {
 struct IntroSynthesizedCameraMetadata {
   std::string name;
   std::uint32_t class_identifier;
+};
+enum class IntroResourceLoadStage { prepared, constructing_root, root_ready, failed };
+struct IntroRootOwnerState {
+  std::string name;
+  std::uint32_t class_identifier;
+  std::uint32_t aggregate_flags{}, component_mask{};
+  bool room_mode{}, enabled{};
+  std::map<std::uint32_t,std::vector<IntroRuntimeResourceHandle>> category_memberships{};
 };
 struct IntroCameraRegistrationServices {
   std::function<std::int32_t()> width,height;
@@ -95,8 +106,8 @@ public:
   [[nodiscard]] IntroRuntimeHandle handle() const noexcept { return handle_; }
   [[nodiscard]] std::uint32_t renderer_resource_id() const noexcept { return renderer_resource_id_; }
   [[nodiscard]] std::uint32_t source_flags() const noexcept { return source_flags_; }
-  // Full factory/normalization lifecycle has not been established.
-  [[nodiscard]] std::optional<std::uint32_t> runtime_resource_flags() const noexcept { return std::nullopt; }
+  // The same optional live word used by resource mutations, never source flags.
+  [[nodiscard]] std::optional<std::uint32_t> runtime_resource_flags() const;
   [[nodiscard]] PictureColorState& color_state() noexcept { return *colors_; }
   [[nodiscard]] const PictureColorState& color_state() const noexcept { return *colors_; }
   [[nodiscard]] std::span<const data::PictureResourceDescriptor> descriptors() const noexcept { return *descriptors_; }
@@ -107,6 +118,7 @@ public:
 private:
   friend class IntroRuntime;
   const IntroPreparedPicture* source_{};
+  const IntroRuntime* runtime_{};
   IntroRuntimeHandle handle_;
   std::uint32_t renderer_resource_id_{}, source_flags_{};
   std::vector<data::PictureResourceDescriptor>* descriptors_{};
@@ -127,6 +139,14 @@ public:
   IntroRuntime(IntroRuntime&&) = delete;
   IntroRuntime& operator=(IntroRuntime&&) = delete;
   [[nodiscard]] const IntroPreparedResources& resources() const noexcept { return resources_; }
+  // Executes the fresh ROOT/ZROOM and immediate RootGroup stage. Prepared
+  // authored parent links are not live attachments and are detached here.
+  // Source construction/attachment must follow against this same root.
+  void construct_root();
+  [[nodiscard]] IntroResourceLoadStage resource_load_stage() const noexcept {return resource_load_stage_;}
+  [[nodiscard]] const std::optional<IntroRootOwnerState>& root_owner_state() const noexcept {return root_owner_state_;}
+  [[nodiscard]] const RootGroupComponent* root_group() const noexcept {return root_group_.get();}
+  [[nodiscard]] std::span<const std::size_t> root_attached_components() const noexcept {return root_attachments_;}
   [[nodiscard]] runtime::ApplicationServices& application() noexcept { return application_; }
   [[nodiscard]] runtime::ComponentLifecycle& components() noexcept { return components_; }
   [[nodiscard]] const runtime::ComponentLifecycle& components() const noexcept { return components_; }
@@ -195,6 +215,18 @@ public:
   // is NOT the original flag setter and runs none of its side effects. Source
   // flags or constructor constants must not stand in for post-load root state.
   void assign_resource_state(IntroRuntimeHandle owner,IntroRuntimeResourceState state);
+  // Operate on established live hierarchy only; these do not execute loading
+  // or attachment. Unknown ancestor words are rejected before any writes.
+  void mutate_resource_low_byte(IntroRuntimeResourceHandle resource,std::uint32_t set_mask,std::uint32_t clear_mask);
+  struct ResourceMutationModes {
+    // Bind actual retained scene modes; neither is a constructor assumption.
+    const bool& allocation_enabled;
+    const bool& maintenance_suppressed;
+  };
+  // Unsupported maintenance rejects before any writes.
+  void set_resource_flags_no_maintenance(IntroRuntimeResourceHandle resource,
+      std::uint32_t set_mask,std::uint32_t clear_mask,
+      ResourceMutationModes modes);
   // Explicit first part of the loader fallback: query existing camera, construct
   // and attach a fresh child, set loader flag/pose and call the real queue. Root
   // resource state must already be known. Preview attachment, priority and
@@ -238,6 +270,7 @@ private:
   IntroPreparedResources resources_;
   // Declared before components so their captures are destroyed before leases.
   std::vector<std::unique_ptr<IntroRuntimeSound>> sounds_;
+  std::shared_ptr<RootGroupComponent> root_group_;
   runtime::ComponentLifecycle components_;
   std::unique_ptr<runtime::OrdinaryComponentManager> ordinary_;
   std::vector<std::vector<std::size_t>> owner_components_;
@@ -250,6 +283,10 @@ private:
   std::vector<IntroRuntimeHandle> hierarchy_owners_;
   std::map<std::uint64_t,std::uint32_t> owner_indices_;
   std::vector<std::optional<IntroRuntimeResourceState>> resource_states_;
+  IntroResourceLoadStage resource_load_stage_{IntroResourceLoadStage::prepared};
+  std::optional<IntroRootOwnerState> root_owner_state_;
+  std::vector<std::size_t> root_attachments_;
+  bool resource_allocation_enabled_{}; // Actual scene-constructor mode starts off.
   std::optional<IntroRuntimeHandle> default_camera_;
   std::optional<IntroSynthesizedCameraMetadata> default_camera_metadata_;
   std::unique_ptr<FreshIntroCamera> default_camera_owner_;

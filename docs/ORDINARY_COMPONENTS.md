@@ -31,13 +31,17 @@ requires real hooks when enabled; unimplemented concrete callbacks must throw.
 requires it. A hidden, unadmitted PreviewCamera does not create an empty manager
 or publish a dispatch-clock alias. Queries do not allocate it.
 
-`IntroRuntime` uses this manager for its actual synthesized PreviewCamera
-component. Its native component handle is derived from the common constructor's
-serial, not a GMS index or camera ID. The factory preserves construction-mode
+`IntroRuntime` uses this manager for its actual RootGroup and synthesized
+PreviewCamera components. Native handles derive from the common constructor's
+serial, not a GMS index or camera ID. The Preview factory preserves construction-mode
 status, attaches its live-variable payload, applies the visible-owner enrollment
 rules, and appends real ordinary membership. The concrete Preview global handlers
 have no effects; this does not license empty handlers for other component types.
 The host requires the complete global initializer before an ordinary pass.
+
+RootGroup has a real repeated global initializer, but its ordinary input-action
+processor remains unimplemented and fails by name when reached. Creating its
+pending entry does not make ordinary scene execution complete.
 
 Tests cover partition collision vectors and generator state, two-stage sorting,
 duplicate caches, stale removals, shared state across managers, pause/filter and

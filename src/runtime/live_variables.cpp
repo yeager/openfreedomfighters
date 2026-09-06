@@ -17,7 +17,7 @@ void LiveVariableLease::reset() noexcept {
   if(registry_) registry_->release(handle_);
   registry_=nullptr;handle_={};
 }
-LiveVariableLease LiveVariableRegistry::insert(std::string name,std::variant<bool*,float*> storage) {
+LiveVariableLease LiveVariableRegistry::insert(std::string name,Storage storage) {
   if(name.empty() || next_==0) throw std::runtime_error("Live variable name or identity domain is unavailable");
   const LiveVariableHandle handle{next_,this};
   entries_.emplace(handle.identity,Entry{std::move(name),storage});
@@ -33,6 +33,9 @@ LiveVariableLease LiveVariableRegistry::bind(std::string name,float& storage) {
 }
 void LiveVariableRegistry::release(LiveVariableHandle handle) noexcept {
   if(handle.registry==this) entries_.erase(handle.identity);
+}
+LiveVariableLease LiveVariableRegistry::bind(std::string name,std::optional<float>& storage) {
+  return insert(std::move(name),&storage);
 }
 bool LiveVariableRegistry::contains(LiveVariableHandle handle) const noexcept {
   return handle.registry==this && entries_.contains(handle.identity);
@@ -56,6 +59,11 @@ bool LiveVariableRegistry::read_bool(LiveVariableHandle handle) const {
   return **storage;
 }
 float LiveVariableRegistry::read_float(LiveVariableHandle handle) const {
+  if(const auto* optional=std::get_if<std::optional<float>*>(&lookup(handle).storage)) {
+    if(!(**optional) || !std::isfinite((**optional).value()))
+      throw std::runtime_error("Live variable float is uninitialized or nonfinite");
+    return (**optional).value();
+  }
   const auto* storage=std::get_if<float*>(&lookup(handle).storage);
   if(!storage) throw std::runtime_error("Live variable is not floating point");
   if(!std::isfinite(**storage)) throw std::runtime_error("Live variable float must be finite");
@@ -67,6 +75,11 @@ void LiveVariableRegistry::write_bool(LiveVariableHandle handle,bool value) {
   **storage=value;
 }
 void LiveVariableRegistry::write_float(LiveVariableHandle handle,float value) {
+  if(const auto* optional=std::get_if<std::optional<float>*>(&lookup(handle).storage)) {
+    if(!std::isfinite(value)) throw std::runtime_error("Live variable float must be finite");
+    **optional=value;
+    return;
+  }
   const auto* storage=std::get_if<float*>(&lookup(handle).storage);
   if(!storage) throw std::runtime_error("Live variable is not floating point");
   if(!std::isfinite(value)) throw std::runtime_error("Live variable float must be finite");

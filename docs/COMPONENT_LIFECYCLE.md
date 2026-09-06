@@ -15,9 +15,8 @@ through the separate [ordinary manager](ORDINARY_COMPONENTS.md). The existing
 authored catalog is not treated as a collection of completed factories.
 
 A local run against the owned supported intro found 384 records: 383 authored
-attachments plus RootGroup. Every authored identifier matched the public source
-reader. All remained unconstructed, with no assigned runtime identity. This
-checks the real catalog, not original runtime admission.
+attachments plus RootGroup. Normal startup now constructs and immediately
+initializes RootGroup; the 383 authored entries still await their factories.
 
 ## Construction and ownership
 
@@ -34,10 +33,17 @@ actual derived constructor, registered class defaults, owner wiring and event
 enrollment. Authored parameters and owner-class ordinals are not substitutes.
 An exception preserves registration and leaves the lifecycle failed.
 
-The catalog and construction order are separate. RootGroup's immediate phase-one
-call, source-reader preparation and other factory effects must be implemented by
-the concrete route. RootGroup must not be marked phase-one complete merely because
-the original loader invokes it directly before the global pass.
+Each common constructor also samples the live application dispatch clock and
+uses the shared scene scheduling phase to set its initial clock and `0.1f`
+interval. The phase advances by binary32 `0.1f`, wrapping to positive zero at
+one. It is not reset for another component or registry. The explicit clock
+supplier must remain valid and is called before serial assignment; sampling
+failure leaves the phase/serial unchanged and fails the lifecycle.
+
+The catalog and construction order are separate. The concrete RootGroup route
+now registers its descriptor, binds/enrolls the component, marks immediate status
+`0x2` and calls its real initializer. It does not mark global completion `0x4` or
+run the global owner-notification tail. See [root resource state](RESOURCE_STATE.md).
 
 ## Global component passes
 
@@ -78,8 +84,8 @@ policies, not replicas of the original allocator.
 
 ## Remaining startup work
 
-Normal startup builds the catalog but does not construct or globally initialize
-its real component population. Concrete constructors/readers/callbacks, live
+Normal startup constructs RootGroup but does not construct or globally initialize
+the authored component population. Concrete constructors/readers/callbacks, live
 owner flags, root/additional-owner loader hooks, progress behavior, retirement,
 scene properties and shared command containers remain needed. The ordinary
 dispatcher exists, but most admitted concrete callbacks are still missing.

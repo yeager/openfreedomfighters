@@ -19,6 +19,12 @@ const audio::SoundRecord& IntroRuntimeSound::record() const {
   return lease_.get();
 }
 
+std::optional<std::uint32_t> IntroRuntimePicture::runtime_resource_flags() const {
+  if (!runtime_) return std::nullopt;
+  const auto& state = runtime_->resource_state(handle_);
+  return state ? std::optional{state->flags} : std::nullopt;
+}
+
 IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::ApplicationServices& application,
                            runtime::SceneComponentSequence& component_sequence)
     : application_(application), resources_(std::move(resources)), components_(component_sequence),
@@ -90,6 +96,7 @@ IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::Applicat
   for (const auto* source : ordered) {
     auto picture = std::make_unique<IntroRuntimePicture>();
     picture->source_ = source;
+    picture->runtime_ = this;
     picture->handle_ = source_handle(source->directory_index);
     const auto& record = directory.at(source->directory_index);
     picture->renderer_resource_id_ = record.class_data_value;
@@ -120,6 +127,58 @@ IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::Applicat
 IntroRuntimeSound& IntroRuntime::sound_for_source(std::size_t source) {
   for (auto& sound : sounds_) if (sound->source_index() == source) return *sound;
   throw std::runtime_error("Intro source has no retained sound owner");
+}
+
+void IntroRuntime::construct_root() {
+  if(resource_load_stage_==IntroResourceLoadStage::root_ready) return;
+  if(resource_load_stage_!=IntroResourceLoadStage::prepared)
+    throw std::runtime_error("ROOT construction is active or previously failed");
+  if(resource_allocation_enabled_ || components_.construction_mode() || components_.failed() ||
+      !components_.construction_order().empty() || default_camera_ || ordinary_ ||
+      std::ranges::any_of(resource_states_,[](const auto& state){return state.has_value();}))
+    throw std::runtime_error("Fresh ROOT requires inactive allocation before resource/component construction");
+  root_attachments_.reserve(1);
+  IntroRootOwnerState metadata{"ROOT",0x00100021U};
+  resource_load_stage_=IntroResourceLoadStage::constructing_root;
+  try {
+    // The prepared source graph is not the owner's live child list. No authored
+    // resource has been constructed at this boundary; attachment will link it.
+    for(auto& node:hierarchy_) node.parent=no_picture_transform_parent;
+    hierarchy_[0].matrix=engine_identity;
+    hierarchy_[0].position={0.0F,0.0F,0.0F};
+    resource_states_[0]=IntroRuntimeResourceState{0x01000000U,{}};
+    const bool maintenance_suppressed=false;
+    set_resource_flags_no_maintenance(resource_handle(root_handle()),0x08000000U,0,
+        {resource_allocation_enabled_,maintenance_suppressed});
+    root_owner_state_=std::move(metadata);
+    components_.construct(0,[this](runtime::ComponentRecord& record) {
+      auto& state=record.state();
+      state.status|=0x20U;
+      root_group_=std::make_shared<RootGroupComponent>(&application_.live_variables(),&application_.input_maps());
+      state.class_ordinal=153;
+      state.priority=0;
+      state.requested=0x115U;
+      state.attached_owner=root_handle().value;
+      root_group_->bind_owner(RootGroupOwnerHandle{state.attached_owner});
+      root_attachments_.push_back(0);
+      root_owner_state_->component_mask|=state.requested;
+      const auto admitted=state.requested&~state.admitted&0x158U;
+      state.requested|=admitted;
+      state.admitted|=admitted;
+      if(admitted&0x10U) register_ordinary_component(0);
+      return runtime::ConstructedComponent{state,
+          [payload=root_group_](runtime::ComponentRecord&){payload->initialize();},{}};
+    });
+    components_.at(0).state().status|=2U;
+    root_group_->initialize();
+    // Publish the factory result, then enable its separate root marker. Fresh
+    // room mode is false and parent absent: no parent/resource mutation follows.
+    root_owner_state_->enabled=true;
+    resource_load_stage_=IntroResourceLoadStage::root_ready;
+  } catch(...) {
+    resource_load_stage_=IntroResourceLoadStage::failed;
+    throw;
+  }
 }
 
 void IntroRuntime::stop_sound_owner(std::size_t source) {
@@ -343,9 +402,50 @@ const std::optional<IntroRuntimeResourceState>& IntroRuntime::resource_state(Int
   return resource_states_.at(hierarchy_index(owner));
 }
 void IntroRuntime::assign_resource_state(IntroRuntimeHandle owner,IntroRuntimeResourceState state) {
+  if(resource_load_stage_==IntroResourceLoadStage::failed)
+    throw std::runtime_error("Resource construction previously failed");
   const auto index=hierarchy_index(owner);
   if(state.context.value) static_cast<void>(resource_owner(state.context));
   resource_states_.at(index)=state;
+}
+void IntroRuntime::mutate_resource_low_byte(IntroRuntimeResourceHandle resource,
+    std::uint32_t set_mask,std::uint32_t clear_mask) {
+  if(default_camera_busy_ || default_camera_failed_ || resource_load_stage_==IntroResourceLoadStage::failed)
+    throw std::runtime_error("Resource mutation unavailable during failed or active Default camera construction");
+  const auto index=hierarchy_index(resource_owner(resource));
+  if(!resource_states_.at(index)) throw std::runtime_error("Resource flag word is unknown");
+  std::vector<std::uint32_t> ancestors;
+  if(set_mask&0xffU) {
+    auto parent=hierarchy_.at(index).parent;
+    while(parent!=no_picture_transform_parent) {
+      if(parent==index || std::find(ancestors.begin(),ancestors.end(),parent)!=ancestors.end())
+        throw std::runtime_error("Resource parent chain is cyclic");
+      if(!resource_states_.at(parent)) throw std::runtime_error("Ancestor resource flag word is unknown");
+      ancestors.push_back(parent);
+      parent=hierarchy_.at(parent).parent;
+    }
+  }
+  auto& flags=resource_states_[index]->flags;
+  flags=(flags&0xffffff00U)|(((flags&~clear_mask)|set_mask)&0xffU);
+  for(const auto parent:ancestors) resource_states_[parent]->flags|=set_mask&0xffU;
+}
+void IntroRuntime::set_resource_flags_no_maintenance(IntroRuntimeResourceHandle resource,
+    std::uint32_t set_mask,std::uint32_t clear_mask,
+    ResourceMutationModes modes) {
+  if(default_camera_busy_ || default_camera_failed_ || resource_load_stage_==IntroResourceLoadStage::failed)
+    throw std::runtime_error("Resource mutation unavailable during failed or active Default camera construction");
+  const auto index=hierarchy_index(resource_owner(resource));
+  if(!resource_states_.at(index)) throw std::runtime_error("Resource flag word is unknown");
+  const auto current=resource_states_[index]->flags;
+  if((((current&~clear_mask)|set_mask)^current)&0x2000U)
+    throw std::runtime_error("Resource 0x2000 transition requires unimplemented registration services");
+  if((set_mask|clear_mask)&0x8000U) {
+    if(modes.allocation_enabled && !modes.maintenance_suppressed)
+      throw std::runtime_error("Active resource 0x8000 maintenance is unsupported");
+  }
+  if((set_mask|clear_mask)&0xffU) mutate_resource_low_byte(resource,set_mask,clear_mask);
+  auto& flags=resource_states_[index]->flags;
+  flags=(flags&~(clear_mask&0xffffff00U))|(set_mask&0xffffff00U);
 }
 PreviewCameraResourceView IntroRuntime::camera_resource_view(IntroRuntimeHandle owner) {
   static_cast<void>(camera_for_owner(owner));
@@ -361,6 +461,8 @@ std::optional<IntroRuntimeHandle> IntroRuntime::create_default_camera_resource(
     throw std::runtime_error("Default camera construction reentry or prior failure");
   if(registered_cameras_.camera_at(0,[this](std::uint64_t owner){return live_owner(owner);}))
     return std::nullopt;
+  if(resource_load_stage_!=IntroResourceLoadStage::prepared)
+    throw std::runtime_error("Authored resource loading must complete after ROOT construction before DefaultCam fallback");
   if(default_camera_) throw std::runtime_error("Default camera already awaits component admission");
   if(components_.phases_completed() || components_.failed())
     throw std::runtime_error("Default camera creation belongs before global component initialization");

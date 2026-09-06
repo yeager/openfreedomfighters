@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -41,6 +42,8 @@ public:
   LiveVariableRegistry& operator=(const LiveVariableRegistry&) = delete;
   [[nodiscard]] LiveVariableLease bind(std::string name,bool& storage);
   [[nodiscard]] LiveVariableLease bind(std::string name,float& storage);
+  // Registration never reads this not-yet-initialized field.
+  [[nodiscard]] LiveVariableLease bind(std::string name,std::optional<float>& storage);
   [[nodiscard]] std::vector<LiveVariableHandle> enumerate(std::string_view name) const;
   [[nodiscard]] bool contains(LiveVariableHandle handle) const noexcept;
   [[nodiscard]] LiveVariableType type(LiveVariableHandle handle) const;
@@ -50,11 +53,12 @@ public:
   void write_float(LiveVariableHandle handle,float value);
 private:
   friend class LiveVariableLease;
-  struct Entry {std::string name;std::variant<bool*,float*> storage;};
+  using Storage=std::variant<bool*,float*,std::optional<float>*>;
+  struct Entry {std::string name;Storage storage;};
   std::map<std::uint64_t,Entry> entries_;
   std::uint64_t next_{1};
   [[nodiscard]] const Entry& lookup(LiveVariableHandle handle) const;
-  [[nodiscard]] LiveVariableLease insert(std::string name,std::variant<bool*,float*> storage);
+  [[nodiscard]] LiveVariableLease insert(std::string name,Storage storage);
   void release(LiveVariableHandle handle) noexcept;
 };
 } // namespace off::runtime

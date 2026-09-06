@@ -15,16 +15,19 @@ namespace off::runtime {
 // Owned by the scene manager, not reset by loading another source archive.
 class SceneComponentSequence final {
 public:
-  SceneComponentSequence() = default;
+  explicit SceneComponentSequence(std::function<std::uint32_t()> dispatch_clock);
   SceneComponentSequence(const SceneComponentSequence&) = delete;
   SceneComponentSequence& operator=(const SceneComponentSequence&) = delete;
   [[nodiscard]] std::uint64_t next_identity() const noexcept { return next_; }
   [[nodiscard]] std::uint64_t live_count() const noexcept { return live_; }
+  [[nodiscard]] float scheduling_phase() const noexcept { return phase_; }
   void set_construction_mode(bool value) noexcept { construction_mode_ = value; }
 private:
   friend class ComponentLifecycle;
   std::uint64_t next_{};
   std::uint64_t live_{};
+  std::function<std::uint32_t()> dispatch_clock_;
+  float phase_{};
   bool construction_mode_{};
   bool busy_{};
 };
@@ -69,6 +72,8 @@ public:
   [[nodiscard]] std::optional<std::uint32_t> identity() const noexcept { return identity_; }
   [[nodiscard]] bool constructed() const noexcept { return constructed_; }
   [[nodiscard]] bool removed() const noexcept { return removed_; }
+  [[nodiscard]] float scheduling_interval() const;
+  [[nodiscard]] std::uint32_t scheduling_clock() const;
   [[nodiscard]] ComponentState& state();
   [[nodiscard]] const ComponentState& state() const;
 private:
@@ -76,6 +81,8 @@ private:
   explicit ComponentRecord(ComponentSource source) : source_(std::move(source)) {}
   ComponentSource source_;
   std::optional<std::uint32_t> identity_;
+  struct Schedule { float interval; std::uint32_t clock; };
+  std::optional<Schedule> schedule_;
   std::optional<ConstructedComponent> instance_;
   bool constructed_{}, removed_{};
 };
@@ -119,6 +126,7 @@ public:
   void run_global_phases(const ComponentLifecycleServices& services);
   [[nodiscard]] bool failed() const noexcept { return failed_; }
   [[nodiscard]] bool phases_completed() const noexcept { return completed_; }
+  [[nodiscard]] bool construction_mode() const noexcept {return sequence_.construction_mode_;}
 private:
   void check_idle() const;
   void pass(bool second, const ComponentLifecycleServices& services, std::size_t& visited);

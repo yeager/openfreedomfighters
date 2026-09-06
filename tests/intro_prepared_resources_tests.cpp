@@ -384,7 +384,7 @@ int main() {
       rejects([&] { (void)wrong_parameter.build(); });
     }
     std::int32_t clock_sample=1000;
-    off::runtime::SceneComponentSequence component_sequence;
+    off::runtime::SceneComponentSequence component_sequence{[]{return std::uint32_t{0};}};
     off::runtime::ApplicationServices application(
         off::runtime::ClockExecutionPolicy::no_recording_or_replay,
         {[] { return std::int64_t{99}; },[&] { return clock_sample; }},
@@ -634,6 +634,70 @@ int main() {
           {[]{return std::int64_t{0};},[&]{return camera_sample;}});
       IntroRuntime first(fixture.build(),camera_application,component_sequence);
       IntroRuntime interleaved(fixture.build(),camera_application,component_sequence);
+      // Explicit synthetic live words/modes, not proof of the source loader.
+      {
+        IntroRuntime first(fixture.build(),camera_application,component_sequence);
+        const auto root=first.root_handle(), child=first.source_handle(0);
+        const auto rr=first.resource_handle(root), cr=first.resource_handle(child);
+        bool allocating=false,suppressed=false;
+        IntroRuntime::ResourceMutationModes modes{allocating,suppressed};
+        first.assign_resource_state(child,{0x09000000U,{}});
+        rejects([&]{first.mutate_resource_low_byte(cr,0x80U,0);});
+        check(first.resource_state(child)->flags==0x09000000U,"unknown ancestor rejects before child mutation");
+        first.assign_resource_state(child,{0x090000ffU,{}});
+        first.set_resource_flags_no_maintenance(cr,0,0xffU,modes);
+        check(first.resource_state(child)->flags==0x09000000U && !first.resource_state(root),
+              "clear-only setter does not require or manufacture unknown ancestor state");
+        first.assign_resource_state(root,{0x09000000U,{}});
+        first.set_resource_flags_no_maintenance(cr,0x09108080U,~0x09108080U,modes);
+        check(first.resource_state(child)->flags==0x09108080U && first.resource_state(root)->flags==0x09000080U,
+              "replacement propagates only requested low byte through canonical parent");
+        first.mutate_resource_low_byte(rr,0xf0U,0xffU);
+        first.set_resource_flags_no_maintenance(cr,3U,0xffU,modes);
+        check(first.resource_state(root)->flags==0x090000f3U && first.resource_state(child)->flags==0x09108003U,
+              "set wins overlap and root accumulates requested child low bits");
+        first.mutate_resource_low_byte(cr,0,0xffU);
+        first.mutate_resource_low_byte(rr,0,0x80U);
+        check(first.resource_state(root)->flags==0x09000073U && first.resource_state(child)->flags==0x09108000U,
+              "child clears do not propagate and root clears do not alter child");
+        allocating=true;
+        rejects([&]{first.set_resource_flags_no_maintenance(cr,0x8001U,0,modes);});
+        rejects([&]{first.set_resource_flags_no_maintenance(cr,0x2001U,0,modes);});
+        check(first.resource_state(child)->flags==0x09108000U && first.resource_state(root)->flags==0x09000073U,
+              "unsupported service branches reject before any low-byte writes");
+        first.set_resource_flags_no_maintenance(cr,0x10000000U,0,modes);
+        check(first.resource_state(child)->flags==0x19108000U,
+              "active allocation allows masks that do not touch maintenance bit");
+        first.assign_resource_state(child,{0x0910a000U,{}});
+        rejects([&]{first.set_resource_flags_no_maintenance(cr,2U,0x2000U,modes);});
+        check(first.resource_state(child)->flags==0x0910a000U && first.resource_state(root)->flags==0x09000073U,
+              "clearing live registration bit rejects before requested low-byte mutation");
+        first.set_resource_flags_no_maintenance(cr,0x2000U,0x2000U,modes);
+        check(first.resource_state(child)->flags==0x0910a000U,
+              "unchanged live registration bit is admitted with overlapping set and clear");
+        first.assign_resource_state(child,{0x09108000U,{}});
+        suppressed=true;
+        first.set_resource_flags_no_maintenance(cr,0x8001U,0,modes);
+        rejects([&]{first.mutate_resource_low_byte({},1,0);});
+        rejects([&]{first.mutate_resource_low_byte(interleaved.resource_handle(interleaved.root_handle()),1,0);});
+        auto& picture=first.picture_for_source(1);
+        const auto picture_resource=first.resource_handle(picture.handle());
+        check(!picture.runtime_resource_flags(),"unproduced picture word stays unknown");
+        first.assign_resource_state(picture.handle(),{0x491005a0U,rr});
+        first.mutate_resource_low_byte(picture_resource,4U,0xa0U);
+        check(picture.runtime_resource_flags()==0x49100504U &&
+              first.resource_state(picture.handle())->context==rr &&
+              (first.resource_state(child)->flags&4U) && (first.resource_state(root)->flags&4U),
+              "picture view follows canonical flags and propagation through every ancestor preserves context");
+        first.set_resource_flags_no_maintenance(rr,0xc00U,0,modes);
+        const auto fresh=first.create_default_camera_resource(false,[](auto){});
+        check(fresh && (first.resource_state(*fresh)->flags&0xc00U)==0xc00U &&
+              first.camera_for_owner(*fresh).flags()==0x10020U,
+              "genuinely mutated root hide state feeds DefaultCam without changing camera-owner flags");
+        first.mutate_resource_low_byte(picture_resource,0,4U);
+        check(picture.runtime_resource_flags()==0x49100500U && picture.source_flags()==0,
+              "picture view survives dynamic resource storage growth without changing authored flags");
+      }
       const auto original_count=first.hierarchy().size();
       const auto children=first.child_owners(first.root_handle());
       check(!first.resource_state(first.root_handle()),"post-load root state is unknown until its actual producer publishes it");
@@ -720,7 +784,7 @@ int main() {
         std::int32_t sample=0;
         off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
             {[]{return std::int64_t{0};},[&]{return sample;}});
-        off::runtime::SceneComponentSequence sequence;
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{0};}};
         off::graphics::IntroRuntime host(fixture.build(),app,sequence);
         const auto original_components=host.components().size();
         for(std::size_t i=0;i<original_components;++i) host.components().construct(i,[](auto& record){
@@ -760,18 +824,100 @@ int main() {
         unsigned input_reads=0,queued=0;
         off::graphics::IntroOrdinaryFrameServices frame{[]{return true;},[]{return std::optional<std::uint64_t>{};},
           [&]{++input_reads;return keys;},[&](auto resource){check(host.resource_owner(resource)==created,"ordinary queue uses same DefaultCam resource");++queued;}};
+        app.assign_component_dispatch_time(99U);
         host.run_ordinary_components(frame);
         sample=1000;app.advance_crt();app.clock().publish_scene(true);keys.held[5]=true;keys.pointer={1,0};
         host.run_ordinary_components(frame);
         check(input_reads==(hidden?0U:2U) && queued==(hidden?0U:1U) &&
               host.hierarchy().at(host.hierarchy_index(created)).position[2]==(hidden?-200.0F:700.0F) &&
               preview.state().registered_cache==(hidden?0U:0x10U) &&
-              (hidden?!app.component_dispatch_time():app.component_dispatch_time()==0),
+              app.component_dispatch_time()==(hidden?99U:0U),
               "admitted paused-bypass Preview runs through same initialized component/clock/hierarchy; hidden one never dispatches");
         frame.component_filter=[&]{return std::optional{host.component_handle(index)+1000};};
         host.run_ordinary_components(frame);check(input_reads==(hidden?0U:2U),"captured filter excludes real Preview callback");
         check(!host.ensure_default_camera(false,{},{}),"existing renderer camera prevents duplicate fallback creation");
       }
+    }
+    {
+      using namespace off::graphics;
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      check(app.component_dispatch_time()==0U,"application constructs the actual initial dispatch clock");
+      off::runtime::SceneComponentSequence sequence{[&]{return *app.component_dispatch_time();}};
+      off::runtime::LiveVariableHandle retired_display;
+      {
+        IntroRuntime host(fixture.build(),app,sequence);
+        host.construct_root();
+        const auto root=host.root_handle();
+        const auto& state=host.root_owner_state();
+        const auto* payload=host.root_group();
+        const auto& record=host.components().at(0);
+        retired_display=payload->display_variable();
+        check(host.resource_load_stage()==IntroResourceLoadStage::root_ready && state &&
+              state->name=="ROOT" && state->class_identifier==0x00100021U && state->aggregate_flags==0 &&
+              state->component_mask==0x115U && state->enabled && !state->room_mode &&
+              state->category_memberships.empty() && host.child_owners(root).empty(),
+              "fresh ZROOM retains real class, empty live collections and separate enabled marker");
+        check(host.resource_state(root)->flags==0x09000000U && !host.resource_state(root)->context.value &&
+              !host.resource_parent(root).value && host.hierarchy()[0].matrix==std::array<float,9>{0,0,1,0,1,0,1,0,0} &&
+              host.hierarchy()[0].position==std::array<float,3>{0,0,0},
+              "whole root stage preserves constructor resource flags, identity and context");
+        check(record.constructed() && record.identity()==0 && record.scheduling_interval()==0.1F &&
+              record.scheduling_clock()==0 && sequence.scheduling_phase()==0.1F &&
+              record.state().class_ordinal==153 && record.state().priority==0 &&
+              record.state().requested==0x115U && record.state().admitted==0x110U &&
+              record.state().registered_cache==0 && record.state().status==0x22U &&
+              record.state().attached_owner==root.value && !record.state().script_reference,
+              "RootGroup common scheduling, concrete metadata and immediate status follow actual enrollment");
+        check(payload && payload->owner().value==root.value && payload->initialized() &&
+              payload->display_name()==0.0F && host.root_attached_components().size()==1 &&
+              host.root_attached_components()[0]==0 && host.ordinary_components()->pending().size()==1 &&
+              host.ordinary_components()->pending()[0]==host.component_handle(0) &&
+              host.ordinary_components()->retained().empty() &&
+              app.input_maps().at(payload->input_map()).references==1 && host.registered_cameras().entries().empty(),
+              "real root descriptor/map/owner attachment and pending membership do not invent camera or cache admission");
+        for(std::size_t i=0;i<host.resources().sources().directory().size();++i)
+          check(!host.resource_state(host.source_handle(i)) && !host.resource_parent(host.source_handle(i)).value,
+                "prepared authored parent graph is not already-executed attachment");
+        app.live_variables().write_float(retired_display,7.0F);
+        host.mutate_resource_low_byte(host.resource_handle(root),0x80U,0);
+        host.construct_root();
+        check(sequence.next_identity()==1 && app.live_variables().read_float(retired_display)==7.0F &&
+              host.resource_state(root)->flags==0x09000080U && app.input_maps().at(payload->input_map()).references==1,
+              "existing root reuse preserves live mutations and does not reconstruct or initialize again");
+        rejects([&]{(void)host.ensure_default_camera(false,[](auto){},{});});
+        rejects([&]{host.run_ordinary_components({});});
+        check(!host.default_camera_handle(),"root construction result cannot substitute for completed source loading");
+        // Explicit synthetic remaining factories isolate the real RootGroup
+        // global callback. They do not implement the retail source population.
+        for(std::size_t i=1;i<host.components().size();++i) host.components().construct(i,[](auto& item){
+          auto value=item.state(); value.class_ordinal=1;value.attached_owner=item.source().owner;
+          return off::runtime::ConstructedComponent{value,{},{}};
+        });
+        unsigned root_notifications=0;
+        host.components().run_global_phases({[](bool,auto&,std::size_t){},
+          [&](auto owner){return std::optional<std::uint32_t>{owner==root.value?host.resource_state(root)->flags:0};},
+          [&](auto owner){check(owner==root.value,"only real requested RootGroup phase notifies here");++root_notifications;},
+          [](auto&){throw std::runtime_error("Unexpected root fixture retirement");}});
+        check(record.state().status==0x26U && root_notifications==1 && payload->display_name()==0.0F &&
+              app.input_maps().at(payload->input_map()).references==2 && host.resource_state(root)->flags==0x09000080U,
+              "global phase one repeats real initializer and owner tail without confusing immediate status2 with status4");
+        app.reset_clock();
+        bool named_failure=false;
+        try {host.run_ordinary_components({[]{return false;},[]{return std::optional<std::uint64_t>{};},{},{}});}
+        catch(const std::runtime_error& error) {named_failure=std::string_view(error.what()).find("ZGROUP_RootGroup")!=std::string_view::npos;}
+        check(named_failure,"unimplemented real RootGroup input processor cannot succeed as an empty callback");
+      }
+      check(sequence.live_count()==0 && !app.live_variables().contains(retired_display),
+            "root teardown releases component identity and console descriptor before application storage");
+      off::runtime::SceneComponentSequence failing_sequence{[]()->std::uint32_t{throw std::runtime_error("clock unavailable");}};
+      IntroRuntime failed(fixture.build(),app,failing_sequence);
+      rejects([&]{failed.construct_root();});
+      check(failed.resource_load_stage()==IntroResourceLoadStage::failed && failed.resource_state(failed.root_handle())->flags==0x09000000U &&
+            !failed.root_owner_state()->enabled && failing_sequence.live_count()==0,
+            "root clock failure preserves constructor prefix but does not publish a successful root");
+      rejects([&]{failed.construct_root();});
+      rejects([&]{failed.mutate_resource_low_byte(failed.resource_handle(failed.root_handle()),1,0);});
     }
     {
       auto projection_fixture = fixture;

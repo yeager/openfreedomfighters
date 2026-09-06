@@ -117,7 +117,11 @@ int main(int argc, char **argv) {
       off::runtime::make_monotonic_clock_samples());
   std::optional<off::graphics::SceneGpuPlan> scene;
   // Scene-manager identity lifetime, independent of source archive catalogs.
-  off::runtime::SceneComponentSequence component_sequence;
+  off::runtime::SceneComponentSequence component_sequence{[&application] {
+    const auto time=application.component_dispatch_time();
+    if(!time) throw std::runtime_error("Live application component dispatch time has not been produced");
+    return *time;
+  }};
   std::optional<off::graphics::SceneRenderAsset> startup_ui_scene_resources;
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
   std::unique_ptr<off::graphics::IntroRuntime> intro;
@@ -142,6 +146,9 @@ int main(int argc, char **argv) {
         intro = std::make_unique<off::graphics::IntroRuntime>(
             off::graphics::load_intro_prepared_resources(
                 data_path / "Scenes" / "FF-Intro.ZIP"), application, component_sequence);
+        // Execute the actual fresh root stage. Authored source construction and
+        // its loader tail are still required before fallback/view admission.
+        intro->construct_root();
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -192,7 +199,8 @@ int main(int argc, char **argv) {
               << " images; automatic scene activation remains pending.\n";
   if (intro)
     std::cout << "Retained component catalog: " << intro->components().size()
-              << " entries including synthesized RootGroup; concrete factories pending.\n";
+              << " entries; " << intro->components().construction_order().size()
+              << " constructed. ROOT/RootGroup initialized; authored factories and loader tail pending.\n";
   if (intro)
     std::cout << "Source-bound intro sound definitions: " << intro->resources().sounds().size()
               << "; retained authored metadata, no playback or readiness event.\n";

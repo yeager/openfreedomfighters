@@ -13,6 +13,18 @@ std::string describe(const ComponentRecord& record) {
       " attachment=" + (source.attachment_index ? std::to_string(*source.attachment_index) : "none");
 }
 }
+SceneComponentSequence::SceneComponentSequence(std::function<std::uint32_t()> dispatch_clock)
+    : dispatch_clock_(std::move(dispatch_clock)) {
+  if(!dispatch_clock_) throw std::runtime_error("Live component dispatch clock supplier is required");
+}
+float ComponentRecord::scheduling_interval() const {
+  if(!schedule_) throw std::runtime_error("Component schedule is not constructed");
+  return schedule_->interval;
+}
+std::uint32_t ComponentRecord::scheduling_clock() const {
+  if(!schedule_) throw std::runtime_error("Component schedule is not constructed");
+  return schedule_->clock;
+}
 ComponentLifecycle::~ComponentLifecycle() {
   // Native owner teardown, not an emulation of original per-class destruction.
   for (const auto& record : records_)
@@ -53,15 +65,23 @@ void ComponentLifecycle::construct(std::size_t index, const Factory& supplied) {
     throw std::runtime_error("Scene component identity exhausted");
   const auto factory = supplied;
   order_.reserve(order_.size() + 1);
+  busy_ = true;
+  sequence_.busy_ = true;
+  try {
+  const auto dispatch_time=sequence_.dispatch_clock_();
+  // Force each approved binary32 rounding boundary independently of contraction.
+  const volatile float scaled_phase=sequence_.phase_*0.1F;
+  const volatile float offset=scaled_phase*-1024.0F;
+  const volatile float advanced=sequence_.phase_+0.1F;
+  record.schedule_=ComponentRecord::Schedule{0.1F,
+      dispatch_time-static_cast<std::uint32_t>(static_cast<std::int32_t>(offset))};
+  sequence_.phase_=advanced>=1.0F?0.0F:advanced;
   record.identity_ = static_cast<std::uint32_t>(sequence_.next_++);
   ++sequence_.live_;
   order_.push_back(index);
   record.instance_ = ConstructedComponent{
       {0,0,0,0,0,sequence_.construction_mode_ ? 0x10U : 0U,0,0},{},{}};
   completed_ = false;
-  busy_ = true;
-  sequence_.busy_ = true;
-  try {
     record.instance_ = factory(record);
     record.constructed_ = true;
     busy_ = false;

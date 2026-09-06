@@ -70,6 +70,7 @@ add_library(off_core
     src/runtime/application_clock.cpp
     src/runtime/component_lifecycle.cpp
     src/runtime/live_variables.cpp
+    src/runtime/input_maps.cpp
     src/runtime/ordinary_components.cpp
     src/crypto/sha256.cpp
     src/data/archive_vfs.cpp
@@ -121,6 +122,7 @@ add_library(off_core
     src/graphics/preview_camera_update.cpp
     src/graphics/preview_translation.cpp
     src/graphics/preview_camera_component.cpp
+    src/graphics/root_group_component.cpp
     src/graphics/intro_picture_transform.cpp
     src/graphics/center_picture_position.cpp
     src/graphics/position_update_service.cpp
@@ -245,6 +247,9 @@ install(FILES assets/branding/openfreedomfighters-splash.bmp
         DESTINATION bin/assets)
 
 if(BUILD_TESTING)
+    add_executable(off_root_group_component_tests tests/root_group_component_tests.cpp)
+    target_link_libraries(off_root_group_component_tests PRIVATE off_core)
+    add_test(NAME off_root_group_component_tests COMMAND off_root_group_component_tests)
     add_executable(off_ordinary_components_tests tests/ordinary_components_tests.cpp)
     target_link_libraries(off_ordinary_components_tests PRIVATE off_core)
     add_test(NAME off_ordinary_components_tests COMMAND off_ordinary_components_tests)

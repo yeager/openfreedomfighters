@@ -39,9 +39,10 @@ executable code are included here.
   settings. Typed attachment loading, owner preparation, stop and the verified
   SoundExtend parameter operation are implemented. The complete
   [startup audio lifecycle](docs/INTRO_AUDIO_STARTUP_ORDER.md) is not connected.
-- The intro runtime retains every authored component attachment and has a shared
-  two-phase initialization path. Most concrete component implementations remain
-  missing; a catalog entry is not an initialized component.
+- Normal startup constructs the scene's ROOT and its RootGroup component,
+  including the shared construction clock and control-map registration.
+  Authored attachments remain a catalog; most concrete factories and the full
+  two-phase initialization path still need to be connected.
   DefaultCam and its PreviewCamera now share an [ordinary update queue](docs/ORDINARY_COMPONENTS.md)
   with real admission and sorting. This path still requires the preceding loader
   state and is not called by normal startup yet.

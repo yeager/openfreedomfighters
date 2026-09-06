@@ -12,6 +12,10 @@ update loop yet. The logical sound backend has no output device or channel pump.
 
 ## Clock
 
+The separate component dispatch-time integer starts at zero in the application
+constructor. Later ordinary passes replace it with the scene clock. Common
+component construction samples this retained alias; it does not reset it.
+
 The initial rate is 1 and CRT mode is off. Selecting CRT mode only assigns the
 mode; it does not sample time. Reset clears accumulators, integer clocks, scene
 offset, raw delta and smoothing. It retains rate, mode, suppression, last scaled

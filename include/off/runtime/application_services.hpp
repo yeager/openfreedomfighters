@@ -5,6 +5,7 @@
 #include "off/graphics/preview_camera_update.hpp"
 #include "off/runtime/application_clock.hpp"
 #include "off/runtime/live_variables.hpp"
+#include "off/runtime/input_maps.hpp"
 #include "off/runtime/ordinary_components.hpp"
 #include <utility>
 #include <stdexcept>
@@ -26,6 +27,7 @@ public:
   [[nodiscard]] audio::SoundPreferences& sound() noexcept { return sound_; }
   [[nodiscard]] graphics::PreviewCameraUpdate& preview_camera_update() noexcept { return preview_camera_update_; }
   [[nodiscard]] LiveVariableRegistry& live_variables() noexcept { return live_variables_; }
+  [[nodiscard]] InputMapRegistry& input_maps() noexcept {return input_maps_;}
   [[nodiscard]] OrdinarySortingState& ordinary_sorting() noexcept {return ordinary_sorting_;}
   void assign_component_dispatch_time(std::uint32_t time) noexcept {component_dispatch_time_=time;}
   [[nodiscard]] std::optional<std::uint32_t> component_dispatch_time() const noexcept {return component_dispatch_time_;}
@@ -83,8 +85,10 @@ private:
   audio::SoundPreferences sound_;
   graphics::PreviewCameraUpdate preview_camera_update_;
   LiveVariableRegistry live_variables_;
+  InputMapRegistry input_maps_;
   OrdinarySortingState ordinary_sorting_;
-  std::optional<std::uint32_t> component_dispatch_time_;
+  // Actual application-constructor producer; later ordinary passes update it.
+  std::optional<std::uint32_t> component_dispatch_time_{0U};
   std::uint64_t next_runtime_owner_{1};
 };
 } // namespace off::runtime

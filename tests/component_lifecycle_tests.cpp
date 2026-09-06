@@ -23,7 +23,7 @@ ConstructedComponent instance(std::uint64_t owner, std::uint32_t mask = 3) {
   return {{314, 0, mask, 0, 0, 0x20, 0, owner}, {}, {}};
 }
 struct Fixture {
-  SceneComponentSequence sequence;
+  SceneComponentSequence sequence{[]{return std::uint32_t{0};}};
   ComponentLifecycle lifecycle{sequence};
   std::map<std::uint64_t, std::uint32_t> flags;
   std::vector<std::string> log;
@@ -197,7 +197,7 @@ int main() {
       check(f.lifecycle.phases_completed(), "caught forbidden reentry leaves admitted outer pass intact");
     }
     {
-      SceneComponentSequence sequence;
+      SceneComponentSequence sequence{[]{return std::uint32_t{0};}};
       sequence.set_construction_mode(true);
       {
         ComponentLifecycle first(sequence);
@@ -301,6 +301,38 @@ int main() {
       check(f.lifecycle.phases_completed(),"caught cross-registry mutation leaves outer pass valid");
       foreign.construct(foreign_index,[](auto&) { return instance(2,0); });
       check(f.sequence.next_identity()==2,"scene-wide guard releases after complete pass");
+    }
+    {
+      rejects([]{SceneComponentSequence absent({});});
+      std::uint32_t dispatch=0xfffffff8U;
+      unsigned samples=0;
+      SceneComponentSequence sequence{[&]{++samples;return dispatch;}};
+      ComponentLifecycle first(sequence),second(sequence);
+      constexpr std::uint32_t offsets[]{0,10,20,30,40,51,61,71,81,92,0};
+      for(std::uint32_t i=0;i<11;++i) {
+        auto& list=(i%2)?second:first;
+        const auto index=list.append(source(i+1));
+        rejects([&]{(void)list.at(index).scheduling_clock();});
+        list.construct(index,[&](auto& record) {
+          check(record.identity()==i && sequence.next_identity()==i+1 &&
+                sequence.live_count()==i+1 && record.scheduling_interval()==0.1F &&
+                record.scheduling_clock()==dispatch+offsets[i] && samples==i+1,
+                "factory observes live sampled schedule, unsigned wrap and registered serial");
+          if(i==9) check(sequence.scheduling_phase()==0.0F,"tenth phase advance wraps to positive zero");
+          return instance(i+1,0);
+        });
+        if(i==1) dispatch=123U;
+      }
+      check(sequence.scheduling_phase()==0.1F,"phase remains shared across registries after wrap");
+    }
+    {
+      SceneComponentSequence sequence{[]{throw std::runtime_error("missing live clock");return std::uint32_t{0};}};
+      ComponentLifecycle list(sequence);
+      const auto index=list.append(source(1));
+      rejects([&]{list.construct(index,[](auto&){return instance(1);});});
+      check(list.failed() && sequence.live_count()==0 && sequence.next_identity()==0 &&
+            sequence.scheduling_phase()==0.0F && !list.at(index).identity() && list.construction_order().empty(),
+            "clock supplier failure retains no scheduling or serial mutation");
     }
     std::cout << "Retained component identity, reverse global lifecycle, live admission and failure prefixes verified.\n";
   } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }

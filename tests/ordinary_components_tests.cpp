@@ -16,7 +16,7 @@ void sort_case(std::vector<OrdinarySortItem> items,std::vector<std::uint64_t> ex
   check(actual==expected && sorting.state==state,"approved sorting collision/state fixture");
 }
 struct Fixture {
-  SceneComponentSequence sequence;
+  SceneComponentSequence sequence{[]{return std::uint32_t{0};}};
   ComponentLifecycle lifecycle{sequence};
   std::set<std::uint64_t> stale;
   std::vector<std::string> effects;

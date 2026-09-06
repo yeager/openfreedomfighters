@@ -13,10 +13,12 @@ It does show why a controller-and-five-commands-only initializer is insufficient
 The host now retains the complete attachment catalog and a
 [two-phase component lifecycle](COMPONENT_LIFECYCLE.md). Concrete component
 factories, live resource flags and event-registry membership still need to be
-implemented in that same host.
+completed in that same host. Normal startup now executes the actual fresh
+[ROOT/RootGroup construction stage](RESOURCE_STATE.md), including its immediate
+initializer and retained console/input-map registrations.
 The conditional DefaultCam factory now constructs its real PreviewCamera and
 ordinary membership in that host. Its callback writes directly into the scene
-hierarchy after the complete global initializer. The root-state producer and
+hierarchy after the complete global initializer. The post-load root state and
 other concrete component factories remain missing; the normal SDL loop does
 not invoke this conditional path. See [ordinary updates](ORDINARY_COMPONENTS.md).
 The two intro sound owners now retain their authored SND definitions and paired
@@ -43,6 +45,9 @@ separate from authored objects, source-backed transform hierarchy, native handle
 mapping, one canonical camera and mutable picture storage. Source construction
 order is retained for future additional-owner initialization; storing a handle
 does not execute that owner's factory or lifecycle callbacks.
+The explicit root-construction stage detaches prepared source parent links: its
+live child list is empty until actual source attachment runs. The source image
+retains the authored hierarchy information for that later operation.
 
 Exact PRM descriptor aliases share writable storage. Different descriptor ranges
 that overlap are rejected explicitly. Paired frame-resource materials share by
@@ -71,12 +76,11 @@ descriptor/material writes, live draw snapshots, immutable source preservation
 and canonical camera projection. These fixtures do not
 establish the original scene's activation history.
 
-An earlier bounded native startup run with the owned Steam installation completed:
-four picture owners are retained and all 26 intro images upload on SDL/Vulkan.
-The run exited after two presentation frames. This proved the verified-data →
-retained-host → GPU-upload path, not intro draw submission or playback. It
-predates the component catalog. A later visible screenshot attempt stalled in
-the local graphics environment and was stopped; it is not a current startup pass.
+A bounded native startup run with the owned Steam installation completed after
+two presentation frames: RootGroup was constructed and immediately initialized,
+the other 383 component entries remained unconstructed, four picture owners were
+retained and all 26 intro images uploaded on SDL/Vulkan. This verifies the
+data-check, root-construction and GPU-upload path, not intro drawing or playback.
 
 ## Retained controller initialization
 
