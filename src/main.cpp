@@ -149,6 +149,10 @@ int main(int argc, char **argv) {
         // Execute the actual fresh root stage. Authored source construction and
         // its loader tail are still required before fallback/view admission.
         intro->construct_root();
+        // The engine GPU runtime is created below, after CPU preflight. The
+        // startup splash is a separate renderer. Reset load progress once under
+        // the native staging policy, then construct only the first scope.
+        intro->begin_source_loading_without_engine_renderer();
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -201,6 +205,9 @@ int main(int argc, char **argv) {
     std::cout << "Retained component catalog: " << intro->components().size()
               << " entries; " << intro->components().construction_order().size()
               << " constructed. ROOT/RootGroup initialized; authored factories and loader tail pending.\n";
+  if (intro && !intro->source_resource_scopes().empty())
+    std::cout << "Initial source scope: " << intro->source_resource_scopes().front().resources.size()
+              << " resources allocated; authored owners not yet constructed.\n";
   if (intro)
     std::cout << "Source-bound intro sound definitions: " << intro->resources().sounds().size()
               << "; retained authored metadata, no playback or readiness event.\n";

@@ -1,7 +1,8 @@
 # Live resource flags
 
 `IntroRuntime` retains one optional complete resource flag word and a separate
-typed resource-context handle per owner. Unknown state stays unknown. Authored
+typed resource-context handle per canonical resource slot. Resources can exist
+without an associated owner. Unknown state stays unknown. Authored
 flags, camera-owner flags and owner aggregate flags are different values.
 Picture flag queries and PreviewCamera resource views use this same storage,
 including after a dynamic camera grows the resource collection.
@@ -41,6 +42,29 @@ its immediate initializer. At this boundary the root's actual flags are
 Prepared authored links are detached; later attachment must build the real list.
 An existing completed root is reused without resetting its state.
 
+Normal CPU preflight then calls `begin_source_loading_without_engine_renderer`.
+This explicitly resets retained scene progress once as a native load-begin
+policy, applies the first directory row's stage-three progress operation
+(`0.8`, admitted only above the retained value plus `0.002`), and allocates the
+initial scope. This is not an original constructor default or proof of the
+original cold reset caller. No engine GPU renderer exists at this native stage;
+the separate splash renderer does not supply that identity. A future loader
+running with an engine renderer must execute its real progress drawing and
+presentation services, not reuse this absent-renderer entry point.
+
+The owned intro's first scope contains 20 resources, partitioned by its count
+table. Inactive batch construction gives each a distinct native resource ID,
+identity pose, positive-zero position, no parent/context and flags `0x09000000`.
+They remain ownerless. Reserved source catalog handles are not live owners;
+owner/resource lookup and camera registration reject unconstructed owners.
+Canonical flag mutation still works on an allocated ownerless resource.
+
+Only this first scope is allocated. Its partition cursors remain unconsumed
+until owner construction starts. Later batches must be interleaved with source
+factories and attachments, not eagerly constructed for the entire directory.
+`allocate_initial_source_scope` is also exposed as an explicit stage operation;
+it does not itself execute preceding progress or claim complete loading.
+
 RootGroup retains its `DisplayName` floating-point descriptor and `RootControl`
 input-map registration. Its ordinary membership remains pending, not merged.
 The root's separate enabled marker does not enable a camera or set a resource
@@ -56,5 +80,5 @@ services are not replaced by constructor constants or empty callbacks.
 Tests use independently constructed states to check ancestor propagation,
 maintenance gates, picture views and subsequent DefaultCam hide inheritance.
 They do not establish the retail root's post-load flags. The explicit `root_ready`
-stage blocks DefaultCam fallback until actual authored loading is implemented;
+and `initial_scope_ready` stages block DefaultCam fallback until actual authored loading is implemented;
 the fresh construction result is not accepted as the later loader result.

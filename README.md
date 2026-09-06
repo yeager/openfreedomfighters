@@ -41,6 +41,8 @@ executable code are included here.
   [startup audio lifecycle](docs/INTRO_AUDIO_STARTUP_ORDER.md) is not connected.
 - Normal startup constructs the scene's ROOT and its RootGroup component,
   including the shared construction clock and control-map registration.
+  It then allocates the first 20 source resources. These have no constructed
+  owners yet; later resource groups must load in scene order.
   Authored attachments remain a catalog; most concrete factories and the full
   two-phase initialization path still need to be connected.
   DefaultCam and its PreviewCamera now share an [ordinary update queue](docs/ORDINARY_COMPONENTS.md)

@@ -25,8 +25,8 @@ struct IntroRuntimeHandle {
   std::uint64_t value{};
   bool operator==(const IntroRuntimeHandle&) const = default;
 };
-// Separate typed resource domain. Native resource/owner pairs share the numeric
-// token, not their semantics; this is not an original allocator representation.
+// Separate typed resource domain. Resources can exist before an owner is
+// associated; tokens are native identities, not original allocator pointers.
 struct IntroRuntimeResourceHandle {
   std::uint64_t value{};
   bool operator==(const IntroRuntimeResourceHandle&) const = default;
@@ -39,7 +39,15 @@ struct IntroSynthesizedCameraMetadata {
   std::string name;
   std::uint32_t class_identifier;
 };
-enum class IntroResourceLoadStage { prepared, constructing_root, root_ready, failed };
+enum class IntroResourceLoadStage {
+  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, failed
+};
+struct IntroSourceResourceScope {
+  std::uint32_t count_group{};
+  std::array<std::uint32_t,24> counts{};
+  std::array<std::optional<std::uint32_t>,24> next_in_partition{};
+  std::vector<IntroRuntimeResourceHandle> resources;
+};
 struct IntroRootOwnerState {
   std::string name;
   std::uint32_t class_identifier;
@@ -143,6 +151,16 @@ public:
   // authored parent links are not live attachments and are detached here.
   // Source construction/attachment must follow against this same root.
   void construct_root();
+  // Explicit native cold-load staging before engine renderer creation. Reset
+  // retained scene progress once, execute first-row progress, then allocate.
+  // This is not evidence of the original cold reset caller or renderer timing.
+  void begin_source_loading_without_engine_renderer();
+  [[nodiscard]] std::optional<float> loading_progress() const noexcept {return loading_progress_;}
+  // Actual first-scope batch only. Later scopes must be interleaved with real
+  // owner construction and attachment; this never constructs all source rows.
+  void allocate_initial_source_scope();
+  [[nodiscard]] std::span<const IntroSourceResourceScope> source_resource_scopes() const noexcept {return source_resource_scopes_;}
+  [[nodiscard]] std::optional<IntroRuntimeResourceHandle> allocated_source_resource(std::size_t source) const;
   [[nodiscard]] IntroResourceLoadStage resource_load_stage() const noexcept {return resource_load_stage_;}
   [[nodiscard]] const std::optional<IntroRootOwnerState>& root_owner_state() const noexcept {return root_owner_state_;}
   [[nodiscard]] const RootGroupComponent* root_group() const noexcept {return root_group_.get();}
@@ -208,6 +226,9 @@ public:
   [[nodiscard]] std::uint32_t hierarchy_index(IntroRuntimeHandle handle) const;
   [[nodiscard]] IntroRuntimeResourceHandle resource_handle(IntroRuntimeHandle owner) const;
   [[nodiscard]] IntroRuntimeHandle resource_owner(IntroRuntimeResourceHandle resource) const;
+  [[nodiscard]] std::uint32_t resource_index(IntroRuntimeResourceHandle resource) const;
+  [[nodiscard]] std::optional<IntroRuntimeHandle> associated_resource_owner(IntroRuntimeResourceHandle resource) const;
+  [[nodiscard]] const std::optional<IntroRuntimeResourceState>& resource_state_for_handle(IntroRuntimeResourceHandle resource) const;
   [[nodiscard]] IntroRuntimeResourceHandle resource_parent(IntroRuntimeHandle owner) const;
   [[nodiscard]] std::vector<IntroRuntimeHandle> child_owners(IntroRuntimeHandle owner) const;
   [[nodiscard]] const std::optional<IntroRuntimeResourceState>& resource_state(IntroRuntimeHandle owner) const;
@@ -282,11 +303,16 @@ private:
   std::vector<PictureHierarchyNode> hierarchy_;
   std::vector<IntroRuntimeHandle> hierarchy_owners_;
   std::map<std::uint64_t,std::uint32_t> owner_indices_;
+  std::map<std::uint64_t,std::uint32_t> resource_indices_;
+  std::vector<std::optional<IntroRuntimeResourceHandle>> hierarchy_resources_;
+  std::vector<std::optional<IntroRuntimeHandle>> resource_owners_;
   std::vector<std::optional<IntroRuntimeResourceState>> resource_states_;
   IntroResourceLoadStage resource_load_stage_{IntroResourceLoadStage::prepared};
+  std::optional<float> loading_progress_;
   std::optional<IntroRootOwnerState> root_owner_state_;
   std::vector<std::size_t> root_attachments_;
   bool resource_allocation_enabled_{}; // Actual scene-constructor mode starts off.
+  std::vector<IntroSourceResourceScope> source_resource_scopes_;
   std::optional<IntroRuntimeHandle> default_camera_;
   std::optional<IntroSynthesizedCameraMetadata> default_camera_metadata_;
   std::unique_ptr<FreshIntroCamera> default_camera_owner_;
@@ -308,7 +334,8 @@ private:
   bool projected_{false};
   bool sound_preparation_busy_{};
   [[nodiscard]] bool live_owner(std::uint64_t handle) const noexcept {
-    return owner_indices_.contains(handle);
+    const auto found=owner_indices_.find(handle);
+    return found!=owner_indices_.end() && resource_owners_[found->second]==IntroRuntimeHandle{handle};
   }
 };
 } // namespace off::graphics

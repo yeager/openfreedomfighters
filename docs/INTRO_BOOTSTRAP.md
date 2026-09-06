@@ -16,6 +16,9 @@ factories, live resource flags and event-registry membership still need to be
 completed in that same host. Normal startup now executes the actual fresh
 [ROOT/RootGroup construction stage](RESOURCE_STATE.md), including its immediate
 initializer and retained console/input-map registrations.
+CPU preflight also executes first-row loading progress under an explicit native
+load-begin reset policy and allocates the first scope's 20 ownerless resources.
+It does not eagerly allocate later groups or run an authored owner factory.
 The conditional DefaultCam factory now constructs its real PreviewCamera and
 ordinary membership in that host. Its callback writes directly into the scene
 hierarchy after the complete global initializer. The post-load root state and
@@ -81,6 +84,13 @@ two presentation frames: RootGroup was constructed and immediately initialized,
 the other 383 component entries remained unconstructed, four picture owners were
 retained and all 26 intro images uploaded on SDL/Vulkan. This verifies the
 data-check, root-construction and GPU-upload path, not intro drawing or playback.
+
+The subsequent first-scope integration passes all 86 local CTest executables
+and a focused ASan/UBSan integration run. A private check against the owned
+archive verifies all 20 initial resources against the count-table slot mapping,
+with no owner bindings, unchanged ROOT state and 450 later resources absent.
+A new bounded normal startup also reaches SDL/Vulkan and exits successfully.
+These checks still do not establish an authored owner factory or intro playback.
 
 ## Retained controller initialization
 

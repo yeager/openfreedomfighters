@@ -53,33 +53,33 @@ void real(Bytes& b, std::uint8_t tag, double v) {
     word(b, static_cast<std::uint32_t>(bits)); word(b, static_cast<std::uint32_t>(bits >> 32));
 }
 void finish(Bytes& b) { b.push_back(std::byte{0xff}); set(b, 0, static_cast<std::uint32_t>(b.size())); }
-Bytes list(std::initializer_list<std::uint32_t> references) {
+Bytes list(std::initializer_list<std::uint32_t> references,std::uint32_t bias=0) {
     Bytes b(4); scalar(b, 0x89, static_cast<std::uint32_t>(4 + references.size() * 4));
-    for (auto r : references) word(b, r);
+    for (auto r : references) word(b, r?r+bias:0);
     b.push_back(std::byte{6}); finish(b); return b;
 }
-Bytes controller() {
+Bytes controller(std::uint32_t bias=0) {
     Bytes b(4); scalar(b, 9, 4); b.push_back(std::byte{6});
-    scalar(b, 0x88, 6); scalar(b, 0x88, 7); scalar(b, 8, 0);
+    scalar(b, 0x88, 6+bias); scalar(b, 0x88, 7+bias); scalar(b, 8, 0);
     b.push_back(std::byte{0x84}); text(b, "IndependentDestination");
     scalar(b, 0x83, 17); scalar(b, 0x88, 0); scalar(b, 8, 2);
     b.push_back(std::byte{6}); finish(b); return b;
 }
-Bytes first_cut() {
-    Bytes b(4); scalar(b, 0x89, 8); word(b, 5); b.push_back(std::byte{6});
+Bytes first_cut(std::uint32_t bias=0) {
+    Bytes b(4); scalar(b, 0x89, 8); word(b, 5+bias); b.push_back(std::byte{6});
     constexpr std::array<std::uint8_t, 7> tags{0x83, 0x83, 3, 8, 3, 0x83, 3};
     for (std::size_t i = 0; i < tags.size(); ++i) scalar(b, tags[i], i == 3 ? 0 : 1);
     floating(b, 2, -0.0F); b.push_back(std::byte{6});
     for (std::uint32_t i = 0; i < 5; ++i) {
         scalar(b, 3, 31 - i); scalar(b, 0x8a, i == 4 ? 0 : 1);
-        scalar(b, 0x88, 2); scalar(b, 0x83, 100 + i);
+        scalar(b, 0x88, 2+bias); scalar(b, 0x83, 100 + i);
         b.push_back(std::byte{4}); text(b, "IndependentTarget"); b.push_back(std::byte{6});
     }
     finish(b); return b;
 }
-Bytes member() {
+Bytes member(std::uint32_t bias=0) {
     Bytes b(4); scalar(b, 0x89, 28);
-    for (auto r : {9U, 4U, 0U, 2U, 0U, 0U}) word(b, r);
+    for (auto r : {9U, 4U, 0U, 2U, 0U, 0U}) word(b, r?r+bias:0);
     b.push_back(std::byte{6}); floating(b, 2, 13); floating(b, 0x82, 217);
     scalar(b, 3, 1); b.push_back(std::byte{6}); finish(b); return b;
 }
@@ -100,15 +100,15 @@ Bytes picture(bool legal) {
     b.push_back(std::byte{6}); scalar(b, 3, 16);
     b.push_back(std::byte{6}); b.push_back(std::byte{6}); finish(b); return b;
 }
-Bytes window() {
+Bytes window(std::uint32_t bias=0) {
     Bytes b(4); scalar(b, 3, 19); floating(b, 2, -0.0F);
     scalar(b, 3, 7); scalar(b, 3, 9); scalar(b, 3, 23);
     b.push_back(std::byte{6}); b.push_back(std::byte{6});
-    scalar(b, 0x88, 9); scalar(b, 0x88, 0); scalar(b, 0x88, 2);
+    scalar(b, 0x88, 9+bias); scalar(b, 0x88, 0); scalar(b, 0x88, 2+bias);
     scalar(b, 0x83, 5); scalar(b, 0x83, 6); scalar(b, 3, 7);
     b.push_back(std::byte{6}); finish(b); return b;
 }
-Bytes sound_owner() {
+Bytes sound_owner(std::uint32_t bias=0) {
     Bytes b(4); scalar(b,0x83,5); scalar(b,0x8b,128);
     for(float value:{271.F,272.F,-0.0F,7.F}) floating(b,2,value);
     scalar(b,3,123); scalar(b,3,6); floating(b,2,66); floating(b,2,0.5F);
@@ -119,7 +119,7 @@ Bytes sound_owner() {
     floating(b,0x82,-0.0F); scalar(b,3,13); scalar(b,3,1);
     floating(b,2,1.25F); scalar(b,3,14); scalar(b,0x83,7);
     scalar(b,3,5); scalar(b,3,6); scalar(b,3,99); b.push_back(std::byte{6});
-    scalar(b,0x88,2); scalar(b,0x0a,1); b.push_back(std::byte{6});
+    scalar(b,0x88,2+bias); scalar(b,0x0a,1); b.push_back(std::byte{6});
     scalar(b,3,1); scalar(b,0x0a,1); scalar(b,0x0a,0);
     for(std::uint32_t group=0;group<4;++group) {
       scalar(b,group==3?0x83:3,group);
@@ -149,7 +149,7 @@ struct Fixture {
     Bytes payload, names, prm, tex, snd;
     std::array<std::size_t, 10> block_offsets{};
     std::array<std::size_t, 10> attachment_offsets{};
-    explicit Fixture(bool include_sound=false) : payload(1024), snd(16) {
+    explicit Fixture(bool include_sound=false,bool leading_group=false) : payload(1024), snd(16) {
         // Deliberately permuted directory roles; no retail source indices.
         set(payload, 0, 32); set(payload, 4, 128); set(payload, 12, 4); set(payload, 20, 176);
         set(payload, 32, include_sound?10:9); set(payload, 128, 1); set(payload, 132, 144);
@@ -188,10 +188,35 @@ struct Fixture {
                    {"ZLIST_CutSequenceCommand", 1}, {"ZLIST_CutSequenceCommand", 1}});
         if(include_sound) attach(9,{{"ZSNDOBJ_SoundExtend",0},{"ZSNDOBJ_SoundNotify",0},
                                   {"ZSNDOBJ_SoundSegment",1},{"ZGEOM_ZSetZDefine",0}});
-        const std::array<Bytes, 10> blocks{camera(), picture(false), controller(), picture(true), member(), list({8, 8}), list({4, 2, 4}), first_cut(), window(),sound_owner()};
+        const std::uint32_t bias=leading_group?1U:0U;
+        const std::array<Bytes, 10> blocks{camera(), picture(false), controller(bias), picture(true), member(bias), list({8, 8},bias), list({4, 2, 4},bias), first_cut(bias), window(bias),sound_owner(bias)};
         for (std::size_t i = 0; i < node_count; ++i) {
             block_offsets[i] = payload.size(); set(payload, 512 + 48 * i + 32, static_cast<std::uint32_t>(payload.size()));
             payload.insert(payload.end(), blocks[i].begin(), blocks[i].end());
+        }
+        if(leading_group) {
+            while(payload.size()%4) payload.push_back(std::byte{0});
+            const auto record=payload.size();payload.resize(record+48);
+            set(payload,record,static_cast<std::uint32_t>(names.size()));text(names,"IndependentLeadingGroup");
+            set(payload,record+4,384);set(payload,record+8,420);
+            set(payload,record+16,0x00100001U);set(payload,record+24,0x03200000U);
+            const auto deferred=payload.size();
+            set(payload,record+32,static_cast<std::uint32_t>(deferred));
+            Bytes deferred_blob(4);scalar(deferred_blob,3,12345U);finish(deferred_blob);
+            payload.insert(payload.end(),deferred_blob.begin(),deferred_blob.end());
+            while(payload.size()%4) payload.push_back(std::byte{0});
+            const auto directory=payload.size();
+            word(payload,static_cast<std::uint32_t>(node_count+1));
+            word(payload,static_cast<std::uint32_t>(record/4));word(payload,0);
+            const Bytes entries(payload.begin()+36,payload.begin()+static_cast<std::ptrdiff_t>(36+8*node_count));
+            payload.insert(payload.end(),entries.begin(),entries.end());
+            set(payload,0,static_cast<std::uint32_t>(directory));
+            const auto pools=payload.size();word(payload,3);
+            payload.resize(payload.size()+3*24*4);
+            set(payload,pools+4,2); // First group and window share category zero.
+            set(payload,pools+4+2*24*4+4,2);
+            set(payload,pools+4+2*24*4+12,include_sound?7U:6U);
+            set(payload,20,static_cast<std::uint32_t>(pools));
         }
         prm.resize(16); word(prm, 1);
         for (float v : {3.F, 4.F, 9.F, 0.F, 1.F, 1.F, 0.F, 6.F, 8.F}) word(prm, std::bit_cast<std::uint32_t>(v));
@@ -267,6 +292,75 @@ int main() {
     using off::graphics::IntroPreparedResources;
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
     Fixture fixture;
+    {
+      Fixture leading(false,true);
+      const auto prepared=leading.build();
+      const auto& image=prepared.sources();
+      check(image.directory().front().source_type==0x00100001U &&
+            image.directory().front().object_flags==0x03200000U &&
+            image.pool_groups().size()==3 && image.pool_groups()[0].slot_count==2 &&
+            image.pool_groups()[1].slot_count==0 && image.directory()[0].local_slot_index==0 &&
+            image.directory()[1].local_slot_index==1 && prepared.controller_index()==3 &&
+            prepared.first_cut_index()==8 && prepared.camera_index()==9,
+            "leading synthetic group preserves biased role joins and interleaved pool counts");
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      off::runtime::SceneComponentSequence sequence{[&]{return *app.component_dispatch_time();}};
+      off::graphics::IntroRuntime host(leading.build(),app,sequence);
+      rejects([&]{host.allocate_initial_source_scope();});
+      check(!host.loading_progress(),"prepared host does not invent initialized scene loading progress");
+      rejects([&]{host.begin_source_loading_without_engine_renderer();});
+      check(!host.loading_progress(),"premature load begin does not reset retained progress");
+      host.construct_root();
+      const auto root_resource=host.resource_handle(host.root_handle());
+      check(!host.loading_progress(),"root construction does not initialize loading progress");
+      host.begin_source_loading_without_engine_renderer();
+      check(host.loading_progress()==0.8F,"native once-only reset and first-row stage three retain binary32 progress");
+      const auto scopes=host.source_resource_scopes();
+      check(scopes.size()==1 && scopes[0].count_group==0 && scopes[0].resources.size()==2 &&
+            scopes[0].counts[0]==2 && scopes[0].next_in_partition[0]==0 &&
+            host.resource_load_stage()==off::graphics::IntroResourceLoadStage::initial_scope_ready,
+            "only initial synthetic scope is allocated with its real unconsumed partition cursor");
+      for(std::size_t category=1;category<24;++category)
+        check(scopes[0].counts[category]==0 && !scopes[0].next_in_partition[category],
+              "empty partitions retain absent cursors");
+      for(std::size_t source=0;source<image.directory().size();++source) {
+        const auto resource=host.allocated_source_resource(source);
+        if(source>=2) {
+          check(!resource,"later child scope resources are not eagerly constructed");
+          continue;
+        }
+        check(resource && *resource==scopes[0].resources[source] && *resource!=root_resource &&
+              !host.associated_resource_owner(*resource) &&
+              host.resource_index(*resource)==host.hierarchy_index(host.source_handle(source)),
+              "pool partition identities join canonical catalog storage without owner association");
+        rejects([&]{(void)host.resource_owner(*resource);});
+        rejects([&]{(void)host.resource_handle(host.source_handle(source));});
+        const auto& state=host.resource_state_for_handle(*resource);
+        const auto& pose=host.hierarchy()[host.resource_index(*resource)];
+        check(state && state->flags==0x09000000U && !state->context.value &&
+              pose.parent==off::graphics::no_picture_transform_parent &&
+              pose.matrix==std::array<float,9>{0,0,1,0,1,0,1,0,0} &&
+              pose.position==std::array<float,3>{0,0,0} &&
+              std::ranges::none_of(pose.position,[](float value){return std::signbit(value);}),
+              "ownerless batch resource has actual inactive constructor flags and positive-zero identity pose");
+      }
+      check(scopes[0].resources[0]!=scopes[0].resources[1],"distinct batch slots retain distinct identities");
+      const bool allocating=false,suppressed=false;
+      host.set_resource_flags_no_maintenance(scopes[0].resources[0],0x100004U,0,{allocating,suppressed});
+      host.mutate_resource_low_byte(scopes[0].resources[0],2U,4U);
+      check(host.resource_state_for_handle(scopes[0].resources[0])->flags==0x09100002U &&
+            host.resource_state_for_handle(scopes[0].resources[1])->flags==0x09000000U &&
+            host.resource_state_for_handle(root_resource)->flags==0x09000000U &&
+            !host.resource_state_for_handle(root_resource)->context.value &&
+            host.child_owners(host.root_handle()).empty() && sequence.live_count()==1,
+            "ownerless canonical mutation changes only targeted resource, not root or component state");
+      rejects([&]{host.allocate_initial_source_scope();});
+      rejects([&]{host.begin_source_loading_without_engine_renderer();});
+      check(host.loading_progress()==0.8F,"repeated load begin rejects without resetting completed progress");
+      check(host.source_resource_scopes().size()==1 && host.source_resource_scopes()[0].resources.size()==2,
+            "repeated scope allocation cannot replace retained identities");
+    }
     {
       Fixture sound_fixture(true);
       const auto prepared=sound_fixture.build();
@@ -847,7 +941,16 @@ int main() {
       off::runtime::LiveVariableHandle retired_display;
       {
         IntroRuntime host(fixture.build(),app,sequence);
+        const auto prepared_resource=host.resource_handle(host.source_handle(0));
         host.construct_root();
+        rejects([&]{(void)host.resource_index(prepared_resource);});
+        rejects([&]{(void)host.resource_owner(prepared_resource);});
+        rejects([&]{(void)host.resource_handle(host.source_handle(0));});
+        rejects([&]{host.assign_resource_state(host.source_handle(0),{0x09000000U,{}});});
+        rejects([&]{host.register_camera(0.0F,{});});
+        check(host.associated_resource_owner(host.resource_handle(host.root_handle()))==host.root_handle() &&
+              host.source_index(host.source_handle(0))==0 && host.registered_cameras().entries().empty(),
+              "actual root stage removes prepared resource identities without losing catalog joins or inventing owners");
         const auto root=host.root_handle();
         const auto& state=host.root_owner_state();
         const auto* payload=host.root_group();

@@ -64,10 +64,15 @@ IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::Applicat
   }
   hierarchy_owners_.reserve(hierarchy_.size());
   resource_states_.resize(hierarchy_.size());
+  hierarchy_resources_.reserve(hierarchy_.size());
+  resource_owners_.reserve(hierarchy_.size());
   for(std::size_t index=0;index<hierarchy_.size();++index) {
     const IntroRuntimeHandle owner{owner_base_+index};
     hierarchy_owners_.push_back(owner);
     owner_indices_.emplace(owner.value,static_cast<std::uint32_t>(index));
+    resource_indices_.emplace(owner.value,static_cast<std::uint32_t>(index));
+    hierarchy_resources_.push_back(IntroRuntimeResourceHandle{owner.value});
+    resource_owners_.push_back(owner);
   }
 
   // Validate all alias ranges before installing any borrowed mutable storage.
@@ -130,7 +135,7 @@ IntroRuntimeSound& IntroRuntime::sound_for_source(std::size_t source) {
 }
 
 void IntroRuntime::construct_root() {
-  if(resource_load_stage_==IntroResourceLoadStage::root_ready) return;
+  if(root_owner_state_ && root_owner_state_->enabled && resource_load_stage_!=IntroResourceLoadStage::failed) return;
   if(resource_load_stage_!=IntroResourceLoadStage::prepared)
     throw std::runtime_error("ROOT construction is active or previously failed");
   if(resource_allocation_enabled_ || components_.construction_mode() || components_.failed() ||
@@ -144,6 +149,11 @@ void IntroRuntime::construct_root() {
     // The prepared source graph is not the owner's live child list. No authored
     // resource has been constructed at this boundary; attachment will link it.
     for(auto& node:hierarchy_) node.parent=no_picture_transform_parent;
+    for(std::size_t index=1;index<hierarchy_resources_.size();++index) {
+      if(hierarchy_resources_[index]) resource_indices_.erase(hierarchy_resources_[index]->value);
+      hierarchy_resources_[index].reset();
+      resource_owners_[index].reset();
+    }
     hierarchy_[0].matrix=engine_identity;
     hierarchy_[0].position={0.0F,0.0F,0.0F};
     resource_states_[0]=IntroRuntimeResourceState{0x01000000U,{}};
@@ -175,6 +185,91 @@ void IntroRuntime::construct_root() {
     // room mode is false and parent absent: no parent/resource mutation follows.
     root_owner_state_->enabled=true;
     resource_load_stage_=IntroResourceLoadStage::root_ready;
+  } catch(...) {
+    resource_load_stage_=IntroResourceLoadStage::failed;
+    throw;
+  }
+}
+
+std::optional<IntroRuntimeResourceHandle> IntroRuntime::allocated_source_resource(std::size_t source) const {
+  const auto index=hierarchy_index(source_handle(source));
+  if(!resource_states_[index]) return std::nullopt;
+  return hierarchy_resources_[index];
+}
+
+void IntroRuntime::begin_source_loading_without_engine_renderer() {
+  if(resource_load_stage_!=IntroResourceLoadStage::root_ready || loading_progress_)
+    throw std::runtime_error("Native source load begin requires a fresh completed root");
+  // Explicit native load-begin reset, not an original constructor default.
+  loading_progress_=0.0F;
+  // Directory row zero has fraction +0 in stage 3, whose boundaries are .8/.9.
+  // Keep the scene progress operation even without an engine renderer. A splash
+  // window does not supply that engine identity or its draw/present services.
+  constexpr float candidate=0.8F;
+  if(candidate>*loading_progress_+0.002F) loading_progress_=candidate;
+  try {
+    allocate_initial_source_scope();
+  } catch(...) {
+    resource_load_stage_=IntroResourceLoadStage::failed;
+    throw;
+  }
+}
+
+void IntroRuntime::allocate_initial_source_scope() {
+  if(resource_load_stage_!=IntroResourceLoadStage::root_ready || !source_resource_scopes_.empty() ||
+      resource_allocation_enabled_ || components_.construction_mode())
+    throw std::runtime_error("Initial source batch requires the completed root and inactive allocation mode");
+  const auto& groups=resources_.sources().pool_groups();
+  if(groups.empty()) throw std::runtime_error("Source construction count table is absent");
+  const auto& group=groups.front();
+  const auto& directory=resources_.sources().directory();
+  // Pair the class-partition allocation order with reserved catalog storage.
+  // This table reserves no owner and does not execute later-scope constructors.
+  std::vector<std::optional<std::uint32_t>> slot_indices(group.slot_count);
+  for(std::size_t source=0;source<directory.size();++source) {
+    const auto& entry=directory[source];
+    if(entry.pool_group!=0) continue;
+    if(entry.group_slot_index>=slot_indices.size() || slot_indices[entry.group_slot_index])
+      throw std::runtime_error("Invalid initial source resource slot mapping");
+    const auto index=hierarchy_index(source_handle(source));
+    if(hierarchy_resources_[index] || resource_states_[index] || resource_owners_[index])
+      throw std::runtime_error("Source resource was already allocated or associated");
+    slot_indices[entry.group_slot_index]=index;
+  }
+  if(std::ranges::any_of(slot_indices,[](const auto& index){return !index;}))
+    throw std::runtime_error("Initial source resource partitions are not fully mapped");
+  IntroSourceResourceScope scope;
+  scope.counts=group.class_counts;
+  std::uint32_t offset=0;
+  for(std::size_t category=0;category<scope.counts.size();++category) {
+    if(scope.counts[category]>group.slot_count-offset)
+      throw std::runtime_error("Initial source resource partition overflow");
+    if(scope.counts[category]) scope.next_in_partition[category]=offset;
+    offset+=scope.counts[category];
+  }
+  if(offset!=group.slot_count) throw std::runtime_error("Initial source resource count mismatch");
+  scope.resources.reserve(group.slot_count);
+  source_resource_scopes_.reserve(1);
+  resource_load_stage_=IntroResourceLoadStage::allocating_initial_scope;
+  try {
+    source_resource_scopes_.push_back(std::move(scope));
+    // Native arena identities are not original pointers or reserved owner IDs.
+    const auto first=group.slot_count?application_.allocate_runtime_owners(group.slot_count):0;
+    const bool maintenance_suppressed=false;
+    for(std::size_t slot=0;slot<slot_indices.size();++slot) {
+      const auto index=*slot_indices[slot];
+      const IntroRuntimeResourceHandle resource{first+slot};
+      if(!resource_indices_.emplace(resource.value,index).second)
+        throw std::runtime_error("Duplicate native source resource identity");
+      hierarchy_resources_[index]=resource;
+      resource_owners_[index].reset();
+      hierarchy_[index]={engine_identity,{0.0F,0.0F,0.0F},no_picture_transform_parent};
+      resource_states_[index]=IntroRuntimeResourceState{0x01000000U,{}};
+      source_resource_scopes_.front().resources.push_back(resource);
+      set_resource_flags_no_maintenance(resource,0x08000000U,0,
+          {resource_allocation_enabled_,maintenance_suppressed});
+    }
+    resource_load_stage_=IntroResourceLoadStage::initial_scope_ready;
   } catch(...) {
     resource_load_stage_=IntroResourceLoadStage::failed;
     throw;
@@ -296,6 +391,7 @@ void IntroRuntime::register_camera(float key,const IntroCameraRegistrationServic
   register_camera(source_handle(resources_.camera_index()),key,services);
 }
 void IntroRuntime::register_camera(IntroRuntimeHandle owner,float key,const IntroCameraRegistrationServices& services) {
+  if(!live_owner(owner.value)) throw std::runtime_error("Camera owner has not been constructed and associated");
   if(default_camera_==owner && (default_camera_busy_ || default_camera_failed_))
     throw std::runtime_error("Default camera construction has not completed successfully");
   auto* camera=&camera_for_owner(owner);
@@ -382,15 +478,33 @@ std::uint32_t IntroRuntime::hierarchy_index(IntroRuntimeHandle handle) const {
   return found->second;
 }
 IntroRuntimeResourceHandle IntroRuntime::resource_handle(IntroRuntimeHandle owner) const {
-  static_cast<void>(hierarchy_index(owner));return {owner.value};
+  const auto index=hierarchy_index(owner);
+  if(resource_owners_[index]!=owner || !hierarchy_resources_[index])
+    throw std::runtime_error("Owner has no associated live resource");
+  return *hierarchy_resources_[index];
 }
 IntroRuntimeHandle IntroRuntime::resource_owner(IntroRuntimeResourceHandle resource) const {
-  const IntroRuntimeHandle owner{resource.value};static_cast<void>(hierarchy_index(owner));return owner;
+  const auto owner=associated_resource_owner(resource);
+  if(!owner) throw std::runtime_error("Resource has no associated live owner");
+  return *owner;
+}
+std::uint32_t IntroRuntime::resource_index(IntroRuntimeResourceHandle resource) const {
+  const auto found=resource_indices_.find(resource.value);
+  if(found==resource_indices_.end()) throw std::runtime_error("Resource handle is not live");
+  return found->second;
+}
+std::optional<IntroRuntimeHandle> IntroRuntime::associated_resource_owner(IntroRuntimeResourceHandle resource) const {
+  return resource_owners_.at(resource_index(resource));
+}
+const std::optional<IntroRuntimeResourceState>& IntroRuntime::resource_state_for_handle(IntroRuntimeResourceHandle resource) const {
+  return resource_states_.at(resource_index(resource));
 }
 IntroRuntimeResourceHandle IntroRuntime::resource_parent(IntroRuntimeHandle owner) const {
   const auto parent=hierarchy_.at(hierarchy_index(owner)).parent;
-  return parent==no_picture_transform_parent?IntroRuntimeResourceHandle{}:
-    resource_handle(hierarchy_owners_.at(parent));
+  if(parent==no_picture_transform_parent) return {};
+  const auto resource=hierarchy_resources_.at(parent);
+  if(!resource) throw std::runtime_error("Parent resource has not been allocated");
+  return *resource;
 }
 std::vector<IntroRuntimeHandle> IntroRuntime::child_owners(IntroRuntimeHandle owner) const {
   const auto parent=hierarchy_index(owner);std::vector<IntroRuntimeHandle> children;
@@ -405,14 +519,15 @@ void IntroRuntime::assign_resource_state(IntroRuntimeHandle owner,IntroRuntimeRe
   if(resource_load_stage_==IntroResourceLoadStage::failed)
     throw std::runtime_error("Resource construction previously failed");
   const auto index=hierarchy_index(owner);
-  if(state.context.value) static_cast<void>(resource_owner(state.context));
+  if(!hierarchy_resources_.at(index)) throw std::runtime_error("Resource has not been allocated");
+  if(state.context.value) static_cast<void>(resource_index(state.context));
   resource_states_.at(index)=state;
 }
 void IntroRuntime::mutate_resource_low_byte(IntroRuntimeResourceHandle resource,
     std::uint32_t set_mask,std::uint32_t clear_mask) {
   if(default_camera_busy_ || default_camera_failed_ || resource_load_stage_==IntroResourceLoadStage::failed)
     throw std::runtime_error("Resource mutation unavailable during failed or active Default camera construction");
-  const auto index=hierarchy_index(resource_owner(resource));
+  const auto index=resource_index(resource);
   if(!resource_states_.at(index)) throw std::runtime_error("Resource flag word is unknown");
   std::vector<std::uint32_t> ancestors;
   if(set_mask&0xffU) {
@@ -434,7 +549,7 @@ void IntroRuntime::set_resource_flags_no_maintenance(IntroRuntimeResourceHandle 
     ResourceMutationModes modes) {
   if(default_camera_busy_ || default_camera_failed_ || resource_load_stage_==IntroResourceLoadStage::failed)
     throw std::runtime_error("Resource mutation unavailable during failed or active Default camera construction");
-  const auto index=hierarchy_index(resource_owner(resource));
+  const auto index=resource_index(resource);
   if(!resource_states_.at(index)) throw std::runtime_error("Resource flag word is unknown");
   const auto current=resource_states_[index]->flags;
   if((((current&~clear_mask)|set_mask)^current)&0x2000U)
@@ -469,17 +584,20 @@ std::optional<IntroRuntimeHandle> IntroRuntime::create_default_camera_resource(
   const auto root_state=resource_states_.at(0);
   if(!root_state || !enqueue_transform)
     throw std::runtime_error("Default camera needs actual root resource state and transform queue");
-  if(root_state->context.value) static_cast<void>(resource_owner(root_state->context));
+  if(root_state->context.value) static_cast<void>(resource_index(root_state->context));
   if(hierarchy_.size()>=std::numeric_limits<std::uint32_t>::max())
     throw std::runtime_error("Intro dynamic hierarchy capacity exhausted");
   const auto index=static_cast<std::uint32_t>(hierarchy_.size());
   const auto capacity=hierarchy_.size()+1;
   hierarchy_.reserve(capacity);hierarchy_owners_.reserve(capacity);
   resource_states_.reserve(capacity);owner_components_.reserve(capacity);
+  hierarchy_resources_.reserve(capacity);resource_owners_.reserve(capacity);
   auto camera=std::make_unique<FreshIntroCamera>();
   IntroSynthesizedCameraMetadata metadata{"DefaultCam",0x400003U};
   const IntroRuntimeHandle owner{application_.allocate_runtime_owners(1)};
   owner_indices_.emplace(owner.value,index);
+  try {resource_indices_.emplace(owner.value,index);}
+  catch(...) {owner_indices_.erase(owner.value);throw;}
   hierarchy_.push_back({engine_identity,{0,0,0},0});
   hierarchy_owners_.push_back(owner);owner_components_.emplace_back();
   IntroRuntimeResourceState child{single_allocation_mode?0x01100000U:0x09000000U,{}};
@@ -489,6 +607,8 @@ std::optional<IntroRuntimeHandle> IntroRuntime::create_default_camera_resource(
     child.context=(root_state->flags&0x40000U)?resource_handle(root_handle()):root_state->context;
   }
   resource_states_.push_back(child);
+  hierarchy_resources_.push_back(IntroRuntimeResourceHandle{owner.value});
+  resource_owners_.push_back(owner);
   default_camera_owner_=std::move(camera);default_camera_=owner;default_camera_metadata_=std::move(metadata);
   default_camera_context_=root_handle();
   struct Guard {bool& busy;~Guard(){busy=false;}} guard{default_camera_busy_};
