@@ -40,10 +40,19 @@ Tests return skip status when no GPU device is available, rather than claiming
 GPU correctness from a CPU-only run. Unsupported depth capabilities are reported
 separately from the color checks.
 
-All 60 local CTest executables pass, including actual Vulkan offscreen readback
-for both RGBA8 and BGRA8 targets. Depth-only execution preserves color in those
-tests; depth and stencil contents have not yet been read back or independently
-verified. A passing color test is not proof of the complete clear contract.
+All 61 local CTest executables pass without skips. Color tests exercise actual
+Vulkan offscreen readback for both RGBA8 and BGRA8 targets.
+
+A separate witness rasterizer verifies depth and stencil through GPU equality
+tests, then downloads the resulting white/black color mask. It loads both planes
+without writing them and uses independent resources and pipelines. Positive and
+negative controls check the witness itself; these are not raw depth downloads.
+The 52 probes cover D24S8 and D32S8, inside/outside preservation, independent and
+combined clears, overlaps and repeated non-mutating probes. Tested depth values
+are 0 and 1; stencil values are 0, 0x35 and 255. The same test joins
+`PictureViewTransition` to the GPU helper and checks repeated-frame suppression,
+a suppressed clear consuming the frame guard, and clearing on the next frame.
+These local results establish Vulkan behavior, not untested backend correctness.
 Targeted GCC and ASan/UBSan runs also pass with SDL's offscreen Vulkan backend.
 The initial desktop-backend sanitizer run stalled in the external symbolizer and
 was terminated; it is not counted as a successful sanitizer run.

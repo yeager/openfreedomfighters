@@ -203,7 +203,7 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   native equal-key policy. Runtime queue admission remains separate.
 - [x] Execute ordinary view-transition hooks with retained camera fog fractions,
   shared material fog context, repeated viewport setup and a per-view clear
-  guard. Actual view admission and viewport-bounded GPU execution remain open.
+  guard. Actual view admission remains open; GPU clear verification is below.
 - [x] Dispatch prepared ordered entries through retained view associations,
   subtype transitions and key-field resource binding, preserving barrier cursors.
   The real outer preparation and drawing coordinator remain open.
@@ -211,8 +211,10 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   retained index base, explicit capability count and mutable diagnostic boundary.
   Backend command execution and complete inherited GPU state remain separate.
 - [x] Execute viewport-bounded color clears on the GPU and verify RGBA8/BGRA8
-  readback, overlaps and preserved outside pixels. Depth/stencil contents and
-  normal intro integration still require verification.
+  readback, overlaps and preserved outside pixels.
+- [x] Verify bounded depth/stencil clears with independent GPU equality probes
+  on D24S8 and D32S8, including the per-view frame guard connected to GPU clears.
+  Normal intro integration remains open.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.
