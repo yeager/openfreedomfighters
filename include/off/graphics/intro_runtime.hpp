@@ -34,13 +34,27 @@ struct IntroRuntimeResourceHandle {
 struct IntroRuntimeResourceState {
   std::uint32_t flags;
   IntroRuntimeResourceHandle context;
+  // Common resource construction clears these fields; owner state is separate.
+  std::uint32_t metadata{},directory_auxiliary{};
 };
 struct IntroSynthesizedCameraMetadata {
   std::string name;
   std::uint32_t class_identifier;
 };
 enum class IntroResourceLoadStage {
-  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, failed
+  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, failed
+};
+struct IntroAuthoredGroupOwner {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::string name;
+  std::uint32_t class_identifier{0x00100001U},flags{0x03000000U},sentinel{0xffffffffU};
+  float scalar{1.0F};
+  std::uint32_t source_word{};
+};
+struct IntroDeferredReaderWork {
+  IntroRuntimeResourceHandle resource;
+  std::uint32_t source_offset;
 };
 struct IntroSourceResourceScope {
   std::uint32_t count_group{};
@@ -159,6 +173,15 @@ public:
   // Actual first-scope batch only. Later scopes must be interleaved with real
   // owner construction and attachment; this never constructs all source rows.
   void allocate_initial_source_scope();
+  void construct_first_authored_group();
+  [[nodiscard]] const std::optional<IntroAuthoredGroupOwner>& first_authored_group() const noexcept {return first_authored_group_;}
+  [[nodiscard]] std::uint32_t group_class_instance_count() const {return application_.group_class_instance_count();}
+  [[nodiscard]] bool manager_row_edit() const noexcept {return manager_row_edit_;}
+  [[nodiscard]] bool scene_resource_edit() const noexcept {return scene_resource_edit_;}
+  [[nodiscard]] std::uint32_t count_group_selector() const noexcept {return count_group_selector_;}
+  [[nodiscard]] std::span<const IntroRuntimeResourceHandle> loaded_resource_handles() const noexcept {return loaded_resource_handles_;}
+  [[nodiscard]] std::span<const std::optional<IntroRuntimeResourceHandle>> directory_resource_mapping() const noexcept {return directory_resource_mapping_;}
+  [[nodiscard]] std::span<const IntroDeferredReaderWork> deferred_reader_work() const noexcept {return deferred_reader_work_;}
   [[nodiscard]] std::span<const IntroSourceResourceScope> source_resource_scopes() const noexcept {return source_resource_scopes_;}
   [[nodiscard]] std::optional<IntroRuntimeResourceHandle> allocated_source_resource(std::size_t source) const;
   [[nodiscard]] IntroResourceLoadStage resource_load_stage() const noexcept {return resource_load_stage_;}
@@ -313,6 +336,14 @@ private:
   std::vector<std::size_t> root_attachments_;
   bool resource_allocation_enabled_{}; // Actual scene-constructor mode starts off.
   std::vector<IntroSourceResourceScope> source_resource_scopes_;
+  std::optional<IntroAuthoredGroupOwner> first_authored_group_;
+  // Concrete native registration for the supported ZGROUP factory, independent
+  // of authored class ordinals and component registration.
+  std::uint32_t count_group_selector_{};
+  bool manager_row_edit_{},scene_resource_edit_{};
+  std::vector<IntroRuntimeResourceHandle> loaded_resource_handles_;
+  std::vector<std::optional<IntroRuntimeResourceHandle>> directory_resource_mapping_;
+  std::vector<IntroDeferredReaderWork> deferred_reader_work_;
   std::optional<IntroRuntimeHandle> default_camera_;
   std::optional<IntroSynthesizedCameraMetadata> default_camera_metadata_;
   std::unique_ptr<FreshIntroCamera> default_camera_owner_;

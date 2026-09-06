@@ -115,6 +115,9 @@ int main(int argc, char **argv) {
   off::runtime::ApplicationServices application(
       off::runtime::ClockExecutionPolicy::no_recording_or_replay,
       off::runtime::make_monotonic_clock_samples());
+  // Native registration of the currently implemented concrete factory;
+  // not the original complete class-list/base-class preparation.
+  if(!verify_only && !diagnostic_scene) application.initialize_native_group_registration();
   std::optional<off::graphics::SceneGpuPlan> scene;
   // Scene-manager identity lifetime, independent of source archive catalogs.
   off::runtime::SceneComponentSequence component_sequence{[&application] {
@@ -153,6 +156,7 @@ int main(int argc, char **argv) {
         // startup splash is a separate renderer. Reset load progress once under
         // the native staging policy, then construct only the first scope.
         intro->begin_source_loading_without_engine_renderer();
+        intro->construct_first_authored_group();
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -207,7 +211,8 @@ int main(int argc, char **argv) {
               << " constructed. ROOT/RootGroup initialized; authored factories and loader tail pending.\n";
   if (intro && !intro->source_resource_scopes().empty())
     std::cout << "Initial source scope: " << intro->source_resource_scopes().front().resources.size()
-              << " resources allocated; authored owners not yet constructed.\n";
+              << " resources allocated; " << intro->loaded_resource_handles().size()
+              << " authored owner constructed and attached; deferred readers pending.\n";
   if (intro)
     std::cout << "Source-bound intro sound definitions: " << intro->resources().sounds().size()
               << "; retained authored metadata, no playback or readiness event.\n";

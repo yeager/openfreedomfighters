@@ -28,6 +28,23 @@ public:
   [[nodiscard]] graphics::PreviewCameraUpdate& preview_camera_update() noexcept { return preview_camera_update_; }
   [[nodiscard]] LiveVariableRegistry& live_variables() noexcept { return live_variables_; }
   [[nodiscard]] InputMapRegistry& input_maps() noexcept {return input_maps_;}
+  // Explicit native registration of the implemented concrete ZGROUP factory.
+  // This is not the original full registry preparation/base-class resolution.
+  // Host creation/destruction does not reset or decrement the notification word.
+  void initialize_native_group_registration() {
+    if(group_registration_) throw std::runtime_error("Native group class is already registered");
+    group_registration_=GroupRegistration{0x00100001U,0U};
+  }
+  [[nodiscard]] bool has_group_registration() const noexcept {return group_registration_.has_value();}
+  [[nodiscard]] std::uint32_t group_class_instance_count() const {
+    if(!group_registration_) throw std::runtime_error("Concrete group class is not registered");
+    return group_registration_->notification_sequence;
+  }
+  std::uint32_t register_group_instance() {
+    const auto previous=group_class_instance_count();
+    group_registration_->notification_sequence=previous+std::uint32_t{1};
+    return previous;
+  }
   [[nodiscard]] OrdinarySortingState& ordinary_sorting() noexcept {return ordinary_sorting_;}
   void assign_component_dispatch_time(std::uint32_t time) noexcept {component_dispatch_time_=time;}
   [[nodiscard]] std::optional<std::uint32_t> component_dispatch_time() const noexcept {return component_dispatch_time_;}
@@ -86,6 +103,10 @@ private:
   graphics::PreviewCameraUpdate preview_camera_update_;
   LiveVariableRegistry live_variables_;
   InputMapRegistry input_maps_;
+  struct GroupRegistration {
+    std::uint32_t class_identifier,notification_sequence;
+  };
+  std::optional<GroupRegistration> group_registration_;
   OrdinarySortingState ordinary_sorting_;
   // Actual application-constructor producer; later ordinary passes update it.
   std::optional<std::uint32_t> component_dispatch_time_{0U};

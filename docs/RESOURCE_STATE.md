@@ -65,6 +65,30 @@ factories and attachments, not eagerly constructed for the entire directory.
 `allocate_initial_source_scope` is also exposed as an explicit stage operation;
 it does not itself execute preceding progress or claim complete loading.
 
+## First authored group
+
+The next stage constructs the first directory row's group on its existing batch
+resource. It consumes the category-zero cursor before the factory and retains
+the authored name. Owner flags and resource flags stay separate. Attachment
+links that same resource to ROOT; it does not allocate a replacement resource.
+
+The loader retains its resource-handle list, directory-index mapping and deferred
+reader queue. Queuing the source's deferred blob does not execute its reader.
+The count-group selector advances, but this row does not enter a child scope.
+The other initial resources remain ownerless, and the scene is not ready.
+
+This stage is restricted to the reviewed first-row shape and live fresh-root
+state. It is not a generic group factory or a replacement for subsequent source
+readers, component creation and loader-tail processing.
+
+The concrete class's notification sequence is application-owned, shared across
+hosts and incremented with unsigned 32-bit wrap. Destruction does not decrement
+it. Native startup explicitly registers the implemented group class once;
+missing registration rejects before slot consumption. This limited registration
+policy does not implement the original pre-GMS class-list preparation, which
+resets all registered sequences and resolves base-class links. It must not be
+mistaken for a per-host reset or a count of currently living owners.
+
 RootGroup retains its `DisplayName` floating-point descriptor and `RootControl`
 input-map registration. Its ordinary membership remains pending, not merged.
 The root's separate enabled marker does not enable a camera or set a resource

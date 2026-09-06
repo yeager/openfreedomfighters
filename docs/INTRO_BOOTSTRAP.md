@@ -18,7 +18,9 @@ completed in that same host. Normal startup now executes the actual fresh
 initializer and retained console/input-map registrations.
 CPU preflight also executes first-row loading progress under an explicit native
 load-begin reset policy and allocates the first scope's 20 ownerless resources.
-It does not eagerly allocate later groups or run an authored owner factory.
+It then constructs the first authored group, attaches its existing resource to
+ROOT and queues its deferred reader. The other 19 resources remain ownerless;
+later batches and deferred readers do not run at this boundary.
 The conditional DefaultCam factory now constructs its real PreviewCamera and
 ordinary membership in that host. Its callback writes directly into the scene
 hierarchy after the complete global initializer. The post-load root state and
@@ -91,6 +93,13 @@ archive verifies all 20 initial resources against the count-table slot mapping,
 with no owner bindings, unchanged ROOT state and 450 later resources absent.
 A new bounded normal startup also reaches SDL/Vulkan and exits successfully.
 These checks still do not establish an authored owner factory or intro playback.
+
+The first authored group factory is now separately verified against the owned
+archive: it binds the supplied resource, attaches it to ROOT, consumes one
+partition slot and queues exactly one deferred reader. The other 19 initial
+resources remain ownerless. All 86 local tests and the focused ASan/UBSan run
+pass with this stage, and normal startup reaches SDL/Vulkan after constructing
+the group. No deferred reader, later authored owner or intro draw is claimed.
 
 ## Retained controller initialization
 

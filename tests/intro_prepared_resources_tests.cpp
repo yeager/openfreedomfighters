@@ -362,6 +362,103 @@ int main() {
             "repeated scope allocation cannot replace retained identities");
     }
     {
+      Fixture leading(false,true);
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      off::runtime::SceneComponentSequence sequence{[&]{return *app.component_dispatch_time();}};
+      off::graphics::IntroRuntime host(leading.build(),app,sequence);
+      rejects([&]{host.construct_first_authored_group();});
+      host.construct_root();
+      rejects([&]{host.construct_first_authored_group();});
+      host.begin_source_loading_without_engine_renderer();
+      const auto resource=*host.allocated_source_resource(0);
+      const auto other=*host.allocated_source_resource(1);
+      const auto owner=host.source_handle(0);
+      const auto root=host.root_handle();
+      const auto deferred_offset=host.resources().sources().directory()[0].deferred_source_offset;
+      rejects([&]{host.construct_first_authored_group();});
+      check(!host.first_authored_group() && host.source_resource_scopes()[0].next_in_partition[0]==0,
+            "missing concrete registration rejects before factory allocation and cursor consumption");
+      app.initialize_native_group_registration();
+      host.construct_first_authored_group();
+      const auto& group=host.first_authored_group();
+      check(group && group->owner==owner && group->resource==resource &&
+            group->name=="IndependentLeadingGroup" && group->class_identifier==0x00100001U &&
+            group->flags==0x03000000U && group->sentinel==0xffffffffU && group->scalar==1.0F &&
+            group->source_word==0 && host.resource_state_for_handle(resource)->metadata==0 &&
+            host.resource_state_for_handle(resource)->directory_auxiliary==0,
+            "actual first group factory retains authored name and separate owner state");
+      check(host.resource_owner(resource)==owner && host.resource_handle(owner)==resource &&
+            host.resource_parent(owner)==host.resource_handle(root) &&
+            host.child_owners(root)==std::vector<off::graphics::IntroRuntimeHandle>{owner} &&
+            host.child_owners(owner).empty() && !host.associated_resource_owner(other),
+            "factory binds and attaches the supplied resource without constructing other owners");
+      check(host.resource_state_for_handle(resource)->flags==0x09000000U &&
+            !host.resource_state_for_handle(resource)->context.value &&
+            host.resource_state(root)->flags==0x09000000U && host.root_owner_state()->aggregate_flags==0 &&
+            host.source_resource_scopes()[0].resources.size()==2 &&
+            host.source_resource_scopes()[0].next_in_partition[0]==1 && host.count_group_selector()==1,
+            "first group consumes one partition slot, preserves root flags and advances count selector");
+      check(host.loaded_resource_handles().size()==1 && host.loaded_resource_handles()[0]==resource &&
+            host.directory_resource_mapping().size()==host.resources().sources().directory().size() &&
+            host.directory_resource_mapping()[0]==resource &&
+            std::ranges::none_of(host.directory_resource_mapping().subspan(1),[](const auto& entry){return entry.has_value();}) &&
+            host.deferred_reader_work().size()==1 && host.deferred_reader_work()[0].resource==resource &&
+            host.deferred_reader_work()[0].source_offset==deferred_offset,
+            "ordered loader tables retain canonical identity and queue, but do not execute, the deferred reader");
+      check(!host.manager_row_edit() && !host.scene_resource_edit() && host.loading_progress()==0.8F &&
+            host.resource_load_stage()==off::graphics::IntroResourceLoadStage::first_group_ready &&
+            host.components().construction_order().size()==1 && sequence.live_count()==1 &&
+            host.group_class_instance_count()==1,
+            "row completes without fabricating components, progress resets or scene readiness");
+      rejects([&]{host.construct_first_authored_group();});
+      check(host.group_class_instance_count()==1 && host.loaded_resource_handles().size()==1 &&
+            host.deferred_reader_work().size()==1 && host.source_resource_scopes()[0].next_in_partition[0]==1,
+            "repeated first-row construction cannot allocate, attach or queue duplicates");
+      host.construct_root();
+      check(host.child_owners(root).size()==1,"root reuse preserves the attached authored group");
+      {
+        off::graphics::IntroRuntime second(leading.build(),app,sequence);
+        check(second.group_class_instance_count()==1,"new host preserves application class notification sequence");
+        second.construct_root();second.begin_source_loading_without_engine_renderer();
+        second.construct_first_authored_group();
+        check(second.group_class_instance_count()==2 && host.group_class_instance_count()==2,
+              "concrete registration sequence is shared across simultaneous scene hosts");
+      }
+      check(host.group_class_instance_count()==2,"destroying a group does not decrement its notification sequence");
+      rejects([&]{app.initialize_native_group_registration();});
+      check(host.group_class_instance_count()==2,"native registration initialization cannot silently reset a live sequence");
+    }
+    for(unsigned rejected_shape=0;rejected_shape<4;++rejected_shape) {
+      Fixture source(false,rejected_shape!=0);
+      if(rejected_shape==3) {
+        const auto record=source.build().sources().directory()[0].record_offset;
+        const auto table=static_cast<std::uint32_t>(source.payload.size());
+        word(source.payload,0);
+        set(source.payload,record+20,table);
+      }
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      off::runtime::SceneComponentSequence sequence{[&]{return *app.component_dispatch_time();}};
+      off::graphics::IntroRuntime host(source.build(),app,sequence);
+      app.initialize_native_group_registration();
+      host.construct_root();host.begin_source_loading_without_engine_renderer();
+      if(rejected_shape==1) {
+        const bool allocating=false,suppressed=false;
+        host.set_resource_flags_no_maintenance(host.resource_handle(host.root_handle()),0x400U,0,
+            {allocating,suppressed});
+      } else if(rejected_shape==2) {
+        auto state=*host.resource_state_for_handle(*host.allocated_source_resource(0));
+        state.metadata=7;
+        host.assign_resource_state(host.source_handle(0),state);
+      }
+      rejects([&]{host.construct_first_authored_group();});
+      check(!host.first_authored_group() && host.loaded_resource_handles().empty() &&
+            host.deferred_reader_work().empty() && !host.manager_row_edit() && !host.scene_resource_edit() &&
+            host.group_class_instance_count()==0 && host.source_resource_scopes()[0].next_in_partition[0]==0,
+            "unsupported source, inherited hide, metadata cleanup or present component table rejects before factory effects");
+    }
+    {
       Fixture sound_fixture(true);
       const auto prepared=sound_fixture.build();
       check(prepared.sounds().size()==1 && prepared.sound_bank()->size()==144,

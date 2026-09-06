@@ -276,6 +276,84 @@ void IntroRuntime::allocate_initial_source_scope() {
   }
 }
 
+void IntroRuntime::construct_first_authored_group() {
+  if(!application_.has_group_registration())
+    throw std::runtime_error("First group requires a registered concrete group factory");
+  if(resource_load_stage_!=IntroResourceLoadStage::initial_scope_ready || loading_progress_!=0.8F ||
+      first_authored_group_ || resource_allocation_enabled_ || components_.construction_mode())
+    throw std::runtime_error("First group requires the completed absent-renderer pre-row stage");
+  const auto& directory=resources_.sources().directory();
+  if(directory.empty()) throw std::runtime_error("First group source is absent");
+  const auto& source=directory.front();
+  const auto zero=[](float value){return value==0.0F && !std::signbit(value);};
+  if(source.source_type!=0x00100001U || source.source_variant || source.parent_steps || source.enters_child_pool ||
+      source.object_flags!=0x03200000U || source.class_data_value || source.auxiliary_value ||
+      source.buf_auxiliary_offset || source.child_value || source.post_load_source_offset ||
+      source.attachment_table_offset || !source.attachments.empty() || !source.deferred_source_offset || source.basis!=engine_identity ||
+      !std::ranges::all_of(source.position,zero) || source.pool_group || source.pool_class)
+    throw std::runtime_error("Unsupported first authored group source shape");
+  const auto root=resource_handle(root_handle());
+  const auto& root_state=resource_state_for_handle(root);
+  if(!root_state || root_state->flags!=0x09000000U || root_state->context.value ||
+      !root_owner_state_ || root_owner_state_->aggregate_flags || !root_owner_state_->enabled ||
+      root_owner_state_->room_mode || !child_owners(root_handle()).empty() ||
+      hierarchy_[0].parent!=no_picture_transform_parent || hierarchy_[0].matrix!=engine_identity ||
+      !std::ranges::all_of(hierarchy_[0].position,zero))
+    throw std::runtime_error("First group requires the actual fresh live ROOT");
+  auto& scope=source_resource_scopes_.at(0);
+  if(!scope.next_in_partition[0] || *scope.next_in_partition[0]!=0 || !scope.counts[0])
+    throw std::runtime_error("First group partition is absent or already consumed");
+  const auto resource=scope.resources.at(*scope.next_in_partition[0]);
+  const auto index=resource_index(resource);
+  if(index!=hierarchy_index(source_handle(0)) || resource_owners_[index] ||
+      !resource_states_[index] || resource_states_[index]->flags!=0x09000000U ||
+      resource_states_[index]->context.value || resource_states_[index]->metadata ||
+      resource_states_[index]->directory_auxiliary || hierarchy_[index].parent!=no_picture_transform_parent ||
+      hierarchy_[index].matrix!=engine_identity || !std::ranges::all_of(hierarchy_[index].position,zero))
+    throw std::runtime_error("First group supplied resource is not fresh and ownerless");
+  const auto names=resources_.source_names();
+  if(source.buf_name_offset>=names.size()) throw std::runtime_error("Group name is out of range");
+  std::size_t end=source.buf_name_offset;
+  while(end<names.size() && names[end]!=std::byte{0}) ++end;
+  if(end==names.size()) throw std::runtime_error("Group name is unterminated");
+  try {
+    ++*scope.next_in_partition[0]; // Consume supplied slot BEFORE concrete factory allocation.
+    std::string name;
+    for(std::size_t i=source.buf_name_offset;i<end;++i) name.push_back(static_cast<char>(names[i]));
+    first_authored_group_=IntroAuthoredGroupOwner{source_handle(0),resource,std::move(name)};
+    resource_owners_[index]=source_handle(0);
+    const auto previous_count=application_.register_group_instance();
+    // The registered concrete ZGROUP notification accepts the previous count
+    // and has no effects; this does not stand in for other class notifications.
+    static_cast<void>(previous_count);
+    manager_row_edit_=true;
+    scene_resource_edit_=true;
+    loaded_resource_handles_.push_back(resource);
+    resource_states_[index]->metadata=0;
+    resource_states_[index]->directory_auxiliary=0;
+    // Exact equal transform service branch: no dirty write or queue call.
+    // Concrete parent selection is ROOT for this admitted first-source route.
+    auto merged=resource_states_[index]->flags|(source.object_flags&0xfffffU);
+    if(merged&0x8080U) merged|=0x8080U;
+    const bool suppressed=false;
+    set_resource_flags_no_maintenance(resource,merged,~merged,{resource_allocation_enabled_,suppressed});
+    // Empty ROOT group insertion: canonical parent establishes its sole child,
+    // hence head/tail/count, without sibling or category/spatial side effects.
+    hierarchy_[index].parent=resource_index(root);
+    const auto current=resource_states_[index]->flags;
+    set_resource_flags_no_maintenance(resource,current,~current,{resource_allocation_enabled_,suppressed});
+    ++count_group_selector_;
+    first_authored_group_->source_word=source.child_value;
+    first_authored_group_->flags=(first_authored_group_->flags&0x00ffffffU)|(source.object_flags&0xff000000U);
+    deferred_reader_work_.push_back({resource,source.deferred_source_offset});
+    directory_resource_mapping_.resize(directory.size());
+    directory_resource_mapping_[0]=resource;
+    manager_row_edit_=false;
+    scene_resource_edit_=false;
+    resource_load_stage_=IntroResourceLoadStage::first_group_ready;
+  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
+}
+
 void IntroRuntime::stop_sound_owner(std::size_t source) {
   if (sound_preparation_busy_) throw std::runtime_error("Reentrant intro sound control is unsupported");
   auto& owner=sound_for_source(source);
