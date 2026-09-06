@@ -1081,7 +1081,7 @@ upload_overlay_retail_textures(SDL_GPUDevice *device,
 
 RuntimeResult
 run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
-                    const graphics::SceneGpuPlan &scene,
+                    const graphics::SceneGpuPlan *scene,
                     const graphics::StartupGraphicsAsset &startup_graphics,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,
@@ -1090,7 +1090,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   if (ui_fonts.fonts.empty())
     return failure("retail UI font set is empty");
   try {
-    graphics::validate_scene_gpu_plan(scene);
+    if (scene)
+      graphics::validate_scene_gpu_plan(*scene);
   } catch (const std::exception &error) {
     return {.success = false,
             .message = std::string("scene GPU plan validation failed: ") +
@@ -1122,7 +1123,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     return result;
   }
   GpuScene gpu;
-  if (!upload_scene(device, window, scene, gpu)) {
+  if (scene && !upload_scene(device, window, *scene, gpu)) {
     const auto result = failure("scene GPU upload failed");
     release_scene(device, gpu);
     SDL_ReleaseWindowFromGPUDevice(device, window);
@@ -1177,10 +1178,13 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       .success = true,
       .message =
           std::string("Renderer: SDL GPU/") + SDL_GetGPUDeviceDriver(device) +
-          " (source-only diagnostic scene: " +
-          std::to_string(scene.meshes.size()) + " meshes, " +
-          std::to_string(scene.instances.size()) + " instances, " +
-          std::to_string(scene.draws.size()) + " draws; " +
+          (scene
+               ? " (explicit source-only diagnostic scene: " +
+                     std::to_string(scene->meshes.size()) + " meshes, " +
+                     std::to_string(scene->instances.size()) + " instances, " +
+                     std::to_string(scene->draws.size()) + " draws; "
+               : " (authored startup resources loaded; world rendering "
+                 "pending; ") +
           std::to_string(gpu_startup.images.size()) +
           " startup graphics images uploaded, not rendered; " +
           std::to_string(ui_fonts.fonts.size()) + " retail UI fonts loaded)"};
@@ -1356,7 +1360,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     }
     SDL_GPUTexture *frame_target =
         capture_texture != nullptr ? capture_texture : swapchain;
-    if (swapchain != nullptr &&
+    if (scene && swapchain != nullptr &&
         !ensure_scene_depth(device, swapchain_width, swapchain_height, gpu)) {
       result = failure("scene depth target creation failed");
       SDL_SubmitGPUCommandBuffer(command);
@@ -1409,7 +1413,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
           .stencil_store_op = SDL_GPU_STOREOP_DONT_CARE,
           .cycle = true};
       SDL_GPURenderPass *pass =
-          SDL_BeginGPURenderPass(command, &target, 1, &depth_target);
+          SDL_BeginGPURenderPass(command, &target, 1, scene ? &depth_target : nullptr);
       if (pass == nullptr) {
         result = failure("SDL GPU render-pass creation failed");
         SDL_SubmitGPUCommandBuffer(command);
@@ -1421,54 +1425,55 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       std::optional<std::size_t> bound_instance;
       SDL_GPUGraphicsPipeline *bound_pipeline = nullptr;
       SDL_GPUTexture *bound_texture = nullptr;
-      for (const auto &draw : scene.draws) {
-        if (draw.depth_policy == graphics::SceneDepthPolicy::no_draw)
-          continue;
-        SDL_GPUGraphicsPipeline *pipeline = nullptr;
-        if (draw.topology == graphics::PrimitiveTopology::triangle_strip)
-          pipeline =
-              draw.blend_enabled ? gpu.triangle_blended : gpu.triangle_opaque;
-        else
-          pipeline = draw.blend_enabled ? gpu.line_blended : gpu.line_opaque;
-        if (pipeline != bound_pipeline) {
-          SDL_BindGPUGraphicsPipeline(pass, pipeline);
-          bound_pipeline = pipeline;
+      if (scene)
+        for (const auto &draw : scene->draws) {
+          if (draw.depth_policy == graphics::SceneDepthPolicy::no_draw)
+            continue;
+          SDL_GPUGraphicsPipeline *pipeline = nullptr;
+          if (draw.topology == graphics::PrimitiveTopology::triangle_strip)
+            pipeline =
+                draw.blend_enabled ? gpu.triangle_blended : gpu.triangle_opaque;
+          else
+            pipeline = draw.blend_enabled ? gpu.line_blended : gpu.line_opaque;
+          if (pipeline != bound_pipeline) {
+            SDL_BindGPUGraphicsPipeline(pass, pipeline);
+            bound_pipeline = pipeline;
+          }
+          if (bound_mesh != draw.mesh_index) {
+            const auto &mesh = gpu.meshes[draw.mesh_index];
+            const SDL_GPUBufferBinding vb{.buffer = mesh.vertex_buffer,
+                                          .offset = 0};
+            const SDL_GPUBufferBinding ib{.buffer = mesh.index_buffer,
+                                          .offset = 0};
+            SDL_BindGPUVertexBuffers(pass, 0, &vb, 1);
+            SDL_BindGPUIndexBuffer(pass, &ib, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+            bound_mesh = draw.mesh_index;
+          }
+          SDL_GPUTexture *texture = draw.texture_index.has_value()
+                                        ? gpu.textures[*draw.texture_index]
+                                        : gpu.white_texture;
+          if (texture != bound_texture) {
+            const SDL_GPUTextureSamplerBinding binding{.texture = texture,
+                                                       .sampler = gpu.sampler};
+            SDL_BindGPUFragmentSamplers(pass, 0, &binding, 1);
+            bound_texture = texture;
+          }
+          if (bound_instance != draw.instance_index) {
+            const auto scene_uniform = graphics::make_scene_diagnostic_matrices(
+                *scene, draw.instance_index, swapchain_width, swapchain_height);
+            std::array<float, 32> packed{};
+            std::copy(scene_uniform.projection_view.begin(),
+                      scene_uniform.projection_view.end(), packed.begin());
+            std::copy(scene_uniform.model.begin(), scene_uniform.model.end(),
+                      packed.begin() + 16);
+            SDL_PushGPUVertexUniformData(command, 0, packed.data(),
+                                         sizeof(packed));
+            bound_instance = draw.instance_index;
+          }
+          SDL_DrawGPUIndexedPrimitives(
+              pass, static_cast<Uint32>(draw.index_count), 1,
+              static_cast<Uint32>(draw.first_index), 0, 0);
         }
-        if (bound_mesh != draw.mesh_index) {
-          const auto &mesh = gpu.meshes[draw.mesh_index];
-          const SDL_GPUBufferBinding vb{.buffer = mesh.vertex_buffer,
-                                        .offset = 0};
-          const SDL_GPUBufferBinding ib{.buffer = mesh.index_buffer,
-                                        .offset = 0};
-          SDL_BindGPUVertexBuffers(pass, 0, &vb, 1);
-          SDL_BindGPUIndexBuffer(pass, &ib, SDL_GPU_INDEXELEMENTSIZE_16BIT);
-          bound_mesh = draw.mesh_index;
-        }
-        SDL_GPUTexture *texture = draw.texture_index.has_value()
-                                      ? gpu.textures[*draw.texture_index]
-                                      : gpu.white_texture;
-        if (texture != bound_texture) {
-          const SDL_GPUTextureSamplerBinding binding{.texture = texture,
-                                                     .sampler = gpu.sampler};
-          SDL_BindGPUFragmentSamplers(pass, 0, &binding, 1);
-          bound_texture = texture;
-        }
-        if (bound_instance != draw.instance_index) {
-          const auto scene_uniform = graphics::make_scene_diagnostic_matrices(
-              scene, draw.instance_index, swapchain_width, swapchain_height);
-          std::array<float, 32> packed{};
-          std::copy(scene_uniform.projection_view.begin(),
-                    scene_uniform.projection_view.end(), packed.begin());
-          std::copy(scene_uniform.model.begin(), scene_uniform.model.end(),
-                    packed.begin() + 16);
-          SDL_PushGPUVertexUniformData(command, 0, packed.data(),
-                                       sizeof(packed));
-          bound_instance = draw.instance_index;
-        }
-        SDL_DrawGPUIndexedPrimitives(
-            pass, static_cast<Uint32>(draw.index_count), 1,
-            static_cast<Uint32>(draw.first_index), 0, 0);
-      }
       SDL_EndGPURenderPass(pass);
 
       if (!overlay_batch.vertices.empty()) {

@@ -78,3 +78,18 @@ SDL video driver also succeeded without creating a window.
 The supported-install launch was repeated successfully after the single-window
 handoff change. Host GTK/libdecor and EGL driver warnings remain; successful
 Vulkan completion does not establish a warning-free desktop environment.
+
+## UI preparation versus original scene activation
+
+Normal startup prepares the exact verified startup UI archive without selecting
+an arbitrary renderable world archive. The current direct geometry parser yields
+zero startup meshes/instances and retains two resolution outcomes on the
+supported local data. This is parser coverage, not proof that the original
+startup has no rendered objects. No world draws or bounds-derived camera are
+scheduled on this path. F10 remains available on the cleared window.
+
+The existing alphabetical first-renderable archive scan, source-only geometry
+and diagnostic projection now require `--diagnostic-scene`. They remain useful
+for renderer checks but do not establish original bootstrap or mission order.
+Loading the UI archive does not itself execute the original intro or its later
+transition to the main menu.

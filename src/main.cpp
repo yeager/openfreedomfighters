@@ -22,7 +22,7 @@ namespace {
 void usage(std::ostream &output) {
   output << "Usage: openfreedomfighters --data PATH [--mode original|modern] "
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
-            "[--screenshot FILE.bmp]\n";
+            "[--screenshot FILE.bmp] [--diagnostic-scene]\n";
 }
 
 } // namespace
@@ -33,6 +33,7 @@ int main(int argc, char **argv) {
   bool verify_only = false;
   std::size_t frame_limit = 0;
   bool show_graphics_menu = false;
+  bool diagnostic_scene = false;
   std::filesystem::path screenshot_path;
   for (int index = 1; index < argc; ++index) {
     const std::string_view argument{argv[index]};
@@ -58,6 +59,8 @@ int main(int argc, char **argv) {
       }
     } else if (argument == "--show-graphics-menu") {
       show_graphics_menu = true;
+    } else if (argument == "--diagnostic-scene") {
+      diagnostic_scene = true;
     } else if (argument == "--screenshot" && index + 1 < argc) {
       screenshot_path = argv[++index];
     } else if (argument == "--help" || argument == "-h") {
@@ -105,15 +108,23 @@ int main(int argc, char **argv) {
   }
 
   std::optional<off::data::InstallVerification> verification;
-  off::graphics::SceneGpuPlan scene;
+  std::optional<off::graphics::SceneGpuPlan> scene;
+  std::optional<off::graphics::SceneRenderAsset> startup_ui_scene_resources;
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
   off::ui::RetailUiFontSet ui_fonts;
   off::ui::RetailUiTextureSet ui_textures;
   off::platform::StartupWindow startup_window;
   if (!verify_only) {
     auto preflight = off::platform::run_sdl_startup_preflight(data_path, [&] {
-      scene = off::graphics::prepare_scene_gpu_plan(
-          off::graphics::load_diagnostic_scene_render_asset(data_path));
+      if (diagnostic_scene) {
+        scene.emplace(off::graphics::prepare_scene_gpu_plan(
+            off::graphics::load_diagnostic_scene_render_asset(data_path)));
+      } else {
+        // Retain exact UI-archive resources, not an original first-scene
+        // selection or a guessed camera/world draw plan.
+        startup_ui_scene_resources.emplace(
+            off::graphics::load_startup_scene_render_asset(data_path));
+      }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));
       ui_fonts = off::ui::load_retail_ui_fonts(
@@ -149,8 +160,12 @@ int main(int argc, char **argv) {
   if (verify_only) {
     return 0;
   }
+  if (!diagnostic_scene)
+    std::cout << "Authored startup resources loaded; world rendering pending. "
+                 "This is not gameplay or a faithful rendered startup menu.\n";
   const auto runtime = off::platform::run_sdl_gpu_runtime(
-      startup_window, mode, scene, *startup_graphics, ui_fonts, ui_textures,
+      startup_window, mode, scene ? &*scene : nullptr, *startup_graphics,
+      ui_fonts, ui_textures,
       frame_limit, show_graphics_menu, screenshot_path);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';

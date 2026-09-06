@@ -20,9 +20,11 @@ struct RuntimeResult {
 
 // Borrows the successful preflight window. The caller retains ownership until
 // this call returns; GPU resources are released before the window is destroyed.
+// A null scene is normal startup: no world uploads, depth target, diagnostic
+// projection or scene draws. Non-null opts into the separate diagnostic path.
 [[nodiscard]] RuntimeResult
 run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
-                    const graphics::SceneGpuPlan &scene,
+                    const graphics::SceneGpuPlan *scene,
                     const graphics::StartupGraphicsAsset &startup_graphics,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,

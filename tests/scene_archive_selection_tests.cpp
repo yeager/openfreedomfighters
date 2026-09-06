@@ -171,6 +171,20 @@ int main() {
             malformed_error.find("candidate") == std::string::npos,
         "fail closed on a malformed structurally complete archive");
 
+  const auto startup_root = work / "exact-startup";
+  std::filesystem::create_directories(startup_root / "Scenes");
+  write_zip(startup_root / "Scenes" / "ALPHA.ZIP", complete_members());
+  write_zip(startup_root / "Scenes" / "FF-StartUp.ZIP", complete_members(true));
+  std::string startup_error;
+  try {
+    static_cast<void>(off::graphics::load_startup_scene_render_asset(startup_root));
+  } catch (const std::exception &failure) {
+    startup_error = failure.what();
+  }
+  check(startup_error == "scene archive contains duplicate scene-resource members" &&
+            selection_error(startup_root) != startup_error,
+        "exact UI archive loading does not use alphabetical diagnostic selection");
+
   const auto symlink_root = work / "symlink";
   const auto external_root = work / "external";
   std::filesystem::create_directories(symlink_root / "Scenes");

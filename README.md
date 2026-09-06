@@ -53,21 +53,24 @@ clean-room storage. The native C++ bootstrap now:
 
 Texture, primary-vertex, topology, spatial, and supported audio data decode into
 portable representations. The executable now opens a resizable high-DPI native
-window, loads a validated textured triangle-strip preview from `FF-StartUp.ZIP`,
-uploads its retail vertices, indexes, and decoded RGBA texture, and issues indexed
-draws through SDL GPU's Vulkan, Metal, or D3D12 backend path. Local runtime
+window and prepares the verified startup UI archive, images and fonts. Normal
+launches schedule no world draws: actual scene activation, camera and materials
+remain unresolved. `--diagnostic-scene` explicitly enables the separate
+source-only indexed geometry preview through SDL GPU's Vulkan, Metal or D3D12
+backend path. Its lexical archive selection is not mission or bootstrap order.
+Local runtime
 validation currently covers Vulkan; CI compiles and tests Windows and macOS without
 retail data or GPU hardware. A new scene asset builder follows ordered RMC/RMI
 handles to exact GMS sources and PRM records, preserves both transform records,
 retains unresolved outcomes, and includes line-list, untextured, and transparent
 geometry. The startup RMC
-source is not itself a primitive, so the visible preview still uses the documented
-GMS diagnostic fallback. Primary and secondary scene handles now receive explicit
+source is not itself a primitive; normal startup does not substitute another
+archive or a GMS diagnostic fallback. Primary and secondary scene handles receive explicit
 stable manifest outcomes instead of silently disappearing. The projection is not
 yet the scene camera or Original material model. An SDL-free GPU plan now produces
 stable opaque/blended multi-instance commands, shared resource references, global
 diagnostic bounds, and non-flattened clip depth for cross-platform testing.
-The upcoming SDL integration is intentionally described as a multi-instance
+The opt-in SDL integration is intentionally described as a multi-instance
 source-only diagnostic scene; it will not establish the original camera,
 RMC/RMI world placement, material behavior, or a faithfully loaded level.
 Complete scene rendering, gameplay
@@ -93,6 +96,9 @@ Replace `original` with `modern` to verify the second runtime profile.
 Omit `--verify-only` to open the current native renderer prototype. Close the
 window or press Escape to exit. `--frame-limit COUNT` is available for bounded
 GPU smoke tests and still requires successful retail-data verification first.
+Normal startup currently clears the window and can show F10; the original intro
+and menu are not yet activated or rendered. Add `--diagnostic-scene` only to
+inspect the separate geometry preview. It is never a normal-startup fallback.
 Every normal launch first presents project-owned OpenFreedomFighters artwork for
 three seconds. Retail verification and subsequent CPU asset preparation run on
 a worker so the window remains responsive. Preparation begins only after
