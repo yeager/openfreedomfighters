@@ -46,7 +46,32 @@ not assumed to be the group's actual initialized bounds.
 
 The window root also contains other children; it is not verified by recomputing
 from only the legal picture. Child readiness, actual getter/suppression state,
-callback scheduling and incremental propagation remain integration requirements.
+and actual callback scheduling/admission remain integration requirements.
 
 All 50 local CTest executables pass after this integration, together with targeted
 group and zero-ID query ASan/UBSan and GCC tests and the private owned-resource probe.
+
+## Complete ordinary intro-root membership
+
+`intro_bounds_owner_opt_out` supplies the independently reviewed responses for
+the exact ordinary picture, language-group, window-root and window-camera owner
+classes. Unknown classes return no decision, not an assumed false response.
+Live owner identity must be established separately; runtime resource flags are
+not class metadata.
+
+The ordinary intro camera opts out unconditionally. After the resource-flag guard,
+this prevents both name lookup and bounds retrieval. It does not disable camera
+rendering or imply zero camera bounds. The root's language group and fade picture
+still contribute their actual eligible geometry.
+
+The private probe now follows the root's complete authored child membership under
+explicit retained-runtime-identity conditions. It materializes the fade picture's
+real PRM bounds with an admitted sizing callback, recomputes the language group,
+then recomputes the root from those children while verifying that the camera getter
+is never called. An explicit subsequent Center operation passes through the shared
+deferred position service and updates both ancestors without contracting existing
+sibling bounds. The root's status, dimensions, suppression and callback admission
+are supplied test conditions, not a captured original startup or resize sequence.
+
+The complete-root probe and all 51 local CTest executables pass, along with the
+updated owner-query/group tests under ASan/UBSan and GCC.

@@ -184,6 +184,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   children, preserving filters, root fallback conditions and distinct extent rules.
 - [x] Connect eligible identity-basis parent-space bounds to expansion-only shared
   ancestor updates, preserving no-expansion stops and existing sibling bounds.
+- [x] Bind reviewed concrete intro owner opt-outs and privately verify complete
+  root child membership plus deferred two-ancestor updates using owned resources.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

@@ -7,6 +7,16 @@
 #include <stdexcept>
 
 namespace off::graphics {
+std::optional<bool> intro_bounds_owner_opt_out(std::uint32_t runtime_owner_class) noexcept {
+    switch (runtime_owner_class) {
+    case 0x00200046U:
+    case 0x00101389U:
+    case 0x00100030U: return false;
+    case 0x00400003U: return true;
+    default: return std::nullopt;
+    }
+}
+
 namespace {
 constexpr float sentinel = std::bit_cast<float>(0x7e967699U);
 constexpr float minimum_extent = std::bit_cast<float>(0x39000000U);

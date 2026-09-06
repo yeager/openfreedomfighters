@@ -7,6 +7,11 @@
 #include <string_view>
 
 namespace off::graphics {
+// Reviewed concrete ordinary intro owner classes only. Unknown or replacement
+// owners require their own query; nullopt is not a default false response.
+// Class metadata is distinct from resource runtime flags and camera enablement.
+[[nodiscard]] std::optional<bool> intro_bounds_owner_opt_out(std::uint32_t runtime_owner_class) noexcept;
+
 struct ParentSpaceBounds {
     std::array<float,3> center;
     std::array<float,3> extents;

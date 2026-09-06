@@ -139,6 +139,9 @@ The [group-bounds callback](docs/GROUP_BOUNDS.md) now recomputes separate resour
 and child-only owner bounds from explicitly admitted live children.
 The [identity-basis propagation path](docs/BOUNDS_PROPAGATION.md) now expands
 shared ancestors without contraction and stops when no bounds grow.
+Concrete intro owner-class queries now exclude the camera from parent bounds
+without inventing camera geometry; the private probe covers the complete root
+membership and deferred updates through both ancestors under explicit admission.
 
 ## Build the native bootstrap
 

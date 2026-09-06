@@ -68,6 +68,34 @@ int main() {
     if (std::fesetround(FE_TONEAREST) != 0) return 1;
     constexpr float minimum = 0x1p-13F;
     {
+        for (std::uint32_t type : {0x00200046U, 0x00101389U, 0x00100030U})
+            check(intro_bounds_owner_opt_out(type) == std::optional<bool>{false},
+                  "reviewed concrete picture and group owners participate in bounds");
+        check(intro_bounds_owner_opt_out(0x00400003U) == std::optional<bool>{true},
+              "reviewed concrete camera owner opts out of parent bounds");
+        for (std::uint32_t type : {0U, 0x100000U, 0x40000U, 0x00200047U, 0x00400002U, 0xffffffffU})
+            check(!intro_bounds_owner_opt_out(type).has_value(),
+                  "unknown class words and runtime flag masks do not receive guessed owner behavior");
+        Fixture f;
+        f.hooks.opt_out = [&](const PositionResource& r) {
+            f.record("o", r);
+            const auto type = r.identity == 1 ? 0x00400003U : 0x00200046U;
+            return intro_bounds_owner_opt_out(type).value();
+        };
+        f.hooks.name = [&](const PositionResource& r) -> std::optional<std::string_view> {
+            check(r.identity != 1, "camera opt-out precedes name lookup");
+            f.record("n", r); return std::nullopt;
+        };
+        f.hooks.get_bounds = [&](PositionResource& r) -> std::optional<ParentSpaceBounds> {
+            check(r.identity != 1, "camera opt-out avoids requiring invented camera bounds");
+            f.record("b", r); return ParentSpaceBounds{{3, 4, 0}, {3, 4, 0}};
+        };
+        f.group.apply(f.resource, f.flags, f.owner, std::span(f.children).first(2), true, 0, f.hooks);
+        check(f.calls == std::vector<std::string>{"o0", "n0", "b0", "o1"} &&
+              f.resource.center == std::array<float, 3>{3, 4, 0} && f.resource.radius == 6,
+              "concrete class mapping composes at the existing opt-out guard only");
+    }
+    {
         Fixture f;
         f.resources[0].flags = 0x40000U;
         f.resources[4].flags = 0xC00U;
