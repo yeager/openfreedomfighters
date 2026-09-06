@@ -30,6 +30,17 @@ The checked-in header contains SPIR-V and generated Metal source. Normal builds
 do not need shader compiler executables. CMake checks the GLSL source hash and
 requires regeneration after source changes. The generator validates SPIR-V,
 reflects the input/output, descriptor and uniform layout, and checks Metal slots.
+It also emits HLSL from that same SPIR-V. The separate DXIL build step uses DXC
+shader model 6.0, retains reflected register spaces and produces a C++ header:
+
+```sh
+python3 tools/build_picture_dxil.py --dxc /path/to/dxc \
+  --work-dir /path/to/existing/private-build-directory
+```
+
+The `picture-dxil` CI job uses Microsoft's checksum-pinned DXC 1.9.2602 Linux
+x86-64 distribution and uploads only the generated header. Compilation alone
+does not verify D3D12 pixels or establish original shader behavior.
 
 ```sh
 python3 tools/build_picture_shader.py \

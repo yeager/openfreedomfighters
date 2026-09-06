@@ -15,6 +15,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  picture-dxil:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TMPDIR: ${{ github.workspace }}/.shader-work
+      TMP: ${{ github.workspace }}/.shader-work
+      TEMP: ${{ github.workspace }}/.shader-work
+    steps:
+      - uses: actions/checkout@v6
+      - name: Fetch checksum-pinned DXC
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .shader-work/dxc
+          curl --fail --location --retry 3 \
+            --output .shader-work/dxc.tar.gz \
+            https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.9.2602/linux_dxc_2026_02_20.x86_64.tar.gz
+          printf '%s  %s\n' a1d3e3b5e1c5685b3eb27d5e8890e41d87df45def05112a2d6f1a63a931f7d60 .shader-work/dxc.tar.gz | sha256sum --check -
+          tar -xzf .shader-work/dxc.tar.gz -C .shader-work/dxc
+      - name: Compile and validate picture DXIL
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/build_picture_dxil.py --dxc .shader-work/dxc/bin/dxc \
+            --work-dir .shader-work --output .shader-work/picture_stage_dxil.hpp
+          if test -f include/off/platform/generated/picture_stage_dxil.hpp; then
+            cmp include/off/platform/generated/picture_stage_dxil.hpp .shader-work/picture_stage_dxil.hpp
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: picture-stage-dxil
+          path: .shader-work/picture_stage_dxil.hpp
+          if-no-files-found: error
+          include-hidden-files: true
+
   content-audit:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
