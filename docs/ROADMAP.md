@@ -6,6 +6,22 @@ define inputs, deliverables, validation evidence, and exit criteria for every
 phase and the cross-cutting gates. A checked item is not evidence for an entire
 phase unless its phase gate also passes.
 
+## Delivery priority
+
+Build complete runnable paths before expanding isolated helpers or polishing
+optional features. The next acceptance targets, in order, are:
+
+1. Normal launch loads owned game data and renders the original intro through
+   actual scene activation, camera registration, timing and picture submission.
+2. The intro reaches an interactive original main menu through the recovered
+   completion event, not a substitute timer or diagnostic preview.
+3. Starting a game loads the first mission with a controllable player, camera,
+   collision and audio, then adds combat and squad behavior.
+
+Recover missing behavior in batches around these paths. Add lower-level work
+when it blocks a target; keep clean-room, data validation and regression checks
+as delivery requirements. Modern graphics polish follows a working Original path.
+
 ## Phase 0 - Evidence, policy, and reproducibility
 
 - [x] Identify the Steam installation and record aggregate inventory.
@@ -220,10 +236,13 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   history and backend operations; the first intro frame is not hardcoded.
 - [x] Coordinate preselection, reserved-key marking, all-state barrier rounds
   and live-order restoration using the same renderer snapshot. Required
-  preselection/special-render services and normal startup admission remain open.
+  special-render services and normal startup admission remain open.
+- [x] Implement live owner-context preselection with ordered eligibility queries,
+  related-resource enumeration and inactive removal, joined to ordinary drawing
+  and next-frame key restoration. Actual activation and geometry services remain open.
 - [x] Evaluate resolved stage-zero picture operations in a project-owned shader,
-  with SPIR-V/MSL/DXIL output and Vulkan pixel tests joined to material requests.
-  D3D12 pixel verification, fog, later stages and complete picture GPU submission remain open.
+  with SPIR-V/MSL/DXIL output and Vulkan, Metal and D3D12 pixel tests joined to
+  material requests. Fog, later stages and complete picture GPU submission remain open.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

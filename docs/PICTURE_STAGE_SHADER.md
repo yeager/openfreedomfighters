@@ -59,16 +59,19 @@ was generated with glslang 16.2.0, SPIRV-Cross package
 may generate different bytes; review and regenerate intentionally.
 
 The SDL factory selects DXIL, SPIR-V or MSL and fails explicitly for other formats.
-Vulkan execution is verified locally; Metal compilation/execution is not yet
-verified. DXIL was compiled and validated by the pinned DXC in
+Vulkan execution is verified locally. DXIL was compiled and validated by the pinned DXC in
 [CI run 34039110983](https://github.com/yeager/openfreedomfighters/actions/runs/34039110983).
 Its reflected input semantics, 48-byte uniform layout and register spaces match
-the existing vertex shader and SDL bindings. D3D12 pixel execution remains a
-separate verification step. The normal runtime's existing shader selection is unchanged.
+the existing vertex shader and SDL bindings. In
+[CI run 34039482431](https://github.com/yeager/openfreedomfighters/actions/runs/34039482431),
+explicit Direct3D 12 and Metal runs each executed all 14 GPU cases successfully;
+neither was skipped. The normal runtime's existing shader selection is unchanged.
 
 ## Verification
 
-All 65 local CTest tests pass without skips. Fourteen offscreen Vulkan
+All 65 local CTest tests pass without skips. The same CI run passed the Windows,
+macOS and Linux build/test jobs, shader regeneration check and Gitleaks audit.
+Fourteen offscreen Vulkan
 cases compare every RGBA channel against independently computed expectations,
 with one UNORM byte of tolerance. Cases cover argument selection, RGB/alpha
 saturation and independent operations. Four cases connect the actual material

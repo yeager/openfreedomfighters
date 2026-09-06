@@ -1,4 +1,5 @@
 #include "off/graphics/picture_ordered_coordinator.hpp"
+#include "off/graphics/picture_preselection.hpp"
 
 #include <array>
 #include <iostream>
@@ -40,6 +41,77 @@ std::uint32_t run(PictureOrderedCoordinator& coordinator,
 }
 
 int main() {
+  // Synthetic live registry joins the real eligibility service, key marking,
+  // ordinary dispatch and restoration. This is not observed intro membership.
+  {
+    std::array<PictureOrderedDrawEntry, 3> entries{{
+      {0x08000012U, 11, 7, 11}, {0x08000022U, 12, 7, 12},
+      {0x08000032U, 13, 7, 13}}};
+    PictureSelectionContext removed{90, false, 0, 0, {}, {}};
+    PictureSelectionContext selected{91, true, 101, 1, {}, 12};
+    std::array<PictureSelectionContext*, 2> membership{&removed, &selected};
+    PicturePreselection preselection(membership);
+    PicturePreselectionHooks eligibility;
+    eligibility.backend_owner = [](auto) { return 201; };
+    eligibility.owner_override = [](auto) { return 0; };
+    eligibility.selection_interface = [](auto) { return 301; };
+    eligibility.selection_identifier = [](auto) { return 401; };
+    eligibility.resolve_selection = [](auto) { return 501; };
+    eligibility.view_camera = [](auto) -> std::uint64_t {
+      throw std::runtime_error("initial null view must not query camera");
+    };
+    eligibility.prepare_camera = [](auto) {
+      throw std::runtime_error("initial null view must not prepare camera");
+    };
+    eligibility.relative_point = [](const auto&, auto) {
+      return PicturePreselectionHooks::Point{1, 2, 3};
+    };
+    eligibility.backend_extension = [](auto) {
+      return PicturePreselectionHooks::Optional{601};
+    };
+    unsigned predicates = 0;
+    eligibility.predicate = [&](auto query, const auto& point, auto extension, auto object) {
+      check(query == 301 && point == PicturePreselectionHooks::Point{1, 2, 3} &&
+        extension == 601 && object == 501, "real preselection forwards all predicate inputs");
+      ++predicates;
+      return true;
+    };
+    eligibility.next_record = [](auto) { return PicturePreselectionHooks::Optional{}; };
+    eligibility.related_resources = [](auto, auto) { return std::size_t{0}; };
+    eligibility.resource_owner = [](auto) { return PicturePreselectionHooks::Optional{}; };
+    eligibility.owner_capabilities = [](auto) { return 0U; };
+    eligibility.current_resource = [](auto) { return PicturePreselectionHooks::Optional{}; };
+    eligibility.resource_registry_identifier = [](auto) { return std::uint64_t{0}; };
+    eligibility.state_context = [](auto) -> PictureSelectionContext* { return nullptr; };
+    eligibility.next_resource = [](auto, auto) { return PicturePreselectionHooks::Optional{}; };
+    PictureOrderedState state{1, entries, {}, {}};
+    std::array<PictureOrderedState*, 1> snapshot{&state};
+    PictureOrderedCoordinator coordinator;
+    PictureOrderedDrawLoop loop;
+    auto hooks = quiet();
+    hooks.preselect = [&](const auto&, const auto& append) {
+      preselection.run(4, eligibility, append);
+    };
+    hooks.view_order = [](const auto&, auto) { return std::optional<std::uint8_t>{1}; };
+    std::vector<std::uint64_t> emitted;
+    hooks.draw = [&](auto& current, auto) {
+      return loop.run(current.entries, *current.cursor, {
+        [] {}, [](auto) {}, [](auto) {}, [](auto) {}, [](auto) {},
+        [&](auto record, auto) { emitted.push_back(record); }});
+    };
+    check(coordinator.run(snapshot, 1, hooks) == 1 &&
+      emitted == std::vector<std::uint64_t>{11, 13} &&
+      state.selected_records == std::vector<std::uint64_t>{12} &&
+      entries[1].key == 0x08000022U && !state.cursor &&
+      preselection.registry_size() == 1 && predicates == 1,
+      "eligibility excludes the selected middle record and restoration preserves its key");
+    selected.active = false;
+    emitted.clear();
+    check(coordinator.run(snapshot, 1, hooks) == 1 &&
+      emitted == std::vector<std::uint64_t>{11, 12, 13} &&
+      state.selected_records.empty() && preselection.registry_size() == 0 && predicates == 1,
+      "next frame removes inactive membership and draws the restored record");
+  }
   // Actual ordinary loops: two barriers force three rounds, including reset
   // calls on a second state that was already exhausted in round zero.
   {

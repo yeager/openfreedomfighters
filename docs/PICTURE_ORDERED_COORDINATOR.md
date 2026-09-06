@@ -36,9 +36,10 @@ The typed service boundary retains work not yet implemented by this coordinator:
    Empty output still requires production and begin/end calls.
 4. Re-read the profiling scalars and conditionally end profiling independently.
 
-Neither preselection eligibility nor special-stream production is replaced by
-an assumed empty result. A native intro host still needs these real services or
-evidence establishing their inactive branches.
+[PicturePreselection](PICTURE_PRESELECTION.md) supplies the eligibility traversal
+over a live owner-context registry. Its activation, geometry and query services
+still need the actual runtime host. Neither eligibility nor special-stream
+production is replaced by an assumed empty result.
 
 ## Restoration and failures
 

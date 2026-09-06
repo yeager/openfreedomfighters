@@ -30,7 +30,8 @@ executable code are included here.
 Graphics have been tested locally on Linux/Vulkan. CI builds and tests on
 Windows, macOS and Linux using independent fixtures, not retail assets.
 
-Next: connect intro activation, camera registration and picture drawing. Details
+Next: make normal startup render the original intro and reach its main menu.
+This takes priority over graphics polish and more isolated helpers. Details
 are in the [intro notes](docs/INTRO_BOOTSTRAP.md) and [roadmap](docs/ROADMAP.md).
 
 ## Planned modes

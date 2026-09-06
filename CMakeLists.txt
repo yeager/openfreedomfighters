@@ -97,6 +97,7 @@ add_library(off_core
     src/graphics/picture_view_transition.cpp
     src/graphics/picture_ordered_draw_loop.cpp
     src/graphics/picture_ordered_coordinator.cpp
+    src/graphics/picture_preselection.cpp
     src/graphics/picture_draw_reset.cpp
     src/graphics/renderer_frame.cpp
     src/graphics/intro_camera_state.cpp
@@ -443,6 +444,9 @@ if(BUILD_TESTING)
     add_executable(off_picture_ordered_coordinator_tests tests/picture_ordered_coordinator_tests.cpp)
     target_link_libraries(off_picture_ordered_coordinator_tests PRIVATE off_core)
     add_test(NAME off_picture_ordered_coordinator_tests COMMAND off_picture_ordered_coordinator_tests)
+    add_executable(off_picture_preselection_tests tests/picture_preselection_tests.cpp)
+    target_link_libraries(off_picture_preselection_tests PRIVATE off_core)
+    add_test(NAME off_picture_preselection_tests COMMAND off_picture_preselection_tests)
 
     add_executable(off_startup_lifecycle_tests tests/startup_lifecycle_tests.cpp)
     target_link_libraries(off_startup_lifecycle_tests PRIVATE off_core)
