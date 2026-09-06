@@ -34,11 +34,42 @@ recovered. Natural completion and the first activation trigger remain unresolved
 The authored destination must not be replaced with an assumed direct main-menu
 transition.
 
-## Required before decoding and activation
+## Restricted controller reader
 
-1. Establish the exact tagged class wrapper, field encodings, string boundaries,
-   optional-field lookahead and terminal/trailing-data rules. Preserve unknown
-   values rather than assigning invented semantics.
+`GmsImage::intro_movie_controller_source` decodes only the reviewed supported
+intro component shape. The caller must establish supported intro provenance;
+the method additionally checks the source class, single attached component
+identity, zero attachment parameter, empty base-list wrapper and bounded tagged
+block. It is not a generic component dispatcher and does not select a scene.
+
+The result retains raw sequence/group/unknown references, raw destination bytes,
+the authored option value and presence-preserving optional references. It does
+not resolve those references through the unrelated runtime object-handle decoder
+or equate the authored option with the fixed-destination runtime flag. Destination
+bytes are not assumed to be UTF-8 or a filesystem path.
+
+The reader rejects unsupported full tags, truncated fields, overlength or
+unterminated strings, invalid wrapper/header forms and any trailing bytes inside
+the declared block. Padding outside the declared block is left untouched. Zero,
+one or two optional tokens are accepted in order; the shorter forms follow the
+reviewed scalar-reader behavior, not additional observations of retail objects.
+Other high-tag-bit combinations are unsupported by this reader, not proven
+invalid in the original format.
+
+Private verification on the owned intro archive successfully validates GMS/BUF,
+finds exactly one component accepted by these guards and compares every returned
+field against the reviewed authored-data observations. Neither the payload nor
+its field values are emitted to public artifacts. This demonstrates field
+decoding, not execution of the controller.
+Public GMS tests cover all three optional shapes, raw bytes, string limits,
+identity guards, malformed tags and every declared truncation of the compact
+fixture. The full 35-test suite and targeted GMS ASan/UBSan run pass locally.
+
+## Required before activation
+
+1. Extend component dispatch beyond the restricted intro shape only after its
+   attachment order and wrapper rules are established. Preserve unknown values
+   rather than assigning invented semantics.
 2. Establish authored source-reference lookup and bounded sequence/group-list
    decoding. These references are not the already implemented runtime object-pool
    handles; passing them through that decoder is invalid.

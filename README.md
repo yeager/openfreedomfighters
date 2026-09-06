@@ -77,6 +77,11 @@ Complete scene rendering, gameplay
 simulation, menus, localization, and the complete native runtime remain under
 development; no playable build exists yet.
 
+The data layer also has a restricted, bounds-checked intro-controller reader
+that preserves authored references, destination bytes and optional-field presence.
+It does not yet resolve the sequence resources or activate the intro; see
+[intro bootstrap evidence](docs/INTRO_BOOTSTRAP.md).
+
 ## Build the native bootstrap
 
 A C++23 compiler, CMake 3.25 or newer, zlib development files, and

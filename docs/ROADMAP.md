@@ -128,9 +128,11 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   specified by the [audio runtime contract](AUDIO_RUNTIME.md). Audio-bank
   decoding is implemented; runtime playback is not.
 - [ ] Startup/menu and one static level render on Windows, Linux, Steam Deck, and macOS.
-- [ ] Decode the authored intro controller and sequence resources with bounded
-  class-stream readers; preserve source references until their lookup contract
-  is established.
+- [x] Decode the restricted supported intro-controller field stream with bounded
+  identity/wrapper checks and presence-preserving optional references; verify
+  returned fields privately against owned data without executing the controller.
+- [ ] Decode and join authored intro sequence/group resources; preserve source
+  references until their loading and lookup contract is established.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -24,6 +25,17 @@ struct GmsWindowPictureSource {
     std::uint8_t alignment_enum{0};
     std::optional<std::uint8_t> extension_control;
     std::uint32_t picture_asset_reference{0};
+};
+
+struct GmsIntroMovieControllerSource {
+    std::uint32_t sequence_reference{0};
+    std::uint32_t group_reference{0};
+    std::uint32_t additional_reference{0};
+    // Owned raw bytes, not an asserted UTF-8 string or a resolved scene path.
+    std::string destination;
+    std::uint32_t authored_option{0};
+    std::optional<std::uint32_t> first_optional_reference;
+    std::optional<std::uint32_t> second_optional_reference;
 };
 
 struct GmsDirectoryEntry {
@@ -86,6 +98,11 @@ public:
     // Callers must establish that this image came from the supported startup
     // archive; other scene-specific picture stream variants are not yet covered.
     [[nodiscard]] GmsWindowPictureSource startup_window_picture_source(
+        std::size_t directory_index
+    ) const;
+    // Caller must establish supported intro provenance. This deliberately narrow
+    // attachment grammar is not generic component dispatch or reference lookup.
+    [[nodiscard]] GmsIntroMovieControllerSource intro_movie_controller_source(
         std::size_t directory_index
     ) const;
     void validate_buf(std::span<const std::byte> bytes) const;

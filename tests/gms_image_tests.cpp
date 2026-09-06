@@ -180,6 +180,47 @@ std::vector<std::byte> window_picture_fixture(
     return bytes;
 }
 
+std::vector<std::byte> intro_controller_fixture(
+    std::string_view destination = "SyntheticDestination", unsigned int optionals = 2
+) {
+    auto bytes = packed_fixture();
+    bytes.resize(9U + 1024U);
+    set_u32(bytes, 0, 1024U);
+    set_u32(bytes, 4, 1033U);
+    set_u32(bytes, 9U + 336U + 16U, 0x0800001aU);
+    set_u32(bytes, 9U + 336U + 20U, 512U);
+    set_u32(bytes, 9U + 336U + 32U, 600U);
+    set_u32(bytes, 9U + 512U, 1U);
+    set_u32(bytes, 9U + 516U, 544U);
+    constexpr char identity[] = "ZGEOM_MovieControl";
+    std::copy_n(reinterpret_cast<const std::byte*>(identity), sizeof(identity),
+                bytes.begin() + 9U + 544U);
+    std::vector<std::byte> block(4U);
+    const auto scalar = [&](std::uint8_t tag, std::uint32_t value) {
+        block.push_back(static_cast<std::byte>(tag));
+        append_u32(block, value);
+    };
+    scalar(0x09U, 4U);
+    block.push_back(std::byte{0x06});
+    scalar(0x88U, 0xf1234567U);
+    scalar(0x88U, 0x87654321U);
+    scalar(0x08U, 0xffffffffU);
+    block.push_back(std::byte{0x84});
+    for (char c : destination) {
+        block.push_back(static_cast<std::byte>(c));
+    }
+    block.push_back(std::byte{0});
+    scalar(0x83U, 0x80000000U);
+    if (optionals > 0U) scalar(0x88U, 0U);
+    if (optionals > 1U) scalar(0x08U, 0xc1234567U);
+    block.push_back(std::byte{0x06});
+    block.push_back(std::byte{0xff});
+    set_u32(block, 0, static_cast<std::uint32_t>(block.size()));
+    std::copy(block.begin(), block.end(), bytes.begin() + 9U + 600U);
+    bytes[9U + 600U + block.size()] = std::byte{0xa5};
+    return bytes;
+}
+
 template <typename Operation>
 void check_rejected(Operation operation, const char* message) {
     bool rejected = false;
@@ -208,6 +249,84 @@ void check_parse_rejected(Mutation mutation, const char* message) {
 }  // namespace
 
 int main() {
+    const auto decode_intro = [](std::vector<std::byte> bytes) {
+        return off::data::GmsImage::parse(off::data::PackedResource::parse(
+            std::move(bytes))).intro_movie_controller_source(1);
+    };
+    for (unsigned int count = 0; count <= 2; ++count) {
+        const auto decoded = decode_intro(intro_controller_fixture("", count));
+        check(decoded.sequence_reference == 0xf1234567U &&
+                  decoded.group_reference == 0x87654321U &&
+                  decoded.additional_reference == 0xffffffffU &&
+                  decoded.authored_option == 0x80000000U &&
+                  decoded.destination.empty() &&
+                  decoded.first_optional_reference.has_value() == (count >= 1U) &&
+                  decoded.second_optional_reference.has_value() == (count == 2U),
+              "decode raw intro fields and optional prefixes, ignoring external padding");
+        if (count >= 1U) check(*decoded.first_optional_reference == 0U,
+                             "preserve explicit zero optional reference");
+        if (count == 2U) check(*decoded.second_optional_reference == 0xc1234567U,
+                              "preserve optional reference high bits");
+    }
+    const std::string raw_destination(99U, static_cast<char>(0xfe));
+    check(decode_intro(intro_controller_fixture(raw_destination)).destination == raw_destination,
+          "preserve 99 raw non-ASCII destination bytes in owned output");
+    check_rejected([&] { decode_intro(intro_controller_fixture(std::string(100U, 'x'))); },
+                   "reject a 100-byte intro destination");
+    const auto reject_intro_mutation = [&](auto mutate) {
+        auto bytes = intro_controller_fixture("", 2);
+        mutate(bytes);
+        check_rejected([&] { decode_intro(std::move(bytes)); },
+                       "reject malformed restricted intro controller source");
+    };
+    // Empty destination yields a 44-byte block: every declared truncation must
+    // fail even though the untouched backing image still contains all fields.
+    for (std::uint32_t size = 0; size < 44U; ++size) {
+        reject_intro_mutation([&](auto& b) { set_u32(b, 609U, size); });
+    }
+    for (auto position : {4U, 9U, 10U, 15U, 20U, 25U, 27U, 32U, 37U, 42U, 43U}) {
+        reject_intro_mutation([&](auto& b) { b[609U + position] = std::byte{0x45}; });
+    }
+    for (auto header : {0x0100002cU, 0x00ffffffU, 45U}) {
+        reject_intro_mutation([&](auto& b) { set_u32(b, 609U, header); });
+    }
+    for (auto offset : {0U, 1023U}) {
+        reject_intro_mutation([&](auto& b) { set_u32(b, 9U + 336U + 32U, offset); });
+    }
+    reject_intro_mutation([](auto& b) { set_u32(b, 9U + 336U + 16U, 0U); });
+    reject_intro_mutation([](auto& b) { set_u32(b, 9U + 336U + 12U, 1U); });
+    for (auto count : {0U, 2U}) {
+        reject_intro_mutation([&](auto& b) { set_u32(b, 521U, count); });
+    }
+    for (auto parameter : {0x3f800000U, 0x7f800000U, 0x7fc00000U}) {
+        reject_intro_mutation([&](auto& b) { set_u32(b, 529U, parameter); });
+    }
+    reject_intro_mutation([](auto& b) { b[553U] = std::byte{'X'}; });
+    reject_intro_mutation([](auto& b) { b[570U] = std::byte{'X'}; });
+    reject_intro_mutation([](auto& b) { set_u32(b, 525U, 1023U); });
+    reject_intro_mutation([](auto& b) { set_u32(b, 614U, 8U); });
+    reject_intro_mutation([](auto& b) { b[641U] = std::byte{0x08}; });
+    reject_intro_mutation([](auto& b) { b[635U] = std::byte{1}; });
+    reject_intro_mutation([](auto& b) { b[619U] = std::byte{0x08}; });
+    reject_intro_mutation([](auto& b) {
+        set_u32(b, 609U, 49U);
+        b[651U] = std::byte{0x88};
+        set_u32(b, 652U, 0U);
+        b[656U] = std::byte{0x06};
+        b[657U] = std::byte{0xff};
+    });
+    reject_intro_mutation([](auto& b) {
+        // No destination terminator anywhere in the enclosing block.
+        std::fill(b.begin() + 635U, b.begin() + 653U, std::byte{0x81});
+    });
+    auto negative_zero = intro_controller_fixture();
+    set_u32(negative_zero, 529U, 0x80000000U);
+    check(decode_intro(std::move(negative_zero)).destination == "SyntheticDestination",
+          "accept finite negative-zero attachment parameter");
+    check_rejected([&] {
+        static_cast<void>(off::data::GmsImage::parse(off::data::PackedResource::parse(
+            intro_controller_fixture())).intro_movie_controller_source(3));
+    }, "reject out-of-range intro source index");
     const auto image = off::data::GmsImage::parse(
         off::data::PackedResource::parse(packed_fixture())
     );
