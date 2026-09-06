@@ -47,3 +47,31 @@ as data, but must not automatically become a claimed execution order. Complete
 cursor behavior, admission branches, callback delivery and resource
 activation still block a faithful complete player. No 60 Hz queue or splash timer
 is substituted for those contracts.
+
+## Direct event delivery evidence
+
+The traced command-owner direct-target route invokes the target object's event
+hook first, then its shared component dispatcher, before returning to the caller.
+It passes a 16-bit registered event identifier and an argument word. This route
+does not enqueue a later frame. It is distinct from a reference-target helper
+which first resolves a runtime reference; neither requires relocating an authored
+GMS source reference again after target resolution.
+
+After the target hook returns, the component dispatcher collects currently valid attachment handles into an
+ordered snapshot, removing stale source entries. It re-resolves each snapshot
+handle before its turn and skips entries that no longer resolve. Additions during
+a component callback are not appended to that existing snapshot; removals can
+prevent a later callback. After a component callback it also re-resolves the owner
+and stops if the owner no longer exists.
+
+Component lifecycle/readiness/disable guards still apply. Their complete rules,
+target-specific hook behavior, post-callback maintenance and recursive mutation
+contracts remain unresolved. The traced boundary has no general recursion guard:
+a native prohibition would be a safety policy, not original behavior. Inline
+invocation does not prove that every target hook completes all side effects
+immediately or that no other route schedules work.
+
+This establishes synchronous invocation on the traced shared route, not a
+universal event system. Runtime attachment construction order is still not joined
+to authored GMS attachment order, so post-load command registration order remains
+open. A complete player cannot yet be claimed from these dispatch observations.
