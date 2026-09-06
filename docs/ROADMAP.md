@@ -186,6 +186,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   ancestor updates, preserving no-expansion stops and existing sibling bounds.
 - [x] Bind reviewed concrete intro owner opt-outs and privately verify complete
   root child membership plus deferred two-ancestor updates using owned resources.
+- [x] Retain owning first-cut source, picture and texture resources in normal
+  CPU startup preparation, with checked joins and a pre-decode memory budget.
+  This prepares data without claiming lifecycle admission or intro rendering.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

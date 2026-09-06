@@ -167,6 +167,9 @@ public:
         std::size_t directory_index
     ) const;
     void validate_buf(std::span<const std::byte> bytes) const;
+    // Borrowed from this owning image; checked independently of component payload.
+    [[nodiscard]] std::string_view attachment_identifier(
+        std::size_t directory_index, std::size_t attachment_index) const;
     // Restricted supported-intro forms; caller establishes archive provenance.
     // Values remain authored data, not runtime events, clock units or defaults.
     [[nodiscard]] GmsIntroFirstCutSource intro_first_cut_source(std::size_t index) const;

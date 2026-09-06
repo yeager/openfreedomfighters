@@ -1,5 +1,42 @@
 # Intro bootstrap evidence and implementation gates
 
+## Owning first-cut preparation in normal startup
+
+Normal graphical startup now retains `graphics::IntroPreparedResources` from the
+verified installation's exact `Scenes/FF-Intro.ZIP`, alongside the separate
+startup UI resources. Preparation runs in the existing CPU preflight worker;
+archive or resource failures use the existing error popup over the project splash.
+The headless `--verify-only` path remains installation verification, and the
+explicit diagnostic-scene path does not prepare this intro resource set.
+
+The loader requires unique GMS/BUF/PRM/TEX archive members. It finds the unique
+movie-controller attachment by its checked identifier before parsing its guarded
+payload: a malformed matching controller is an error, not a skipped candidate.
+It validates the paired BUF and follows authored source references to the ordered
+cut/group lists, first cut, subordinate member, camera, legal picture and command
+fade targets. Source indices are discovered from these joins, not retail directory
+constants. Unsupported first-cut shapes are rejected instead of substituted.
+
+The returned object owns its GMS, BUF, decoded source records, picture descriptors,
+groups, paired material identities, texture bindings and unique decoded mip-zero
+images. Raw reference ordering and aliases are preserved; picture deduplication
+uses source identity and image deduplication uses the paired catalog index. All
+referenced image extents count toward an explicit native 64 MiB aggregate budget
+before any image is decoded. Later cuts and other source references remain source
+data, not invented runtime objects. Mutable material aliasing still belongs to
+the eventual runtime owner layer, not this immutable preparation object.
+
+This is preparation, not scene initialization or playback. It executes no
+component phases, commands, fades, camera enabling, clocks or GPU draw plan, and
+does not reinterpret the three-second project splash as the original intro.
+Private verification checks the retained descriptors and decoded pixels against
+the real owned archive without publishing retail data or expected vectors.
+The complete 52-executable local CTest suite passes, including independent
+builder/ZIP fixtures for ownership, aliases, nullable references, malformed joins,
+missing/duplicate members and the memory budget. Targeted GCC and ASan/UBSan
+checks pass. A bounded normal-startup smoke test with owned Steam data reaches
+SDL GPU/Vulkan and exits successfully; it is not evidence of intro playback.
+
 ## First-cut legal picture resources
 
 `GmsImage::intro_legal_picture_source` now reads the separately reviewed

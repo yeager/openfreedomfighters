@@ -41,8 +41,9 @@ also have post-callback state writes. These facts do not justify transactional,
 deferred or non-reentrant behavior without further evidence.
 
 Command insertion is not a proven stable sort: the observed ordered container
-places equal keys before its selected equal candidate, while actual lifecycle
-registration order remains unresolved. Parsed attachment order must be preserved
+places equal keys before its selected equal candidate. The ordinary global
+initializer traverses reverse component-construction order, subject to runtime
+eligibility and surrounding hooks. Parsed attachment order must be preserved
 as data, but must not automatically become a claimed execution order. Complete
 cursor behavior, admission branches, callback delivery and resource
 activation still block a faithful complete player. No 60 Hz queue or splash timer
@@ -82,11 +83,16 @@ proof that original callbacks never mutate or recurse. If a visitor throws, the
 selected command remains current for a later retry and successful earlier
 callbacks remain consumed. External callback effects are not rolled back.
 
-The separately reviewed successful, live and unmutated phase-one/phase-two
-lifecycle path registers commands once in authored attachment order. This permits
-a conditional owned-data trace through the pass, but actual startup entry into
-that lifecycle path remains unproved. An explicit test-clock trace is not an
-original runtime capture or a playable intro.
+The separately reviewed successful, live and unmutated per-owner lifecycle path
+registers commands once in authored attachment order. Its owned-data trace is
+conditional and is not the ordinary global startup schedule. The global
+initializer instead finishes a reverse-construction-order phase-one pass before
+starting a separate reverse-construction-order phase-two pass. Each traversal
+saves the previous registry link before invoking callbacks. Eligible command
+components therefore register in reverse construction order on that route;
+surrounding owner hooks, runtime hide flags and component retirement still need
+to be joined before asserting the actual startup trace. An explicit test-clock
+trace is not an original runtime capture or a playable intro.
 Private verification follows the decoded controller, lists, first cut and
 subordinate resource, runs explicit test positions through the command pass, and
 compares all conditional visitor indices, event names, target identities and

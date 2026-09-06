@@ -849,6 +849,22 @@ std::optional<std::string> GmsImage::authored_event_identifier(std::uint32_t raw
     return result;
 }
 
+std::string_view GmsImage::attachment_identifier(
+    std::size_t directory_index, std::size_t attachment_index) const {
+    if (directory_index >= directory_.size() ||
+        attachment_index >= directory_[directory_index].attachments.size())
+        throw std::runtime_error("GMS attachment identifier index is out of range");
+    const auto bytes = resource_.payload();
+    const auto offset = directory_[directory_index].attachments[attachment_index].source_offset;
+    if (offset >= bytes.size())
+        throw std::runtime_error("GMS attachment identifier is out of range");
+    auto end = static_cast<std::size_t>(offset);
+    while (end < bytes.size() && bytes[end] != std::byte{0}) ++end;
+    if (end == bytes.size())
+        throw std::runtime_error("GMS attachment identifier is unterminated");
+    return {reinterpret_cast<const char *>(bytes.data() + offset), end - offset};
+}
+
 GmsIntroMovieControllerSource GmsImage::intro_movie_controller_source(
     std::size_t directory_index
 ) const {
