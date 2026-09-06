@@ -1,5 +1,6 @@
 #include "off/data/install.hpp"
 #include "off/graphics/intro_prepared_resources.hpp"
+#include "off/graphics/fresh_intro_camera.hpp"
 #include "off/graphics/scene_gpu_plan.hpp"
 #include "off/graphics/scene_render.hpp"
 #include "off/graphics/startup_graphics_asset.hpp"
@@ -113,6 +114,7 @@ int main(int argc, char **argv) {
   std::optional<off::graphics::SceneRenderAsset> startup_ui_scene_resources;
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
   std::optional<off::graphics::IntroPreparedResources> intro_resources;
+  std::optional<off::graphics::FreshIntroCamera> intro_camera;
   off::ui::RetailUiFontSet ui_fonts;
   off::ui::RetailUiTextureSet ui_textures;
   off::platform::StartupWindow startup_window;
@@ -130,6 +132,9 @@ int main(int argc, char **argv) {
         // manufacturing lifecycle state. Keep ownership through the runtime.
         intro_resources.emplace(off::graphics::load_intro_prepared_resources(
             data_path / "Scenes" / "FF-Intro.ZIP"));
+        // Fresh CPU state only. Renderer registration and window initialization
+        // remain separate; an enabled bit alone does not admit a draw.
+        intro_camera.emplace(intro_resources->camera());
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -174,6 +179,8 @@ int main(int argc, char **argv) {
               << intro_resources->pictures().size() << " pictures, "
               << intro_resources->images().size()
               << " images; lifecycle and rendering not activated.\n";
+  if (intro_camera)
+    std::cout << "Fresh intro camera CPU state constructed; renderer registration pending.\n";
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       startup_window, mode, scene ? &*scene : nullptr, *startup_graphics,
       ui_fonts, ui_textures,

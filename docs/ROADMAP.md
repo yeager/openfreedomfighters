@@ -191,6 +191,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   This prepares data without claiming lifecycle admission or intro rendering.
 - [x] Decode the first-cut window source through the camera's authored parent
   and validate its reciprocal camera reference without parsing unrelated windows.
+- [x] Construct the fresh intro camera's reviewed CPU fields with one canonical
+  runtime flag word; keep window effects and renderer registration separate.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

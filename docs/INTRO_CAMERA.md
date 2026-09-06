@@ -164,8 +164,8 @@ without rolling back effects already performed by the renderer hook.
 
 This is not a camera-selection or registration operation. Although recovered
 construction sets the enabled bit, copying and subsequent lifecycle operations
-can change runtime flags. No complete constructor flag word or actual first-frame
-enabled state is inferred here. Actual scene-property population and the resulting
+can change runtime flags. This transition helper accepts an explicit flag word;
+fresh construction is covered below. Actual scene-property population and the resulting
 first-cut query value, plus application admission, remain separate proof obligations.
 
 All 45 local CTest executables pass after this addition. The enable-transition
@@ -201,3 +201,32 @@ GMS/BUF payloads, and a fresh property store is empty. Neither observation prove
 the runtime query result: generic insertion, copying/restoration and intervening
 lifecycle activity still require tracing. Thus these findings narrow the actual
 startup path but do not yet establish an unconditional first-frame enabled state.
+
+## Fresh camera state
+
+Normal startup now constructs and retains a `FreshIntroCamera` after loading the
+first-cut source. It uses the existing mode-zero conversion for camera parameters
+and owns one mutable flag word through `CameraEnabledState`.
+
+The concrete constructor sets the complete flag word to `0x20`. The restricted
+source reader adds `0x80000` when option A is zero and `0x10000` when option B is
+nonzero. The final authored boolean is a separate field, not an enable switch.
+Noncanonical truth words are preserved and tested as zero/nonzero.
+
+Render-control starts at zero and the associated target handle starts null.
+That handle is not the camera's separate scene-root owner pointer, which this
+class does not represent. Enable changes use the same flag storage returned by
+the runtime queries; there is no detached copy to become stale.
+
+This constructor only covers the supported fresh source path. It cannot reset
+an existing camera, and rejects the unsupported renderer-selector and aspect
+branches through the checked converter. Window initialization, renderer
+registration and frame admission are still separate work. No draw is scheduled
+just because construction leaves the enabled bit set.
+
+The owned-data probe checks these fresh fields before using the same instance's
+converted parameters. Independent tests cover flag combinations, raw truth words,
+source ownership, enable notifications and rejected inputs. All 53 local CTest
+executables pass. Targeted GCC and ASan/UBSan checks for this class also pass.
+Normal startup with the owned installation also passes the bounded Vulkan smoke
+test; this does not verify a rendered intro frame.
