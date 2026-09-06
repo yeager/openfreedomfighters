@@ -53,12 +53,13 @@ already-consumed clear guard. The caller must abort the failed frame. Missing
 hooks, unsupported inputs and reentry reject before additional effects as
 native safety policy. Hooks must preserve referenced lifetimes and state.
 
-Normal startup still needs camera/view admission, packed-key transition dispatch,
-the actual renderer-completion frame counter, shared draw-pass reset and a GPU
-executor for viewport-bounded clearing and picture submission. A new engine's
-frame word starts at one, but earlier qualifying renderer invocations can
-advance it before the intro; this adapter accepts the current word rather than
-hardcoding a first-frame value.
+Normal startup still needs camera/view admission and a picture GPU executor.
+The [ordered dispatcher](PICTURE_ORDERED_DRAW_LOOP.md),
+[shared reset](PICTURE_DRAW_RESET.md) and
+[renderer frame lifecycle](RENDERER_FRAME.md) are implemented components, not yet
+the complete startup coordinator. A new engine's frame word starts at one, but
+earlier qualifying renderer invocations can advance it before the intro; this
+adapter accepts the current word rather than hardcoding a first-frame value.
 
 The [SDL clear executor](SDL_PICTURE_CLEAR.md) now provides a separate bounded
 GPU operation for a clear request. Connecting it to normal admitted intro views
@@ -68,5 +69,5 @@ Public tests use independent inputs. Retail-source joins remain private and
 conditional on explicitly supplied pass/backend state, not measured admission.
 
 The private probe passes with the owned intro camera's real fractions, viewport
-and background. All 57 local CTest executables pass; the transition test also
-passes under ASan/UBSan. This verifies the CPU-to-hook contract, not GPU output.
+and background. The transition tests verify the CPU-to-hook contract; GPU clear
+verification and its tested formats are described in the SDL clear executor page.

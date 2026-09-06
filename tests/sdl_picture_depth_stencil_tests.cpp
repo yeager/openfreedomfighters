@@ -1,5 +1,6 @@
 #include "sdl_gpu_witness.hpp"
 #include "off/platform/sdl_picture_clear.hpp"
+#include "off/graphics/renderer_frame.hpp"
 
 #include <array>
 #include <cstdint>
@@ -204,20 +205,41 @@ int run(SDL_GPUTextureFormat depth_format, const char* label) {
       view.run(frame, camera, flags, 0, {r.x, r.y, r.x + r.width, r.y + r.height},
                1, true, activity, fog, view_hooks);
     };
-    transition(17, 0, a);
-    transition(17, 0, b);
+    off::graphics::RendererFrameClock clock;
+    off::graphics::RendererFrame renderer;
+    unsigned completions = 0;
+    off::graphics::RendererFrameLifecycleHooks frame_hooks{
+      [] { return true; },
+      [&] { transition(clock.value(), 0, a); transition(clock.value(), 0, b); },
+      [] {}, [] {}, [&] { ++completions; }};
+    require(renderer.run(clock, false, true, frame_hooks) == off::graphics::RendererFrameOutcome::skipped &&
+            clock.value() == 1 && clears == 0 && completions == 0,
+            "stopped engine must not enter renderer or advance its clock");
+    require(renderer.run(clock, true, true, frame_hooks) == off::graphics::RendererFrameOutcome::rendered,
+            "explicit device admission must execute the renderer");
     probe("same-frame second viewport does not clear depth again", true, 1, false, 0, in_a);
     probe("same-frame second viewport does not clear stencil again", false, 0, true, 0, in_a);
+    frame_hooks.admit_device_scene = [] { return false; };
+    require(renderer.run(clock, true, true, frame_hooks) == off::graphics::RendererFrameOutcome::admission_failed &&
+            clock.value() == 3 && clears == 1 && activity == 1 && completions == 2,
+            "failed admission completes and advances without touching the view");
+    probe("failed renderer admission preserves depth", true, 1, false, 0, in_a);
     gpu.acquire();
-    transition(18, 0x8000U, b);
-    transition(18, 0, b);
+    frame_hooks.admit_device_scene = [] { return true; };
+    frame_hooks.backend_traversal = [&] {
+      transition(clock.value(), 0x8000U, b); transition(clock.value(), 0, b);
+    };
+    (void)renderer.run(clock, true, true, frame_hooks);
     probe("suppressed guard remains consumed after flag removal", true, 1, false, 0, in_a);
-    gpu.acquire(); transition(19, 0, b);
+    gpu.acquire();
+    frame_hooks.backend_traversal = [&] { transition(clock.value(), 0, b); };
+    (void)renderer.run(clock, true, true, frame_hooks);
     const auto either = [](Uint32 x, Uint32 y) { return inside(x, y, a) || inside(x, y, b); };
     probe("next frame clears new viewport depth while preserving first", true, 1, false, 0, either);
     probe("next frame clears new viewport stencil while preserving first", false, 0, true, 0, either);
-    require(clears == 2 && activity == 19 && view.last_clear_frame() == 19,
-            "CPU view guard must govern actual GPU clear calls");
+    require(clears == 2 && activity == 4 && view.last_clear_frame() == 4 &&
+            clock.value() == 5 && completions == 4,
+            "renderer clock and CPU view guard must govern actual GPU clear calls");
     require(SDL_WaitForGPUIdle(gpu.device), "complete witness GPU work before teardown");
     std::cout << "Completed " << probes << " color-readback depth/stencil probes for " << label << '\n';
     return failures == 0 ? 0 : 1;

@@ -215,6 +215,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Verify bounded depth/stencil clears with independent GPU equality probes
   on D24S8 and D32S8, including the per-view frame guard connected to GPU clears.
   Normal intro integration remains open.
+- [x] Implement the shared renderer frame counter and gated completion sequence,
+  including failed device admission. Actual startup must supply its renderer
+  history and backend operations; the first intro frame is not hardcoded.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

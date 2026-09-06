@@ -17,6 +17,7 @@
 - [Ordered picture dispatch](PICTURE_ORDERED_DRAW_LOOP.md)
 - [Picture draw reset](PICTURE_DRAW_RESET.md)
 - [Picture view transitions](PICTURE_VIEW_TRANSITION.md)
+- [Renderer frame lifecycle](RENDERER_FRAME.md)
 - [Viewport-bounded GPU clear](SDL_PICTURE_CLEAR.md)
 - [Picture projection](PICTURE_PROJECTION.md)
 - [Picture submission cache](PICTURE_SUBMISSION_CACHE.md)
