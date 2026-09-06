@@ -72,6 +72,20 @@ invocation does not prove that every target hook completes all side effects
 immediately or that no other route schedules work.
 
 This establishes synchronous invocation on the traced shared route, not a
-universal event system. Runtime attachment construction order is still not joined
-to authored GMS attachment order, so post-load command registration order remains
-open. A complete player cannot yet be claimed from these dispatch observations.
+universal event system. Post-load command registration order still depends on
+phase invocation and eligibility. A complete player cannot yet be claimed from
+these dispatch observations.
+
+## Construction and deferred payload order
+
+The reviewed successful-construction path visits the authored attachment table
+from first to last and creates each component through an append operation. It
+does not sort by component name or scheduled command time. A later loader pass
+consumes the object's base payload, then the component payloads in that same
+runtime attachment order. The first-cut sequence component and its command
+components therefore retain their authored construction/deserialization order.
+
+This does not prove every component was successfully created or eligible for its
+post-load callback. Command registration occurs in a later lifecycle phase;
+the scheduler's invocation of that phase, first-cut admission and component guards
+must still be joined to this ordering before asserting an actual execution trace.
