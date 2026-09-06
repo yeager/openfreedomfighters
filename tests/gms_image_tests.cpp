@@ -294,6 +294,62 @@ std::vector<std::byte> cut_fixture(bool first, std::string_view name = "") {
     return bytes;
 }
 
+void intro_window_tests() {
+    const auto fixture = [] {
+        auto bytes = intro_controller_fixture();
+        set_u32(bytes, 9 + 336 + 16, 0x00100030U);
+        set_u32(bytes, 9 + 336 + 20, 0U);
+        // Every group-family directory occurrence advances the pool ordinal,
+        // including both references to this window record without child flags.
+        bytes.resize(1289U); set_u32(bytes, 0, 1280U); set_u32(bytes, 4, 1289U);
+        set_u32(bytes, 9 + 20, 704U); set_u32(bytes, 9 + 704, 4U);
+        set_u32(bytes, 9 + 708, 2U); set_u32(bytes, 9 + 804, 1U);
+        std::vector<std::byte> block(4);
+        const auto scalar = [&](std::uint8_t tag, std::uint32_t value) {
+            block.push_back(static_cast<std::byte>(tag)); append_u32(block, value);
+        };
+        scalar(3, 0xfedcba98U); scalar(2, 0x80000000U); scalar(3, 7); scalar(3, 0xffffffffU); scalar(3, 23);
+        block.push_back(std::byte{6}); block.push_back(std::byte{6});
+        scalar(0x88, 0x80000003U); scalar(0x88, 0); scalar(0x88, 0xffffffffU);
+        scalar(0x83, 11); scalar(0x83, 0); scalar(3, 0x87654321U);
+        block.push_back(std::byte{6}); block.push_back(std::byte{0xff});
+        set_u32(block, 0, static_cast<std::uint32_t>(block.size()));
+        std::copy(block.begin(), block.end(), bytes.begin() + 609);
+        return bytes;
+    };
+    const auto parse = [](auto bytes) { return off::data::GmsImage::parse(off::data::PackedResource::parse(std::move(bytes))); };
+    const auto decoded = parse(fixture()).intro_window_source(1);
+    check(decoded.base_integer_a == 0xfedcba98U && decoded.base_integer_b == 23 &&
+          std::bit_cast<std::uint32_t>(decoded.base_scalar) == 0x80000000U &&
+          decoded.base_flag_a == 7 && decoded.base_flag_b == 0xffffffffU &&
+          decoded.selected_camera_reference == 0x80000003U &&
+          decoded.opaque_references == std::array<std::uint32_t, 2>{0, 0xffffffffU} &&
+          decoded.options == std::array<std::uint32_t, 3>{11, 0, 0x87654321U},
+          "window decoder preserves all raw words, references, truth values and signed zero");
+    const auto reject_mutation = [&](auto mutate) {
+        auto bad = fixture(); mutate(bad);
+        check_rejected([&] { static_cast<void>(parse(bad).intro_window_source(1)); }, "malformed window source rejects");
+    };
+    for (std::uint32_t length = 0; length < 63; ++length)
+        reject_mutation([&](auto& b) { set_u32(b, 609, length); });
+    reject_mutation([](auto& b) { set_u32(b, 609, 64); });
+    reject_mutation([](auto& b) { set_u32(b, 609, 0x0100003fU); });
+    constexpr std::array<std::size_t, 15> tags{4,9,14,19,24,29,30,31,36,41,46,51,56,61,62};
+    for (auto tag : tags) reject_mutation([&](auto& b) { b[609 + tag] ^= std::byte{0x40}; });
+    for (auto nonfinite : {0x7f800000U, 0xff800000U, 0x7fc00000U})
+        reject_mutation([&](auto& b) { set_u32(b, 619, nonfinite); });
+    reject_mutation([](auto& b) { set_u32(b, 9 + 336 + 12, 1); });
+    reject_mutation([](auto& b) { set_u32(b, 9 + 336 + 16, 0x00100000U); });
+    reject_mutation([](auto& b) { set_u32(b, 9 + 336 + 20, 512); });
+    reject_mutation([](auto& b) { set_u32(b, 9 + 336 + 32, 0); });
+    reject_mutation([](auto& b) { set_u32(b, 9 + 336 + 32, 1022); });
+    auto finite = fixture(); set_f32(finite, 619, -17.25F);
+    check(parse(finite).intro_window_source(1).base_scalar == -17.25F, "window raw scalar is finite, not positive-only");
+    check_rejected([&] { static_cast<void>(parse(fixture()).intro_window_source(3)); }, "window index checked");
+    check_rejected([&] { static_cast<void>(parse(intro_controller_fixture()).intro_window_source(1)); }, "controller cannot impersonate window");
+    check_rejected([&] { static_cast<void>(parse(fixture()).intro_camera_source(1)); }, "window does not relax camera guard");
+}
+
 void cut_tests() {
     const auto parse = [](auto bytes) {
         return off::data::GmsImage::parse(off::data::PackedResource::parse(std::move(bytes)));
@@ -648,6 +704,7 @@ void intro_fade_picture_tests() {
 }  // namespace
 
 int main() {
+    intro_window_tests();
     intro_legal_picture_tests();
     intro_camera_tests();
     intro_fade_picture_tests();

@@ -189,6 +189,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Retain owning first-cut source, picture and texture resources in normal
   CPU startup preparation, with checked joins and a pre-decode memory budget.
   This prepares data without claiming lifecycle admission or intro rendering.
+- [x] Decode the first-cut window source through the camera's authored parent
+  and validate its reciprocal camera reference without parsing unrelated windows.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

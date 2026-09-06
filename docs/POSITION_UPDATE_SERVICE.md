@@ -49,10 +49,23 @@ operations. This explicit native failure policy avoids claiming an original
 rollback or valid retry after partial resolution and compaction.
 
 The default intro filename selects deferred rather than immediate mode in the
-reviewed scene constructor. Loading disables collection early and enables it near
-completion. That does not yet prove the first Center callback's placement relative
-to completion or exclude configuration overrides and intervening controls.
-These states therefore remain explicit until that lifecycle join is established.
+reviewed scene constructor. Ordinary loading disables collection early, then
+clears and enables it before the global component initializer. Global phase one
+finishes before phase two, both traversing reverse component-construction order.
+This establishes the queue boundary around those passes, not each component's
+runtime eligibility or the effects of intervening callbacks.
+
+With explicit entry suppression `S` and no callback counter mutations, ordinary
+loading increments before source construction, decrements before the initial
+root-bounds refresh and global initialization, then increments again before
+return. Thus initialization sees `S`, while successful load returns with `S+1`.
+Collection enablement does not justify a zero suppression input at the first
+update. Context suspension saves the old counter and resets the active counter;
+restoration copies it back, and cleanup has a decrement. Their actual call
+placement must be preserved rather than inventing an extra balancing operation.
+The root refresh requires exactly zero, unlike the service's nonpositive guard.
+Any future native counter implementation must define 32-bit wrapping or explicitly
+reject overflow; mathematical `S+1` is not permission for C++ signed overflow.
 
 The private owned-data probe connects the real legal picture's authored position
 through Center to this queue and checks its deferred processing order. Supplied

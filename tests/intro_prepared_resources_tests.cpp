@@ -75,7 +75,7 @@ Bytes first_cut() {
 }
 Bytes member() {
     Bytes b(4); scalar(b, 0x89, 28);
-    for (auto r : {1U, 4U, 0U, 2U, 0U, 0U}) word(b, r);
+    for (auto r : {9U, 4U, 0U, 2U, 0U, 0U}) word(b, r);
     b.push_back(std::byte{6}); floating(b, 2, 13); floating(b, 0x82, 217);
     scalar(b, 3, 1); b.push_back(std::byte{6}); finish(b); return b;
 }
@@ -96,27 +96,39 @@ Bytes picture(bool legal) {
     b.push_back(std::byte{6}); scalar(b, 3, 16);
     b.push_back(std::byte{6}); b.push_back(std::byte{6}); finish(b); return b;
 }
+Bytes window() {
+    Bytes b(4); scalar(b, 3, 19); floating(b, 2, -0.0F);
+    scalar(b, 3, 7); scalar(b, 3, 9); scalar(b, 3, 23);
+    b.push_back(std::byte{6}); b.push_back(std::byte{6});
+    scalar(b, 0x88, 9); scalar(b, 0x88, 0); scalar(b, 0x88, 2);
+    scalar(b, 0x83, 5); scalar(b, 0x83, 6); scalar(b, 3, 7);
+    b.push_back(std::byte{6}); finish(b); return b;
+}
 struct Fixture {
     Bytes payload, names, prm, tex;
-    std::array<std::size_t, 8> block_offsets{};
-    std::array<std::size_t, 8> attachment_offsets{};
+    std::array<std::size_t, 9> block_offsets{};
+    std::array<std::size_t, 9> attachment_offsets{};
     Fixture() : payload(1024) {
         // Deliberately permuted directory roles; no retail source indices.
-        set(payload, 0, 32); set(payload, 4, 128); set(payload, 12, 4); set(payload, 20, 256);
-        set(payload, 32, 8); set(payload, 128, 1); set(payload, 132, 144);
+        set(payload, 0, 32); set(payload, 4, 128); set(payload, 12, 4); set(payload, 20, 176);
+        set(payload, 32, 9); set(payload, 128, 1); set(payload, 132, 144);
         const std::string_view event = "IndependentEvent";
         for (std::size_t i = 0; i < event.size(); ++i) payload[144 + i] = static_cast<std::byte>(event[i]);
-        set(payload, 256, 1); set(payload, 260 + 4, 2); set(payload, 260 + 12, 6);
+        set(payload, 176, 2); set(payload, 180, 1); set(payload, 280, 2); set(payload, 288, 6);
         constexpr std::array<float, 9> basis{0, 0, 1, 0, 1, 0, 1, 0, 0};
         for (std::size_t i = 0; i < basis.size(); ++i) set(payload, 384 + i * 4, std::bit_cast<std::uint32_t>(basis[i]));
-        constexpr std::array<std::uint32_t, 8> types{0x00400003, 0x00200046, 0x0800001a, 0x00200046,
-                                                     0x0800001a, 0x0800001a, 0x0800001a, 0x0800001a};
+        constexpr std::array<std::uint32_t, 9> types{0x00400003, 0x00200046, 0x0800001a, 0x00200046,
+                                                     0x0800001a, 0x0800001a, 0x0800001a, 0x0800001a, 0x00100030};
         for (std::size_t i = 0; i < types.size(); ++i) {
             const auto record = 512 + 48 * i;
             set(payload, 36 + 8 * i, static_cast<std::uint32_t>(record / 4));
             set(payload, record, static_cast<std::uint32_t>(names.size())); text(names, "FixtureNode" + std::to_string(i));
             set(payload, record + 4, 384); set(payload, record + 8, 420); set(payload, record + 16, types[i]);
         }
+        // Only directory order is swapped: the window precedes and parents the
+        // camera, while all other role indices retain their independent values.
+        set(payload, 36, (1U << 24U) | static_cast<std::uint32_t>((512 + 48 * 8) / 4));
+        set(payload, 36 + 8 * 8, 512U / 4U);
         const auto attach = [&](std::size_t node, const std::vector<std::pair<std::string_view, float>>& entries) {
             const auto start = payload.size(); attachment_offsets[node] = start;
             set(payload, 512 + 48 * node + 20, static_cast<std::uint32_t>(start));
@@ -132,7 +144,7 @@ struct Fixture {
         attach(7, {{"ZLIST_CutSequenceList", 0}, {"ZLIST_CutSequenceCommand", 1},
                    {"ZLIST_CutSequenceCommand", 1}, {"ZLIST_CutSequenceCommand", 1},
                    {"ZLIST_CutSequenceCommand", 1}, {"ZLIST_CutSequenceCommand", 1}});
-        const std::array<Bytes, 8> blocks{camera(), picture(false), controller(), picture(true), member(), list({8, 8}), list({4, 2, 4}), first_cut()};
+        const std::array<Bytes, 9> blocks{camera(), picture(false), controller(), picture(true), member(), list({8, 8}), list({4, 2, 4}), first_cut(), window()};
         for (std::size_t i = 0; i < blocks.size(); ++i) {
             block_offsets[i] = payload.size(); set(payload, 512 + 48 * i + 32, static_cast<std::uint32_t>(payload.size()));
             payload.insert(payload.end(), blocks[i].begin(), blocks[i].end());
@@ -207,8 +219,11 @@ int main() {
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
     Fixture fixture;
     auto asset = fixture.build();
-    check(asset.controller_index() == 2 && asset.first_cut_index() == 7 && asset.member_index() == 4 && asset.camera_index() == 0,
+    check(asset.controller_index() == 2 && asset.first_cut_index() == 7 && asset.member_index() == 4 && asset.camera_index() == 8,
           "preparation follows authored directory references rather than fixed retail indices or pool slots");
+    check(asset.window_index() == 0 && asset.window().selected_camera_reference == 9 &&
+          asset.window().options == std::array<std::uint32_t, 3>{5, 6, 7},
+          "matching window is joined by selected authored camera and retains unnormalized options");
     check(std::vector<std::uint32_t>(asset.cut_references().begin(), asset.cut_references().end()) == std::vector<std::uint32_t>{8, 8} &&
           std::vector<std::uint32_t>(asset.group_references().begin(), asset.group_references().end()) == std::vector<std::uint32_t>{4, 2, 4},
           "ordered raw lists preserve duplicate references");
@@ -227,7 +242,7 @@ int main() {
               "preparation retains attachment command order without choosing lifecycle registration order");
     auto owned = [] { Fixture local; return local.build(); }();
     auto moved = std::move(owned);
-    check(moved.sources().directory().size() == 8 && !moved.source_names().empty() &&
+    check(moved.sources().directory().size() == 9 && moved.window_index() == 0 && !moved.source_names().empty() &&
           moved.images()[0].mip_zero.pixels[0] == 0x5aU &&
           moved.pictures()[1].picture.descriptors()[0].local_z == 9,
           "prepared resources own all required data after temporary sources are destroyed and object moved");
@@ -251,9 +266,41 @@ int main() {
     mutate_rejects([](auto& f) { set(f.payload, f.block_offsets[4] + 13, 2); });
     mutate_rejects([](auto& f) { f.prm.resize(32); });
     mutate_rejects([](auto& f) { set(f.prm, 80, 2049); });
+    mutate_rejects([](auto& f) { set(f.payload, 512 + 48 * 8 + 16, 0x00100000U); });
+    mutate_rejects([](auto& f) { set(f.payload, f.block_offsets[8] + 32, 2); });
+    mutate_rejects([](auto& f) { set(f.payload, f.block_offsets[8] + 32, 0); });
+    mutate_rejects([](auto& f) { f.payload[f.block_offsets[8] + 4] = std::byte{0x83}; });
+    mutate_rejects([](auto& f) { set(f.payload, f.block_offsets[8] + 37, 99); });
+    mutate_rejects([](auto& f) { set(f.payload, f.block_offsets[8] + 42, 99); });
+    mutate_rejects([](auto& f) {
+        // Leave the camera outside the window's child pool while retaining
+        // valid pool counts: the supported authored parent link is absent.
+        set(f.payload, 36 + 8 * 8, (1U << 25U) | (512U / 4U));
+        set(f.payload, 180 + 12, 1); set(f.payload, 288, 5);
+    });
+    {
+        auto unrelated = fixture;
+        set(unrelated.payload, 32, 10);
+        while (unrelated.payload.size() % 4 != 0) unrelated.payload.push_back(std::byte{0});
+        const auto pools = unrelated.payload.size();
+        unrelated.payload.resize(pools + 4 + 3 * 96);
+        set(unrelated.payload, 20, static_cast<std::uint32_t>(pools));
+        set(unrelated.payload, pools, 3); set(unrelated.payload, pools + 4, 1);
+        set(unrelated.payload, pools + 100, 1); set(unrelated.payload, pools + 104, 2);
+        set(unrelated.payload, pools + 112, 6);
+        std::copy_n(unrelated.payload.begin() + 512 + 48 * 8, 48,
+                    unrelated.payload.begin() + 512 + 48 * 9);
+        set(unrelated.payload, 36 + 8 * 9, static_cast<std::uint32_t>((512 + 48 * 9) / 4));
+        // An unrelated same-family variant is deliberately outside the strict
+        // window schema. It must not be decoded while following the camera parent.
+        set(unrelated.payload, 512 + 48 * 9 + 20,
+            static_cast<std::uint32_t>(unrelated.attachment_offsets[1]));
+        check(unrelated.build().window_index() == 0,
+              "unrelated window variants do not invalidate the selected camera-parent pair");
+    }
     const auto image = fixture.image();
     check(image.attachment_identifier(2, 0) == "ZGEOM_MovieControl", "checked attachment identity accessor");
-    rejects([&] { (void)image.attachment_identifier(8, 0); });
+    rejects([&] { (void)image.attachment_identifier(9, 0); });
     rejects([&] { (void)image.attachment_identifier(0, 0); });
     {
         auto unterminated = fixture;

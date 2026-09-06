@@ -37,6 +37,32 @@ missing/duplicate members and the memory budget. Targeted GCC and ASan/UBSan
 checks pass. A bounded normal-startup smoke test with owned Steam data reaches
 SDL GPU/Vulkan and exits successfully; it is not evidence of intro playback.
 
+## Window and camera source join
+
+Preparation follows the first-cut camera's authored parent to its window and
+checks that the window's selected-camera reference points back to that camera.
+Other windows in the archive can use different formats; they remain unparsed
+source records rather than causing an unrelated first-cut failure.
+
+The selected window reader accepts the reviewed complete 63-byte tagged layout.
+It preserves the base scalar, integer and truth words, three references and three
+window options. The reader rejects nonfinite scalars, wrong tags and missing
+fields. Preparation separately validates authored references. Broader optional-field
+variants are not supported by this reader.
+
+This authored window is not the engine's separately created scene root. Original
+loading reaches its initialization hook through an additional-owner list built
+from GMS construction order. The hook changes window-owner flags and camera state;
+those are distinct from the resource flags used for component eligibility. Reading
+the source does not execute that hook, register the camera or change its enabled
+state.
+
+The source join passes private checks against the owned archive and the normal
+SDL/Vulkan startup smoke test. Independent tests cover malformed tags, truncated
+blocks, raw truth words, missing parents, wrong camera references and unrelated
+window variants. All 52 CTest executables pass, as do the targeted GCC and
+ASan/UBSan checks. None of these tests establishes intro playback.
+
 ## First-cut legal picture resources
 
 `GmsImage::intro_legal_picture_source` now reads the separately reviewed

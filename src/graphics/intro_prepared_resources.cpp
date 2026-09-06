@@ -104,6 +104,18 @@ IntroPreparedResources build_intro_prepared_resources(
   result.camera_index_ = required_source(gms, result.member_.references[0]);
   result.camera_ = gms.intro_camera_source(result.camera_index_);
 
+  // Supported first-cut shape: the camera is an authored child of its window.
+  // Other scene windows have different grammars and remain unprepared sources.
+  const auto selected_window = gms.hierarchy().at(result.camera_index_).parent_directory_index;
+  if (!selected_window)
+    throw std::runtime_error("intro first-cut camera has no authored window parent");
+  result.window_index_ = *selected_window;
+  result.window_ = gms.intro_window_source(*selected_window);
+  for (const auto reference : result.window_.opaque_references)
+    validate_reference(reference);
+  if (required_source(gms, result.window_.selected_camera_reference) != result.camera_index_)
+    throw std::runtime_error("intro window does not select its first-cut camera child");
+
   const auto add_picture = [&](std::size_t index, bool legal) {
     // Check the requested grammar even on aliases: a fade target cannot
     // silently reuse a legal picture merely because it was already prepared.

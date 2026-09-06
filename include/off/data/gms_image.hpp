@@ -55,6 +55,18 @@ struct GmsIntroCameraSource {
     std::uint32_t final_boolean{0};
 };
 
+struct GmsIntroWindowSource {
+    std::uint32_t base_integer_a{0};
+    float base_scalar{0};
+    std::uint32_t base_flag_a{0};
+    std::uint32_t base_flag_b{0};
+    std::uint32_t base_integer_b{0};
+    std::uint32_t selected_camera_reference{0};
+    std::array<std::uint32_t, 2> opaque_references{};
+    // Raw authored truth words, not normalized booleans or runtime flags.
+    std::array<std::uint32_t, 3> options{};
+};
+
 struct GmsIntroCutCommandSource {
     std::uint32_t timeline_position{0};
     std::uint32_t event_reference{0};
@@ -150,6 +162,9 @@ public:
     // Supported intro provenance and exact camera grammar only. Authored fields,
     // not runtime camera state: no near clamp, angle conversion or viewport policy.
     [[nodiscard]] GmsIntroCameraSource intro_camera_source(std::size_t directory_index) const;
+    // Supported intro full-tag window form only; no owner initialization,
+    // property insertion, camera registration or enable/disable side effects.
+    [[nodiscard]] GmsIntroWindowSource intro_window_source(std::size_t directory_index) const;
     // Caller must establish supported intro provenance. This deliberately narrow
     // attachment grammar is not generic component dispatch or reference lookup.
     [[nodiscard]] GmsIntroMovieControllerSource intro_movie_controller_source(

@@ -73,6 +73,8 @@ public:
   [[nodiscard]] const data::GmsIntroCameraSource &camera() const noexcept {
     return camera_;
   }
+  [[nodiscard]] std::size_t window_index() const noexcept { return window_index_; }
+  [[nodiscard]] const data::GmsIntroWindowSource &window() const noexcept { return window_; }
   [[nodiscard]] const std::array<std::optional<std::string>, 5> &
   command_events() const noexcept {
     return events_;
@@ -95,12 +97,13 @@ private:
   data::GmsImage sources_;
   std::vector<std::byte> names_;
   std::size_t controller_index_{}, first_cut_index_{}, member_index_{},
-      camera_index_{};
+      camera_index_{}, window_index_{};
   data::GmsIntroMovieControllerSource controller_;
   std::vector<std::uint32_t> cuts_, groups_;
   data::GmsIntroFirstCutSource first_cut_;
   data::GmsIntroCutSequenceSource member_;
   data::GmsIntroCameraSource camera_;
+  data::GmsIntroWindowSource window_;
   std::array<std::optional<std::string>, 5> events_;
   std::vector<IntroPreparedPicture> pictures_;
   std::vector<IntroPreparedImage> images_;

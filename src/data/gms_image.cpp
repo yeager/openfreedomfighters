@@ -957,6 +957,52 @@ GmsIntroMovieControllerSource GmsImage::intro_movie_controller_source(
     return result;
 }
 
+GmsIntroWindowSource GmsImage::intro_window_source(std::size_t index) const {
+    const auto fail = []() {
+        throw std::runtime_error("GMS intro window source is unsupported or malformed");
+    };
+    if (index >= directory_.size()) fail();
+    const auto& entry = directory_[index];
+    if (entry.source_type != 0x00100030U || entry.class_data_value != 0U ||
+        !entry.attachments.empty() || entry.deferred_source_offset == 0U) fail();
+    const auto payload = resource_.payload();
+    const auto offset = static_cast<std::size_t>(entry.deferred_source_offset);
+    // This full-presence grammar has a fixed encoded length, not a retail value.
+    constexpr std::size_t encoded_size = 63U;
+    if (offset > payload.size() || encoded_size > payload.size() - offset) fail();
+    const ByteReader reader(payload);
+    if (reader.u32(offset) != encoded_size) fail();
+    const auto end = offset + encoded_size;
+    auto cursor = offset + 4U;
+    const auto tag = [&](std::uint8_t expected) {
+        if (cursor >= end || payload[cursor] != static_cast<std::byte>(expected)) fail();
+        ++cursor;
+    };
+    const auto word = [&](std::uint8_t expected) {
+        tag(expected);
+        if (4U > end - cursor) fail();
+        const auto value = reader.u32(cursor);
+        cursor += 4U;
+        return value;
+    };
+    GmsIntroWindowSource result;
+    result.base_integer_a = word(0x03U);
+    result.base_scalar = std::bit_cast<float>(word(0x02U));
+    if (!std::isfinite(result.base_scalar)) fail();
+    result.base_flag_a = word(0x03U);
+    result.base_flag_b = word(0x03U);
+    result.base_integer_b = word(0x03U);
+    tag(0x06U);
+    tag(0x06U);
+    result.selected_camera_reference = word(0x88U);
+    result.opaque_references = {word(0x88U), word(0x88U)};
+    result.options = {word(0x83U), word(0x83U), word(0x03U)};
+    tag(0x06U);
+    tag(0xffU);
+    if (cursor != end) fail();
+    return result;
+}
+
 GmsIntroCameraSource GmsImage::intro_camera_source(std::size_t index) const {
     const auto fail = []() -> void {
         throw std::runtime_error("GMS intro camera is unsupported or malformed");
