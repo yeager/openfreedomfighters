@@ -1,6 +1,7 @@
 #include "off/graphics/intro_prepared_resources.hpp"
 #include "off/graphics/intro_runtime.hpp"
 #include "off/data/packed_resource.hpp"
+#include "off/data/archive_vfs.hpp"
 
 #include <algorithm>
 #include <array>
@@ -106,22 +107,48 @@ Bytes window() {
     scalar(b, 0x83, 5); scalar(b, 0x83, 6); scalar(b, 3, 7);
     b.push_back(std::byte{6}); finish(b); return b;
 }
+Bytes sound_owner() {
+    Bytes b(4); scalar(b,0x83,5); scalar(b,0x8b,128);
+    for(float value:{271.F,272.F,-0.0F,7.F}) floating(b,2,value);
+    scalar(b,3,123); scalar(b,3,6); floating(b,2,66); floating(b,2,0.5F);
+    scalar(b,3,7); scalar(b,3,9); floating(b,2,-0.0F);
+    b.push_back(std::byte{6});
+    // Opaque placeholder groups: only the owner prefix is tested here.
+    for(int i=0;i<4;++i) b.push_back(std::byte{6});
+    finish(b); return b;
+}
+Bytes audio_header() {
+    Bytes b(16); set(b,8,3); set(b,12,4);
+    for(const auto global:{false,true}) {
+      const auto size=global?8U:2U;
+      for(const auto value:{6U,0U,global?0x80000001U:1U,22050U,16U,size,size,1U,
+                           global?7U:0U,size/2,2U,1U}) word(b,value);
+    }
+    word(b,0); word(b,0); set(b,0,static_cast<std::uint32_t>(b.size()-8));
+    set(b,4,static_cast<std::uint32_t>(b.size())); return b;
+}
+void save_fixture(const std::filesystem::path& path,const Bytes& bytes) {
+    std::ofstream file(path,std::ios::binary|std::ios::trunc);
+    file.write(reinterpret_cast<const char*>(bytes.data()),static_cast<std::streamsize>(bytes.size()));
+    if(!file) throw std::runtime_error("Cannot write independent audio fixture");
+}
 struct Fixture {
-    Bytes payload, names, prm, tex;
-    std::array<std::size_t, 9> block_offsets{};
-    std::array<std::size_t, 9> attachment_offsets{};
-    Fixture() : payload(1024) {
+    Bytes payload, names, prm, tex, snd;
+    std::array<std::size_t, 10> block_offsets{};
+    std::array<std::size_t, 10> attachment_offsets{};
+    explicit Fixture(bool include_sound=false) : payload(1024), snd(16) {
         // Deliberately permuted directory roles; no retail source indices.
         set(payload, 0, 32); set(payload, 4, 128); set(payload, 12, 4); set(payload, 20, 176);
-        set(payload, 32, 9); set(payload, 128, 1); set(payload, 132, 144);
+        set(payload, 32, include_sound?10:9); set(payload, 128, 1); set(payload, 132, 144);
         const std::string_view event = "IndependentEvent";
         for (std::size_t i = 0; i < event.size(); ++i) payload[144 + i] = static_cast<std::byte>(event[i]);
-        set(payload, 176, 2); set(payload, 180, 1); set(payload, 280, 2); set(payload, 288, 6);
+        set(payload, 176, 2); set(payload, 180, 1); set(payload, 280, 2); set(payload, 288, include_sound?7:6);
         constexpr std::array<float, 9> basis{0, 0, 1, 0, 1, 0, 1, 0, 0};
         for (std::size_t i = 0; i < basis.size(); ++i) set(payload, 384 + i * 4, std::bit_cast<std::uint32_t>(basis[i]));
-        constexpr std::array<std::uint32_t, 9> types{0x00400003, 0x00200046, 0x0800001a, 0x00200046,
-                                                     0x0800001a, 0x0800001a, 0x0800001a, 0x0800001a, 0x00100030};
-        for (std::size_t i = 0; i < types.size(); ++i) {
+        constexpr std::array<std::uint32_t, 10> types{0x00400003, 0x00200046, 0x0800001a, 0x00200046,
+                                                     0x0800001a, 0x0800001a, 0x0800001a, 0x0800001a, 0x00100030,0x00200012};
+        const std::size_t node_count=include_sound?10:9;
+        for (std::size_t i = 0; i < node_count; ++i) {
             const auto record = 512 + 48 * i;
             set(payload, 36 + 8 * i, static_cast<std::uint32_t>(record / 4));
             set(payload, record, static_cast<std::uint32_t>(names.size())); text(names, "FixtureNode" + std::to_string(i));
@@ -146,8 +173,10 @@ struct Fixture {
         attach(7, {{"ZLIST_CutSequenceList", 0}, {"ZLIST_CutSequenceCommand", 1},
                    {"ZLIST_CutSequenceCommand", 1}, {"ZLIST_CutSequenceCommand", 1},
                    {"ZLIST_CutSequenceCommand", 1}, {"ZLIST_CutSequenceCommand", 1}});
-        const std::array<Bytes, 9> blocks{camera(), picture(false), controller(), picture(true), member(), list({8, 8}), list({4, 2, 4}), first_cut(), window()};
-        for (std::size_t i = 0; i < blocks.size(); ++i) {
+        if(include_sound) attach(9,{{"ZSNDOBJ_SoundExtend",0},{"ZSNDOBJ_SoundNotify",0},
+                                  {"ZSNDOBJ_SoundSegment",1},{"ZGEOM_ZSetZDefine",0}});
+        const std::array<Bytes, 10> blocks{camera(), picture(false), controller(), picture(true), member(), list({8, 8}), list({4, 2, 4}), first_cut(), window(),sound_owner()};
+        for (std::size_t i = 0; i < node_count; ++i) {
             block_offsets[i] = payload.size(); set(payload, 512 + 48 * i + 32, static_cast<std::uint32_t>(payload.size()));
             payload.insert(payload.end(), blocks[i].begin(), blocks[i].end());
         }
@@ -162,6 +191,11 @@ struct Fixture {
         const auto end = tex.size(); tex.resize(end + 8192); set(tex, end, 16);
         const auto sequences = tex.size(); tex.resize(sequences + 8192);
         set(tex, 0, static_cast<std::uint32_t>(end)); set(tex, 4, static_cast<std::uint32_t>(sequences)); set(tex, 8, 3); set(tex, 12, 4);
+        if(include_sound) {
+            text(snd,"Independent/Sound.asset"); snd.resize(144);
+            set(snd,128,1); set(snd,132,16); set(snd,136,0x1234);
+            set(snd,140,std::bit_cast<std::uint32_t>(12.375F));
+        }
     }
     Bytes packed() const {
         Bytes packed; word(packed, static_cast<std::uint32_t>(payload.size()));
@@ -173,7 +207,7 @@ struct Fixture {
         return off::data::GmsImage::parse(off::data::PackedResource::parse(packed()));
     }
     off::graphics::IntroPreparedResources build(std::size_t budget = 16) const {
-        return off::graphics::build_intro_prepared_resources(image(), names, prm, off::data::TextureCatalog::parse(tex), budget);
+        return off::graphics::build_intro_prepared_resources(image(), names, prm, off::data::TextureCatalog::parse(tex), budget,snd);
     }
 };
 void halfword(Bytes& b, std::uint16_t value) {
@@ -220,6 +254,44 @@ int main() {
     using off::graphics::IntroPreparedResources;
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
     Fixture fixture;
+    {
+      Fixture sound_fixture(true);
+      const auto prepared=sound_fixture.build();
+      check(prepared.sounds().size()==1 && prepared.sound_bank()->size()==144,
+            "prepared intro owns complete sound bank and source-bound definition");
+      const auto& sound=prepared.sounds().front();
+      check(sound.directory_index==9 && sound.source.authored_type==5 &&
+            sound.source.sound_definition_reference==128 && sound.definition.definition_offset==128 &&
+            sound.definition.identifier_offset==16 && sound.definition.resource_link==0x1234 &&
+            sound.definition.logical_identifier=="Independent/Sound.asset" && sound.definition.duration==12.375F,
+            "SND offset, logical identifier, opaque link and authored duration retain distinct domains");
+      check(sound.source.cone_scalars[0]==271 && std::signbit(sound.source.cone_scalars[2]) &&
+            sound.source.legacy_integer==123 && sound.source.loop_option==6 &&
+            sound.source.gain_multiplier==66 && sound.source.pitch_scalar==0.5F &&
+            sound.source.category==7 && sound.source.enabled_option==9 &&
+            std::signbit(sound.source.final_scalar) &&
+            sound.source.component_groups_offset==sound_fixture.block_offsets[9]+70,
+            "owner prefix preserves raw fields and leaves component groups unread");
+      auto missing=sound_fixture; missing.snd.clear(); rejects([&] { (void)missing.build(); });
+      auto null_definition=sound_fixture; set(null_definition.payload,null_definition.block_offsets[9]+10,0);
+      rejects([&] { (void)null_definition.build(); });
+      auto wrong_domain=sound_fixture; set(wrong_domain.payload,wrong_domain.block_offsets[9]+10,9);
+      rejects([&] { (void)wrong_domain.build(); });
+      auto unsupported=sound_fixture; set(unsupported.snd,128,2); rejects([&] { (void)unsupported.build(); });
+      for(std::size_t field=0;field<13;++field) {
+        auto malformed=sound_fixture;
+        malformed.payload[malformed.block_offsets[9]+4+field*5]=std::byte{0x7f};
+        rejects([&] { (void)malformed.build(); });
+      }
+      auto nonfinite=sound_fixture;
+      set(nonfinite.payload,nonfinite.block_offsets[9]+15,0x7f800000);
+      rejects([&] { (void)nonfinite.build(); });
+      auto wrong_type=sound_fixture; set(wrong_type.payload,wrong_type.block_offsets[9]+5,10);
+      rejects([&] { (void)wrong_type.build(); });
+      auto wrong_parameter=sound_fixture;
+      set(wrong_parameter.payload,wrong_parameter.attachment_offsets[9]+8,std::bit_cast<std::uint32_t>(1.0F));
+      rejects([&] { (void)wrong_parameter.build(); });
+    }
     std::int32_t clock_sample=1000;
     off::runtime::SceneComponentSequence component_sequence;
     off::runtime::ApplicationServices application(
@@ -434,7 +506,7 @@ int main() {
         std::filesystem::create_directories(work);
         const std::vector<std::pair<std::string, Bytes>> members{
             {"owned.GMS", fixture.packed()}, {"owned.BUF", fixture.names},
-            {"owned.PRM", fixture.prm}, {"owned.TEX", fixture.tex}};
+            {"owned.PRM", fixture.prm}, {"owned.TEX", fixture.tex}, {"owned.SND",fixture.snd}};
         const auto path = work / "independent-intro.zip";
         archive(path, members);
         const auto loaded = off::graphics::load_intro_prepared_resources(path);
@@ -451,6 +523,38 @@ int main() {
         auto corrupt = members; corrupt[1].second.clear();
         const auto bad = work / "invalid-paired-buf.zip"; archive(bad, corrupt);
         rejects([&] { (void)off::graphics::load_intro_prepared_resources(bad); });
+        const auto scenes=work/"Scenes"; std::filesystem::create_directories(scenes);
+        Fixture sound_fixture(true); set(sound_fixture.snd,136,0x41);
+        const auto sound_path=scenes/"independent-sound.zip";
+        archive(sound_path,{{"sound.GMS",sound_fixture.packed()},{"sound.BUF",sound_fixture.names},
+            {"sound.PRM",sound_fixture.prm},{"sound.TEX",sound_fixture.tex},{"sound.SND",sound_fixture.snd}});
+        save_fixture(scenes/"independent-sound.WHD",audio_header());
+        save_fixture(scenes/"independent-sound.WAV",Bytes(2,std::byte{0x11}));
+        const Bytes global_bytes(15,std::byte{0x5a}); save_fixture(work/"streams.wav",global_bytes);
+        const auto with_audio=off::graphics::load_intro_prepared_resources(sound_path);
+        check(with_audio.audio() && with_audio.audio()->record_indices().size()==1 &&
+              with_audio.audio()->record_indices()[0]==1 &&
+              with_audio.audio()->read_encoded(0)==Bytes(8,std::byte{0x5a}),
+              "normal archive loader follows odd SND resource link into the correct global bank range");
+        check(with_audio.sounds()[0].definition.duration==12.375F &&
+              with_audio.audio()->header().records()[1].sample_rate==22050,
+              "authored duration remains independent of WHD counts and sample rate");
+        const auto pcm=with_audio.audio()->decode(0);
+        check(pcm.frame_count()==4 && pcm.channels==1 &&
+              with_audio.sounds()[0].definition.duration==12.375F,
+              "source-bound offline decode does not replace authored duration or emit readiness");
+        rejects([&] { (void)with_audio.audio()->read_encoded(0,7); });
+        rejects([&] { (void)with_audio.audio()->read_encoded(1); });
+        const auto header=off::data::AudioBankHeader::parse(audio_header());
+        check(!header.record_index_for_sound_link(0) && !header.record_index_for_sound_link(1) &&
+              header.record_index_for_sound_link(16)==0 && header.record_index_for_sound_link(17)==0 &&
+              header.record_index_for_sound_link(64)==1,"WHD offsets are full-image boundaries, not row numbers");
+        for(const auto invalid:{2U,14U,18U,48U,112U,0xffffffffU})
+          rejects([&] { (void)header.record_index_for_sound_link(invalid); });
+        // The read view outlives its mounting VFS, but still detects truncation.
+        save_fixture(work/"streams.wav",Bytes(8));
+        rejects([&] { (void)with_audio.audio()->read_encoded(0); });
+        rejects([&] { (void)off::graphics::load_intro_prepared_resources(sound_path); });
     }
     return failures == 0 ? 0 : 1;
 }

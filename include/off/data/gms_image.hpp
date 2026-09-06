@@ -38,6 +38,21 @@ struct GmsIntroMovieControllerSource {
     std::optional<std::uint32_t> second_optional_reference;
 };
 
+// Owner group only; following attached-component groups remain unread.
+struct GmsIntroSoundOwnerPrefix {
+    std::uint32_t authored_type{};
+    std::uint32_t sound_definition_reference{};
+    std::array<float,4> cone_scalars{};
+    std::uint32_t legacy_integer{};
+    std::uint32_t loop_option{};
+    float gain_multiplier{};
+    float pitch_scalar{};
+    std::uint32_t category{};
+    std::uint32_t enabled_option{};
+    float final_scalar{};
+    std::uint32_t component_groups_offset{};
+};
+
 struct GmsIntroCameraSource {
     double near_distance{0};
     double far_distance{0};
@@ -170,6 +185,11 @@ public:
     [[nodiscard]] GmsIntroMovieControllerSource intro_movie_controller_source(
         std::size_t directory_index
     ) const;
+    // Exact supported intro sound-owner prefix and attachment identities only.
+    // Definition references address the COMPLETE SND bank, not GMS object slots.
+    // Does not read component groups, construct a sound record or start playback.
+    [[nodiscard]] GmsIntroSoundOwnerPrefix intro_sound_owner_prefix(
+        std::size_t directory_index) const;
     // Supported deferred type-8/type-9 relocation with mode false only. Resolves
     // source identity, not a runtime handle or proof of a successful factory.
     // Rejects out-of-range references instead of the original diagnostic + zero.

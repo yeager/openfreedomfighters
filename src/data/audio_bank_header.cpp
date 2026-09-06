@@ -49,11 +49,11 @@ AudioBankHeader AudioBankHeader::parse(std::span<const std::byte> bytes) {
             .format_flags = reader.u32(offset + 8),
             .sample_rate = reader.u32(offset + 12),
             .bits_per_sample = reader.u32(offset + 16),
-            .value_count = reader.u32(offset + 20),
+            .decoded_byte_count = reader.u32(offset + 20),
             .encoded_size = reader.u32(offset + 24),
             .channels = reader.u32(offset + 28),
             .data_offset = reader.u32(offset + 32),
-            .frame_count = reader.u32(offset + 36),
+            .sample_value_count = reader.u32(offset + 36),
             .block_align = reader.u32(offset + 40),
             .samples_per_block = reader.u32(offset + 44),
         };
@@ -78,6 +78,15 @@ void AudioBankHeader::validate_payload_ranges(
             throw std::runtime_error("WHD stream range exceeds its audio bank");
         }
     }
+}
+
+std::optional<std::size_t> AudioBankHeader::record_index_for_sound_link(std::uint32_t link) const {
+    const auto offset=static_cast<std::size_t>(link & 0xfffffffeU);
+    if(offset==0) return std::nullopt;
+    if(offset<header_size || (offset-header_size)%record_size!=0 ||
+       (offset-header_size)/record_size>=records_.size())
+        throw std::runtime_error("SND resource link does not address a WHD record boundary");
+    return (offset-header_size)/record_size;
 }
 
 }  // namespace off::data

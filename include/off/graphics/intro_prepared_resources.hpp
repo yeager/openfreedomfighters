@@ -2,6 +2,10 @@
 
 #include "off/data/gms_image.hpp"
 #include "off/data/picture_texture_binding.hpp"
+#include "off/data/sound_definition_bank.hpp"
+#include "off/data/audio_bank_header.hpp"
+#include "off/data/vfs_file_view.hpp"
+#include "off/audio/decode.hpp"
 #include "off/graphics/texture_decode.hpp"
 
 #include <filesystem>
@@ -23,6 +27,29 @@ struct IntroPreparedImage {
   std::size_t catalog_image_index{};
   std::uint32_t texture_id{};
   RgbaImage mip_zero;
+};
+
+struct IntroPreparedSound {
+  std::size_t directory_index;
+  data::GmsIntroSoundOwnerPrefix source;
+  data::SimpleSoundDefinition definition;
+};
+
+// Encoded bank ownership only, not a backend sound record or playback handle.
+class IntroPreparedAudio final {
+public:
+  IntroPreparedAudio(std::span<const IntroPreparedSound> sounds,
+      data::AudioBankHeader header, data::VfsFileView local, data::VfsFileView global);
+  [[nodiscard]] const data::AudioBankHeader& header() const noexcept { return header_; }
+  [[nodiscard]] std::span<const std::optional<std::size_t>> record_indices() const noexcept { return records_; }
+  [[nodiscard]] std::vector<std::byte> read_encoded(std::size_t sound_index,
+      std::size_t byte_budget=64U*1024U*1024U) const;
+  // Explicit offline decode only. Does not mutate duration, progress or readiness.
+  [[nodiscard]] audio::DecodedAudio decode(std::size_t sound_index) const;
+private:
+  data::AudioBankHeader header_;
+  data::VfsFileView local_, global_;
+  std::vector<std::optional<std::size_t>> records_;
 };
 
 // Owning authored resources only. No runtime objects, enabled camera, clock,
@@ -86,6 +113,9 @@ public:
   [[nodiscard]] std::span<const IntroPreparedImage> images() const noexcept {
     return images_;
   }
+  [[nodiscard]] std::span<const IntroPreparedSound> sounds() const noexcept { return sounds_; }
+  [[nodiscard]] const std::optional<data::SoundDefinitionBank>& sound_bank() const noexcept { return sound_bank_; }
+  [[nodiscard]] const std::optional<IntroPreparedAudio>& audio() const noexcept { return audio_; }
 
 private:
   explicit IntroPreparedResources(data::GmsImage sources)
@@ -93,7 +123,8 @@ private:
   friend IntroPreparedResources
   build_intro_prepared_resources(data::GmsImage, std::span<const std::byte>,
                                  std::span<const std::byte>,
-                                 const data::TextureCatalog &, std::size_t);
+                                 const data::TextureCatalog &, std::size_t, std::span<const std::byte>);
+  friend IntroPreparedResources load_intro_prepared_resources(const std::filesystem::path&);
   data::GmsImage sources_;
   std::vector<std::byte> names_;
   std::size_t controller_index_{}, first_cut_index_{}, member_index_{},
@@ -107,6 +138,9 @@ private:
   std::array<std::optional<std::string>, 5> events_;
   std::vector<IntroPreparedPicture> pictures_;
   std::vector<IntroPreparedImage> images_;
+  std::optional<data::SoundDefinitionBank> sound_bank_;
+  std::vector<IntroPreparedSound> sounds_;
+  std::optional<IntroPreparedAudio> audio_;
 };
 
 // Inputs must be provenance-paired supported intro resources, not arbitrary GMS
@@ -115,7 +149,8 @@ private:
 [[nodiscard]] IntroPreparedResources build_intro_prepared_resources(
     data::GmsImage sources, std::span<const std::byte> names,
     std::span<const std::byte> primitives, const data::TextureCatalog &textures,
-    std::size_t decoded_byte_budget = intro_decoded_byte_budget);
+    std::size_t decoded_byte_budget = intro_decoded_byte_budget,
+    std::span<const std::byte> sound_definitions = {});
 
 // Use after install verification, for the exact supported FF-Intro.ZIP archive.
 [[nodiscard]] IntroPreparedResources

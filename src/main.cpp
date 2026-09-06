@@ -194,6 +194,9 @@ int main(int argc, char **argv) {
   if (intro)
     std::cout << "Retained component catalog: " << intro->components().size()
               << " entries including synthesized RootGroup; concrete factories pending.\n";
+  if (intro)
+    std::cout << "Source-bound intro sound definitions: " << intro->resources().sounds().size()
+              << "; retained authored metadata, no playback or readiness event.\n";
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       startup_window, mode, scene ? &*scene : nullptr, *startup_graphics,
       ui_fonts, ui_textures, intro.get(),

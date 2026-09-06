@@ -12,7 +12,10 @@ implemented separately; see [application services](APPLICATION_SERVICES.md).
 They do not open an audio device or establish the planned mixer behavior below.
 The intro sound components require retained sound records during initialization;
 backend absence is not a supported reason to replace their callbacks with no-ops.
-Source binding and record metadata remain prerequisites for that lifecycle.
+Intro source-to-SND-to-WHD bindings now load from the owned installation, with
+bounded on-demand decoding; see [audio formats](AUDIO_FORMAT.md#intro-source-binding).
+Mutable runtime sound records and their lifecycle callbacks remain unimplemented.
+Successful decoding is not a playback-start acknowledgement or a readiness event.
 
 ## Runtime boundary
 

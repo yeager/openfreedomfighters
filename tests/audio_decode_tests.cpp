@@ -233,5 +233,56 @@ int main() {
     }
     check(unknown_rejected, "reject an unverified encoding family");
 
+    const auto rejects_bank = [&](const off::data::AudioStreamRecord& metadata,
+                                  std::span<const std::byte> bytes, const char* message) {
+        bool rejected = false;
+        try { (void)off::audio::decode_bank_stream(metadata, bytes); }
+        catch (const std::runtime_error&) { rejected = true; }
+        check(rejected, message);
+    };
+    const auto with_count = [](off::data::AudioStreamRecord metadata, std::uint32_t count) {
+        metadata.sample_value_count = count;
+        metadata.decoded_byte_count = count * 2;
+        return metadata;
+    };
+    const auto mono_metadata = with_count(record(0x11, 8, 1, 8, 9), 5);
+    const auto trimmed_mono = off::audio::decode_bank_stream(mono_metadata, mono_block);
+    check(trimmed_mono.interleaved_samples == std::vector<std::int16_t>{0, 1, 2, 3, 4},
+          "bank mono IMA excludes physical padding without synthesizing sound");
+    check(off::audio::decode_stream(mono_metadata, mono_block).frame_count() == 9,
+          "physical decoder remains available and does not silently apply bank trim");
+    const auto stereo_metadata = with_count(record(0x11, 16, 2, 16, 9), 6);
+    const auto trimmed_stereo = off::audio::decode_bank_stream(stereo_metadata, stereo_block);
+    check(trimmed_stereo.interleaved_samples == std::vector<std::int16_t>{0, 100, 1, 99, 2, 98} &&
+          trimmed_stereo.frame_count() == 3, "stereo bank count is sample values, with complete channel frames");
+    rejects_bank(with_count(mono_metadata, 10), mono_block, "short IMA decode cannot fill declared length with silence");
+    rejects_bank(with_count(stereo_metadata, 20), stereo_block, "short stereo IMA decode rejects");
+    rejects_bank(with_count(stereo_metadata, 5), stereo_block, "partial stereo channel frame rejects");
+    rejects_bank(with_count(mono_metadata, 0), mono_block, "zero meaningful count rejects");
+    auto invalid_counts = mono_metadata;
+    invalid_counts.decoded_byte_count = 9;
+    rejects_bank(invalid_counts, mono_block, "decoded bytes must be twice sample-value count");
+    invalid_counts.sample_value_count = UINT32_MAX;
+    invalid_counts.decoded_byte_count = UINT32_MAX - 1;
+    rejects_bank(invalid_counts, mono_block, "byte relation cannot pass through uint32 multiplication wrap");
+    for (auto rate : {0U, 384001U}) {
+        auto invalid = mono_metadata; invalid.sample_rate = rate;
+        rejects_bank(invalid, mono_block, "bank decoder validates sample rate independently of header parser");
+    }
+    for (auto channels : {0U, 3U}) {
+        auto invalid = mono_metadata; invalid.channels = channels;
+        rejects_bank(invalid, mono_block, "bank decoder rejects unsupported channels before remainder operation");
+    }
+    const auto pcm_metadata = with_count(record(1, 8, 1, 2, 1), 4);
+    check(off::audio::decode_bank_stream(pcm_metadata, pcm_bytes).interleaved_samples == pcm.interleaved_samples,
+          "exact PCM meaningful count passes unchanged");
+    rejects_bank(with_count(pcm_metadata, 3), pcm_bytes, "PCM is not trimmed to a mismatched count");
+    rejects_bank(with_count(pcm_metadata, 5), pcm_bytes, "PCM cannot synthesize missing declared samples");
+    const auto vorbis_metadata = with_count(vorbis_record, 512);
+    check(off::audio::decode_bank_stream(vorbis_metadata, vorbis_bytes).frame_count() == 256,
+          "Vorbis decoded channel frames match declared interleaved sample count");
+    rejects_bank(with_count(vorbis_metadata, 510), vorbis_bytes, "Vorbis shorter declared count rejects instead of trimming");
+    rejects_bank(with_count(vorbis_metadata, 514), vorbis_bytes, "Vorbis longer declared count rejects instead of filling");
+
     return failures == 0 ? 0 : 1;
 }

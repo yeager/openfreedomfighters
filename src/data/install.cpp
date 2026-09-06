@@ -181,7 +181,7 @@ InstallVerification verify_install(const std::filesystem::path &root,
         }
         const auto &bank =
             record.uses_global_bank() ? global_stream : local_stream;
-        const auto decoded = audio::decode_stream(
+        const auto decoded = audio::decode_bank_stream(
             record, bank.read(record.data_offset, record.encoded_size));
         if (decoded.frame_count() == 0) {
           throw std::runtime_error(

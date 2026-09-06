@@ -26,6 +26,8 @@ executable code are included here.
   tests; normal startup activation is not connected yet.
 - Clock and sound preferences now share application-lifetime state across intro
   scenes. This does not add intro playback or audible sound.
+- The two intro sound definitions resolve to their original audio-bank streams
+  and can be decoded on demand. Playback and its readiness events are not connected.
 - The intro runtime retains every authored component attachment and has a shared
   two-phase initialization path. Most concrete component implementations remain
   missing; a catalog entry is not an initialized component.

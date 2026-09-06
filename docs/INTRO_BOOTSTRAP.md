@@ -14,6 +14,10 @@ The host now retains the complete attachment catalog and a
 [two-phase component lifecycle](COMPONENT_LIFECYCLE.md). Concrete component
 factories, live resource flags and event-registry membership still need to be
 implemented in that same host.
+The two intro sound owners now retain their authored SND definitions and paired
+WHD-to-bank bindings, with validated on-demand decoding of the original streams.
+This supplies their source data, not mutable backend records or `SoundReady`;
+see [audio binding](AUDIO_FORMAT.md#intro-source-binding).
 Global lifecycle order and ordinary update order are different. Both must execute
 against that retained state, with separate global/scene properties and shared
 scene/dispatch clocks. An unsupported admitted component must be identified by

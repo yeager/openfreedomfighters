@@ -380,4 +380,28 @@ DecodedAudio decode_stream(
     }
 }
 
+DecodedAudio decode_bank_stream(
+    const data::AudioStreamRecord& record,
+    std::span<const std::byte> encoded
+) {
+    if (record.sample_rate == 0 || record.sample_rate > 384'000 ||
+        (record.channels != 1 && record.channels != 2) ||
+        record.sample_value_count == 0 ||
+        record.sample_value_count % record.channels != 0 ||
+        std::uint64_t(record.sample_value_count) * 2 != record.decoded_byte_count ||
+        record.sample_value_count > maximum_decoded_sample_values) {
+        throw std::runtime_error("invalid meaningful WHD audio counts or sample layout");
+    }
+    auto decoded = decode_stream(record, encoded);
+    const auto meaningful = static_cast<std::size_t>(record.sample_value_count);
+    if (decoded.encoding == Encoding::ima_adpcm) {
+        if (decoded.interleaved_samples.size() < meaningful)
+            throw std::runtime_error("IMA stream is shorter than its meaningful WHD sample count");
+        decoded.interleaved_samples.resize(meaningful);
+    } else if (decoded.interleaved_samples.size() != meaningful) {
+        throw std::runtime_error("decoded stream length disagrees with meaningful WHD sample count");
+    }
+    return decoded;
+}
+
 }  // namespace off::audio

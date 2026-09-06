@@ -31,4 +31,14 @@ struct DecodedAudio {
     std::span<const std::byte> encoded
 );
 
+// Selected bank record decoding: validates the WHD meaningful 16-bit output
+// counts separately from physical codec length. PCM/Vorbis must match exactly;
+// IMA may contain final-block padding, which is removed only after proving that
+// enough real decoded samples exist. No silence, timing or readiness is invented.
+// decode_stream remains available for independent physical-codec inspection.
+[[nodiscard]] DecodedAudio decode_bank_stream(
+    const data::AudioStreamRecord& record,
+    std::span<const std::byte> encoded
+);
+
 }  // namespace off::audio

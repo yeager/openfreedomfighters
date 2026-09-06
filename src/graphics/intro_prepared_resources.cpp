@@ -1,6 +1,7 @@
 #include "off/graphics/intro_prepared_resources.hpp"
 
 #include "off/data/zip_archive.hpp"
+#include "off/data/archive_vfs.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -44,10 +45,34 @@ std::size_t required_source(const data::GmsImage &sources,
 
 } // namespace
 
+IntroPreparedAudio::IntroPreparedAudio(std::span<const IntroPreparedSound> sounds,
+    data::AudioBankHeader header,data::VfsFileView local,data::VfsFileView global)
+    : header_(std::move(header)),local_(std::move(local)),global_(std::move(global)) {
+  header_.validate_payload_ranges(local_.size(),global_.size());
+  records_.reserve(sounds.size());
+  for(const auto& sound:sounds)
+    records_.push_back(header_.record_index_for_sound_link(sound.definition.resource_link));
+}
+
+std::vector<std::byte> IntroPreparedAudio::read_encoded(std::size_t sound_index,std::size_t byte_budget) const {
+  if(sound_index>=records_.size()) throw std::runtime_error("Intro sound index is out of range");
+  const auto index=records_[sound_index];
+  if(!index) throw std::runtime_error("Intro sound definition has no stream request");
+  const auto& record=header_.records()[*index];
+  if(record.encoded_size>byte_budget) throw std::runtime_error("Intro encoded sound exceeds native byte budget");
+  return (record.uses_global_bank()?global_:local_).read(record.data_offset,record.encoded_size);
+}
+
+audio::DecodedAudio IntroPreparedAudio::decode(std::size_t sound_index) const {
+  const auto encoded=read_encoded(sound_index);
+  const auto record=*records_[sound_index];
+  return audio::decode_bank_stream(header_.records()[record],encoded);
+}
+
 IntroPreparedResources build_intro_prepared_resources(
     data::GmsImage sources, std::span<const std::byte> names,
     std::span<const std::byte> primitives, const data::TextureCatalog &textures,
-    std::size_t decoded_byte_budget) {
+    std::size_t decoded_byte_budget, std::span<const std::byte> sound_definitions) {
   sources.validate_buf(names);
   std::optional<std::size_t> controller_index;
   for (std::size_t index = 0; index < sources.directory().size(); ++index) {
@@ -69,6 +94,16 @@ IntroPreparedResources build_intro_prepared_resources(
   IntroPreparedResources result(std::move(sources));
   const auto &gms = result.sources_;
   result.names_.assign(names.begin(), names.end());
+  if(!sound_definitions.empty())
+    result.sound_bank_.emplace(data::SoundDefinitionBank::parse(sound_definitions,1024U*1024U));
+  for(std::size_t index=0;index<gms.directory().size();++index) {
+    if(gms.directory()[index].source_type!=0x00200012U) continue;
+    const auto source=gms.intro_sound_owner_prefix(index);
+    if(!result.sound_bank_) throw std::runtime_error("Intro sound owner has no SND definition bank");
+    auto definition=result.sound_bank_->simple_definition(source.sound_definition_reference);
+    if(!definition) throw std::runtime_error("Intro sound owner has a null sound definition");
+    result.sounds_.push_back({index,source,std::move(*definition)});
+  }
   result.controller_index_ = *controller_index;
   // Matching identity has been selected uniquely. Payload errors must
   // propagate.
@@ -180,13 +215,29 @@ load_intro_prepared_resources(const std::filesystem::path &intro_archive) {
   const auto &buf = unique_member(archive, ".buf");
   const auto &prm = unique_member(archive, ".prm");
   const auto &tex = unique_member(archive, ".tex");
+  const auto &snd = unique_member(archive, ".snd");
   auto sources =
       data::GmsImage::parse(data::PackedResource::parse(archive.read(gms)));
   const auto names = archive.read(buf);
   const auto primitives = archive.read(prm);
   const auto textures = data::TextureCatalog::parse(archive.read(tex));
-  return build_intro_prepared_resources(std::move(sources), names, primitives,
-                                        textures);
+  const auto sound_definitions=archive.read(snd);
+  auto result=build_intro_prepared_resources(std::move(sources), names, primitives,
+                                            textures,intro_decoded_byte_budget,sound_definitions);
+  if(!result.sounds_.empty()) {
+    // Supported installation layout: scene archive and paired WHD/WAV live in
+    // Scenes, global streams.wav in its parent. Logical SND names are not paths.
+    data::ArchiveVfs vfs;
+    constexpr std::array<std::string_view,5> excluded{
+        "Freedom_Fighters_OST","Launcher.exe","eax.dll","steam_api.dll","steam_appid.txt"};
+    const auto root=intro_archive.parent_path().parent_path();
+    static_cast<void>(vfs.mount_directory(root,excluded));
+    const auto base=(intro_archive.parent_path().filename()/intro_archive.stem()).generic_string();
+    auto header=data::AudioBankHeader::parse(vfs.read(base+".WHD"));
+    result.audio_.emplace(result.sounds_,std::move(header),
+                          vfs.open_stream(base+".WAV"),vfs.open_stream("streams.wav"));
+  }
+  return result;
 }
 
 } // namespace off::graphics

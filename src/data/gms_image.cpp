@@ -865,6 +865,57 @@ std::string_view GmsImage::attachment_identifier(
     return {reinterpret_cast<const char *>(bytes.data() + offset), end - offset};
 }
 
+GmsIntroSoundOwnerPrefix GmsImage::intro_sound_owner_prefix(std::size_t index) const {
+    const auto fail=[] { throw std::runtime_error("GMS intro sound-owner prefix is unsupported or malformed"); };
+    if(index>=directory_.size()) fail();
+    const auto& entry=directory_[index];
+    constexpr std::array<std::string_view,4> identities{
+        "ZSNDOBJ_SoundExtend","ZSNDOBJ_SoundNotify","ZSNDOBJ_SoundSegment","ZGEOM_ZSetZDefine"};
+    constexpr std::array<float,4> parameters{0,0,1,0};
+    if(entry.source_type!=0x00200012U || entry.deferred_source_offset==0 ||
+       entry.attachments.size()!=identities.size()) fail();
+    for(std::size_t i=0;i<identities.size();++i)
+        if(attachment_identifier(index,i)!=identities[i] || entry.attachments[i].parameter!=parameters[i]) fail();
+    const auto bytes=resource_.payload();
+    const ByteReader reader(bytes);
+    std::size_t cursor=entry.deferred_source_offset;
+    if(cursor>bytes.size() || bytes.size()-cursor<4) fail();
+    const auto header=reader.u32(cursor);
+    const auto length=static_cast<std::size_t>(header & tagged_block_size_mask);
+    if((header>>24U)!=0 || length<4 || length>bytes.size()-cursor) fail();
+    const auto end=cursor+length;
+    if(bytes[end-1]!=std::byte{0xff}) fail();
+    cursor+=4;
+    const auto scalar=[&](std::uint8_t tag) {
+        if(end-cursor<5 || bytes[cursor]!=static_cast<std::byte>(tag)) fail();
+        const auto value=reader.u32(cursor+1); cursor+=5; return value;
+    };
+    const auto real=[&] {
+        const float value=std::bit_cast<float>(scalar(0x02));
+        if(!std::isfinite(value)) fail();
+        return value;
+    };
+    GmsIntroSoundOwnerPrefix result;
+    result.authored_type=scalar(0x83);
+    if(result.authored_type>9) fail();
+    result.sound_definition_reference=scalar(0x8b);
+    for(auto& value:result.cone_scalars) value=real();
+    result.legacy_integer=scalar(0x03);
+    result.loop_option=scalar(0x03);
+    result.gain_multiplier=real();
+    result.pitch_scalar=real();
+    result.category=scalar(0x03);
+    result.enabled_option=scalar(0x03);
+    result.final_scalar=real();
+    if(cursor>=end || bytes[cursor]!=std::byte{0x06}) fail();
+    ++cursor;
+    // Attached readers validate their own groups later. Do not scan for marker
+    // bytes inside opaque numeric/string payloads or claim the tail was read.
+    if(end-cursor<2 || cursor>std::numeric_limits<std::uint32_t>::max()) fail();
+    result.component_groups_offset=static_cast<std::uint32_t>(cursor);
+    return result;
+}
+
 GmsIntroMovieControllerSource GmsImage::intro_movie_controller_source(
     std::size_t directory_index
 ) const {
