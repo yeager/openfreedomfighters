@@ -97,6 +97,9 @@ intro pictures or establish initial owner state and draw admission.
 The separate intro fade-picture reader now preserves authored picture fields and
 resource keys with exact component guards. Existing checked PRM/TEX APIs resolve
 the real textures; startup-only composition is not reused for intro data.
+Explicit engine-dimension initialization now updates fade picture scales and
+invalidates their transform cache without replacing authored geometry. Original
+startup dimensions, resource admission and on-screen composition remain unresolved.
 
 ## Build the native bootstrap
 

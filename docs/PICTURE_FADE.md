@@ -97,3 +97,42 @@ Equal texture pixels do not erase distinct authored resource identities. No reta
 payload or expected pixel vectors are published. These real-data joins establish
 the resources to use for later rendering, not the camera, resource lifetime,
 material propagation, update admission or final compositing order.
+
+## Dimension initialization and transform invalidation
+
+`graphics::FadePictureSize` represents one picture owner's recovered initial
+size scales and conditional initialization. The caller supplies explicit signed
+engine width and height. Each axis uses integer division by 16, adds one, and
+only then converts to binary32. Floating-point division or rounding upward is not
+equivalent. These inputs are not taken from the texture, source descriptor or an
+assumed startup resolution.
+
+The owner starts with size scales one and one. If the computed pair is numerically
+unchanged, initialization does nothing. Otherwise it stores both scales, marks
+the paired `PictureSubmissionCache` dirty, and synchronously notifies an explicit
+resource-invalidation hook. The hook represents the boundary to the still-separate
+resource manager; it does not itself establish materialization or draw admission.
+Hook exceptions leave size and dirty-state changes committed. Repeating the same
+size afterward does not retry that notification. Reentrancy, nonpositive display
+dimensions, missing required hooks and a non-nearest floating-point rounding mode
+are rejected as explicit native policies.
+
+The resulting scales feed `PictureCacheTransformInput::picture_width` and
+`picture_height`, not viewport dimensions. Other camera/owner inputs must remain
+explicit. Size is not automatically part of the submission cache key, making the
+invalidation necessary even when the submission position is unchanged. Authored
+descriptor spans, centers, texture identities, UVs and colors remain untouched.
+Tests exercise recomputation through the existing transform/cache path, unchanged
+integer quotients and binary32 collisions, plus notification ordering and failure.
+
+The original fade component invokes this operation during admitted lifecycle
+phase one. The helper does not manufacture that admission or add another once-only
+latch; a caller can explicitly initialize again with changed dimensions. Actual
+startup dimensions and scene activation remain separate from this CPU contract.
+
+The 39-test suite and targeted size/cache/transform ASan/UBSan executable pass
+locally. The private owned-resource probe also checks that explicit dimension
+initialization leaves actual descriptor spans and modulation unchanged. Private
+research revalidated the complete existing disassembly against a freshly streamed
+disassembly of the installed executable on 2026-09-06; the output hashes match.
+Original code and the complete listing remain outside the public repository.
