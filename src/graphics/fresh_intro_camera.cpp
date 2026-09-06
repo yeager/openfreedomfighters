@@ -33,6 +33,10 @@ void FreshIntroCamera::set_priority(std::int32_t priority) noexcept {
   priority_=priority;
   parameters_.registration_priority=rounded;
 }
+void FreshIntroCamera::toggle_preview_flag() {
+  if(enabled_state_.changing_) throw std::runtime_error("preview toggle cannot reenter camera transition");
+  enabled_state_.flags_^=0x10000U;
+}
 
 void FreshIntroCamera::notify_renderer_dimensions(
     const std::function<std::int32_t()>& width,

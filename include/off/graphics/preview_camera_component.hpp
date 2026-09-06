@@ -21,8 +21,8 @@ public:
   [[nodiscard]] std::array<runtime::LiveVariableHandle,4> handles() const noexcept;
   // Called only through admitted ordinary dispatch. Uses this component's live
   // collision variable and the application's canonical clock/pointer history.
-  // Keyboard/debug-collision branches remain explicit implementation boundaries.
-  void update(runtime::ApplicationServices& application,PreviewCameraPose& camera,
+  // Enabled debug-collision visualization remains a separate service boundary.
+  void update(runtime::ApplicationServices& application,FreshIntroCamera& owner,PreviewCameraPose& camera,
       PreviewCameraInput input,const std::function<void(PreviewCameraPose&)>& enqueue_transform);
 private:
   bool collision_enabled_{};

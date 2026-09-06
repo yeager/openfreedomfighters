@@ -23,11 +23,11 @@ std::array<runtime::LiveVariableHandle,4> PreviewCameraComponent::handles() cons
   return {variables_[0].handle(),variables_[1].handle(),variables_[2].handle(),variables_[3].handle()};
 }
 void PreviewCameraComponent::update(runtime::ApplicationServices& application,
-    PreviewCameraPose& camera,PreviewCameraInput input,
+    FreshIntroCamera& owner,PreviewCameraPose& camera,PreviewCameraInput input,
     const std::function<void(PreviewCameraPose&)>& enqueue_transform) {
   if(variables_[0].handle().registry!=&application.live_variables())
     throw std::runtime_error("Preview camera variables belong to a different application");
   input.collision_visualization=collision_enabled_;
-  application.update_preview_camera(camera,input,enqueue_transform);
+  application.update_preview_camera(owner,camera,input,enqueue_transform);
 }
 } // namespace off::graphics

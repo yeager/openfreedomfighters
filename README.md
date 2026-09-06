@@ -26,6 +26,8 @@ executable code are included here.
   tests; normal startup activation is not connected yet.
   [Camera membership and listener selection](docs/CAMERA_REGISTRATION.md) now
   share the scene's runtime identities, including across scene reloads.
+  [Preview-camera controls](docs/PREVIEW_CAMERA.md) handle keyboard and pointer
+  updates in tests; their normal input and component dispatch are not connected.
 - Clock and sound preferences now share application-lifetime state across intro
   scenes. This does not add intro playback or audible sound.
 - The two intro sound definitions resolve to their original audio-bank streams

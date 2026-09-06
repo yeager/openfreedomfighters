@@ -28,6 +28,9 @@ public:
   [[nodiscard]] std::int32_t priority() const noexcept { return priority_; }
   // Camera priority is independent of the renderer registry's insertion key.
   void set_priority(std::int32_t priority) noexcept;
+  // Preview Y-key direct camera-owner flag mutation, with no renderer or
+  // resource/transform side effects. This is not an enabled-state transition.
+  void toggle_preview_flag();
   [[nodiscard]] float renderer_width() const noexcept { return renderer_width_; }
   [[nodiscard]] float renderer_height() const noexcept { return renderer_height_; }
   // Query/store width, then query/store height. A later exception preserves the

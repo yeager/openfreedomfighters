@@ -118,6 +118,7 @@ add_library(off_core
     src/graphics/intro_camera_state.cpp
     src/graphics/fresh_intro_camera.cpp
     src/graphics/preview_camera_update.cpp
+    src/graphics/preview_translation.cpp
     src/graphics/preview_camera_component.cpp
     src/graphics/intro_picture_transform.cpp
     src/graphics/center_picture_position.cpp
@@ -243,6 +244,12 @@ install(FILES assets/branding/openfreedomfighters-splash.bmp
         DESTINATION bin/assets)
 
 if(BUILD_TESTING)
+    add_executable(off_preview_keyboard_tests tests/preview_keyboard_tests.cpp)
+    target_link_libraries(off_preview_keyboard_tests PRIVATE off_core)
+    add_test(NAME off_preview_keyboard_tests COMMAND off_preview_keyboard_tests)
+    add_executable(off_preview_translation_tests tests/preview_translation_tests.cpp)
+    target_link_libraries(off_preview_translation_tests PRIVATE off_core)
+    add_test(NAME off_preview_translation_tests COMMAND off_preview_translation_tests)
     add_executable(off_preview_camera_component_tests tests/preview_camera_component_tests.cpp)
     target_link_libraries(off_preview_camera_component_tests PRIVATE off_core)
     add_test(NAME off_preview_camera_component_tests COMMAND off_preview_camera_component_tests)

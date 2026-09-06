@@ -84,18 +84,18 @@ int main() {
     {
       off::graphics::PreviewCameraComponent component(application.live_variables());
       component_handles=component.handles();
-      rejects([&]{component.update(application,pose,input,queue);});
+      rejects([&]{component.update(application,owner,pose,input,queue);});
       application.reset_clock();application.clock().assign_crt_mode(true);application.clock().set_rate(0);
-      component.update(application,pose,input,queue);
+      component.update(application,owner,pose,input,queue);
       off::runtime::ApplicationServices foreign_application(
         off::runtime::ClockExecutionPolicy::no_recording_or_replay,
         off::runtime::make_monotonic_clock_samples());
-      rejects([&]{component.update(foreign_application,pose,input,queue);});
+      rejects([&]{component.update(foreign_application,owner,pose,input,queue);});
       check(queued==0 && application.preview_camera_update().previous_pointer()==std::optional{input.pointer},
             "component overrides fake collision input and application overrides fake raw delta");
       sample=1000;(void)application.advance_crt();application.clock().publish_scene(true);
       input.pointer={1,0};input.raw_crt_delta=0;
-      component.update(application,pose,input,queue);
+      component.update(application,owner,pose,input,queue);
       check(queued==1 && application.clock().state().raw_delta>0 && application.clock().state().scene_delta==0 &&
             pose.basis!=std::array<float,9>{0,0,1,0,1,0,1,0,0} && pose.position==std::array<float,3>{0,50,-200} &&
             owner.flags()==owner_flags && pose.resource_flags==0x100400,
@@ -103,10 +103,10 @@ int main() {
       application.live_variables().write_bool(component_handles[2],true);
       input.collision_visualization=false;input.pointer={2,0};
       const auto before=pose.basis;
-      rejects([&]{component.update(application,pose,input,queue);});
+      rejects([&]{component.update(application,owner,pose,input,queue);});
       check(pose.basis==before && queued==1,"live enabled collision state overrides caller false and rejects unsupported branch");
       application.live_variables().write_bool(component_handles[2],false);
-      component.update(application,pose,input,queue);
+      component.update(application,owner,pose,input,queue);
       check(queued==2 && owner.flags()==owner_flags,"live collision disable restores admitted pointer path");
     }
     for(const auto handle:component_handles) {

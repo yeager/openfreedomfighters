@@ -35,14 +35,16 @@ public:
     return first;
   }
   // Explicit component-update boundary. Input queries and the live camera/queue
-  // come from the caller; raw delta always comes from this canonical clock.
-  void update_preview_camera(graphics::PreviewCameraPose& camera,
+  // come from the caller; pointer raw delta and keyboard last scaled increment
+  // always come from this canonical clock (not frozen scene publication).
+  void update_preview_camera(graphics::FreshIntroCamera& owner,graphics::PreviewCameraPose& camera,
       graphics::PreviewCameraInput input,
       const std::function<void(graphics::PreviewCameraPose&)>& enqueue_transform) {
     if (!clock_.ready() || clock_.failed() || !clock_.state().crt_mode)
       throw std::runtime_error("preview camera requires the live CRT application clock");
     input.raw_crt_delta=clock_.state().raw_delta;
-    preview_camera_update_.run(camera,input,enqueue_transform);
+    input.last_scaled_increment=clock_.state().last_scaled_increment;
+    preview_camera_update_.run(owner,camera,input,enqueue_transform);
   }
   // Canonical logical records survive across scene loads. This store alone is
   // not an output device or a producer of playback-start acknowledgements.
