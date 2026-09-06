@@ -210,6 +210,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Implement ordered ordinary draw reset with shared fog/material tracking,
   retained index base, explicit capability count and mutable diagnostic boundary.
   Backend command execution and complete inherited GPU state remain separate.
+- [x] Execute viewport-bounded color clears on the GPU and verify RGBA8/BGRA8
+  readback, overlaps and preserved outside pixels. Depth/stencil contents and
+  normal intro integration still require verification.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

@@ -130,6 +130,16 @@ else()
     target_compile_options(off_core PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
 endif()
 
+add_library(off_sdl_picture_clear STATIC src/platform/sdl_picture_clear.cpp)
+target_link_libraries(off_sdl_picture_clear PUBLIC off_core ${OFF_SDL3_TARGET})
+target_include_directories(off_sdl_picture_clear PRIVATE "${off_shader_assets_SOURCE_DIR}/examples")
+if(MSVC)
+    target_compile_options(off_sdl_picture_clear PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(off_sdl_picture_clear PRIVATE -Wall -Wextra -Wpedantic -Wconversion
+                           -Wno-missing-field-initializers)
+endif()
+
 add_executable(
     openfreedomfighters
     src/main.cpp
@@ -139,7 +149,7 @@ add_executable(
 )
 target_link_libraries(
     openfreedomfighters PRIVATE
-    off_core ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
+    off_core off_sdl_picture_clear ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
 )
 target_include_directories(
     openfreedomfighters PRIVATE
@@ -168,6 +178,10 @@ install(FILES assets/branding/openfreedomfighters-splash.bmp
         DESTINATION bin/assets)
 
 if(BUILD_TESTING)
+    add_executable(off_sdl_picture_clear_tests tests/sdl_picture_clear_tests.cpp)
+    target_link_libraries(off_sdl_picture_clear_tests PRIVATE off_sdl_picture_clear)
+    add_test(NAME off_sdl_picture_clear_tests COMMAND off_sdl_picture_clear_tests)
+    set_tests_properties(off_sdl_picture_clear_tests PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
     add_executable(off_core_tests tests/core_tests.cpp)
     target_link_libraries(off_core_tests PRIVATE off_core)
     target_compile_definitions(

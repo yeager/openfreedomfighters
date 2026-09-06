@@ -60,6 +60,10 @@ frame word starts at one, but earlier qualifying renderer invocations can
 advance it before the intro; this adapter accepts the current word rather than
 hardcoding a first-frame value.
 
+The [SDL clear executor](SDL_PICTURE_CLEAR.md) now provides a separate bounded
+GPU operation for a clear request. Connecting it to normal admitted intro views
+is still required; the diagnostic runtime's full-target background is unchanged.
+
 Public tests use independent inputs. Retail-source joins remain private and
 conditional on explicitly supplied pass/backend state, not measured admission.
 
