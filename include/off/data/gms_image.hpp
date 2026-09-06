@@ -143,6 +143,10 @@ public:
     [[nodiscard]] GmsWindowPictureSource intro_fade_picture_source(
         std::size_t directory_index
     ) const;
+    // Separate supported intro Center-attached legal-picture grammar.
+    [[nodiscard]] GmsWindowPictureSource intro_legal_picture_source(
+        std::size_t directory_index
+    ) const;
     // Supported intro provenance and exact camera grammar only. Authored fields,
     // not runtime camera state: no near clamp, angle conversion or viewport policy.
     [[nodiscard]] GmsIntroCameraSource intro_camera_source(std::size_t directory_index) const;

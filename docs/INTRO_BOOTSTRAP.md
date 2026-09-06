@@ -1,5 +1,30 @@
 # Intro bootstrap evidence and implementation gates
 
+## First-cut legal picture resources
+
+`GmsImage::intro_legal_picture_source` now reads the separately reviewed
+Center-attached picture form. Its exact attachment identity, parameter, full tags
+and component delimiters differ from the fade picture. Both readers retain their
+own admission rules; the startup-only grammar is unchanged. Required fields do
+not receive synthetic defaults, and source flags remain distinct from runtime
+resource state.
+
+Private verification follows the real first-cut member reference, compares all
+decoded source fields and checks the complete multi-piece PRM picture and its
+paired TEX bindings with the existing checked decoders. Texture selection uses
+resource identities, never diagnostic names or replacement text. No legal-screen
+texture or expected retail vector is published.
+
+The legal picture has an authored hide contribution. Center initialization and
+the member's timing envelope do not by themselves prove that contribution is
+cleared or that the picture is drawn. Position initialization, member activation,
+resource admission and final camera/pass composition remain separate integration
+work. This source reader does not register a fade controller on the legal picture.
+All 42 local CTest executables pass after this addition, along with the targeted
+GMS ASan/UBSan and GCC tests and the private owned-resource probe.
+
+## Current runtime boundary
+
 The original intro is not yet activated by the native runtime. Normal startup
 prepares the verified UI resources and clears the window; the optional
 diagnostic world preview does not establish bootstrap order. The project-owned

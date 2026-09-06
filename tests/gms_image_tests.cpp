@@ -498,6 +498,80 @@ void intro_camera_tests() {
                    "camera directory index checked");
 }
 
+void intro_legal_picture_tests() {
+    const auto fixture = [] {
+        auto bytes = window_picture_fixture();
+        bytes.resize(1033U);
+        set_u32(bytes, 0U, 1024U); set_u32(bytes, 4U, 1033U);
+        set_u32(bytes, 9U + 336U + 20U, 512U);
+        set_u32(bytes, 9U + 336U + 32U, 600U);
+        set_u32(bytes, 521U, 1U); set_u32(bytes, 525U, 544U);
+        set_f32(bytes, 529U, 1.0F);
+        constexpr char identity[] = "ZGEOM_Center";
+        std::copy_n(reinterpret_cast<const std::byte*>(identity), sizeof(identity), bytes.begin() + 553U);
+        set_u32(bytes, 609U, 38U);
+        constexpr std::array<std::uint8_t, 5> tags{3,3,3,0x83,3};
+        constexpr std::array<std::uint32_t, 5> values{6,0xfabc1234U,121,14,11};
+        for (std::size_t i = 0; i < tags.size(); ++i) {
+            bytes[613U + 5U * i] = static_cast<std::byte>(tags[i]);
+            set_u32(bytes, 614U + 5U * i, values[i]);
+        }
+        bytes[638U] = std::byte{6}; bytes[639U] = std::byte{3};
+        set_u32(bytes, 640U, 0xe1234567U);
+        bytes[644U] = std::byte{6}; bytes[645U] = std::byte{6};
+        bytes[646U] = std::byte{0xff}; bytes[647U] = std::byte{0xa5};
+        return bytes;
+    };
+    const auto parse = [](auto bytes) {
+        return off::data::GmsImage::parse(off::data::PackedResource::parse(std::move(bytes)));
+    };
+    const auto decode = [&](auto bytes) { return parse(std::move(bytes)).intro_legal_picture_source(1U); };
+    const auto value = decode(fixture());
+    check(value.authored_state_exponent == 6U && value.base_render_property == 0xfabc1234U &&
+          value.authored_alpha == 121U && value.alignment_enum == 14U && value.extension_control == 11U &&
+          value.picture_asset_reference == 0xe1234567U, "legal picture preserves reviewed fields and full resource key");
+    auto maximum = fixture(); set_u32(maximum, 624U, 0xffffffffU); set_u32(maximum, 634U, 0xffffffffU);
+    check(decode(maximum).authored_alpha == 255U && decode(maximum).extension_control == 16U,
+          "legal picture unsigned alpha and extension clamps");
+    auto zero = fixture(); set_u32(zero, 634U, 0U);
+    check(decode(zero).extension_control == 0U, "legal picture zero extension remains present");
+    const auto reject = [&](auto mutation) {
+        auto bytes = fixture(); mutation(bytes);
+        check_rejected([&] { static_cast<void>(decode(bytes)); }, "malformed legal picture rejected");
+    };
+    for (std::uint32_t size = 0; size < 38U; ++size)
+        reject([&](auto& b) { set_u32(b, 609U, size); });
+    for (const auto header : {39U,0x01000026U,0x00ffffffU})
+        reject([&](auto& b) { set_u32(b, 609U, header); });
+    for (const auto offset : {613U,618U,623U,628U,633U,638U,639U,644U,645U,646U})
+        reject([&](auto& b) { b[offset] ^= std::byte{0x80}; });
+    for (const auto count : {0U,2U}) reject([&](auto& b) { set_u32(b, 521U, count); });
+    for (const auto parameter : {0U,0x80000000U,0x40000000U,0x7f800000U,0x7fc00000U})
+        reject([&](auto& b) { set_u32(b, 529U, parameter); });
+    reject([](auto& b) { b[553U] = std::byte{'X'}; });
+    reject([](auto& b) { b[565U] = std::byte{'X'}; });
+    reject([](auto& b) { set_u32(b, 525U, 1023U); });
+    reject([](auto& b) { set_u32(b, 9U + 336U + 12U, 1U); });
+    reject([](auto& b) { set_u32(b, 9U + 336U + 16U, 0U); });
+    reject([](auto& b) { set_u32(b, 614U, 8U); });
+    reject([](auto& b) { set_u32(b, 629U, 16U); });
+    for (const auto offset : {0U,1023U})
+        reject([&](auto& b) { set_u32(b, 9U + 336U + 32U, offset); });
+    check_rejected([&] { static_cast<void>(parse(fixture()).intro_legal_picture_source(3U)); }, "legal picture index checked");
+    check_rejected([&] { static_cast<void>(parse(window_picture_fixture()).intro_legal_picture_source(1U)); },
+                   "startup picture is not legal picture source");
+    check_rejected([&] { static_cast<void>(parse(fixture()).startup_window_picture_source(1U)); },
+                   "legal picture does not relax startup delimiters");
+    check_rejected([&] { static_cast<void>(parse(fixture()).intro_fade_picture_source(1U)); },
+                   "center attachment is not fade attachment");
+    auto fade = fixture();
+    constexpr char fade_identity[] = "ZWINPIC_FadeToBlack";
+    std::copy_n(reinterpret_cast<const std::byte*>(fade_identity), sizeof(fade_identity), fade.begin() + 553U);
+    set_f32(fade, 529U, 0.0F); fade[618U] = std::byte{0x83};
+    check(parse(fade).intro_fade_picture_source(1U).extension_control == 11U, "cross-check fixture has valid fade grammar");
+    check_rejected([&] { static_cast<void>(decode(fade)); }, "fade picture is not legal picture source");
+}
+
 void intro_fade_picture_tests() {
     const auto fixture = [] {
         auto bytes = window_picture_fixture();
@@ -574,6 +648,7 @@ void intro_fade_picture_tests() {
 }  // namespace
 
 int main() {
+    intro_legal_picture_tests();
     intro_camera_tests();
     intro_fade_picture_tests();
     cut_tests();

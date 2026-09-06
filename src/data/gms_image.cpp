@@ -1004,19 +1004,18 @@ GmsIntroCameraSource GmsImage::intro_camera_source(std::size_t index) const {
     return result;
 }
 
-GmsWindowPictureSource GmsImage::intro_fade_picture_source(std::size_t index) const {
+namespace {
+GmsWindowPictureSource parse_intro_picture(std::span<const std::byte> payload,
+                                         const GmsDirectoryEntry& entry, bool legal) {
     const auto fail = []() -> void {
-        throw std::runtime_error("GMS intro fade picture is unsupported or malformed");
+        throw std::runtime_error("GMS intro picture is unsupported or malformed");
     };
-    if (index >= directory_.size()) fail();
-    const auto& entry = directory_[index];
     if (entry.source_type != window_picture_source_type || entry.class_data_value != 0U ||
         entry.deferred_source_offset == 0U || entry.attachments.size() != 1U) fail();
-    const auto payload = resource_.payload();
-    constexpr std::string_view identity = "ZWINPIC_FadeToBlack";
+    const std::string_view identity = legal ? "ZGEOM_Center" : "ZWINPIC_FadeToBlack";
     const auto& attachment = entry.attachments.front();
     const auto name_offset = static_cast<std::size_t>(attachment.source_offset);
-    if (!std::isfinite(attachment.parameter) || attachment.parameter != 0.0F ||
+    if (!std::isfinite(attachment.parameter) || attachment.parameter != (legal ? 1.0F : 0.0F) ||
         name_offset > payload.size() || identity.size() + 1U > payload.size() - name_offset) fail();
     for (std::size_t i = 0; i < identity.size(); ++i) {
         if (payload[name_offset + i] != static_cast<std::byte>(identity[i])) fail();
@@ -1030,9 +1029,9 @@ GmsWindowPictureSource GmsImage::intro_fade_picture_source(std::size_t index) co
     const auto tag = [&](std::size_t relative, std::uint8_t expected) {
         if (payload[offset + relative] != static_cast<std::byte>(expected)) fail();
     };
-    tag(4, 0x03); tag(9, 0x83); tag(14, 0x03); tag(19, 0x83);
+    tag(4, 0x03); tag(9, legal ? 0x03 : 0x83); tag(14, 0x03); tag(19, 0x83);
     if (payload[offset + 24U] != std::byte{0x03} &&
-        payload[offset + 24U] != std::byte{0x83}) fail();
+        (legal || payload[offset + 24U] != std::byte{0x83})) fail();
     tag(29, 0x06); tag(30, 0x03); tag(35, 0x06); tag(36, 0x06); tag(37, 0xff);
     const auto exponent = reader.u32(offset + 5U);
     const auto alignment = reader.u32(offset + 20U);
@@ -1045,6 +1044,17 @@ GmsWindowPictureSource GmsImage::intro_fade_picture_source(std::size_t index) co
         .extension_control = static_cast<std::uint8_t>(std::min(reader.u32(offset + 25U), 16U)),
         .picture_asset_reference = reader.u32(offset + 31U),
     };
+}
+} // namespace
+
+GmsWindowPictureSource GmsImage::intro_fade_picture_source(std::size_t index) const {
+    if (index >= directory_.size()) throw std::runtime_error("GMS intro picture index is out of range");
+    return parse_intro_picture(resource_.payload(), directory_[index], false);
+}
+
+GmsWindowPictureSource GmsImage::intro_legal_picture_source(std::size_t index) const {
+    if (index >= directory_.size()) throw std::runtime_error("GMS intro picture index is out of range");
+    return parse_intro_picture(resource_.payload(), directory_[index], true);
 }
 
 GmsWindowPictureSource GmsImage::startup_window_picture_source(

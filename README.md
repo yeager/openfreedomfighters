@@ -112,6 +112,9 @@ camera or inventing renderer dimensions.
 An ordered admitted-view pass now preserves cached signed-priority ordering and
 visits every enabled, non-null view. Startup registration and concrete render-pass
 preparation still need to be connected; it is not an active-camera shortcut.
+The first-cut legal picture also has its own guarded reader and verified real
+PRM/TEX joins. Its multi-piece authored content is preserved; visibility is not
+inferred merely from its member reference or centering component.
 
 ## Build the native bootstrap
 
