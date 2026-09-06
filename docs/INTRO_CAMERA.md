@@ -255,3 +255,9 @@ the failed frame. Reentry during an enable-change notification rejects.
 The [intro picture join](PICTURE_TRANSFORM.md#concrete-intro-draw-input-join) uses
 these services with live hierarchy and picture state. Normal startup has not yet
 connected that join to its view traversal or GPU submission.
+
+The two retained auxiliary source floats are now exposed as current fog-start
+and fog-end fractions. Conversion copies their binary32 values unchanged,
+including signed zero; it does not clamp, divide by 100 or multiply by far.
+The [view transition](PICTURE_VIEW_TRANSITION.md) performs the distance products
+later. Camera copies/restores beyond the supported fresh path remain separate.

@@ -53,9 +53,14 @@ int main() {
             }
     {
         auto s = source();
+        s.auxiliary_floats = {-0.0F, 0.375F};
         FreshIntroCamera camera(s);
         s.near_distance = 999; s.viewport[2] = 0; s.flag_option_a = 19;
+        s.auxiliary_floats = {42, 99};
         const auto& p = camera.parameters();
+        check(std::bit_cast<std::uint32_t>(p.fog_start_fraction) == 0x80000000U &&
+              p.fog_end_fraction == 0.375F,
+              "canonical camera owns fog fractions independently of source lifetime");
         check(p.authored.near_distance == 0.375 && p.near_distance == 1 && p.far_distance == 321.25 &&
               p.authored.auxiliary_scalar == 0.1234567890123 &&
               std::bit_cast<std::uint32_t>(p.angle_radians) == 0x3db2b8c3U &&
@@ -76,6 +81,9 @@ int main() {
         });
         check(!camera.enabled() && camera.flags() == (original & ~0x20U) && notices == 1,
               "enable transition mutates single canonical word while retaining source-derived bits");
+        check(std::bit_cast<std::uint32_t>(p.fog_start_fraction) == 0x80000000U &&
+              p.fog_end_fraction == 0.375F,
+              "enabled transition does not rewrite current fog fractions");
         rejects([&] { camera.set_enabled(true, true, [&] {
             ++notices; check(!camera.enabled(), "throwing hook sees pre-transition state");
             throw std::runtime_error("renderer failure");

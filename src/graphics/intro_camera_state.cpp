@@ -80,7 +80,8 @@ IntroCameraState convert_intro_camera_mode_zero(const data::GmsIntroCameraSource
                             ((source.background_rgb[1] & 255U) << 8U) |
                             (source.background_rgb[2] & 255U);
     return {source, near, far, auxiliary, radians, viewport, ratio, priority,
-            background, source.final_boolean != 0U};
+            background, source.final_boolean != 0U,
+            source.auxiliary_floats[0], source.auxiliary_floats[1]};
 }
 
 } // namespace off::graphics

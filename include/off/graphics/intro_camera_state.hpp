@@ -42,6 +42,9 @@ struct IntroCameraState {
     float registration_priority;
     std::uint32_t background;
     bool final_boolean;
+    // Current fractions copied from the full source schema, not distances.
+    float fog_start_fraction;
+    float fog_end_fraction;
 };
 
 // Newly constructed camera, aspect mode zero and renderer-list selector zero.

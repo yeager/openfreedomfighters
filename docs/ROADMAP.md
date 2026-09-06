@@ -201,6 +201,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Build checked picture ordering keys from current view/control bytes and
   selected texture IDs; merge explicit retained/rebuilt partitions with documented
   native equal-key policy. Runtime queue admission remains separate.
+- [x] Execute ordinary view-transition hooks with retained camera fog fractions,
+  shared material fog context, repeated viewport setup and a per-view clear
+  guard. Actual view admission and viewport-bounded GPU execution remain open.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

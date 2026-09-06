@@ -51,6 +51,14 @@ int main() {
           "angle multiply then divide retains each binary32 rounding boundary");
     check(camera.registration_priority == -1.0F && camera.background == 0x00abcdefU && camera.final_boolean,
           "priority signed interpretation, background low bytes and boolean nonzero conversion");
+    check(camera.fog_start_fraction == -3.25F && camera.fog_end_fraction == 7.5F,
+          "fog fractions are copied without clamping or distance scaling");
+    auto fog_source = source();
+    fog_source.auxiliary_floats = {-0.0F, std::numeric_limits<float>::denorm_min()};
+    const auto fog_camera = convert_intro_camera_mode_zero(fog_source);
+    check(std::bit_cast<std::uint32_t>(fog_camera.fog_start_fraction) == 0x80000000U &&
+          std::bit_cast<std::uint32_t>(fog_camera.fog_end_fraction) == 1U,
+          "fog source preserves signed zero and binary32 payload without arithmetic");
     check(camera.authored.auxiliary_scalar == 0.1234567890123 && camera.authored.angle_degrees == 5 &&
           camera.authored.integer_a == 0xdeadbeefU && camera.authored.priority == 0xffffffffU &&
           camera.authored.flag_option_a == 0x87654321U && camera.authored.flag_option_b == 0xfedcba98U &&
