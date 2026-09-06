@@ -41,6 +41,9 @@ to the active rebuild queue. Reused-record maintenance, actual view association
 and visibility remain caller responsibilities. Resource-preparation order is not
 a substitute for this draw order. The subsequent binding transition is described
 in [picture material requests](PICTURE_MATERIAL_STATE.md#resource-binding-requests).
+The [ordered dispatch loop](PICTURE_ORDERED_DRAW_LOOP.md) consumes prepared
+entries with their retained live associations; it does not reconstruct those
+associations from sorted keys.
 
 ## Verification
 

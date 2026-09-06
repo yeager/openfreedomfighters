@@ -204,6 +204,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Execute ordinary view-transition hooks with retained camera fog fractions,
   shared material fog context, repeated viewport setup and a per-view clear
   guard. Actual view admission and viewport-bounded GPU execution remain open.
+- [x] Dispatch prepared ordered entries through retained view associations,
+  subtype transitions and key-field resource binding, preserving barrier cursors.
+  The real outer preparation, reset implementation and drawing coordinator remain open.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.
