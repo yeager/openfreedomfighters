@@ -61,7 +61,9 @@ remain separate registrations, and destruction releases bindings in registration
 order. The component update reads its live collision setting and uses the same
 application's clock and shared pointer history, not a caller's replacement state.
 
-This does not yet attach/admit DefaultCam through the complete loader, connect
-the real platform input producer, run collision visualization or consume the
-transform queue. Normal startup does not call this boundary automatically.
-Camera/listener registration is described in [camera membership](CAMERA_REGISTRATION.md).
+`PreviewCameraResourceView` binds directly to the retained hierarchy and resource
+flags. The integrated DefaultCam factory and ordinary dispatcher use that view;
+they do not update a detached preview/listener pose. The loader still needs its
+preceding real root-state producer and remaining component implementations.
+Platform input, collision visualization and transform-queue consumption remain
+unconnected in normal startup. See [camera membership](CAMERA_REGISTRATION.md).

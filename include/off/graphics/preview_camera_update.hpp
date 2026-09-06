@@ -13,6 +13,13 @@ struct PreviewCameraPose {
   // Resource hide/transform-dirty domain, NOT camera-owner enabled/toggle flags.
   std::uint32_t resource_flags;
 };
+// Borrow references to the actual retained resource fields. No parallel pose
+// snapshot is stored or published; the queue callback identifies that resource.
+struct PreviewCameraResourceView {
+  std::array<float,9>& basis;
+  std::array<float,3>& position;
+  std::uint32_t& resource_flags;
+};
 struct PreviewCameraInput {
   std::array<float,2> pointer;
   float raw_crt_delta;
@@ -45,6 +52,8 @@ public:
   // native transcendental math remains an interoperability policy.
   void run(FreshIntroCamera& owner,PreviewCameraPose& camera, const PreviewCameraInput& input,
            const std::function<void(PreviewCameraPose&)>& enqueue_transform);
+  void run(FreshIntroCamera& owner,PreviewCameraResourceView camera,const PreviewCameraInput& input,
+           const std::function<void()>& enqueue_same_resource);
 private:
   std::optional<std::array<float,2>> previous_;
   bool busy_{};

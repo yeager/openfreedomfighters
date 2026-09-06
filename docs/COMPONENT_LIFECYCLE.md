@@ -9,6 +9,11 @@ records to the same owners used elsewhere in the host. This catalog collection
 includes unconstructed and removed entries; it is not the live owner attachment
 store required by runtime lookup and disposal.
 
+The synthesized DefaultCam path now adds a concrete PreviewCamera instance,
+retains its actual owner attachment and live-variable payload, and enrolls it
+through the separate [ordinary manager](ORDINARY_COMPONENTS.md). The existing
+authored catalog is not treated as a collection of completed factories.
+
 A local run against the owned supported intro found 384 records: 383 authored
 attachments plus RootGroup. Every authored identifier matched the public source
 reader. All remained unconstructed, with no assigned runtime identity. This
@@ -76,7 +81,8 @@ policies, not replicas of the original allocator.
 Normal startup builds the catalog but does not construct or globally initialize
 its real component population. Concrete constructors/readers/callbacks, live
 owner flags, root/additional-owner loader hooks, progress behavior, retirement,
-scene properties, shared command containers and ordinary dispatch remain needed.
+scene properties and shared command containers remain needed. The ordinary
+dispatcher exists, but most admitted concrete callbacks are still missing.
 The component-pass API does not perform those surrounding loader operations.
 
 The intro sound owners are a real dependency: their initialization reads retained

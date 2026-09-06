@@ -24,6 +24,8 @@ public:
   // Enabled debug-collision visualization remains a separate service boundary.
   void update(runtime::ApplicationServices& application,FreshIntroCamera& owner,PreviewCameraPose& camera,
       PreviewCameraInput input,const std::function<void(PreviewCameraPose&)>& enqueue_transform);
+  void update(runtime::ApplicationServices& application,FreshIntroCamera& owner,PreviewCameraResourceView resource,
+      PreviewCameraInput input,const std::function<void()>& enqueue_transform);
 private:
   bool collision_enabled_{};
   float collision_length_{1000.0F};

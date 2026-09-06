@@ -42,8 +42,28 @@ activate a cut or render a view. No game assets were saved or published.
 
 ## Still needed for normal startup
 
-The complete DefaultCam child-attachment/resource-flag path, actual PreviewCamera
-component enrollment, ordinary input dispatch, backend view creation and full
-global component initialization remain unconnected. Known constructor flags are
-not proof of a resource's flags after attachment to the current root. This work
-does not skip those gates or signal that audio playback is ready.
+`IntroRuntime::ensure_default_camera` now performs the fallback when the caller
+has established the root's actual resource state: query camera zero, create the
+named DefaultCam/ZCAMERA child, attach it to the same hierarchy, set its loader
+flag/transform, attach PreviewCamera, then set priority and register with key zero.
+It uses application-allocated dynamic identities rather than extending a source
+index range. Existing children retain their order. Resource context association,
+parent and camera-owner room remain separate typed domains.
+
+Fresh resource flags inherit only the reviewed root hide and context markers;
+the transform queue sees the same dirty resource once. Unknown root state blocks
+creation. `assign_resource_state` is a native publication boundary for an actual
+producer, not the original flag setter and not permission to substitute authored
+flags or a constructor constant. Failed construction keeps its completed prefix
+and cannot be resumed as though it had succeeded.
+
+The real Preview payload is admitted through the shared [ordinary component
+manager](ORDINARY_COMPONENTS.md). Its resource view refers directly to the host
+hierarchy, so keyboard/mouse writes, renderer traversal and listener selection
+share the same owner and pose. The owned-data probe still rejects fallback while
+the real root's post-load state is unavailable; it creates no substitute camera.
+
+Normal startup still needs the preceding root/resource loader operations, the
+remaining concrete component population, real platform input/frame dispatch and
+backend view creation. Synthetic integration tests exercise the complete fallback
+ordering and subsequent Preview callback but do not prove retail intro playback.

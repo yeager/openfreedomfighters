@@ -134,5 +134,33 @@ int main() {
         check(value==0 && std::signbit(value)==negative_basis,
               "pointer-only zero translation preserves reviewed signed-zero products and additions");
     }
+    {
+      off::graphics::FreshIntroCamera live_owner;
+      off::graphics::PreviewCameraUpdate live_update;
+      // Separate storage represents existing hierarchy/resource fields, rather
+      // than constructing an owning pose that could detach from live state.
+      std::array<float,9> retained_basis{0,0,1,0,1,0,1,0,0};
+      std::array<float,3> retained_position{0,50,-200};
+      std::uint32_t retained_flags=0x400;
+      const off::graphics::PreviewCameraResourceView view{retained_basis,retained_position,retained_flags};
+      off::graphics::PreviewCameraInput sample{{0,0},1,{},{},false,0.5F};
+      unsigned visits=0;
+      const auto queue_live=[&] {
+        ++visits;
+        check(retained_flags==0x100400 && retained_position==std::array<float,3>{0,50,250} &&
+              retained_basis!=camera().basis,"queue observes canonical resource field writes");
+        check(live_owner.flags()==0x20,"resource dirty writes leave owner flags separate");
+        rejects([&]{live_update.run(live_owner,view,sample,[]{});});
+      };
+      live_update.run(live_owner,view,sample,queue_live);
+      sample.pointer[0]=1;sample.held[5]=true;
+      live_update.run(live_owner,view,sample,queue_live);
+      check(visits==1 && &view.basis==&retained_basis && &view.position==&retained_position &&
+            &view.resource_flags==&retained_flags,"borrowed view writes original storage without detached pose");
+      const auto before=retained_basis;
+      sample.held={};sample.pointer[0]=2;
+      rejects([&]{live_update.run(live_owner,view,sample,[]{throw std::runtime_error("queue failure");});});
+      check(retained_basis!=before && retained_flags==0x100400,"queue failure preserves completed canonical mutations");
+    }
   } catch(const std::exception& error) { std::cerr<<error.what()<<'\n'; return 1; }
 }

@@ -21,6 +21,12 @@ bool same(float a,float b) { return std::bit_cast<std::uint32_t>(a)==std::bit_ca
 }
 void PreviewCameraUpdate::run(FreshIntroCamera& owner,PreviewCameraPose& camera,const PreviewCameraInput& input,
     const std::function<void(PreviewCameraPose&)>& enqueue_transform) {
+  if(!enqueue_transform) throw std::runtime_error("preview camera requires a transform queue");
+  run(owner,PreviewCameraResourceView{camera.basis,camera.position,camera.resource_flags},input,
+      [&]{enqueue_transform(camera);});
+}
+void PreviewCameraUpdate::run(FreshIntroCamera& owner,PreviewCameraResourceView camera,const PreviewCameraInput& input,
+    const std::function<void()>& enqueue_transform) {
   if(busy_) throw std::runtime_error("preview camera update cannot reenter");
   if(!enqueue_transform || input.collision_visualization)
     throw std::runtime_error("preview camera requires supported controls and a transform queue");
@@ -96,6 +102,6 @@ void PreviewCameraUpdate::run(FreshIntroCamera& owner,PreviewCameraPose& camera,
   camera.resource_flags|=0x100000U;
   camera.basis=basis;
   camera.resource_flags|=0x100000U;
-  enqueue_transform(camera);
+  enqueue_transform();
 }
 } // namespace off::graphics

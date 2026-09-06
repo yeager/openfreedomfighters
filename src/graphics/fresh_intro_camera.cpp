@@ -37,6 +37,10 @@ void FreshIntroCamera::toggle_preview_flag() {
   if(enabled_state_.changing_) throw std::runtime_error("preview toggle cannot reenter camera transition");
   enabled_state_.flags_^=0x10000U;
 }
+void FreshIntroCamera::enable_preview_flag() {
+  if(enabled_state_.changing_) throw std::runtime_error("preview flag cannot reenter camera transition");
+  enabled_state_.flags_|=0x10000U;
+}
 
 void FreshIntroCamera::notify_renderer_dimensions(
     const std::function<std::int32_t()>& width,

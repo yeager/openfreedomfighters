@@ -14,6 +14,11 @@ The host now retains the complete attachment catalog and a
 [two-phase component lifecycle](COMPONENT_LIFECYCLE.md). Concrete component
 factories, live resource flags and event-registry membership still need to be
 implemented in that same host.
+The conditional DefaultCam factory now constructs its real PreviewCamera and
+ordinary membership in that host. Its callback writes directly into the scene
+hierarchy after the complete global initializer. The root-state producer and
+other concrete component factories remain missing; the normal SDL loop does
+not invoke this conditional path. See [ordinary updates](ORDINARY_COMPONENTS.md).
 The two intro sound owners now retain their authored SND definitions and paired
 WHD-to-bank bindings, with validated on-demand decoding of the original streams.
 Their host-owned sound leases now resolve canonical application records with

@@ -30,4 +30,12 @@ void PreviewCameraComponent::update(runtime::ApplicationServices& application,
   input.collision_visualization=collision_enabled_;
   application.update_preview_camera(owner,camera,input,enqueue_transform);
 }
+void PreviewCameraComponent::update(runtime::ApplicationServices& application,
+    FreshIntroCamera& owner,PreviewCameraResourceView resource,PreviewCameraInput input,
+    const std::function<void()>& enqueue_transform) {
+  if(variables_[0].handle().registry!=&application.live_variables())
+    throw std::runtime_error("Preview camera variables belong to a different application");
+  input.collision_visualization=collision_enabled_;
+  application.update_preview_camera(owner,resource,input,enqueue_transform);
+}
 } // namespace off::graphics

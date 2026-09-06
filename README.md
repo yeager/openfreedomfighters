@@ -42,6 +42,9 @@ executable code are included here.
 - The intro runtime retains every authored component attachment and has a shared
   two-phase initialization path. Most concrete component implementations remain
   missing; a catalog entry is not an initialized component.
+  DefaultCam and its PreviewCamera now share an [ordinary update queue](docs/ORDINARY_COMPONENTS.md)
+  with real admission and sorting. This path still requires the preceding loader
+  state and is not called by normal startup yet.
 - F10 opens a working graphics-settings panel. Its current appearance is
   diagnostic; matching the game's menu design is still on the roadmap.
 - A separate geometry preview is available with `--diagnostic-scene`. It is not
@@ -124,6 +127,12 @@ gitleaks detect --source . --no-git --redact
 Start with the [roadmap](docs/ROADMAP.md), [build provenance](docs/BUILD_PROVENANCE.md)
 or [architecture](docs/ARCHITECTURE.md). The [documentation index](docs/README.md)
 covers file formats, rendering research, tools and implementation plans.
+
+## License
+
+The project's original code is available under the [MIT license](LICENSE).
+This does not cover the original game's code, graphics, music or other assets.
+Third-party dependencies retain their own licenses.
 
 Independent fan project; not affiliated with IO Interactive or Electronic Arts.
 *Freedom Fighters* and its assets belong to their respective rights holders.

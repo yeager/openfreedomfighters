@@ -1,5 +1,6 @@
 #include "off/graphics/intro_prepared_resources.hpp"
 #include "off/graphics/intro_runtime.hpp"
+#include "off/graphics/preview_camera_component.hpp"
 #include "off/data/packed_resource.hpp"
 #include "off/data/archive_vfs.hpp"
 
@@ -625,6 +626,152 @@ int main() {
       rejects([&]{simultaneous.set_camera_context(next_scene.root_handle());});
       check(simultaneous.camera_context()==simultaneous.root_handle(),"foreign context rejection preserves scene root");
       application.sound_records().clear_scene_listener();
+    }
+    {
+      using namespace off::graphics;
+      std::int32_t camera_sample=0;
+      off::runtime::ApplicationServices camera_application(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[&]{return camera_sample;}});
+      IntroRuntime first(fixture.build(),camera_application,component_sequence);
+      IntroRuntime interleaved(fixture.build(),camera_application,component_sequence);
+      const auto original_count=first.hierarchy().size();
+      const auto children=first.child_owners(first.root_handle());
+      check(!first.resource_state(first.root_handle()),"post-load root state is unknown until its actual producer publishes it");
+      rejects([&]{(void)first.create_default_camera_resource(false,[](auto){});});
+      check(first.hierarchy().size()==original_count && !first.default_camera_handle(),"unknown root cannot manufacture default camera");
+      first.assign_resource_state(first.root_handle(),{0x48000000U,first.resource_handle(first.source_handle(0))});
+      unsigned queued=0;
+      const auto created=first.create_default_camera_resource(false,[&](auto resource){
+        ++queued;const auto owner=first.resource_owner(resource);
+        check(first.default_camera_handle()==owner && first.resource_parent(owner)==first.resource_handle(first.root_handle()),
+              "transform hook receives actual attached camera resource identity");
+        check(first.default_camera_metadata()->name=="DefaultCam" && first.default_camera_metadata()->class_identifier==0x400003,
+              "normal synthesized camera retains its name and concrete class identity");
+        const auto& node=first.hierarchy().at(first.hierarchy_index(owner));
+        check(node.position==std::array<float,3>{0,50,-200} &&
+              first.resource_state(owner)->flags==0x49100000U && first.camera_for_owner(owner).flags()==0x10020,
+              "loader transform and separate owner flag visible before queue callback");
+        rejects([&]{(void)first.create_default_camera_resource(false,[](auto){});});
+        rejects([&]{(void)first.camera_resource_view(owner);});
+      });
+      check(created && queued==1 && first.hierarchy().size()==original_count+1 &&
+            first.hierarchy_index(*created)==original_count && !first.source_index(*created) &&
+            created->value>interleaved.source_handle(interleaved.resources().sources().directory().size()-1).value,
+            "dynamic owner uses application allocation, not next hierarchy/source arithmetic");
+      rejects([&]{(void)interleaved.hierarchy_index(*created);});
+      rejects([&]{(void)first.hierarchy_index(interleaved.root_handle());});
+      auto appended=first.child_owners(first.root_handle());
+      check(appended.size()==children.size()+1 && appended.back()==*created &&
+            std::equal(children.begin(),children.end(),appended.begin()),"default camera appends without rebuilding authored children");
+      check(first.additional_owner_order().size()==original_count-1 && first.owner_components(*created).empty() &&
+            first.camera_for_owner(*created).priority()==0 && !first.camera_for_owner(*created).parameters().authored &&
+            first.registered_cameras().entries().empty() && !first.sound_listener(),
+            "resource creation does not fabricate Preview enrollment, priority, renderer membership or listener assignment");
+      check(first.resource_state(*created)->context==first.resource_handle(first.source_handle(0)) &&
+            first.camera_context(*created)==first.root_handle(),"resource context and owner room remain distinct");
+      rejects([&]{(void)first.create_default_camera_resource(false,[](auto){});});
+      first.register_camera(*created,0,{[]{return 1920;},[]{return 1080;},[]{return false;},{}});
+      check(first.sound_listener()->owner==*created && first.sound_listener()->context==first.root_handle() &&
+            first.camera_for_owner(*created).renderer_width()==1920,"same synthesized owner participates in explicit camera/listener registration");
+      check(!first.create_default_camera_resource(false,{}),"existing registered camera suppresses creation before requesting missing services");
+      first.set_camera_context(*created,first.source_handle(1));
+      check(first.sound_listener()->context==first.source_handle(1) &&
+            first.resource_state(*created)->context==first.resource_handle(first.source_handle(0)),"live owner context changes do not overwrite resource association");
+      camera_application.reset_clock();camera_application.clock().assign_crt_mode(true);camera_application.clock().set_rate(1);
+      PreviewCameraComponent preview(camera_application.live_variables());
+      PreviewCameraInput input{{0,0},0,{},{},false};
+      preview.update(camera_application,first.camera_for_owner(*created),first.camera_resource_view(*created),input,[]{});
+      camera_sample+=100;camera_application.advance_crt();camera_application.clock().publish_scene(false);input.pointer={2,1};
+      const auto old_basis=first.hierarchy().at(first.hierarchy_index(*created)).matrix;
+      preview.update(camera_application,first.camera_for_owner(*created),first.camera_resource_view(*created),input,[&]{
+        ++queued;check(first.hierarchy().at(first.hierarchy_index(*created)).matrix!=old_basis,
+                       "Preview queue reads the same changed hierarchy, not a detached pose");
+      });
+      check(queued==2 && first.camera_for_owner(*created).flags()==0x10020,"canonical pointer motion preserves separate owner flags");
+      camera_application.sound_records().clear_scene_listener();
+    }
+    for(bool mode:{false,true}) for(std::uint32_t parent_flags:{0U,0x400U,0x800U,0xc00U,0x40000U,0x40000000U,0xffffffffU}) {
+      off::graphics::IntroRuntime host(fixture.build(),application,component_sequence);
+      host.assign_resource_state(host.root_handle(),{parent_flags,{}});
+      const auto camera_owner=*host.create_default_camera_resource(mode,[](auto){});
+      const auto expected=(mode?0x01100000U:0x09000000U)|(parent_flags&0xc00U)|
+          ((parent_flags&0x40040000U)?0x40000000U:0U)|0x100000U;
+      check(host.resource_state(camera_owner)->flags==expected && host.resource_state(host.root_handle())->flags==parent_flags,
+            "fresh camera inherits only approved hide/context bits, for both live allocation modes");
+      check(host.resource_state(camera_owner)->context==((parent_flags&0x40000U)?host.resource_handle(host.root_handle()):
+            off::graphics::IntroRuntimeResourceHandle{}),"spatial-parent marker selects root, otherwise null context stays null");
+    }
+    {
+      off::graphics::IntroRuntime host(fixture.build(),application,component_sequence);
+      host.assign_resource_state(host.root_handle(),{0,{}});
+      rejects([&]{(void)host.create_default_camera_resource(false,[](auto){throw std::runtime_error("queue failed");});});
+      const auto owner=*host.default_camera_handle();
+      check(host.default_camera_failed() && host.resource_state(owner)->flags==0x09100000U &&
+            host.hierarchy().at(host.hierarchy_index(owner)).position==std::array<float,3>{0,50,-200},
+            "failed queue preserves child and transform prefix without admitting a successful retry");
+      rejects([&]{(void)host.create_default_camera_resource(false,[](auto){});});
+      rejects([&]{(void)host.camera_resource_view(owner);});
+      rejects([&]{host.register_camera(owner,0,{[]{return 640;},[]{return 480;},[]{return false;},{}});});
+    }
+    {
+      // Synthetic scene population: non-preview factories below are explicit
+      // fixtures, not implementations of the corresponding retail components.
+      for(bool hidden:{false,true}) {
+        std::int32_t sample=0;
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[&]{return sample;}});
+        off::runtime::SceneComponentSequence sequence;
+        off::graphics::IntroRuntime host(fixture.build(),app,sequence);
+        const auto original_components=host.components().size();
+        for(std::size_t i=0;i<original_components;++i) host.components().construct(i,[](auto& record){
+          auto state=record.state();state.class_ordinal=1;state.requested=1;state.attached_owner=record.source().owner;
+          return off::runtime::ConstructedComponent{state,[](auto&){},[](auto&){}};
+        });
+        const auto serial=sequence.next_identity();sequence.set_construction_mode(true);
+        host.assign_resource_state(host.root_handle(),{hidden?0x09000400U:0x09000000U,{}});
+        std::vector<std::string> order;
+        const auto created=*host.ensure_default_camera(false,[&](auto resource){
+          order.emplace_back("transform");
+          check(host.resource_owner(resource)==*host.default_camera_handle() && !host.default_preview_component_index(),
+                "loader transform precedes Preview attachment on same canonical child");
+        },{[&]{order.emplace_back("width");return 1280;},[&]{order.emplace_back("height");return 720;},
+           [&]{order.emplace_back("backend");return false;},{}});
+        const auto index=*host.default_preview_component_index();auto& preview=host.components().at(index);
+        check(order==std::vector<std::string>{"transform","width","height","backend"} &&
+              preview.identity()==serial && preview.state().class_ordinal==152 && preview.state().priority==0 &&
+              preview.state().status==0x30 && preview.state().requested==0x111 && preview.state().script_reference==0 &&
+              preview.state().attached_owner==created.value && preview.state().registered_cache==0,
+              "actual common serial, class default, owner binding and construction status survive full fallback order");
+        check(host.default_camera_components().size()==1 && host.default_camera_components()[0]==index &&
+              host.owner_components(created).size()==1 && host.camera_for_owner(created).priority()==0x40000000 &&
+              host.registered_cameras().entries().front().key==0 &&
+              app.live_variables().enumerate("cam_coli_enable").size()==1,
+              "real attached Preview payload and live variables precede distinct camera priority/zero-key registration");
+        check(preview.state().admitted==(hidden?0U:0x110U) && host.default_camera_component_mask()==(hidden?0U:0x111U) &&
+              (hidden?!host.ordinary_components():(host.ordinary_components() && host.ordinary_components()->pending().size()==1)),
+              "live resource hide controls actual ordinary enrollment and lazy manager creation, not camera enabled flag");
+        rejects([&]{host.run_ordinary_components({});});
+        rejects([&]{host.attach_default_preview_camera();});rejects([&]{host.finish_default_camera_registration({});});
+        host.components().run_global_phases({[](bool,auto&,std::size_t){},
+          [&](auto owner){return std::optional<std::uint32_t>{owner==created.value?host.resource_state(created)->flags:0};},
+          [](auto){},[](auto&){throw std::runtime_error("unexpected fixture retirement");}});
+        app.reset_clock();app.clock().assign_crt_mode(true);
+        off::graphics::PreviewCameraInput keys{{0,0},0,{},{},false};
+        unsigned input_reads=0,queued=0;
+        off::graphics::IntroOrdinaryFrameServices frame{[]{return true;},[]{return std::optional<std::uint64_t>{};},
+          [&]{++input_reads;return keys;},[&](auto resource){check(host.resource_owner(resource)==created,"ordinary queue uses same DefaultCam resource");++queued;}};
+        host.run_ordinary_components(frame);
+        sample=1000;app.advance_crt();app.clock().publish_scene(true);keys.held[5]=true;keys.pointer={1,0};
+        host.run_ordinary_components(frame);
+        check(input_reads==(hidden?0U:2U) && queued==(hidden?0U:1U) &&
+              host.hierarchy().at(host.hierarchy_index(created)).position[2]==(hidden?-200.0F:700.0F) &&
+              preview.state().registered_cache==(hidden?0U:0x10U) &&
+              (hidden?!app.component_dispatch_time():app.component_dispatch_time()==0),
+              "admitted paused-bypass Preview runs through same initialized component/clock/hierarchy; hidden one never dispatches");
+        frame.component_filter=[&]{return std::optional{host.component_handle(index)+1000};};
+        host.run_ordinary_components(frame);check(input_reads==(hidden?0U:2U),"captured filter excludes real Preview callback");
+        check(!host.ensure_default_camera(false,{},{}),"existing renderer camera prevents duplicate fallback creation");
+      }
     }
     {
       auto projection_fixture = fixture;

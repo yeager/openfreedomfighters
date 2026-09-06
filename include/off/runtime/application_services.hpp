@@ -5,6 +5,7 @@
 #include "off/graphics/preview_camera_update.hpp"
 #include "off/runtime/application_clock.hpp"
 #include "off/runtime/live_variables.hpp"
+#include "off/runtime/ordinary_components.hpp"
 #include <utility>
 #include <stdexcept>
 #include <limits>
@@ -25,6 +26,9 @@ public:
   [[nodiscard]] audio::SoundPreferences& sound() noexcept { return sound_; }
   [[nodiscard]] graphics::PreviewCameraUpdate& preview_camera_update() noexcept { return preview_camera_update_; }
   [[nodiscard]] LiveVariableRegistry& live_variables() noexcept { return live_variables_; }
+  [[nodiscard]] OrdinarySortingState& ordinary_sorting() noexcept {return ordinary_sorting_;}
+  void assign_component_dispatch_time(std::uint32_t time) noexcept {component_dispatch_time_=time;}
+  [[nodiscard]] std::optional<std::uint32_t> component_dispatch_time() const noexcept {return component_dispatch_time_;}
   // Native application-scoped owner IDs never alias a previously destroyed
   // scene. This is not the original allocator or the component serial counter.
   [[nodiscard]] std::uint64_t allocate_runtime_owners(std::uint64_t count) {
@@ -45,6 +49,14 @@ public:
     input.raw_crt_delta=clock_.state().raw_delta;
     input.last_scaled_increment=clock_.state().last_scaled_increment;
     preview_camera_update_.run(owner,camera,input,enqueue_transform);
+  }
+  void update_preview_camera(graphics::FreshIntroCamera& owner,graphics::PreviewCameraResourceView resource,
+      graphics::PreviewCameraInput input,const std::function<void()>& enqueue_transform) {
+    if(!clock_.ready() || clock_.failed() || !clock_.state().crt_mode)
+      throw std::runtime_error("preview camera requires the live CRT application clock");
+    input.raw_crt_delta=clock_.state().raw_delta;
+    input.last_scaled_increment=clock_.state().last_scaled_increment;
+    preview_camera_update_.run(owner,resource,input,enqueue_transform);
   }
   // Canonical logical records survive across scene loads. This store alone is
   // not an output device or a producer of playback-start acknowledgements.
@@ -71,6 +83,8 @@ private:
   audio::SoundPreferences sound_;
   graphics::PreviewCameraUpdate preview_camera_update_;
   LiveVariableRegistry live_variables_;
+  OrdinarySortingState ordinary_sorting_;
+  std::optional<std::uint32_t> component_dispatch_time_;
   std::uint64_t next_runtime_owner_{1};
 };
 } // namespace off::runtime

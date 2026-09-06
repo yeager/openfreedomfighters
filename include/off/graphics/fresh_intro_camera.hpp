@@ -31,6 +31,8 @@ public:
   // Preview Y-key direct camera-owner flag mutation, with no renderer or
   // resource/transform side effects. This is not an enabled-state transition.
   void toggle_preview_flag();
+  // Loader's direct OR, distinct from the held-key XOR operation.
+  void enable_preview_flag();
   [[nodiscard]] float renderer_width() const noexcept { return renderer_width_; }
   [[nodiscard]] float renderer_height() const noexcept { return renderer_height_; }
   // Query/store width, then query/store height. A later exception preserves the

@@ -70,6 +70,7 @@ add_library(off_core
     src/runtime/application_clock.cpp
     src/runtime/component_lifecycle.cpp
     src/runtime/live_variables.cpp
+    src/runtime/ordinary_components.cpp
     src/crypto/sha256.cpp
     src/data/archive_vfs.cpp
     src/data/audio_bank_header.cpp
@@ -244,6 +245,9 @@ install(FILES assets/branding/openfreedomfighters-splash.bmp
         DESTINATION bin/assets)
 
 if(BUILD_TESTING)
+    add_executable(off_ordinary_components_tests tests/ordinary_components_tests.cpp)
+    target_link_libraries(off_ordinary_components_tests PRIVATE off_core)
+    add_test(NAME off_ordinary_components_tests COMMAND off_ordinary_components_tests)
     add_executable(off_preview_keyboard_tests tests/preview_keyboard_tests.cpp)
     target_link_libraries(off_preview_keyboard_tests PRIVATE off_core)
     add_test(NAME off_preview_keyboard_tests COMMAND off_preview_keyboard_tests)
