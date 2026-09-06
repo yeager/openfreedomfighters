@@ -304,6 +304,28 @@ int main() {
               "time groups retain integer units, not float reinterpretation or discarded zeros");
       const std::size_t start=sound.source.component_groups_offset;
       const auto segment_start=start+76+11;
+      struct TimeVector { std::array<std::uint32_t,4> words; std::uint32_t expected; };
+      constexpr std::array<TimeVector,7> time_vectors{{
+        {{0,0,0,1},0x3d23d70aU}, {{1,2,3,4},0x4568b28fU},
+        {{0,0,16777217U,1},0x4b800000U}, {{0,0,0xffffffffU,0},0x4f800000U},
+        {{1193047U,0,0,0},0x44ee0000U}, {{0,0,0,0xffffffffU},0x4d23d70aU},
+        {{0xffffffffU,0xffffffffU,0xffffffffU,0xffffffffU},0x4f851eb1U}
+      }};
+      for(std::size_t iteration=0;iteration<time_vectors.size();++iteration) {
+        auto times=sound_fixture;
+        for(std::size_t group=0;group<4;++group) {
+          const auto& vector=time_vectors[(iteration+group)%time_vectors.size()];
+          for(std::size_t field=0;field<4;++field)
+            set(times.payload,segment_start+15+group*20+field*5+1,vector.words[field]);
+        }
+        const auto prepared=times.build();
+        for(std::size_t group=0;group<4;++group) {
+          const auto& vector=time_vectors[(iteration+group)%time_vectors.size()];
+          check(std::bit_cast<std::uint32_t>(prepared.sounds()[0].segment_times[group])==vector.expected &&
+                prepared.sounds()[0].attachments.segment.times[group]==vector.words,
+                "segment time preparation preserves raw fields and exact unsigned wrap/binary32 rounding");
+        }
+      }
       auto variants=sound_fixture;
       variants.payload[start+6*5]=std::byte{2};
       variants.payload[segment_start]=std::byte{0x83};

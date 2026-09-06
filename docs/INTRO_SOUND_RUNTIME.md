@@ -27,6 +27,14 @@ resolve runtime identities, apply Extend parameters, convert segment times,
 register events, insert properties or send SoundReady. Wider nonzero control
 branches still need their real runtime services before they can execute.
 
+Preparation also derives the four segment times while retaining their raw words.
+For each group, whole seconds are `((hours * 60 + minutes) * 60 + seconds)`
+with unsigned 32-bit wrap. Whole seconds and fractional units convert separately
+to binary32; the latter multiply by binary32 `0.04` before a separately rounded
+addition. No time-field clamp or fused multiply/add is used. Tests cover integer
+wrap, high-bit values and rounding boundaries in every group. This calculation
+does not construct the component or execute its playback callbacks.
+
 `IntroRuntime::apply_sound_extension` implements the verified unchanged intro
 parameter subset against the owner's published canonical binding. A zero binding
 skips all writes. A present binding applies the specified gain multiplier,

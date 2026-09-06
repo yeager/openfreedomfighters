@@ -111,7 +111,19 @@ IntroPreparedResources build_intro_prepared_resources(
     if(!result.sound_bank_) throw std::runtime_error("Intro sound owner has no SND definition bank");
     auto definition=result.sound_bank_->simple_definition(source.sound_definition_reference);
     if(!definition) throw std::runtime_error("Intro sound owner has a null sound definition");
-    result.sounds_.push_back({index,source,std::move(*definition),gms.intro_sound_attachments(index)});
+    IntroPreparedSound sound{index,source,std::move(*definition),gms.intro_sound_attachments(index)};
+    for(std::size_t group=0;group<sound.segment_times.size();++group) {
+      const auto& time=sound.attachments.segment.times[group];
+      const std::uint32_t whole=((time[0]*std::uint32_t{60}+time[1])*std::uint32_t{60}+time[2]);
+      // Explicit binary32 boundaries prevent fusion and preserve unsigned
+      // conversion after integer wrap, including high-bit-set source values.
+      volatile float seconds=static_cast<float>(whole);
+      volatile float fraction=static_cast<float>(time[3]);
+      volatile float scaled=fraction*0.04F;
+      volatile float total=seconds+scaled;
+      sound.segment_times[group]=total;
+    }
+    result.sounds_.push_back(std::move(sound));
   }
   result.controller_index_ = *controller_index;
   // Matching identity has been selected uniquely. Payload errors must

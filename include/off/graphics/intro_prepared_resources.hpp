@@ -35,6 +35,9 @@ struct IntroPreparedSound {
   data::GmsIntroSoundOwnerPrefix source;
   data::SimpleSoundDefinition definition;
   data::GmsIntroSoundAttachments attachments;
+  // Derived reader values, not evidence of component/event registration.
+  // Raw unsigned time fields remain in attachments.segment.times.
+  std::array<float,4> segment_times{};
 };
 
 // Encoded bank ownership only, not a backend sound record or playback handle.
