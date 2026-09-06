@@ -34,7 +34,20 @@ public:
     void run(bool renderer_admitted, bool backend_ready, std::uint64_t renderer_identity,
              std::span<const RendererStateEntry> states, const RendererFrameHooks& hooks);
 
+    // Complete the same preparation phase, then invoke ordered drawing with the
+    // exact captured matching-state sequence, after backend maintenance. Never
+    // recollect from a registry that callbacks may have changed. The snapshot
+    // span is valid only during this synchronous callback. An empty snapshot
+    // still reaches drawing when renderer admission passed.
+    using OrderedDrawing = std::function<void(std::span<const std::uint64_t>)>;
+    void run_and_draw(bool renderer_admitted, bool backend_ready, std::uint64_t renderer_identity,
+             std::span<const RendererStateEntry> states, const RendererFrameHooks& hooks,
+             const OrderedDrawing& ordered_drawing);
+
 private:
+    void run_impl(bool renderer_admitted, bool backend_ready, std::uint64_t renderer_identity,
+             std::span<const RendererStateEntry> states, const RendererFrameHooks& hooks,
+             const OrderedDrawing& ordered_drawing);
     bool running_{false};
 };
 

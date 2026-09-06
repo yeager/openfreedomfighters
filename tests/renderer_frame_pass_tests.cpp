@@ -137,5 +137,32 @@ int main() {
                          {'F',90},{'P',90},{'b',60},{'t',60},{'e',60},{'b',50},{'t',50},{'e',50},
                          {'M',80},{'M',90},{'B',0}},
           "outer snapshots compose with ordered admitted views before separate maintenance pass");
+    states = {{7,20},{8,30},{7,0},{7,20}};
+    changed = false;
+    trace.clear();
+    pass.run_and_draw(true, true, 7, states, mutate_registration,
+        [&](std::span<const std::uint64_t> snapshot) {
+            check(trace == full, "ordered drawing follows every preparation and maintenance callback");
+            check(std::vector<std::uint64_t>(snapshot.begin(), snapshot.end()) ==
+                  std::vector<std::uint64_t>{20,0,20},
+                  "ordered drawing receives identical snapshot despite replaced registration storage");
+            rejects([&] { pass.run(false, false, 7, {}, {}); });
+            trace.emplace_back('D', snapshot.size());
+        });
+    auto with_drawing = full; with_drawing.emplace_back('D',3);
+    check(trace == with_drawing, "duplicate and zero snapshot identities survive into ordered drawing");
+    trace.clear();
+    pass.run_and_draw(true, false, 7, states, hooks, [&](auto snapshot) {
+        check(snapshot.empty() && trace == Trace{{'B',0}}, "unready backend provides empty snapshot after maintenance");
+        trace.emplace_back('D',0);
+    });
+    check(trace == Trace{{'B',0},{'D',0}}, "empty ordered coordinator still has an explicit invocation");
+    trace.clear();
+    rejects([&] { pass.run_and_draw(true, true, 7, states, hooks, {}); });
+    check(trace.empty(), "missing ordered-drawing service rejects before effects");
+    rejects([&] { pass.run_and_draw(true, true, 7, states, hooks, [&](auto) {
+        trace.emplace_back('D',0); throw std::runtime_error("drawing failure");
+    }); });
+    check(trace == Trace{{'F',999},{'M',999},{'B',0},{'D',0}}, "drawing failure preserves preparation prefix");
     return failures == 0 ? 0 : 1;
 }

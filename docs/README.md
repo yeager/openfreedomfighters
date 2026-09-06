@@ -15,6 +15,7 @@
 - [Picture materials](PICTURE_MATERIAL_STATE.md)
 - [Picture draw order](PICTURE_DRAW_ORDER.md)
 - [Ordered picture dispatch](PICTURE_ORDERED_DRAW_LOOP.md)
+- [Ordered drawing coordinator](PICTURE_ORDERED_COORDINATOR.md)
 - [Picture draw reset](PICTURE_DRAW_RESET.md)
 - [Picture view transitions](PICTURE_VIEW_TRANSITION.md)
 - [Renderer frame lifecycle](RENDERER_FRAME.md)

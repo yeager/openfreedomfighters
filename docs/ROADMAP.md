@@ -206,7 +206,7 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   guard. Actual view admission remains open; GPU clear verification is below.
 - [x] Dispatch prepared ordered entries through retained view associations,
   subtype transitions and key-field resource binding, preserving barrier cursors.
-  The real outer preparation and drawing coordinator remain open.
+  Selection eligibility and special-stream production remain open.
 - [x] Implement ordered ordinary draw reset with shared fog/material tracking,
   retained index base, explicit capability count and mutable diagnostic boundary.
   Backend command execution and complete inherited GPU state remain separate.
@@ -218,6 +218,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Implement the shared renderer frame counter and gated completion sequence,
   including failed device admission. Actual startup must supply its renderer
   history and backend operations; the first intro frame is not hardcoded.
+- [x] Coordinate preselection, reserved-key marking, all-state barrier rounds
+  and live-order restoration using the same renderer snapshot. Required
+  preselection/special-render services and normal startup admission remain open.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

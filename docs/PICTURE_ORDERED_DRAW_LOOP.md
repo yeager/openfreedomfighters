@@ -52,21 +52,22 @@ this is not a transactional retry interface.
 
 ## Still needed for normal startup
 
-The actual coordinator first prepares every matching state's cursor through a
+The [coordinator](PICTURE_ORDERED_COORDINATOR.md) prepares every matching state's cursor through a
 selection hook that can mark reserved entries. It then calls every state's draw
 operation once per round, including exhausted states, repeating if any returns
 more work. It does not drain one state before moving to the next. First-round
 special services and final cleanup are separate real operations.
 
-This adapter does not replace those services with no-ops or admit the intro.
+The coordinator is implemented with required selection and special-work service
+boundaries. It does not replace those services with no-ops or admit the intro.
 The reset hook can call [PictureDrawReset](PICTURE_DRAW_RESET.md) using the same
 live context and an actual backend command sink. View hooks can use `PictureViewTransition`; resource
 and emission hooks still need the real GPU executor and current material state.
 
 ## Verification
 
-All 58 local CTest executables pass. The loop test also passes with GCC and
-ASan/UBSan, including every callback-failure prefix and cursor publication.
+The loop tests cover every callback-failure prefix and cursor publication,
+including targeted GCC and ASan/UBSan verification.
 
 The private owned-data probe joins the checked texture/control keys, sorted
 records, ordered dispatch and real-camera view transition for all 26 prepared
