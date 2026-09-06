@@ -30,9 +30,25 @@ serialized asset payloads:
   original process are not portable event constants.
 
 Input-driven skip producers exist, but their complete guards and policy are not
-recovered. Natural completion and the first activation trigger remain unresolved.
+recovered. Natural completion timing and the readiness producer remain unresolved.
 The authored destination must not be replaced with an assumed direct main-menu
 transition.
+
+### First-cut execution boundary
+
+The controller's initial-start path is gated by a readiness notification and an
+activation latch. It prepares sequence components, records engine-clock state
+and advances the first cut. The notification producer and its prerequisites
+remain untraced; splash expiry must not synthesize readiness.
+
+The first cut has attached sequence-player and command components. It is not an
+attachment-free reference list, even though it shares the same base source
+class. Applying the restricted list reader to it must fail its identity guard.
+The player retains the caller of its start request. Cleanup clears execution
+state, sends completion to that retained caller when present, then clears the
+caller reference. Natural timeline update can invoke cleanup, but its end-value
+derivation, units, clock conversion and command dependencies are not yet fully
+specified. This is evidence of an execution path, not a native playback contract.
 
 ## Restricted controller reader
 
@@ -118,6 +134,23 @@ headers/counts/tags/termination. The 35-test suite passes with these additions.
    There is currently no native scene stack or script/event host. The generic
    simulation event queue provides ordering, not original event meanings or a
    proven intro update phase.
+
+### Timing and event delivery
+
+Do not route cut completion through the current fixed-step world queue merely
+because it already transports events. That queue accepts only future ticks;
+using it would introduce delivery latency if the original cut/controller
+exchange is synchronous. The project's scheduler also clamps elapsed time,
+limits catch-up steps and drops excess time. Those policies are not the
+[recovered variable-delta service](TIMING_EVIDENCE.md).
+
+The cut-player boundary must take explicit compatibility-time inputs until its
+actual producer is established. Research must identify the selected clock
+branch, start/reset/update ordering, completion comparison, scaling and
+pause/load/focus suppression, as well as synchronous versus deferred delivery.
+Do not convert authored durations to a guessed number of 60 Hz ticks. Original
+and Modern should consume the same established compatibility clock and event
+state; sharing graphics modes does not justify changing intro timing.
 
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
