@@ -3,6 +3,7 @@
 #include "off/data/gms_image.hpp"
 #include "off/data/sound_definition_bank.hpp"
 #include <array>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -79,6 +80,15 @@ public:
   void request_category_volume(std::uint32_t category,std::int32_t volume,std::uint32_t mode) override;
   [[nodiscard]] float master_gain() const noexcept { return master_gain_; }
   void set_master_volume(std::int32_t percent) noexcept;
+  using LiveOwner=std::function<bool(std::uint64_t)>;
+  void set_listener(std::uint64_t owner,const LiveOwner& live_owner);
+  void clear_scene_listener();
+  [[nodiscard]] std::uint64_t listener_handle() const noexcept {return listener_;}
+  [[nodiscard]] const std::optional<std::array<float,3>>& listener_offsets() const noexcept {return listener_offsets_;}
+  // Fallback queries the actual first renderer's pruned index-zero collection.
+  // It does not filter enabled cameras or assign the explicit listener field.
+  [[nodiscard]] std::uint64_t resolve_listener(const LiveOwner& live_owner,
+      const std::function<std::uint64_t()>& first_renderer_camera) const;
 private:
   friend class SoundRecordLease;
   void release(std::uint64_t binding) noexcept;
@@ -88,5 +98,8 @@ private:
   std::vector<std::uint64_t> prepared_,pending_stops_;
   bool special_mode_{},pending_volume_update_{};
   float master_gain_{1};
+  std::uint64_t listener_{};
+  std::optional<std::array<float,3>> listener_offsets_;
+  mutable bool listener_busy_{};
 };
 } // namespace off::audio

@@ -26,6 +26,8 @@ IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::Applicat
   const auto& directory = resources_.sources().directory();
   if (directory.size() >= std::numeric_limits<std::uint32_t>::max())
     throw std::runtime_error("intro hierarchy exceeds native index capacity");
+  owner_base_=application_.allocate_runtime_owners(directory.size()+1);
+  camera_context_=root_handle();
   owner_components_.resize(directory.size()+1);
   owner_components_[0].push_back(components_.append({root_handle().value, std::nullopt,
       std::nullopt, "ZGROUP_RootGroup", 0, 0, 0.0F, true}));
@@ -200,6 +202,40 @@ std::span<const std::size_t> IntroRuntime::owner_components(IntroRuntimeHandle o
   return owner_components_.at(hierarchy_index(owner));
 }
 
+void IntroRuntime::register_camera(float key,const IntroCameraRegistrationServices& services) {
+  const auto owner=source_handle(resources_.camera_index());
+  registered_cameras_.register_camera(owner.value,key,{
+    [this,owner](std::uint64_t handle) {
+      return handle==owner.value && hierarchy_index(owner)<hierarchy_.size();
+    },
+    [this,services](std::uint64_t) {camera_.notify_renderer_dimensions(services.width,services.height);},
+    services.backend_ready,
+    services.admit_view?std::function<void(std::uint64_t)>{
+      [services](std::uint64_t handle) {services.admit_view({handle});}}:std::function<void(std::uint64_t)>{}
+  });
+}
+void IntroRuntime::set_camera_context(IntroRuntimeHandle context) {
+  if(context.value) static_cast<void>(hierarchy_index(context));
+  camera_context_=context;
+}
+void IntroRuntime::set_sound_listener(IntroRuntimeHandle owner) {
+  application_.sound_records().set_listener(owner.value,[this](std::uint64_t handle) {
+    return live_owner(handle);
+  });
+}
+std::optional<IntroSoundListener> IntroRuntime::sound_listener() {
+  const auto live=[this](std::uint64_t handle) {return live_owner(handle);};
+  const auto handle=application_.sound_records().resolve_listener(live,[&] {
+    return registered_cameras_.camera_at(0,live);
+  });
+  if(!handle) return std::nullopt;
+  if(handle!=source_handle(resources_.camera_index()).value)
+    throw std::runtime_error("Intro listener context requires a constructed camera owner");
+  const auto context=camera_context_.value?camera_context_:root_handle();
+  static_cast<void>(hierarchy_index(context));
+  return IntroSoundListener{{handle},context};
+}
+
 void IntroRuntime::run_controller_phase_two(const IntroControllerPhaseTwoServices& external) {
   auto bound=external;
   application_.bind_controller_phase_two(bound);
@@ -217,17 +253,17 @@ runtime::ComponentCallback IntroRuntime::controller_phase_two_callback(
 
 IntroRuntimeHandle IntroRuntime::source_handle(std::size_t source) const {
   if (source >= resources_.sources().directory().size()) throw std::runtime_error("intro source index is out of range");
-  return {static_cast<std::uint64_t>(source)+2};
+  return {owner_base_+static_cast<std::uint64_t>(source)+1};
 }
 std::optional<std::size_t> IntroRuntime::source_index(IntroRuntimeHandle handle) const {
   static_cast<void>(hierarchy_index(handle));
   if (handle == root_handle()) return std::nullopt;
-  return static_cast<std::size_t>(handle.value-2);
+  return static_cast<std::size_t>(handle.value-owner_base_-1);
 }
 std::uint32_t IntroRuntime::hierarchy_index(IntroRuntimeHandle handle) const {
-  if (handle.value == 0 || handle.value > resources_.sources().directory().size()+1)
+  if (!live_owner(handle.value))
     throw std::runtime_error("intro runtime handle is not live");
-  return static_cast<std::uint32_t>(handle.value-1);
+  return static_cast<std::uint32_t>(handle.value-owner_base_);
 }
 void IntroRuntime::set_local_transform(IntroRuntimeHandle handle,
     const std::array<float,9>& basis,const std::array<float,3>& position) {

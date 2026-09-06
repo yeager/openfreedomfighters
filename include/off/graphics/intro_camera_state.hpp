@@ -2,6 +2,7 @@
 
 #include "off/data/gms_image.hpp"
 #include <functional>
+#include <optional>
 
 namespace off::graphics {
 
@@ -33,7 +34,8 @@ private:
 
 struct IntroCameraState {
     // Retain opaque options and original precision separately from conversions.
-    data::GmsIntroCameraSource authored;
+    // Synthesized cameras have no authored record; never invent a GMS source.
+    std::optional<data::GmsIntroCameraSource> authored;
     float near_distance;
     float far_distance;
     float auxiliary_scalar;
@@ -46,6 +48,9 @@ struct IntroCameraState {
     // Current fractions copied from the full source schema, not distances.
     float fog_start_fraction;
     float fog_end_fraction;
+    float additional_projection_scale{1};
+    std::array<float,2> projection_multipliers{1,1};
+    std::array<float,3> vector_scale{1,1,1};
 };
 
 // Newly constructed camera, aspect mode zero and renderer-list selector zero.

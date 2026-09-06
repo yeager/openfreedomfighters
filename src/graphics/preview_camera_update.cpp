@@ -63,9 +63,9 @@ void PreviewCameraUpdate::run(PreviewCameraPose& camera,const PreviewCameraInput
   for(std::size_t i=0;i<6;++i) unchanged=unchanged && same(basis[i],camera.basis[i]);
   if(unchanged) return;
   camera.position=position;
-  camera.flags|=0x100000U;
+  camera.resource_flags|=0x100000U;
   camera.basis=basis;
-  camera.flags|=0x100000U;
+  camera.resource_flags|=0x100000U;
   enqueue_transform(camera);
 }
 } // namespace off::graphics

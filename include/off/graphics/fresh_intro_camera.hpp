@@ -8,11 +8,13 @@
 
 namespace off::graphics {
 
-// Constructed from the supported fresh mode-zero/selector-zero camera source.
+// Constructed normally without a source, or from a supported fresh
+// mode-zero/selector-zero authored source.
 // Owns the reviewed CPU fields, not a complete engine owner or registered view.
 // In particular, the separate scene-root owner pointer is not represented here.
 class FreshIntroCamera final {
 public:
+  FreshIntroCamera();
   explicit FreshIntroCamera(const data::GmsIntroCameraSource &source);
   FreshIntroCamera(const FreshIntroCamera &) = delete;
   FreshIntroCamera &operator=(const FreshIntroCamera &) = delete;
@@ -23,6 +25,15 @@ public:
   [[nodiscard]] std::uint32_t flags() const noexcept { return enabled_state_.flags(); }
   [[nodiscard]] bool enabled() const noexcept { return enabled_state_.enabled(); }
   [[nodiscard]] std::uint32_t render_control() const noexcept { return render_control_; }
+  [[nodiscard]] std::int32_t priority() const noexcept { return priority_; }
+  // Camera priority is independent of the renderer registry's insertion key.
+  void set_priority(std::int32_t priority) noexcept;
+  [[nodiscard]] float renderer_width() const noexcept { return renderer_width_; }
+  [[nodiscard]] float renderer_height() const noexcept { return renderer_height_; }
+  // Query/store width, then query/store height. A later exception preserves the
+  // completed prefix; no projection, viewport, flags or context are changed.
+  void notify_renderer_dimensions(const std::function<std::int32_t()>& width,
+                                  const std::function<std::int32_t()>& height);
   // A future native runtime identity, never an authored source reference.
   [[nodiscard]] std::optional<std::uint64_t> associated_target() const noexcept { return associated_target_; }
 
@@ -49,6 +60,9 @@ private:
   IntroCameraState parameters_;
   CameraEnabledState enabled_state_;
   std::uint32_t render_control_{0};
+  std::int32_t priority_{};
+  float renderer_width_{},renderer_height_{};
+  bool notifying_dimensions_{};
   std::optional<std::uint64_t> associated_target_;
   std::optional<PictureCameraServices> picture_services_;
 };

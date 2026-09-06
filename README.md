@@ -24,6 +24,8 @@ executable code are included here.
   One retained runtime owns their hierarchy and mutable picture state; intro
   textures upload to the GPU. Indexed drawing works in explicit integration
   tests; normal startup activation is not connected yet.
+  [Camera membership and listener selection](docs/CAMERA_REGISTRATION.md) now
+  share the scene's runtime identities, including across scene reloads.
 - Clock and sound preferences now share application-lifetime state across intro
   scenes. This does not add intro playback or audible sound.
 - The two intro sound definitions resolve to their original audio-bank streams

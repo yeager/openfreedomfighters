@@ -59,14 +59,14 @@ int main() {
     check(std::bit_cast<std::uint32_t>(fog_camera.fog_start_fraction) == 0x80000000U &&
           std::bit_cast<std::uint32_t>(fog_camera.fog_end_fraction) == 1U,
           "fog source preserves signed zero and binary32 payload without arithmetic");
-    check(camera.authored.auxiliary_scalar == 0.1234567890123 && camera.authored.angle_degrees == 5 &&
-          camera.authored.integer_a == 0xdeadbeefU && camera.authored.priority == 0xffffffffU &&
-          camera.authored.flag_option_a == 0x87654321U && camera.authored.flag_option_b == 0xfedcba98U &&
-          camera.authored.auxiliary_floats == authored.auxiliary_floats,
+    check(camera.authored && camera.authored->auxiliary_scalar == 0.1234567890123 && camera.authored->angle_degrees == 5 &&
+          camera.authored->integer_a == 0xdeadbeefU && camera.authored->priority == 0xffffffffU &&
+          camera.authored->flag_option_a == 0x87654321U && camera.authored->flag_option_b == 0xfedcba98U &&
+          camera.authored->auxiliary_floats == authored.auxiliary_floats,
           "authored precision and opaque options are preserved independently");
     check(std::bit_cast<std::uint32_t>(camera.viewport[0]) == 0U &&
           std::bit_cast<std::uint32_t>(camera.viewport[1]) == 0U &&
-          std::bit_cast<std::uint32_t>(camera.authored.viewport[0]) == 0x80000000U &&
+          std::bit_cast<std::uint32_t>(camera.authored->viewport[0]) == 0x80000000U &&
           camera.viewport_ratio == 0.5F, "identity composition is not a bitwise viewport copy");
     authored.priority = 0x80000000U;
     authored.far_distance = -0.0; authored.auxiliary_scalar = -0.0; authored.angle_degrees = -0.0;
@@ -132,7 +132,7 @@ int main() {
     const auto viewport = off::graphics::prepare_picture_viewport_request(common.rectangle, camera.viewport);
     check(viewport == std::array<float, 4>{10, 20, 100, 25},
           "composed relative viewport maps into explicitly supplied pass rectangle");
-    check(camera.authored.near_distance == 0.375 && camera.authored.viewport[2] == 0.5F,
+    check(camera.authored->near_distance == 0.375 && camera.authored->viewport[2] == 0.5F,
           "downstream preparation does not mutate authored source");
     if (saved_rounding != -1) check(std::fesetround(saved_rounding) == 0, "restore incoming rounding environment");
     return failures == 0 ? 0 : 1;

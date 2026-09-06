@@ -24,7 +24,7 @@ int main() {
     unsigned queued=0;
     const auto queue=[&](auto& live) {
       check(&live==&first || &live==&second,"queue receives the original live resource");
-      check((live.flags&0x100000U)!=0,"dirty bit is visible before queue insertion");
+      check((live.resource_flags&0x100000U)!=0,"resource dirty bit is visible before queue insertion");
       ++queued;
       rejects([&] { update.run(live,input,[](auto&) {}); });
     };
@@ -40,7 +40,7 @@ int main() {
     const float cosine=static_cast<float>(std::cos(double(0.2F)));
     check(queued==1 && near(first.basis[0],sine) && near(first.basis[2],cosine) &&
           near(first.basis[6],cosine) && near(first.basis[8],-sine) &&
-          first.position==camera().position && first.flags==0x110000U,
+          first.position==camera().position && first.resource_flags==0x110000U,
           "real pointer motion rotates the permuted basis without numeric translation");
     update.run(second,input,queue);
     check(queued==1 && second.basis==camera().basis,"second camera shares the published pointer sample");

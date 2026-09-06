@@ -9,7 +9,8 @@ namespace off::graphics {
 struct PreviewCameraPose {
   std::array<float,9> basis;
   std::array<float,3> position;
-  std::uint32_t flags;
+  // Resource hide/transform-dirty domain, NOT camera-owner enabled/toggle flags.
+  std::uint32_t resource_flags;
 };
 struct PreviewCameraInput {
   std::array<float,2> pointer;

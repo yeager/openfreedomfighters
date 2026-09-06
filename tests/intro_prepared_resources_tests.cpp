@@ -516,6 +516,34 @@ int main() {
     }
     {
       off::graphics::IntroRuntime host(fixture.build(),application,component_sequence);
+      application.sound_records().clear_scene_listener();
+      check(!host.sound_listener(),"unregistered scene camera cannot manufacture a sound listener");
+      std::vector<int> camera_calls;
+      const auto camera_owner=host.source_handle(host.resources().camera_index());
+      host.register_camera(0,{
+        [&]{camera_calls.push_back(1);return 1920;},
+        [&]{camera_calls.push_back(2);return 1080;},
+        [&]{camera_calls.push_back(3);return false;},
+        [&](auto){throw std::runtime_error("unready backend must not admit a view");}
+      });
+      check(camera_calls==std::vector<int>{1,2,3} && host.camera().renderer_width()==1920 &&
+        host.camera().renderer_height()==1080,"registration uses canonical camera dimensions before backend gate");
+      host.register_camera(9,{});
+      check(camera_calls.size()==3,"duplicate registration skips dimensions and backend");
+      const auto listener=host.sound_listener();
+      check(listener && listener->owner==camera_owner && listener->context==host.root_handle() &&
+        application.sound_records().listener_handle()==0,"registry fallback selects actual camera/root without setting explicit listener");
+      host.camera().set_enabled(false,false,{});
+      check(host.sound_listener()->owner==camera_owner,"disabled camera remains a valid sound listener");
+      host.camera().set_enabled(true,false,{});
+      host.set_camera_context(host.source_handle(0));
+      check(host.sound_listener()->context==host.source_handle(0),"live camera context replaces root independently of resource parent");
+      host.set_camera_context({});
+      check(host.sound_listener()->context==host.root_handle(),"null camera context falls back to actual root");
+      host.set_sound_listener(camera_owner);
+      check(application.sound_records().listener_handle()==camera_owner.value &&
+        *application.sound_records().listener_offsets()==std::array<float,3>{0,0,0},"explicit listener setter reaches application backend");
+      application.sound_records().clear_scene_listener();
       check(host.components().size()==11 && component_sequence.next_identity()==0,
             "complete fixture attachment catalog plus root does not invent construction IDs");
       check(host.components().at(0).source().factory_name=="ZGROUP_RootGroup" &&
@@ -561,6 +589,42 @@ int main() {
       rejects([&] { (void)host.picture_for_source(0); });
       rejects([&] { host.project_selected_window_camera_state(); });
       check(!host.camera().associated_target(), "unsupported window projection has no camera effects");
+    }
+    {
+      off::graphics::IntroRuntimeHandle expired_camera;
+      {
+        off::graphics::IntroRuntime old_scene(fixture.build(),application,component_sequence);
+        expired_camera=old_scene.source_handle(old_scene.resources().camera_index());
+        old_scene.set_sound_listener(expired_camera);
+        check(old_scene.sound_listener()->owner==expired_camera,"old scene explicit listener resolves while owner lives");
+      }
+      off::graphics::IntroRuntime next_scene(fixture.build(),application,component_sequence);
+      const auto next_camera=next_scene.source_handle(next_scene.resources().camera_index());
+      check(next_camera!=expired_camera && !next_scene.sound_listener() &&
+            application.sound_records().listener_handle()==expired_camera.value,
+            "expired explicit camera cannot alias same source in a later scene");
+      rejects([&]{(void)next_scene.source_index(expired_camera);});
+      rejects([&]{(void)next_scene.hierarchy_index(expired_camera);});
+      rejects([&]{next_scene.set_sound_listener(expired_camera);});
+      next_scene.register_camera(0,{[]{return 640;},[]{return 480;},[]{return false;},{}});
+      check(next_scene.sound_listener()->owner==next_camera &&
+            next_scene.sound_listener()->context==next_scene.root_handle() &&
+            application.sound_records().listener_handle()==expired_camera.value,
+            "new registry fallback selects new live camera without reviving or rewriting expired explicit handle");
+      off::graphics::IntroRuntime simultaneous(fixture.build(),application,component_sequence);
+      check(next_scene.root_handle()!=simultaneous.root_handle(),"simultaneous scenes have distinct roots");
+      for(std::size_t i=0;i<next_scene.resources().sources().directory().size();++i) {
+        const auto first=next_scene.source_handle(i),second=simultaneous.source_handle(i);
+        check(first!=second && next_scene.source_index(first)==i && simultaneous.source_index(second)==i &&
+              next_scene.hierarchy_index(first)==i+1 && simultaneous.hierarchy_index(second)==i+1,
+              "application owner ranges preserve source and hierarchy joins without aliasing");
+        rejects([&]{(void)next_scene.source_index(second);});
+        rejects([&]{(void)simultaneous.hierarchy_index(first);});
+      }
+      rejects([&]{(void)next_scene.hierarchy_index(simultaneous.root_handle());});
+      rejects([&]{simultaneous.set_camera_context(next_scene.root_handle());});
+      check(simultaneous.camera_context()==simultaneous.root_handle(),"foreign context rejection preserves scene root");
+      application.sound_records().clear_scene_listener();
     }
     {
       auto projection_fixture = fixture;

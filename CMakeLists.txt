@@ -62,12 +62,14 @@ add_library(off_core
     src/audio/decode.cpp
     src/audio/sound_preferences.cpp
     src/audio/sound_records.cpp
+    src/audio/sound_listener.cpp
     src/audio/sound_record_volume.cpp
     src/audio/stereo_source_command.cpp
     src/audio/stereo_stream_playback.cpp
     src/audio/intro_audio_stream.cpp
     src/runtime/application_clock.cpp
     src/runtime/component_lifecycle.cpp
+    src/runtime/live_variables.cpp
     src/crypto/sha256.cpp
     src/data/archive_vfs.cpp
     src/data/audio_bank_header.cpp
@@ -112,9 +114,11 @@ add_library(off_core
     src/graphics/picture_preselection.cpp
     src/graphics/picture_draw_reset.cpp
     src/graphics/renderer_frame.cpp
+    src/graphics/renderer_camera_registry.cpp
     src/graphics/intro_camera_state.cpp
     src/graphics/fresh_intro_camera.cpp
     src/graphics/preview_camera_update.cpp
+    src/graphics/preview_camera_component.cpp
     src/graphics/intro_picture_transform.cpp
     src/graphics/center_picture_position.cpp
     src/graphics/position_update_service.cpp
@@ -239,6 +243,12 @@ install(FILES assets/branding/openfreedomfighters-splash.bmp
         DESTINATION bin/assets)
 
 if(BUILD_TESTING)
+    add_executable(off_preview_camera_component_tests tests/preview_camera_component_tests.cpp)
+    target_link_libraries(off_preview_camera_component_tests PRIVATE off_core)
+    add_test(NAME off_preview_camera_component_tests COMMAND off_preview_camera_component_tests)
+    add_executable(off_renderer_camera_registry_tests tests/renderer_camera_registry_tests.cpp)
+    target_link_libraries(off_renderer_camera_registry_tests PRIVATE off_core)
+    add_test(NAME off_renderer_camera_registry_tests COMMAND off_renderer_camera_registry_tests)
     add_executable(off_intro_audio_stream_tests tests/intro_audio_stream_tests.cpp)
     target_link_libraries(off_intro_audio_stream_tests PRIVATE off_core Vorbis::vorbisenc)
     add_test(NAME off_intro_audio_stream_tests COMMAND off_intro_audio_stream_tests)

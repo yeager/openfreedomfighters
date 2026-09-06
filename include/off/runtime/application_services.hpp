@@ -4,8 +4,10 @@
 #include "off/graphics/intro_controller_initialization.hpp"
 #include "off/graphics/preview_camera_update.hpp"
 #include "off/runtime/application_clock.hpp"
+#include "off/runtime/live_variables.hpp"
 #include <utility>
 #include <stdexcept>
+#include <limits>
 
 namespace off::runtime {
 // Application-lifetime state, borrowed by scenes rather than reset when each
@@ -22,6 +24,16 @@ public:
   [[nodiscard]] const ApplicationClock& clock() const noexcept { return clock_; }
   [[nodiscard]] audio::SoundPreferences& sound() noexcept { return sound_; }
   [[nodiscard]] graphics::PreviewCameraUpdate& preview_camera_update() noexcept { return preview_camera_update_; }
+  [[nodiscard]] LiveVariableRegistry& live_variables() noexcept { return live_variables_; }
+  // Native application-scoped owner IDs never alias a previously destroyed
+  // scene. This is not the original allocator or the component serial counter.
+  [[nodiscard]] std::uint64_t allocate_runtime_owners(std::uint64_t count) {
+    if(!count || !next_runtime_owner_ || count-1>std::numeric_limits<std::uint64_t>::max()-next_runtime_owner_)
+      throw std::runtime_error("Native runtime owner identity domain exhausted");
+    const auto first=next_runtime_owner_;
+    next_runtime_owner_+=count;
+    return first;
+  }
   // Explicit component-update boundary. Input queries and the live camera/queue
   // come from the caller; raw delta always comes from this canonical clock.
   void update_preview_camera(graphics::PreviewCameraPose& camera,
@@ -56,5 +68,7 @@ private:
   audio::SoundRecordRegistry sound_records_;
   audio::SoundPreferences sound_;
   graphics::PreviewCameraUpdate preview_camera_update_;
+  LiveVariableRegistry live_variables_;
+  std::uint64_t next_runtime_owner_{1};
 };
 } // namespace off::runtime

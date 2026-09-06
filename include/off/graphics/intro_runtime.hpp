@@ -10,6 +10,7 @@
 #include "off/graphics/picture_view_transition.hpp"
 #include "off/graphics/renderer_frame.hpp"
 #include "off/graphics/renderer_frame_pass.hpp"
+#include "off/graphics/renderer_camera_registry.hpp"
 #include "off/graphics/picture_ordered_coordinator.hpp"
 #include <map>
 #include <memory>
@@ -19,6 +20,14 @@ namespace off::graphics {
 struct IntroRuntimeHandle {
   std::uint64_t value{};
   bool operator==(const IntroRuntimeHandle&) const = default;
+};
+struct IntroCameraRegistrationServices {
+  std::function<std::int32_t()> width,height;
+  std::function<bool()> backend_ready;
+  std::function<void(IntroRuntimeHandle)> admit_view;
+};
+struct IntroSoundListener {
+  IntroRuntimeHandle owner,context;
 };
 
 // Canonical record lease, not an audio channel. Owner binding is published by
@@ -130,7 +139,15 @@ public:
   [[nodiscard]] const IntroControllerInitialization& controller_initialization() const noexcept { return controller_initialization_; }
   [[nodiscard]] FreshIntroCamera& camera() noexcept { return camera_; }
   [[nodiscard]] const FreshIntroCamera& camera() const noexcept { return camera_; }
-  [[nodiscard]] IntroRuntimeHandle root_handle() const noexcept { return {1}; }
+  // Explicit real renderer membership for the retained authored camera. Does
+  // not activate a cut, fabricate backend readiness or synthesize DefaultCam.
+  void register_camera(float key,const IntroCameraRegistrationServices& services);
+  [[nodiscard]] RendererCameraRegistry& registered_cameras() noexcept {return registered_cameras_;}
+  [[nodiscard]] IntroRuntimeHandle camera_context() const noexcept {return camera_context_;}
+  void set_camera_context(IntroRuntimeHandle context);
+  void set_sound_listener(IntroRuntimeHandle owner);
+  [[nodiscard]] std::optional<IntroSoundListener> sound_listener();
+  [[nodiscard]] IntroRuntimeHandle root_handle() const noexcept { return {owner_base_}; }
   [[nodiscard]] IntroRuntimeHandle camera_root_owner() const noexcept { return root_handle(); }
   [[nodiscard]] IntroRuntimeHandle source_handle(std::size_t source) const;
   [[nodiscard]] std::optional<std::size_t> source_index(IntroRuntimeHandle handle) const;
@@ -153,6 +170,7 @@ public:
   [[nodiscard]] PictureViewTransition& view_transition() noexcept { return view_; }
 private:
   runtime::ApplicationServices& application_;
+  std::uint64_t owner_base_{};
   IntroPreparedResources resources_;
   // Declared before components so their captures are destroyed before leases.
   std::vector<std::unique_ptr<IntroRuntimeSound>> sounds_;
@@ -161,6 +179,8 @@ private:
   std::size_t controller_component_{};
   IntroControllerInitialization controller_initialization_;
   FreshIntroCamera camera_;
+  RendererCameraRegistry registered_cameras_;
+  IntroRuntimeHandle camera_context_; // The same synthesized root, not resource parent.
   std::vector<PictureHierarchyNode> hierarchy_;
   std::vector<IntroRuntimeHandle> additional_;
   std::map<std::uint32_t, std::vector<data::PictureResourceDescriptor>> descriptors_;
@@ -173,5 +193,8 @@ private:
   PictureViewTransition view_;
   bool projected_{false};
   bool sound_preparation_busy_{};
+  [[nodiscard]] bool live_owner(std::uint64_t handle) const noexcept {
+    return handle>=owner_base_ && handle-owner_base_<hierarchy_.size();
+  }
 };
 } // namespace off::graphics

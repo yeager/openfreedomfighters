@@ -39,6 +39,45 @@ int main() {
                   !std::is_move_assignable_v<FreshIntroCamera>);
     const int saved = std::fegetround();
     if (std::fesetround(FE_TONEAREST) != 0) return 1;
+    {
+        FreshIntroCamera camera;
+        const auto& p=camera.parameters();
+        check(!p.authored && camera.flags()==0x20 && camera.enabled() && camera.priority()==0 &&
+              camera.render_control()==0 && !camera.associated_target(),"ordinary constructor has no fabricated authored source");
+        check(p.near_distance==5 && p.far_distance==20000 && p.auxiliary_scalar==400 &&
+              std::bit_cast<std::uint32_t>(p.angle_radians)==0x3f9c61abU && p.registration_priority==0 &&
+              p.viewport==std::array<float,4>{0,0,1,1} && p.viewport_ratio==1 && p.background==0 &&
+              !p.final_boolean && p.fog_start_fraction==0 && p.fog_end_fraction==0 &&
+              p.additional_projection_scale==1 && p.projection_multipliers==std::array<float,2>{1,1} &&
+              p.vector_scale==std::array<float,3>{1,1,1},"reviewed synthesized projection defaults");
+        check(std::bit_cast<std::uint32_t>(camera.renderer_width())==0 &&
+              std::bit_cast<std::uint32_t>(camera.renderer_height())==0 &&
+              std::bit_cast<std::uint32_t>(p.viewport[0])==0 &&
+              std::bit_cast<std::uint32_t>(p.viewport[1])==0 &&
+              std::bit_cast<std::uint32_t>(p.fog_start_fraction)==0 &&
+              std::bit_cast<std::uint32_t>(p.fog_end_fraction)==0,"constructor zeros are positive");
+        camera.set_priority(0x40000000);
+        check(camera.priority()==0x40000000 && p.registration_priority==1073741824.F && !p.authored,
+              "loader priority updates canonical integer and derived float without source");
+        camera.set_priority(std::numeric_limits<std::int32_t>::max());
+        check(camera.priority()==std::numeric_limits<std::int32_t>::max() && p.registration_priority==2147483648.F,
+              "priority preserves integer precision independently of binary32 derivative");
+        int calls=0;
+        camera.notify_renderer_dimensions([&]{check(calls++==0,"width queried first");return 16777217;},
+          [&]{check(calls++==1 && camera.renderer_width()==16777216.F,"width stored before height query");return -12;});
+        check(camera.renderer_height()==-12 && calls==2 && camera.flags()==0x20 &&
+              p.viewport==std::array<float,4>{0,0,1,1} && p.viewport_ratio==1,
+              "notification does not clamp dimensions or change viewport/flags");
+        rejects([&]{camera.notify_renderer_dimensions([]()->std::int32_t{throw std::runtime_error("width");},
+          [&]{++calls;return 3;});});
+        check(calls==2 && camera.renderer_width()==16777216.F && camera.renderer_height()==-12,"width failure preserves both fields and skips height");
+        rejects([&]{camera.notify_renderer_dimensions([]{return 123;},[]()->std::int32_t{throw std::runtime_error("height");});});
+        check(camera.renderer_width()==123 && camera.renderer_height()==-12,"height failure preserves completed width store");
+        rejects([&]{camera.notify_renderer_dimensions([]{return 7;},{});});
+        check(camera.renderer_width()==7 && camera.renderer_height()==-12,"missing height preserves width prefix");
+        camera.notify_renderer_dimensions([&]{rejects([&]{camera.notify_renderer_dimensions([]{return 1;},[]{return 2;});});return 640;},[]{return 480;});
+        check(camera.renderer_width()==640 && camera.renderer_height()==480,"nonreentrant notification recovers after failures");
+    }
     for (std::uint32_t a : {0U, 1U, 7U, 0xffffffffU})
         for (std::uint32_t b : {0U, 1U, 9U, 0x80000000U})
             for (std::uint32_t final : {0U, 3U}) {
@@ -48,25 +87,26 @@ int main() {
                 check(camera.flags() == expected && camera.enabled() && camera.render_control() == 0 &&
                       !camera.associated_target() && camera.parameters().final_boolean == (final != 0),
                       "fresh flag word uses inverse A/direct B truth, independent final boolean and null target");
-                check(camera.parameters().authored.flag_option_a == a && camera.parameters().authored.flag_option_b == b,
+                check(camera.parameters().authored && camera.parameters().authored->flag_option_a == a && camera.parameters().authored->flag_option_b == b,
                       "raw option words remain owned beside converted runtime flags");
             }
     {
         auto s = source();
         s.auxiliary_floats = {-0.0F, 0.375F};
         FreshIntroCamera camera(s);
+        check(camera.priority()==-1,"authored priority is retained as signed integer");
         s.near_distance = 999; s.viewport[2] = 0; s.flag_option_a = 19;
         s.auxiliary_floats = {42, 99};
         const auto& p = camera.parameters();
         check(std::bit_cast<std::uint32_t>(p.fog_start_fraction) == 0x80000000U &&
               p.fog_end_fraction == 0.375F,
               "canonical camera owns fog fractions independently of source lifetime");
-        check(p.authored.near_distance == 0.375 && p.near_distance == 1 && p.far_distance == 321.25 &&
-              p.authored.auxiliary_scalar == 0.1234567890123 &&
+        check(p.authored->near_distance == 0.375 && p.near_distance == 1 && p.far_distance == 321.25 &&
+              p.authored->auxiliary_scalar == 0.1234567890123 &&
               std::bit_cast<std::uint32_t>(p.angle_radians) == 0x3db2b8c3U &&
               p.registration_priority == -1 && p.background == 0x00abcdefU && p.viewport_ratio == 0.5F,
               "instance owns source precision and existing rounded conversion results");
-        check(std::bit_cast<std::uint32_t>(p.authored.viewport[0]) == 0x80000000U &&
+        check(std::bit_cast<std::uint32_t>(p.authored->viewport[0]) == 0x80000000U &&
               std::bit_cast<std::uint32_t>(p.viewport[0]) == 0,
               "authored signed zero stays distinct from composed viewport");
         const auto original = camera.flags();

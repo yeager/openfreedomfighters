@@ -6,7 +6,7 @@ uses the canonical clock's raw CRT delta, not scaled or frozen scene time and
 not a caller-supplied replacement delta.
 
 The caller supplies actual application input-query results, the live camera
-pose/flags and its transform-update queue service. The first pointer sample
+resource pose/flags and its transform-update queue service. The first pointer sample
 baselines history once. Subsequent finite mouse movement rotates the existing
 basis; each update publishes history even when the raw delta is zero. Different
 preview cameras share this history. There is no mouse-button, enabled-camera,
@@ -18,6 +18,8 @@ interoperability choice, not a claim of bitwise agreement with the original
 math library for every angle. The transform setter's equality fast path compares
 position and the first six basis words bitwise. Otherwise it copies the full
 pose, sets the resource dirty bit and queues that same resource.
+Resource hide/dirty flags are distinct from camera-owner enabled/toggle flags;
+the updater never puts resource dirty state into the camera-owner flag word.
 
 Missing queue service, nonfinite input, active keyboard variants and collision
 visualization are explicit unsupported results, not substituted zero inputs.
@@ -29,8 +31,14 @@ Tests exercise baselining, real pointer displacement, accumulated rotation,
 cross-camera history, zero-delta publication, clock binding, unsupported inputs,
 dirty-state visibility, queue failures and reentry.
 
-This does not yet construct or admit the loader's DefaultCam/PreviewCamera,
-register its console variables, process keyboard motion or consume the transform
-queue. Normal startup does not invoke this explicit boundary automatically.
-The audio listener must eventually use the actual registered camera resource,
-not a separate pose copied solely for sound.
+`PreviewCameraComponent` owns the real four live-variable bindings. The static
+check variable deliberately aliases the dynamic-check field; the separate static
+field remains distinct. Typed handles reject stale/foreign access, duplicate names
+remain separate registrations, and destruction releases bindings in registration
+order. The component update reads its live collision setting and uses the same
+application's clock and shared pointer history, not a caller's replacement state.
+
+This does not yet attach/admit DefaultCam through the complete loader, process
+keyboard motion/debug collision or consume the transform queue. Normal startup
+does not call this boundary automatically. Camera/listener registration is
+described in [camera membership](CAMERA_REGISTRATION.md).
