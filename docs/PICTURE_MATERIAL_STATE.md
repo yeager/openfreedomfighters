@@ -3,6 +3,8 @@
 This renderer-neutral model describes state requests from the recovered
 picture-resource binding and descriptor-emitter material paths. It does not
 choose the final startup material word, execute GPU calls or evaluate pixels.
+The [single-stage shader](PICTURE_STAGE_SHADER.md) now evaluates supported
+resolved stage operations on the GPU; it is not a complete material executor.
 Resource binding and material requests remain separate ordered phases: the
 latter can override the former. Missing requests mean leave inherited state
 unchanged, never select an implicit default.

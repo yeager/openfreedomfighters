@@ -221,6 +221,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Coordinate preselection, reserved-key marking, all-state barrier rounds
   and live-order restoration using the same renderer snapshot. Required
   preselection/special-render services and normal startup admission remain open.
+- [x] Evaluate resolved stage-zero picture operations in a project-owned shader,
+  with SPIR-V/MSL output and Vulkan pixel tests joined to material requests.
+  DXIL, fog, later stages and complete picture GPU submission remain open.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

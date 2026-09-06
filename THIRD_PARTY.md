@@ -11,6 +11,7 @@ OpenFreedomFighters uses established portable libraries through their public API
 | [libvorbis](https://github.com/xiph/vorbis) | Vorbis decode and synthetic test encoding | BSD-style license | system development package; commit-pinned source build on Windows CI |
 | [Spleen 2.2.0](https://github.com/fcambus/spleen/releases/tag/2.2.0) | Temporary diagnostic 8x16 UI glyphs | BSD-2-Clause | generated printable-ASCII row table; license vendored in `third_party/spleen/LICENSE` |
 | [Capstone](https://github.com/capstone-engine/capstone) | private code-boundary analysis | BSD 3-Clause | pinned optional Python analysis dependency |
+| [glslang](https://github.com/KhronosGroup/glslang), [SPIRV-Tools](https://github.com/KhronosGroup/SPIRV-Tools), [SPIRV-Cross](https://github.com/KhronosGroup/SPIRV-Cross) | offline compilation, validation and translation of project-owned shaders | see respective upstream license files | optional development tools; not linked or bundled; regeneration versions documented in `docs/PICTURE_STAGE_SHADER.md` |
 
 These dependencies contain no Freedom Fighters code or data. Their licenses and notices remain governed by their respective upstream distributions and must be included when binary packaging begins.
 

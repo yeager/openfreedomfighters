@@ -149,9 +149,25 @@ add_executable(
     src/platform/sdl_menu_gamepad.cpp
     src/platform/sdl_startup.cpp
 )
+add_library(off_sdl_picture_stage_shader STATIC src/platform/picture_stage_shader.cpp)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/picture_stage.frag"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/picture_stage_frag.hpp")
+file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/picture_stage.frag" OFF_PICTURE_SHADER_SOURCE_SHA)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/picture_stage_frag.hpp"
+     OFF_PICTURE_SHADER_GENERATED_SHA REGEX "^// GLSL SHA256: ")
+if(NOT OFF_PICTURE_SHADER_GENERATED_SHA STREQUAL "// GLSL SHA256: ${OFF_PICTURE_SHADER_SOURCE_SHA}")
+    message(FATAL_ERROR "Picture shader source changed; regenerate with tools/build_picture_shader.py")
+endif()
+target_link_libraries(off_sdl_picture_stage_shader PUBLIC off_core ${OFF_SDL3_TARGET})
+if(MSVC)
+    target_compile_options(off_sdl_picture_stage_shader PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(off_sdl_picture_stage_shader PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
+endif()
 target_link_libraries(
     openfreedomfighters PRIVATE
-    off_core off_sdl_picture_clear ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
+    off_core off_sdl_picture_clear off_sdl_picture_stage_shader ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
 )
 target_include_directories(
     openfreedomfighters PRIVATE
@@ -180,6 +196,11 @@ install(FILES assets/branding/openfreedomfighters-splash.bmp
         DESTINATION bin/assets)
 
 if(BUILD_TESTING)
+    add_executable(off_sdl_picture_stage_shader_tests tests/sdl_picture_stage_shader_tests.cpp)
+    target_link_libraries(off_sdl_picture_stage_shader_tests PRIVATE off_sdl_picture_stage_shader)
+    target_include_directories(off_sdl_picture_stage_shader_tests PRIVATE "${off_shader_assets_SOURCE_DIR}/examples")
+    add_test(NAME off_sdl_picture_stage_shader_tests COMMAND off_sdl_picture_stage_shader_tests)
+    set_tests_properties(off_sdl_picture_stage_shader_tests PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
     add_executable(off_sdl_picture_clear_tests tests/sdl_picture_clear_tests.cpp)
     target_link_libraries(off_sdl_picture_clear_tests PRIVATE off_sdl_picture_clear)
     add_test(NAME off_sdl_picture_clear_tests COMMAND off_sdl_picture_clear_tests)
