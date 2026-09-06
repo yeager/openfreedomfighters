@@ -182,6 +182,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   zero-ID bounds query without substituting its PRM key or invented query data.
 - [x] Recompute group resource and child-only owner bounds from ordered live
   children, preserving filters, root fallback conditions and distinct extent rules.
+- [x] Connect eligible identity-basis parent-space bounds to expansion-only shared
+  ancestor updates, preserving no-expansion stops and existing sibling bounds.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

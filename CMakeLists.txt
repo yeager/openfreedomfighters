@@ -96,6 +96,7 @@ add_library(off_core
     src/graphics/position_update_service.cpp
     src/graphics/picture_bounds.cpp
     src/graphics/group_bounds.cpp
+    src/graphics/bounds_propagation.cpp
     src/graphics/admitted_view_pass.cpp
     src/graphics/renderer_frame_pass.cpp
     src/platform/startup_lifecycle.cpp
@@ -249,6 +250,9 @@ if(BUILD_TESTING)
     add_executable(off_group_bounds_tests tests/group_bounds_tests.cpp)
     target_link_libraries(off_group_bounds_tests PRIVATE off_core)
     add_test(NAME off_group_bounds_tests COMMAND off_group_bounds_tests)
+    add_executable(off_bounds_propagation_tests tests/bounds_propagation_tests.cpp)
+    target_link_libraries(off_bounds_propagation_tests PRIVATE off_core)
+    add_test(NAME off_bounds_propagation_tests COMMAND off_bounds_propagation_tests)
 
     add_executable(off_admitted_view_pass_tests tests/admitted_view_pass_tests.cpp)
     target_link_libraries(off_admitted_view_pass_tests PRIVATE off_core)

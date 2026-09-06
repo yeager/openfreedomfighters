@@ -133,9 +133,12 @@ The [local picture-bounds calculation](docs/PICTURE_BOUNDS.md) now consumes real
 PRM groups with preserved rounding, scaled extents and pre-clamp radius inputs.
 Its ordered application preserves the explicit renderer-bounds query before
 descriptor replacement. The ordinary legal picture's retained zero renderer ID
-now selects its verified concrete query path; ancestor updates remain separate.
+now selects its verified concrete query path; ancestor updates use a separate
+propagation operation.
 The [group-bounds callback](docs/GROUP_BOUNDS.md) now recomputes separate resource
 and child-only owner bounds from explicitly admitted live children.
+The [identity-basis propagation path](docs/BOUNDS_PROPAGATION.md) now expands
+shared ancestors without contraction and stops when no bounds grow.
 
 ## Build the native bootstrap
 
