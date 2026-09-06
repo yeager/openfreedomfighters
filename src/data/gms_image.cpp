@@ -941,6 +941,69 @@ GmsIntroMovieControllerSource GmsImage::intro_movie_controller_source(
     return result;
 }
 
+GmsIntroCameraSource GmsImage::intro_camera_source(std::size_t index) const {
+    const auto fail = []() -> void {
+        throw std::runtime_error("GMS intro camera is unsupported or malformed");
+    };
+    if (index >= directory_.size()) fail();
+    const auto& entry = directory_[index];
+    if (entry.source_type != 0x00400003U || entry.class_data_value != 0U ||
+        !entry.attachments.empty() || entry.deferred_source_offset == 0U) fail();
+    const auto payload = resource_.payload();
+    const auto offset = static_cast<std::size_t>(entry.deferred_source_offset);
+    if (offset > payload.size() || 122U > payload.size() - offset) fail();
+    const ByteReader reader(payload);
+    if (reader.u32(offset) != 122U) fail();
+    const auto end = offset + 122U;
+    auto cursor = offset + 4U;
+    const auto tag = [&](std::uint8_t expected) {
+        if (cursor >= end || payload[cursor] != static_cast<std::byte>(expected)) fail();
+        ++cursor;
+    };
+    const auto word = [&](std::uint8_t expected) {
+        tag(expected);
+        if (4U > end - cursor) fail();
+        const auto value = reader.u32(cursor);
+        cursor += 4U;
+        return value;
+    };
+    const auto real = [&](std::uint8_t expected) {
+        tag(expected);
+        if (8U > end - cursor) fail();
+        const auto bits = static_cast<std::uint64_t>(reader.u32(cursor)) |
+                          (static_cast<std::uint64_t>(reader.u32(cursor + 4U)) << 32U);
+        cursor += 8U;
+        const auto value = std::bit_cast<double>(bits);
+        constexpr double limit = std::numeric_limits<float>::max();
+        // Conservative native convertible-range policy, before any narrowing.
+        if (!std::isfinite(value) || value < -limit || value > limit) fail();
+        return value;
+    };
+    const auto single = [&](std::uint8_t expected) {
+        const auto value = std::bit_cast<float>(word(expected));
+        if (!std::isfinite(value)) fail();
+        return value;
+    };
+    GmsIntroCameraSource result;
+    result.near_distance = real(0x01);
+    result.far_distance = real(0x01);
+    result.background_rgb = {word(0x03), word(0x43), word(0x43)};
+    result.auxiliary_scalar = real(0x01);
+    result.angle_degrees = real(0x81);
+    result.integer_a = word(0x03);
+    result.renderer_list_selector = word(0x83);
+    result.priority = word(0x83);
+    result.aspect_mode = word(0x03);
+    result.flag_option_a = word(0x83);
+    result.auxiliary_floats = {single(0x02), single(0x02)};
+    result.flag_option_b = word(0x03);
+    result.viewport = {single(0x02), single(0x42), single(0x42), single(0x42)};
+    result.final_boolean = word(0x03);
+    tag(0x06); tag(0xff);
+    if (cursor != end) fail();
+    return result;
+}
+
 GmsWindowPictureSource GmsImage::intro_fade_picture_source(std::size_t index) const {
     const auto fail = []() -> void {
         throw std::runtime_error("GMS intro fade picture is unsupported or malformed");

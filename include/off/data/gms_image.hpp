@@ -38,6 +38,23 @@ struct GmsIntroMovieControllerSource {
     std::optional<std::uint32_t> second_optional_reference;
 };
 
+struct GmsIntroCameraSource {
+    double near_distance{0};
+    double far_distance{0};
+    std::array<std::uint32_t, 3> background_rgb{};
+    double auxiliary_scalar{0};
+    double angle_degrees{0};
+    std::uint32_t integer_a{0};
+    std::uint32_t renderer_list_selector{0};
+    std::uint32_t priority{0};
+    std::uint32_t aspect_mode{0};
+    std::uint32_t flag_option_a{0};
+    std::array<float, 2> auxiliary_floats{};
+    std::uint32_t flag_option_b{0};
+    std::array<float, 4> viewport{};
+    std::uint32_t final_boolean{0};
+};
+
 struct GmsIntroCutCommandSource {
     std::uint32_t timeline_position{0};
     std::uint32_t event_reference{0};
@@ -126,6 +143,9 @@ public:
     [[nodiscard]] GmsWindowPictureSource intro_fade_picture_source(
         std::size_t directory_index
     ) const;
+    // Supported intro provenance and exact camera grammar only. Authored fields,
+    // not runtime camera state: no near clamp, angle conversion or viewport policy.
+    [[nodiscard]] GmsIntroCameraSource intro_camera_source(std::size_t directory_index) const;
     // Caller must establish supported intro provenance. This deliberately narrow
     // attachment grammar is not generic component dispatch or reference lookup.
     [[nodiscard]] GmsIntroMovieControllerSource intro_movie_controller_source(

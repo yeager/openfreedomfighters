@@ -401,6 +401,102 @@ void check_parse_rejected(Mutation mutation, const char* message) {
     );
 }
 
+void intro_camera_tests() {
+    const auto set_double_bits = [](auto& bytes, std::size_t offset, std::uint64_t bits) {
+        set_u32(bytes, offset, static_cast<std::uint32_t>(bits));
+        set_u32(bytes, offset + 4U, static_cast<std::uint32_t>(bits >> 32U));
+    };
+    const auto fixture = [&] {
+        auto bytes = intro_controller_fixture();
+        set_u32(bytes, 9U + 336U + 16U, 0x00400003U);
+        set_u32(bytes, 9U + 336U + 20U, 0U);
+        set_u32(bytes, 609U, 122U);
+        constexpr std::array<std::size_t, 4> double_positions{4, 13, 37, 46};
+        constexpr std::array<double, 4> doubles{-2.25, 8192.125, 0.1234567890123, -135.5};
+        for (std::size_t i = 0; i < doubles.size(); ++i) {
+            bytes[609U + double_positions[i]] = i == 3U ? std::byte{0x81} : std::byte{1};
+            set_double_bits(bytes, 610U + double_positions[i], std::bit_cast<std::uint64_t>(doubles[i]));
+        }
+        constexpr std::array<std::size_t, 10> integer_positions{22,27,32,55,60,65,70,75,90,115};
+        constexpr std::array<std::uint8_t, 10> integer_tags{3,0x43,0x43,3,0x83,0x83,3,0x83,3,3};
+        for (std::size_t i = 0; i < integer_positions.size(); ++i) {
+            bytes[609U + integer_positions[i]] = static_cast<std::byte>(integer_tags[i]);
+            set_u32(bytes, 610U + integer_positions[i], 0xf1234560U + static_cast<std::uint32_t>(i));
+        }
+        constexpr std::array<std::size_t, 6> float_positions{80,85,95,100,105,110};
+        constexpr std::array<float, 6> floats{-3.5F, 7.25F, -0.25F, 1.5F, 2.25F, -4.0F};
+        for (std::size_t i = 0; i < floats.size(); ++i) {
+            bytes[609U + float_positions[i]] = i < 3U ? std::byte{2} : std::byte{0x42};
+            set_f32(bytes, 610U + float_positions[i], floats[i]);
+        }
+        bytes[729U] = std::byte{6}; bytes[730U] = std::byte{0xff};
+        bytes[731U] = std::byte{0xa5};
+        return bytes;
+    };
+    const auto parse = [](auto bytes) {
+        return off::data::GmsImage::parse(off::data::PackedResource::parse(std::move(bytes)));
+    };
+    const auto decode = [&](auto bytes) { return parse(std::move(bytes)).intro_camera_source(1U); };
+    const auto camera = decode(fixture());
+    check(camera.near_distance == -2.25 && camera.far_distance == 8192.125 &&
+          camera.auxiliary_scalar == 0.1234567890123 && camera.angle_degrees == -135.5,
+          "camera preserves original binary64 fields without clamping or degree conversion");
+    check(camera.background_rgb == std::array<std::uint32_t, 3>{0xf1234560U,0xf1234561U,0xf1234562U} &&
+          camera.integer_a == 0xf1234563U && camera.renderer_list_selector == 0xf1234564U &&
+          camera.priority == 0xf1234565U && camera.aspect_mode == 0xf1234566U &&
+          camera.flag_option_a == 0xf1234567U && camera.flag_option_b == 0xf1234568U &&
+          camera.final_boolean == 0xf1234569U, "camera preserves full opaque integer words");
+    check(camera.auxiliary_floats == std::array<float, 2>{-3.5F,7.25F} &&
+          camera.viewport == std::array<float, 4>{-0.25F,1.5F,2.25F,-4.0F},
+          "camera preserves finite raw floats without viewport composition or constraints");
+    auto zero = fixture();
+    for (const auto position : {4U,13U,37U,46U})
+        set_double_bits(zero, 610U + position, 0x8000000000000000ULL);
+    for (const auto position : {80U,85U,95U,100U,105U,110U})
+        set_u32(zero, 610U + position, 0x80000000U);
+    const auto signed_zero = decode(zero);
+    for (const auto value : {signed_zero.near_distance, signed_zero.far_distance,
+                             signed_zero.auxiliary_scalar, signed_zero.angle_degrees})
+        check(std::bit_cast<std::uint64_t>(value) == 0x8000000000000000ULL, "preserve double negative zero");
+    for (const auto value : signed_zero.auxiliary_floats)
+        check(std::bit_cast<std::uint32_t>(value) == 0x80000000U, "preserve auxiliary float negative zero");
+    for (const auto value : signed_zero.viewport)
+        check(std::bit_cast<std::uint32_t>(value) == 0x80000000U, "preserve viewport float negative zero");
+    auto limits = fixture();
+    const double float_limit = static_cast<double>(std::numeric_limits<float>::max());
+    set_double_bits(limits, 614U, std::bit_cast<std::uint64_t>(float_limit));
+    set_double_bits(limits, 623U, std::bit_cast<std::uint64_t>(-float_limit));
+    check(decode(limits).near_distance == float_limit && decode(limits).far_distance == -float_limit,
+          "finite representable double boundary is retained, not narrowed");
+    const auto reject = [&](auto mutation) {
+        auto bytes = fixture(); mutation(bytes);
+        check_rejected([&] { static_cast<void>(decode(bytes)); }, "malformed restricted camera rejected");
+    };
+    for (std::uint32_t size = 0; size < 122U; ++size)
+        reject([&](auto& b) { set_u32(b, 609U, size); });
+    for (const auto header : {123U,0x0100007aU,0x00ffffffU})
+        reject([&](auto& b) { set_u32(b, 609U, header); });
+    for (const auto position : {4U,13U,22U,27U,32U,37U,46U,55U,60U,65U,70U,75U,
+                                80U,85U,90U,95U,100U,105U,110U,115U,120U,121U})
+        reject([&](auto& b) { b[609U + position] ^= std::byte{0x40}; });
+    for (const auto position : {4U,13U,37U,46U}) {
+        for (const auto bits : {0x7ff0000000000000ULL,0xfff0000000000000ULL,0x7ff8000000000000ULL})
+            reject([&](auto& b) { set_double_bits(b, 610U + position, bits); });
+        for (const double value : {float_limit * 2.0, -float_limit * 2.0})
+            reject([&](auto& b) { set_double_bits(b, 610U + position, std::bit_cast<std::uint64_t>(value)); });
+    }
+    for (const auto position : {80U,85U,95U,100U,105U,110U})
+        for (const auto bits : {0x7f800000U,0xff800000U,0x7fc00000U})
+            reject([&](auto& b) { set_u32(b, 610U + position, bits); });
+    reject([](auto& b) { set_u32(b, 9U + 336U + 12U, 1U); });
+    reject([](auto& b) { set_u32(b, 9U + 336U + 16U, 0x0800001aU); });
+    reject([](auto& b) { set_u32(b, 9U + 336U + 20U, 512U); });
+    for (const auto offset : {0U,1023U})
+        reject([&](auto& b) { set_u32(b, 9U + 336U + 32U, offset); });
+    check_rejected([&] { static_cast<void>(parse(fixture()).intro_camera_source(3U)); },
+                   "camera directory index checked");
+}
+
 void intro_fade_picture_tests() {
     const auto fixture = [] {
         auto bytes = window_picture_fixture();
@@ -477,6 +573,7 @@ void intro_fade_picture_tests() {
 }  // namespace
 
 int main() {
+    intro_camera_tests();
     intro_fade_picture_tests();
     cut_tests();
     const auto decode_intro = [](std::vector<std::byte> bytes) {
