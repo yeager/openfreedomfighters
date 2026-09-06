@@ -220,8 +220,13 @@ int main() {
     using off::graphics::IntroPreparedResources;
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
     Fixture fixture;
+    std::int32_t clock_sample=1000;
+    off::runtime::ApplicationServices application(
+        off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+        {[] { return std::int64_t{99}; },[&] { return clock_sample; }},
+        []() -> off::audio::SoundVolumeBackend* { return nullptr; });
     {
-      off::graphics::IntroRuntime host(fixture.build());
+      off::graphics::IntroRuntime host(fixture.build(),application);
       check(host.controller_initialization().deadline()==0 &&
             !host.controller_initialization().phase_two_completed(),
             "retained controller starts uninitialized; resource construction does not invoke phase two");
@@ -263,7 +268,7 @@ int main() {
     {
       auto projection_fixture = fixture;
       set(projection_fixture.payload, projection_fixture.block_offsets[8]+42,0);
-      off::graphics::IntroRuntime host(projection_fixture.build());
+      off::graphics::IntroRuntime host(projection_fixture.build(),application);
       const auto old_flags = host.camera().flags();
       host.project_selected_window_camera_state();
       check(host.window_camera_projection_applied() &&
@@ -272,6 +277,38 @@ int main() {
             host.camera().render_control() == 0 && host.camera().enabled(),
             "explicit window projection updates the same canonical camera without registration");
       rejects([&] { host.project_selected_window_camera_state(); });
+    }
+    {
+      application.reset_clock();
+      application.clock().assign_crt_mode(true);
+      clock_sample=1250;
+      application.advance_crt();
+      application.clock().publish_scene(false);
+      off::graphics::IntroRuntime host(fixture.build(),application);
+      off::graphics::IntroControllerPhaseTwoServices services;
+      services.input_manager_exists=[] { return false; };
+      services.register_movie_control_action_map=[] { throw std::runtime_error("no input manager in this fixture"); };
+      services.query_global_property=[](std::string_view key,std::uint32_t& out) {
+        out=key=="SoundReadFromMem"?1:60;
+      };
+      unsigned presented=0;
+      services.first_renderer=[] { return 7U; };
+      services.renderer_height=[](auto) { return 480; };
+      services.renderer_width=[](auto) { return 640; };
+      services.set_viewport=[](auto,const auto&) {};
+      services.renderer_has_stencil=[](auto) { return false; };
+      services.clear=[](auto,const auto&) {};
+      services.present=[&](auto) { ++presented; return off::graphics::IntroPresentationResult::presented; };
+      host.run_controller_phase_two(services);
+      check(&host.application()==&application && application.sound().volume()==60 &&
+            *application.configuration().find("SoundEffectsVolume")=="60" &&
+            host.controller_initialization().deadline()==2304 && presented==2,
+            "host phase two consumes canonical application clock and actual retained sound configuration");
+      off::graphics::IntroRuntime next_host(fixture.build(),application);
+      check(next_host.application().sound().volume()==60 &&
+            next_host.application().clock().scene_integer_word()==256 &&
+            !next_host.controller_initialization().phase_two_completed(),
+            "new scene host preserves application state without fabricating initialization");
     }
     auto asset = fixture.build();
     check(asset.controller_index() == 2 && asset.first_cut_index() == 7 && asset.member_index() == 4 && asset.camera_index() == 8,

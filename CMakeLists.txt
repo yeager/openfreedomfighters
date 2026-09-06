@@ -59,6 +59,8 @@ add_library(off_core
     src/cutscene/picture_fade.cpp
     src/cutscene/picture_activation_prefix.cpp
     src/audio/decode.cpp
+    src/audio/sound_preferences.cpp
+    src/runtime/application_clock.cpp
     src/crypto/sha256.cpp
     src/data/archive_vfs.cpp
     src/data/audio_bank_header.cpp
@@ -228,6 +230,12 @@ install(FILES assets/branding/openfreedomfighters-splash.bmp
         DESTINATION bin/assets)
 
 if(BUILD_TESTING)
+    add_executable(off_sound_preferences_tests tests/sound_preferences_tests.cpp)
+    target_link_libraries(off_sound_preferences_tests PRIVATE off_core)
+    add_test(NAME off_sound_preferences_tests COMMAND off_sound_preferences_tests)
+    add_executable(off_application_clock_tests tests/application_clock_tests.cpp)
+    target_link_libraries(off_application_clock_tests PRIVATE off_core)
+    add_test(NAME off_application_clock_tests COMMAND off_application_clock_tests)
     add_test(NAME off_shader_source_hash_tests COMMAND ${CMAKE_COMMAND}
         "-DOFF_TEST_WORK_DIR=${CMAKE_BINARY_DIR}/test-work/shader-source-hash"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_source_hash_tests.cmake")

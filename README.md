@@ -24,6 +24,8 @@ executable code are included here.
   One retained runtime owns their hierarchy and mutable picture state; intro
   textures upload to the GPU. Indexed drawing works in explicit integration
   tests; normal startup activation is not connected yet.
+- Clock and sound preferences now share application-lifetime state across intro
+  scenes. This does not add intro playback or audible sound.
 - F10 opens a working graphics-settings panel. Its current appearance is
   diagnostic; matching the game's menu design is still on the roadmap.
 - A separate geometry preview is available with `--diagnostic-scene`. It is not

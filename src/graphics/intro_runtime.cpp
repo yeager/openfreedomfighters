@@ -10,8 +10,8 @@ namespace {
 constexpr std::array<float,9> engine_identity{0,0,1,0,1,0,1,0,0};
 }
 
-IntroRuntime::IntroRuntime(IntroPreparedResources&& resources)
-    : resources_(std::move(resources)), camera_(resources_.camera()) {
+IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::ApplicationServices& application)
+    : application_(application), resources_(std::move(resources)), camera_(resources_.camera()) {
   const auto& directory = resources_.sources().directory();
   if (directory.size() >= std::numeric_limits<std::uint32_t>::max())
     throw std::runtime_error("intro hierarchy exceeds native index capacity");
@@ -69,6 +69,12 @@ IntroRuntime::IntroRuntime(IntroPreparedResources&& resources)
     picture->colors_->refresh_material(source->source.base_render_property);
     pictures_.push_back(std::move(picture));
   }
+}
+
+void IntroRuntime::run_controller_phase_two(const IntroControllerPhaseTwoServices& external) {
+  auto bound=external;
+  application_.bind_controller_phase_two(bound);
+  controller_initialization_.run_phase_two(bound);
 }
 
 IntroRuntimeHandle IntroRuntime::source_handle(std::size_t source) const {

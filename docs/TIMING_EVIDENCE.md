@@ -59,9 +59,10 @@ The signed deadline comparison is not a wrap-safe elapsed-time test. Observed
 32-bit additions do not establish portable behavior for the upstream
 out-of-range floating-to-integer conversion. Controller phase two assigns the
 deadline after selecting CRT mode and running the audio-volume helper. Startup
-rate, ordinary update admission and upstream conversion policy remain unresolved;
-these observations do not yet
-constitute a complete native clock implementation contract.
+rate is now established as 1. The CRT path, reset/rebase and scene publication
+are implemented with an explicit checked native sampling policy; see
+[application services](APPLICATION_SERVICES.md). Ordinary update admission and
+the full alternate-clock and recording/replay paths remain incomplete.
 
 ## Frame pacing is not a simulation rate
 

@@ -3,6 +3,7 @@
 #include "off/graphics/fresh_intro_camera.hpp"
 #include "off/graphics/intro_prepared_resources.hpp"
 #include "off/graphics/intro_controller_initialization.hpp"
+#include "off/runtime/application_services.hpp"
 #include "off/graphics/picture_color_state.hpp"
 #include "off/graphics/picture_submission_cache.hpp"
 #include "off/graphics/picture_view_transition.hpp"
@@ -46,14 +47,19 @@ private:
 
 // Stable scene ownership, not automatic cut admission or completed initialization.
 // All identities and borrowed material/descriptor storage die with this host.
+// The borrowed ApplicationServices must outlive this host and its bound callbacks.
 class IntroRuntime final {
 public:
-  explicit IntroRuntime(IntroPreparedResources&& resources);
+  IntroRuntime(IntroPreparedResources&& resources, runtime::ApplicationServices& application);
   IntroRuntime(const IntroRuntime&) = delete;
   IntroRuntime& operator=(const IntroRuntime&) = delete;
   IntroRuntime(IntroRuntime&&) = delete;
   IntroRuntime& operator=(IntroRuntime&&) = delete;
   [[nodiscard]] const IntroPreparedResources& resources() const noexcept { return resources_; }
+  [[nodiscard]] runtime::ApplicationServices& application() noexcept { return application_; }
+  // Caller still owes actual global lifecycle admission and external services.
+  // Clock/audio resolve through the same application state retained by this scene.
+  void run_controller_phase_two(const IntroControllerPhaseTwoServices& external);
   [[nodiscard]] IntroControllerInitialization& controller_initialization() noexcept { return controller_initialization_; }
   [[nodiscard]] const IntroControllerInitialization& controller_initialization() const noexcept { return controller_initialization_; }
   [[nodiscard]] FreshIntroCamera& camera() noexcept { return camera_; }
@@ -80,6 +86,7 @@ public:
   [[nodiscard]] PictureOrderedCoordinator& ordered_coordinator() noexcept { return ordered_; }
   [[nodiscard]] PictureViewTransition& view_transition() noexcept { return view_; }
 private:
+  runtime::ApplicationServices& application_;
   IntroPreparedResources resources_;
   IntroControllerInitialization controller_initialization_;
   FreshIntroCamera camera_;

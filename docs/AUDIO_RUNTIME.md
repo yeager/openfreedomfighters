@@ -7,6 +7,10 @@ samples with validated channels and sample rate. No audio device, voice schedule
 mixer, resampler, positional renderer, environmental effect, or playback path is
 implemented yet.
 
+The retained sound-preference state and intro-controller volume binding are
+implemented separately; see [application services](APPLICATION_SERVICES.md).
+They do not open an audio device or establish the planned mixer behavior below.
+
 ## Runtime boundary
 
 Decoded samples are immutable assets. Playback creates bounded voice instances

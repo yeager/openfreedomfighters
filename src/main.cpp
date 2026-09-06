@@ -110,6 +110,12 @@ int main(int argc, char **argv) {
   }
 
   std::optional<off::data::InstallVerification> verification;
+  // One application owner survives scene construction. No sound backend exists
+  // yet; this is not a successful stub backend or a fabricated ready event.
+  off::runtime::ApplicationServices application(
+      off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+      off::runtime::make_monotonic_clock_samples(),
+      []() -> off::audio::SoundVolumeBackend* { return nullptr; });
   std::optional<off::graphics::SceneGpuPlan> scene;
   std::optional<off::graphics::SceneRenderAsset> startup_ui_scene_resources;
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
@@ -123,6 +129,9 @@ int main(int argc, char **argv) {
         scene.emplace(off::graphics::prepare_scene_gpu_plan(
             off::graphics::load_diagnostic_scene_render_asset(data_path)));
       } else {
+        // Supported normal (non-restore) cold-load boundary, before resources.
+        // Native monotonic samples are an explicit CRT portability policy.
+        application.reset_clock();
         // Retain exact UI-archive resources, not an original first-scene
         // selection or a guessed camera/world draw plan.
         startup_ui_scene_resources.emplace(
@@ -131,7 +140,7 @@ int main(int argc, char **argv) {
         // manufacturing lifecycle state. Keep ownership through the runtime.
         intro = std::make_unique<off::graphics::IntroRuntime>(
             off::graphics::load_intro_prepared_resources(
-                data_path / "Scenes" / "FF-Intro.ZIP"));
+                data_path / "Scenes" / "FF-Intro.ZIP"), application);
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));
