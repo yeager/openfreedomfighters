@@ -65,14 +65,51 @@ Public GMS tests cover all three optional shapes, raw bytes, string limits,
 identity guards, malformed tags and every declared truncation of the compact
 fixture. The full 35-test suite and targeted GMS ASan/UBSan run pass locally.
 
+## Authored source lookup and list decoding
+
+The reviewed deferred-load relocation builds its map in source-directory order,
+before deserializing recorded tagged blocks. It does not use runtime pool order,
+class ordinals or sorted names. `GmsImage::local_source_for_authored_reference`
+provides the corresponding immutable identity lookup for source-reference scalar
+and raw-list fields on this path. It does not mutate the original payload or
+manufacture a runtime handle.
+
+Only bit 31 is removed from the authored word. A nonzero resulting index selects
+the preceding zero-based directory entry; both marked and unmarked indices are
+eligible in this deferred-load mode. Raw zero returns no source. A high-bit-only
+word is rejected because relocation leaves it unchanged and its later runtime
+meaning is not established as null. Out-of-range indices are also rejected:
+this is a deliberate safety policy instead of the original diagnostic-and-zero
+behavior. Bit 30 is not another removable marker. The API is not a replacement
+for runtime registry or object-slot lookup, nor a general interpretation of every
+integer or reference family in a tagged stream.
+
+`GmsImage::intro_source_reference_list` checks the reviewed attachment-free list
+class shape, nonzero deferred offset, bounded header and exact raw-list framing.
+It reads the inclusive byte count with alignment and subtraction-based bounds
+checks, requires exact closing markers, and leaves external padding untouched.
+Returned words retain their authored order, duplicates and zero or unresolved
+values. Reading a list does not automatically resolve its entries, filter classes,
+enforce equal sequence/group counts or create timings.
+
+Together these APIs allow the controller's list references to identify the
+actual source lists without display-name selection. General component dispatch,
+successful runtime object creation and list-entry activation remain separate.
+Private verification follows both references from the decoded controller and
+compares the complete ordered lists, every resulting target index/type and the
+optional source join against independent owned-data observations. No expected
+retail vectors are published. Public fixtures exercise tagged and untagged
+boundary indices, directory-versus-pool order, raw-list preservation and malformed
+headers/counts/tags/termination. The 35-test suite passes with these additions.
+
 ## Required before activation
 
 1. Extend component dispatch beyond the restricted intro shape only after its
    attachment order and wrapper rules are established. Preserve unknown values
    rather than assigning invented semantics.
-2. Establish authored source-reference lookup and bounded sequence/group-list
-   decoding. These references are not the already implemented runtime object-pool
-   handles; passing them through that decoder is invalid.
+2. Establish sequence-player payloads, factory initialization and resource
+   dependencies beyond the decoded list identities. Resolving a source does not
+   prove its runtime object was constructed or activated.
 3. Recover configuration precedence and scene-name-to-resource resolution. The
    constructor default alone does not prove which scene an actual launch selects.
 4. Recover initial activation, natural completion, timing dependencies and skip

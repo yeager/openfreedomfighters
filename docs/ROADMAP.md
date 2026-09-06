@@ -131,8 +131,11 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
 - [x] Decode the restricted supported intro-controller field stream with bounded
   identity/wrapper checks and presence-preserving optional references; verify
   returned fields privately against owned data without executing the controller.
-- [ ] Decode and join authored intro sequence/group resources; preserve source
-  references until their loading and lookup contract is established.
+- [x] Decode authored intro sequence/group reference lists and resolve their
+  source identities through the reviewed deferred-load mapping, preserving
+  ordered raw values and verifying all joins privately against owned data.
+- [ ] Decode sequence-player payloads and initialize their runtime resources;
+  source identity alone does not establish a functioning player.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

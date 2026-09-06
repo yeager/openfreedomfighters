@@ -653,6 +653,70 @@ std::optional<std::size_t> GmsImage::local_source_for_handle(
     return local_slot_to_directory_[handle.slot_index];
 }
 
+std::optional<std::size_t> GmsImage::local_source_for_authored_reference(
+    std::uint32_t raw_reference
+) const {
+    if (raw_reference == 0U) {
+        return std::nullopt;
+    }
+    const auto one_based_index = static_cast<std::size_t>(raw_reference & 0x7fffffffU);
+    if (one_based_index == 0U || one_based_index > directory_.size()) {
+        throw std::runtime_error("GMS authored source reference is unresolved or out of range");
+    }
+    return one_based_index - 1U;
+}
+
+std::vector<std::uint32_t> GmsImage::intro_source_reference_list(
+    std::size_t directory_index
+) const {
+    const auto fail = []() {
+        throw std::runtime_error("GMS intro source-reference list is unsupported or malformed");
+    };
+    if (directory_index >= directory_.size()) {
+        fail();
+    }
+    const auto& entry = directory_[directory_index];
+    if (entry.source_type != 0x0800001aU || entry.class_data_value != 0U ||
+        !entry.attachments.empty() || entry.deferred_source_offset == 0U) {
+        fail();
+    }
+    const auto payload = resource_.payload();
+    const auto offset = static_cast<std::size_t>(entry.deferred_source_offset);
+    if (offset > payload.size() || 4U > payload.size() - offset) {
+        fail();
+    }
+    const ByteReader reader(payload);
+    const auto header = reader.u32(offset);
+    const auto size = static_cast<std::size_t>(header & tagged_block_size_mask);
+    if ((header >> 24U) != 0U || size < 4U || size > payload.size() - offset) {
+        fail();
+    }
+    const auto end = offset + size;
+    auto cursor = offset + 4U;
+    if (5U > end - cursor || payload[cursor] != std::byte{0x89}) {
+        fail();
+    }
+    ++cursor;
+    const auto byte_count = static_cast<std::size_t>(reader.u32(cursor));
+    if (byte_count < 4U || (byte_count - 4U) % 4U != 0U ||
+        byte_count > end - cursor) {
+        fail();
+    }
+    const auto list_end = cursor + byte_count;
+    if (end - list_end != 2U || payload[list_end] != std::byte{0x06} ||
+        payload[list_end + 1U] != std::byte{0xff}) {
+        fail();
+    }
+    std::vector<std::uint32_t> result;
+    result.reserve((byte_count - 4U) / 4U);
+    cursor += 4U;
+    while (cursor < list_end) {
+        result.push_back(reader.u32(cursor));
+        cursor += 4U;
+    }
+    return result;
+}
+
 GmsIntroMovieControllerSource GmsImage::intro_movie_controller_source(
     std::size_t directory_index
 ) const {

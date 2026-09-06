@@ -221,6 +221,21 @@ std::vector<std::byte> intro_controller_fixture(
     return bytes;
 }
 
+std::vector<std::byte> intro_list_fixture(const std::vector<std::uint32_t>& words) {
+    auto bytes = intro_controller_fixture();
+    set_u32(bytes, 9U + 336U + 20U, 0U);
+    std::vector<std::byte> block(4U);
+    block.push_back(std::byte{0x89});
+    append_u32(block, static_cast<std::uint32_t>(4U + 4U * words.size()));
+    for (const auto word : words) append_u32(block, word);
+    block.push_back(std::byte{0x06});
+    block.push_back(std::byte{0xff});
+    set_u32(block, 0U, static_cast<std::uint32_t>(block.size()));
+    std::copy(block.begin(), block.end(), bytes.begin() + 609U);
+    bytes[609U + block.size()] = std::byte{0xa5};
+    return bytes;
+}
+
 template <typename Operation>
 void check_rejected(Operation operation, const char* message) {
     bool rejected = false;
@@ -330,6 +345,55 @@ int main() {
     const auto image = off::data::GmsImage::parse(
         off::data::PackedResource::parse(packed_fixture())
     );
+    check(!image.local_source_for_authored_reference(0U), "raw zero is a null authored reference");
+    for (auto flag : {0U, 0x80000000U}) {
+        check(image.local_source_for_authored_reference(flag | 1U) == 0U &&
+                  image.local_source_for_authored_reference(flag | 3U) == 2U,
+              "resolve first and last tagged and untagged source indices");
+    }
+    check(image.directory()[1].local_slot_index != 1U &&
+              image.local_source_for_authored_reference(2U) == 1U,
+          "authored references select source directory rather than reordered pool slots");
+    for (auto raw : {4U, 0x80000004U, 0x80000000U, 0xffffffffU, 0x40000001U, 0xc0000001U}) {
+        check_rejected([&] { static_cast<void>(image.local_source_for_authored_reference(raw)); },
+                       "reject unresolved or out-of-range authored references without masking bit30");
+    }
+    const auto decode_list = [](const std::vector<std::byte>& bytes) {
+        return off::data::GmsImage::parse(off::data::PackedResource::parse(bytes))
+            .intro_source_reference_list(1U);
+    };
+    for (const auto& words : std::vector<std::vector<std::uint32_t>>{
+             {}, {1U}, {0U, 0x80000000U, 0xffffffffU, 0x40000001U, 1U, 1U}}) {
+        check(decode_list(intro_list_fixture(words)) == words,
+              "decode raw list count, order, duplicates and unresolved words ignoring external padding");
+    }
+    const auto reject_list_mutation = [&](auto mutate) {
+        auto bytes = intro_list_fixture({1U, 2U});
+        mutate(bytes);
+        check_rejected([&] { static_cast<void>(decode_list(bytes)); },
+                       "reject malformed restricted intro source-reference list");
+    };
+    for (std::uint32_t size = 0; size < 19U; ++size) {
+        reject_list_mutation([&](auto& b) { set_u32(b, 609U, size); });
+    }
+    for (auto header : {20U, 0x01000013U, 0x00ffffffU}) {
+        reject_list_mutation([&](auto& b) { set_u32(b, 609U, header); });
+    }
+    for (auto count : {0U, 3U, 5U, 11U, 13U, 16U, 0xfffffffcU, 0xffffffffU}) {
+        reject_list_mutation([&](auto& b) { set_u32(b, 614U, count); });
+    }
+    for (auto offset : {613U, 626U, 627U}) {
+        reject_list_mutation([&](auto& b) { b[offset] = std::byte{0}; });
+    }
+    reject_list_mutation([](auto& b) { b[613U] = std::byte{0x09}; });
+    reject_list_mutation([](auto& b) { set_u32(b, 9U + 336U + 16U, 0U); });
+    reject_list_mutation([](auto& b) { set_u32(b, 9U + 336U + 12U, 1U); });
+    reject_list_mutation([](auto& b) { set_u32(b, 9U + 336U + 20U, 512U); });
+    for (auto offset : {0U, 1023U}) {
+        reject_list_mutation([&](auto& b) { set_u32(b, 9U + 336U + 32U, offset); });
+    }
+    check_rejected([&] { static_cast<void>(image.intro_source_reference_list(3U)); },
+                   "reject out-of-range list directory index");
     check(image.decoded_size() == 512, "retain the decoded GMS image");
     check(image.directory().size() == 3, "parse the object-source directory");
     check(image.identifier_count() == 2, "parse the identifier table");

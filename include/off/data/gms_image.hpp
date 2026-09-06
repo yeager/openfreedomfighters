@@ -105,6 +105,17 @@ public:
     [[nodiscard]] GmsIntroMovieControllerSource intro_movie_controller_source(
         std::size_t directory_index
     ) const;
+    // Supported deferred type-8/type-9 relocation with mode false only. Resolves
+    // source identity, not a runtime handle or proof of a successful factory.
+    // Rejects out-of-range references instead of the original diagnostic + zero.
+    [[nodiscard]] std::optional<std::size_t> local_source_for_authored_reference(
+        std::uint32_t raw_reference
+    ) const;
+    // Caller must establish supported intro provenance; returns raw words without
+    // relocation, preserving ordering, duplicates, and unresolved values.
+    [[nodiscard]] std::vector<std::uint32_t> intro_source_reference_list(
+        std::size_t directory_index
+    ) const;
     void validate_buf(std::span<const std::byte> bytes) const;
 
     [[nodiscard]] const std::vector<GmsDirectoryEntry>& directory() const noexcept {
