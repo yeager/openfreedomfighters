@@ -7,6 +7,22 @@
 #include <stdexcept>
 
 namespace off::graphics {
+void CameraEnabledState::set_enabled(bool requested, bool renderer_present,
+                                    const std::function<void()>& state_change) {
+    if (changing_) throw std::runtime_error("camera state transition cannot reenter");
+    if (requested == enabled()) return;
+    if (renderer_present && !state_change)
+        throw std::runtime_error("present renderer requires a state-change hook");
+    struct Guard {
+        bool& active;
+        explicit Guard(bool& value) : active(value) { active = true; }
+        ~Guard() { active = false; }
+    } guard(changing_);
+    if (renderer_present) state_change();
+    if (requested) flags_ |= 0x20U;
+    else flags_ &= ~0x20U;
+}
+
 namespace {
 float finite(float value) {
     if (!std::isfinite(value)) throw std::runtime_error("intro camera arithmetic must be finite");

@@ -1,8 +1,31 @@
 #pragma once
 
 #include "off/data/gms_image.hpp"
+#include <functional>
 
 namespace off::graphics {
+
+// Explicit runtime flags, never inferred from authored camera options. This
+// models enable/disable operations, not construction, copying or registration.
+class CameraEnabledState final {
+public:
+    explicit CameraEnabledState(std::uint32_t runtime_flags) : flags_(runtime_flags) {}
+    CameraEnabledState(const CameraEnabledState&) = delete;
+    CameraEnabledState& operator=(const CameraEnabledState&) = delete;
+    CameraEnabledState(CameraEnabledState&&) = delete;
+    CameraEnabledState& operator=(CameraEnabledState&&) = delete;
+    [[nodiscard]] std::uint32_t flags() const noexcept { return flags_; }
+    [[nodiscard]] bool enabled() const noexcept { return (flags_ & 0x20U) != 0U; }
+
+    // Changed states notify a present renderer before committing the bit.
+    // Equal states need no hook. A throwing hook leaves flags unchanged.
+    // Stable ownership and no reentry are explicit native safety constraints.
+    void set_enabled(bool requested, bool renderer_present,
+                     const std::function<void()>& state_change);
+private:
+    std::uint32_t flags_;
+    bool changing_{false};
+};
 
 struct IntroCameraState {
     // Retain opaque options and original precision separately from conversions.

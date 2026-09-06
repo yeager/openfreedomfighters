@@ -121,6 +121,8 @@ admission inputs. This does not yet force or establish application startup readi
 A conditional existing-picture activation prefix now preserves parent-guarded
 authored-hide clearing, phase-one requests and tracking order. A recorded request
 is not treated as proof that the legal picture became visible.
+Camera enable/disable transitions now preserve renderer notification before the
+runtime flag change; registration is not used as an implicit enable operation.
 
 ## Build the native bootstrap
 

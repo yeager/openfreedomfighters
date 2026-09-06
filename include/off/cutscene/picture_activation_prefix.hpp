@@ -28,7 +28,7 @@ public:
     // Callbacks must not mutate inputs, destroy the target or reenter this object.
     // Exceptions retain completed tracking/flag effects, with no forced callbacks.
     void run(std::uint32_t& target_flags, std::optional<std::uint32_t> parent_flags,
-             bool registration_class, bool owner_present, const Visitor& visitor);
+             bool owner_present, const Visitor& visitor);
 
 private:
     bool running_{false};

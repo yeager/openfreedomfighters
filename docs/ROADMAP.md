@@ -166,6 +166,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   nested view phases and subsequent state/backend maintenance.
 - [x] Implement the reviewed new-existing-picture activation prefix with parent
   hide guards, ordered lifecycle requests and distinct request/success semantics.
+- [x] Implement explicit camera enable transitions with idempotence, preserved
+  runtime flags and renderer notification before the enabled-bit write.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

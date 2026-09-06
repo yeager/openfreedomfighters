@@ -37,6 +37,8 @@ an unhidden parent, only the target's authored-hide bit is cleared. Conditional
 registration-class handling, owner activation notification and normal resource
 registration then follow in the recovered order. Remaining dynamic-hide and
 resource-eligibility bits are preserved and still gate registration.
+The registration-class condition reads bit `0x40000` from the target's runtime
+flags after hide clearing, not a separate class/source flag or caller boolean.
 
 After either the successful or parent-blocked hide-control return, the prefix
 requests lifecycle phase one, then records that activation was requested. The

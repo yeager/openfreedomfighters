@@ -6,7 +6,7 @@ namespace off::cutscene {
 
 void PictureActivationPrefix::run(std::uint32_t& target_flags,
                                   std::optional<std::uint32_t> parent_flags,
-                                  bool registration_class, bool owner_present,
+                                  bool owner_present,
                                   const Visitor& visitor) {
     const bool hidden = (target_flags & 0x400U) != 0U;
     // Missing-parent validation before effects is a native safety policy.
@@ -26,7 +26,7 @@ void PictureActivationPrefix::run(std::uint32_t& target_flags,
         visitor(Stage::parent_blocked);
     } else {
         target_flags &= ~0x400U;
-        if ((target_flags & 0x200c00U) == 0U && registration_class)
+        if ((target_flags & 0x200c00U) == 0U && (target_flags & 0x40000U) != 0U)
             visitor(Stage::class_registration);
         if (owner_present) visitor(Stage::owner_activation);
         if ((target_flags & 0x200c00U) == 0U) visitor(Stage::normal_registration);

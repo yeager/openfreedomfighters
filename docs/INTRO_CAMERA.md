@@ -151,3 +151,23 @@ need their own integration evidence.
 All 43 local CTest executables pass after this connection. The nested renderer/view
 tests also pass under GCC and targeted ASan/UBSan, and the private owned-camera
 probe verifies the conditional outer-to-inner phase order.
+
+## Explicit runtime enable transitions
+
+`CameraEnabledState` accepts an explicit runtime flag word, separate from the
+authored camera reader. Its query reads bit `0x20`. Enable and disable are
+idempotent; a changed state notifies a present renderer before modifying that
+bit, preserving every other flag. With no renderer, the bit changes directly.
+A required missing hook is rejected before effects. Native callbacks must not
+reenter or destroy the owner; a throwing callback leaves the flag unchanged,
+without rolling back effects already performed by the renderer hook.
+
+This is not a camera-selection or registration operation. Although recovered
+construction sets the enabled bit, copying and subsequent lifecycle operations
+can change runtime flags. No complete constructor flag word or actual first-frame
+enabled state is inferred here. The first-cut camera setup's named-service lookup
+and surrounding application admission remain separate proof obligations.
+
+All 45 local CTest executables pass after this addition. The enable-transition
+tests also pass with GCC and ASan/UBSan, including disabled-view skipping and
+reenabling under explicitly supplied admission and identity inputs.
