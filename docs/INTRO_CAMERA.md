@@ -230,3 +230,28 @@ source ownership, enable notifications and rejected inputs. All 53 local CTest
 executables pass. Targeted GCC and ASan/UBSan checks for this class also pass.
 Normal startup with the owned installation also passes the bounded Vulkan smoke
 test; this does not verify a rendered intro frame.
+
+## Picture service preparation
+
+`FreshIntroCamera::prepare_picture_services` now retains the camera values used
+by the intro picture cache. It takes the stored visitor rectangle as signed
+integers, checks positive signed32 differences, and converts those differences
+to binary32. It does not substitute drawable size or a reference resolution.
+The normalized viewport comes from the camera's converted state.
+
+For the ordinary branch, the scalar preserves these binary32 stages:
+half-angle, narrowed tangent, tangent times current far, current far divided by
+that product, then multiplication by one half. Cancelling far algebraically can
+change the result and is covered by a regression witness. Tangent uses the native
+double-precision standard library before narrowing; original x87 equivalence is
+not claimed.
+
+Successful preparation clears `0x2` in the camera's canonical flag word without
+an enable-change notification. It does not prepare all frustum fields, register
+the camera or admit a view. As native failure policy, validation precedes writes;
+a failure preserves the previous snapshot, which must not be used to continue
+the failed frame. Reentry during an enable-change notification rejects.
+
+The [intro picture join](PICTURE_TRANSFORM.md#concrete-intro-draw-input-join) uses
+these services with live hierarchy and picture state. Normal startup has not yet
+connected that join to its view traversal or GPU submission.

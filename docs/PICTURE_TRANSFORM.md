@@ -118,3 +118,41 @@ of the pass rectangle; its service receiver is the camera, not the window.
 This resolves `q` for that path, but not the undefined external Y operand.
 The module does not invent `(1,1)`, attribute the external Y
 operand to a renderer query, or supply any other fallback.
+
+## Concrete intro draw-input join
+
+`make_intro_picture_cache_input` connects the reviewed producers to cache
+preparation. Its inputs are an explicit live hierarchy, picture and camera
+endpoints, stored XY alignment, current picture scale, prepared camera services,
+and an explicit native replacement for the undefined Y operand.
+
+The hierarchy's owner endpoint is the camera resource, not its selected window.
+The picture chain includes the synthesized scene root; the inverse camera chain
+excludes that terminal root. Authored parentless resources therefore still need
+their runtime parent. The synthesized root's constructor supplies engine identity
+and zero position, but later changes must remain in the live graph.
+
+The relative position goes directly to submission position. The relative basis
+is transpose-combined with the picture's current local orientation before cache
+preparation; that same local orientation remains a separate later cache input.
+The adapter neither cancels those operations nor adds Center translation again.
+Stored alignment becomes `(x, y, 0)`. Picture scale is not derived from textures
+or descriptor bounds.
+
+The transpose combination uses separately rounded binary32 products and sums
+without fused multiply-add. This is an explicit portable arithmetic policy;
+the surrounding hierarchy and cache helpers retain their documented policies.
+No whole-pipeline x87 precision claim is made. Cache dependency invalidation
+remains explicit, as described in [submission caching](PICTURE_SUBMISSION_CACHE.md).
+
+Independent tests cover non-symmetric orientation, a translated terminal root,
+signed rectangle overflow, scalar rounding, Center applied once, and the join
+through ordered cache visitation into descriptor expansion. The private probe
+also expands all real legal-picture groups using the owned camera, checked source
+links, completed conditional Center state and decoded alignment. Its pass size
+and external Y choice are explicit test inputs, not observed original values.
+Neither test path establishes scene admission or renders the intro on screen.
+
+Validation: all 54 local CTest executables pass. The new adapter test also passes
+with GCC and targeted ASan/UBSan. These checks cover CPU state and geometry, not
+pixel fidelity or a completed startup sequence.

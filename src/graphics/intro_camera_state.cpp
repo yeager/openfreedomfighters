@@ -7,6 +7,11 @@
 #include <stdexcept>
 
 namespace off::graphics {
+void CameraEnabledState::clear_picture_preparation_bit() {
+    if (changing_) throw std::runtime_error("camera state transition cannot reenter");
+    flags_ &= ~0x2U;
+}
+
 void CameraEnabledState::set_enabled(bool requested, bool renderer_present,
                                     const std::function<void()>& state_change) {
     if (changing_) throw std::runtime_error("camera state transition cannot reenter");

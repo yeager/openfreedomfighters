@@ -56,6 +56,15 @@ The operation semantics are described by
 [Microsoft's texture-operation reference](https://learn.microsoft.com/en-us/windows/win32/direct3d9/d3dtextureop);
 that reference does not establish the game's runtime feature selection.
 
+For the concrete ordinary draw loop, the outer binding decision compares packed
+ordering-key bits `0x7ff0`, starting from an all-ones previous key on each loop
+invocation. A changed field only calls resource binding when the entry has a
+resource; that resource must also have a backing texture selection before the
+binding helper is called. No selection leaves the previous binding unchanged.
+The model's explicit transition input represents that admitted helper call, not
+resource-pointer or catalog-index inequality. Complete key production, view and
+subtype transitions remain outside this material helper.
+
 ## Material requests and cache
 
 The caller supplies the resolved runtime material word. The picture path uses
@@ -66,6 +75,13 @@ zero. Features are not part of the cache key.
 The active special-material branch subsequently changes the cached material
 word to `0xffffffff`, retaining the secondary word and threshold. The returned
 cache replacement records that post-request value, not merely the input triple.
+
+The concrete ordinary pass resets its material triple to `(0xffffffff, 0, 0)`
+on every loop invocation, including an empty loop or a resume after a barrier.
+It does not reset between groups. This initial secondary word ensures that the
+first unsuppressed picture request misses even if its material word is all ones.
+The entry operation also resets tracked backend state; the optional material
+requests here are not a representation of that complete reset.
 
 With features zero, only mode selector 1 requests texture factor `0xffffffff`;
 other selectors request nothing. With any nonzero features:

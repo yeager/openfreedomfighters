@@ -25,4 +25,8 @@ void FreshIntroCamera::set_enabled(bool requested, bool renderer_present,
   enabled_state_.set_enabled(requested, renderer_present, state_change);
 }
 
+void FreshIntroCamera::prepare_picture_services(const PictureVisitorRectangle& rectangle) {
+  picture_services_ = prepare_picture_camera_services(enabled_state_, parameters_, rectangle);
+}
+
 } // namespace off::graphics

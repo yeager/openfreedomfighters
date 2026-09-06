@@ -22,6 +22,9 @@ public:
     // Stable ownership and no reentry are explicit native safety constraints.
     void set_enabled(bool requested, bool renderer_present,
                      const std::function<void()>& state_change);
+    // View preparation clears only 0x2, without an enabled-state notification.
+    // This is not full frustum preparation. Reentry from set_enabled rejects.
+    void clear_picture_preparation_bit();
 private:
     std::uint32_t flags_;
     bool changing_{false};

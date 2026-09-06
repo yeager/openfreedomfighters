@@ -193,6 +193,11 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   and validate its reciprocal camera reference without parsing unrelated windows.
 - [x] Construct the fresh intro camera's reviewed CPU fields with one canonical
   runtime flag word; keep window effects and renderer registration separate.
+- [x] Join prepared camera services and live picture/camera transform chains to
+  cache preparation, retaining the synthesized root, own-bounds XY alignment
+  and explicit undefined-Y policy. Verify real legal-picture expansion privately.
+- [ ] Connect admitted intro views and ordered picture submissions to GPU drawing,
+  including the complete draw-pass reset, resource keys and inherited state.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/graphics/intro_camera_state.hpp"
+#include "off/graphics/intro_picture_transform.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -31,11 +32,21 @@ public:
   void set_enabled(bool requested, bool renderer_present,
                    const std::function<void()> &state_change);
 
+  // Retains the picture-service projection in this camera, updating its one
+  // canonical flag word. No registration or complete frustum preparation.
+  // Failure preserves the previous snapshot; the caller must stop the failed
+  // frame rather than submit using that stale snapshot.
+  void prepare_picture_services(const PictureVisitorRectangle& rectangle);
+  [[nodiscard]] const std::optional<PictureCameraServices>& picture_services() const noexcept {
+    return picture_services_;
+  }
+
 private:
   IntroCameraState parameters_;
   CameraEnabledState enabled_state_;
   std::uint32_t render_control_{0};
   std::optional<std::uint64_t> associated_target_;
+  std::optional<PictureCameraServices> picture_services_;
 };
 
 } // namespace off::graphics
