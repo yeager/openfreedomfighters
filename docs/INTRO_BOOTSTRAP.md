@@ -46,7 +46,9 @@ ordinary active-controller update. Equality with the deadline does not activate.
 The constructor initializes the deadline to zero, but a separate lifecycle
 routine assigns an engine-clock-relative deadline. Its call ordering is not yet
 established, so constructor zero does not prove immediate activation in a real
-scene. Clock-unit conversion and wrap behavior are also unverified. The readiness
+scene. The clock scale is now established as 1024 units per accumulated engine-time
+second, making the delay nominally two engine-time seconds, not two wall-clock
+seconds. Startup rate/mode and portable wrap behavior remain unverified. The readiness
 producer remains untraced; neither start route may be replaced by splash expiry.
 This corrects the earlier description of readiness as an exclusive start gate.
 
@@ -167,7 +169,8 @@ tests and the targeted GMS ASan/UBSan run pass after these additions.
 
 This exposes real command data for later execution. Timeline units, command tie
 ordering, resource activation and completion scheduling remain separate evidence
-requirements; the float pair must not be relabeled as seconds without proof.
+requirements; the float pair is a timeline-domain value and must not itself be
+relabeled as seconds merely because the upstream clock scale is now known.
 
 ## Required before activation
 

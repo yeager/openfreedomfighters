@@ -12,10 +12,20 @@ frequency. For a non-negative raw elapsed value `r`, its update is:
 
 ```text
 bounded_sample = min(1.0, r)
-smoothed_delta = 0.7 * previous_smoothed_delta
+seeded_previous = bounded_sample if previous_smoothed_delta == 0
+                  else previous_smoothed_delta
+smoothed_delta = 0.7 * seeded_previous
                + 0.3 * bounded_sample
 exposed_delta  = time_scale * min(0.1, smoothed_delta)
 ```
+
+This is a conceptual formula, not a bit-exact floating-point implementation.
+The zero-state seeding step corrects the earlier formula, which incorrectly
+blended the first sample against zero. The seed check applies whenever the stored
+smoothing state is zero, not only at initialization. Counter differences and counter rate,
+stored constants and increments have observed float-rounding boundaries; the
+upstream accumulator is double precision. Exact operation rounding still requires
+an implementation-ready contract.
 
 The retained smoothed value is stored before the final 100 ms clamp. A separate
 selectable path exposes a scaled millisecond-resolution process-clock delta
@@ -23,9 +33,31 @@ without this high-resolution smoothing. The available evidence does not yet
 establish which modes select that path, so it is not described as a fixed step.
 
 The timing service also has a one-shot suppression operation. On the next
-update, it leaves the scaled delta and scaled total unchanged, then clears the
-suppression state. A caller relationship to every pause or menu transition has
-not been proven.
+update it skips increment selection and accumulation, retaining the previous
+scaled delta before later hooks, then clears the suppression state while other
+per-frame sampling still occurs. The complete effects on every exposed value,
+hook and caller have not been established; neither has its relationship to every
+pause or menu transition.
+
+## Scene clock used by intro controllers
+
+The upstream rate-scaled increment is rounded to float and accumulated in double
+precision. Its time value multiplied by 1024 is converted to a signed integer by
+truncation. The scene clock adds a retained offset to that upstream integer.
+Its published delta is the signed scene-clock difference scaled by 1/1024.
+
+Scene freeze preserves the scene clock and publishes zero scene delta while the
+upstream producer still runs. Resume compensates the offset for the upstream
+interval spent frozen. The intro controller therefore observes engine time,
+not a direct host millisecond counter. Its delay of 2048 units is nominally two
+engine-time seconds; rate, smoothing, clamps, suppression and freeze prevent a
+guaranteed wall-clock interpretation.
+
+The signed deadline comparison is not a wrap-safe elapsed-time test. Observed
+32-bit additions do not establish portable behavior for the upstream
+out-of-range floating-to-integer conversion. Startup clock mode/rate, lifecycle
+ordering and overflow policy remain unresolved; these observations do not yet
+constitute a complete native clock implementation contract.
 
 ## Frame pacing is not a simulation rate
 
@@ -59,13 +91,14 @@ must cover at least these independent cases:
 
 | Previous smoothed | Raw elapsed | Scale | Next smoothed | Exposed delta |
 |---:|---:|---:|---:|---:|
-| 0.0 | 2.0 | 1.0 | 0.3 | 0.1 |
+| 0.0 | 2.0 | 1.0 | approximately 1.0 | approximately 0.1 |
 | 0.02 | 0.04 | 1.0 | 0.026 | 0.026 |
 | 0.02 | 0.04 | 0.5 | 0.026 | 0.013 |
 
-Tests must also prove that one-shot suppression preserves the previously
-exposed delta and scaled total for exactly one update, while clock samples can
-still be refreshed for the following update. These vectors specify only the
+The decimal vectors are conceptual expectations, not bit-exact reference values.
+Tests must also prove that one-shot suppression skips accumulation for exactly
+one update, while clock samples can still be refreshed for the following update.
+Assertions about other exposed values require further evidence. These vectors specify only the
 recovered timing service; they do not replace the fixed-step scheduler tests.
 
 ## Remaining evidence gates
