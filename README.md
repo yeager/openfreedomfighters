@@ -30,8 +30,9 @@ executable code are included here.
   and can be decoded incrementally on a worker. Playback and its readiness
   events are not connected.
 - Their mutable sound records now share an application-owned backend with volume
-  settings. Owner preparation and stop operations are implemented but not yet
-  wired into the complete intro lifecycle.
+  settings. Typed attachment loading, owner preparation, stop and the verified
+  SoundExtend parameter operation are implemented. The complete
+  [startup audio lifecycle](docs/INTRO_AUDIO_STARTUP_ORDER.md) is not connected.
 - The intro runtime retains every authored component attachment and has a shared
   two-phase initialization path. Most concrete component implementations remain
   missing; a catalog entry is not an initialized component.
