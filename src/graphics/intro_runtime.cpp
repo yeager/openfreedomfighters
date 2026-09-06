@@ -10,11 +10,27 @@ namespace {
 constexpr std::array<float,9> engine_identity{0,0,1,0,1,0,1,0,0};
 }
 
-IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::ApplicationServices& application)
-    : application_(application), resources_(std::move(resources)), camera_(resources_.camera()) {
+IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::ApplicationServices& application,
+                           runtime::SceneComponentSequence& component_sequence)
+    : application_(application), resources_(std::move(resources)), components_(component_sequence),
+      camera_(resources_.camera()) {
   const auto& directory = resources_.sources().directory();
   if (directory.size() >= std::numeric_limits<std::uint32_t>::max())
     throw std::runtime_error("intro hierarchy exceeds native index capacity");
+  owner_components_.resize(directory.size()+1);
+  owner_components_[0].push_back(components_.append({root_handle().value, std::nullopt,
+      std::nullopt, "ZGROUP_RootGroup", 0, 0, 0.0F, true}));
+  for (std::size_t index=0; index<directory.size(); ++index) {
+    const auto& source = directory[index];
+    for (std::size_t attachment=0; attachment<source.attachments.size(); ++attachment) {
+      const auto& input = source.attachments[attachment];
+      const auto entry = components_.append({source_handle(index).value, index, attachment,
+          std::string(resources_.sources().attachment_identifier(index,attachment)),
+          input.source_offset, source.deferred_source_offset, input.parameter, false});
+      owner_components_[index+1].push_back(entry);
+      if (index == resources_.controller_index()) controller_component_ = entry;
+    }
+  }
   hierarchy_.reserve(directory.size()+1);
   additional_.reserve(directory.size());
   hierarchy_.push_back({engine_identity, {0.0F,0.0F,0.0F}, no_picture_transform_parent});
@@ -71,10 +87,23 @@ IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::Applicat
   }
 }
 
+std::span<const std::size_t> IntroRuntime::owner_components(IntroRuntimeHandle owner) const {
+  return owner_components_.at(hierarchy_index(owner));
+}
+
 void IntroRuntime::run_controller_phase_two(const IntroControllerPhaseTwoServices& external) {
   auto bound=external;
   application_.bind_controller_phase_two(bound);
   controller_initialization_.run_phase_two(bound);
+}
+
+runtime::ComponentCallback IntroRuntime::controller_phase_two_callback(
+    const IntroControllerPhaseTwoServices& external) {
+  return [this, external](runtime::ComponentRecord& record) {
+    if (&record != &components_.at(controller_component_))
+      throw std::runtime_error("MovieControl callback bound to a different component");
+    run_controller_phase_two(external);
+  };
 }
 
 IntroRuntimeHandle IntroRuntime::source_handle(std::size_t source) const {

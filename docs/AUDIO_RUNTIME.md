@@ -10,6 +10,9 @@ implemented yet.
 The retained sound-preference state and intro-controller volume binding are
 implemented separately; see [application services](APPLICATION_SERVICES.md).
 They do not open an audio device or establish the planned mixer behavior below.
+The intro sound components require retained sound records during initialization;
+backend absence is not a supported reason to replace their callbacks with no-ops.
+Source binding and record metadata remain prerequisites for that lifecycle.
 
 ## Runtime boundary
 

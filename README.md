@@ -26,6 +26,9 @@ executable code are included here.
   tests; normal startup activation is not connected yet.
 - Clock and sound preferences now share application-lifetime state across intro
   scenes. This does not add intro playback or audible sound.
+- The intro runtime retains every authored component attachment and has a shared
+  two-phase initialization path. Most concrete component implementations remain
+  missing; a catalog entry is not an initialized component.
 - F10 opens a working graphics-settings panel. Its current appearance is
   diagnostic; matching the game's menu design is still on the roadmap.
 - A separate geometry preview is available with `--diagnostic-scene`. It is not

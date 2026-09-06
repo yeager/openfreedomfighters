@@ -61,6 +61,7 @@ add_library(off_core
     src/audio/decode.cpp
     src/audio/sound_preferences.cpp
     src/runtime/application_clock.cpp
+    src/runtime/component_lifecycle.cpp
     src/crypto/sha256.cpp
     src/data/archive_vfs.cpp
     src/data/audio_bank_header.cpp
@@ -230,6 +231,9 @@ install(FILES assets/branding/openfreedomfighters-splash.bmp
         DESTINATION bin/assets)
 
 if(BUILD_TESTING)
+    add_executable(off_component_lifecycle_tests tests/component_lifecycle_tests.cpp)
+    target_link_libraries(off_component_lifecycle_tests PRIVATE off_core)
+    add_test(NAME off_component_lifecycle_tests COMMAND off_component_lifecycle_tests)
     add_executable(off_sound_preferences_tests tests/sound_preferences_tests.cpp)
     target_link_libraries(off_sound_preferences_tests PRIVATE off_core)
     add_test(NAME off_sound_preferences_tests COMMAND off_sound_preferences_tests)

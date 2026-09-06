@@ -221,12 +221,21 @@ int main() {
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
     Fixture fixture;
     std::int32_t clock_sample=1000;
+    off::runtime::SceneComponentSequence component_sequence;
     off::runtime::ApplicationServices application(
         off::runtime::ClockExecutionPolicy::no_recording_or_replay,
         {[] { return std::int64_t{99}; },[&] { return clock_sample; }},
         []() -> off::audio::SoundVolumeBackend* { return nullptr; });
     {
-      off::graphics::IntroRuntime host(fixture.build(),application);
+      off::graphics::IntroRuntime host(fixture.build(),application,component_sequence);
+      check(host.components().size()==11 && component_sequence.next_identity()==0,
+            "complete fixture attachment catalog plus root does not invent construction IDs");
+      check(host.components().at(0).source().factory_name=="ZGROUP_RootGroup" &&
+            !host.components().at(0).constructed(), "synthesized root awaits its concrete factory");
+      const auto controller_component=host.controller_component_index();
+      check(host.components().at(controller_component).source().factory_name=="ZGEOM_MovieControl" &&
+            host.owner_components(host.source_handle(host.resources().controller_index())).size()==1,
+            "controller joins same retained owner attachment catalog");
       check(host.controller_initialization().deadline()==0 &&
             !host.controller_initialization().phase_two_completed(),
             "retained controller starts uninitialized; resource construction does not invoke phase two");
@@ -268,7 +277,7 @@ int main() {
     {
       auto projection_fixture = fixture;
       set(projection_fixture.payload, projection_fixture.block_offsets[8]+42,0);
-      off::graphics::IntroRuntime host(projection_fixture.build(),application);
+      off::graphics::IntroRuntime host(projection_fixture.build(),application,component_sequence);
       const auto old_flags = host.camera().flags();
       host.project_selected_window_camera_state();
       check(host.window_camera_projection_applied() &&
@@ -284,7 +293,7 @@ int main() {
       clock_sample=1250;
       application.advance_crt();
       application.clock().publish_scene(false);
-      off::graphics::IntroRuntime host(fixture.build(),application);
+      off::graphics::IntroRuntime host(fixture.build(),application,component_sequence);
       off::graphics::IntroControllerPhaseTwoServices services;
       services.input_manager_exists=[] { return false; };
       services.register_movie_control_action_map=[] { throw std::runtime_error("no input manager in this fixture"); };
@@ -299,12 +308,29 @@ int main() {
       services.renderer_has_stencil=[](auto) { return false; };
       services.clear=[](auto,const auto&) {};
       services.present=[&](auto) { ++presented; return off::graphics::IntroPresentationResult::presented; };
-      host.run_controller_phase_two(services);
+      // Independent lifecycle fixture, not original class factories: all other
+      // entries have phase-one-only callbacks. MovieControl uses the real host
+      // binding, shared clock/preferences and the explicit renderer fixture.
+      const auto movie_callback=host.controller_phase_two_callback(services);
+      for (std::size_t i=0; i<host.components().size(); ++i) {
+        host.components().construct(i,[&](off::runtime::ComponentRecord& record) {
+          const bool movie=&record==&host.components().at(host.controller_component_index());
+          return off::runtime::ConstructedComponent{
+            {0,0,movie?3U:1U,0,0,0x20,0,record.source().owner},
+            [](auto&) {},movie?movie_callback:off::runtime::ComponentCallback{}};
+        });
+      }
+      host.components().run_global_phases({
+        [](bool,auto&,std::size_t) {},
+        [](auto) { return std::optional<std::uint32_t>{0}; },
+        [](auto) {},[](auto&) { throw std::runtime_error("unexpected fixture retirement"); }});
       check(&host.application()==&application && application.sound().volume()==60 &&
             *application.configuration().find("SoundEffectsVolume")=="60" &&
-            host.controller_initialization().deadline()==2304 && presented==2,
+            host.controller_initialization().deadline()==2304 && presented==2 &&
+            host.components().phases_completed() &&
+            host.components().at(host.controller_component_index()).state().status==0x2c,
             "host phase two consumes canonical application clock and actual retained sound configuration");
-      off::graphics::IntroRuntime next_host(fixture.build(),application);
+      off::graphics::IntroRuntime next_host(fixture.build(),application,component_sequence);
       check(next_host.application().sound().volume()==60 &&
             next_host.application().clock().scene_integer_word()==256 &&
             !next_host.controller_initialization().phase_two_completed(),

@@ -4,6 +4,7 @@
 
 - [Intro bootstrap](INTRO_BOOTSTRAP.md)
 - [Application clock and sound preferences](APPLICATION_SERVICES.md)
+- [Retained component lifecycle](COMPONENT_LIFECYCLE.md)
 - [Intro camera](INTRO_CAMERA.md)
 - [Cut timeline](CUT_TIMELINE.md)
 - [Native startup splash](STARTUP_SPLASH.md)

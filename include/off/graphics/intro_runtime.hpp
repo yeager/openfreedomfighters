@@ -4,6 +4,7 @@
 #include "off/graphics/intro_prepared_resources.hpp"
 #include "off/graphics/intro_controller_initialization.hpp"
 #include "off/runtime/application_services.hpp"
+#include "off/runtime/component_lifecycle.hpp"
 #include "off/graphics/picture_color_state.hpp"
 #include "off/graphics/picture_submission_cache.hpp"
 #include "off/graphics/picture_view_transition.hpp"
@@ -48,18 +49,31 @@ private:
 // Stable scene ownership, not automatic cut admission or completed initialization.
 // All identities and borrowed material/descriptor storage die with this host.
 // The borrowed ApplicationServices must outlive this host and its bound callbacks.
+// The borrowed scene component sequence must also outlive this host.
 class IntroRuntime final {
 public:
-  IntroRuntime(IntroPreparedResources&& resources, runtime::ApplicationServices& application);
+  IntroRuntime(IntroPreparedResources&& resources, runtime::ApplicationServices& application,
+               runtime::SceneComponentSequence& component_sequence);
   IntroRuntime(const IntroRuntime&) = delete;
   IntroRuntime& operator=(const IntroRuntime&) = delete;
   IntroRuntime(IntroRuntime&&) = delete;
   IntroRuntime& operator=(IntroRuntime&&) = delete;
   [[nodiscard]] const IntroPreparedResources& resources() const noexcept { return resources_; }
   [[nodiscard]] runtime::ApplicationServices& application() noexcept { return application_; }
+  [[nodiscard]] runtime::ComponentLifecycle& components() noexcept { return components_; }
+  [[nodiscard]] const runtime::ComponentLifecycle& components() const noexcept { return components_; }
+  // Catalog membership includes unconstructed/removed entries, not a live
+  // owner attachment collection suitable for runtime lookup or disposal.
+  [[nodiscard]] std::span<const std::size_t> owner_components(IntroRuntimeHandle owner) const;
+  // Component 0 describes the synthesized RootGroup; all authored attachments
+  // follow in directory/attachment order. Catalog order is not construction.
+  [[nodiscard]] std::size_t controller_component_index() const noexcept { return controller_component_; }
   // Caller still owes actual global lifecycle admission and external services.
   // Clock/audio resolve through the same application state retained by this scene.
   void run_controller_phase_two(const IntroControllerPhaseTwoServices& external);
+  // Install on the concrete MovieControl instance constructed in components().
+  [[nodiscard]] runtime::ComponentCallback controller_phase_two_callback(
+      const IntroControllerPhaseTwoServices& external);
   [[nodiscard]] IntroControllerInitialization& controller_initialization() noexcept { return controller_initialization_; }
   [[nodiscard]] const IntroControllerInitialization& controller_initialization() const noexcept { return controller_initialization_; }
   [[nodiscard]] FreshIntroCamera& camera() noexcept { return camera_; }
@@ -88,6 +102,9 @@ public:
 private:
   runtime::ApplicationServices& application_;
   IntroPreparedResources resources_;
+  runtime::ComponentLifecycle components_;
+  std::vector<std::vector<std::size_t>> owner_components_;
+  std::size_t controller_component_{};
   IntroControllerInitialization controller_initialization_;
   FreshIntroCamera camera_;
   std::vector<PictureHierarchyNode> hierarchy_;

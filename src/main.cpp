@@ -117,6 +117,8 @@ int main(int argc, char **argv) {
       off::runtime::make_monotonic_clock_samples(),
       []() -> off::audio::SoundVolumeBackend* { return nullptr; });
   std::optional<off::graphics::SceneGpuPlan> scene;
+  // Scene-manager identity lifetime, independent of source archive catalogs.
+  off::runtime::SceneComponentSequence component_sequence;
   std::optional<off::graphics::SceneRenderAsset> startup_ui_scene_resources;
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
   std::unique_ptr<off::graphics::IntroRuntime> intro;
@@ -140,7 +142,7 @@ int main(int argc, char **argv) {
         // manufacturing lifecycle state. Keep ownership through the runtime.
         intro = std::make_unique<off::graphics::IntroRuntime>(
             off::graphics::load_intro_prepared_resources(
-                data_path / "Scenes" / "FF-Intro.ZIP"), application);
+                data_path / "Scenes" / "FF-Intro.ZIP"), application, component_sequence);
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -189,6 +191,9 @@ int main(int argc, char **argv) {
               << intro->pictures().size() << " picture owners, "
               << intro->resources().images().size()
               << " images; automatic scene activation remains pending.\n";
+  if (intro)
+    std::cout << "Retained component catalog: " << intro->components().size()
+              << " entries including synthesized RootGroup; concrete factories pending.\n";
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       startup_window, mode, scene ? &*scene : nullptr, *startup_graphics,
       ui_fonts, ui_textures, intro.get(),

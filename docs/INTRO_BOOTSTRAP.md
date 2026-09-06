@@ -10,8 +10,10 @@ source records. This is not an active-component count: live resource flags,
 bypass masks, lifecycle callbacks and later mutations still determine admission.
 It does show why a controller-and-five-commands-only initializer is insufficient.
 
-The next implementation must retain resource flags, component instances and
-registry membership in the same host that already owns the decoded pictures.
+The host now retains the complete attachment catalog and a
+[two-phase component lifecycle](COMPONENT_LIFECYCLE.md). Concrete component
+factories, live resource flags and event-registry membership still need to be
+implemented in that same host.
 Global lifecycle order and ordinary update order are different. Both must execute
 against that retained state, with separate global/scene properties and shared
 scene/dispatch clocks. An unsupported admitted component must be identified by
@@ -56,13 +58,15 @@ resource flags are explicit, not copied from source flags or replaced by zero.
 
 The existing synthetic integration suite now checks hierarchy identities, shared
 descriptor/material writes, live draw snapshots, immutable source preservation
-and canonical camera projection. All 66 local tests pass. These fixtures do not
+and canonical camera projection. These fixtures do not
 establish the original scene's activation history.
 
-A bounded native startup run with the owned Steam installation also completes:
+An earlier bounded native startup run with the owned Steam installation completed:
 four picture owners are retained and all 26 intro images upload on SDL/Vulkan.
-The run exits after two presentation frames. This proves the verified-data →
-retained-host → GPU-upload path, not intro draw submission or playback.
+The run exited after two presentation frames. This proved the verified-data →
+retained-host → GPU-upload path, not intro draw submission or playback. It
+predates the component catalog. A later visible screenshot attempt stalled in
+the local graphics environment and was stopped; it is not a current startup pass.
 
 ## Retained controller initialization
 
@@ -85,7 +89,7 @@ the first cut can start.
 
 Independent fixtures check ordered live service calls, audio/property branches,
 wrapping deadlines, repeated invocation, and failure-prefix retention. The full
-68-test local suite and targeted ASan/UBSan run pass. Renderer callbacks in these
+initialization tests and targeted ASan/UBSan run pass. Renderer callbacks in these
 initialization fixtures are test doubles, not proof of SDL presentation or an
 admitted original scene. The separate [SDL presentation bridge](SDL_INTRO_PRESENTATION.md)
 now runs the renderer tail through SDL window/swapchain operations in its Vulkan test;
