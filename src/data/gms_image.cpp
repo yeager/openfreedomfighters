@@ -941,6 +941,49 @@ GmsIntroMovieControllerSource GmsImage::intro_movie_controller_source(
     return result;
 }
 
+GmsWindowPictureSource GmsImage::intro_fade_picture_source(std::size_t index) const {
+    const auto fail = []() -> void {
+        throw std::runtime_error("GMS intro fade picture is unsupported or malformed");
+    };
+    if (index >= directory_.size()) fail();
+    const auto& entry = directory_[index];
+    if (entry.source_type != window_picture_source_type || entry.class_data_value != 0U ||
+        entry.deferred_source_offset == 0U || entry.attachments.size() != 1U) fail();
+    const auto payload = resource_.payload();
+    constexpr std::string_view identity = "ZWINPIC_FadeToBlack";
+    const auto& attachment = entry.attachments.front();
+    const auto name_offset = static_cast<std::size_t>(attachment.source_offset);
+    if (!std::isfinite(attachment.parameter) || attachment.parameter != 0.0F ||
+        name_offset > payload.size() || identity.size() + 1U > payload.size() - name_offset) fail();
+    for (std::size_t i = 0; i < identity.size(); ++i) {
+        if (payload[name_offset + i] != static_cast<std::byte>(identity[i])) fail();
+    }
+    if (payload[name_offset + identity.size()] != std::byte{0}) fail();
+    const auto offset = static_cast<std::size_t>(entry.deferred_source_offset);
+    if (offset > payload.size() || 38U > payload.size() - offset) fail();
+    const ByteReader reader(payload);
+    // Exact high byte, size and full tags: never accept arbitrary tail delimiters.
+    if (reader.u32(offset) != 38U) fail();
+    const auto tag = [&](std::size_t relative, std::uint8_t expected) {
+        if (payload[offset + relative] != static_cast<std::byte>(expected)) fail();
+    };
+    tag(4, 0x03); tag(9, 0x83); tag(14, 0x03); tag(19, 0x83);
+    if (payload[offset + 24U] != std::byte{0x03} &&
+        payload[offset + 24U] != std::byte{0x83}) fail();
+    tag(29, 0x06); tag(30, 0x03); tag(35, 0x06); tag(36, 0x06); tag(37, 0xff);
+    const auto exponent = reader.u32(offset + 5U);
+    const auto alignment = reader.u32(offset + 20U);
+    if (exponent >= 8U || alignment > 15U) fail();
+    return {
+        .authored_state_exponent = static_cast<std::uint8_t>(exponent),
+        .base_render_property = reader.u32(offset + 10U),
+        .authored_alpha = static_cast<std::uint8_t>(std::min(reader.u32(offset + 15U), 255U)),
+        .alignment_enum = static_cast<std::uint8_t>(alignment),
+        .extension_control = static_cast<std::uint8_t>(std::min(reader.u32(offset + 25U), 16U)),
+        .picture_asset_reference = reader.u32(offset + 31U),
+    };
+}
+
 GmsWindowPictureSource GmsImage::startup_window_picture_source(
     std::size_t directory_index
 ) const {

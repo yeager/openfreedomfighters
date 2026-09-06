@@ -73,3 +73,27 @@ Reusing that reader unchanged is unsupported. Authored source flags and runtime
 resource flags are distinct domains; their numeric bits must not be equated
 without the loader conversion and lifecycle. Neither a decoded picture nor an
 unhide effect alone proves that the original draw path accepts it.
+
+## Intro picture source and texture joins
+
+`GmsImage::intro_fade_picture_source` is separate from the startup-only reader.
+Callers must establish supported intro provenance; the method also checks the
+picture source class, zero class data, exactly one named fade attachment with
+numeric zero parameter, and the exact bounded component-delimited block. Full
+tags, both closing delimiters, terminal and declared length are required. The
+extension field is mandatory; unsupported forms fail without invented defaults.
+
+The reader checks state exponent and alignment, preserves the opaque base-render
+selector and full picture resource key, and applies the reviewed unsigned alpha
+and extension clamps. It does not infer color from an owner label or copy source
+flags into a runtime visibility word. External padding remains outside the block.
+The startup reader's accepted grammar is unchanged.
+
+The private owned-data probe now follows the actual command targets through this
+reader, the checked PRM picture decoder, manager-key texture bindings and TEX
+decoder. It checks all returned source fields, descriptor properties, resource
+identities, draw-group/quad counts and every decoded pixel of the bound images.
+Equal texture pixels do not erase distinct authored resource identities. No retail
+payload or expected pixel vectors are published. These real-data joins establish
+the resources to use for later rendering, not the camera, resource lifetime,
+material propagation, update admission or final compositing order.

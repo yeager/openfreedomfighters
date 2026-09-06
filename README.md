@@ -94,6 +94,9 @@ A [conditional picture-fade receiver](docs/PICTURE_FADE.md) now emits the review
 alpha and owner-control effects with explicit clocks, strict completion and
 synchronous callback ordering. It does not yet apply those effects to rendered
 intro pictures or establish initial owner state and draw admission.
+The separate intro fade-picture reader now preserves authored picture fields and
+resource keys with exact component guards. Existing checked PRM/TEX APIs resolve
+the real textures; startup-only composition is not reused for intro data.
 
 ## Build the native bootstrap
 

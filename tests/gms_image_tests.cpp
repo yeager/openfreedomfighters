@@ -401,9 +401,83 @@ void check_parse_rejected(Mutation mutation, const char* message) {
     );
 }
 
+void intro_fade_picture_tests() {
+    const auto fixture = [] {
+        auto bytes = window_picture_fixture();
+        bytes.resize(1033U);
+        set_u32(bytes, 0U, 1024U); set_u32(bytes, 4U, 1033U);
+        set_u32(bytes, 9U + 336U + 20U, 512U);
+        set_u32(bytes, 9U + 336U + 32U, 600U);
+        set_u32(bytes, 521U, 1U); set_u32(bytes, 525U, 544U);
+        constexpr char identity[] = "ZWINPIC_FadeToBlack";
+        std::copy_n(reinterpret_cast<const std::byte*>(identity), sizeof(identity),
+                    bytes.begin() + 553U);
+        set_u32(bytes, 609U, 38U);
+        constexpr std::array<std::uint8_t, 5> tags{3, 0x83, 3, 0x83, 3};
+        constexpr std::array<std::uint32_t, 5> values{7, 0xabcdef12U, 73, 15, 12};
+        for (std::size_t i = 0; i < tags.size(); ++i) {
+            bytes[613U + 5U * i] = static_cast<std::byte>(tags[i]);
+            set_u32(bytes, 614U + 5U * i, values[i]);
+        }
+        bytes[638U] = std::byte{6}; bytes[639U] = std::byte{3};
+        set_u32(bytes, 640U, 0xf1234567U);
+        bytes[644U] = std::byte{6}; bytes[645U] = std::byte{6};
+        bytes[646U] = std::byte{0xff}; bytes[647U] = std::byte{0xa5};
+        return bytes;
+    };
+    const auto parse = [](auto bytes) {
+        return off::data::GmsImage::parse(off::data::PackedResource::parse(std::move(bytes)));
+    };
+    const auto decode = [&](auto bytes) { return parse(std::move(bytes)).intro_fade_picture_source(1U); };
+    const auto value = decode(fixture());
+    check(value.authored_state_exponent == 7U && value.base_render_property == 0xabcdef12U &&
+              value.authored_alpha == 73U && value.alignment_enum == 15U &&
+              value.extension_control == 12U && value.picture_asset_reference == 0xf1234567U,
+          "intro fade picture preserves fields and ignores external padding");
+    auto alternate = fixture(); alternate[633U] = std::byte{0x83};
+    set_u32(alternate, 624U, 0xffffffffU); set_u32(alternate, 634U, 0xffffffffU);
+    const auto clamped = decode(alternate);
+    check(clamped.authored_alpha == 255U && clamped.extension_control == 16U,
+          "intro fade picture uses unsigned clamps and alternate extension tag");
+    auto zero = fixture(); set_u32(zero, 634U, 0U); set_u32(zero, 529U, 0x80000000U);
+    check(decode(zero).extension_control == 0U, "mandatory zero extension and negative-zero parameter accepted");
+    const auto reject = [&](auto mutation) {
+        auto bytes = fixture(); mutation(bytes);
+        check_rejected([&] { static_cast<void>(decode(bytes)); }, "malformed intro fade picture rejected");
+    };
+    for (std::uint32_t size = 0U; size < 38U; ++size)
+        reject([&](auto& b) { set_u32(b, 609U, size); });
+    for (const auto header : {39U, 0x01000026U, 0x00ffffffU})
+        reject([&](auto& b) { set_u32(b, 609U, header); });
+    for (const auto offset : {613U, 618U, 623U, 628U, 633U, 638U, 639U, 644U, 645U, 646U})
+        reject([&](auto& b) { b[offset] = std::byte{0x43}; });
+    reject([](auto& b) { b[613U] = std::byte{0x83}; });
+    reject([](auto& b) { b[618U] = std::byte{3}; });
+    reject([](auto& b) { b[639U] = std::byte{0x83}; });
+    reject([](auto& b) { set_u32(b, 614U, 8U); });
+    reject([](auto& b) { set_u32(b, 629U, 16U); });
+    for (const auto count : {0U, 2U}) reject([&](auto& b) { set_u32(b, 521U, count); });
+    for (const auto parameter : {0x3f800000U, 0x7f800000U, 0x7fc00000U})
+        reject([&](auto& b) { set_u32(b, 529U, parameter); });
+    reject([](auto& b) { b[553U] = std::byte{'X'}; });
+    reject([](auto& b) { b[572U] = std::byte{'X'}; });
+    reject([](auto& b) { set_u32(b, 525U, 1023U); });
+    reject([](auto& b) { set_u32(b, 9U + 336U + 12U, 1U); });
+    reject([](auto& b) { set_u32(b, 9U + 336U + 16U, 0U); });
+    for (const auto offset : {0U, 1023U})
+        reject([&](auto& b) { set_u32(b, 9U + 336U + 32U, offset); });
+    check_rejected([&] { static_cast<void>(parse(fixture()).intro_fade_picture_source(3U)); },
+                   "intro fade picture index checked");
+    check_rejected([&] { static_cast<void>(parse(window_picture_fixture()).intro_fade_picture_source(1U)); },
+                   "startup grammar is not admitted as an intro fade picture");
+    check_rejected([&] { static_cast<void>(parse(fixture()).startup_window_picture_source(1U)); },
+                   "intro tail does not relax startup picture grammar");
+}
+
 }  // namespace
 
 int main() {
+    intro_fade_picture_tests();
     cut_tests();
     const auto decode_intro = [](std::vector<std::byte> bytes) {
         return off::data::GmsImage::parse(off::data::PackedResource::parse(

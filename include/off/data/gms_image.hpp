@@ -121,6 +121,11 @@ public:
     [[nodiscard]] GmsWindowPictureSource startup_window_picture_source(
         std::size_t directory_index
     ) const;
+    // Supported intro provenance only: one fade attachment and its exact
+    // component-delimited picture stream. Does not construct a runtime owner.
+    [[nodiscard]] GmsWindowPictureSource intro_fade_picture_source(
+        std::size_t directory_index
+    ) const;
     // Caller must establish supported intro provenance. This deliberately narrow
     // attachment grammar is not generic component dispatch or reference lookup.
     [[nodiscard]] GmsIntroMovieControllerSource intro_movie_controller_source(

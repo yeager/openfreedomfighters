@@ -148,6 +148,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   clocks, ordered owner effects and strict completion; no guessed initial color.
 - [ ] Join intro picture owners and resource lifecycle to actual fade rendering;
   CPU alpha requests alone do not establish visible intro playback.
+- [x] Decode the restricted intro fade-picture source grammar separately from
+  startup pictures and verify real PRM/TEX resource and pixel joins privately.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.
