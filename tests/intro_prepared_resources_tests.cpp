@@ -113,8 +113,20 @@ Bytes sound_owner() {
     scalar(b,3,123); scalar(b,3,6); floating(b,2,66); floating(b,2,0.5F);
     scalar(b,3,7); scalar(b,3,9); floating(b,2,-0.0F);
     b.push_back(std::byte{6});
-    // Opaque placeholder groups: only the owner prefix is tested here.
-    for(int i=0;i<4;++i) b.push_back(std::byte{6});
+    floating(b,0x82,-2.5F); scalar(b,3,11); scalar(b,3,12);
+    for(float value:{0.25F,0.5F,0.75F}) floating(b,2,value);
+    floating(b,0x82,-0.0F); scalar(b,3,13); scalar(b,3,1);
+    floating(b,2,1.25F); scalar(b,3,14); scalar(b,0x83,7);
+    scalar(b,3,5); scalar(b,3,6); scalar(b,3,99); b.push_back(std::byte{6});
+    scalar(b,0x88,2); scalar(b,0x0a,1); b.push_back(std::byte{6});
+    scalar(b,3,1); scalar(b,0x0a,1); scalar(b,0x0a,0);
+    for(std::uint32_t group=0;group<4;++group) {
+      scalar(b,group==3?0x83:3,group);
+      for(std::uint32_t field=1;field<4;++field) scalar(b,0x43,group*10+field);
+    }
+    floating(b,2,0.375F); scalar(b,3,1); b.push_back(std::byte{4}); text(b,"Independent caption key");
+    b.push_back(std::byte{6}); scalar(b,0x83,1); b.push_back(std::byte{0x84});
+    text(b,"IndependentProperty"); b.push_back(std::byte{6});
     finish(b); return b;
 }
 Bytes audio_header() {
@@ -272,6 +284,62 @@ int main() {
             std::signbit(sound.source.final_scalar) &&
             sound.source.component_groups_offset==sound_fixture.block_offsets[9]+70,
             "owner prefix preserves raw fields and leaves component groups unread");
+      const auto& attachments=sound.attachments;
+      check(attachments.extend.scalars==std::array<float,6>{-2.5F,0.25F,0.5F,0.75F,-0.0F,1.25F} &&
+            std::signbit(attachments.extend.scalars[4]) &&
+            attachments.extend.integers==std::array<std::uint32_t,4>{11,12,13,14} &&
+            attachments.extend.option && attachments.extend.category==7 &&
+            attachments.extend.option_a==5 && attachments.extend.option_b==6 &&
+            attachments.extend.authored_output_mode==99,
+            "typed Extend fields preserve varied values and unknown output enum without applying effects");
+      check(attachments.notify.target_reference==2 && attachments.notify.event_reference==1 &&
+            attachments.segment.start_event_reference==1 && attachments.segment.stop_event_reference==0 &&
+            attachments.segment.enabled && attachments.segment.subtitles &&
+            attachments.segment.probability==0.375F &&
+            attachments.segment.subtitle=="Independent caption key" &&
+            attachments.property_on_parent && attachments.property_key=="IndependentProperty",
+            "attachment references, booleans and owned strings remain authored values");
+      for(std::uint32_t group=0;group<4;++group)
+        check(attachments.segment.times[group]==std::array<std::uint32_t,4>{group,group*10+1,group*10+2,group*10+3},
+              "time groups retain integer units, not float reinterpretation or discarded zeros");
+      const std::size_t start=sound.source.component_groups_offset;
+      const auto segment_start=start+76+11;
+      auto variants=sound_fixture;
+      variants.payload[start+6*5]=std::byte{2};
+      variants.payload[segment_start]=std::byte{0x83};
+      variants.payload[segment_start+15+3*20]=std::byte{3};
+      const auto alternate=variants.image().intro_sound_attachments(9);
+      check(alternate.extend.scalars==attachments.extend.scalars &&
+            alternate.segment.enabled && alternate.segment.times==attachments.segment.times,
+            "observed high-tag alternatives retain the same typed payload");
+      std::vector<std::size_t> field_tags;
+      for(std::size_t i=0;i<15;++i) field_tags.push_back(start+i*5);
+      for(std::size_t i=0;i<2;++i) field_tags.push_back(start+76+i*5);
+      for(std::size_t i=0;i<21;++i) field_tags.push_back(segment_start+i*5);
+      field_tags.push_back(segment_start+105);
+      const auto property_start=segment_start+105+1+std::string_view("Independent caption key").size()+1+1;
+      field_tags.push_back(property_start); field_tags.push_back(property_start+5);
+      for(const auto offset:field_tags) {
+        auto malformed=sound_fixture; malformed.payload[offset]=std::byte{0x7f};
+        rejects([&] { (void)malformed.build(); });
+      }
+      for(const auto offset:{start+40,segment_start,segment_start+100,property_start}) {
+        auto malformed=sound_fixture; set(malformed.payload,offset+1,2);
+        rejects([&] { (void)malformed.image().intro_sound_attachments(9); });
+      }
+      for(const auto field:{0U,3U,4U,5U,6U,9U}) {
+        auto malformed=sound_fixture; set(malformed.payload,start+5*field+1,0x7fc00000);
+        rejects([&] { (void)malformed.image().intro_sound_attachments(9); });
+      }
+      for(std::size_t end=start;end<sound_fixture.payload.size();++end) {
+        auto truncated=sound_fixture; truncated.payload.resize(end);
+        set(truncated.payload,truncated.block_offsets[9],static_cast<std::uint32_t>(end-truncated.block_offsets[9]));
+        rejects([&] { (void)truncated.image().intro_sound_attachments(9); });
+      }
+      auto trailing=sound_fixture;
+      trailing.payload.push_back(std::byte{0xff});
+      set(trailing.payload,trailing.block_offsets[9],static_cast<std::uint32_t>(trailing.payload.size()-trailing.block_offsets[9]));
+      rejects([&] { (void)trailing.image().intro_sound_attachments(9); });
       auto missing=sound_fixture; missing.snd.clear(); rejects([&] { (void)missing.build(); });
       auto null_definition=sound_fixture; set(null_definition.payload,null_definition.block_offsets[9]+10,0);
       rejects([&] { (void)null_definition.build(); });

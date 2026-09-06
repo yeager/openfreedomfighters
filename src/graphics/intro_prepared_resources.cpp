@@ -111,7 +111,7 @@ IntroPreparedResources build_intro_prepared_resources(
     if(!result.sound_bank_) throw std::runtime_error("Intro sound owner has no SND definition bank");
     auto definition=result.sound_bank_->simple_definition(source.sound_definition_reference);
     if(!definition) throw std::runtime_error("Intro sound owner has a null sound definition");
-    result.sounds_.push_back({index,source,std::move(*definition)});
+    result.sounds_.push_back({index,source,std::move(*definition),gms.intro_sound_attachments(index)});
   }
   result.controller_index_ = *controller_index;
   // Matching identity has been selected uniquely. Payload errors must

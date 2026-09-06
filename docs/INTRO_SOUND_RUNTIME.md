@@ -7,6 +7,26 @@ and acknowledgement processing must share the mutable record.
 
 This is a logical backend with no output device. It does not make the intro play.
 
+## Authored attachment data
+
+Preparation reads and owns the four sound attachment groups in source order:
+SoundExtend, SoundNotify, SoundSegment and ZSetZDefine. Each field validates its
+supported full tag, including the observed alternate high-bit forms. All groups
+and the outer block must terminate exactly. Numeric floats must be finite and
+Boolean words must be 0 or 1 under the native parser policy.
+
+Extend retains its six floats, four integer controls, Boolean, category, two
+options and authored output enum. Notify retains separate authored target and
+event references. Segment retains its event references, all four integer time
+groups, probability, subtitle Boolean and owned string. ZSet retains its parent
+selection and owned property key. Unknown enum values remain available for
+explicit execution validation; they are not silently changed to defaults.
+
+These are data reads, not component construction or callbacks. They do not
+resolve runtime identities, apply Extend parameters, convert segment times,
+register events, insert properties or send SoundReady. Wider nonzero control
+branches still need their real runtime services before they can execute.
+
 ## Ownership
 
 The registry retains at most 1,024 records. Native bindings are monotonically

@@ -53,6 +53,32 @@ struct GmsIntroSoundOwnerPrefix {
     std::uint32_t component_groups_offset{};
 };
 
+// Typed authored values only. References are not native handles or event IDs.
+struct GmsIntroSoundAttachments {
+    struct Extend {
+        // Source fields 1,4,5,6,7,10 and 2,3,8,11 respectively. Wider
+        // nonzero callback branches are not implied by successful parsing.
+        std::array<float,6> scalars{};
+        std::array<std::uint32_t,4> integers{};
+        bool option{}; // Field 9.
+        std::uint32_t category{}, option_a{}, option_b{}, authored_output_mode{};
+    } extend;
+    struct Notify {
+        std::uint32_t target_reference{}, event_reference{};
+    } notify;
+    struct Segment {
+        bool enabled{};
+        std::uint32_t start_event_reference{}, stop_event_reference{};
+        // Hours, minutes, seconds, fractional units; no time conversion here.
+        std::array<std::array<std::uint32_t,4>,4> times{};
+        float probability{};
+        bool subtitles{};
+        std::string subtitle;
+    } segment;
+    bool property_on_parent{};
+    std::string property_key;
+};
+
 struct GmsIntroCameraSource {
     double near_distance{0};
     double far_distance{0};
@@ -189,6 +215,10 @@ public:
     // Definition references address the COMPLETE SND bank, not GMS object slots.
     // Does not read component groups, construct a sound record or start playback.
     [[nodiscard]] GmsIntroSoundOwnerPrefix intro_sound_owner_prefix(
+        std::size_t directory_index) const;
+    // Exact supported four-group grammar; retains unknown enum values for
+    // later execution validation. No registration or reader callback effects.
+    [[nodiscard]] GmsIntroSoundAttachments intro_sound_attachments(
         std::size_t directory_index) const;
     // Supported deferred type-8/type-9 relocation with mode false only. Resolves
     // source identity, not a runtime handle or proof of a successful factory.

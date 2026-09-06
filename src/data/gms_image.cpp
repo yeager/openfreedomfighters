@@ -916,6 +916,74 @@ GmsIntroSoundOwnerPrefix GmsImage::intro_sound_owner_prefix(std::size_t index) c
     return result;
 }
 
+GmsIntroSoundAttachments GmsImage::intro_sound_attachments(std::size_t index) const {
+    const auto prefix=intro_sound_owner_prefix(index);
+    const auto bytes=resource_.payload();
+    const ByteReader reader(bytes);
+    const auto begin=directory_[index].deferred_source_offset;
+    const auto end=begin+static_cast<std::size_t>(reader.u32(begin)&tagged_block_size_mask);
+    std::size_t cursor=prefix.component_groups_offset;
+    const auto fail=[] { throw std::runtime_error("GMS intro sound attachments are unsupported or malformed"); };
+    const auto tag=[&](std::uint8_t expected) {
+        if(cursor>=end || bytes[cursor]!=static_cast<std::byte>(expected)) fail();
+        ++cursor;
+    };
+    const auto scalar=[&](std::uint8_t expected, std::uint8_t alternate) {
+        if(cursor>=end) fail();
+        const auto actual=std::to_integer<std::uint8_t>(bytes[cursor]);
+        if(actual!=expected && actual!=alternate) fail();
+        ++cursor;
+        if(end-cursor<4) fail();
+        const auto value=reader.u32(cursor); cursor+=4; return value;
+    };
+    const auto integer=[&](std::uint8_t expected) { return scalar(expected,expected); };
+    const auto real=[&](std::uint8_t expected, std::uint8_t alternate) {
+        const auto value=std::bit_cast<float>(scalar(expected,alternate));
+        if(!std::isfinite(value)) fail();
+        return value;
+    };
+    const auto boolean=[&](std::uint8_t expected, std::uint8_t alternate) {
+        const auto value=scalar(expected,alternate);
+        if(value>1) fail();
+        return value!=0;
+    };
+    const auto string=[&](std::uint8_t expected) {
+        tag(expected);
+        std::string value;
+        while(cursor<end && bytes[cursor]!=std::byte{0})
+            value.push_back(static_cast<char>(std::to_integer<unsigned char>(bytes[cursor++])));
+        if(cursor==end) fail();
+        ++cursor; return value;
+    };
+    GmsIntroSoundAttachments result;
+    auto& extend=result.extend;
+    extend.scalars[0]=real(0x82,0x82);
+    extend.integers[0]=integer(3); extend.integers[1]=integer(3);
+    for(std::size_t i=1;i<4;++i) extend.scalars[i]=real(2,2);
+    extend.scalars[4]=real(0x82,2);
+    extend.integers[2]=integer(3); extend.option=boolean(3,3);
+    extend.scalars[5]=real(2,2); extend.integers[3]=integer(3);
+    extend.category=integer(0x83); extend.option_a=integer(3);
+    extend.option_b=integer(3); extend.authored_output_mode=integer(3);
+    tag(6);
+    result.notify.target_reference=integer(0x88);
+    result.notify.event_reference=integer(0x0a); tag(6);
+    auto& segment=result.segment;
+    segment.enabled=boolean(3,0x83);
+    segment.start_event_reference=integer(0x0a);
+    segment.stop_event_reference=integer(0x0a);
+    for(std::size_t group=0;group<segment.times.size();++group) {
+        segment.times[group][0]=scalar(3,group==3?0x83:3);
+        for(std::size_t field=1;field<4;++field) segment.times[group][field]=integer(0x43);
+    }
+    segment.probability=real(2,2); segment.subtitles=boolean(3,3);
+    segment.subtitle=string(4); tag(6);
+    result.property_on_parent=boolean(0x83,0x83);
+    result.property_key=string(0x84); tag(6); tag(0xff);
+    if(cursor!=end) fail();
+    return result;
+}
+
 GmsIntroMovieControllerSource GmsImage::intro_movie_controller_source(
     std::size_t directory_index
 ) const {

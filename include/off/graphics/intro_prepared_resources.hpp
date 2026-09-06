@@ -34,6 +34,7 @@ struct IntroPreparedSound {
   std::size_t directory_index;
   data::GmsIntroSoundOwnerPrefix source;
   data::SimpleSoundDefinition definition;
+  data::GmsIntroSoundAttachments attachments;
 };
 
 // Encoded bank ownership only, not a backend sound record or playback handle.
