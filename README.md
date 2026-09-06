@@ -129,6 +129,10 @@ Its [position update service](docs/POSITION_UPDATE_SERVICE.md) now preserves sha
 deferred queuing, validated handle resolution and ordered downstream callbacks.
 The final-batch handler is now complete for validated all-plain-picture batches;
 mixed owner classes remain explicit, and preceding bounds work is not skipped.
+The [local picture-bounds calculation](docs/PICTURE_BOUNDS.md) now consumes real
+PRM groups with preserved rounding, scaled extents and pre-clamp radius inputs.
+Its ordered application preserves the explicit renderer-bounds query before
+descriptor replacement; ancestor updates and actual query admission remain separate.
 
 ## Build the native bootstrap
 

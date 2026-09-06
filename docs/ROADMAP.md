@@ -174,6 +174,10 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   bounded handle queue, with explicit downstream bounds/maintenance operations.
 - [x] Complete final-batch scene behavior for validated all-plain-picture owners,
   rejecting unknown/mixed classes instead of assuming every queued owner is a picture.
+- [x] Compute plain-picture local bounds from checked PRM group spans with
+  explicit scale, binary32 boundaries and separate raw/clamped extents.
+- [x] Apply materialized picture bounds after the explicit renderer-resource
+  base query, preserving both result branches and ordered runtime writes.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.
