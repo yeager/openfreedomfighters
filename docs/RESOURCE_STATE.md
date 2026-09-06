@@ -256,6 +256,44 @@ The real source path must preserve its first setter, attachment, then second
 setter using the post-attachment word. Remaining source readers and loader
 services are not replaced by constructor constants or empty callbacks.
 
+## Room and animation scope
+
+Rows 48–68 construct the first nested Room, two child Groups, ordinary objects,
+four category-two owners, three cameras, a particle-template owner and four
+Lists. Allocation retains the bank-two Room partition and every prior cursor.
+The saved-flags list captures the Room's merged flags before the loader removes
+the spatial bits. Room membership is separate from hierarchy: ROOT retains the
+Room owner, while the Room retains its ordinary and category-two resources.
+Category-two attachment propagates the group capability bit through ancestors.
+
+The loader preserves the directory's full unsigned renderer identifier on each
+resource, independently of metadata, property data and transforms. This is not
+an offset or a native handle. Assignment does not register anything while the
+actual resource-allocation mode is off.
+
+Three camera property sections borrow their complete 64-byte blocks from the
+retained BUF allocation. External property blocks are copied using their
+validated declared length. Attaching a component preserves the same owner
+auxiliary storage and its property data.
+
+VertAnim, MatPosAnim, CutSequence and CutSequenceList now have concrete
+constructor state and notification ordering. Authored animation data and cut
+timing remain unavailable until their readers execute. The shared VertAnim event
+slot and CutSequenceList collection belong to the application. The latter is
+created by the first list notification but receives no member at construction.
+ParticleTemplates resolves a scene property through a retained application
+object token; it reuses an existing collection or creates one and appends the
+actual owner. This native storage does not claim verified original teardown.
+ROOT does not consume the directory Room notification counter.
+
+The owned-data probe verifies 84 batch resources plus ROOT, 69 canonical owners,
+66 queued readers, 59 components and 18 ordinary pending additions. Tests also
+cover nonzero high-bit identifiers, reused application collections, sparse
+reader queues, borrowed versus copied properties and failed first-list
+notification without erasing existing state. Normal startup executes this
+construction prefix; readers, animation updates, camera admission and rendering
+remain pending.
+
 Tests use independently constructed states to check ancestor propagation,
 maintenance gates, picture views and subsequent DefaultCam hide inheritance.
 They do not establish the retail root's post-load flags. The explicit `root_ready`

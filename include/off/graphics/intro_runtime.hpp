@@ -37,14 +37,17 @@ struct IntroRuntimeResourceState {
   std::uint32_t flags;
   IntroRuntimeResourceHandle context;
   // Common resource construction clears these fields; owner state is separate.
-  std::uint32_t metadata{},directory_auxiliary{};
+  std::uint32_t metadata{};
+  // Actual resource renderer identifier, seeded by the directory's complete
+  // second word. Not a BUF offset, prepared draw ID or relocated owner token.
+  std::uint32_t directory_auxiliary{};
 };
 struct IntroSynthesizedCameraMetadata {
   std::string name;
   std::uint32_t class_identifier;
 };
 enum class IntroResourceLoadStage {
-  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, authored_camera_ready, second_window_picture_ready, second_window_scope_ready, following_visual_scope_ready, failed
+  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, authored_camera_ready, second_window_picture_ready, second_window_scope_ready, following_visual_scope_ready, room_animation_scope_ready, failed
 };
 struct IntroConstructedCameraOwner {
   IntroRuntimeHandle owner;
@@ -52,10 +55,51 @@ struct IntroConstructedCameraOwner {
   std::string name;
   std::uint32_t class_identifier{0x00400003U},notification_sequence{};
 };
+struct IntroOwnerAuxiliary {
+  std::vector<std::uint64_t> attachments;
+  std::uint32_t component_mask{};
+  std::span<const std::byte> borrowed_property_data;
+  std::vector<std::byte> owned_property_data;
+  bool work_available{};
+};
 struct IntroLiveCameraOwner {
   IntroConstructedCameraOwner metadata;
   FreshIntroCamera camera;
   IntroRuntimeHandle context;
+  std::unique_ptr<IntroOwnerAuxiliary> auxiliary;
+};
+struct IntroVertAnimLocalState {
+  std::array<std::uint32_t,2> zero_words{};
+  std::array<std::uint16_t,2> zero_shorts{};
+};
+struct IntroMatPosAnimLocalState {
+  std::array<std::uint32_t,3> backing_words{};
+  std::uint16_t tracking_short{};
+  std::array<std::uint32_t,2> tracking_words{};
+};
+struct IntroAnimationConstructionState {
+  std::optional<IntroVertAnimLocalState> vert;
+  std::optional<IntroMatPosAnimLocalState> mat;
+  float rate{25};
+  std::optional<float> scalar;
+  bool enabled_a{true},enabled_b{true},extra_control{};
+  std::optional<bool> enabled_c;
+  std::uint16_t short_control{1};
+  std::optional<std::uint32_t> word_control;
+  std::optional<std::array<float,9>> basis;
+  std::optional<std::array<float,3>> transient_vector;
+};
+struct IntroCutListConstructionState {
+  // Opaque references, not fabricated scene resource handles. Their distinct
+  // null constructor values differ from unproduced source/cursor fields.
+  std::array<std::uint64_t,3> selected_references{};
+  std::array<bool,7> controls{};
+  std::uint32_t playback_clock{};
+  float derived_end{0.0F};
+  std::int32_t playback_tracking{};
+  std::optional<float> optional_scalar;
+  std::optional<std::uint64_t> current_command;
+  // Authored start/end/options remain unproduced; no reader runs here.
 };
 // Concrete constructor state, deliberately separate from the prepared asset view.
 struct IntroConstructedPictureOwner {
@@ -75,6 +119,11 @@ struct IntroConstructedPictureComponent {
   std::optional<std::uint32_t> fade_start,fade_deadline,fade_state,fade_in_event,fade_out_event;
   std::optional<std::string> target_name;
   std::optional<std::uint32_t> script_reference;
+  std::optional<IntroAnimationConstructionState> animation;
+  std::optional<IntroCutListConstructionState> cut_list;
+  std::optional<std::uint32_t> list_index;
+  std::optional<std::int32_t> list_sentinel;
+  std::optional<std::vector<std::uint64_t>> commands,auxiliary_list_a,auxiliary_list_b;
 };
 struct IntroConstructedCharacterOwner {
   IntroConstructedPictureOwner visual;
@@ -99,6 +148,24 @@ struct IntroAuthoredGroupOwner {
   std::uint32_t aggregate_flags{},component_mask{};
   IntroRuntimeHandle auxiliary{};
 };
+struct IntroConstructedRoomOwner {
+  IntroAuthoredGroupOwner group;
+  bool room_mode{},enabled{};
+  std::vector<IntroRuntimeHandle> rooms;
+  std::vector<IntroRuntimeResourceHandle> category_two,ordinary_members;
+};
+struct IntroConstructedObjectOwner {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::string name;
+  std::uint32_t class_identifier{},flags{};
+  bool classification{},backing_available{};
+  std::unique_ptr<IntroOwnerAuxiliary> auxiliary;
+};
+struct IntroSavedResourceFlags {
+  IntroRuntimeResourceHandle resource;
+  std::uint32_t flags;
+};
 struct IntroDeferredReaderWork {
   IntroRuntimeResourceHandle resource;
   std::uint32_t source_offset;
@@ -118,6 +185,7 @@ struct IntroWindowOwner {
 struct IntroSceneResourceProperty {
   std::uint32_t type{16};
   IntroRuntimeResourceHandle resource;
+  std::optional<std::uint64_t> object_token{};
 };
 struct IntroSourceResourceScope {
   std::uint32_t count_group{};
@@ -131,6 +199,7 @@ struct IntroRootOwnerState {
   std::uint32_t aggregate_flags{}, component_mask{};
   bool room_mode{}, enabled{};
   std::map<std::uint32_t,std::vector<IntroRuntimeResourceHandle>> category_memberships{};
+  std::vector<IntroRuntimeHandle> rooms{};
 };
 struct IntroCameraRegistrationServices {
   std::function<std::int32_t()> width,height;
@@ -251,6 +320,15 @@ public:
   void construct_second_window_picture_without_engine_renderer();
   void construct_second_window_scope_without_engine_renderer();
   void construct_following_visual_scope_without_engine_renderer();
+  void construct_room_animation_scope_without_engine_renderer();
+  [[nodiscard]] const IntroConstructedRoomOwner* constructed_room_owner(std::size_t source) const noexcept;
+  [[nodiscard]] const IntroConstructedObjectOwner* constructed_object_owner(std::size_t source) const noexcept;
+  [[nodiscard]] const IntroOwnerAuxiliary* constructed_owner_auxiliary(std::size_t source) const noexcept;
+  [[nodiscard]] std::span<const IntroSavedResourceFlags> saved_resource_flags() const noexcept {return saved_resource_flags_;}
+  [[nodiscard]] bool light_policy() const noexcept {return light_policy_;}
+  void set_light_policy(bool value) noexcept {light_policy_=value;}
+  void set_scene_object_property_native(std::string key,std::uint64_t token);
+  void assign_owner_property_data(std::size_t source,std::span<const std::byte> section);
   [[nodiscard]] const IntroConstructedPictureOwner* constructed_visual_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroAuthoredGroupOwner* constructed_group_owner(std::size_t source) const noexcept;
   [[nodiscard]] PositionServiceMode directory_position_mode() const noexcept {return position_mode_;}
@@ -440,6 +518,10 @@ private:
   std::map<std::size_t,IntroConstructedPictureOwner> constructed_picture_owners_;
   std::map<std::size_t,IntroConstructedPictureOwner> constructed_visual_owners_;
   std::map<std::size_t,IntroAuthoredGroupOwner> constructed_group_owners_;
+  std::map<std::size_t,IntroConstructedRoomOwner> constructed_room_owners_;
+  std::map<std::size_t,IntroConstructedObjectOwner> constructed_object_owners_;
+  std::vector<IntroSavedResourceFlags> saved_resource_flags_;
+  bool light_policy_{};
   std::map<std::size_t,IntroConstructedCharacterOwner> constructed_character_owners_;
   std::map<std::size_t,IntroConstructedListOwner> constructed_list_owners_;
   std::map<std::size_t,IntroConstructedPictureComponent> constructed_picture_components_;
@@ -460,6 +542,11 @@ private:
   void construct_owner_attachments(std::size_t row,std::uint32_t& mask,std::vector<std::uint64_t>& attachments);
   void apply_directory_transform(std::size_t row,IntroRuntimeResourceHandle resource);
   void assign_fresh_directory_metadata(IntroRuntimeResourceHandle resource,std::uint32_t metadata);
+  void assign_directory_property(std::size_t source);
+  void attach_directory_owner(std::size_t source,IntroRuntimeResourceHandle resource,IntroRuntimeHandle parent);
+  [[nodiscard]] IntroAuthoredGroupOwner* group_owner(IntroRuntimeHandle owner);
+  [[nodiscard]] IntroConstructedRoomOwner* nearest_authored_room(IntroRuntimeHandle parent);
+  [[nodiscard]] IntroOwnerAuxiliary& ensure_owner_auxiliary(std::size_t source);
   PositionUpdateService position_updates_;
   std::string selected_scene_filename_;
   PositionServiceMode position_mode_{false,false,0};

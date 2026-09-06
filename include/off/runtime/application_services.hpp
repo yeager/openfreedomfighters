@@ -13,8 +13,14 @@
 #include <map>
 #include <string>
 #include <string_view>
+#include <memory>
+#include <optional>
+#include <vector>
 
 namespace off::runtime {
+struct ApplicationHandleCollection {
+  std::vector<std::uint64_t> members;
+};
 // Application-lifetime state, borrowed by scenes rather than reset when each
 // IntroRuntime is constructed. No global numeric/scene-reference stores are
 // inferred from this separate text configuration or from backend absence.
@@ -88,6 +94,49 @@ public:
     for(const auto name:attachment_classes) components.emplace(name,0U);
     class_sequences_.swap(owners);
     component_class_sequences_.swap(components);
+  }
+  void initialize_native_room_animation_scope_registration() {
+    constexpr std::uint32_t owner_classes[]{0x00100021U,0x00200002U,0x00800024U,0x002000e5U};
+    constexpr std::string_view attachment_classes[]{
+        "ZSTDOBJ_VertAnim","ZGEOM_MatPosAnim","ZLIST_CutSequence","ZLIST_CutSequenceList"};
+    for(const auto identity:owner_classes)
+      if(has_class_registration(identity))
+        throw std::runtime_error("Native Room scope owner class is already registered");
+    for(const auto name:attachment_classes)
+      if(has_component_class_registration(name))
+        throw std::runtime_error("Native Room scope attachment class is already registered");
+    auto owners=class_sequences_;
+    auto components=component_class_sequences_;
+    for(const auto identity:owner_classes) owners.emplace(identity,0U);
+    for(const auto name:attachment_classes) components.emplace(name,0U);
+    class_sequences_.swap(owners);
+    component_class_sequences_.swap(components);
+  }
+  // Native application token domain, distinct from scene/resource handles.
+  // Collections have stable storage for this application's lifetime. No scene
+  // teardown or original registry-removal behavior is inferred here.
+  [[nodiscard]] std::uint64_t create_handle_collection() {
+    if(!next_collection_token_) throw std::runtime_error("Application collection tokens exhausted");
+    const auto token=next_collection_token_;
+    handle_collections_.emplace(token,ApplicationHandleCollection{});
+    ++next_collection_token_;
+    return token;
+  }
+  [[nodiscard]] ApplicationHandleCollection* resolve_handle_collection(std::uint64_t token) noexcept {
+    const auto found=handle_collections_.find(token);
+    return found==handle_collections_.end()?nullptr:&found->second;
+  }
+  [[nodiscard]] const ApplicationHandleCollection* resolve_handle_collection(std::uint64_t token) const noexcept {
+    const auto found=handle_collections_.find(token);
+    return found==handle_collections_.end()?nullptr:&found->second;
+  }
+  [[nodiscard]] std::optional<std::uint16_t> vert_anim_event() const noexcept {return vert_anim_event_;}
+  void set_vert_anim_event(std::uint16_t event) noexcept {vert_anim_event_=event;}
+  [[nodiscard]] ApplicationHandleCollection* cut_sequence_lists() noexcept {return cut_sequence_lists_.get();}
+  [[nodiscard]] const ApplicationHandleCollection* cut_sequence_lists() const noexcept {return cut_sequence_lists_.get();}
+  void create_cut_sequence_list_collection() {
+    if(cut_sequence_lists_) throw std::runtime_error("Shared CutSequenceList collection already exists");
+    cut_sequence_lists_=std::make_unique<ApplicationHandleCollection>();
   }
   [[nodiscard]] std::uint32_t component_class_notification_sequence(std::string_view name) const {
     const auto found=component_class_sequences_.find(name);
@@ -182,5 +231,9 @@ private:
   // Actual application-constructor producer; later ordinary passes update it.
   std::optional<std::uint32_t> component_dispatch_time_{0U};
   std::uint64_t next_runtime_owner_{1};
+  std::map<std::uint64_t,ApplicationHandleCollection> handle_collections_;
+  std::uint64_t next_collection_token_{1};
+  std::optional<std::uint16_t> vert_anim_event_;
+  std::unique_ptr<ApplicationHandleCollection> cut_sequence_lists_;
 };
 } // namespace off::runtime

@@ -60,13 +60,14 @@ struct FixtureReferenceMap {
     bool second_window{};
     bool full_second_scope{};
     bool following_visual_scope{};
+    bool room_animation_scope{};
     std::uint32_t operator()(std::uint32_t value) const {
         if(!value) return 0;
         if(picture_order) {
             if(camera_row) {
                 if(value==9) return 6;
-                if(value==3) return following_visual_scope?49U:full_second_scope?43U:second_window?9U:7U;
-                if(value>=5 && value<=8) return value+(following_visual_scope?45U:full_second_scope?39U:second_window?5U:3U);
+                if(value==3) return room_animation_scope?70U:following_visual_scope?49U:full_second_scope?43U:second_window?9U:7U;
+                if(value>=5 && value<=8) return value+(room_animation_scope?66U:following_visual_scope?45U:full_second_scope?39U:second_window?5U:3U);
             }
             if(value==2) return 5;
             if(value==3) return 6;
@@ -171,12 +172,13 @@ struct Fixture {
     Bytes payload, names, prm, tex, snd;
     std::array<std::size_t, 10> block_offsets{};
     std::array<std::size_t, 10> attachment_offsets{};
-    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false) : payload(1024), snd(16) {
+    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false,bool room_animation_scope=false) : payload(1024), snd(16) {
         if(language_group && !leading_group) throw std::runtime_error("language fixture requires leading group");
         if(camera_row && !language_group) throw std::runtime_error("camera row fixture requires language group");
         if(second_window && !camera_row) throw std::runtime_error("second Window fixture requires Camera row");
         if(full_second_scope && !second_window) throw std::runtime_error("full second scope requires second Window");
         if(following_visual_scope && !full_second_scope) throw std::runtime_error("following visual scope requires full second scope");
+        if(room_animation_scope && !following_visual_scope) throw std::runtime_error("Room fixture requires preceding visual scope");
         // Deliberately permuted directory roles; no retail source indices.
         set(payload, 0, 32); set(payload, 4, 128); set(payload, 12, 4); set(payload, 20, 176);
         set(payload, 32, include_sound?10:9); set(payload, 128, 1); set(payload, 132, 144);
@@ -217,7 +219,7 @@ struct Fixture {
                                   {"ZSNDOBJ_SoundSegment",1},{"ZGEOM_ZSetZDefine",0}});
         // All nonnull references emitted below target original rows after the
         // first window, so both inserted rows precede those referenced owners.
-        const FixtureReferenceMap bias{leading_group?(language_group?2U:1U):0U,language_group,camera_row,second_window,full_second_scope,following_visual_scope};
+        const FixtureReferenceMap bias{leading_group?(language_group?2U:1U):0U,language_group,camera_row,second_window,full_second_scope,following_visual_scope,room_animation_scope};
         const std::array<Bytes, 10> blocks{camera(), picture(false), controller(bias), picture(true), member(bias), list({8, 8},bias), list({4, 2, 4},bias), first_cut(bias,include_events), window(bias),sound_owner(bias)};
         for (std::size_t i = 0; i < node_count; ++i) {
             block_offsets[i] = payload.size(); set(payload, 512 + 48 * i + 32, static_cast<std::uint32_t>(payload.size()));
@@ -312,8 +314,55 @@ struct Fixture {
                     set(payload,at+32,static_cast<std::uint32_t>(deferred));
                 }
             }
+            const auto room_scope_records=payload.size();
+            if(room_animation_scope) {
+                payload.resize(payload.size()+21*48);
+                for(std::size_t row=48;row<=68;++row) {
+                    const auto at=room_scope_records+(row-48)*48;
+                    const bool group=row==48 || row==50 || row==63;
+                    const bool room=row==49;
+                    const bool camera_owner=row>=59 && row<=61;
+                    const bool light=row>=53 && row<=56;
+                    const bool mesh=row==51 || row==52 || row==57 || row==58 || row==62;
+                    const auto type=group?0x00100001U:room?0x00100021U:camera_owner?0x00400003U:
+                        light?0x00800024U:mesh?0x00200002U:row==64?0x002000e5U:0x0800001aU;
+                    set(payload,at,static_cast<std::uint32_t>(names.size()));text(names,"IndependentRoomOwner"+std::to_string(row));
+                    set(payload,at+4,384);set(payload,at+8,420);set(payload,at+16,type);
+                    const auto flags=row==48?0x03200000U:room?0x07044000U:row==50?0x03000000U:
+                        row==63?0x47000000U:light?0x80U:camera_owner?0x00280400U:
+                        row==51 || row==62?0x20073U:row==52?0x20071U:row==58?0x200f1U:
+                        row==57 || row==64?0x200f3U:0x00200000U;
+                    set(payload,at+24,flags);
+                    if(light || mesh || row==64) set(payload,at+12,static_cast<std::uint32_t>(0x2000+row*16));
+                    if(room) payload.at(at+45)=std::byte{2};
+                    if(row==49 || row==50 || row==63) set(payload,at+36,static_cast<std::uint32_t>(0x40000000U+row*16));
+                    if(row!=57 && row!=58 && row!=62) set(payload,at+32,static_cast<std::uint32_t>(deferred));
+                    if(row==50 || mesh || light || camera_owner) {
+                        set(payload,at+8,static_cast<std::uint32_t>(payload.size()));
+                        word(payload,std::bit_cast<std::uint32_t>(static_cast<float>(row-47)));
+                        word(payload,std::bit_cast<std::uint32_t>(2.F));word(payload,std::bit_cast<std::uint32_t>(-3.F));
+                    }
+                    if(row==53 || row==54 || camera_owner) {
+                        set(payload,at+4,static_cast<std::uint32_t>(payload.size()));
+                        for(const auto value:std::array<float,9>{1,0,0,0,1,0,0,0,-1}) word(payload,std::bit_cast<std::uint32_t>(value));
+                    }
+                    if(camera_owner) {
+                        const auto property=names.size();names.resize(property+64,std::byte{0x5c});
+                        set(names,property,static_cast<std::uint32_t>(row));set(names,property+4,0x80000040U);
+                        set(payload,at+28,static_cast<std::uint32_t>(property));
+                    }
+                    const std::string_view attachment=row==51 || row==52?"ZSTDOBJ_VertAnim":
+                        camera_owner?"ZGEOM_MatPosAnim":row==65?"ZLIST_CutSequenceList":row>=66?"ZLIST_CutSequence":"";
+                    if(!attachment.empty()) {
+                        const auto table=payload.size();word(payload,1);word(payload,static_cast<std::uint32_t>(table+12));
+                        word(payload,row==65?0U:camera_owner?0x42c80000U:0x3f800000U);text(payload,attachment);
+                        set(payload,at+20,static_cast<std::uint32_t>(table));
+                    }
+                }
+                while(payload.size()%4) payload.push_back(std::byte{0});
+            }
             const auto directory=payload.size();
-            word(payload,static_cast<std::uint32_t>(node_count+1+(language_group?1:0)+(second_window?2:0)+(full_second_scope?34:0)+(following_visual_scope?6:0)));
+            word(payload,static_cast<std::uint32_t>(node_count+1+(language_group?1:0)+(second_window?2:0)+(full_second_scope?34:0)+(following_visual_scope?6:0)+(room_animation_scope?21:0)));
             word(payload,static_cast<std::uint32_t>(record/4));word(payload,0);
             const Bytes entries(payload.begin()+36,payload.begin()+static_cast<std::ptrdiff_t>(36+8*node_count));
             if(language_group) {
@@ -338,6 +387,16 @@ struct Fixture {
                             word(payload,static_cast<std::uint32_t>((visual_scope_records+slot*48)/4));word(payload,0);
                         }
                     }
+                    if(room_animation_scope) {
+                        for(std::size_t row=48;row<=68;++row) {
+                            const bool pop=row==48 || row==53 || row==63 || row==65;
+                            const bool enter=row==48 || row==49 || row==50 || row==63;
+                            word(payload,(pop?1U<<25U:0U)|(enter?1U<<24U:0U)|
+                                static_cast<std::uint32_t>((room_scope_records+(row-48)*48)/4));
+                            word(payload,row==53?0xfedcba98U:
+                                (row>=54 && row<=58) || row==64?static_cast<std::uint32_t>(0x3000+row):0U);
+                        }
+                    }
                     word(payload,(1U<<25U)|static_cast<std::uint32_t>((512+48*2)/4));word(payload,0);
                 } else payload.insert(payload.end(),entries.begin()+16,entries.begin()+24);
                 if(camera_row) {
@@ -346,10 +405,10 @@ struct Fixture {
                 } else payload.insert(payload.end(),entries.begin()+32,entries.end());
             } else payload.insert(payload.end(),entries.begin(),entries.end());
             set(payload,0,static_cast<std::uint32_t>(directory));
-            const auto pool_count=following_visual_scope?6U:second_window?5U:language_group?4U:3U;
+            const auto pool_count=room_animation_scope?10U:following_visual_scope?6U:second_window?5U:language_group?4U:3U;
             const auto pools=payload.size();word(payload,pool_count);
             payload.resize(payload.size()+pool_count*24*4);
-            set(payload,pools+4,following_visual_scope?4U:second_window?3U:2U); // ROOT's group/Window category.
+            set(payload,pools+4,room_animation_scope?5U:following_visual_scope?4U:second_window?3U:2U); // ROOT's group/Window category.
             if(full_second_scope) set(payload,pools+4+12,include_sound?6U:5U);
             set(payload,pools+4+2*24*4+4,language_group?1U:2U);
             set(payload,pools+4+2*24*4+12,second_window?1U:include_sound?7U:6U);
@@ -362,6 +421,12 @@ struct Fixture {
                 set(payload,pools+4+4*24*4+12,full_second_scope?19U:include_sound?6U:5U);
             }
             if(following_visual_scope) set(payload,pools+4+5*24*4+4,5);
+            if(room_animation_scope) {
+                set(payload,pools+4+6*24*4,1);set(payload,pools+4+6*24*4+3*4,4);set(payload,pools+4+6*24*4+16*4,1);
+                for(const auto [category,count]:std::array<std::pair<std::size_t,std::uint32_t>,4>{{{0,1},{1,3},{2,4},{3,3}}})
+                    set(payload,pools+4+7*24*4+category*4,count);
+                set(payload,pools+4+8*24*4+4,2);set(payload,pools+4+9*24*4+4,1);
+            }
             set(payload,20,static_cast<std::uint32_t>(pools));
         }
         prm.resize(16); word(prm, 1);
@@ -450,6 +515,227 @@ int main() {
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
     Fixture fixture;
     {
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      const auto token=app.create_handle_collection();
+      auto* retained=app.resolve_handle_collection(token);
+      check(token!=0 && retained && retained->members.empty() && !app.resolve_handle_collection(0),
+            "application object tokens resolve stable concrete collections, not scene resource handles");
+      retained->members.push_back(123);
+      for(int i=0;i<100;++i) static_cast<void>(app.create_handle_collection());
+      check(app.resolve_handle_collection(token)==retained &&
+            std::as_const(app).resolve_handle_collection(token)->members==std::vector<std::uint64_t>{123} &&
+            !app.resolve_handle_collection(std::numeric_limits<std::uint64_t>::max()),
+            "later object registrations preserve collection identity, contents and invalid-token distinction");
+      check(!app.vert_anim_event() && !app.cut_sequence_lists(),"shared component class state starts absent");
+      app.set_vert_anim_event(17);app.create_cut_sequence_list_collection();
+      auto* shared=app.cut_sequence_lists();shared->members.push_back(456);
+      rejects([&]{app.create_cut_sequence_list_collection();});
+      app.set_vert_anim_event(29);
+      check(app.vert_anim_event()==29 && app.cut_sequence_lists()==shared && shared->members==std::vector<std::uint64_t>{456},
+            "shared event slot replaces its value while repeated collection creation never resets existing members");
+      app.initialize_native_room_animation_scope_registration();
+      static_cast<void>(app.register_class_instance(0x00100021U));
+      rejects([&]{app.initialize_native_room_animation_scope_registration();});
+      check(app.class_notification_sequence(0x00100021U)==1 && app.class_notification_sequence(0x00200002U)==0 &&
+            app.component_class_notification_sequence("ZLIST_CutSequenceList")==0 && app.vert_anim_event()==29 &&
+            app.cut_sequence_lists()==shared,"registration preserves unrelated application state and rejects duplicate reset");
+    }
+    for(const bool existing_shared_state:{false,true}) {
+      Fixture room_fixture(false,true,true,true,true,true,true,true,true);
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
+      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+      app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
+      app.initialize_native_room_animation_scope_registration();
+      if(existing_shared_state) {
+        for(int i=0;i<7;++i) static_cast<void>(app.register_component_class_instance("ZLIST_CutSequenceList"));
+        app.create_cut_sequence_list_collection();app.cut_sequence_lists()->members.push_back(789);
+        app.set_vert_anim_event(999);
+      }
+      const auto* shared_before=app.cut_sequence_lists();
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
+      off::graphics::IntroRuntime host(room_fixture.build(),app,sequence);
+      check(host.resources().controller_index()==69 && host.resources().first_cut_index()==73 &&
+            host.resources().sources().directory().size()==74 && !host.light_policy(),
+            "independent nested Room fixture keeps selected controller references outside the constructed prefix");
+      host.construct_root();
+      check(app.class_notification_sequence(0x00100021U)==0,
+            "synthesized ROOT factory does not invent a directory class notification");
+      host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+      host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
+      host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
+      host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
+      std::uint64_t particle_token=0;
+      if(existing_shared_state) {
+        host.set_light_policy(true);
+        particle_token=app.create_handle_collection();
+        app.resolve_handle_collection(particle_token)->members.push_back(host.source_handle(0).value);
+        host.set_scene_object_property_native("ParticleTemplates",particle_token);
+      }
+      const auto events=host.scene_event_names().counter();
+      host.construct_room_animation_scope_without_engine_renderer();
+      check(host.loaded_resource_handles().size()==69 && host.deferred_reader_work().size()==66 &&
+            !host.directory_resource_mapping()[69] && host.count_group_selector()==9 &&
+            host.current_source_parent()==host.source_handle(48) && host.source_resource_scopes().size()==9 &&
+            host.resource_load_stage()==off::graphics::IntroResourceLoadStage::room_animation_scope_ready,
+            "nested Room scope constructs every owner but queues no reader for the three absent source blobs");
+      const auto* room=host.constructed_room_owner(49);
+      check(room && room->group.owner==host.source_handle(49) && room->group.flags==0x07010000U &&
+            !room->room_mode && !room->enabled && host.constructed_group_owner(48)->flags==0x03010000U &&
+            host.root_owner_state()->aggregate_flags==0x10000U && host.constructed_group_owner(63)->flags==0x47000000U,
+            "category-two capability changes the real group-owner word without replacing its source high flags");
+      check(host.resource_state(host.root_handle())->flags==0x090000f3U &&
+            host.resource_state(host.source_handle(48))->flags==0x090000f3U &&
+            host.resource_state(host.source_handle(49))->flags==0x090000f3U &&
+            host.resource_state(host.source_handle(50))->flags==0x09100073U &&
+            host.resource_state(host.source_handle(63))->flags==0x090000f3U &&
+            host.saved_resource_flags().size()==1 &&
+            host.saved_resource_flags()[0].resource==host.resource_handle(host.source_handle(49)) &&
+            host.saved_resource_flags()[0].flags==0x09044000U,
+            "saved Room flags remain retained while actual child low-byte propagation updates resource ancestors");
+      std::vector<off::graphics::IntroRuntimeResourceHandle> ordinary;
+      for(const auto row:{51U,52U,57U,58U,62U}) ordinary.push_back(host.resource_handle(host.source_handle(row)));
+      check(room->ordinary_members==ordinary && room->category_two==std::vector<off::graphics::IntroRuntimeResourceHandle>{
+                host.resource_handle(host.source_handle(53)),host.resource_handle(host.source_handle(54)),
+                host.resource_handle(host.source_handle(55)),host.resource_handle(host.source_handle(56))},
+            "Room ordinary-resource bucket and category-two collection preserve distinct source-ordered membership");
+      check(host.root_owner_state()->rooms==std::vector<off::graphics::IntroRuntimeHandle>{host.source_handle(49)} &&
+            room->rooms.empty() && room->group.source_word==host.resources().sources().directory()[49].child_value &&
+            host.constructed_group_owner(50)->source_word==host.resources().sources().directory()[50].child_value &&
+            host.constructed_group_owner(63)->source_word==host.resources().sources().directory()[63].child_value &&
+            host.source_resource_scopes()[5].count_group==6 && host.source_resource_scopes()[5].next_in_partition[16]==6 &&
+            host.source_resource_scopes()[5].next_in_partition[0]==1,
+            "Room collection is distinct from hierarchy and bank-two cursor remains distinct from ordinary groups");
+      check(host.child_owners(host.source_handle(48))==std::vector<off::graphics::IntroRuntimeHandle>{
+                host.source_handle(49),host.source_handle(63),host.source_handle(65),host.source_handle(66),host.source_handle(67),host.source_handle(68)} &&
+            host.child_owners(host.source_handle(50))==std::vector<off::graphics::IntroRuntimeHandle>{host.source_handle(51),host.source_handle(52)} &&
+            host.child_owners(host.source_handle(63))==std::vector<off::graphics::IntroRuntimeHandle>{host.source_handle(64)},
+            "nested group pops restore the real retained parent without flattening Room hierarchy");
+      std::size_t reader=48;
+      for(std::size_t row=48;row<=68;++row) {
+        const auto owner=host.source_handle(row);
+        const auto& source=host.resources().sources().directory()[row];
+        check(host.directory_resource_mapping()[row]==host.resource_handle(owner) && !host.resource_state(owner)->context.value &&
+              host.resource_state(owner)->directory_auxiliary==source.auxiliary_value,
+              "every Room-scope resource maps canonically without inventing an inherited context");
+        if(source.deferred_source_offset) {
+          check(host.deferred_reader_work()[reader].resource==host.resource_handle(owner) &&
+                host.deferred_reader_work()[reader].source_offset==source.deferred_source_offset,
+                "sparse deferred queue preserves source order independently of directory index");
+          ++reader;
+        }
+        if(row>=53 && row<=56) {
+          const auto* light=host.constructed_object_owner(row);
+          check(light && light->class_identifier==0x00800024U && light->flags==(existing_shared_state?1U:0U) &&
+                !light->backing_available && host.resource_state(owner)->flags==0x09108080U,
+                "light constructor reads the live scene policy without replacing canonical resource flags");
+        }
+        if(row>=59 && row<=61) {
+          const auto* auxiliary=host.constructed_owner_auxiliary(row);
+          const auto property=host.resources().source_names().subspan(source.buf_auxiliary_offset,64);
+          check(auxiliary && auxiliary->borrowed_property_data.data()==property.data() &&
+                auxiliary->borrowed_property_data.size()==64 && auxiliary->owned_property_data.empty() &&
+                auxiliary->attachments.size()==1 && auxiliary->component_mask==0 && !auxiliary->work_available &&
+                host.resource_state(owner)->flags==0x09180400U,
+                "Camera properties borrow the exact retained BUF section and share auxiliary storage with hidden MatPosAnim");
+        }
+      }
+      check(reader==66 && sequence.live_count()==59 && host.components().construction_order().size()==59 &&
+            host.ordinary_components()->pending().size()==18 && app.class_notification_sequence(0x00100021U)==1 &&
+            app.class_notification_sequence(0x00200002U)==5 && app.class_notification_sequence(0x00800024U)==4 &&
+            app.class_notification_sequence(0x002000e5U)==1 &&
+            app.component_class_notification_sequence("ZSTDOBJ_VertAnim")==2 &&
+            app.component_class_notification_sequence("ZGEOM_MatPosAnim")==3 &&
+            app.component_class_notification_sequence("ZLIST_CutSequence")==3 &&
+            app.component_class_notification_sequence("ZLIST_CutSequenceList")==std::uint32_t{existing_shared_state?8U:1U},
+            "all concrete owner/component counters advance once and only three new ordinary additions are queued");
+      check(app.vert_anim_event()==host.scene_event_names().find("Msg_RunWhenPaused") &&
+            host.scene_event_names().counter()==events+1 && app.cut_sequence_lists() &&
+            app.cut_sequence_lists()->members==(existing_shared_state?std::vector<std::uint64_t>{789}:std::vector<std::uint64_t>{}) &&
+            (!existing_shared_state || app.cut_sequence_lists()==shared_before),
+            "VertAnim updates shared application event slot; CutSequenceList notification preserves shared collection without inserting members");
+      const auto property=host.scene_resource_property("ParticleTemplates");
+      check(property && property->type==16 && property->object_token && !property->resource.value,
+            "ParticleTemplates scene property carries an object token rather than a resource identity");
+      const auto* particles=app.resolve_handle_collection(*property->object_token);
+      check(particles && particles->members==(existing_shared_state?
+                std::vector<std::uint64_t>{host.source_handle(0).value,host.source_handle(64).value}:
+                std::vector<std::uint64_t>{host.source_handle(64).value}) &&
+            (!existing_shared_state || *property->object_token==particle_token),
+            "particle constructor reuses application-token collection and appends its real owner after prior members");
+      const auto list_index=host.owner_components(host.source_handle(65)).front();
+      const auto* list_payload=host.constructed_attachment(list_index);
+      check(list_payload && list_payload->list_index==std::uint32_t{existing_shared_state?7U:0U} &&
+            list_payload->list_sentinel==-1 && list_payload->commands && list_payload->commands->empty() &&
+            list_payload->auxiliary_list_a && list_payload->auxiliary_list_a->empty() &&
+            list_payload->auxiliary_list_b && list_payload->auxiliary_list_b->empty() &&
+            host.components().at(list_index).state().class_ordinal==97,
+            "CutSequenceList initializes real collections and stores captured class index, not common serial");
+      check(list_payload->cut_list && list_payload->cut_list->selected_references==std::array<std::uint64_t,3>{} &&
+            list_payload->cut_list->controls==std::array<bool,7>{} && list_payload->cut_list->playback_clock==0 &&
+            std::bit_cast<std::uint32_t>(list_payload->cut_list->derived_end)==0 &&
+            list_payload->cut_list->playback_tracking==0 && !list_payload->cut_list->optional_scalar &&
+            !list_payload->cut_list->current_command,
+            "CutSequenceList produces only its distinct cleared controls, references and derived time, leaving source fields unavailable");
+      for(const auto row:{51U,52U,59U,60U,61U,65U,66U,67U,68U}) {
+        const auto index=host.owner_components(host.source_handle(row)).front();
+        const auto& state=host.components().at(index).state();
+        const auto* payload=host.constructed_attachment(index);
+        const bool vertex=row==51 || row==52,material=row>=59 && row<=61;
+        check(payload && payload->owner==host.source_handle(row) && state.attached_owner==payload->owner.value &&
+              state.status==0x20 && state.registered_cache==0 &&
+              state.class_ordinal==(vertex?85:material?86:row==65?97:96) &&
+              state.priority==(vertex || material?100U:row==65?0U:1U) &&
+              state.requested==(vertex?0x35U:material?0x435U:row==65?0x837U:0x825U) &&
+              state.admitted==(vertex || row==65?0x10U:0U) &&
+              payload->raw_attachment_argument==(material?0x42c80000U:row==65?0U:0x3f800000U),
+              "animation and cut attachment metadata retain default priorities, raw arguments and real hide admission");
+        if(vertex || material) {
+          check(payload->animation && payload->animation->rate==25 &&
+                payload->animation->enabled_a && payload->animation->enabled_b && !payload->animation->extra_control &&
+                payload->animation->short_control==1,
+                "animation constructors preserve independent byte and integer defaults without source execution");
+          if(material) {
+            check(payload->animation->scalar==50 && payload->animation->word_control==1 &&
+                  payload->animation->enabled_c==true && payload->animation->mat && !payload->animation->vert &&
+                  payload->animation->mat->backing_words==std::array<std::uint32_t,3>{} &&
+                  payload->animation->mat->tracking_words==std::array<std::uint32_t,2>{} &&
+                  payload->animation->mat->tracking_short==0 &&
+                  payload->animation->basis==std::array<float,9>{0,0,1,0,1,0,1,0,0} &&
+                  payload->animation->transient_vector==std::array<float,3>{0,0,0},
+                  "MatPosAnim retains constructor basis, scalar and separate integer control");
+          } else check(!payload->animation->scalar && !payload->animation->word_control && !payload->animation->basis &&
+                       !payload->animation->enabled_c && payload->animation->vert && !payload->animation->mat &&
+                       payload->animation->vert->zero_words==std::array<std::uint32_t,2>{} &&
+                       payload->animation->vert->zero_shorts==std::array<std::uint16_t,2>{},
+                       "VertAnim does not borrow MatPosAnim-specific defaults");
+        }
+      }
+      const auto* auxiliary=host.constructed_owner_auxiliary(59);
+      const auto borrowed=auxiliary->borrowed_property_data;
+      Bytes external(borrowed.begin(),borrowed.end());
+      set(external,8,0x12345678U);
+      host.assign_owner_property_data(59,external);
+      const auto* copied=host.constructed_owner_auxiliary(59);
+      check(copied==auxiliary && copied->borrowed_property_data.empty() && copied->owned_property_data==external &&
+            copied->attachments.size()==1,"external property section is copied into the same owner auxiliary block without losing attachments");
+      const auto expected=external;
+      external[8]=std::byte{0};
+      check(copied->owned_property_data==expected,"owned property copy is independent of subsequent external mutations");
+      Bytes truncated(7);rejects([&]{host.assign_owner_property_data(59,truncated);});
+      Bytes oversized(8);set(oversized,4,0x3fffffffU);rejects([&]{host.assign_owner_property_data(59,oversized);});
+      const auto names=host.resources().source_names();
+      rejects([&]{host.assign_owner_property_data(59,names.subspan(names.size()));});
+      check(copied->owned_property_data==expected && copied->attachments.size()==1,
+            "invalid property bounds do not discard existing property or attachment storage");
+      check(host.position_updates().pending_count()==0 && !host.directory_position_mode().collection_enabled &&
+            host.directory_position_mode().suppression==1 && host.registered_cameras().entries().empty(),
+            "room construction does not enable position collection, register renderer cameras or execute loader tail");
+      rejects([&]{host.construct_room_animation_scope_without_engine_renderer();});
+    }
+    {
       Fixture visual_fixture(false,true,true,true,true,true,true,true);
       off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
           {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
@@ -521,6 +807,38 @@ int main() {
             host.resource_load_stage()==off::graphics::IntroResourceLoadStage::following_visual_scope_ready,
             "metadata-only scope preserves component clocks, events, pending queues and loader controls");
       rejects([&]{host.construct_following_visual_scope_without_engine_renderer();});
+    }
+    {
+      Fixture room_fixture(false,true,true,true,true,true,true,true,true);
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
+      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+      app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
+      app.initialize_native_room_animation_scope_registration();
+      // Deliberately inconsistent first-notification state, not a substitute
+      // collection for the admitted native constructor path.
+      app.create_cut_sequence_list_collection();
+      app.cut_sequence_lists()->members.push_back(555);
+      auto* shared=app.cut_sequence_lists();
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{5};}};
+      off::graphics::IntroRuntime host(room_fixture.build(),app,sequence);
+      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+      host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
+      host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
+      host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
+      rejects([&]{host.construct_room_animation_scope_without_engine_renderer();});
+      const auto index=host.owner_components(host.source_handle(65)).front();
+      const auto* payload=host.constructed_attachment(index);
+      check(host.resource_load_stage()==off::graphics::IntroResourceLoadStage::failed &&
+            host.loaded_resource_handles().size()==66 && host.deferred_reader_work().size()==62 &&
+            !host.directory_resource_mapping()[65] && host.constructed_list_owner(65) && !host.constructed_list_owner(66) &&
+            payload && payload->cut_list && !payload->list_index && host.components().at(index).state().admitted==0x10U &&
+            sequence.live_count()==56 && host.ordinary_components()->pending().size()==18 &&
+            app.component_class_notification_sequence("ZLIST_CutSequenceList")==1 &&
+            app.cut_sequence_lists()==shared && shared->members==std::vector<std::uint64_t>{555},
+            "first CutSequenceList notification diagnostic preserves real constructor/enrollment/counter prefix without resetting shared collection");
+      rejects([&]{host.construct_room_animation_scope_without_engine_renderer();});
     }
     {
       Fixture full_fixture(false,true,true,true,true,true,true);
