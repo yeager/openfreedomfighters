@@ -48,7 +48,9 @@ The registration-class callback represents the entire existing resource helper;
 the prefix does not invent record-allocation or resource-maintenance internals.
 
 Inputs are runtime flags, not raw source words. Stable target/parent lifetime,
-non-mutating callbacks and no reentry are explicit native constraints. A missing
+non-mutating callbacks and no reentry are explicit native constraints, except
+that phase one may apply reviewed target-flag effects after all flag-dependent
+branches, as the Center composition below does. A missing
 required parent or visitor is rejected before effects. Callback failures retain
 their prefix, including an already-cleared target flag, and do not force subsequent
 phase-one or tracking callbacks. Later object-start and event-dispatch operations
@@ -59,6 +61,39 @@ under explicitly supplied runtime/parent conditions, including the blocked-paren
 case. It does not treat those test conditions as a captured original lifecycle.
 All 44 local CTest executables pass with this prefix, as do its targeted
 ASan/UBSan and GCC tests and the private owned-resource probe.
+
+### Center phase-one position update
+
+`graphics::CenterPicturePosition` now connects an explicitly admitted Center
+callback to the live picture's local position, runtime flags, submission cache
+and component status. Initial position must come from the authored object copy
+or subsequent runtime state; the adapter does not assume zero coordinates.
+Explicit positive engine dimensions are halved using integer division before
+binary32 conversion, producing local `(W/2, H/2, +0)` without parent, texture or
+viewport adjustments. Nearest rounding and finite current position are native
+admission policies.
+
+Numerically equal positions, including signed zeros, leave the position, runtime
+flags and cache unchanged, but still mark the component's status bit. A changed
+position is stored first, then runtime dirty bit `0x100000` is set, then the
+resource update service is called synchronously. Only after it returns is the
+picture cache invalidated and the component status marked. The callback therefore
+observes the new position and flags but the prior cache/status state.
+
+The service remains an explicit required integration boundary on changed paths;
+this adapter does not implement hierarchy propagation or invent a once-only
+lifecycle latch. The admitted service must not throw, mutate the inputs, reenter
+or destroy the owner. Unexpected C++ exceptions propagate with position/flags
+already committed and without forcing later cache/status writes. No atomic
+rollback or original retry behavior is claimed. Runtime flags and component
+status must be distinct state words.
+
+The private probe feeds the real legal object's authored position through an
+explicit phase-one request, including the parent-blocked activation path. Its
+engine dimensions and service callback are test conditions, not an observed
+original frame or a complete scene-transform implementation.
+All 46 local CTest executables pass with this composition, along with targeted
+Center ASan/UBSan and GCC tests and the private owned-resource probe.
 
 ## Current runtime boundary
 

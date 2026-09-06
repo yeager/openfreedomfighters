@@ -123,6 +123,8 @@ authored-hide clearing, phase-one requests and tracking order. A recorded reques
 is not treated as proof that the legal picture became visible.
 Camera enable/disable transitions now preserve renderer notification before the
 runtime flag change; registration is not used as an implicit enable operation.
+The legal picture's Center callback now updates local position, runtime dirty
+flags, the explicit resource service, picture cache and component status in order.
 
 ## Build the native bootstrap
 

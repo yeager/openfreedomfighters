@@ -92,6 +92,7 @@ add_library(off_core
     src/graphics/picture_projection.cpp
     src/graphics/picture_view_parameters.cpp
     src/graphics/intro_camera_state.cpp
+    src/graphics/center_picture_position.cpp
     src/graphics/admitted_view_pass.cpp
     src/graphics/renderer_frame_pass.cpp
     src/platform/startup_lifecycle.cpp
@@ -230,6 +231,9 @@ if(BUILD_TESTING)
     add_executable(off_camera_enabled_state_tests tests/camera_enabled_state_tests.cpp)
     target_link_libraries(off_camera_enabled_state_tests PRIVATE off_core)
     add_test(NAME off_camera_enabled_state_tests COMMAND off_camera_enabled_state_tests)
+    add_executable(off_center_picture_position_tests tests/center_picture_position_tests.cpp)
+    target_link_libraries(off_center_picture_position_tests PRIVATE off_core)
+    add_test(NAME off_center_picture_position_tests COMMAND off_center_picture_position_tests)
 
     add_executable(off_admitted_view_pass_tests tests/admitted_view_pass_tests.cpp)
     target_link_libraries(off_admitted_view_pass_tests PRIVATE off_core)

@@ -25,7 +25,9 @@ public:
     // Flags are runtime flags, NOT the unconverted authored source word.
     // class_registration represents the entire conditional registration-record
     // helper; no allocation or maintenance semantics are invented inside it.
-    // Callbacks must not mutate inputs, destroy the target or reenter this object.
+    // Callbacks must not mutate inputs, except phase_one may update target flags
+    // through reviewed lifecycle effects after all flag-dependent branches.
+    // No target destruction or reentry is allowed.
     // Exceptions retain completed tracking/flag effects, with no forced callbacks.
     void run(std::uint32_t& target_flags, std::optional<std::uint32_t> parent_flags,
              bool owner_present, const Visitor& visitor);
