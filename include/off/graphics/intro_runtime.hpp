@@ -5,6 +5,7 @@
 #include "off/graphics/intro_controller_initialization.hpp"
 #include "off/runtime/application_services.hpp"
 #include "off/runtime/component_lifecycle.hpp"
+#include "off/runtime/scene_event_names.hpp"
 #include "off/graphics/picture_color_state.hpp"
 #include "off/graphics/picture_submission_cache.hpp"
 #include "off/graphics/picture_view_transition.hpp"
@@ -42,7 +43,23 @@ struct IntroSynthesizedCameraMetadata {
   std::uint32_t class_identifier;
 };
 enum class IntroResourceLoadStage {
-  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, failed
+  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, failed
+};
+// Concrete constructor state, deliberately separate from the prepared asset view.
+struct IntroConstructedPictureOwner {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::string name;
+  std::uint32_t class_identifier{0x00200046U},packed_color{0xffffffffU},material_selector{},component_mask{};
+  std::uint8_t alpha{255},alignment{0x11},exponent_control{0x80},submission_control{8};
+  std::array<float,2> size_scale{1.0F,1.0F},alignment_offset{};
+  bool backing_available{},submission_transform_dirty{},submission_cache_available{};
+  std::vector<std::uint64_t> attachments;
+};
+struct IntroConstructedPictureComponent {
+  IntroRuntimeHandle owner;
+  std::int32_t attachment_argument{};
+  std::optional<std::uint32_t> fade_start,fade_deadline,fade_state,fade_in_event,fade_out_event;
 };
 struct IntroAuthoredGroupOwner {
   IntroRuntimeHandle owner;
@@ -183,6 +200,10 @@ public:
   // authored parent links are not live attachments and are detached here.
   // Source construction/attachment must follow against this same root.
   void construct_root();
+  void prepare_source_event_names();
+  [[nodiscard]] std::uint16_t declare_scene_event_name(std::string_view name,std::uint16_t requested=0);
+  [[nodiscard]] const runtime::SceneEventNames& scene_event_names() const noexcept {return event_names_;}
+  [[nodiscard]] std::span<const std::optional<std::uint32_t>> source_event_name_mapping() const noexcept {return source_event_name_mapping_;}
   // Explicit native cold-load staging before engine renderer creation. Reset
   // retained scene progress once, execute first-row progress, then allocate.
   // This is not evidence of the original cold reset caller or renderer timing.
@@ -196,6 +217,9 @@ public:
   void allocate_initial_source_scope();
   void construct_first_authored_group();
   void construct_window_language_groups_without_engine_renderer();
+  void construct_picture_component_prefix_without_engine_renderer();
+  [[nodiscard]] const IntroConstructedPictureOwner* constructed_picture_owner(std::size_t source) const noexcept;
+  [[nodiscard]] const IntroConstructedPictureComponent* constructed_picture_component(std::size_t source) const noexcept;
   [[nodiscard]] const std::unique_ptr<IntroWindowOwner>& window_owner() const noexcept {return window_owner_;}
   [[nodiscard]] const std::optional<IntroAuthoredGroupOwner>& language_owner() const noexcept {return language_owner_;}
   [[nodiscard]] IntroRuntimeHandle current_source_parent() const noexcept {return current_source_parent_.value?current_source_parent_:root_handle();}
@@ -358,10 +382,15 @@ private:
   std::vector<std::optional<IntroRuntimeHandle>> resource_owners_;
   std::vector<std::optional<IntroRuntimeResourceState>> resource_states_;
   IntroResourceLoadStage resource_load_stage_{IntroResourceLoadStage::prepared};
+  runtime::SceneEventNames event_names_;
+  std::vector<std::optional<std::uint32_t>> source_event_name_mapping_;
+  bool source_event_names_prepared_{};
   std::optional<float> loading_progress_;
   void allocate_source_scope(std::uint32_t count_group);
   std::unique_ptr<IntroWindowOwner> window_owner_;
   std::optional<IntroAuthoredGroupOwner> language_owner_;
+  std::map<std::size_t,IntroConstructedPictureOwner> constructed_picture_owners_;
+  std::map<std::size_t,IntroConstructedPictureComponent> constructed_picture_components_;
   IntroRuntimeHandle current_source_parent_{};
   std::map<std::string,IntroSceneResourceProperty,std::less<>> scene_resource_properties_;
   std::optional<IntroRootOwnerState> root_owner_state_;

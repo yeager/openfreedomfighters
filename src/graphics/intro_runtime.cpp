@@ -146,6 +146,7 @@ void IntroRuntime::construct_root() {
   IntroRootOwnerState metadata{"ROOT",0x00100021U};
   resource_load_stage_=IntroResourceLoadStage::constructing_root;
   try {
+    prepare_source_event_names();
     // The prepared source graph is not the owner's live child list. No authored
     // resource has been constructed at this boundary; attachment will link it.
     for(auto& node:hierarchy_) node.parent=no_picture_transform_parent;
@@ -490,6 +491,163 @@ void IntroRuntime::construct_window_language_groups_without_engine_renderer() {
       scene_resource_edit_=false;
     }
     resource_load_stage_=IntroResourceLoadStage::window_language_ready;
+  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
+}
+
+std::uint16_t IntroRuntime::declare_scene_event_name(std::string_view name,std::uint16_t requested) {
+  if(resource_load_stage_==IntroResourceLoadStage::failed)
+    throw std::runtime_error("Cannot declare scene events after failed source construction");
+  return event_names_.declare(name,requested);
+}
+
+void IntroRuntime::prepare_source_event_names() {
+  if(resource_load_stage_==IntroResourceLoadStage::failed)
+    throw std::runtime_error("Cannot prepare scene events after failed source construction");
+  if(source_event_names_prepared_) return;
+  if(resource_load_stage_!=IntroResourceLoadStage::prepared && resource_load_stage_!=IntroResourceLoadStage::constructing_root)
+    throw std::runtime_error("Source event preparation must precede ROOT construction");
+  const auto count=resources_.sources().identifier_count();
+  if(count>=std::numeric_limits<std::uint32_t>::max()) throw std::runtime_error("Source event mapping is too large");
+  try {
+    source_event_name_mapping_.resize(count+1);
+    for(std::size_t index=1;index<=count;++index) {
+      const auto name=resources_.sources().authored_event_identifier(static_cast<std::uint32_t>(index));
+      if(!name) throw std::runtime_error("Source event name is absent");
+      source_event_name_mapping_[index]=event_names_.declare(*name);
+    }
+    source_event_names_prepared_=true;
+  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
+}
+
+const IntroConstructedPictureOwner* IntroRuntime::constructed_picture_owner(std::size_t source) const noexcept {
+  const auto found=constructed_picture_owners_.find(source);
+  return found==constructed_picture_owners_.end()?nullptr:&found->second;
+}
+const IntroConstructedPictureComponent* IntroRuntime::constructed_picture_component(std::size_t source) const noexcept {
+  const auto found=constructed_picture_components_.find(source);
+  return found==constructed_picture_components_.end()?nullptr:&found->second;
+}
+
+void IntroRuntime::construct_picture_component_prefix_without_engine_renderer() {
+  if(resource_load_stage_!=IntroResourceLoadStage::window_language_ready || !window_owner_ || !language_owner_ ||
+      !constructed_picture_owners_.empty() || resource_allocation_enabled_ || components_.construction_mode() ||
+      loaded_resource_handles_.size()!=3 || count_group_selector_!=3 || current_source_parent()!=language_owner_->owner ||
+      manager_row_edit_ || scene_resource_edit_)
+    throw std::runtime_error("Picture prefix requires the completed Window and Language stage");
+  if(!application_.has_class_registration(0x00200046U) ||
+      !application_.has_component_class_registration("ZGEOM_Center") ||
+      !application_.has_component_class_registration("ZWINPIC_FadeToBlack"))
+    throw std::runtime_error("Picture prefix requires concrete owner and component registrations");
+  const auto& directory=resources_.sources().directory();
+  if(directory.size()<5) throw std::runtime_error("Picture prefix sources are absent");
+  const auto zero=[](float value){return value==0.0F && !std::signbit(value);};
+  const auto& root_state=resource_state(root_handle());
+  if(!root_state || root_state->flags!=0x09000000U || root_state->context.value ||
+      !root_owner_state_ || !root_owner_state_->enabled || root_owner_state_->room_mode ||
+      root_owner_state_->aggregate_flags || !root_owner_state_->category_memberships.empty() ||
+      window_owner_->group.aggregate_flags || language_owner_->aggregate_flags ||
+      resource_parent(window_owner_->group.owner)!=resource_handle(root_handle()) ||
+      resource_parent(language_owner_->owner)!=resource_handle(window_owner_->group.owner) ||
+      child_owners(window_owner_->group.owner)!=std::vector<IntroRuntimeHandle>{language_owner_->owner} ||
+      !child_owners(language_owner_->owner).empty())
+    throw std::runtime_error("Picture prefix requires the retained fresh non-room ancestry");
+  for(std::size_t row=3;row<=4;++row) {
+    const auto& source=directory[row];
+    const auto expected=row==3?"ZGEOM_Center":"ZWINPIC_FadeToBlack";
+    if(source.source_type!=0x00200046U || source.source_variant || source.parent_steps!=(row==3?0:1) ||
+        source.enters_child_pool || source.object_flags!=(row==3?0x00200400U:0x00200000U) ||
+        source.class_data_value || source.auxiliary_value || source.buf_auxiliary_offset || source.child_value ||
+        source.post_load_source_offset || !source.deferred_source_offset || source.attachments.size()!=1 ||
+        source.basis!=engine_identity || !std::ranges::all_of(source.position,zero) || source.pool_class!=1 ||
+        source.pool_group!=(row==3?3U:2U) || resources_.sources().attachment_identifier(row,0)!=expected ||
+        source.attachments.front().parameter!=(row==3?1.0F:0.0F) || owner_components(source_handle(row)).size()!=1)
+      throw std::runtime_error("Unsupported Picture prefix source shape");
+  }
+  try {
+    for(std::size_t row=3;row<=4;++row) {
+      advance_source_loading_progress_without_engine_renderer(row);
+      if(row==3) allocate_source_scope(count_group_selector_);
+      else current_source_parent_=window_owner_->group.owner;
+      const auto& source=directory[row];
+      const auto scope_it=std::ranges::find(source_resource_scopes_,source.pool_group,&IntroSourceResourceScope::count_group);
+      if(scope_it==source_resource_scopes_.end()) throw std::runtime_error("Picture allocation scope is absent");
+      auto& scope=*scope_it;
+      auto& cursor=scope.next_in_partition[1];
+      const auto partition_begin=scope.counts[0];
+      const auto partition_end=std::uint64_t{partition_begin}+scope.counts[1];
+      if(!cursor || *cursor<partition_begin || *cursor>=partition_end)
+        throw std::runtime_error("Picture partition is absent or exhausted");
+      const auto resource=scope.resources.at(*cursor);
+      const auto index=resource_index(resource);
+      const auto owner=source_handle(row);
+      const auto parent_resource=resource_handle(current_source_parent());
+      const auto& parent_state=resource_state_for_handle(parent_resource);
+      if(index!=hierarchy_index(owner) || resource_owners_[index] || !resource_states_[index] ||
+          resource_states_[index]->flags!=0x09000000U || resource_states_[index]->context.value ||
+          resource_states_[index]->metadata || resource_states_[index]->directory_auxiliary ||
+          hierarchy_[index].parent!=no_picture_transform_parent || hierarchy_[index].matrix!=engine_identity ||
+          !std::ranges::all_of(hierarchy_[index].position,zero) || !parent_state ||
+          parent_state->flags!=0x09000000U || parent_state->context.value)
+        throw std::runtime_error("Picture attachment requires fresh canonical resource and parent state");
+      const auto names=resources_.source_names();
+      if(source.buf_name_offset>=names.size()) throw std::runtime_error("Picture name is out of range");
+      std::size_t end=source.buf_name_offset;
+      while(end<names.size() && names[end]!=std::byte{0}) ++end;
+      if(end==names.size()) throw std::runtime_error("Picture name is unterminated");
+      ++*cursor;
+      std::string name;
+      for(std::size_t i=source.buf_name_offset;i<end;++i) name.push_back(static_cast<char>(names[i]));
+      auto& picture=constructed_picture_owners_.try_emplace(row).first->second;
+      picture.owner=owner;picture.resource=resource;picture.name=std::move(name);
+      resource_owners_[index]=owner;
+      static_cast<void>(application_.register_class_instance(source.source_type));
+      manager_row_edit_=true;scene_resource_edit_=true;
+      loaded_resource_handles_.push_back(resource);
+      resource_states_[index]->metadata=0;resource_states_[index]->directory_auxiliary=0;
+      auto merged=resource_states_[index]->flags|(source.object_flags&0xfffffU);
+      if(merged&0x8080U) merged|=0x8080U;
+      const bool suppressed=false;
+      set_resource_flags_no_maintenance(resource,merged,~merged,{resource_allocation_enabled_,suppressed});
+      hierarchy_[index].parent=resource_index(parent_resource);
+      // Hidden Center returns at the normal registration guard. The visible
+      // Picture reaches the non-room ROOT and the genuinely absent renderer.
+      const auto current=resource_states_[index]->flags;
+      set_resource_flags_no_maintenance(resource,current,~current,{resource_allocation_enabled_,suppressed});
+      scene_resource_edit_=false;
+      const auto component_index=owner_components(owner).front();
+      components_.construct(component_index,[&](runtime::ComponentRecord& record) {
+        auto& state=record.state();
+        state.status|=0x20U;
+        auto& payload=constructed_picture_components_.try_emplace(row).first->second;
+        payload.attachment_argument=row==3?1:0;
+        state.class_ordinal=static_cast<std::uint16_t>(row==3?280:307);
+        state.priority=row==3?1U:0U;state.requested=row==3?1U:0x35U;
+        if(row==4) {
+          payload.fade_start=0;payload.fade_deadline=0;payload.fade_state=3;
+          // The scene registry supplies these values; event declaration is
+          // construction work, not event dispatch or an alpha mutation.
+          payload.fade_in_event=event_names_.declare("FadeIn");
+          payload.fade_out_event=event_names_.declare("FadeOut");
+        }
+        payload.owner=owner;state.attached_owner=owner.value;
+        picture.attachments.push_back(component_handle(component_index));
+        if(!(resource_states_[index]->flags&0x400U)) {
+          picture.component_mask|=state.requested;
+          const auto admitted=state.requested&~state.admitted&0x158U;
+          state.requested|=admitted;state.admitted|=admitted;
+          if(admitted&0x10U) register_ordinary_component(component_index);
+        }
+        return runtime::ConstructedComponent{state,
+            [](auto&){throw std::runtime_error("Picture component initialization requires live materialization and renderer services");},
+            [](auto&){throw std::runtime_error("Picture component second phase is not specified");}};
+      });
+      static_cast<void>(application_.register_component_class_instance(components_.at(component_index).source().factory_name));
+      scene_resource_edit_=true;
+      deferred_reader_work_.push_back({resource,source.deferred_source_offset});
+      directory_resource_mapping_.at(row)=resource;
+      manager_row_edit_=false;scene_resource_edit_=false;
+    }
+    resource_load_stage_=IntroResourceLoadStage::picture_component_prefix_ready;
   } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
 }
 

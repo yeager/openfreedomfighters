@@ -53,33 +53,46 @@ void real(Bytes& b, std::uint8_t tag, double v) {
     word(b, static_cast<std::uint32_t>(bits)); word(b, static_cast<std::uint32_t>(bits >> 32));
 }
 void finish(Bytes& b) { b.push_back(std::byte{0xff}); set(b, 0, static_cast<std::uint32_t>(b.size())); }
-Bytes list(std::initializer_list<std::uint32_t> references,std::uint32_t bias=0) {
+struct FixtureReferenceMap {
+    std::uint32_t offset{};
+    bool picture_order{};
+    std::uint32_t operator()(std::uint32_t value) const {
+        if(!value) return 0;
+        if(picture_order) {
+            if(value==2) return 5;
+            if(value==3) return 6;
+            if(value==4) return 4;
+        }
+        return value+offset;
+    }
+};
+Bytes list(std::initializer_list<std::uint32_t> references,FixtureReferenceMap map={}) {
     Bytes b(4); scalar(b, 0x89, static_cast<std::uint32_t>(4 + references.size() * 4));
-    for (auto r : references) word(b, r?r+bias:0);
+    for (auto r : references) word(b, map(r));
     b.push_back(std::byte{6}); finish(b); return b;
 }
-Bytes controller(std::uint32_t bias=0) {
+Bytes controller(FixtureReferenceMap map={}) {
     Bytes b(4); scalar(b, 9, 4); b.push_back(std::byte{6});
-    scalar(b, 0x88, 6+bias); scalar(b, 0x88, 7+bias); scalar(b, 8, 0);
+    scalar(b, 0x88, map(6)); scalar(b, 0x88, map(7)); scalar(b, 8, 0);
     b.push_back(std::byte{0x84}); text(b, "IndependentDestination");
     scalar(b, 0x83, 17); scalar(b, 0x88, 0); scalar(b, 8, 2);
     b.push_back(std::byte{6}); finish(b); return b;
 }
-Bytes first_cut(std::uint32_t bias=0) {
-    Bytes b(4); scalar(b, 0x89, 8); word(b, 5+bias); b.push_back(std::byte{6});
+Bytes first_cut(FixtureReferenceMap map={},bool include_events=true) {
+    Bytes b(4); scalar(b, 0x89, 8); word(b, map(5)); b.push_back(std::byte{6});
     constexpr std::array<std::uint8_t, 7> tags{0x83, 0x83, 3, 8, 3, 0x83, 3};
     for (std::size_t i = 0; i < tags.size(); ++i) scalar(b, tags[i], i == 3 ? 0 : 1);
     floating(b, 2, -0.0F); b.push_back(std::byte{6});
     for (std::uint32_t i = 0; i < 5; ++i) {
-        scalar(b, 3, 31 - i); scalar(b, 0x8a, i == 4 ? 0 : 1);
-        scalar(b, 0x88, 2+bias); scalar(b, 0x83, 100 + i);
+        scalar(b, 3, 31 - i); scalar(b, 0x8a, i == 4 || !include_events ? 0 : 1);
+        scalar(b, 0x88, map(2)); scalar(b, 0x83, 100 + i);
         b.push_back(std::byte{4}); text(b, "IndependentTarget"); b.push_back(std::byte{6});
     }
     finish(b); return b;
 }
-Bytes member(std::uint32_t bias=0) {
+Bytes member(FixtureReferenceMap map={}) {
     Bytes b(4); scalar(b, 0x89, 28);
-    for (auto r : {9U, 4U, 0U, 2U, 0U, 0U}) word(b, r?r+bias:0);
+    for (auto r : {9U, 4U, 0U, 2U, 0U, 0U}) word(b, map(r));
     b.push_back(std::byte{6}); floating(b, 2, 13); floating(b, 0x82, 217);
     scalar(b, 3, 1); b.push_back(std::byte{6}); finish(b); return b;
 }
@@ -100,15 +113,15 @@ Bytes picture(bool legal) {
     b.push_back(std::byte{6}); scalar(b, 3, 16);
     b.push_back(std::byte{6}); b.push_back(std::byte{6}); finish(b); return b;
 }
-Bytes window(std::uint32_t bias=0) {
+Bytes window(FixtureReferenceMap map={}) {
     Bytes b(4); scalar(b, 3, 19); floating(b, 2, -0.0F);
     scalar(b, 3, 7); scalar(b, 3, 9); scalar(b, 3, 23);
     b.push_back(std::byte{6}); b.push_back(std::byte{6});
-    scalar(b, 0x88, 9+bias); scalar(b, 0x88, 0); scalar(b, 0x88, 2+bias);
+    scalar(b, 0x88, map(9)); scalar(b, 0x88, 0); scalar(b, 0x88, map(2));
     scalar(b, 0x83, 5); scalar(b, 0x83, 6); scalar(b, 3, 7);
     b.push_back(std::byte{6}); finish(b); return b;
 }
-Bytes sound_owner(std::uint32_t bias=0) {
+Bytes sound_owner(FixtureReferenceMap map={}) {
     Bytes b(4); scalar(b,0x83,5); scalar(b,0x8b,128);
     for(float value:{271.F,272.F,-0.0F,7.F}) floating(b,2,value);
     scalar(b,3,123); scalar(b,3,6); floating(b,2,66); floating(b,2,0.5F);
@@ -119,7 +132,7 @@ Bytes sound_owner(std::uint32_t bias=0) {
     floating(b,0x82,-0.0F); scalar(b,3,13); scalar(b,3,1);
     floating(b,2,1.25F); scalar(b,3,14); scalar(b,0x83,7);
     scalar(b,3,5); scalar(b,3,6); scalar(b,3,99); b.push_back(std::byte{6});
-    scalar(b,0x88,2+bias); scalar(b,0x0a,1); b.push_back(std::byte{6});
+    scalar(b,0x88,map(2)); scalar(b,0x0a,1); b.push_back(std::byte{6});
     scalar(b,3,1); scalar(b,0x0a,1); scalar(b,0x0a,0);
     for(std::uint32_t group=0;group<4;++group) {
       scalar(b,group==3?0x83:3,group);
@@ -149,7 +162,7 @@ struct Fixture {
     Bytes payload, names, prm, tex, snd;
     std::array<std::size_t, 10> block_offsets{};
     std::array<std::size_t, 10> attachment_offsets{};
-    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false) : payload(1024), snd(16) {
+    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true) : payload(1024), snd(16) {
         if(language_group && !leading_group) throw std::runtime_error("language fixture requires leading group");
         // Deliberately permuted directory roles; no retail source indices.
         set(payload, 0, 32); set(payload, 4, 128); set(payload, 12, 4); set(payload, 20, 176);
@@ -191,8 +204,8 @@ struct Fixture {
                                   {"ZSNDOBJ_SoundSegment",1},{"ZGEOM_ZSetZDefine",0}});
         // All nonnull references emitted below target original rows after the
         // first window, so both inserted rows precede those referenced owners.
-        const std::uint32_t bias=leading_group?(language_group?2U:1U):0U;
-        const std::array<Bytes, 10> blocks{camera(), picture(false), controller(bias), picture(true), member(bias), list({8, 8},bias), list({4, 2, 4},bias), first_cut(bias), window(bias),sound_owner(bias)};
+        const FixtureReferenceMap bias{leading_group?(language_group?2U:1U):0U,language_group};
+        const std::array<Bytes, 10> blocks{camera(), picture(false), controller(bias), picture(true), member(bias), list({8, 8},bias), list({4, 2, 4},bias), first_cut(bias,include_events), window(bias),sound_owner(bias)};
         for (std::size_t i = 0; i < node_count; ++i) {
             block_offsets[i] = payload.size(); set(payload, 512 + 48 * i + 32, static_cast<std::uint32_t>(payload.size()));
             payload.insert(payload.end(), blocks[i].begin(), blocks[i].end());
@@ -218,8 +231,8 @@ struct Fixture {
                 payload.insert(payload.end(),deferred_blob.begin(),deferred_blob.end());
                 while(payload.size()%4) payload.push_back(std::byte{0});
                 set(payload,512+48*8+24,0x03000000U);
-                // Return from Language to Window before the next original row.
-                set(payload,36+8*2,(1U<<25U)|static_cast<std::uint32_t>((512+48*2)/4));
+                set(payload,512+48*3+24,0x00200400U);
+                set(payload,512+48*1+24,0x00200000U);
             }
             const auto directory=payload.size();
             word(payload,static_cast<std::uint32_t>(node_count+1+(language_group?1:0)));
@@ -228,7 +241,12 @@ struct Fixture {
             if(language_group) {
                 payload.insert(payload.end(),entries.begin(),entries.begin()+8);
                 word(payload,(1U<<24U)|static_cast<std::uint32_t>(language_record/4));word(payload,0);
-                payload.insert(payload.end(),entries.begin()+8,entries.end());
+                // Center is inside Language; Fade pops back to Window. Keep
+                // the remaining source roles intact through explicit mapping.
+                payload.insert(payload.end(),entries.begin()+24,entries.begin()+32);
+                word(payload,(1U<<25U)|static_cast<std::uint32_t>((512+48)/4));word(payload,0);
+                payload.insert(payload.end(),entries.begin()+16,entries.begin()+24);
+                payload.insert(payload.end(),entries.begin()+32,entries.end());
             } else payload.insert(payload.end(),entries.begin(),entries.end());
             set(payload,0,static_cast<std::uint32_t>(directory));
             const auto pools=payload.size();word(payload,language_group?4U:3U);
@@ -257,6 +275,17 @@ struct Fixture {
             text(snd,"Independent/Sound.asset"); snd.resize(144);
             set(snd,128,1); set(snd,132,16); set(snd,136,0x1234);
             set(snd,140,std::bit_cast<std::uint32_t>(12.375F));
+        }
+    }
+    void event_names(std::initializer_list<std::string_view> entries) {
+        const auto table=payload.size();
+        set(payload,4,static_cast<std::uint32_t>(table));
+        word(payload,static_cast<std::uint32_t>(entries.size()));
+        payload.resize(payload.size()+entries.size()*4);
+        std::size_t index=0;
+        for(const auto entry:entries) {
+            set(payload,table+4+4*index++,static_cast<std::uint32_t>(payload.size()));
+            text(payload,entry);
         }
     }
     Bytes packed() const {
@@ -318,6 +347,208 @@ int main() {
     Fixture fixture;
     {
       Fixture nested(false,true,true);
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      app.initialize_native_group_registration();
+      app.initialize_native_window_language_registration();
+      app.initialize_native_picture_registration();
+      std::size_t clock_reads=0;
+      off::runtime::SceneComponentSequence sequence{[&] {
+        if(++clock_reads==3) throw std::runtime_error("Independent dispatch clock failure at Fade construction");
+        return std::uint32_t{70};
+      }};
+      off::graphics::IntroRuntime host(nested.build(),app,sequence);
+      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+      host.construct_window_language_groups_without_engine_renderer();
+      rejects([&]{host.construct_picture_component_prefix_without_engine_renderer();});
+      const auto* center=host.constructed_picture_owner(3);
+      const auto* fade=host.constructed_picture_owner(4);
+      const auto center_index=host.owner_components(host.source_handle(3)).front();
+      const auto fade_index=host.owner_components(host.source_handle(4)).front();
+      check(host.resource_load_stage()==off::graphics::IntroResourceLoadStage::failed && host.components().failed() &&
+            center && fade && host.components().at(center_index).constructed() &&
+            !host.components().at(fade_index).constructed() && !host.components().at(fade_index).identity() &&
+            center->attachments==std::vector<std::uint64_t>{host.component_handle(center_index)} && fade->attachments.empty() &&
+            host.constructed_picture_component(3) && !host.constructed_picture_component(4) &&
+            host.components().construction_order().size()==2 && sequence.next_identity()==2 && sequence.live_count()==2,
+            "failed Fade clock service retains constructed Center and Picture owner prefix without fabricating a Fade component");
+      check(host.loaded_resource_handles().size()==5 && host.deferred_reader_work().size()==4 &&
+            host.directory_resource_mapping()[3]==center->resource && !host.directory_resource_mapping()[4] &&
+            host.associated_resource_owner(fade->resource)==fade->owner &&
+            host.resource_state_for_handle(fade->resource)->flags==0x09000000U &&
+            host.ordinary_components()->pending().size()==1 && host.scene_event_names().counter()==1 &&
+            !host.scene_event_names().find("FadeIn") && !host.scene_event_names().find("FadeOut"),
+            "mid-row service failure retains earlier publications but not failed-row deferred work or undeclared fade events");
+      check(app.class_notification_sequence(0x00200046U)==2 &&
+            app.component_class_notification_sequence("ZGEOM_Center")==1 &&
+            app.component_class_notification_sequence("ZWINPIC_FadeToBlack")==0,
+            "notification counters stop at the successful owner and component construction prefix");
+      rejects([&]{host.construct_picture_component_prefix_without_engine_renderer();});
+      rejects([&]{static_cast<void>(host.declare_scene_event_name("AfterFailure"));});
+      rejects([&]{host.prepare_source_event_names();});
+    }
+    {
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{0};}};
+      off::graphics::IntroRuntime host(fixture.build(),app,sequence);
+      check(host.declare_scene_event_name("OccupiedIdentity",1)==1 && host.scene_event_names().counter()==0,
+            "explicit event seed occupies an identity without advancing the dynamic counter");
+      rejects([&]{host.construct_root();});
+      check(host.resource_load_stage()==off::graphics::IntroResourceLoadStage::failed &&
+            !host.root_owner_state() && !host.root_group() && !host.resource_state(host.root_handle()) &&
+            host.components().construction_order().empty() && sequence.next_identity()==0 &&
+            host.source_event_name_mapping().size()==2 && !host.source_event_name_mapping()[0] &&
+            !host.source_event_name_mapping()[1] && host.scene_event_names().counter()==0 &&
+            host.scene_event_names().find("OccupiedIdentity")==1 && !host.scene_event_names().find("IndependentEvent"),
+            "source event collision fails before ROOT without publishing a mapping or consuming component identities");
+      rejects([&]{host.construct_root();});
+      rejects([&]{host.prepare_source_event_names();});
+      rejects([&]{static_cast<void>(host.declare_scene_event_name("Retry"));});
+    }
+    {
+      Fixture empty_events(false,true,true,false);
+      empty_events.event_names({});
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      app.initialize_native_group_registration();
+      app.initialize_native_window_language_registration();
+      app.initialize_native_picture_registration();
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{0};}};
+      off::graphics::IntroRuntime host(empty_events.build(),app,sequence);
+      host.construct_root();
+      check(host.source_event_name_mapping().size()==1 && !host.source_event_name_mapping()[0] &&
+            !host.scene_event_names().initialized() && host.scene_event_names().counter()==0,
+            "empty authored event table does not initialize the lazy registry before ROOT");
+      host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+      host.construct_window_language_groups_without_engine_renderer();
+      host.construct_picture_component_prefix_without_engine_renderer();
+      const auto* fade=host.constructed_picture_component(4);
+      check(fade && fade->fade_in_event==1 && fade->fade_out_event==2 &&
+            host.scene_event_names().counter()==2 && host.scene_event_names().find("CAM_ENTERCAMERA")==0x401 &&
+            host.scene_event_names().find("CAM_LEAVECAMERA")==0x400,
+            "Fade initializes absent scene registry with reserved names and consecutive dynamic declarations");
+    }
+    {
+      Fixture nested(false,true,true);
+      nested.event_names({"IndependentEvent","fAdEiN","INDEPENDENTEVENT","FadeIn"});
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      app.initialize_native_group_registration();
+      app.initialize_native_window_language_registration();
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{700};}};
+      // A preceding scene uses this same sequence: constructors must retain its
+      // serial and phase even after that scene's concrete objects are gone.
+      {
+        off::graphics::IntroRuntime previous(nested.build(),app,sequence);
+        previous.construct_root();
+      }
+      check(sequence.next_identity()==1 && sequence.live_count()==0,
+            "previous scene retires live objects without resetting the shared construction serial");
+      off::graphics::IntroRuntime host(nested.build(),app,sequence);
+      check(!host.scene_event_names().initialized() && host.source_event_name_mapping().empty(),
+            "prepared asset metadata does not initialize the live event registry");
+      check(host.declare_scene_event_name("RetainedEvent")==1 &&
+            host.declare_scene_event_name("FADEIN")==2,"scene event seed advances the retained counter");
+      host.prepare_source_event_names();
+      const auto mapping=host.source_event_name_mapping();
+      check(mapping.size()==5 && !mapping[0] && mapping[1]==3 && mapping[2]==2 &&
+            mapping[3]==3 && mapping[4]==2 && host.scene_event_names().counter()==3 &&
+            host.resource_load_stage()==off::graphics::IntroResourceLoadStage::prepared &&
+            host.components().construction_order().empty(),
+            "source event table declares in order before ROOT and reuses case variants and retained names");
+      host.prepare_source_event_names();
+      host.construct_root();
+      check(host.scene_event_names().counter()==3 && host.source_event_name_mapping()[1]==3,
+            "ROOT construction retains successful source event preparation");
+      host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+      host.construct_window_language_groups_without_engine_renderer();
+      rejects([&]{host.construct_picture_component_prefix_without_engine_renderer();});
+      check(host.loaded_resource_handles().size()==3 && !host.constructed_picture_owner(3) &&
+            host.source_resource_scopes().size()==2,"absent Picture registrations fail before allocating or constructing owners");
+      app.initialize_native_picture_registration();
+      static_cast<void>(app.register_class_instance(0x00200046U));
+      static_cast<void>(app.register_class_instance(0x00200046U));
+      static_cast<void>(app.register_component_class_instance("ZGEOM_Center"));
+      for(int i=0;i<3;++i) static_cast<void>(app.register_component_class_instance("ZWINPIC_FadeToBlack"));
+      host.construct_picture_component_prefix_without_engine_renderer();
+      const auto* center=host.constructed_picture_owner(3);
+      const auto* fade=host.constructed_picture_owner(4);
+      check(center && fade,"both real Picture owners are constructed");
+      for(const auto row:{std::size_t{3},std::size_t{4}}) {
+        const auto* picture_owner=host.constructed_picture_owner(row);
+        const auto* component=host.constructed_picture_component(row);
+        const auto owner=host.source_handle(row);
+        const auto resource=*host.allocated_source_resource(row);
+        const auto component_index=host.owner_components(owner).front();
+        const auto& record=host.components().at(component_index);
+        const auto& state=record.state();
+        check(picture_owner && component && picture_owner->owner==owner && picture_owner->resource==resource &&
+              host.associated_resource_owner(resource)==owner && host.resource_handle(owner)==resource &&
+              component->owner==owner && state.attached_owner==owner.value &&
+              picture_owner->attachments==std::vector<std::uint64_t>{host.component_handle(component_index)},
+              "Picture owner, typed component, common owner and canonical attachment handle agree");
+        check(picture_owner->packed_color==0xffffffffU && picture_owner->alpha==255 &&
+              picture_owner->material_selector==0 && picture_owner->alignment==0x11 &&
+              picture_owner->exponent_control==0x80 && picture_owner->submission_control==8 &&
+              picture_owner->size_scale==std::array<float,2>{1,1} &&
+              picture_owner->alignment_offset==std::array<float,2>{0,0} &&
+              !std::signbit(picture_owner->alignment_offset[0]) && !std::signbit(picture_owner->alignment_offset[1]) &&
+              !picture_owner->backing_available && !picture_owner->submission_transform_dirty &&
+              !picture_owner->submission_cache_available,
+              "live constructor defaults do not import authored Picture controls or materialize backing");
+        check(state.status==0x20 && state.registered_cache==0 && state.script_reference==0 &&
+              state.class_ordinal==(row==3?280:307) && state.priority==(row==3?1U:0U) &&
+              state.requested==(row==3?1U:0x35U) && state.admitted==(row==3?0U:0x10U) &&
+              picture_owner->component_mask==(row==3?0U:0x35U) && component->attachment_argument==(row==3?1:0),
+              "hidden Center stops enrollment while visible Fade admits only the ordinary requested bit");
+        check(record.identity()==row-1 && record.scheduling_clock()==(row==3?720U:730U) &&
+              record.scheduling_interval()==0.1F,
+              "Picture components continue retained serial and scheduling phase against the live dispatch clock");
+        check(host.resource_state_for_handle(resource)->flags==(row==3?0x09000400U:0x09000000U) &&
+              !host.resource_state_for_handle(resource)->context.value &&
+              host.loaded_resource_handles()[row]==resource && host.directory_resource_mapping()[row]==resource &&
+              host.deferred_reader_work()[row].resource==resource &&
+              host.deferred_reader_work()[row].source_offset==host.resources().sources().directory()[row].deferred_source_offset,
+              "canonical Picture flags and unconsumed reader work are retained in source order");
+      }
+      const auto* fade_component=host.constructed_picture_component(4);
+      check(fade_component->fade_start==0 && fade_component->fade_deadline==0 && fade_component->fade_state==3 &&
+            fade_component->fade_in_event==2 && fade_component->fade_out_event==4 &&
+            host.scene_event_names().counter()==4 && !host.constructed_picture_component(3)->fade_state,
+            "Fade constructor reuses source-prepared FadeIn and allocates only absent FadeOut without starting a fade");
+      const auto scopes=host.source_resource_scopes();
+      check(scopes.size()==3 && scopes[1].count_group==2 && scopes[1].resources.size()==8 &&
+            scopes[1].next_in_partition[1]==2 && scopes[2].count_group==3 && scopes[2].resources.size()==1 &&
+            scopes[2].next_in_partition[1]==1 && fade->resource==scopes[1].resources[1] &&
+            center->resource==scopes[2].resources[0] && host.count_group_selector()==3 &&
+            host.current_source_parent()==host.source_handle(1),
+            "row four restores the Window absolute category-one cursor without allocating another batch");
+      check(host.child_owners(host.source_handle(2))==std::vector<off::graphics::IntroRuntimeHandle>{center->owner} &&
+            host.child_owners(host.source_handle(1))==std::vector<off::graphics::IntroRuntimeHandle>{host.source_handle(2),fade->owner} &&
+            host.resource_parent(center->owner)==host.resource_handle(host.source_handle(2)) &&
+            host.resource_parent(fade->owner)==host.resource_handle(host.source_handle(1)),
+            "Picture hierarchy retains Language child and Window sibling insertion order");
+      const auto order=host.components().construction_order();
+      check(order.size()==3 && order[1]==host.owner_components(center->owner).front() &&
+            order[2]==host.owner_components(fade->owner).front() && sequence.live_count()==3 && sequence.next_identity()==4 &&
+            host.ordinary_components()->pending().size()==2 &&
+            host.ordinary_components()->pending()[0]==host.component_handle(order[0]) &&
+            host.ordinary_components()->pending()[1]==host.component_handle(order[2]) &&
+            !host.components().phases_completed(),"global construction and ordinary pending lists retain ROOT then the actual eligible attachments");
+      check(app.class_notification_sequence(0x00200046U)==4 &&
+            app.component_class_notification_sequence("ZGEOM_Center")==2 &&
+            app.component_class_notification_sequence("ZWINPIC_FadeToBlack")==4,
+            "shared Picture notifications and separate component class counters preserve their prior histories");
+      check(host.loaded_resource_handles().size()==5 && host.deferred_reader_work().size()==5 &&
+            !host.directory_resource_mapping()[5] && !host.associated_resource_owner(*host.allocated_source_resource(5)) &&
+            !host.constructed_picture_owner(5) && !host.manager_row_edit() && !host.scene_resource_edit() &&
+            host.resource_load_stage()==off::graphics::IntroResourceLoadStage::picture_component_prefix_ready,
+            "Picture prefix stops before next allocated owner and all deferred readers without marking scene readiness");
+      rejects([&]{host.construct_picture_component_prefix_without_engine_renderer();});
+    }
+    {
+      Fixture nested(false,true,true);
       const auto prepared=nested.build();
       check(prepared.sources().directory().size()==11 &&
             prepared.sources().directory()[2].source_type==0x00101389U &&
@@ -325,7 +556,9 @@ int main() {
             prepared.sources().directory()[3].pool_group==3 &&
             prepared.sources().directory()[4].pool_group==2 &&
             prepared.sources().pool_groups()[2].slot_count==8 &&
-            prepared.controller_index()==4 && prepared.first_cut_index()==9 && prepared.camera_index()==10,
+            prepared.controller_index()==5 && prepared.first_cut_index()==9 && prepared.camera_index()==10 &&
+            prepared.sources().attachment_identifier(3,0)=="ZGEOM_Center" &&
+            prepared.sources().attachment_identifier(4,0)=="ZWINPIC_FadeToBlack",
             "independent nested language fixture preserves references and allocation scope entry/pop");
       off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
           {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});

@@ -120,6 +120,7 @@ int main(int argc, char **argv) {
   if(!verify_only && !diagnostic_scene) {
     application.initialize_native_group_registration();
     application.initialize_native_window_language_registration();
+    application.initialize_native_picture_registration();
   }
   std::optional<off::graphics::SceneGpuPlan> scene;
   // Scene-manager identity lifetime, independent of source archive catalogs.
@@ -161,6 +162,7 @@ int main(int argc, char **argv) {
         intro->begin_source_loading_without_engine_renderer();
         intro->construct_first_authored_group();
         intro->construct_window_language_groups_without_engine_renderer();
+        intro->construct_picture_component_prefix_without_engine_renderer();
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));

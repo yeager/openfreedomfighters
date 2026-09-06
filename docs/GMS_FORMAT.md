@@ -99,7 +99,17 @@ Header word 5 locates a third table. It begins with a pool-group count, followed
 
 The portable parser reproduces this traversal and records each entry's group, class, class ordinal, group-relative slot index, and image-local slot index. It rejects hierarchy underflow, missing or extra groups, invalid classes, reused or unpopulated slots, and any mismatch between observed assignments and declared class counts. Across the supported corpus, all 179,838 assignments exactly reproduce all 24 counters in all 29,450 groups; no inferred correction or fallback is needed.
 
-The identifier table also begins with a 32-bit count. Each following 32-bit value is a byte offset to a NUL-terminated identifier in the same decoded image. The public parser validates every range and terminator but deliberately exposes only the count, not retail identifier text.
+The event identifier table also begins with a 32-bit count. Each following
+32-bit value is a byte offset to a NUL-terminated name in the same decoded image.
+The parser validates every range and terminator. `authored_event_identifier`
+resolves a one-based reference to a borrowed name in the user's loaded data;
+zero is absent. No retail name table is distributed with the project.
+
+Before ROOT and directory construction, the runtime declares these names in
+source order against the scene's retained event registry. Its source-reference
+mapping holds the returned identities, which may differ from table indices when
+names already exist or differ only in ASCII case. See
+[scene event preparation](RESOURCE_STATE.md#picture-and-attachment-construction).
 
 Across the 90 supported images, the parser also validates 154,941 identifier references. Their decoded size totals 33,436,872 bytes.
 

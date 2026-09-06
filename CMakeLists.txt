@@ -70,6 +70,7 @@ add_library(off_core
     src/runtime/application_clock.cpp
     src/runtime/component_lifecycle.cpp
     src/runtime/live_variables.cpp
+    src/runtime/scene_event_names.cpp
     src/runtime/input_maps.cpp
     src/runtime/ordinary_components.cpp
     src/crypto/sha256.cpp
@@ -247,6 +248,9 @@ install(FILES assets/branding/openfreedomfighters-splash.bmp
         DESTINATION bin/assets)
 
 if(BUILD_TESTING)
+    add_executable(off_scene_event_names_tests tests/scene_event_names_tests.cpp)
+    target_link_libraries(off_scene_event_names_tests PRIVATE off_core)
+    add_test(NAME off_scene_event_names_tests COMMAND off_scene_event_names_tests)
     add_executable(off_root_group_component_tests tests/root_group_component_tests.cpp)
     target_link_libraries(off_root_group_component_tests PRIVATE off_core)
     add_test(NAME off_root_group_component_tests COMMAND off_root_group_component_tests)

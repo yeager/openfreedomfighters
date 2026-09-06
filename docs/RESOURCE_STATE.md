@@ -119,6 +119,43 @@ construct Picture components. Resource flags remain `0x09000000` on this bounded
 path, distinct from each group's owner flags. The remaining directory and loader
 tail are still required before scene activation.
 
+## Picture and attachment construction
+
+The next two rows construct Picture owners on their supplied category-one
+resources. The first allocates count-group three and attaches under Language.
+The second restores Window's existing count-group-two cursor, without allocating
+another batch, and attaches after Language. The owned intro now has 24 allocated
+resources, five attached owners and five queued readers. No later owner or
+deferred reader runs in this stage.
+
+These live Picture owners are separate from prepared image and descriptor data.
+Their constructors retain white color, alpha 255, unit size scales and an absent
+backing/submission cache. They do not install authored materials or invalidate a
+transform. Deferred reading must populate that state before any draw admission.
+
+The hidden first Picture constructs `ZGEOM_Center` with argument 1. Its hidden
+resource prevents component enrollment and owner-mask changes. The visible
+second Picture constructs `ZWINPIC_FadeToBlack` with argument 0, idle fade state
+and zero deadlines. Its requested mask is `0x35`; enrollment admits `0x10` and
+appends the real component handle to the ordinary pending queue. Neither runs an
+initializer, ordinary update or fade event. Registration at the non-room ROOT
+requires the explicitly absent engine renderer used by CPU preflight.
+
+Both Picture instances advance the same owner-class notification counter.
+Center and Fade each advance their own component-class counter after attachment
+and enrollment. Their serials and scheduling phase come from the retained common
+component lifecycle; no per-Picture or per-scene reset substitutes for it.
+
+Before ROOT construction, source event names are declared in GMS table order.
+The one-based source mapping stores the returned scene identities, not row
+numbers; entry zero remains absent. ASCII case variants reuse an identity.
+Fade declares `FadeIn` then `FadeOut` against this same retained scene registry.
+Lazy camera-name reservations do not advance the dynamic counter. Native checks
+reject conflicting reverse identities, capacity overflow and embedded NUL names.
+The registry owns its names and does not dispatch events. The host exposes
+declarations and read-only inspection, not a clear operation that could invalidate
+already prepared source mappings.
+
 RootGroup retains its `DisplayName` floating-point descriptor and `RootControl`
 input-map registration. Its ordinary membership remains pending, not merged.
 The root's separate enabled marker does not enable a camera or set a resource

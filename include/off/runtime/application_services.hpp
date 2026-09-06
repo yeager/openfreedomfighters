@@ -11,6 +11,8 @@
 #include <stdexcept>
 #include <limits>
 #include <map>
+#include <string>
+#include <string_view>
 
 namespace off::runtime {
 // Application-lifetime state, borrowed by scenes rather than reset when each
@@ -46,6 +48,33 @@ public:
   }
   [[nodiscard]] bool has_class_registration(std::uint32_t identity) const noexcept {
     return class_sequences_.contains(identity);
+  }
+  void initialize_native_picture_registration() {
+    if(has_class_registration(0x00200046U) || has_component_class_registration("ZGEOM_Center") ||
+        has_component_class_registration("ZWINPIC_FadeToBlack"))
+      throw std::runtime_error("Native Picture or attachment class is already registered");
+    auto owners=class_sequences_;
+    auto components=component_class_sequences_;
+    owners.emplace(0x00200046U,0U);
+    components.emplace("ZGEOM_Center",0U);
+    components.emplace("ZWINPIC_FadeToBlack",0U);
+    class_sequences_.swap(owners);
+    component_class_sequences_.swap(components);
+  }
+  [[nodiscard]] bool has_component_class_registration(std::string_view name) const {
+    return component_class_sequences_.contains(name);
+  }
+  [[nodiscard]] std::uint32_t component_class_notification_sequence(std::string_view name) const {
+    const auto found=component_class_sequences_.find(name);
+    if(found==component_class_sequences_.end()) throw std::runtime_error("Component class is not registered");
+    return found->second;
+  }
+  std::uint32_t register_component_class_instance(std::string_view name) {
+    auto found=component_class_sequences_.find(name);
+    if(found==component_class_sequences_.end()) throw std::runtime_error("Component class is not registered");
+    const auto previous=found->second;
+    ++found->second;
+    return previous;
   }
   [[nodiscard]] std::uint32_t class_notification_sequence(std::uint32_t identity) const {
     const auto found=class_sequences_.find(identity);
@@ -123,6 +152,7 @@ private:
   LiveVariableRegistry live_variables_;
   InputMapRegistry input_maps_;
   std::map<std::uint32_t,std::uint32_t> class_sequences_;
+  std::map<std::string,std::uint32_t,std::less<>> component_class_sequences_;
   OrdinarySortingState ordinary_sorting_;
   // Actual application-constructor producer; later ordinary passes update it.
   std::optional<std::uint32_t> component_dispatch_time_{0U};

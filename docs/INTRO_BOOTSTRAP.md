@@ -18,10 +18,13 @@ completed in that same host. Normal startup now executes the actual fresh
 initializer and retained console/input-map registrations.
 CPU preflight also executes first-row loading progress under an explicit native
 load-begin reset policy and allocates the first scope's 20 ownerless resources.
-It then constructs the first group, Window and Language owners. Their two
-allocation scopes contain 23 resources; only three have constructed owners.
+It then constructs the first group, Window, Language and two Picture owners.
+Their three allocation scopes contain 24 resources; five have constructed owners.
 Window registers its real console descriptor and scene resource property.
-The three deferred readers remain queued; the next Picture scope is not allocated.
+The Picture attachments construct Center and FadeToBlack without running their
+initializers. The scene event-name table is prepared before ROOT and supplies
+Fade's event identities. Five deferred readers remain queued; later owners,
+including the authored camera, are not constructed.
 The conditional DefaultCam factory now constructs its real PreviewCamera and
 ordinary membership in that host. Its callback writes directly into the scene
 hierarchy after the complete global initializer. The post-load root state and
@@ -82,32 +85,27 @@ descriptor/material writes, live draw snapshots, immutable source preservation
 and canonical camera projection. These fixtures do not
 establish the original scene's activation history.
 
-A bounded native startup run with the owned Steam installation completed after
-two presentation frames: RootGroup was constructed and immediately initialized,
-the other 383 component entries remained unconstructed, four picture owners were
-retained and all 26 intro images uploaded on SDL/Vulkan. This verifies the
-data-check, root-construction and GPU-upload path, not intro drawing or playback.
+## Current startup verification
 
-The subsequent first-scope integration passes all 86 local CTest executables
-and a focused ASan/UBSan integration run. A private check against the owned
-archive verifies all 20 initial resources against the count-table slot mapping,
-with no owner bindings, unchanged ROOT state and 450 later resources absent.
-A new bounded normal startup also reaches SDL/Vulkan and exits successfully.
-These checks still do not establish an authored owner factory or intro playback.
+All 87 local tests pass. Independent fixtures cover scope restoration, canonical
+owner/resource links, hidden versus visible component enrollment, retained class
+counters and scheduling, and ordered event declarations with duplicate names.
+Injected event collisions and clock failures verify that partial construction
+cannot publish a completed row or be retried as successful initialization.
+Focused ASan/UBSan checks cover the host integration and supporting runtime code;
+this is not a sanitizer build of every dependency.
 
-The first authored group factory is now separately verified against the owned
-archive: it binds the supplied resource, attaches it to ROOT, consumes one
-partition slot and queues exactly one deferred reader. The other 19 initial
-resources remain ownerless. All 86 local tests and the focused ASan/UBSan run
-pass with this stage, and normal startup reaches SDL/Vulkan after constructing
-the group. No deferred reader, later authored owner or intro draw is claimed.
+A private probe using the owned archive checks each boundary from ROOT through
+the first five source rows: 24 allocated resources, five attached owners, real
+Window bindings, three constructed components and five unconsumed readers.
+It also checks the complete source event mapping and Fade's reused identities.
+No later owner or live Picture backing is present.
 
-Window/Language integration also passes all 86 tests and the focused ASan/UBSan
-run. Independent fixtures check nested scope allocation, property replacement,
-same-name console descriptors and lease cleanup. The owned-data probe verifies
-23 resources, three canonical attached owners, `rWindows`, `Show2d` and three
-queued readers. Normal startup reaches SDL/Vulkan after this stage. Picture
-construction, deferred reading and intro playback remain pending.
+Normal startup with the owned Steam installation reaches SDL/Vulkan and exits
+after two presentation frames. It verifies 36 optional soundtrack files and
+uploads all 26 intro images. An earlier 45-second run timed out; the subsequent
+run with a 120-second ceiling completed. This proves the data-check,
+construction and GPU-upload path, not intro drawing, audio playback or the menu.
 
 ## Retained controller initialization
 
