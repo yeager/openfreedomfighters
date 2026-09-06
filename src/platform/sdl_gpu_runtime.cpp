@@ -1,4 +1,5 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
+#include "off/platform/sdl_intro_renderer.hpp"
 #include "off/platform/sdl_menu_gamepad.hpp"
 #include "off/ui/graphics_menu_draw.hpp"
 #include "off/ui/graphics_menu_pointer.hpp"
@@ -1167,11 +1168,12 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   // These are the retained FF-Intro images, not the separate startup UI set.
   // Keep allocation/image identities through the entire window lifetime. Upload
   // is not scene admission: unresolved cut start must not become a fake draw.
-  GpuStartupImages gpu_intro;
-  if (intro && !upload_picture_images(device, intro->resources().images(),
-          graphics::intro_decoded_byte_budget, gpu_intro)) {
-    const auto result = failure("intro runtime image GPU upload failed");
-    release_startup_images(device, gpu_intro);
+  std::unique_ptr<SdlIntroRenderer> gpu_intro;
+  try {
+    if (intro)
+      gpu_intro = std::make_unique<SdlIntroRenderer>(device, intro->resources().images());
+  } catch (const std::exception& error) {
+    const RuntimeResult result{false, std::string("intro renderer initialization failed: ") + error.what()};
     release_startup_images(device, gpu_startup);
     release_overlay(device, overlay);
     release_scene(device, gpu);
@@ -1674,9 +1676,9 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   }
   SDL_WaitForGPUIdle(device);
   if (result.success && intro)
-    result.message += " (" + std::to_string(gpu_intro.images.size()) +
+    result.message += " (" + std::to_string(gpu_intro->image_count()) +
         " source-backed intro images uploaded; automatic intro playback pending)";
-  release_startup_images(device, gpu_intro);
+  gpu_intro.reset();
   release_overlay(device, overlay);
   release_startup_images(device, gpu_startup);
   release_scene(device, gpu);

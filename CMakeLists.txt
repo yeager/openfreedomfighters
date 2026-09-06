@@ -181,9 +181,17 @@ if(MSVC)
 else()
     target_compile_options(off_sdl_picture_stage_shader PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
 endif()
+add_library(off_sdl_intro_renderer STATIC src/platform/sdl_intro_renderer.cpp)
+target_link_libraries(off_sdl_intro_renderer PUBLIC off_sdl_picture_stage_shader)
+target_include_directories(off_sdl_intro_renderer PRIVATE "${off_shader_assets_SOURCE_DIR}/examples")
+if(MSVC)
+    target_compile_options(off_sdl_intro_renderer PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(off_sdl_intro_renderer PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
+endif()
 target_link_libraries(
     openfreedomfighters PRIVATE
-    off_core off_sdl_picture_clear off_sdl_picture_stage_shader ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
+    off_core off_sdl_picture_clear off_sdl_picture_stage_shader off_sdl_intro_renderer ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
 )
 target_include_directories(
     openfreedomfighters PRIVATE
@@ -215,6 +223,10 @@ if(BUILD_TESTING)
     add_test(NAME off_shader_source_hash_tests COMMAND ${CMAKE_COMMAND}
         "-DOFF_TEST_WORK_DIR=${CMAKE_BINARY_DIR}/test-work/shader-source-hash"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_source_hash_tests.cmake")
+    add_executable(off_sdl_intro_renderer_tests tests/sdl_intro_renderer_tests.cpp)
+    target_link_libraries(off_sdl_intro_renderer_tests PRIVATE off_sdl_intro_renderer)
+    add_test(NAME off_sdl_intro_renderer_tests COMMAND off_sdl_intro_renderer_tests)
+    set_tests_properties(off_sdl_intro_renderer_tests PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
     add_executable(off_sdl_picture_stage_shader_tests tests/sdl_picture_stage_shader_tests.cpp)
     target_link_libraries(off_sdl_picture_stage_shader_tests PRIVATE off_sdl_picture_stage_shader)
     target_include_directories(off_sdl_picture_stage_shader_tests PRIVATE "${off_shader_assets_SOURCE_DIR}/examples")

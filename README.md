@@ -22,7 +22,8 @@ executable code are included here.
   are optional; music playback is not implemented yet.
 - The first intro sequence's camera, pictures and textures load from game data.
   One retained runtime owns their hierarchy and mutable picture state; intro
-  textures upload to the GPU. Activation and drawing are not connected yet.
+  textures upload to the GPU. Indexed drawing works in explicit integration
+  tests; normal startup activation is not connected yet.
 - F10 opens a working graphics-settings panel. Its current appearance is
   diagnostic; matching the game's menu design is still on the roadmap.
 - A separate geometry preview is available with `--diagnostic-scene`. It is not

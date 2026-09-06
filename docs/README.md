@@ -14,6 +14,7 @@
 - [Picture expansion](PICTURE_EXPANSION.md)
 - [Picture materials](PICTURE_MATERIAL_STATE.md)
 - [Picture texture-stage shader](PICTURE_STAGE_SHADER.md)
+- [Indexed intro picture renderer](SDL_INTRO_RENDERER.md)
 - [Picture draw order](PICTURE_DRAW_ORDER.md)
 - [Ordered picture dispatch](PICTURE_ORDERED_DRAW_LOOP.md)
 - [Ordered drawing coordinator](PICTURE_ORDERED_COORDINATOR.md)
