@@ -100,6 +100,9 @@ the real textures; startup-only composition is not reused for intro data.
 Explicit engine-dimension initialization now updates fade picture scales and
 invalidates their transform cache without replacing authored geometry. Original
 startup dimensions, resource admission and on-screen composition remain unresolved.
+Fade alpha outputs now propagate into mutable descriptor colors and shared paired
+material storage; fresh draw plans consume those changes while preserving real
+textures and geometry. GPU submission and complete intro playback are still pending.
 
 ## Build the native bootstrap
 

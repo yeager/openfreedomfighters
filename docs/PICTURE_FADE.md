@@ -136,3 +136,42 @@ initialization leaves actual descriptor spans and modulation unchanged. Private
 research revalidated the complete existing disassembly against a freshly streamed
 disassembly of the installed executable on 2026-09-06; the output hashes match.
 Original code and the complete listing remain outside the public repository.
+
+## Mutable colors and paired materials
+
+`graphics::PictureColorState` connects alpha outputs to caller-owned mutable
+descriptor storage and ordered pointers to paired runtime material words. Initial
+owner alpha, packed color and runtime material are explicit constructor inputs.
+Construction does not rewrite descriptor colors. Ordinary `refresh_material`
+maps the base property and updates the owner and paired materials without an alpha
+override; it is not a complete load lifecycle.
+
+`set_alpha` first compares the full input with 255 and propagates a material-bit
+transition only when the owner's bit changes. It then stores the low alpha byte,
+replaces the packed owner color's high byte while preserving owner RGB, and copies
+that whole packed color into every descriptor in ascending order. Descriptor RGB
+is replaced, not multiplied. Ungrouped descriptors and repeated equal-alpha calls
+are included. No transform invalidation or downstream half-channel reduction
+occurs here.
+
+Shared spans and duplicate paired material pointers retain shared writes; owners
+must not silently clone those identities. Another owner's write can change shared
+resources without changing this owner's stored material. Consequently a repeated
+alpha with an unchanged owner material bit does not force a material refresh.
+Null material pointers are rejected at construction before storage mutations.
+The caller guarantees allocation lifetime and excludes concurrent mutation.
+
+Immutable descriptor encodings and authored texture-resource records remain
+unchanged. `draw_plan` builds a fresh snapshot from current descriptor colors for
+the existing expansion path. Previously built plans are copies and remain stale;
+callers must not submit them as if their colors updated automatically. This is
+CPU draw-state propagation, not GPU submission or proof of scene admission.
+
+The private owned-data probe conditionally routes actual intro commands through
+the fade receiver into mutable picture state and fresh draw plans. It verifies
+the three selected descriptor spans and paired records are distinct before using
+separate probe storage, and checks updated colors/materials while retaining real
+texture identities and geometry. Public tests separately exercise shared aliases,
+duplicate references and the downstream expansion color reduction.
+All 40 CTest executables and the targeted color-state/material/draw-plan/expansion
+ASan/UBSan executable pass locally after this integration.

@@ -152,6 +152,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   startup pictures and verify real PRM/TEX resource and pixel joins privately.
 - [x] Apply reviewed fade picture sizing from explicit engine dimensions, with
   change-only transform-cache invalidation and ordered resource notification.
+- [x] Propagate fade alpha into mutable descriptor colors and paired materials,
+  preserving shared storage and producing fresh renderer-facing draw snapshots.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.
