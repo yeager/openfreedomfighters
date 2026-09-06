@@ -3,6 +3,8 @@
 #include <utility>
 
 namespace off::runtime {
+SceneEventNames::SceneEventNames() : by_identity_(std::make_unique<ReverseNames>()) {}
+
 std::string SceneEventNames::canonicalize(std::string_view name) {
   if(name.find('\0')!=std::string_view::npos)
     throw std::runtime_error("Scene event name contains embedded NUL");
@@ -16,14 +18,14 @@ std::uint16_t SceneEventNames::insert(std::string canonical,std::uint16_t reques
   const auto identity=requested?static_cast<std::uint32_t>(requested):counter_+1U;
   if(identity==0 || identity>=capacity)
     throw std::runtime_error("Scene event identity capacity exhausted");
-  if(by_identity_[identity])
+  if((*by_identity_)[identity])
     throw std::runtime_error("Scene event identity collides with a different name");
   // Prepare both owned name copies before committing either index. Allocation
   // failure may preserve completed lazy initialization, not half an entry.
   std::optional<std::string> reverse{canonical};
   const auto narrowed=static_cast<std::uint16_t>(identity);
   by_name_.emplace(std::move(canonical),narrowed);
-  by_identity_[identity]=std::move(reverse);
+  (*by_identity_)[identity]=std::move(reverse);
   if(!requested) counter_=identity;
   return narrowed;
 }
@@ -44,12 +46,12 @@ std::optional<std::uint16_t> SceneEventNames::find(std::string_view name) const 
 }
 std::optional<std::string_view> SceneEventNames::name(std::uint16_t identity) const {
   if(identity>=capacity) throw std::runtime_error("Scene event identity is out of range");
-  if(!by_identity_[identity]) return std::nullopt;
-  return *by_identity_[identity];
+  if(!(*by_identity_)[identity]) return std::nullopt;
+  return *(*by_identity_)[identity];
 }
 void SceneEventNames::clear() noexcept {
   by_name_.clear();
-  for(auto& name:by_identity_) name.reset();
+  for(auto& name:*by_identity_) name.reset();
   counter_=0;
   initialized_=false;
 }

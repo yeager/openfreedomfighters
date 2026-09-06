@@ -41,10 +41,11 @@ executable code are included here.
   [startup audio lifecycle](docs/INTRO_AUDIO_STARTUP_ORDER.md) is not connected.
 - Normal startup constructs the scene's ROOT and its RootGroup component,
   including the shared construction clock and control-map registration.
-  It constructs the first group, Window, Language and two Picture owners, with
-  24 resources allocated in scene order. Window console/property bindings and
+  It constructs the first group, Window, Language, two Picture owners and the
+  camera, with 24 resources allocated in scene order. Window console/property bindings and
   the scene event-name table are live. Center and Fade components are constructed,
-  but their initialization and the five queued readers remain pending.
+  but their initialization and the six queued readers remain pending. The camera
+  is constructed but not yet registered for rendering.
   Most authored attachments remain a catalog; their factories and the full
   two-phase initialization path still need to be connected.
   DefaultCam and its PreviewCamera now share an [ordinary update queue](docs/ORDINARY_COMPONENTS.md)

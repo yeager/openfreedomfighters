@@ -43,7 +43,13 @@ struct IntroSynthesizedCameraMetadata {
   std::uint32_t class_identifier;
 };
 enum class IntroResourceLoadStage {
-  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, failed
+  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, authored_camera_ready, failed
+};
+struct IntroConstructedCameraOwner {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::string name;
+  std::uint32_t class_identifier{0x00400003U},notification_sequence{};
 };
 // Concrete constructor state, deliberately separate from the prepared asset view.
 struct IntroConstructedPictureOwner {
@@ -218,6 +224,10 @@ public:
   void construct_first_authored_group();
   void construct_window_language_groups_without_engine_renderer();
   void construct_picture_component_prefix_without_engine_renderer();
+  void construct_authored_camera_without_engine_renderer();
+  [[nodiscard]] const IntroConstructedCameraOwner* constructed_camera_owner() const noexcept {
+    return constructed_camera_owner_ ? &*constructed_camera_owner_ : nullptr;
+  }
   [[nodiscard]] const IntroConstructedPictureOwner* constructed_picture_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroConstructedPictureComponent* constructed_picture_component(std::size_t source) const noexcept;
   [[nodiscard]] const std::unique_ptr<IntroWindowOwner>& window_owner() const noexcept {return window_owner_;}
@@ -276,8 +286,8 @@ public:
       const IntroControllerPhaseTwoServices& external);
   [[nodiscard]] IntroControllerInitialization& controller_initialization() noexcept { return controller_initialization_; }
   [[nodiscard]] const IntroControllerInitialization& controller_initialization() const noexcept { return controller_initialization_; }
-  [[nodiscard]] FreshIntroCamera& camera() noexcept { return camera_; }
-  [[nodiscard]] const FreshIntroCamera& camera() const noexcept { return camera_; }
+  [[nodiscard]] FreshIntroCamera& camera();
+  [[nodiscard]] const FreshIntroCamera& camera() const;
   // Explicit real renderer membership for the retained authored camera. Does
   // not activate a cut, fabricate backend readiness or synthesize DefaultCam.
   void register_camera(float key,const IntroCameraRegistrationServices& services);
@@ -371,7 +381,9 @@ private:
   std::vector<std::vector<std::size_t>> owner_components_;
   std::size_t controller_component_{};
   IntroControllerInitialization controller_initialization_;
-  FreshIntroCamera camera_;
+  FreshIntroCamera prepared_camera_;
+  std::unique_ptr<FreshIntroCamera> live_camera_;
+  std::optional<IntroConstructedCameraOwner> constructed_camera_owner_;
   RendererCameraRegistry registered_cameras_;
   IntroRuntimeHandle camera_context_; // The same synthesized root, not resource parent.
   std::vector<PictureHierarchyNode> hierarchy_;

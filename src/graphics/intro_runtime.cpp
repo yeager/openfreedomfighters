@@ -28,7 +28,7 @@ std::optional<std::uint32_t> IntroRuntimePicture::runtime_resource_flags() const
 IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::ApplicationServices& application,
                            runtime::SceneComponentSequence& component_sequence)
     : application_(application), resources_(std::move(resources)), components_(component_sequence),
-      camera_(resources_.camera()) {
+      prepared_camera_(resources_.camera()) {
   const auto& directory = resources_.sources().directory();
   if (directory.size() >= std::numeric_limits<std::uint32_t>::max())
     throw std::runtime_error("intro hierarchy exceeds native index capacity");
@@ -139,7 +139,7 @@ void IntroRuntime::construct_root() {
   if(resource_load_stage_!=IntroResourceLoadStage::prepared)
     throw std::runtime_error("ROOT construction is active or previously failed");
   if(resource_allocation_enabled_ || components_.construction_mode() || components_.failed() ||
-      !components_.construction_order().empty() || default_camera_ || ordinary_ ||
+      !components_.construction_order().empty() || default_camera_ || ordinary_ || !registered_cameras_.entries().empty() ||
       std::ranges::any_of(resource_states_,[](const auto& state){return state.has_value();}))
     throw std::runtime_error("Fresh ROOT requires inactive allocation before resource/component construction");
   root_attachments_.reserve(1);
@@ -147,6 +147,8 @@ void IntroRuntime::construct_root() {
   resource_load_stage_=IntroResourceLoadStage::constructing_root;
   try {
     prepare_source_event_names();
+    // A prepared camera projection is not a live Window initializer.
+    projected_=false;
     // The prepared source graph is not the owner's live child list. No authored
     // resource has been constructed at this boundary; attachment will link it.
     for(auto& node:hierarchy_) node.parent=no_picture_transform_parent;
@@ -651,6 +653,111 @@ void IntroRuntime::construct_picture_component_prefix_without_engine_renderer() 
   } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
 }
 
+void IntroRuntime::construct_authored_camera_without_engine_renderer() {
+  constexpr std::size_t row=5;
+  if(resource_load_stage_!=IntroResourceLoadStage::picture_component_prefix_ready || !window_owner_ ||
+      !language_owner_ || live_camera_ || constructed_camera_owner_ || resource_allocation_enabled_ ||
+      components_.construction_mode() || manager_row_edit_ || scene_resource_edit_ ||
+      loaded_resource_handles_.size()!=row || count_group_selector_!=3 ||
+      current_source_parent()!=window_owner_->group.owner)
+    throw std::runtime_error("Authored camera requires the completed Picture prefix");
+  if(!application_.has_class_registration(0x00400003U))
+    throw std::runtime_error("Authored camera requires its concrete class registration");
+  const auto& directory=resources_.sources().directory();
+  if(directory.size()<=row || resources_.camera_index()!=row)
+    throw std::runtime_error("Authored camera is not the next directory source");
+  const auto& source=directory[row];
+  const auto zero=[](float value){return value==0.0F && !std::signbit(value);};
+  const auto identity=[](const std::array<float,9>& basis) {
+    for(std::size_t i=0;i<basis.size();++i)
+      if(std::bit_cast<std::uint32_t>(basis[i])!=std::bit_cast<std::uint32_t>(engine_identity[i])) return false;
+    return true;
+  };
+  if(source.source_type!=0x00400003U || source.source_variant || source.parent_steps ||
+      source.enters_child_pool || source.object_flags!=0x00200400U || source.class_data_value ||
+      source.auxiliary_value || source.buf_auxiliary_offset || source.child_value ||
+      source.post_load_source_offset || !source.deferred_source_offset || !source.attachments.empty() ||
+      !identity(source.basis) || !std::ranges::all_of(source.position,zero) ||
+      source.pool_class!=3 || source.pool_group!=2 || !owner_components(source_handle(row)).empty())
+    throw std::runtime_error("Unsupported authored camera source shape");
+  const auto* fade=constructed_picture_owner(4);
+  const auto& root_state=resource_state(root_handle());
+  const auto parent=window_owner_->group.owner;
+  const auto parent_resource=resource_handle(parent);
+  const auto& parent_state=resource_state_for_handle(parent_resource);
+  if(!fade || !root_state || root_state->flags!=0x09000000U || root_state->context.value ||
+      !root_owner_state_ || !root_owner_state_->enabled || root_owner_state_->room_mode ||
+      root_owner_state_->aggregate_flags || !root_owner_state_->category_memberships.empty() ||
+      !parent_state || parent_state->flags!=0x09000000U || parent_state->context.value ||
+      window_owner_->group.aggregate_flags || resource_parent(parent)!=resource_handle(root_handle()) ||
+      child_owners(parent)!=std::vector<IntroRuntimeHandle>{language_owner_->owner,fade->owner})
+    throw std::runtime_error("Authored camera requires the retained fresh Window ancestry");
+  try {
+    advance_source_loading_progress_without_engine_renderer(row);
+    const auto scope_it=std::ranges::find(source_resource_scopes_,source.pool_group,&IntroSourceResourceScope::count_group);
+    if(scope_it==source_resource_scopes_.end()) throw std::runtime_error("Camera allocation scope is absent");
+    auto& scope=*scope_it;
+    auto& cursor=scope.next_in_partition[3];
+    const auto begin=std::uint64_t{scope.counts[0]}+scope.counts[1]+scope.counts[2];
+    const auto end=begin+scope.counts[3];
+    if(!cursor || *cursor<begin || *cursor>=end)
+      throw std::runtime_error("Camera partition is absent or exhausted");
+    const auto resource=scope.resources.at(*cursor);
+    const auto index=resource_index(resource);
+    const auto owner=source_handle(row);
+    if(index!=hierarchy_index(owner) || resource_owners_[index] || !resource_states_[index] ||
+        resource_states_[index]->flags!=0x09000000U || resource_states_[index]->context.value ||
+        resource_states_[index]->metadata || resource_states_[index]->directory_auxiliary ||
+        hierarchy_[index].parent!=no_picture_transform_parent || !identity(hierarchy_[index].matrix) ||
+        !std::ranges::all_of(hierarchy_[index].position,zero))
+      throw std::runtime_error("Camera requires its fresh supplied resource");
+    const auto names=resources_.source_names();
+    if(source.buf_name_offset>=names.size()) throw std::runtime_error("Camera name is out of range");
+    std::size_t name_end=source.buf_name_offset;
+    while(name_end<names.size() && names[name_end]!=std::byte{0}) ++name_end;
+    if(name_end==names.size()) throw std::runtime_error("Camera name is unterminated");
+    ++*cursor;
+    std::string name;
+    for(std::size_t i=source.buf_name_offset;i<name_end;++i) name.push_back(static_cast<char>(names[i]));
+    live_camera_=std::make_unique<FreshIntroCamera>();
+    constructed_camera_owner_.emplace(IntroConstructedCameraOwner{owner,resource,std::move(name)});
+    camera_context_=root_handle();
+    resource_owners_[index]=owner;
+    constructed_camera_owner_->notification_sequence=application_.register_class_instance(source.source_type);
+    manager_row_edit_=true;scene_resource_edit_=true;
+    loaded_resource_handles_.push_back(resource);
+    resource_states_[index]->metadata=0;resource_states_[index]->directory_auxiliary=0;
+    // The validated authored pose equals the fresh pose bitwise: the real
+    // transform setter's equality return performs no dirtying or queue work.
+    const auto merged=resource_states_[index]->flags|(source.object_flags&0xfffffU);
+    set_resource_flags_no_maintenance(resource,merged,~merged,{resource_allocation_enabled_,false});
+    hierarchy_[index].parent=resource_index(parent_resource);
+    const auto current=resource_states_[index]->flags;
+    set_resource_flags_no_maintenance(resource,current,~current,{resource_allocation_enabled_,false});
+    // Normal registration returns at resource hide. Camera enabled is a
+    // separate word; neither renderer membership nor dimensions change here.
+    deferred_reader_work_.push_back({resource,source.deferred_source_offset});
+    directory_resource_mapping_.at(row)=resource;
+    manager_row_edit_=false;scene_resource_edit_=false;
+    resource_load_stage_=IntroResourceLoadStage::authored_camera_ready;
+  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
+}
+
+FreshIntroCamera& IntroRuntime::camera() {
+  if(resource_load_stage_==IntroResourceLoadStage::failed)
+    throw std::runtime_error("Failed intro construction has no usable camera");
+  if(live_camera_) return *live_camera_;
+  if(resource_load_stage_==IntroResourceLoadStage::prepared) return prepared_camera_;
+  throw std::runtime_error("Authored camera has not been constructed");
+}
+const FreshIntroCamera& IntroRuntime::camera() const {
+  if(resource_load_stage_==IntroResourceLoadStage::failed)
+    throw std::runtime_error("Failed intro construction has no usable camera");
+  if(live_camera_) return *live_camera_;
+  if(resource_load_stage_==IntroResourceLoadStage::prepared) return prepared_camera_;
+  throw std::runtime_error("Authored camera has not been constructed");
+}
+
 void IntroRuntime::stop_sound_owner(std::size_t source) {
   if (sound_preparation_busy_) throw std::runtime_error("Reentrant intro sound control is unsupported");
   auto& owner=sound_for_source(source);
@@ -782,13 +889,13 @@ void IntroRuntime::register_camera(IntroRuntimeHandle owner,float key,const Intr
 }
 FreshIntroCamera& IntroRuntime::camera_for_owner(IntroRuntimeHandle owner) {
   static_cast<void>(hierarchy_index(owner));
-  if(owner==source_handle(resources_.camera_index())) return camera_;
+  if(owner==source_handle(resources_.camera_index())) return camera();
   if(default_camera_==owner) return *default_camera_owner_;
   throw std::runtime_error("Intro owner is not a constructed camera");
 }
 const FreshIntroCamera& IntroRuntime::camera_for_owner(IntroRuntimeHandle owner) const {
   static_cast<void>(hierarchy_index(owner));
-  if(owner==source_handle(resources_.camera_index())) return camera_;
+  if(owner==source_handle(resources_.camera_index())) return camera();
   if(default_camera_==owner) return *default_camera_owner_;
   throw std::runtime_error("Intro owner is not a constructed camera");
 }
@@ -1094,7 +1201,7 @@ void IntroRuntime::project_selected_window_camera_state() {
   for (std::size_t i=0; i<basis.size(); ++i)
     if (std::bit_cast<std::uint32_t>(basis[i]) != std::bit_cast<std::uint32_t>(engine_identity[i]))
       throw std::runtime_error("window camera projection requires unchanged engine identity orientation");
-  camera_.apply_window_state_projection(window.options[0] != 0,window.options[1] != 0,
+  camera().apply_window_state_projection(window.options[0] != 0,window.options[1] != 0,
       source_handle(resources_.window_index()).value);
   projected_ = true;
 }

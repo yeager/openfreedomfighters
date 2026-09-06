@@ -49,6 +49,10 @@ public:
   [[nodiscard]] bool has_class_registration(std::uint32_t identity) const noexcept {
     return class_sequences_.contains(identity);
   }
+  void initialize_native_camera_registration() {
+    if(!class_sequences_.emplace(0x00400003U,0U).second)
+      throw std::runtime_error("Native camera class is already registered");
+  }
   void initialize_native_picture_registration() {
     if(has_class_registration(0x00200046U) || has_component_class_registration("ZGEOM_Center") ||
         has_component_class_registration("ZWINPIC_FadeToBlack"))

@@ -11,6 +11,8 @@ template<class Action> void rejects(Action action) {
 }
 }
 int main() {
+  static_assert(sizeof(off::runtime::SceneEventNames)<256,
+                "Scene event reverse storage must not inflate each caller's stack frame");
   off::runtime::SceneEventNames names;
   check(!names.initialized() && names.counter()==0 && !names.find("FadeIn") && !names.name(0),
         "fresh event state and read-only lookup must not initialize the registry");

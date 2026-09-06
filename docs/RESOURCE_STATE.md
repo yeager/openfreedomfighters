@@ -156,6 +156,30 @@ The registry owns its names and does not dispatch events. The host exposes
 declarations and read-only inspection, not a clear operation that could invalidate
 already prepared source mappings.
 
+## Authored Camera construction
+
+The next row consumes Window's existing category-three slot without allocating
+another scope. It binds the concrete Camera owner and appends it after the
+Picture in Window's child list. Its name, canonical resource and retained
+Camera-class notification sequence are preserved. This leaves 24 allocated
+resources, six attached owners and six queued readers in the owned intro.
+
+The live camera uses the ordinary constructor defaults, not the prepared
+authored-source projection. Its runtime flags are `0x20`, priority is zero,
+near/far are 5/20000, viewport is `(0,0,1,1)` and renderer dimensions are zero.
+Its context refers to ROOT; its separate resource parent is Window. The authored
+resource hide produces `0x09000400` without clearing the camera's enabled bit.
+Identity admission compares every orientation word bitwise, including signed
+zero, before skipping transform dirtying and queue work.
+
+No component, event declaration, renderer registration, dimension notification
+or source-reader operation runs for this row. The prepared camera remains an
+offline compatibility object. Once actual source loading begins, camera access
+rejects until the real factory completes, and all subsequent camera accessors
+use that same live instance. A prepared-only Window projection does not count
+as live initialization. Cold loading also rejects a pre-registered camera rather
+than retaining an invalid renderer association across the transition.
+
 RootGroup retains its `DisplayName` floating-point descriptor and `RootControl`
 input-map registration. Its ordinary membership remains pending, not merged.
 The root's separate enabled marker does not enable a camera or set a resource

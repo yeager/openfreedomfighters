@@ -18,13 +18,15 @@ completed in that same host. Normal startup now executes the actual fresh
 initializer and retained console/input-map registrations.
 CPU preflight also executes first-row loading progress under an explicit native
 load-begin reset policy and allocates the first scope's 20 ownerless resources.
-It then constructs the first group, Window, Language and two Picture owners.
-Their three allocation scopes contain 24 resources; five have constructed owners.
+It then constructs the first group, Window, Language, two Picture owners and the
+authored camera. Their three allocation scopes contain 24 resources; six have
+constructed owners.
 Window registers its real console descriptor and scene resource property.
 The Picture attachments construct Center and FadeToBlack without running their
 initializers. The scene event-name table is prepared before ROOT and supplies
-Fade's event identities. Five deferred readers remain queued; later owners,
-including the authored camera, are not constructed.
+Fade's event identities. Six deferred readers remain queued; later owners are
+not constructed. The camera has constructor defaults and its actual Window
+parent, but no renderer membership or source-reader effects yet.
 The conditional DefaultCam factory now constructs its real PreviewCamera and
 ordinary membership in that host. Its callback writes directly into the scene
 hierarchy after the complete global initializer. The post-load root state and
@@ -96,10 +98,18 @@ Focused ASan/UBSan checks cover the host integration and supporting runtime code
 this is not a sanitizer build of every dependency.
 
 A private probe using the owned archive checks each boundary from ROOT through
-the first five source rows: 24 allocated resources, five attached owners, real
-Window bindings, three constructed components and five unconsumed readers.
+the first six source rows: 24 allocated resources, six attached owners, real
+Window bindings, three constructed components and six unconsumed readers.
 It also checks the complete source event mapping and Fade's reused identities.
-No later owner or live Picture backing is present.
+It distinguishes the camera's ROOT context from its Window parent and checks
+every retained constructor parameter. No later owner or live Picture backing
+is present.
+
+The event reverse-name table is heap-backed. Its earlier inline storage made
+the integration test exceed a 1 MiB stack and Windows CI crashed. The same
+limited-stack test now passes; a size assertion prevents the registry from
+silently regaining that stack footprint. Registry identities and declaration
+behavior are unchanged.
 
 Normal startup with the owned Steam installation reaches SDL/Vulkan and exits
 after two presentation frames. It verifies 36 optional soundtrack files and

@@ -56,9 +56,15 @@ void finish(Bytes& b) { b.push_back(std::byte{0xff}); set(b, 0, static_cast<std:
 struct FixtureReferenceMap {
     std::uint32_t offset{};
     bool picture_order{};
+    bool camera_row{};
     std::uint32_t operator()(std::uint32_t value) const {
         if(!value) return 0;
         if(picture_order) {
+            if(camera_row) {
+                if(value==9) return 6;
+                if(value==3) return 7;
+                if(value>=5 && value<=8) return value+3;
+            }
             if(value==2) return 5;
             if(value==3) return 6;
             if(value==4) return 4;
@@ -162,8 +168,9 @@ struct Fixture {
     Bytes payload, names, prm, tex, snd;
     std::array<std::size_t, 10> block_offsets{};
     std::array<std::size_t, 10> attachment_offsets{};
-    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true) : payload(1024), snd(16) {
+    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false) : payload(1024), snd(16) {
         if(language_group && !leading_group) throw std::runtime_error("language fixture requires leading group");
+        if(camera_row && !language_group) throw std::runtime_error("camera row fixture requires language group");
         // Deliberately permuted directory roles; no retail source indices.
         set(payload, 0, 32); set(payload, 4, 128); set(payload, 12, 4); set(payload, 20, 176);
         set(payload, 32, include_sound?10:9); set(payload, 128, 1); set(payload, 132, 144);
@@ -204,7 +211,7 @@ struct Fixture {
                                   {"ZSNDOBJ_SoundSegment",1},{"ZGEOM_ZSetZDefine",0}});
         // All nonnull references emitted below target original rows after the
         // first window, so both inserted rows precede those referenced owners.
-        const FixtureReferenceMap bias{leading_group?(language_group?2U:1U):0U,language_group};
+        const FixtureReferenceMap bias{leading_group?(language_group?2U:1U):0U,language_group,camera_row};
         const std::array<Bytes, 10> blocks{camera(), picture(false), controller(bias), picture(true), member(bias), list({8, 8},bias), list({4, 2, 4},bias), first_cut(bias,include_events), window(bias),sound_owner(bias)};
         for (std::size_t i = 0; i < node_count; ++i) {
             block_offsets[i] = payload.size(); set(payload, 512 + 48 * i + 32, static_cast<std::uint32_t>(payload.size()));
@@ -233,6 +240,7 @@ struct Fixture {
                 set(payload,512+48*8+24,0x03000000U);
                 set(payload,512+48*3+24,0x00200400U);
                 set(payload,512+48*1+24,0x00200000U);
+                if(camera_row) set(payload,512+24,0x00200400U);
             }
             const auto directory=payload.size();
             word(payload,static_cast<std::uint32_t>(node_count+1+(language_group?1:0)));
@@ -245,8 +253,12 @@ struct Fixture {
                 // the remaining source roles intact through explicit mapping.
                 payload.insert(payload.end(),entries.begin()+24,entries.begin()+32);
                 word(payload,(1U<<25U)|static_cast<std::uint32_t>((512+48)/4));word(payload,0);
+                if(camera_row) payload.insert(payload.end(),entries.begin()+64,entries.begin()+72);
                 payload.insert(payload.end(),entries.begin()+16,entries.begin()+24);
-                payload.insert(payload.end(),entries.begin()+32,entries.end());
+                if(camera_row) {
+                    payload.insert(payload.end(),entries.begin()+32,entries.begin()+64);
+                    payload.insert(payload.end(),entries.begin()+72,entries.end());
+                } else payload.insert(payload.end(),entries.begin()+32,entries.end());
             } else payload.insert(payload.end(),entries.begin(),entries.end());
             set(payload,0,static_cast<std::uint32_t>(directory));
             const auto pools=payload.size();word(payload,language_group?4U:3U);
@@ -345,6 +357,162 @@ int main() {
     using off::graphics::IntroPreparedResources;
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
     Fixture fixture;
+    {
+      Fixture camera_fixture(false,true,true,true,true);
+      set(camera_fixture.payload,camera_fixture.block_offsets[8]+42,0);
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      app.initialize_native_group_registration();
+      app.initialize_native_window_language_registration();
+      app.initialize_native_picture_registration();
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{123};}};
+      off::graphics::IntroRuntime host(camera_fixture.build(),app,sequence);
+      check(host.resources().camera_index()==5 && host.resources().controller_index()==6 &&
+            host.resources().first_cut_index()==10 && host.resources().sources().directory()[5].pool_group==2 &&
+            host.resources().sources().directory()[5].group_slot_index==2,
+            "independent Camera fixture moves role references together and uses Window category-three slot");
+      auto& prepared=host.camera();
+      check(prepared.parameters().authored && prepared.priority()==4 && prepared.parameters().far_distance==1200,
+            "prepared camera retains distinct authored values before live construction");
+      prepared.set_priority(99);
+      prepared.set_enabled(false,false,{});
+      host.project_selected_window_camera_state();
+      check(host.window_camera_projection_applied(),"prepared fixture explicitly exercises camera-only Window projection");
+      rejects([&]{host.construct_authored_camera_without_engine_renderer();});
+      host.construct_root();
+      check(!host.window_camera_projection_applied(),"fresh ROOT discards prepared-only projection admission");
+      rejects([&]{static_cast<void>(host.camera());});
+      rejects([&]{static_cast<void>(std::as_const(host).camera());});
+      rejects([&]{static_cast<void>(host.camera_for_owner(host.source_handle(5)));});
+      host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+      host.construct_window_language_groups_without_engine_renderer();
+      host.construct_picture_component_prefix_without_engine_renderer();
+      const auto resource=*host.allocated_source_resource(5);
+      const auto before_scopes=host.source_resource_scopes();
+      const auto root_cursor=before_scopes[0].next_in_partition;
+      const auto root_resources=before_scopes[0].resources;
+      const auto window_resources=before_scopes[1].resources;
+      const auto component_serial=sequence.next_identity();
+      const auto phase=sequence.scheduling_phase();
+      const auto event_counter=host.scene_event_names().counter();
+      const auto event_mapping=std::vector<std::optional<std::uint32_t>>(
+          host.source_event_name_mapping().begin(),host.source_event_name_mapping().end());
+      rejects([&]{host.construct_authored_camera_without_engine_renderer();});
+      check(host.loaded_resource_handles().size()==5 && !host.constructed_camera_owner() &&
+            !host.associated_resource_owner(resource) && host.source_resource_scopes()[1].next_in_partition[3]==2,
+            "missing Camera registration rejects before cursor or factory effects");
+      app.initialize_native_camera_registration();
+      rejects([&]{app.initialize_native_camera_registration();});
+      for(int i=0;i<7;++i) static_cast<void>(app.register_class_instance(0x00400003U));
+      host.construct_authored_camera_without_engine_renderer();
+      const auto* metadata=host.constructed_camera_owner();
+      auto& camera=host.camera();
+      const auto& parameters=camera.parameters();
+      const auto owner=host.source_handle(5);
+      check(metadata && metadata->owner==owner && metadata->resource==resource && metadata->name=="FixtureNode0" &&
+            metadata->class_identifier==0x00400003U && metadata->notification_sequence==7 &&
+            app.class_notification_sequence(0x00400003U)==8 && host.resource_handle(owner)==resource &&
+            host.resource_owner(resource)==owner && &camera==&host.camera_for_owner(owner) &&
+            &camera==&std::as_const(host).camera_for_owner(owner) && &camera!=&prepared,
+            "Camera factory binds supplied canonical resource and preserves concrete class counter history");
+      check(camera.flags()==0x20U && camera.enabled() && camera.render_control()==0 && camera.priority()==0 &&
+            !camera.associated_target() && !parameters.authored && !camera.picture_services() &&
+            std::bit_cast<std::uint32_t>(camera.renderer_width())==0 &&
+            std::bit_cast<std::uint32_t>(camera.renderer_height())==0 &&
+            parameters.near_distance==5 && parameters.far_distance==20000 && parameters.auxiliary_scalar==400 &&
+            std::bit_cast<std::uint32_t>(parameters.angle_radians)==0x3f9c61abU &&
+            parameters.viewport==std::array<float,4>{0,0,1,1} && parameters.viewport_ratio==1 &&
+            parameters.registration_priority==0 && parameters.background==0 && !parameters.final_boolean &&
+            std::bit_cast<std::uint32_t>(parameters.fog_start_fraction)==0 &&
+            std::bit_cast<std::uint32_t>(parameters.fog_end_fraction)==0 &&
+            parameters.additional_projection_scale==1 && parameters.projection_multipliers==std::array<float,2>{1,1} &&
+            parameters.vector_scale==std::array<float,3>{1,1,1},
+            "live camera uses complete constructor defaults, not decoded or modified prepared projection");
+      check(host.resource_state(owner)->flags==0x09000400U && !host.resource_state(owner)->context.value &&
+            host.camera_context()==host.root_handle() && host.camera_context(owner)==host.root_handle() &&
+            host.resource_parent(owner)==host.window_owner()->group.resource &&
+            host.child_owners(host.source_handle(1))==std::vector<off::graphics::IntroRuntimeHandle>{
+                host.source_handle(2),host.source_handle(4),owner},
+            "hidden camera resource attaches after Picture under Window while camera-owner context remains ROOT");
+      const auto scopes=host.source_resource_scopes();
+      check(scopes.size()==3 && scopes[0].resources==root_resources && scopes[0].next_in_partition==root_cursor &&
+            scopes[1].resources==window_resources && scopes[1].next_in_partition[3]==3 &&
+            scopes[1].resources[2]==resource && host.current_source_parent()==host.source_handle(1) &&
+            host.count_group_selector()==3 && host.loaded_resource_handles().size()==6 &&
+            host.loaded_resource_handles()[5]==resource && host.directory_resource_mapping()[5]==resource &&
+            host.deferred_reader_work().size()==6 && host.deferred_reader_work()[5].resource==resource &&
+            host.deferred_reader_work()[5].source_offset==host.resources().sources().directory()[5].deferred_source_offset,
+            "camera consumes only its retained category-three cursor and queues the sixth deferred reader");
+      check(sequence.next_identity()==component_serial && sequence.scheduling_phase()==phase && sequence.live_count()==3 &&
+            host.components().construction_order().size()==3 && host.owner_components(owner).empty() &&
+            host.registered_cameras().entries().empty() && host.ordinary_components()->pending().size()==2 &&
+            host.scene_event_names().counter()==event_counter &&
+            std::ranges::equal(host.source_event_name_mapping(),event_mapping) && !host.window_camera_projection_applied() &&
+            !host.manager_row_edit() && !host.scene_resource_edit() &&
+            !host.associated_resource_owner(*host.allocated_source_resource(6)) && !host.directory_resource_mapping()[6] &&
+            host.resource_load_stage()==off::graphics::IntroResourceLoadStage::authored_camera_ready,
+            "camera row does not construct components, declare events, register a view, initialize Window or read later sources");
+      camera.set_priority(37);
+      check(host.camera_for_owner(owner).priority()==37 && prepared.priority()==99 && !prepared.enabled() &&
+            host.resources().camera().priority==4,"live mutations never target prepared camera or immutable source data");
+      rejects([&]{host.construct_authored_camera_without_engine_renderer();});
+      check(host.loaded_resource_handles().size()==6 && app.class_notification_sequence(0x00400003U)==8,
+            "repeated Camera row cannot consume resources or notifications again");
+    }
+    {
+      Fixture camera_fixture(false,true,true,true,true);
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
+      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{0};}};
+      off::graphics::IntroRuntime host(camera_fixture.build(),app,sequence);
+      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+      host.construct_window_language_groups_without_engine_renderer();
+      host.construct_picture_component_prefix_without_engine_renderer();
+      const auto resource=*host.allocated_source_resource(5);
+      host.mutate_resource_low_byte(resource,1,0);
+      rejects([&]{host.construct_authored_camera_without_engine_renderer();});
+      check(host.resource_load_stage()==off::graphics::IntroResourceLoadStage::failed && !host.constructed_camera_owner() &&
+            !host.associated_resource_owner(resource) && !host.directory_resource_mapping()[5] &&
+            host.loaded_resource_handles().size()==5 && host.deferred_reader_work().size()==5 &&
+            host.source_resource_scopes()[1].next_in_partition[3]==2 && app.class_notification_sequence(0x00400003U)==0,
+            "invalid retained Camera resource fails without publishing owner, cursor consumption or deferred mapping");
+      rejects([&]{host.construct_authored_camera_without_engine_renderer();});
+      rejects([&]{static_cast<void>(host.camera());});
+      rejects([&]{static_cast<void>(std::as_const(host).camera_for_owner(host.source_handle(5)));});
+    }
+    {
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{0};}};
+      off::graphics::IntroRuntime host(fixture.build(),app,sequence);
+      host.register_camera(0,{[]{return 640;},[]{return 480;},[]{return false;},{}});
+      rejects([&]{host.construct_root();});
+      check(host.resource_load_stage()==off::graphics::IntroResourceLoadStage::prepared && !host.root_owner_state() &&
+            host.registered_cameras().entries().size()==1 && host.components().construction_order().empty(),
+            "cold source construction cannot silently reuse an already registered prepared camera");
+    }
+    {
+      Fixture negative_zero(false,true,true,true,true);
+      const auto basis_offset=negative_zero.payload.size();
+      set(negative_zero.payload,512+4,static_cast<std::uint32_t>(basis_offset));
+      for(const auto value:std::array<float,9>{-0.0F,0,1,0,1,0,1,0,0})
+        word(negative_zero.payload,std::bit_cast<std::uint32_t>(value));
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
+      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{0};}};
+      off::graphics::IntroRuntime host(negative_zero.build(),app,sequence);
+      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+      host.construct_window_language_groups_without_engine_renderer();
+      host.construct_picture_component_prefix_without_engine_renderer();
+      rejects([&]{host.construct_authored_camera_without_engine_renderer();});
+      check(!host.constructed_camera_owner() && host.source_resource_scopes()[1].next_in_partition[3]==2 &&
+            host.loaded_resource_handles().size()==5 && app.class_notification_sequence(0x00400003U)==0,
+            "negative-zero authored basis cannot masquerade as bitwise identity and skip transform services");
+    }
     {
       Fixture nested(false,true,true);
       off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,

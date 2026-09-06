@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -13,6 +14,11 @@ namespace off::runtime {
 class SceneEventNames final {
 public:
   static constexpr std::size_t capacity=0x402;
+  SceneEventNames();
+  SceneEventNames(const SceneEventNames&)=delete;
+  SceneEventNames& operator=(const SceneEventNames&)=delete;
+  SceneEventNames(SceneEventNames&&)=delete;
+  SceneEventNames& operator=(SceneEventNames&&)=delete;
   [[nodiscard]] std::uint16_t declare(std::string_view name,std::uint16_t requested=0);
   [[nodiscard]] std::optional<std::uint16_t> find(std::string_view name) const;
   [[nodiscard]] std::optional<std::string_view> name(std::uint16_t identity) const;
@@ -24,7 +30,10 @@ private:
   static std::string canonicalize(std::string_view name);
   std::uint16_t insert(std::string canonical,std::uint16_t requested);
   std::map<std::string,std::uint16_t,std::less<>> by_name_;
-  std::array<std::optional<std::string>,capacity> by_identity_{};
+  // Keep the fixed reverse-name table off the caller's stack. A scene host is
+  // commonly a local object, including on Windows' smaller default stack.
+  using ReverseNames=std::array<std::optional<std::string>,capacity>;
+  std::unique_ptr<ReverseNames> by_identity_;
   std::uint32_t counter_{};
   bool initialized_{};
 };
