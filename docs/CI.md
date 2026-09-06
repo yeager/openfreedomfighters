@@ -13,8 +13,10 @@ Every push to `main`, pull request targeting `main`, and manual dispatch runs:
 - a CMake/MSVC build and CTest on Windows Server 2022 using source-built or checksum-pinned native dependencies;
 - Python analysis-tool tests and ASan/UBSan tests on Linux.
 - checksum-pinned DXC compilation and validation of the project-owned picture
-  shader's generated HLSL, with a generated-header artifact and comparison when
-  a packaged DXIL header is present.
+  shader's generated HLSL, with a generated-header artifact and mandatory exact
+  comparison against the packaged DXIL header;
+- explicit Windows D3D12 and macOS Metal picture-shader pixel tests, reporting a capability
+  skip if no compatible device is available rather than claiming execution.
 
 All CI tests use synthetic fixtures. GitHub-hosted runners never receive a retail installation, extracted resources, private disassembly, or decoded game audio.
 

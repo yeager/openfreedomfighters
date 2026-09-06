@@ -40,9 +40,7 @@ jobs:
           set -euo pipefail
           python3 tools/build_picture_dxil.py --dxc .shader-work/dxc/bin/dxc \
             --work-dir .shader-work --output .shader-work/picture_stage_dxil.hpp
-          if test -f include/off/platform/generated/picture_stage_dxil.hpp; then
-            cmp include/off/platform/generated/picture_stage_dxil.hpp .shader-work/picture_stage_dxil.hpp
-          fi
+          cmp include/off/platform/generated/picture_stage_dxil.hpp .shader-work/picture_stage_dxil.hpp
       - uses: actions/upload-artifact@v7
         with:
           name: picture-stage-dxil
@@ -122,6 +120,8 @@ jobs:
           ninja -C build
       - name: Test
         run: ctest --test-dir build -j4 --output-on-failure
+      - name: Verify picture shader on Metal when available
+        run: OFF_PICTURE_SHADER_TEST_DRIVER=metal ctest --test-dir build -R '^off_sdl_picture_stage_shader_tests$' -V
 
   build-windows:
     runs-on: windows-2022
@@ -140,3 +140,9 @@ jobs:
         run: |
           $env:PATH = "${{ github.workspace }}/zlib-install/bin;$env:PATH"
           ctest --test-dir build -C Release -j4 --output-on-failure
+      - name: Verify picture shader on D3D12 when available
+        shell: pwsh
+        run: |
+          $env:PATH = "${{ github.workspace }}/zlib-install/bin;$env:PATH"
+          $env:OFF_PICTURE_SHADER_TEST_DRIVER = "direct3d12"
+          ctest --test-dir build -C Release -R '^off_sdl_picture_stage_shader_tests$' -V

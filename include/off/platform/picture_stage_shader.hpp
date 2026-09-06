@@ -21,7 +21,7 @@ struct alignas(16) PictureStageShaderUniforms {
 
 // Caller owns the result and keeps the device alive until release. One sampler
 // at slot zero and one fragment uniform buffer at slot zero are required.
-// Inputs match the pinned SDL_ttf vertex shader (color, UV). SPIR-V and MSL are
+// Inputs match the pinned SDL_ttf vertex shader (color, UV). DXIL, SPIR-V and MSL are
 // packaged; unsupported formats fail explicitly, without a text-shader fallback.
 [[nodiscard]] SDL_GPUShader* create_picture_stage_fragment_shader(SDL_GPUDevice* device);
 

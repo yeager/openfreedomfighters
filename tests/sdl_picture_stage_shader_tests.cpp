@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 #include "testgputext/shaders/shader.vert.spv.h"
 #include "testgputext/shaders/shader.vert.msl.h"
+#include "testgputext/shaders/shader.vert.dxil.h"
 
 #include <algorithm>
 #include <array>
@@ -75,7 +76,10 @@ struct Gpu {
   void setup() {
     SDL_GPUShaderCreateInfo shader{};
     const auto formats = SDL_GetGPUShaderFormats(device);
-    if (formats & SDL_GPU_SHADERFORMAT_SPIRV) {
+    if (formats & SDL_GPU_SHADERFORMAT_DXIL) {
+      shader.code = shader_vert_dxil; shader.code_size = shader_vert_dxil_len;
+      shader.format = SDL_GPU_SHADERFORMAT_DXIL; shader.entrypoint = "VSMain";
+    } else if (formats & SDL_GPU_SHADERFORMAT_SPIRV) {
       shader.code = shader_vert_spv; shader.code_size = shader_vert_spv_len;
       shader.format = SDL_GPU_SHADERFORMAT_SPIRV; shader.entrypoint = "main";
     } else {
@@ -230,9 +234,11 @@ int main() {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
       std::cout << "SKIP: SDL video unavailable: " << SDL_GetError() << '\n'; return 77;
     }
-    gpu.device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_MSL, false, nullptr);
+    const char* driver = SDL_getenv("OFF_PICTURE_SHADER_TEST_DRIVER");
+    gpu.device = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_DXIL | SDL_GPU_SHADERFORMAT_SPIRV |
+      SDL_GPU_SHADERFORMAT_MSL, false, driver && *driver ? driver : nullptr);
     if (!gpu.device) {
-      std::cout << "SKIP: SPIR-V/MSL GPU unavailable: " << SDL_GetError() << '\n'; return 77;
+      std::cout << "SKIP: DXIL/SPIR-V/MSL GPU unavailable: " << SDL_GetError() << '\n'; return 77;
     }
     std::cout << "Picture stage shader backend: " << SDL_GetGPUDeviceDriver(gpu.device) << '\n';
     gpu.setup();

@@ -1,5 +1,6 @@
 #include "off/platform/picture_stage_shader.hpp"
 #include "off/platform/generated/picture_stage_frag.hpp"
+#include "off/platform/generated/picture_stage_dxil.hpp"
 
 #include <cstddef>
 #include <stdexcept>
@@ -46,7 +47,12 @@ SDL_GPUShader* create_picture_stage_fragment_shader(SDL_GPUDevice* device) {
   if (!device) throw std::runtime_error("picture stage shader requires a live GPU device");
   SDL_GPUShaderCreateInfo info{};
   const auto formats = SDL_GetGPUShaderFormats(device);
-  if (formats & SDL_GPU_SHADERFORMAT_SPIRV) {
+  if (formats & SDL_GPU_SHADERFORMAT_DXIL) {
+    info.code = generated::picture_stage_dxil;
+    info.code_size = sizeof(generated::picture_stage_dxil);
+    info.format = SDL_GPU_SHADERFORMAT_DXIL;
+    info.entrypoint = "main";
+  } else if (formats & SDL_GPU_SHADERFORMAT_SPIRV) {
     info.code = generated::picture_stage_spirv;
     info.code_size = sizeof(generated::picture_stage_spirv);
     info.format = SDL_GPU_SHADERFORMAT_SPIRV;
@@ -57,7 +63,7 @@ SDL_GPUShader* create_picture_stage_fragment_shader(SDL_GPUDevice* device) {
     info.format = SDL_GPU_SHADERFORMAT_MSL;
     info.entrypoint = "main0";
   } else {
-    throw std::runtime_error("picture stage shader requires SPIR-V or MSL; DXIL is not packaged yet");
+    throw std::runtime_error("picture stage shader requires DXIL, SPIR-V or MSL");
   }
   info.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
   info.num_samplers = 1;

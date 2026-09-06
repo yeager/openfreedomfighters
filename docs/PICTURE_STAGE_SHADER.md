@@ -26,9 +26,11 @@ projection are outside this fragment operation. No default for them is implied.
 
 ## Formats and regeneration
 
-The checked-in header contains SPIR-V and generated Metal source. Normal builds
+The checked-in headers contain SPIR-V, DXIL and generated Metal source. Normal builds
 do not need shader compiler executables. CMake checks the GLSL source hash and
-requires regeneration after source changes. The generator validates SPIR-V,
+requires regeneration after source changes. Hashes use canonical LF text so
+Windows CRLF checkouts do not cause false stale-source errors. A regression test
+checks both newline encodings and a real source change. The generator validates SPIR-V,
 reflects the input/output, descriptor and uniform layout, and checks Metal slots.
 It also emits HLSL from that same SPIR-V. The separate DXIL build step uses DXC
 shader model 6.0, retains reflected register spaces and produces a C++ header:
@@ -56,15 +58,17 @@ was generated with glslang 16.2.0, SPIRV-Cross package
 `2021.01.15+1.4.335.0-1` and SPIRV-Tools `2026.1-1`. Different compiler versions
 may generate different bytes; review and regenerate intentionally.
 
-The SDL factory selects SPIR-V or MSL and fails explicitly for other formats.
+The SDL factory selects DXIL, SPIR-V or MSL and fails explicitly for other formats.
 Vulkan execution is verified locally; Metal compilation/execution is not yet
-verified. DXIL packaging and D3D12 verification remain open. Windows is still a
-target platform; this component does not yet cover its D3D12 backend. The normal
-runtime's existing shader selection is unchanged.
+verified. DXIL was compiled and validated by the pinned DXC in
+[CI run 34039110983](https://github.com/yeager/openfreedomfighters/actions/runs/34039110983).
+Its reflected input semantics, 48-byte uniform layout and register spaces match
+the existing vertex shader and SDL bindings. D3D12 pixel execution remains a
+separate verification step. The normal runtime's existing shader selection is unchanged.
 
 ## Verification
 
-All 64 local CTest executables pass without skips. Fourteen offscreen Vulkan
+All 65 local CTest tests pass without skips. Fourteen offscreen Vulkan
 cases compare every RGBA channel against independently computed expectations,
 with one UNORM byte of tolerance. Cases cover argument selection, RGB/alpha
 saturation and independent operations. Four cases connect the actual material

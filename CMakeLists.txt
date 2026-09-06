@@ -152,12 +152,26 @@ add_executable(
 add_library(off_sdl_picture_stage_shader STATIC src/platform/picture_stage_shader.cpp)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/picture_stage.frag"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/generated/picture_stage.frag.hlsl"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/picture_stage_dxil.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/picture_stage_frag.hpp")
-file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/picture_stage.frag" OFF_PICTURE_SHADER_SOURCE_SHA)
+include(ShaderSourceHash)
+off_shader_source_sha("${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/picture_stage.frag" OFF_PICTURE_SHADER_SOURCE_SHA)
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/picture_stage_frag.hpp"
      OFF_PICTURE_SHADER_GENERATED_SHA REGEX "^// GLSL SHA256: ")
 if(NOT OFF_PICTURE_SHADER_GENERATED_SHA STREQUAL "// GLSL SHA256: ${OFF_PICTURE_SHADER_SOURCE_SHA}")
     message(FATAL_ERROR "Picture shader source changed; regenerate with tools/build_picture_shader.py")
+endif()
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/generated/picture_stage.frag.hlsl"
+     OFF_PICTURE_HLSL_SOURCE_SHA REGEX "^// GLSL SHA256: ")
+if(NOT OFF_PICTURE_HLSL_SOURCE_SHA STREQUAL "// GLSL SHA256: ${OFF_PICTURE_SHADER_SOURCE_SHA}")
+    message(FATAL_ERROR "Picture HLSL source is stale; regenerate with tools/build_picture_shader.py")
+endif()
+off_shader_source_sha("${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/generated/picture_stage.frag.hlsl" OFF_PICTURE_HLSL_SHA)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/picture_stage_dxil.hpp"
+     OFF_PICTURE_DXIL_SOURCE_SHA REGEX "^// HLSL SHA256: ")
+if(NOT OFF_PICTURE_DXIL_SOURCE_SHA STREQUAL "// HLSL SHA256: ${OFF_PICTURE_HLSL_SHA}")
+    message(FATAL_ERROR "Picture DXIL source is stale; regenerate with tools/build_picture_dxil.py")
 endif()
 target_link_libraries(off_sdl_picture_stage_shader PUBLIC off_core ${OFF_SDL3_TARGET})
 if(MSVC)
@@ -196,6 +210,9 @@ install(FILES assets/branding/openfreedomfighters-splash.bmp
         DESTINATION bin/assets)
 
 if(BUILD_TESTING)
+    add_test(NAME off_shader_source_hash_tests COMMAND ${CMAKE_COMMAND}
+        "-DOFF_TEST_WORK_DIR=${CMAKE_BINARY_DIR}/test-work/shader-source-hash"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_source_hash_tests.cmake")
     add_executable(off_sdl_picture_stage_shader_tests tests/sdl_picture_stage_shader_tests.cpp)
     target_link_libraries(off_sdl_picture_stage_shader_tests PRIVATE off_sdl_picture_stage_shader)
     target_include_directories(off_sdl_picture_stage_shader_tests PRIVATE "${off_shader_assets_SOURCE_DIR}/examples")
