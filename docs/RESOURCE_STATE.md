@@ -188,6 +188,45 @@ operation. Its ordinary input processor is still missing and fails by name.
 
 These operations require an established live parent chain. The prepared GMS
 hierarchy alone does not prove that original attachment services have run.
+
+## Second Window scope
+
+Normal startup continues through source row 41. Row 6 restores ROOT as parent
+and constructs another Window, with an independent `Show2d` lease. Its
+`rWindows` property replaces the previous resource value without destroying the
+first Window. Owner-addressed camera access uses stable records; first-cut
+convenience accessors still select the first Window and Camera.
+
+The new scope contains three Pictures, thirteen Characters, one Camera and
+eighteen Lists. Constructors bind supplied resources before notification and
+attachment. Characters retain their own concrete class and control value 64;
+their common visual defaults do not decode text or build geometry. Lists start
+empty: deferred source references are not resolved by their constructor.
+
+Character positions run the actual directory transform operation. A changed
+pose copies position and basis, preserves resource dirty bit `0x00100000`, and
+notifies the retained position service. It does not invalidate Picture caches.
+The fresh scene starts with suppression zero and derives immediate mode from
+the selected filename (`.wld`/`.wl2`, case-insensitive). Ordinary load begin
+disables collection and increments the retained suppression word with 32-bit
+wrap. For the selected `.gms`, notifications return on disabled collection
+without inspecting suppression or touching queue, bounds or spatial state.
+An immediate-mode scene is not admitted by this bounded construction path.
+
+CharFader initializes two clock words and reuses `FadeIn`/`FadeOut`. Its fade mode
+remains unavailable until a later producer. LogoFade initializes its clocks but
+declares no events; both event IDs and mode remain unavailable. External command
+attachments retain raw argument `0x3f800000`, independent of default priority 1.
+Duplicate attachments create distinct instances and advance shared counters.
+Hidden attachments still construct but do not enter the ordinary pending queue.
+
+The owned-data probe verifies 59 batch resources plus ROOT, 42 attached source
+owners and queued readers, 50 constructed components and 15 ordinary pending
+additions. Synthetic integration fixtures exercise the same scope with different
+initial resource counts and independently authored names/data. Position-service
+tests also check that disabled notifications preserve an existing nonempty queue.
+The readers, global initialization, camera registration and rendering remain
+pending; these counts are construction evidence, not a playable-intro claim.
 The real source path must preserve its first setter, attachment, then second
 setter using the post-attachment word. Remaining source readers and loader
 services are not replaced by constructor constants or empty callbacks.

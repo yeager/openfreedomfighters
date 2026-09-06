@@ -5,6 +5,7 @@
 #include <cfenv>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -52,6 +53,23 @@ struct Fixture {
 }
 
 int main() {
+    {
+        Fixture f;
+        f.service.notify(f.resources[0],deferred,f.hooks);
+        const auto flags=f.resources[0].flags;
+        for(const auto suppression:{0,1,-1,std::numeric_limits<std::int32_t>::min()})
+            f.service.notify_with_collection_disabled({false,false,suppression});
+        check(f.service.pending_count()==1 && f.resources[0].flags==flags && f.made.size()==1 &&
+              f.resolved.empty() && f.bounded.empty() && f.maintained.empty() && f.batches==0,
+              "disabled notification preserves retained queue and ignores suppression without resource callbacks");
+        rejects([&]{f.service.notify_with_collection_disabled({true,false,0});});
+        rejects([&]{f.service.notify_with_collection_disabled({false,true,0});});
+        check(!f.service.failed() && f.service.pending_count()==1,
+              "non-disabled modes reject before side effects rather than fabricate early return");
+        f.service.flush(deferred,f.hooks);
+        check(f.resolved==std::vector<std::uint64_t>{0} && f.service.pending_count()==0,
+              "disabled notifications do not replace or invalidate prior queued handles");
+    }
     static_assert(!std::is_copy_constructible_v<PositionUpdateService> &&
                   !std::is_move_constructible_v<PositionUpdateService> &&
                   !std::is_copy_assignable_v<PositionUpdateService> &&

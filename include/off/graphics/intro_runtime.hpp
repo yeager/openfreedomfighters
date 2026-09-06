@@ -13,6 +13,7 @@
 #include "off/graphics/renderer_frame_pass.hpp"
 #include "off/graphics/renderer_camera_registry.hpp"
 #include "off/graphics/preview_camera_component.hpp"
+#include "off/graphics/position_update_service.hpp"
 #include "off/graphics/root_group_component.hpp"
 #include "off/graphics/picture_ordered_coordinator.hpp"
 #include <map>
@@ -43,13 +44,18 @@ struct IntroSynthesizedCameraMetadata {
   std::uint32_t class_identifier;
 };
 enum class IntroResourceLoadStage {
-  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, authored_camera_ready, failed
+  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, authored_camera_ready, second_window_picture_ready, second_window_scope_ready, failed
 };
 struct IntroConstructedCameraOwner {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
   std::string name;
   std::uint32_t class_identifier{0x00400003U},notification_sequence{};
+};
+struct IntroLiveCameraOwner {
+  IntroConstructedCameraOwner metadata;
+  FreshIntroCamera camera;
+  IntroRuntimeHandle context;
 };
 // Concrete constructor state, deliberately separate from the prepared asset view.
 struct IntroConstructedPictureOwner {
@@ -65,7 +71,23 @@ struct IntroConstructedPictureOwner {
 struct IntroConstructedPictureComponent {
   IntroRuntimeHandle owner;
   std::int32_t attachment_argument{};
+  std::uint32_t raw_attachment_argument{};
   std::optional<std::uint32_t> fade_start,fade_deadline,fade_state,fade_in_event,fade_out_event;
+  std::optional<std::string> target_name;
+  std::optional<std::uint32_t> script_reference;
+};
+struct IntroConstructedCharacterOwner {
+  IntroConstructedPictureOwner visual;
+  std::uint32_t character_control{64},local_counter{};
+  bool extra_boolean{},owned_storage_available{};
+};
+struct IntroConstructedListOwner {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::string name;
+  std::uint32_t class_identifier{0x0800001aU},count{},component_mask{};
+  bool backing_available{};
+  std::vector<std::uint64_t> attachments;
 };
 struct IntroAuthoredGroupOwner {
   IntroRuntimeHandle owner;
@@ -196,7 +218,8 @@ private:
 class IntroRuntime final {
 public:
   IntroRuntime(IntroPreparedResources&& resources, runtime::ApplicationServices& application,
-               runtime::SceneComponentSequence& component_sequence);
+               runtime::SceneComponentSequence& component_sequence,
+               std::string selected_scene_filename="FF-Intro.gms");
   IntroRuntime(const IntroRuntime&) = delete;
   IntroRuntime& operator=(const IntroRuntime&) = delete;
   IntroRuntime(IntroRuntime&&) = delete;
@@ -225,12 +248,22 @@ public:
   void construct_window_language_groups_without_engine_renderer();
   void construct_picture_component_prefix_without_engine_renderer();
   void construct_authored_camera_without_engine_renderer();
+  void construct_second_window_picture_without_engine_renderer();
+  void construct_second_window_scope_without_engine_renderer();
+  [[nodiscard]] PositionServiceMode directory_position_mode() const noexcept {return position_mode_;}
+  [[nodiscard]] const PositionUpdateService& position_updates() const noexcept {return position_updates_;}
+  [[nodiscard]] const IntroConstructedCharacterOwner* constructed_character_owner(std::size_t source) const noexcept;
+  [[nodiscard]] const IntroConstructedListOwner* constructed_list_owner(std::size_t source) const noexcept;
+  [[nodiscard]] const IntroConstructedPictureComponent* constructed_attachment(std::size_t component) const noexcept;
   [[nodiscard]] const IntroConstructedCameraOwner* constructed_camera_owner() const noexcept {
-    return constructed_camera_owner_ ? &*constructed_camera_owner_ : nullptr;
+    return constructed_camera_owner(resources_.camera_index());
   }
+  [[nodiscard]] const IntroConstructedCameraOwner* constructed_camera_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroConstructedPictureOwner* constructed_picture_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroConstructedPictureComponent* constructed_picture_component(std::size_t source) const noexcept;
-  [[nodiscard]] const std::unique_ptr<IntroWindowOwner>& window_owner() const noexcept {return window_owner_;}
+  [[nodiscard]] const IntroWindowOwner* window_owner() const noexcept {return window_owner_;}
+  [[nodiscard]] IntroWindowOwner& window_for_owner(IntroRuntimeHandle owner);
+  [[nodiscard]] const IntroWindowOwner& window_for_owner(IntroRuntimeHandle owner) const;
   [[nodiscard]] const std::optional<IntroAuthoredGroupOwner>& language_owner() const noexcept {return language_owner_;}
   [[nodiscard]] IntroRuntimeHandle current_source_parent() const noexcept {return current_source_parent_.value?current_source_parent_:root_handle();}
   [[nodiscard]] std::optional<IntroSceneResourceProperty> scene_resource_property(std::string_view key) const;
@@ -295,7 +328,7 @@ public:
   [[nodiscard]] FreshIntroCamera& camera_for_owner(IntroRuntimeHandle owner);
   [[nodiscard]] const FreshIntroCamera& camera_for_owner(IntroRuntimeHandle owner) const;
   [[nodiscard]] RendererCameraRegistry& registered_cameras() noexcept {return registered_cameras_;}
-  [[nodiscard]] IntroRuntimeHandle camera_context() const noexcept {return camera_context_;}
+  [[nodiscard]] IntroRuntimeHandle camera_context() const;
   void set_camera_context(IntroRuntimeHandle context);
   void set_camera_context(IntroRuntimeHandle owner,IntroRuntimeHandle context);
   [[nodiscard]] IntroRuntimeHandle camera_context(IntroRuntimeHandle owner) const;
@@ -382,10 +415,9 @@ private:
   std::size_t controller_component_{};
   IntroControllerInitialization controller_initialization_;
   FreshIntroCamera prepared_camera_;
-  std::unique_ptr<FreshIntroCamera> live_camera_;
-  std::optional<IntroConstructedCameraOwner> constructed_camera_owner_;
+  std::map<std::size_t,std::unique_ptr<IntroLiveCameraOwner>> live_cameras_;
   RendererCameraRegistry registered_cameras_;
-  IntroRuntimeHandle camera_context_; // The same synthesized root, not resource parent.
+  IntroRuntimeHandle prepared_camera_context_; // Prepared compatibility only.
   std::vector<PictureHierarchyNode> hierarchy_;
   std::vector<IntroRuntimeHandle> hierarchy_owners_;
   std::map<std::uint64_t,std::uint32_t> owner_indices_;
@@ -399,9 +431,12 @@ private:
   bool source_event_names_prepared_{};
   std::optional<float> loading_progress_;
   void allocate_source_scope(std::uint32_t count_group);
-  std::unique_ptr<IntroWindowOwner> window_owner_;
+  std::map<std::size_t,std::unique_ptr<IntroWindowOwner>> window_owners_;
+  IntroWindowOwner* window_owner_{}; // Non-owning first-cut convenience, never latest Window.
   std::optional<IntroAuthoredGroupOwner> language_owner_;
   std::map<std::size_t,IntroConstructedPictureOwner> constructed_picture_owners_;
+  std::map<std::size_t,IntroConstructedCharacterOwner> constructed_character_owners_;
+  std::map<std::size_t,IntroConstructedListOwner> constructed_list_owners_;
   std::map<std::size_t,IntroConstructedPictureComponent> constructed_picture_components_;
   IntroRuntimeHandle current_source_parent_{};
   std::map<std::string,IntroSceneResourceProperty,std::less<>> scene_resource_properties_;
@@ -414,6 +449,15 @@ private:
   // of authored class ordinals and component registration.
   std::uint32_t count_group_selector_{};
   bool manager_row_edit_{},scene_resource_edit_{};
+  void construct_group_row_without_engine_renderer(std::size_t row);
+  void construct_picture_row_without_engine_renderer(std::size_t row);
+  void construct_non_group_row_without_engine_renderer(std::size_t row);
+  void construct_owner_attachments(std::size_t row,std::uint32_t& mask,std::vector<std::uint64_t>& attachments);
+  void apply_directory_transform(std::size_t row,IntroRuntimeResourceHandle resource);
+  PositionUpdateService position_updates_;
+  std::string selected_scene_filename_;
+  PositionServiceMode position_mode_{false,false,0};
+  bool directory_position_controls_prepared_{};
   std::vector<IntroRuntimeResourceHandle> loaded_resource_handles_;
   std::vector<std::optional<IntroRuntimeResourceHandle>> directory_resource_mapping_;
   std::vector<IntroDeferredReaderWork> deferred_reader_work_;

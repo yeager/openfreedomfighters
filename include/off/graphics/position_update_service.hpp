@@ -55,6 +55,9 @@ public:
     // Missing required hooks reject before effects and do not poison the service.
     void notify(PositionResource& resource, PositionServiceMode mode,
                 const PositionServiceHooks& hooks);
+    // This admitted early branch never inspects a resource or invokes hooks.
+    // Retained mode must come from the scene/loader, not a fabricated callback.
+    void notify_with_collection_disabled(PositionServiceMode mode);
     void flush(PositionServiceMode mode, const PositionServiceHooks& hooks);
     [[nodiscard]] std::size_t pending_count() const noexcept { return count_; }
     [[nodiscard]] bool failed() const noexcept { return failed_; }

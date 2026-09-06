@@ -18,15 +18,16 @@ completed in that same host. Normal startup now executes the actual fresh
 initializer and retained console/input-map registrations.
 CPU preflight also executes first-row loading progress under an explicit native
 load-begin reset policy and allocates the first scope's 20 ownerless resources.
-It then constructs the first group, Window, Language, two Picture owners and the
-authored camera. Their three allocation scopes contain 24 resources; six have
-constructed owners.
-Window registers its real console descriptor and scene resource property.
-The Picture attachments construct Center and FadeToBlack without running their
-initializers. The scene event-name table is prepared before ROOT and supplies
-Fade's event identities. Six deferred readers remain queued; later owners are
-not constructed. The camera has constructor defaults and its actual Window
-parent, but no renderer membership or source-reader effects yet.
+It then constructs the first 42 source owners through the second Window scope.
+Four allocated scopes contain 59 resources, separate from ROOT. Each Window
+retains its own console descriptor; the scene property points to the latest one.
+The two cameras keep separate storage and ROOT contexts, with their respective
+Window parents. Neither has renderer membership or source-reader effects yet.
+Center, FadeToBlack, CharFader, LogoFade and external-command attachments bring
+the constructed component count to 50 including RootGroup. The event table is
+prepared before ROOT; CharFader reuses Fade events, while LogoFade declares none.
+All 42 deferred readers remain queued. No later owner or global initialization
+is executed. See [second Window construction](RESOURCE_STATE.md#second-window-scope).
 The conditional DefaultCam factory now constructs its real PreviewCamera and
 ordinary membership in that host. Its callback writes directly into the scene
 hierarchy after the complete global initializer. The post-load root state and
@@ -53,7 +54,7 @@ scene is already running.
 Normal startup now constructs one nonmoving `IntroRuntime` and passes it to the
 SDL window runtime. It owns the immutable prepared resources, a synthesized root
 separate from authored objects, source-backed transform hierarchy, native handle
-mapping, one canonical camera and mutable picture storage. Source construction
+mapping, stable per-owner Windows and cameras, and mutable picture storage. Source construction
 order is retained for future additional-owner initialization; storing a handle
 does not execute that owner's factory or lifecycle callbacks.
 The explicit root-construction stage detaches prepared source parent links: its

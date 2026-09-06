@@ -68,6 +68,23 @@ public:
   [[nodiscard]] bool has_component_class_registration(std::string_view name) const {
     return component_class_sequences_.contains(name);
   }
+  void initialize_native_second_window_scope_registration() {
+    constexpr std::uint32_t owner_classes[]{0x0020002dU,0x0800001aU};
+    constexpr std::string_view attachment_classes[]{
+        "ZCHAROBJ_CharFader","ZWINPIC_LogoFade","ZLIST_ExternCutSequenceCommand"};
+    for(const auto identity:owner_classes)
+      if(has_class_registration(identity))
+        throw std::runtime_error("Native second Window owner class is already registered");
+    for(const auto name:attachment_classes)
+      if(has_component_class_registration(name))
+        throw std::runtime_error("Native second Window attachment class is already registered");
+    auto owners=class_sequences_;
+    auto components=component_class_sequences_;
+    for(const auto identity:owner_classes) owners.emplace(identity,0U);
+    for(const auto name:attachment_classes) components.emplace(name,0U);
+    class_sequences_.swap(owners);
+    component_class_sequences_.swap(components);
+  }
   [[nodiscard]] std::uint32_t component_class_notification_sequence(std::string_view name) const {
     const auto found=component_class_sequences_.find(name);
     if(found==component_class_sequences_.end()) throw std::runtime_error("Component class is not registered");

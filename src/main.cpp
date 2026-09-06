@@ -122,6 +122,7 @@ int main(int argc, char **argv) {
     application.initialize_native_window_language_registration();
     application.initialize_native_picture_registration();
     application.initialize_native_camera_registration();
+    application.initialize_native_second_window_scope_registration();
   }
   std::optional<off::graphics::SceneGpuPlan> scene;
   // Scene-manager identity lifetime, independent of source archive catalogs.
@@ -159,12 +160,14 @@ int main(int argc, char **argv) {
         intro->construct_root();
         // The engine GPU runtime is created below, after CPU preflight. The
         // startup splash is a separate renderer. Reset load progress once under
-        // the native staging policy, then construct only the first scope.
+        // the native staging policy, then construct the reviewed directory prefix.
         intro->begin_source_loading_without_engine_renderer();
         intro->construct_first_authored_group();
         intro->construct_window_language_groups_without_engine_renderer();
         intro->construct_picture_component_prefix_without_engine_renderer();
         intro->construct_authored_camera_without_engine_renderer();
+        intro->construct_second_window_picture_without_engine_renderer();
+        intro->construct_second_window_scope_without_engine_renderer();
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));

@@ -52,7 +52,8 @@ void PositionUpdateService::notify(PositionResource& resource, PositionServiceMo
         hooks.bounds(resource);
         return;
     }
-    if (!mode.collection_enabled || (resource.flags & 0x20200000U) != 0U) return;
+    if (!mode.collection_enabled) {notify_with_collection_disabled(mode);return;}
+    if ((resource.flags & 0x20200000U) != 0U) return;
     if (!hooks.make_handle) throw std::runtime_error("position handle producer is required");
     if (count_ == handles_.size()) validate_flush(mode, hooks);
     Guard guard(running_, failed_);
@@ -62,6 +63,11 @@ void PositionUpdateService::notify(PositionResource& resource, PositionServiceMo
     const auto handle = hooks.make_handle(resource);
     handles_[count_] = handle;
     ++count_;
+}
+void PositionUpdateService::notify_with_collection_disabled(PositionServiceMode mode) {
+    validate_entry();
+    if(mode.immediate || mode.collection_enabled)
+        throw std::runtime_error("Disabled position notification requires retained non-immediate disabled collection");
 }
 void PositionUpdateService::flush(PositionServiceMode mode, const PositionServiceHooks& hooks) {
     validate_entry();
