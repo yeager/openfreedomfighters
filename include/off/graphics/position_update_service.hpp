@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <span>
 
 namespace off::graphics {
@@ -25,6 +26,16 @@ struct PositionServiceHooks {
     std::function<void(PositionResource&)> maintenance;
     std::function<void(std::span<PositionResource* const>)> final_batch;
 };
+
+// Completed final-batch scene behavior for an entirely plain-picture batch.
+// Owner class comes from live metadata, not PositionResource::flags. Validate
+// every survivor, even hidden ones, as a stronger native admission policy.
+// A pure, stable lookup and non-null live owners are required. Mixed/unknown
+// classes reject; callers needing them must retain the broader batch handler.
+// Once admitted, the original selection is empty and has no scene effects.
+void complete_plain_picture_position_batch(
+    std::span<PositionResource* const> survivors,
+    const std::function<std::optional<std::uint32_t>(const PositionResource&)>& owner_class);
 
 // Shared manager-level service, not a per-picture queue or scene admission gate.
 // Handles are opaque; the supplied resolver implements actual validity checks.

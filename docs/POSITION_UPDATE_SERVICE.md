@@ -62,3 +62,26 @@ of complete scene propagation or a rendered intro frame.
 
 All 47 local CTest executables pass after this integration, along with targeted
 service ASan/UBSan and GCC tests and the private owned-resource probe.
+
+## Completed final batch for plain pictures
+
+`complete_plain_picture_position_batch` closes the final handler's scene behavior
+when every surviving live owner is the concrete plain-picture class. It validates
+the entire batch through a pure live owner-class lookup, including hidden entries
+as a stronger native admission policy. Null resources, unknown owners and mixed
+classes reject rather than being silently discarded. Broader batches still need
+the explicit general handler.
+
+For this admitted family neither of the original selected class masks is present.
+The selected list is empty, and the concrete final handler performs no scene
+mutation with or without a spatial service. Runtime position-dirty flags must not
+be mistaken for owner-class bits. This conclusion does not remove preceding
+bounds/maintenance processing or imply that an arbitrary queue contains only
+pictures. The service still invokes the final callback before clearing its count.
+
+The private legal-picture probe now uses this checked handler, with owner identity
+and class tied to the previously verified concrete picture source. Bounds work
+remains an explicit unresolved operation; final-batch completion alone is not a
+complete scene update or proof of visibility.
+The updated handler and queue integration pass all 47 local CTest executables,
+targeted ASan/UBSan and GCC tests, and the private owned-resource probe.

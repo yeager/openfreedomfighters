@@ -172,6 +172,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   ordered resource-service notification, cache invalidation and component status.
 - [x] Implement the shared position-service immediate/deferred scheduling and
   bounded handle queue, with explicit downstream bounds/maintenance operations.
+- [x] Complete final-batch scene behavior for validated all-plain-picture owners,
+  rejecting unknown/mixed classes instead of assuming every queued owner is a picture.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

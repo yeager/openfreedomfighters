@@ -5,6 +5,7 @@
 #include <cfenv>
 #include <cstdint>
 #include <iostream>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <type_traits>
@@ -55,6 +56,55 @@ int main() {
                   !std::is_move_constructible_v<PositionUpdateService> &&
                   !std::is_copy_assignable_v<PositionUpdateService> &&
                   !std::is_move_assignable_v<PositionUpdateService>);
+    {
+        std::array<PositionResource, 3> resources{{{17, 0x100000U}, {23, 0xC00U}, {0, 0}}};
+        std::array<PositionResource*, 3> batch{&resources[0], &resources[1], &resources[2]};
+        std::vector<std::uint64_t> queried;
+        const auto owner_class = [&](const PositionResource& resource) -> std::optional<std::uint32_t> {
+            queried.push_back(resource.identity); return 0x00200046U;
+        };
+        complete_plain_picture_position_batch(batch, owner_class);
+        check(queried == std::vector<std::uint64_t>{17, 23, 0} &&
+              resources[0].flags == 0x100000U && resources[1].flags == 0xC00U && resources[2].flags == 0,
+              "plain batch validates all owner metadata without interpreting runtime flags as class bits");
+        const std::array<PositionResource*, 0> empty{};
+        queried.clear();
+        complete_plain_picture_position_batch(empty, owner_class);
+        check(queried.empty(), "empty concrete batch has no owner queries or scene effects");
+        rejects([&] { complete_plain_picture_position_batch(empty, {}); });
+        auto invalid = batch; invalid[2] = nullptr;
+        rejects([&] { complete_plain_picture_position_batch(invalid, owner_class); });
+        check(queried.empty(), "validate every pointer before invoking any lookup");
+        rejects([&] { complete_plain_picture_position_batch(batch,
+            [](const PositionResource&) -> std::optional<std::uint32_t> { return std::nullopt; }); });
+        rejects([&] { complete_plain_picture_position_batch(batch,
+            [](const PositionResource& r) -> std::optional<std::uint32_t> {
+                return r.identity == 23 ? 0x00100030U : 0x00200046U;
+            }); });
+        rejects([&] { complete_plain_picture_position_batch(batch,
+            [](const PositionResource&) -> std::optional<std::uint32_t> { return 0x00200047U; }); });
+        check(resources[0].flags == 0x100000U && resources[1].flags == 0xC00U,
+              "unknown or mixed owner family cannot silently use the no-effect handler");
+        for (bool mixed : {false, true}) {
+            Fixture f;
+            f.service.notify(f.resources[0], deferred, f.hooks);
+            f.service.notify(f.resources[1], deferred, f.hooks);
+            f.hooks.final_batch = [&](std::span<PositionResource* const> survivors) {
+                check(f.service.pending_count() == 2, "concrete final handler enters before count clear");
+                complete_plain_picture_position_batch(survivors,
+                    [&](const PositionResource& r) -> std::optional<std::uint32_t> {
+                        check(f.service.pending_count() == 2, "owner validation retains survivor count");
+                        return mixed && r.identity == 1 ? 0x00100030U : 0x00200046U;
+                    });
+                check(f.service.pending_count() == 2, "concrete final handler returns before count clear");
+            };
+            if (mixed) rejects([&] { f.service.flush(deferred, f.hooks); });
+            else f.service.flush(deferred, f.hooks);
+            check(f.service.failed() == mixed && f.service.pending_count() == (mixed ? 2U : 0U) &&
+                  f.bounded == std::vector<std::uint64_t>{0, 1},
+                  "mixed final batch poisons without rolling back preceding bounds or clearing count");
+        }
+    }
     {
         Fixture f;
         f.service.notify(f.resources[0], {false, false, 0}, {});

@@ -127,6 +127,8 @@ The legal picture's Center callback now updates local position, runtime dirty
 flags, the explicit resource service, picture cache and component status in order.
 Its [position update service](docs/POSITION_UPDATE_SERVICE.md) now preserves shared
 deferred queuing, validated handle resolution and ordered downstream callbacks.
+The final-batch handler is now complete for validated all-plain-picture batches;
+mixed owner classes remain explicit, and preceding bounds work is not skipped.
 
 ## Build the native bootstrap
 

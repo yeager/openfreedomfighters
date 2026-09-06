@@ -4,6 +4,21 @@
 #include <stdexcept>
 
 namespace off::graphics {
+void complete_plain_picture_position_batch(
+    std::span<PositionResource* const> survivors,
+    const std::function<std::optional<std::uint32_t>(const PositionResource&)>& owner_class) {
+    if (!owner_class) throw std::runtime_error("live picture owner-class lookup is required");
+    for (const auto* resource : survivors)
+        if (!resource) throw std::runtime_error("position batch contains a missing live resource");
+    for (const auto* resource : survivors) {
+        const auto type = owner_class(*resource);
+        if (!type || *type != 0x00200046U)
+            throw std::runtime_error("position batch requires only concrete plain-picture owners");
+    }
+    // Neither selected class family is present. The concrete final handler
+    // therefore receives an empty selection and makes no scene mutations.
+}
+
 namespace {
 struct Guard {
     bool& running;
