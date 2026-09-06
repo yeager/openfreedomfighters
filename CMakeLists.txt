@@ -89,6 +89,7 @@ add_library(off_core
     src/graphics/fade_picture_size.cpp
     src/graphics/picture_expansion.cpp
     src/graphics/picture_material_state.cpp
+    src/graphics/picture_draw_order.cpp
     src/graphics/picture_color_state.cpp
     src/graphics/picture_projection.cpp
     src/graphics/picture_view_parameters.cpp
@@ -348,6 +349,9 @@ if(BUILD_TESTING)
     add_executable(off_picture_material_state_tests tests/picture_material_state_tests.cpp)
     target_link_libraries(off_picture_material_state_tests PRIVATE off_core)
     add_test(NAME off_picture_material_state_tests COMMAND off_picture_material_state_tests)
+    add_executable(off_picture_draw_order_tests tests/picture_draw_order_tests.cpp)
+    target_link_libraries(off_picture_draw_order_tests PRIVATE off_core)
+    add_test(NAME off_picture_draw_order_tests COMMAND off_picture_draw_order_tests)
 
     add_executable(off_picture_projection_tests tests/picture_projection_tests.cpp)
     target_link_libraries(off_picture_projection_tests PRIVATE off_core)

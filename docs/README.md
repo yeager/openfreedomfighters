@@ -13,6 +13,7 @@
 - [Bounds propagation](BOUNDS_PROPAGATION.md)
 - [Picture expansion](PICTURE_EXPANSION.md)
 - [Picture materials](PICTURE_MATERIAL_STATE.md)
+- [Picture draw order](PICTURE_DRAW_ORDER.md)
 - [Picture projection](PICTURE_PROJECTION.md)
 - [Picture submission cache](PICTURE_SUBMISSION_CACHE.md)
 - [Windows reference capture](STARTUP_STATE_CAPTURE.md)

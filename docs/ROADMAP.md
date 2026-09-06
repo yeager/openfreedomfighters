@@ -198,6 +198,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   and explicit undefined-Y policy. Verify real legal-picture expansion privately.
 - [ ] Connect admitted intro views and ordered picture submissions to GPU drawing,
   including the complete draw-pass reset, resource keys and inherited state.
+- [x] Build checked picture ordering keys from current view/control bytes and
+  selected texture IDs; merge explicit retained/rebuilt partitions with documented
+  native equal-key policy. Runtime queue admission remains separate.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.
