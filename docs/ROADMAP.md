@@ -156,6 +156,8 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   preserving shared storage and producing fresh renderer-facing draw snapshots.
 - [x] Decode the restricted first-cut camera source with exact tagged bounds and
   privately verify all authored fields through the real member reference.
+- [x] Convert the supported new-camera mode-zero fields with reviewed binary32
+  boundaries and connect them to view helpers using explicit renderer inputs.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

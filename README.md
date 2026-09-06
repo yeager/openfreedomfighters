@@ -106,6 +106,9 @@ textures and geometry. GPU submission and complete intro playback are still pend
 A [restricted intro camera reader](docs/INTRO_CAMERA.md) preserves the actual
 authored camera fields reached through the first-cut resource. It does not select
 an active camera, apply aspect policy or assume a fullscreen viewport.
+The reviewed mode-zero camera conversion now feeds explicit view calculations,
+preserving angle rounding and separate near-plane clamps without selecting a
+camera or inventing renderer dimensions.
 
 ## Build the native bootstrap
 

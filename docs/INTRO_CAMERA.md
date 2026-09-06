@@ -45,3 +45,39 @@ Verification: all 40 CTest executables pass locally, including camera tests for
 every field, signed zero, retained double precision, range boundaries, malformed
 full tags, source guards and every declared truncation. The targeted GMS
 ASan/UBSan executable and the owned intro probe also pass.
+
+## Conditional mode-zero conversion
+
+`graphics::convert_intro_camera_mode_zero` now converts a newly constructed
+camera's reviewed aspect-mode-zero, renderer-list-zero fields. The authored
+structure is retained separately. Near distance is narrowed then bounded to one;
+far is narrowed without repairing ordering. Angle conversion explicitly rounds
+the narrowing, pi multiplication and division separately to binary32. Combining
+the operations into a constant would change some results. RGB packing retains
+the low byte of each integer, with a zero high byte. Registration priority is
+interpreted as signed before float conversion, and the final boolean uses nonzero
+truth; opaque flag options do not mutate runtime flags.
+
+The converter retains viewport composition arithmetic from the constructor tuple
+even when it appears to be an identity operation, preserving its signed-zero
+behavior. It computes the stored height/width ratio separately. Nearest-even
+rounding, finite representable arithmetic and positive extents are explicit native
+policies; other aspect modes and renderer-list selectors are unsupported. The
+converter returns no partial state on rejection.
+
+Converted near/far and radians can feed the existing view producer, whose later
+near clamp to five remains distinct. The composed viewport feeds the separate
+pass-relative viewport request. Pass rectangle, renderer dimensions, aspect and
+renderer scalar remain explicit inputs. This connection does not extend exact
+conversion arithmetic claims to the view helper's portable tangent/projection
+math, nor prove a camera has been admitted for rendering.
+
+The private probe checks the real authored camera's converted fields and then
+exercises the view/viewport connection with clearly declared test pass inputs.
+Those inputs are not original startup measurements or replacement defaults.
+
+All 41 local CTest executables and the targeted conversion/view/projection
+ASan/UBSan executable pass. The GMS and conversion tests also pass with GCC.
+The preceding camera-reader CI run exposed a missing direct standard-library
+include in its test; this revision fixes that portability error rather than
+depending on Clang's transitive includes.
