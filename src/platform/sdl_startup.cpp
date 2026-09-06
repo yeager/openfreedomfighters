@@ -137,7 +137,7 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
   std::future<StartupPreparationResult> verification_future;
   try {
     verification_future = std::async(std::launch::async, [&] {
-      return prepare_startup_cpu([&] { return data::verify_install(data_path); },
+      return prepare_startup_cpu([&] { return data::verify_install(data_path, [&] { return cancelled.load(); }); },
                                  prepare_assets, cancelled);
     });
   } catch (...) {

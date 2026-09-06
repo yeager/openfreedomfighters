@@ -1,7 +1,9 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <string>
+#include <vector>
 
 namespace off::data {
 
@@ -25,13 +27,16 @@ struct InstallVerification {
     std::filesystem::path executable;
     std::string executable_sha256;
     std::string message;
+    // Hash-verified candidates only: decoder/cue suitability is not implied.
+    std::vector<std::filesystem::path> soundtrack_candidates;
+    std::vector<std::string> optional_file_warnings;
 
     [[nodiscard]] explicit operator bool() const noexcept {
         return error == InstallError::none;
     }
 };
 
-[[nodiscard]] InstallVerification verify_install(const std::filesystem::path& root);
+[[nodiscard]] InstallVerification verify_install(const std::filesystem::path& root,
+    const std::function<bool()>& cancelled = {});
 
 }  // namespace off::data
-

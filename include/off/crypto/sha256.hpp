@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -30,8 +31,8 @@ private:
 };
 
 [[nodiscard]] Sha256Digest sha256(std::string_view text);
-[[nodiscard]] Sha256Digest sha256_file(const std::filesystem::path& path);
+[[nodiscard]] Sha256Digest sha256_file(const std::filesystem::path& path,
+                                     const std::function<bool()>& cancelled = {});
 [[nodiscard]] std::string to_hex(const Sha256Digest& digest);
 
 }  // namespace off::crypto
-

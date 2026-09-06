@@ -57,7 +57,17 @@ ArchiveVfs::MountId ArchiveVfs::mount_archive(const std::filesystem::path& archi
     return mounts_.back().id;
 }
 
-ArchiveVfs::MountId ArchiveVfs::mount_directory(const std::filesystem::path& directory) {
+ArchiveVfs::MountId ArchiveVfs::mount_directory(
+    const std::filesystem::path& directory,
+    std::span<const std::string_view> excluded_top_level) {
+    std::vector<std::string> exclusions;
+    exclusions.reserve(excluded_top_level.size());
+    for (const auto name : excluded_top_level) {
+        if (!is_safe_archive_path(name) || name.find_first_of("/\\") != std::string_view::npos) {
+            throw std::runtime_error("VFS exclusion must be a single safe top-level name");
+        }
+        exclusions.push_back(normalized(name));
+    }
     std::error_code error;
     const auto root = std::filesystem::canonical(directory, error);
     if (error || !std::filesystem::is_directory(root)) {
@@ -71,6 +81,14 @@ ArchiveVfs::MountId ArchiveVfs::mount_directory(const std::filesystem::path& dir
     for (std::filesystem::recursive_directory_iterator iterator(root), end;
          iterator != end;
          ++iterator) {
+        // Name/depth are lexical: do not query a matched entry's status, size,
+        // or target. Disable recursion even when the entry is a symlink/file.
+        if (iterator.depth() == 0 &&
+            std::find(exclusions.begin(), exclusions.end(),
+                      normalized(iterator->path().filename().string())) != exclusions.end()) {
+            iterator.disable_recursion_pending();
+            continue;
+        }
         const auto status = iterator->symlink_status();
         if (std::filesystem::is_symlink(status)) {
             throw std::runtime_error("VFS directory mounts cannot contain symbolic links");

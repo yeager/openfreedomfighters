@@ -168,6 +168,10 @@ int main(int argc, char **argv) {
   }
   std::cout << verification->message << '\n'
             << "Mode: " << off::mode_name(mode) << '\n';
+  for (const auto& warning : verification->optional_file_warnings)
+    std::cerr << "Optional file skipped: " << warning << '\n';
+  std::cout << "Optional soundtrack: " << verification->soundtrack_candidates.size()
+            << " hash-verified files; cue mapping and playback not implemented.\n";
   if (verify_only) {
     return 0;
   }

@@ -64,6 +64,7 @@ add_library(off_core
     src/data/audio_bank_header.cpp
     src/data/gms_image.cpp
     src/data/install.cpp
+    src/data/install_manifest.cpp
     src/data/packed_resource.cpp
     src/data/picture_resource.cpp
     src/data/picture_texture_binding.cpp
@@ -170,6 +171,11 @@ if(BUILD_TESTING)
         off_core_tests PRIVATE OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/test-work"
     )
     add_test(NAME off_core_tests COMMAND off_core_tests)
+    add_executable(off_install_manifest_tests tests/install_manifest_tests.cpp)
+    target_link_libraries(off_install_manifest_tests PRIVATE off_core)
+    target_compile_definitions(off_install_manifest_tests PRIVATE
+        OFF_MANIFEST_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/install-manifest-test-work")
+    add_test(NAME off_install_manifest_tests COMMAND off_install_manifest_tests)
 
     add_executable(off_audio_bank_header_tests tests/audio_bank_header_tests.cpp)
     target_link_libraries(off_audio_bank_header_tests PRIVATE off_core)

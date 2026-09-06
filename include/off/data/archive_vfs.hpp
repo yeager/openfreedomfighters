@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -19,7 +20,12 @@ public:
     using MountId = std::uint64_t;
 
     [[nodiscard]] MountId mount_archive(const std::filesystem::path& archive);
-    [[nodiscard]] MountId mount_directory(const std::filesystem::path& directory);
+    // Exclusions name single top-level entries, matched with VFS case folding.
+    // Matched entries are neither inspected nor traversed/indexed, and do not
+    // contribute to mount size limits. No exclusions preserves strict mounting.
+    [[nodiscard]] MountId mount_directory(
+        const std::filesystem::path& directory,
+        std::span<const std::string_view> excluded_top_level = {});
     [[nodiscard]] MountId mount(const std::filesystem::path& archive) {
         return mount_archive(archive);
     }

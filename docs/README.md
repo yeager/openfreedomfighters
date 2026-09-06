@@ -27,6 +27,7 @@
 - [2003 versus digital-build provenance](BUILD_PROVENANCE.md)
 - [Private disassembly status](DISASSEMBLY_STATUS.md)
 - [Portable data layer](DATA_LAYER.md)
+- [Installation hashes and optional soundtrack](INSTALL_MANIFEST.md)
 - [Derived cache and parser fuzzing specification](CACHE_AND_FUZZING.md)
 - [Campaign compatibility contract](CAMPAIGN_COMPATIBILITY.md)
 - [Audio-bank header format](AUDIO_FORMAT.md)

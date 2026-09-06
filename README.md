@@ -18,6 +18,8 @@ executable code are included here.
 - Archive, texture, geometry and supported audio formats have working readers.
 - Startup shows the project splash for three seconds. Missing or invalid game
   data produces an error dialog over it.
+- Game files are checked against a SHA-256 manifest at startup. Soundtrack files
+  are optional; music playback is not implemented yet.
 - The first intro sequence's camera, pictures and textures load from game data.
   Camera state is constructed on the CPU; activation and drawing are not connected.
 - F10 opens a working graphics-settings panel. Its current appearance is

@@ -146,7 +146,8 @@ Sha256Digest sha256(std::string_view text) {
     return hasher.finish();
 }
 
-Sha256Digest sha256_file(const std::filesystem::path& path) {
+Sha256Digest sha256_file(const std::filesystem::path& path, const std::function<bool()>& cancelled) {
+    if (cancelled && cancelled()) throw std::runtime_error("file hashing cancelled");
     std::ifstream input(path, std::ios::binary);
     if (!input) {
         throw std::runtime_error("could not open file for hashing");
@@ -154,6 +155,7 @@ Sha256Digest sha256_file(const std::filesystem::path& path) {
     Sha256 hasher;
     std::array<char, 64 * 1024> buffer{};
     while (input) {
+        if (cancelled && cancelled()) throw std::runtime_error("file hashing cancelled");
         input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
         const auto count = input.gcount();
         if (count > 0) {
@@ -176,4 +178,3 @@ std::string to_hex(const Sha256Digest& digest) {
 }
 
 }  // namespace off::crypto
-

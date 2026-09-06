@@ -268,6 +268,77 @@ void test_zip_reader() {
     check(vfs.unmount(loose_mount), "unmount the loose-file directory");
     check(!vfs.contains("Scenes/Shared.ZGF"), "remove paths with their mount");
     vfs.clear();
+
+    const auto excluded_root = work / "excluded-loose";
+    std::filesystem::create_directories(excluded_root / "SoundTrack");
+    std::filesystem::create_directories(excluded_root / "Scenes/SoundTrack");
+    {
+        std::ofstream(excluded_root / "SoundTrack/track.bin", std::ios::binary) << "album";
+        std::ofstream(excluded_root / "Scenes/SoundTrack/keep.bin", std::ios::binary) << "game";
+    }
+    const std::array<std::string_view, 1> exclusions{"soundtrack"};
+    off::data::ArchiveVfs filtered;
+    static_cast<void>(filtered.mount_directory(excluded_root, exclusions));
+    check(!filtered.contains("SoundTrack/track.bin") &&
+              filtered.contains("Scenes/SoundTrack/keep.bin"),
+          "case-folded exclusion omits only the named top-level subtree");
+    bool excluded_read_rejected = false;
+    try { static_cast<void>(filtered.open_stream("SoundTrack/track.bin")); }
+    catch (const std::runtime_error&) { excluded_read_rejected = true; }
+    check(excluded_read_rejected, "excluded files cannot be opened through the VFS");
+    off::data::ArchiveVfs unfiltered;
+    static_cast<void>(unfiltered.mount_directory(excluded_root));
+    check(unfiltered.contains("soundtrack/track.bin"), "default mount still indexes optional directories");
+
+    // Sparse fixture exceeds the per-file limit without allocating its payload.
+    std::filesystem::resize_file(excluded_root / "SoundTrack/track.bin", 256ULL * 1024ULL * 1024ULL + 1);
+    off::data::ArchiveVfs without_large_optional;
+    static_cast<void>(without_large_optional.mount_directory(excluded_root, exclusions));
+    check(without_large_optional.contains("Scenes/SoundTrack/keep.bin"),
+          "excluded payload sizes do not consume VFS limits");
+    bool default_limit_rejected = false;
+    try { static_cast<void>(unfiltered.mount_directory(excluded_root)); }
+    catch (const std::runtime_error&) { default_limit_rejected = true; }
+    check(default_limit_rejected, "default mount retains its file-size safety limit");
+
+    for (const auto invalid : std::array<std::string_view, 10>{
+             "", ".", "..", "../SoundTrack", "/SoundTrack", "SoundTrack/child",
+             "SoundTrack\\child", "SoundTrack/", "C:SoundTrack", std::string_view{"a\0b", 3}}) {
+        off::data::ArchiveVfs rejected_mount;
+        const std::array<std::string_view, 1> names{invalid};
+        bool invalid_rejected = false;
+        try { static_cast<void>(rejected_mount.mount_directory(excluded_root, names)); }
+        catch (const std::runtime_error&) { invalid_rejected = true; }
+        check(invalid_rejected && rejected_mount.mount_count() == 0,
+              "invalid top-level exclusion rejects without publishing a mount");
+    }
+
+    const auto symlink_root = work / "excluded-links";
+    std::filesystem::create_directories(symlink_root);
+    std::ofstream(symlink_root / "keep.bin", std::ios::binary) << "kept";
+    std::error_code directory_link_error, file_link_error;
+    std::filesystem::create_directory_symlink(
+        std::filesystem::absolute(excluded_root / "SoundTrack"),
+        symlink_root / "DirectoryLink", directory_link_error);
+    std::filesystem::create_symlink(
+        std::filesystem::absolute(work / "missing-link-target"),
+        symlink_root / "FileLink", file_link_error);
+    const std::array<std::string_view, 2> excluded_links{"directorylink", "FILELINK"};
+    off::data::ArchiveVfs without_links;
+    static_cast<void>(without_links.mount_directory(symlink_root, excluded_links));
+    check(without_links.contains("keep.bin") && !without_links.contains("DirectoryLink/track.bin") &&
+              !without_links.contains("FileLink"),
+          "excluded directory and dangling file links are not followed or indexed");
+    if (!directory_link_error || !file_link_error) {
+        bool default_symlink_rejected = false;
+        try { static_cast<void>(unfiltered.mount_directory(symlink_root)); }
+        catch (const std::runtime_error&) { default_symlink_rejected = true; }
+        check(default_symlink_rejected, "default mount still rejects symbolic links");
+    }
+    if (directory_link_error || file_link_error) {
+        std::cout << "SKIP: unavailable directory/file symlink fixture: "
+                  << directory_link_error.message() << "; " << file_link_error.message() << '\n';
+    }
 }
 
 }  // namespace

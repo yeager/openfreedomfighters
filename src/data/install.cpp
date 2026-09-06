@@ -1,4 +1,5 @@
 #include "off/data/install.hpp"
+#include "off/data/install_manifest.hpp"
 
 #include "off/audio/decode.hpp"
 #include "off/crypto/sha256.hpp"
@@ -43,6 +44,8 @@ InstallVerification failure(InstallError error,
       .executable = {},
       .executable_sha256 = {},
       .message = std::move(message),
+      .soundtrack_candidates = {},
+      .optional_file_warnings = {},
   };
 }
 
@@ -56,7 +59,8 @@ std::string lowercase(std::string value) {
 
 } // namespace
 
-InstallVerification verify_install(const std::filesystem::path &root) {
+InstallVerification verify_install(const std::filesystem::path &root,
+                                  const std::function<bool()>& cancelled) {
   std::error_code error;
   if (!std::filesystem::is_directory(root, error)) {
     return failure(InstallError::missing_root, root,
@@ -87,7 +91,7 @@ InstallVerification verify_install(const std::filesystem::path &root) {
 
   std::string digest;
   try {
-    digest = crypto::to_hex(crypto::sha256_file(executable));
+    digest = crypto::to_hex(crypto::sha256_file(executable, cancelled));
   } catch (const std::exception &) {
     return failure(InstallError::io_error, root, "could not hash Freedom.Exe");
   }
@@ -101,9 +105,26 @@ InstallVerification verify_install(const std::filesystem::path &root) {
 
   std::string archive_context;
   std::string member_context;
+  std::vector<std::filesystem::path> soundtrack_candidates;
+  std::vector<std::string> optional_file_warnings;
   try {
+    const auto inventory = verify_file_manifest(root, supported_install_manifest(), cancelled);
+    if (inventory.cancelled)
+      return failure(InstallError::io_error, root, "game-data verification cancelled");
+    for (const auto& file : inventory.files) {
+      if (file.role == ManifestFileRole::required_game && file.status != ManifestFileStatus::verified)
+        return failure(InstallError::incomplete_game_data, root,
+                       file.path + ": " + file.detail);
+      if (file.role == ManifestFileRole::optional_soundtrack && file.status == ManifestFileStatus::verified)
+        soundtrack_candidates.push_back(file.actual_path);
+      if (file.role != ManifestFileRole::required_game && file.status != ManifestFileStatus::verified &&
+          file.status != ManifestFileStatus::missing)
+        optional_file_warnings.push_back(file.path + ": " + file.detail);
+    }
     ArchiveVfs installation_vfs;
-    const auto installation_mount = installation_vfs.mount_directory(root);
+    constexpr std::array<std::string_view, 5> excluded{
+        "Freedom_Fighters_OST", "Launcher.exe", "eax.dll", "steam_api.dll", "steam_appid.txt"};
+    const auto installation_mount = installation_vfs.mount_directory(root, excluded);
     static_cast<void>(installation_mount);
     constexpr std::array required_paths{
         "Scenes/StartLoader.ZIP",
@@ -696,6 +717,8 @@ InstallVerification verify_install(const std::filesystem::path &root) {
       .executable = executable,
       .executable_sha256 = digest,
       .message = "supported Steam installation verified",
+      .soundtrack_candidates = std::move(soundtrack_candidates),
+      .optional_file_warnings = std::move(optional_file_warnings),
   };
 }
 
