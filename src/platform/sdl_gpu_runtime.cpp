@@ -1,4 +1,5 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
+#include "off/platform/sdl_menu_gamepad.hpp"
 #include "off/ui/graphics_menu_draw.hpp"
 
 #include <SDL3/SDL.h>
@@ -1188,26 +1189,36 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   bool running = true;
   bool screenshot_captured = screenshot_path.empty();
   std::size_t frames = 0;
+  SdlMenuGamepad menu_gamepad{
+      SDL_GetWindowID(window),
+      (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0};
   while (running) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
+      const auto gamepad_key = menu_gamepad.handle_event(
+          event, menu.phase() != ui::GraphicsMenuPhase::closed);
       if (event.type == SDL_EVENT_QUIT) {
         running = false;
         continue;
       }
-      if ((event.type == SDL_EVENT_KEY_DOWN ||
-           event.type == SDL_EVENT_KEY_UP) &&
-          menu_key(event.key.key).has_value()) {
-        const auto key = *menu_key(event.key.key);
+      std::optional<ui::GraphicsMenuKey> translated_key = gamepad_key;
+      bool pressed = gamepad_key.has_value();
+      bool repeated = false;
+      if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
+        translated_key = menu_key(event.key.key);
+        pressed = event.type == SDL_EVENT_KEY_DOWN;
+        repeated = event.key.repeat;
+      }
+      if (translated_key) {
+        const auto key = *translated_key;
         ui::GraphicsMenuEffect effect = ui::GraphicsMenuEffect::none;
         if (menu.phase() == ui::GraphicsMenuPhase::confirming &&
-            event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat &&
+            pressed && !repeated &&
             (key == ui::GraphicsMenuKey::enter ||
              key == ui::GraphicsMenuKey::space)) {
           effect = menu.confirm();
         } else {
-          effect = menu.handle_key(key, event.type == SDL_EVENT_KEY_DOWN,
-                                   event.key.repeat);
+          effect = menu.handle_key(key, pressed, repeated);
         }
         if (effect == ui::GraphicsMenuEffect::quit_requested) {
           running = false;

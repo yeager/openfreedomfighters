@@ -111,6 +111,7 @@ add_executable(
     openfreedomfighters
     src/main.cpp
     src/platform/sdl_gpu_runtime.cpp
+    src/platform/sdl_menu_gamepad.cpp
     src/platform/sdl_startup.cpp
 )
 target_link_libraries(
@@ -275,6 +276,12 @@ if(BUILD_TESTING)
         tests/startup_window_tests.cpp src/platform/sdl_startup.cpp)
     target_link_libraries(off_startup_window_tests PRIVATE off_core ${OFF_SDL3_TARGET})
     add_test(NAME off_startup_window_tests COMMAND off_startup_window_tests)
+
+    add_executable(off_sdl_menu_gamepad_tests
+        tests/sdl_menu_gamepad_tests.cpp src/platform/sdl_menu_gamepad.cpp)
+    target_link_libraries(off_sdl_menu_gamepad_tests PRIVATE off_core ${OFF_SDL3_TARGET})
+    add_test(NAME off_sdl_menu_gamepad_tests COMMAND off_sdl_menu_gamepad_tests)
+    set_tests_properties(off_sdl_menu_gamepad_tests PROPERTIES SKIP_RETURN_CODE 77)
 
     add_executable(off_retail_ui_fonts_tests tests/retail_ui_fonts_tests.cpp)
     target_link_libraries(off_retail_ui_fonts_tests PRIVATE off_core)

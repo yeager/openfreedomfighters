@@ -3,9 +3,36 @@
 This document defines the Phase 2 platform-input and controller boundary. The
 current project-authored `InputAccumulator` records held digital actions,
 press/release edges, and four signed 16-bit axes in tick-addressed snapshots.
-Focus loss can release held actions and neutralize axes. SDL event translation,
-device management, remapping, glyphs, rumble, and recovered retail mappings are
-not implemented yet.
+Focus loss can release held actions and neutralize axes. SDL translation and
+device management now cover the graphics menu's digital controller buttons.
+Gameplay translation, remapping, glyphs, rumble and recovered retail mappings
+are not implemented yet.
+
+## Implemented graphics-menu controller path
+
+The native runtime opens the first available SDL gamepad and handles attachment
+and removal by instance identity. It closes its controller before shutting down
+the gamepad subsystem. Start maps to F10; D-pad directions navigate and adjust;
+south confirms/activates; east cancels or requests display rollback only while
+the menu is visible. East with a closed menu cannot request application exit.
+Controller and keyboard commands share the same transactional apply/confirm/
+revert handler, and confirmation timeout remains independent of device state.
+
+Button commands use press edges, not continuous polling or automatic repeat.
+Held buttons are baselined when selecting a controller and regaining focus;
+unfocused and stale queued commands cannot confirm settings. Removal itself
+does not accept, cancel or revert the draft. Another available controller may
+be selected, with a fresh baseline. This is an explicit portable menu policy,
+not evidence of original gameplay controls. Physical Steam Deck and other
+controller acceptance runs remain required; virtual SDL tests are not a
+substitute for hardware validation.
+The virtual-device test exercises SDL enumeration, button events, removal,
+replacement, focus baselines and a display-confirmation rollback. It skips
+explicitly when virtual attachment is unsupported or other gamepads are already
+connected, to avoid depending on a developer's physical device order. On the
+ARM64 Linux development host it ran successfully, not skipped. A supported
+Steam-data launch with the F10 menu visible also completed through Vulkan after
+this integration; that smoke test does not establish physical button behavior.
 
 ## Layering
 

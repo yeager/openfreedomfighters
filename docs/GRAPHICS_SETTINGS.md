@@ -32,9 +32,11 @@ content. See [Game-data policy](../DATA_POLICY.md).
 
 - F10 opens the overlay and copies the confirmed requested settings into an
   editable draft. F10 again or Escape cancels unconfirmed edits and closes it.
-- Arrow keys navigate and edit rows. Enter or Space activates a row. Controller
-  D-pad, A, and B provide the same operations; a controller menu shortcut will be
-  finalized with the input system.
+- Arrow keys navigate and edit rows. Enter or Space activates a row. The current
+  project controller mapping uses Start for F10, D-pad for navigation/adjustment,
+  the south face button for Enter and the east face button for Escape. These are
+  SDL position names, not platform-specific printed button labels or recovered
+  original mappings. Remapping remains part of the input-system work.
 - Focus is always visible. Disabled rows remain readable, cannot receive an
   actionable focus state, and include a concise reason such as `Requires Modern+`
   or `DLSS runtime unavailable`.
@@ -185,7 +187,7 @@ SDL_ttf without extracting or publishing the font. Bundle-order selection is
 provisional until the original font-role semantics are recovered. The implemented
 window mode, size,
 presentation mode, and Original/Modern profile apply transactionally through
-SDL, including the Keep/Revert timeout. Mouse/controller routing, persistence,
+SDL, including the Keep/Revert timeout. Mouse routing, persistence,
 font fallback, complex-script shaping, and recovered retail styling remain open.
 
 Stage 4 has recovered the authored coordinate space, title and two-column

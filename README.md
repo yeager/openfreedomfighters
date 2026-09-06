@@ -112,6 +112,10 @@ The refreshed red, ivory and black splash is generated project branding at
 [artwork and generation provenance](assets/branding/README.md).
 `--show-graphics-menu` opens the same overlay immediately for bounded visual
 smoke tests. During normal play, F10 opens and closes it.
+The current controller menu mapping is Start to toggle, D-pad to navigate or
+adjust, south face button to activate/confirm, and east face button to cancel.
+Hotplug and focus handling guard against stale confirmations. These are project
+menu controls, not recovered original gameplay mappings.
 `--screenshot FILE.bmp` captures the final composed frame when `--frame-limit`
 is present, or the first frame otherwise, by GPU readback. The destination must
 not exist. Retail-derived screenshots are local artifacts and must be written
