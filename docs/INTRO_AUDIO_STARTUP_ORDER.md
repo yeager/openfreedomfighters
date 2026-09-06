@@ -70,3 +70,7 @@ component admission, the loading-time listener history, complete environment
 construction, output-channel processing and the two receive calls still need
 to be connected. See [retained sound state](INTRO_SOUND_RUNTIME.md) and
 [stream decoding](INTRO_AUDIO_STREAMING.md).
+
+The application-owned [preview camera pointer update](PREVIEW_CAMERA.md) now
+handles the reviewed mouse-motion path. Camera construction, live input routing
+and normal component admission remain separate work.

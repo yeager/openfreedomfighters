@@ -112,6 +112,7 @@ add_library(off_core
     src/graphics/renderer_frame.cpp
     src/graphics/intro_camera_state.cpp
     src/graphics/fresh_intro_camera.cpp
+    src/graphics/preview_camera_update.cpp
     src/graphics/intro_picture_transform.cpp
     src/graphics/center_picture_position.cpp
     src/graphics/position_update_service.cpp
@@ -374,6 +375,9 @@ if(BUILD_TESTING)
     add_executable(off_fresh_intro_camera_tests tests/fresh_intro_camera_tests.cpp)
     target_link_libraries(off_fresh_intro_camera_tests PRIVATE off_core)
     add_test(NAME off_fresh_intro_camera_tests COMMAND off_fresh_intro_camera_tests)
+    add_executable(off_preview_camera_update_tests tests/preview_camera_update_tests.cpp)
+    target_link_libraries(off_preview_camera_update_tests PRIVATE off_core)
+    add_test(NAME off_preview_camera_update_tests COMMAND off_preview_camera_update_tests)
     add_executable(off_intro_picture_transform_tests tests/intro_picture_transform_tests.cpp)
     target_link_libraries(off_intro_picture_transform_tests PRIVATE off_core)
     add_test(NAME off_intro_picture_transform_tests COMMAND off_intro_picture_transform_tests)
