@@ -70,6 +70,10 @@ this acknowledgement yet. Parsing, successful decoding, elapsed duration and
 the splash timer must never generate it. The real channel/stream service and
 SoundNotify's ordinary event route still need integration.
 
+An [incremental Vorbis input path](INTRO_AUDIO_STREAMING.md) now retains real
+encoded input and PCM across worker requests. It does not itself admit a channel
+or produce an acknowledgement.
+
 ## Verification boundary
 
 Independent fixtures cover source assignment, shared record identity, volume

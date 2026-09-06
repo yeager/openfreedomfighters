@@ -7,6 +7,7 @@ include(FetchContent)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(Vorbis REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(Threads REQUIRED)
 
 find_package(SDL3 3.2 CONFIG QUIET)
 if(NOT SDL3_FOUND)
@@ -62,6 +63,7 @@ add_library(off_core
     src/audio/sound_preferences.cpp
     src/audio/sound_records.cpp
     src/audio/sound_record_volume.cpp
+    src/audio/intro_audio_stream.cpp
     src/runtime/application_clock.cpp
     src/runtime/component_lifecycle.cpp
     src/crypto/sha256.cpp
@@ -132,7 +134,7 @@ add_library(off_core
 )
 target_include_directories(off_core PUBLIC include)
 target_compile_features(off_core PUBLIC cxx_std_23)
-target_link_libraries(off_core PUBLIC Vorbis::vorbisfile ZLIB::ZLIB)
+target_link_libraries(off_core PUBLIC Vorbis::vorbisfile ZLIB::ZLIB Threads::Threads)
 set_target_properties(off_core PROPERTIES CXX_EXTENSIONS OFF)
 
 if(MSVC)
@@ -234,6 +236,15 @@ install(FILES assets/branding/openfreedomfighters-splash.bmp
         DESTINATION bin/assets)
 
 if(BUILD_TESTING)
+    add_executable(off_intro_audio_stream_tests tests/intro_audio_stream_tests.cpp)
+    target_link_libraries(off_intro_audio_stream_tests PRIVATE off_core Vorbis::vorbisenc)
+    add_test(NAME off_intro_audio_stream_tests COMMAND off_intro_audio_stream_tests)
+    set_tests_properties(off_intro_audio_stream_tests PROPERTIES TIMEOUT 60)
+    add_executable(off_vfs_file_reader_tests tests/vfs_file_reader_tests.cpp)
+    target_link_libraries(off_vfs_file_reader_tests PRIVATE off_core)
+    target_compile_definitions(off_vfs_file_reader_tests PRIVATE
+        OFF_VFS_READER_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/vfs-reader-test-work")
+    add_test(NAME off_vfs_file_reader_tests COMMAND off_vfs_file_reader_tests)
     add_executable(off_sound_records_tests tests/sound_records_tests.cpp)
     target_link_libraries(off_sound_records_tests PRIVATE off_core)
     add_test(NAME off_sound_records_tests COMMAND off_sound_records_tests)

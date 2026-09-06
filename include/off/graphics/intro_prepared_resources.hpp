@@ -6,6 +6,7 @@
 #include "off/data/audio_bank_header.hpp"
 #include "off/data/vfs_file_view.hpp"
 #include "off/audio/decode.hpp"
+#include "off/audio/intro_audio_stream.hpp"
 #include "off/graphics/texture_decode.hpp"
 
 #include <filesystem>
@@ -46,6 +47,9 @@ public:
       std::size_t byte_budget=64U*1024U*1024U) const;
   // Explicit offline decode only. Does not mutate duration, progress or readiness.
   [[nodiscard]] audio::DecodedAudio decode(std::size_t sound_index) const;
+  // Owns an opened bank reader and incremental decoder; construction does not
+  // issue the initial encoded read, prepare a sound record or announce playback.
+  [[nodiscard]] audio::IntroAudioStream open_stream(std::size_t sound_index) const;
 private:
   data::AudioBankHeader header_;
   data::VfsFileView local_, global_;

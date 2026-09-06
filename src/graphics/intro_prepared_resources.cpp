@@ -69,6 +69,15 @@ audio::DecodedAudio IntroPreparedAudio::decode(std::size_t sound_index) const {
   return audio::decode_bank_stream(header_.records()[record],encoded);
 }
 
+audio::IntroAudioStream IntroPreparedAudio::open_stream(std::size_t sound_index) const {
+  if (sound_index>=records_.size()) throw std::runtime_error("Intro sound index is out of range");
+  const auto index=records_[sound_index];
+  if (!index) throw std::runtime_error("Intro sound definition has no stream request");
+  const auto& record=header_.records()[*index];
+  return audio::IntroAudioStream(record,
+      (record.uses_global_bank()?global_:local_).open_reader());
+}
+
 IntroPreparedResources build_intro_prepared_resources(
     data::GmsImage sources, std::span<const std::byte> names,
     std::span<const std::byte> primitives, const data::TextureCatalog &textures,

@@ -630,6 +630,8 @@ int main() {
         save_fixture(scenes/"independent-sound.WAV",Bytes(2,std::byte{0x11}));
         const Bytes global_bytes(15,std::byte{0x5a}); save_fixture(work/"streams.wav",global_bytes);
         const auto with_audio=off::graphics::load_intro_prepared_resources(sound_path);
+        rejects([&] { (void)with_audio.audio()->open_stream(1); });
+        rejects([&] { (void)with_audio.audio()->open_stream(0); }); // PCM has no incremental Vorbis route.
         check(with_audio.audio() && with_audio.audio()->record_indices().size()==1 &&
               with_audio.audio()->record_indices()[0]==1 &&
               with_audio.audio()->read_encoded(0)==Bytes(8,std::byte{0x5a}),

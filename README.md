@@ -27,7 +27,8 @@ executable code are included here.
 - Clock and sound preferences now share application-lifetime state across intro
   scenes. This does not add intro playback or audible sound.
 - The two intro sound definitions resolve to their original audio-bank streams
-  and can be decoded on demand. Playback and its readiness events are not connected.
+  and can be decoded incrementally on a worker. Playback and its readiness
+  events are not connected.
 - Their mutable sound records now share an application-owned backend with volume
   settings. Owner preparation and stop operations are implemented but not yet
   wired into the complete intro lifecycle.
