@@ -12,6 +12,10 @@ struct IntroAudioPcm {
   std::vector<std::int16_t> interleaved_samples;
   bool end_of_stream{};
 };
+struct IntroAudioStreamSource {
+  data::AudioStreamRecord record;
+  data::VfsFileReader reader;
+};
 // Native sequential Vorbis stream policy, not channel admission or playback.
 // Single controlling thread. Worker I/O/decoding owns no sound-record reference.
 // Control methods do not wait for worker I/O. They may allocate or create a

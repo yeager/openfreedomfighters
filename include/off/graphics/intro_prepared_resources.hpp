@@ -54,6 +54,9 @@ public:
   // Owns an opened bank reader and incremental decoder; construction does not
   // issue the initial encoded read, prepare a sound record or announce playback.
   [[nodiscard]] audio::IntroAudioStream open_stream(std::size_t sound_index) const;
+  // Resolve a command's real WHD link, not its position in the prepared list.
+  // Returns a retained reader; does not issue I/O or admit playback.
+  [[nodiscard]] audio::IntroAudioStreamSource open_source_for_sound_link(std::uint32_t link) const;
 private:
   data::AudioBankHeader header_;
   data::VfsFileView local_, global_;

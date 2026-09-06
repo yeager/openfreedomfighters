@@ -27,8 +27,10 @@ executable code are included here.
 - Clock and sound preferences now share application-lifetime state across intro
   scenes. This does not add intro playback or audible sound.
 - The two intro sound definitions resolve to their original audio-bank streams
-  and can be decoded incrementally on a worker. Playback and its readiness
-  events are not connected.
+  and can be decoded incrementally on a worker. A
+  [channel service](docs/STEREO_STREAM_PLAYBACK.md) now handles bounded refill,
+  start/stop and pending notifications. Normal startup does not use it yet;
+  real audio output is still unverified.
 - Their mutable sound records now share an application-owned backend with volume
   settings. Typed attachment loading, owner preparation, stop and the verified
   SoundExtend parameter operation are implemented. The complete

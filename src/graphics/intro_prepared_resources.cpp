@@ -78,6 +78,14 @@ audio::IntroAudioStream IntroPreparedAudio::open_stream(std::size_t sound_index)
       (record.uses_global_bank()?global_:local_).open_reader());
 }
 
+audio::IntroAudioStreamSource IntroPreparedAudio::open_source_for_sound_link(std::uint32_t link) const {
+  const auto index=header_.record_index_for_sound_link(link);
+  if(!index) throw std::runtime_error("Intro stereo command has no WHD source");
+  const auto record=header_.records()[*index];
+  if(!record.data_offset) throw std::runtime_error("Intro stereo command has no encoded-data offset");
+  return {record,(record.uses_global_bank()?global_:local_).open_reader()};
+}
+
 IntroPreparedResources build_intro_prepared_resources(
     data::GmsImage sources, std::span<const std::byte> names,
     std::span<const std::byte> primitives, const data::TextureCatalog &textures,
