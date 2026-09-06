@@ -63,6 +63,7 @@ add_library(off_core
     src/audio/sound_preferences.cpp
     src/audio/sound_records.cpp
     src/audio/sound_record_volume.cpp
+    src/audio/stereo_source_command.cpp
     src/audio/intro_audio_stream.cpp
     src/runtime/application_clock.cpp
     src/runtime/component_lifecycle.cpp
@@ -252,6 +253,9 @@ if(BUILD_TESTING)
     add_executable(off_sound_record_volume_tests tests/sound_record_volume_tests.cpp)
     target_link_libraries(off_sound_record_volume_tests PRIVATE off_core)
     add_test(NAME off_sound_record_volume_tests COMMAND off_sound_record_volume_tests)
+    add_executable(off_stereo_source_command_tests tests/stereo_source_command_tests.cpp)
+    target_link_libraries(off_stereo_source_command_tests PRIVATE off_core)
+    add_test(NAME off_stereo_source_command_tests COMMAND off_stereo_source_command_tests)
     add_executable(off_sound_definition_bank_tests tests/sound_definition_bank_tests.cpp)
     target_link_libraries(off_sound_definition_bank_tests PRIVATE off_core)
     add_test(NAME off_sound_definition_bank_tests COMMAND off_sound_definition_bank_tests)

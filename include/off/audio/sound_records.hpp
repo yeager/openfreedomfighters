@@ -24,7 +24,9 @@ struct SoundRecord {
   float range{10000}, derived_range{12800};
   std::optional<float> final_scalar;
   std::array<std::int32_t,2> timing_changes{};
-  std::uint32_t source_mode{}, repetition_count{};
+  std::uint32_t source_mode{};
+  std::int32_t pan{}, grouping_count{};
+  std::optional<std::int32_t> priority, environment_group_index;
   std::optional<bool> fade_enabled;
   std::optional<std::array<float,3>> fade_values;
 };
@@ -75,6 +77,8 @@ public:
   // Mode 0 is linear; mode 2 uses the integer response curve. Neither clamps.
   // These mutate retained state, not device initialization or playback ACKs.
   void request_category_volume(std::uint32_t category,std::int32_t volume,std::uint32_t mode) override;
+  [[nodiscard]] float master_gain() const noexcept { return master_gain_; }
+  void set_master_volume(std::int32_t percent) noexcept;
 private:
   friend class SoundRecordLease;
   void release(std::uint64_t binding) noexcept;
@@ -83,5 +87,6 @@ private:
   std::array<SoundCategory,8> categories_{};
   std::vector<std::uint64_t> prepared_,pending_stops_;
   bool special_mode_{},pending_volume_update_{};
+  float master_gain_{1};
 };
 } // namespace off::audio

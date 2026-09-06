@@ -24,6 +24,10 @@ float response(std::int32_t volume) {
 }
 } // namespace
 
+void SoundRecordRegistry::set_master_volume(std::int32_t percent) noexcept {
+  master_gain_=rounded(static_cast<float>(percent)*0.01F);
+}
+
 void SoundRecordRegistry::request_category_volume(std::uint32_t category,
     std::int32_t volume, std::uint32_t mode) {
   if ((mode != 0 && mode != 2) || category >= categories_.size())
