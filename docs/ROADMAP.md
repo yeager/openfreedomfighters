@@ -136,6 +136,9 @@ artifacts, fuzz corpora, caches, and logs contain no retail data.
   ordered raw values and verifying all joins privately against owned data.
 - [ ] Decode sequence-player payloads and initialize their runtime resources;
   source identity alone does not establish a functioning player.
+- [x] Decode the restricted first-cut component settings, ordered command fields
+  and subordinate sequence payload; resolve authored event names separately
+  from source references and verify the full route privately on owned data.
 - [ ] Recover original bootstrap selection, scene-name resolution, scene-stack
   transitions, initial cut activation and natural completion events before
   enabling the intro-to-menu path. The project splash is not an intro timer.

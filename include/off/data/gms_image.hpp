@@ -38,6 +38,27 @@ struct GmsIntroMovieControllerSource {
     std::optional<std::uint32_t> second_optional_reference;
 };
 
+struct GmsIntroCutCommandSource {
+    std::uint32_t timeline_position{0};
+    std::uint32_t event_reference{0};
+    std::uint32_t target_reference{0};
+    std::uint32_t event_argument{0};
+    std::string target_name;
+};
+
+struct GmsIntroFirstCutSource {
+    std::uint32_t sequence_reference{0};
+    std::array<std::uint32_t, 7> settings_words{};
+    float final_value{0};
+    std::array<GmsIntroCutCommandSource, 5> commands{};
+};
+
+struct GmsIntroCutSequenceSource {
+    std::array<std::uint32_t, 6> references{};
+    std::array<float, 2> values{};
+    std::uint32_t authored_option{0};
+};
+
 struct GmsDirectoryEntry {
     std::uint32_t packed_record_reference{0};
     std::uint32_t auxiliary_value{0};
@@ -117,6 +138,12 @@ public:
         std::size_t directory_index
     ) const;
     void validate_buf(std::span<const std::byte> bytes) const;
+    // Restricted supported-intro forms; caller establishes archive provenance.
+    // Values remain authored data, not runtime events, clock units or defaults.
+    [[nodiscard]] GmsIntroFirstCutSource intro_first_cut_source(std::size_t index) const;
+    [[nodiscard]] GmsIntroCutSequenceSource intro_cut_sequence_source(std::size_t index) const;
+    // Zero has no join. Nonzero references are one-based, without bit masking.
+    [[nodiscard]] std::optional<std::string> authored_event_identifier(std::uint32_t raw) const;
 
     [[nodiscard]] const std::vector<GmsDirectoryEntry>& directory() const noexcept {
         return directory_;

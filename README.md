@@ -80,8 +80,10 @@ development; no playable build exists yet.
 The data layer also has a restricted, bounds-checked intro-controller reader
 that preserves authored references, destination bytes and optional-field presence.
 Reviewed source-directory lookup now joins its actual sequence and group lists,
-with bounded raw-list decoding and private ordered-entry verification. It does
-not yet initialize sequence players or activate the intro; see
+with bounded raw-list decoding and private ordered-entry verification. Restricted
+first-cut readers also decode its settings, commands and referenced sequence
+resource, including event-name and target-source joins. They do not yet initialize
+sequence players or activate the intro; see
 [intro bootstrap evidence](docs/INTRO_BOOTSTRAP.md).
 
 ## Build the native bootstrap

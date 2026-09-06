@@ -247,6 +247,146 @@ void check_rejected(Operation operation, const char* message) {
     check(rejected, message);
 }
 
+// Independent grammar fixtures, deliberately unrelated to retail values.
+std::vector<std::byte> cut_fixture(bool first, std::string_view name = "") {
+    auto bytes = intro_controller_fixture();
+    bytes.resize(4105U);
+    set_u32(bytes, 0, 4096U); set_u32(bytes, 4, 4105U);
+    set_u32(bytes, 9U + 336U + 32U, 1200U);
+    set_u32(bytes, 521U, first ? 6U : 1U);
+    std::size_t text = 700U;
+    for (std::size_t i = 0; i < (first ? 6U : 1U); ++i) {
+        const std::string_view identity = !first ? "ZLIST_CutSequence" :
+            (i == 0 ? "ZLIST_CutSequenceList" : "ZLIST_CutSequenceCommand");
+        set_u32(bytes, 525U + i * 8U, static_cast<std::uint32_t>(text));
+        set_f32(bytes, 529U + i * 8U, first && i == 0 ? 0.0F : 1.0F);
+        for (const auto c : identity) bytes[9U + text++] = static_cast<std::byte>(c);
+        bytes[9U + text++] = std::byte{0};
+    }
+    std::vector<std::byte> block(4U);
+    const auto scalar = [&](std::uint8_t tag, std::uint32_t value) {
+        block.push_back(static_cast<std::byte>(tag)); append_u32(block, value);
+    };
+    scalar(0x89U, first ? 8U : 28U);
+    for (std::uint32_t i = 0; i < (first ? 1U : 6U); ++i) append_u32(block, 0xf0000000U + i);
+    block.push_back(std::byte{6});
+    if (first) {
+        constexpr std::array<std::uint8_t, 7> tags{0x83,0x83,3,8,3,0x83,3};
+        for (std::size_t i = 0; i < tags.size(); ++i) scalar(tags[i], static_cast<std::uint32_t>(i + 8U));
+        scalar(2, 0x80000000U);
+        block.push_back(std::byte{6});
+        for (std::uint32_t i = 0; i < 5; ++i) {
+            scalar(i % 2U == 0U ? 3U : 0x83U, 9U - i);
+            scalar(0x8aU, 0x80000000U + i); scalar(0x88U, i);
+            scalar(i % 2U == 0U ? 0x83U : 3U, 100U + i);
+            block.push_back(std::byte{4});
+            for (const auto c : name) block.push_back(static_cast<std::byte>(c));
+            block.push_back(std::byte{0}); block.push_back(std::byte{6});
+        }
+    } else {
+        scalar(2, 0x80000000U); scalar(0x82U, std::bit_cast<std::uint32_t>(-17.5F));
+        scalar(3, 0xffffffffU); block.push_back(std::byte{6});
+    }
+    block.push_back(std::byte{0xff});
+    set_u32(block, 0, static_cast<std::uint32_t>(block.size()));
+    std::copy(block.begin(), block.end(), bytes.begin() + 1209U);
+    return bytes;
+}
+
+void cut_tests() {
+    const auto parse = [](auto bytes) {
+        return off::data::GmsImage::parse(off::data::PackedResource::parse(std::move(bytes)));
+    };
+    const std::string raw_name = std::string(130U, 'x') + static_cast<char>(0xff);
+    const auto cut = parse(cut_fixture(true, raw_name)).intro_first_cut_source(1U);
+    check(cut.sequence_reference == 0xf0000000U && cut.settings_words[6] == 14U,
+          "first cut retains base reference and settings");
+    for (std::size_t i = 0; i < cut.settings_words.size(); ++i)
+        check(cut.settings_words[i] == i + 8U, "retain every raw cut setting");
+    const auto empty_names = parse(cut_fixture(true)).intro_first_cut_source(1U);
+    for (const auto& command : empty_names.commands)
+        check(command.target_name.empty(), "accept empty command target names");
+    check(std::bit_cast<std::uint32_t>(cut.final_value) == 0x80000000U,
+          "first cut preserves signed zero");
+    for (std::size_t i = 0; i < 5; ++i) {
+        check(cut.commands[i].timeline_position == 9U - i &&
+              cut.commands[i].event_reference == 0x80000000U + i &&
+              cut.commands[i].target_reference == i && cut.commands[i].event_argument == 100U + i &&
+              cut.commands[i].target_name == raw_name, "command order and raw fields preserved");
+    }
+    const auto sequence = parse(cut_fixture(false)).intro_cut_sequence_source(1U);
+    check(sequence.references[5] == 0xf0000005U && sequence.authored_option == 0xffffffffU &&
+          sequence.values[1] == -17.5F && std::bit_cast<std::uint32_t>(sequence.values[0]) == 0x80000000U,
+          "cut sequence preserves raw references, boolean and float pair");
+    for (std::size_t i = 0; i < sequence.references.size(); ++i)
+        check(sequence.references[i] == 0xf0000000U + i, "retain every cut resource reference");
+    for (bool first : {false, true}) {
+        const auto reject = [&](auto mutate) {
+            auto bytes = cut_fixture(first); mutate(bytes);
+            check_rejected([&] { const auto image = parse(bytes);
+                if (first) static_cast<void>(image.intro_first_cut_source(1));
+                else static_cast<void>(image.intro_cut_sequence_source(1));
+            }, "cut malformed grammar rejected");
+        };
+        for (const auto offset : {357U, 361U, 377U}) reject([&](auto& b) { set_u32(b, offset, 1U); });
+        reject([](auto& b) { set_u32(b, 521U, 0U); });
+        reject([](auto& b) { set_u32(b, 525U, 4096U); });
+        reject([](auto& b) { set_u32(b, 529U, 0x7fc00000U); });
+        reject([](auto& b) { set_f32(b, 529U, 2.0F); });
+        reject([](auto& b) { b[709U] = std::byte{'X'}; });
+        reject([&](auto& b) { b[709U + (first ? 21U : 17U)] = std::byte{'X'}; });
+        reject([](auto& b) { set_u32(b, 1209U, 0x01000033U); });
+        reject([](auto& b) { set_u32(b, 1214U, 12U); });
+        const std::uint32_t size = first ? 171U : 51U;
+        std::vector<std::size_t> tags{4U, first ? 13U : 33U, size - 2U, size - 1U};
+        if (first) {
+            reject([](auto& b) { b[1223U] = std::byte{0x03}; });
+            for (std::size_t i = 0; i < 8U; ++i) tags.push_back(14U + i * 5U);
+            tags.push_back(54U);
+            for (std::size_t i = 0; i < 5U; ++i) {
+                for (const auto relative : {0U, 5U, 10U, 15U, 20U, 22U})
+                    tags.push_back(55U + i * 23U + relative);
+            }
+            reject([](auto& b) { set_f32(b, 537U, 0.0F); });
+            reject([](auto& b) { set_u32(b, 533U, 700U); });
+            reject([](auto& b) { set_u32(b, 521U, 5U); });
+            reject([](auto& b) { b[1264U] = std::byte{0xc3}; });
+            reject([](auto& b) { std::fill(b.begin() + 1285U, b.begin() + 1380U, std::byte{0x41}); });
+        } else {
+            tags.insert(tags.end(), {34U, 39U, 44U});
+        }
+        for (const auto position : tags)
+            reject([&](auto& b) { b[1209U + position] = std::byte{0x43}; });
+        for (std::uint32_t shortened = 0; shortened < size; ++shortened)
+            reject([&](auto& b) { set_u32(b, 1209U, shortened); });
+        reject([&](auto& b) { set_u32(b, 1209U, size + 1U); });
+        const std::size_t floating = first ? 1259U : 1244U;
+        for (const auto nonfinite : {0x7f800000U, 0xff800000U, 0x7fc00000U})
+            reject([&](auto& b) { set_u32(b, floating, nonfinite); });
+        if (!first) {
+            for (const auto nonfinite : {0x7f800000U, 0xff800000U, 0x7fc00000U})
+                reject([&](auto& b) { set_u32(b, 1249U, nonfinite); });
+        }
+        const auto image = parse(cut_fixture(first));
+        check_rejected([&] { if (first) static_cast<void>(image.intro_first_cut_source(99));
+                            else static_cast<void>(image.intro_cut_sequence_source(99)); }, "cut bounds checked");
+    }
+    auto identifiers = packed_fixture();
+    identifiers[9U + 72U] = std::byte{0xff};
+    set_u32(identifiers, 9U + 68U, 72U);
+    const auto image = parse(identifiers);
+    check(!image.authored_event_identifier(0U) &&
+          image.authored_event_identifier(1U) == image.authored_event_identifier(2U) &&
+          image.authored_event_identifier(1U)->front() == static_cast<char>(0xff),
+          "identifier join preserves raw bytes and duplicates");
+    for (const auto raw : {3U, 0x80000001U, 0xffffffffU})
+        check_rejected([&] { static_cast<void>(image.authored_event_identifier(raw)); }, "identifier bounds unmasked");
+    const auto owned_identifier = parse(packed_fixture()).authored_event_identifier(1U);
+    check(owned_identifier == "first", "identifier bytes outlive their source image");
+    identifiers[9U + 72U] = std::byte{0};
+    check(parse(identifiers).authored_event_identifier(1U) == "", "preserve empty event identifier");
+}
+
 template <typename Mutation>
 void check_parse_rejected(Mutation mutation, const char* message) {
     auto bytes = packed_fixture();
@@ -264,6 +404,7 @@ void check_parse_rejected(Mutation mutation, const char* message) {
 }  // namespace
 
 int main() {
+    cut_tests();
     const auto decode_intro = [](std::vector<std::byte> bytes) {
         return off::data::GmsImage::parse(off::data::PackedResource::parse(
             std::move(bytes))).intro_movie_controller_source(1);

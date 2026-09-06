@@ -36,10 +36,24 @@ transition.
 
 ### First-cut execution boundary
 
-The controller's initial-start path is gated by a readiness notification and an
-activation latch. It prepares sequence components, records engine-clock state
-and advances the first cut. The notification producer and its prerequisites
-remain untraced; splash expiry must not synthesize readiness.
+The controller has two initial-start paths: a readiness notification, or an
+update observing the signed engine clock strictly beyond a stored deadline while the
+activation latch is clear. Both invoke preparation, which prepares sequence
+components, commits the activation latch, records engine-clock state and advances
+the first cut. The activation update then returns without also running the
+ordinary active-controller update. Equality with the deadline does not activate.
+
+The constructor initializes the deadline to zero, but a separate lifecycle
+routine assigns an engine-clock-relative deadline. Its call ordering is not yet
+established, so constructor zero does not prove immediate activation in a real
+scene. Clock-unit conversion and wrap behavior are also unverified. The readiness
+producer remains untraced; neither start route may be replaced by splash expiry.
+This corrects the earlier description of readiness as an exclusive start gate.
+
+A later intro wait branch reuses the deadline and can resume through either the
+clock comparison or readiness notification. Later readiness events therefore
+cannot simply be discarded after first activation. Its event prerequisites and
+full integration remain research work.
 
 The first cut has attached sequence-player and command components. It is not an
 attachment-free reference list, even though it shares the same base source
@@ -118,14 +132,51 @@ retail vectors are published. Public fixtures exercise tagged and untagged
 boundary indices, directory-versus-pool order, raw-list preservation and malformed
 headers/counts/tags/termination. The 35-test suite passes with these additions.
 
+## Restricted first-cut components and event identifiers
+
+`GmsImage::intro_first_cut_source` reads the reviewed first-cut attachment layout,
+its base source reference, raw settings and ordered commands.
+`intro_cut_sequence_source` reads the referenced component's fixed reference
+array, float pair and authored option. Neither is a universal list/component
+dispatcher. Both check exact source/attachment identities, numeric parameters,
+wrapper structure, mandatory fields and declared block termination. Finite
+floats, including signed zero, are preserved; rejecting non-finite values is an
+explicit native safety policy, not a recovered assertion about all original data.
+The optional float's original default is unknown, so this restricted reader
+requires the observed field instead of supplying a playback-rate default.
+
+Commands retain their source order, timeline words, event references, target
+references, arguments and raw target-name bytes. They are not sorted by time or
+deduplicated. Command strings have no inherited controller-destination length
+limit; their NUL terminator must be inside the declared block. Integer tags
+accept only the two reviewed full-byte variants. A target reference and fallback
+name stay separate; the name-search scope remains unimplemented.
+
+`authored_event_identifier` maps a nonzero authored event reference to its
+one-based identifier-table entry and returns owned raw string bytes. It does not
+strip source-reference marker bits. Zero returns absence and out-of-range values
+are rejected. The returned string is an event registration name, not an original
+process's numeric event ID; authored indices must never substitute for runtime
+registration results.
+
+The private owned-data check follows the controller through both lists to the
+first cut and its referenced component. It compares every settings word, command
+field in source order, event-name/target join and subordinate field against the
+independent research observations, without publishing those vectors. All 35
+tests and the targeted GMS ASan/UBSan run pass after these additions.
+
+This exposes real command data for later execution. Timeline units, command tie
+ordering, resource activation and completion scheduling remain separate evidence
+requirements; the float pair must not be relabeled as seconds without proof.
+
 ## Required before activation
 
 1. Extend component dispatch beyond the restricted intro shape only after its
    attachment order and wrapper rules are established. Preserve unknown values
    rather than assigning invented semantics.
-2. Establish sequence-player payloads, factory initialization and resource
-   dependencies beyond the decoded list identities. Resolving a source does not
-   prove its runtime object was constructed or activated.
+2. Extend sequence-player payload coverage beyond the restricted first-cut
+   forms and establish factory initialization and resource dependencies.
+   Resolving a source does not prove its runtime object was constructed or activated.
 3. Recover configuration precedence and scene-name-to-resource resolution. The
    constructor default alone does not prove which scene an actual launch selects.
 4. Recover initial activation, natural completion, timing dependencies and skip

@@ -717,6 +717,138 @@ std::vector<std::uint32_t> GmsImage::intro_source_reference_list(
     return result;
 }
 
+namespace {
+
+// Bounded reader for the two reviewed intro component forms only.
+class IntroComponentReader {
+public:
+    IntroComponentReader(std::span<const std::byte> payload,
+                         const GmsDirectoryEntry& entry,
+                         std::span<const std::string_view> identities)
+        : bytes_(payload), reader_(payload) {
+        if (entry.source_type != 0x0800001aU || entry.class_data_value != 0U ||
+            entry.deferred_source_offset == 0U || entry.attachments.size() != identities.size()) fail();
+        for (std::size_t i = 0; i < identities.size(); ++i) {
+            const auto& attachment = entry.attachments[i];
+            const auto offset = static_cast<std::size_t>(attachment.source_offset);
+            const auto name = identities[i];
+            const float expected = name == "ZLIST_CutSequenceList" ? 0.0F : 1.0F;
+            if (!std::isfinite(attachment.parameter) || attachment.parameter != expected ||
+                offset > bytes_.size() || name.size() + 1U > bytes_.size() - offset) fail();
+            for (std::size_t j = 0; j < name.size(); ++j) {
+                if (bytes_[offset + j] != static_cast<std::byte>(name[j])) fail();
+            }
+            if (bytes_[offset + name.size()] != std::byte{0}) fail();
+        }
+        cursor_ = entry.deferred_source_offset;
+        if (cursor_ > bytes_.size() || 4U > bytes_.size() - cursor_) fail();
+        const auto header = reader_.u32(cursor_);
+        const auto size = static_cast<std::size_t>(header & tagged_block_size_mask);
+        if ((header >> 24U) != 0U || size < 4U || size > bytes_.size() - cursor_) fail();
+        end_ = cursor_ + size;
+        cursor_ += 4U;
+    }
+    [[noreturn]] static void fail() {
+        throw std::runtime_error("GMS intro cut component is unsupported or malformed");
+    }
+    void tag(std::uint8_t expected) {
+        if (cursor_ == end_ || bytes_[cursor_] != static_cast<std::byte>(expected)) fail();
+        ++cursor_;
+    }
+    std::uint32_t word() {
+        if (4U > end_ - cursor_) fail();
+        const auto result = reader_.u32(cursor_);
+        cursor_ += 4U;
+        return result;
+    }
+    std::uint32_t scalar(std::uint8_t expected) { tag(expected); return word(); }
+    std::uint32_t integer() {
+        if (cursor_ == end_ || (bytes_[cursor_] != std::byte{0x03} &&
+                              bytes_[cursor_] != std::byte{0x83})) fail();
+        ++cursor_;
+        return word();
+    }
+    float finite_float(std::uint8_t expected) {
+        const auto result = std::bit_cast<float>(scalar(expected));
+        // Explicit native malformed-data policy; preserve finite signed zero.
+        if (!std::isfinite(result)) fail();
+        return result;
+    }
+    std::string string() {
+        tag(0x04U);
+        std::string result;
+        while (cursor_ < end_ && bytes_[cursor_] != std::byte{0}) {
+            result.push_back(static_cast<char>(std::to_integer<unsigned char>(bytes_[cursor_++])));
+        }
+        tag(0U);
+        return result;
+    }
+    void finish() { tag(0xffU); if (cursor_ != end_) fail(); }
+private:
+    std::span<const std::byte> bytes_;
+    ByteReader reader_;
+    std::size_t cursor_{0};
+    std::size_t end_{0};
+};
+} // namespace
+
+GmsIntroFirstCutSource GmsImage::intro_first_cut_source(std::size_t index) const {
+    if (index >= directory_.size()) IntroComponentReader::fail();
+    constexpr std::array<std::string_view, 6> identities{
+        "ZLIST_CutSequenceList", "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand",
+        "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand"};
+    IntroComponentReader reader(resource_.payload(), directory_[index], identities);
+    if (reader.scalar(0x89U) != 8U) IntroComponentReader::fail();
+    GmsIntroFirstCutSource result;
+    result.sequence_reference = reader.word();
+    reader.tag(0x06U);
+    constexpr std::array<std::uint8_t, 7> tags{0x83, 0x83, 0x03, 0x08, 0x03, 0x83, 0x03};
+    for (std::size_t i = 0; i < tags.size(); ++i) result.settings_words[i] = reader.scalar(tags[i]);
+    result.final_value = reader.finite_float(0x02U);
+    reader.tag(0x06U);
+    for (auto& command : result.commands) {
+        command.timeline_position = reader.integer();
+        command.event_reference = reader.scalar(0x8aU);
+        command.target_reference = reader.scalar(0x88U);
+        command.event_argument = reader.integer();
+        command.target_name = reader.string();
+        reader.tag(0x06U);
+    }
+    reader.finish();
+    return result;
+}
+
+GmsIntroCutSequenceSource GmsImage::intro_cut_sequence_source(std::size_t index) const {
+    if (index >= directory_.size()) IntroComponentReader::fail();
+    constexpr std::array<std::string_view, 1> identities{"ZLIST_CutSequence"};
+    IntroComponentReader reader(resource_.payload(), directory_[index], identities);
+    if (reader.scalar(0x89U) != 28U) IntroComponentReader::fail();
+    GmsIntroCutSequenceSource result;
+    for (auto& reference : result.references) reference = reader.word();
+    reader.tag(0x06U);
+    result.values[0] = reader.finite_float(0x02U);
+    result.values[1] = reader.finite_float(0x82U);
+    result.authored_option = reader.scalar(0x03U);
+    reader.tag(0x06U);
+    reader.finish();
+    return result;
+}
+
+std::optional<std::string> GmsImage::authored_event_identifier(std::uint32_t raw) const {
+    if (raw == 0U) return std::nullopt;
+    if (raw > identifier_count_) throw std::runtime_error("GMS authored event identifier is out of range");
+    const auto payload = resource_.payload();
+    const ByteReader reader(payload);
+    const auto table = static_cast<std::size_t>(reader.u32(4U));
+    auto cursor = static_cast<std::size_t>(reader.u32(table + 4U * static_cast<std::size_t>(raw)));
+    std::string result;
+    // parse() has validated both the immutable table and string termination.
+    while (payload[cursor] != std::byte{0}) {
+        result.push_back(static_cast<char>(std::to_integer<unsigned char>(payload[cursor++])));
+    }
+    return result;
+}
+
 GmsIntroMovieControllerSource GmsImage::intro_movie_controller_source(
     std::size_t directory_index
 ) const {
