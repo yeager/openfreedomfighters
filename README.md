@@ -86,7 +86,10 @@ resource, including event-name and target-source joins. They do not yet initiali
 sequence players or activate the intro; see
 [intro bootstrap evidence](docs/INTRO_BOOTSTRAP.md).
 An [explicit-clock timeline converter](docs/CUT_TIMELINE.md) now preserves the
-recovered arithmetic without supplying a clock source or executing commands.
+recovered arithmetic. A bounded command pass now invokes synchronous visitors in
+the reviewed conditional order, verified with real first-cut data and explicit
+test-clock inputs. Neither supplies a startup clock nor applies rendered/audio
+effects; the complete intro player remains unimplemented.
 
 ## Build the native bootstrap
 

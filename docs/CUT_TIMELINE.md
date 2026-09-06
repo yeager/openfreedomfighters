@@ -48,6 +48,54 @@ cursor behavior, admission branches, callback delivery and resource
 activation still block a faithful complete player. No 60 Hz queue or splash timer
 is substituted for those contracts.
 
+## Bounded admitted command pass
+
+`off::cutscene::CommandPass` owns copies of commands supplied in an explicit
+registration order. It implements only the command phase of an already-admitted
+update. It does not initialize a scene, start cut members, resolve targets, issue
+global events or perform end-of-cut cleanup. A synchronous visitor receives each
+due command and its original registration index.
+
+Registration skips signed-negative schedule words and preserves the recovered
+cached-node insertion behavior using float schedule keys. It is neither a stable
+sort nor an unconditional reversal of equal schedules. The constructor validates
+the finite derived end and both sentinel conversions: add the constant at float
+precision, then truncate to signed integer with explicit range checks.
+
+Start/reset leaves the cursor absent and next schedule zero. A strict comparison
+selects the first node, then rechecks its actual schedule before any callback.
+Each due callback returns before the cursor advances. Ordinary return consumes
+the command even when the visitor found no target. Empty and exhausted cursors
+retain their respective sentinel states rather than a fabricated permanent-done
+flag.
+
+The native supported subset requires a finite position strictly below the empty
+list's converted sentinel. This intentionally excludes extreme-time reinitializing
+loops; rejection must not be described as original behavior. Non-finite or
+out-of-range sentinel conversions and empty visitors are rejected before running
+the phase. This is a validation boundary, not a host-clock clamp.
+
+Commands and their list remain immutable during callbacks. Recursive `run` or
+`reset_start` calls are rejected; moving/copying the pass is disabled, and callers
+must keep it alive through dispatch. These are native safety constraints, not
+proof that original callbacks never mutate or recurse. If a visitor throws, the
+selected command remains current for a later retry and successful earlier
+callbacks remain consumed. External callback effects are not rolled back.
+
+The separately reviewed successful, live and unmutated phase-one/phase-two
+lifecycle path registers commands once in authored attachment order. This permits
+a conditional owned-data trace through the pass, but actual startup entry into
+that lifecycle path remains unproved. An explicit test-clock trace is not an
+original runtime capture or a playable intro.
+Private verification follows the decoded controller, lists, first cut and
+subordinate resource, runs explicit test positions through the command pass, and
+compares all conditional visitor indices, event names, target identities and
+arguments. Zero/equality boundaries, later advances and reset/overdue batches
+match the reviewed expectations. The 37-test suite passes with sentinel-rounding,
+ownership, exception-retry and reentrancy regressions. No retail trace values are
+published and visitors do not yet apply rendering or audio effects.
+The targeted command-pass ASan/UBSan run also passes locally.
+
 ## Direct event delivery evidence
 
 The traced command-owner direct-target route invokes the target object's event
