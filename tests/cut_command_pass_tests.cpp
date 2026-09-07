@@ -1,4 +1,5 @@
 #include "off/cutscene/command_pass.hpp"
+#include "off/cutscene/first_cut_command_session.hpp"
 
 #include <array>
 #include <cmath>
@@ -16,6 +17,8 @@ using off::cutscene::CommandPass;
 using off::cutscene::CommandDeliveryAdapter;
 using off::cutscene::CommandDeliveryResult;
 using off::cutscene::CommandDeliveryServices;
+using off::cutscene::FirstCutCommandSession;
+using off::cutscene::FirstCutCommandSessionServices;
 using Command = off::data::GmsIntroCutCommandSource;
 int failures = 0;
 void check(bool value) { if (!value) { ++failures; std::cerr << "FAIL: cut command pass\n"; } }
@@ -147,5 +150,71 @@ int main() {
           delivery_trace == std::vector<std::string>({"event:7"}));
 
     rejects([&] { CommandDeliveryAdapter invalid({}, 0U); });
+
+    static_assert(!std::is_copy_constructible_v<FirstCutCommandSession> &&
+                  !std::is_move_constructible_v<FirstCutCommandSession>);
+    static_assert(std::is_constructible_v<FirstCutCommandSession,
+                                          const off::graphics::IntroRuntime&, float,
+                                          FirstCutCommandSessionServices, std::uint64_t>);
+    std::array<Command, 3> first_cut_commands{};
+    first_cut_commands[0] = Command{.timeline_position = 2U, .event_reference = 1U,
+                                    .target_reference = 91U, .event_argument = 40U};
+    first_cut_commands[1] = Command{.timeline_position = 0U, .event_reference = 2U,
+                                    .target_reference = 0U, .event_argument = 41U,
+                                    .target_name = "unavailable"};
+    first_cut_commands[2] = Command{.timeline_position = 3U, .event_reference = 3U,
+                                    .target_reference = 93U, .event_argument = 42U};
+    std::array<std::optional<std::uint32_t>, 4> event_mapping{
+        std::nullopt, 0x401U, 0x400U, std::nullopt};
+    std::vector<std::string> session_trace;
+    FirstCutCommandSessionServices session_services{
+        .resolve_reference = [&](std::uint32_t reference) -> std::optional<std::uint64_t> {
+          session_trace.push_back("reference:" + std::to_string(reference));
+          return reference == 91U ? std::optional<std::uint64_t>{991U} : std::nullopt;
+        },
+        .direct_dispatch = [&](std::uint64_t target, std::uint16_t event,
+                               std::uint32_t argument, std::uint64_t sender) {
+          session_trace.push_back("dispatch");
+          check(target == 991U && event == 0x401U && argument == 40U && sender == 1234U);
+        },
+    };
+    FirstCutCommandSession session(first_cut_commands, event_mapping, 10.0F,
+                                   std::move(session_services), 1234U);
+    first_cut_commands[0].target_reference = 777U;
+    event_mapping[1] = 2U;
+    session.run(0.0F);
+    check(session_trace.empty());
+    session.run(2.5F);
+    check(session_trace == std::vector<std::string>({"reference:91", "dispatch"}));
+    session_trace.clear();
+    session.run(4.0F);
+    check(session_trace.empty());
+    session.reset_start();
+    session_trace.clear();
+    session.run(4.0F);
+    check(session_trace == std::vector<std::string>({"reference:91", "dispatch"}));
+    rejects([&] {
+      FirstCutCommandSession incomplete(first_cut_commands, event_mapping, 10.0F, {}, 1U);
+    });
+    session_trace.clear();
+    FirstCutCommandSession named_session(
+        std::span<const Command>{first_cut_commands}.subspan(1U, 1U), event_mapping, 10.0F,
+        FirstCutCommandSessionServices{
+            .resolve_reference = [](std::uint32_t) -> std::optional<std::uint64_t> {
+              return std::nullopt;
+            },
+            .resolve_name = [&](std::string_view name) -> std::optional<std::uint64_t> {
+              session_trace.push_back("name:" + std::string(name));
+              return name == "unavailable" ? std::optional<std::uint64_t>{992U} : std::nullopt;
+            },
+            .direct_dispatch = [&](std::uint64_t target, std::uint16_t event,
+                                   std::uint32_t argument, std::uint64_t sender) {
+              session_trace.push_back("named-dispatch");
+              check(target == 992U && event == 0x400U && argument == 41U && sender == 1235U);
+            },
+        },
+        1235U);
+    named_session.run(1.0F);
+    check(session_trace == std::vector<std::string>({"name:unavailable", "named-dispatch"}));
     return failures == 0 ? 0 : 1;
 }
