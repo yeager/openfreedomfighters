@@ -84,8 +84,8 @@ policies, not replicas of the original allocator.
 
 ## Remaining startup work
 
-Normal startup constructs RootGroup and the reviewed authored prefix, but does
-not yet construct the entire population or run global initialization.
+Normal startup constructs RootGroup and the reviewed authored directory, but
+does not run global initialization or construct the deferred runtime state.
 The remaining concrete constructors/readers/callbacks, live
 owner flags, root/additional-owner loader hooks, progress behavior, retirement,
 scene properties and shared command containers remain needed. The ordinary
