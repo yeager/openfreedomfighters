@@ -15,6 +15,11 @@ The supported data set is the Steam Windows release; other editions have not
 been validated. No original game files, executable code, soundtrack files, or
 other retail assets are included here.
 
+By default, OpenFreedomFighters looks for the owned data in
+`~/.openfreedomfighters` (or `%USERPROFILE%\\.openfreedomfighters` on Windows).
+Pass `--data PATH` to use another location, or set `OPENFREEDOMFIGHTERS_DATA`
+for a portable installation.
+
 ## Current state
 
 - The Steam executable has been disassembled for private research.
@@ -125,15 +130,16 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 
 # Check your installation without opening a window.
-./build/openfreedomfighters --data /path/to/FreedomFighters --verify-only
+./build/openfreedomfighters --verify-only
 
 # Start the current native prototype.
-./build/openfreedomfighters --data /path/to/FreedomFighters --mode original
+./build/openfreedomfighters --mode original
 ```
 
 Use the executable path produced by your build configuration; Windows builds
 use `openfreedomfighters.exe`. Replace `original` with `modern` to select the
-other profile.
+other profile. Pass `--data /path/to/FreedomFighters` when the owned install is
+not in the default location.
 
 F10 toggles settings. Close the window to exit. For development:
 

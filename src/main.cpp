@@ -11,6 +11,7 @@
 
 #include <charconv>
 #include <cstddef>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <iostream>
@@ -23,9 +24,25 @@
 namespace {
 
 void usage(std::ostream &output) {
-  output << "Usage: openfreedomfighters --data PATH [--mode original|modern] "
+  output << "Usage: openfreedomfighters [--data PATH] [--mode original|modern] "
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] [--diagnostic-scene]\n";
+}
+
+[[nodiscard]] std::filesystem::path default_game_data_path() {
+  // An explicit environment value is useful for portable installs and test
+  // systems. It never overrides --data.
+  if (const char *value = std::getenv("OPENFREEDOMFIGHTERS_DATA");
+      value != nullptr && *value != '\0')
+    return std::filesystem::path{value};
+#if defined(_WIN32)
+  const char *home = std::getenv("USERPROFILE");
+#else
+  const char *home = std::getenv("HOME");
+#endif
+  if (home == nullptr || *home == '\0')
+    return {};
+  return std::filesystem::path{home} / ".openfreedomfighters";
 }
 
 } // namespace
@@ -85,9 +102,12 @@ int main(int argc, char **argv) {
       return 2;
     }
   }
+  if (data_path.empty())
+    data_path = default_game_data_path();
   if (data_path.empty() && verify_only) {
     std::cerr
-        << "A legally purchased Freedom Fighters installation is required.\n";
+        << "A legally purchased Freedom Fighters installation is required; "
+           "pass --data PATH or set OPENFREEDOMFIGHTERS_DATA.\n";
     usage(std::cerr);
     return 2;
   }
