@@ -1040,6 +1040,12 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               controller->sequence_members.size()==host.resources().cut_references().size() &&
               controller->group_members.size()==host.resources().group_references().size(),
               "MovieControl owner reader retains real authored data and only proven list-resource mappings");
+        const auto controller_work=std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
+          return work.source_directory_index==host.resources().controller_index();
+        });
+        check(controller_work!=host.deferred_reader_work().end(),"MovieControl retains its deferred reader identity");
+        if(controller_work!=host.deferred_reader_work().end())
+          rejects([&]{host.apply_supported_movie_control_deferred_reader(*controller_work);});
         const auto window_work=std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
           return work.source_directory_index==host.resources().window_index();
         });
