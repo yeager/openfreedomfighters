@@ -63,3 +63,6 @@ world before replacing live state.
 This is deterministic infrastructure for future save and replay envelopes. It
 is not a retail-save format, does not contain presentation or game assets, and
 does not make the project compatible with the original game's serialization.
+
+The required ordered command-capture boundary for future replay is specified in
+[Simulation replay](SIMULATION_REPLAY.md).
