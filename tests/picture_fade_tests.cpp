@@ -1,5 +1,6 @@
 #include "off/cutscene/picture_fade.hpp"
 #include "off/cutscene/first_cut_fade_target_component.hpp"
+#include "off/cutscene/first_cut_fade_admission_plan.hpp"
 
 #include <cstdint>
 #include <iostream>
@@ -13,6 +14,7 @@ using Fade = off::cutscene::PictureFade;
 using State = Fade::State;
 using Effect = Fade::Effect;
 using FirstCutFade = off::cutscene::FirstCutFadeTargetComponent;
+using FirstCutFadeAdmissionEvidence = off::cutscene::FirstCutFadeAdmissionEvidence;
 constexpr auto control = Fade::EffectKind::owner_control;
 constexpr auto alpha = Fade::EffectKind::alpha;
 int failures = 0;
@@ -157,5 +159,37 @@ int main() {
     rejects([&] { FirstCutFade{0, 2, 4, [](bool) {}, [](std::uint8_t) {}}; });
     rejects([&] { FirstCutFade{1, 2, 2, [](bool) {}, [](std::uint8_t) {}}; });
     rejects([&] { FirstCutFade{1, 2, 4, {}, [](std::uint8_t) {}}; });
+
+    FirstCutFadeAdmissionEvidence admission_evidence{
+        true, true, true, true,
+        {{{4, 0x80000005U, 1, "ZWINPIC_FadeToBlack", 0, 0x100, 0x200, false, 2, 4},
+          {7, 0x80000008U, 1, "ZWINPIC_FadeToBlack", 0, 0x101, 0x201, false, 2, 4},
+          {9, 0x8000000aU, 1, "ZWINPIC_FadeToBlack", 0, 0x102, 0x202, false, 2, 4}}}};
+    const auto admission_plan = off::cutscene::make_first_cut_fade_admission_plan(admission_evidence);
+    static_assert(!std::is_copy_constructible_v<decltype(admission_plan)> &&
+                  !std::is_move_constructible_v<decltype(admission_plan)>);
+    const auto& registrations = admission_plan.registration_specs();
+    check(registrations[0].source_row == 4 && registrations[1].source_row == 7 &&
+          registrations[2].source_row == 9 && registrations[1].authored_owner_reference == 0x80000008U &&
+          registrations[2].canonical_component_handle == 0x202 &&
+          registrations[0].fade_in_event == 2 && registrations[2].fade_out_event == 4,
+          "admission plan preserves only externally proven fade registration facts");
+    auto invalid_admission = admission_evidence;
+    invalid_admission.reader_bracket_complete = false;
+    rejects([&] { static_cast<void>(off::cutscene::make_first_cut_fade_admission_plan(invalid_admission)); });
+    invalid_admission = admission_evidence; invalid_admission.attachments[1].source_row = 8;
+    rejects([&] { static_cast<void>(off::cutscene::make_first_cut_fade_admission_plan(invalid_admission)); });
+    invalid_admission = admission_evidence; invalid_admission.attachments[1].attachment_count = 2;
+    rejects([&] { static_cast<void>(off::cutscene::make_first_cut_fade_admission_plan(invalid_admission)); });
+    invalid_admission = admission_evidence; invalid_admission.attachments[1].attachment_identifier = "ZWINPIC_LogoFade";
+    rejects([&] { static_cast<void>(off::cutscene::make_first_cut_fade_admission_plan(invalid_admission)); });
+    invalid_admission = admission_evidence; invalid_admission.attachments[1].attachment_argument = 1;
+    rejects([&] { static_cast<void>(off::cutscene::make_first_cut_fade_admission_plan(invalid_admission)); });
+    invalid_admission = admission_evidence; invalid_admission.attachments[1].owner_hidden = true;
+    rejects([&] { static_cast<void>(off::cutscene::make_first_cut_fade_admission_plan(invalid_admission)); });
+    invalid_admission = admission_evidence; invalid_admission.attachments[1].fade_in_event = 3;
+    rejects([&] { static_cast<void>(off::cutscene::make_first_cut_fade_admission_plan(invalid_admission)); });
+    invalid_admission = admission_evidence; invalid_admission.attachments[1].canonical_component_handle = 0x200;
+    rejects([&] { static_cast<void>(off::cutscene::make_first_cut_fade_admission_plan(invalid_admission)); });
     return failures == 0 ? 0 : 1;
 }
