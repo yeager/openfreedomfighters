@@ -74,3 +74,11 @@ binding must therefore be made by generic component attachment or a later
 generic post-creation route. No owner vtable, final receiver, scene request,
 level, or mission edge has yet been recovered. The next trace targets that
 generic attachment boundary rather than serialized LinkMenu data.
+
+That generic boundary is now recovered: a shared inherited LinkMenu virtual
+setter replaces a prior non-null attachment through the old receiver, then
+stores the supplied owner in both LinkMenu owner fields. It is only attachment
+state; it issues no scene request. Multiple generic call sites exist, but the
+source-load/post-creation caller that attaches this LinkMenu and the concrete
+owner vtable remain unresolved. The receiver chain must therefore remain
+disconnected while tracing those callers.
