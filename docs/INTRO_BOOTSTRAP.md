@@ -642,6 +642,13 @@ view, subtype and binding gates. Only then can the record callback emit its
 supported descriptor batches. Device acceptance, texture upload and present are
 still independent, unrecovered boundaries.
 
+For each nonempty supported descriptor batch, the recovered backend bridge
+expands every descriptor into four vertices and six 16-bit indices, conditionally
+updates the retained stream/index binding state, and issues one device-facing
+draw request with the corresponding vertex, index and primitive counts. The
+terminal result is ignored. This proves request construction only, not device
+acceptance, pixels, loss handling, frame completion or presentation.
+
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
 copied controller payloads. Runtime acceptance additionally requires an actual
