@@ -80,11 +80,13 @@ void store_install_audit_cache(const std::filesystem::path& root,
     output.close();
     // The validator above intentionally reads only the final name, so validate
     // the staging bytes before exposing them through the public cache name.
-    std::ifstream input(staging, std::ios::binary);
-    std::string contents{std::istreambuf_iterator<char>{input}, {}};
-    if (contents != record_contents(identity)) {
-      std::filesystem::remove(staging, error);
-      return;
+    {
+      std::ifstream input(staging, std::ios::binary);
+      std::string contents{std::istreambuf_iterator<char>{input}, {}};
+      if (contents != record_contents(identity)) {
+        std::filesystem::remove(staging, error);
+        return;
+      }
     }
     std::filesystem::rename(staging, record, error);
     if (error)
