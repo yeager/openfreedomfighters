@@ -84,6 +84,51 @@ int main() {
           trace == std::vector<std::string>({"start0:110", "start1:110", "primary0:110:10:1", "complete:77"}));
   }
   {
+    // The optional command phase observes the one sampled timeline position
+    // after both member passes. It still runs when a member requests end, and
+    // therefore precedes synchronous cleanup and completion.
+    ActiveCutUpdate update({{10U, 0.0F, 0.5F}}, 100.0F);
+    int samples = 0;
+    std::vector<std::string> trace;
+    ActiveCutUpdateServices services{
+      .sample_scene_clock = [&] { ++samples; return 42U; },
+      .resolve_member = [](std::uint64_t) { return std::optional<ActiveCutTrackingRegistration>{{110U, 10U, ActiveCutTrackingCollection::primary}}; },
+      .start_member = [&](std::uint64_t, std::size_t) { trace.push_back("start"); },
+      .end_primary_member = [&](std::uint64_t, std::uint64_t, std::size_t, bool) { trace.push_back("end"); },
+      .resolve_retained_source = [](std::uint64_t) { return std::optional<std::uint64_t>{}; },
+      .end_secondary_member = [](std::uint64_t, std::uint64_t, std::size_t, bool) { check(false); },
+      .run_due_commands = [&](float position) {
+        check(position == 1.025390625F);
+        trace.push_back("commands");
+      },
+      .complete = [&](std::uint64_t) { trace.push_back("complete"); },
+    };
+    update.start(0U);
+    check(update.update(services) == ActiveCutUpdateResult::updated && samples == 1 &&
+          trace == std::vector<std::string>({"start", "end", "commands"}));
+    update.request_end();
+    check(update.update(services) == ActiveCutUpdateResult::completed && samples == 2 &&
+          trace == std::vector<std::string>({"start", "end", "commands", "commands", "complete"}));
+  }
+  {
+    // An unset optional command phase neither changes service validation nor
+    // inserts an observable callback between member passes and completion.
+    ActiveCutUpdate update({}, 100.0F);
+    int completions = 0;
+    ActiveCutUpdateServices services{
+      .sample_scene_clock = [] { return 1U; },
+      .resolve_member = [](std::uint64_t) { return std::optional<ActiveCutTrackingRegistration>{}; },
+      .start_member = [](std::uint64_t, std::size_t) {},
+      .end_primary_member = [](std::uint64_t, std::uint64_t, std::size_t, bool) {},
+      .resolve_retained_source = [](std::uint64_t) { return std::optional<std::uint64_t>{}; },
+      .end_secondary_member = [](std::uint64_t, std::uint64_t, std::size_t, bool) { check(false); },
+      .complete = [&](std::uint64_t) { ++completions; },
+    };
+    update.start(0U);
+    update.request_end();
+    check(update.update(services) == ActiveCutUpdateResult::completed && completions == 1);
+  }
+  {
     // A primary miss alone reaches the identity-matched secondary fallback.
     ActiveCutUpdate update({{200U, 0.0F, 1.0F}, {200U, 0.0F, 2.0F, false}}, 100.0F);
     std::uint32_t sampled = 1U;

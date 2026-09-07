@@ -79,6 +79,9 @@ struct ActiveCutUpdateServices {
   std::function<void(std::uint64_t, std::uint64_t, std::size_t, bool)> end_primary_member;
   std::function<std::optional<std::uint64_t>(std::uint64_t)> resolve_retained_source;
   std::function<void(std::uint64_t, std::uint64_t, std::size_t, bool)> end_secondary_member;
+  // Optional already-admitted command phase. It receives the one timeline
+  // sample used by both member passes; absence intentionally means no phase.
+  std::function<void(float)> run_due_commands;
   std::function<void(std::uint64_t)> complete;
 };
 
@@ -183,6 +186,11 @@ public:
     const auto position = timeline_position(services.sample_scene_clock(), scene_clock_start_);
     run_start_pass(position, services);
     run_end_pass(position, services);
+    // Commands remain part of the active update even when a member callback
+    // requested termination. Cleanup follows this phase, preserving the
+    // recovered pass ordering rather than turning an end request into an
+    // early return.
+    if (services.run_due_commands) services.run_due_commands(position);
 
     if (pending_end_) {
       cleanup(services);
