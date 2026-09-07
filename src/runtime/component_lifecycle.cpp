@@ -90,6 +90,10 @@ void ComponentLifecycle::construct_common(std::size_t index) {
   sequence_.phase_=advanced>=1.0F?0.0F:advanced;
   record.identity_ = static_cast<std::uint32_t>(sequence_.next_++);
   ++sequence_.live_;
+  record.previous_=tail_;
+  record.next_.reset();
+  if(tail_) at(*tail_).next_=index;
+  tail_=index;
   order_.push_back(index);
   record.instance_ = ConstructedComponent{
       {0,0,0,0,0,sequence_.construction_mode_ ? 0x10U : 0U,0,0},{},{}};
@@ -119,6 +123,7 @@ void ComponentLifecycle::construct_and_destroy_temporary_common() {
     record.constructed_=true;
     // Unlink the actual newest node before the optional lookup callback. No
     // callback may mutate construction order while this nested route runs.
+    unlink_live_node(index);
     order_.pop_back();
     if(!(record.state().status&0x10U) && optional_lookup_removal_)
       optional_lookup_removal_(*record.identity_);
@@ -128,44 +133,61 @@ void ComponentLifecycle::construct_and_destroy_temporary_common() {
     temporary_active_=false;
   } catch(...) {failed_=true;temporary_active_=false;throw;}
 }
+void ComponentLifecycle::unlink_live_node(std::size_t index) {
+  auto& record=at(index);
+  if(record.removed_) throw std::runtime_error("Component is already unlinked");
+  const auto previous=record.previous_;
+  const auto next=record.next_;
+  if(next) at(*next).previous_=previous;
+  else tail_=previous;
+  if(previous) at(*previous).next_=next;
+  record.previous_.reset();
+  record.next_.reset();
+}
 void ComponentLifecycle::pass(bool second, const ComponentLifecycleServices& services, std::size_t& visited) {
-  // Stable native boundary: callbacks may change live fields, not this list.
-  for (auto cursor = order_.size(); cursor > 0;) {
-    auto& record = at(order_[--cursor]);
-    if (record.removed_) continue;
+  // The second invocation enters here after phase one has returned and samples
+  // tail_ again.  Save the live predecessor before every callback: concrete
+  // callbacks may change fields but native policy rejects registry mutation.
+  for (auto cursor=tail_;cursor;) {
+    const auto current=*cursor;
+    auto& record=at(current);
+    const auto previous=record.previous_;
     ++visited;
     auto& state = record.state();
     const auto mask = second ? 2U : 1U;
-    if (!(state.requested & mask)) continue;
-    services.progress(second,record,visited);
-    if (state.attached_owner == 0) continue;
-    const auto owner = state.attached_owner;
-    const bool bypass=(state.requested & 0x200U)!=0;
-    const auto flags = services.owner_flags(owner);
-    if (!flags) continue;
-    if (bypass || !(*flags & 0x400U)) {
-      if (!(state.status & 1U)) {
-        const auto callback = second ? record.instance_->phase_two : record.instance_->phase_one;
-        if (!callback)
-          throw std::runtime_error("Unsupported component " + describe(record) +
-                                   (second ? " phase two" : " phase one"));
-        callback(record);
-        state.status |= second ? 8U : 4U;
-      }
-      if (state.status & 1U) {
-        services.retire(record);
-        record.removed_ = true;
-        --sequence_.live_;
-        record.instance_->phase_one = {};
-        record.instance_->phase_two = {};
+    if (state.requested & mask) {
+      services.progress(second,record,visited);
+      if (state.attached_owner != 0) {
+        const auto owner = state.attached_owner;
+        const bool bypass=(state.requested & 0x200U)!=0;
+        const auto flags = services.owner_flags(owner);
+        if(flags) {
+          if (bypass || !(*flags & 0x400U)) {
+            if (!(state.status & 1U)) {
+              const auto callback = second ? record.instance_->phase_two : record.instance_->phase_one;
+              if (!callback)
+                throw std::runtime_error("Unsupported component " + describe(record) +
+                                         (second ? " phase two" : " phase one"));
+              callback(record);
+              state.status |= second ? 8U : 4U;
+            }
+            if (state.status & 1U) {
+              services.retire(record);
+              unlink_live_node(current);
+              record.removed_ = true;
+              --sequence_.live_;
+              record.instance_->phase_one = {};
+              record.instance_->phase_two = {};
+            }
+          }
+          if (!second) services.post_phase_one(owner);
+        }
       }
     }
-    if (!second) services.post_phase_one(owner);
+    cursor=previous;
   }
 }
-void ComponentLifecycle::run_global_phases(const ComponentLifecycleServices& supplied) {
-  check_idle();
-  const auto services = supplied;
+void ComponentLifecycle::validate_global_phase_entry(const ComponentLifecycleServices& services) const {
   if (!services.progress || !services.owner_flags || !services.post_phase_one || !services.retire)
     throw std::runtime_error("Incomplete global component lifecycle services");
   for (const auto& record : records_)
@@ -177,16 +199,74 @@ void ComponentLifecycle::run_global_phases(const ComponentLifecycleServices& sup
     throw std::runtime_error("Global phases require all live scene components in the same registry");
   if (order_.size() > std::numeric_limits<std::size_t>::max()/2)
     throw std::runtime_error("Global component progress counter would overflow");
+}
+void ComponentLifecycle::run_global_phases_locked(const ComponentLifecycleServices& services) {
+  std::size_t visited=0;
+  pass(false, services,visited);
+  pass(true, services,visited);
+}
+void ComponentLifecycle::run_global_phases(const ComponentLifecycleServices& supplied) {
+  check_idle();
+  const auto services = supplied;
+  validate_global_phase_entry(services);
   busy_ = true;
   sequence_.busy_ = true;
   completed_ = false;
   try {
-    std::size_t visited=0;
-    pass(false, services,visited);
-    pass(true, services,visited);
+    run_global_phases_locked(services);
     completed_ = true;
     busy_ = false;
     sequence_.busy_ = false;
   } catch (...) { failed_ = true; busy_ = false; sequence_.busy_ = false; throw; }
+}
+void ComponentLifecycle::run_global_lifecycle(
+    std::span<const std::uint64_t> additional_resources,
+    const GlobalComponentLifecycleServices& supplied) {
+  check_idle();
+  const auto services=supplied;
+  validate_global_phase_entry(services.components);
+  if(!services.capture_progress_denominator || !services.root_pre_global || !services.root_post_global ||
+      !services.additional_owner || !services.additional_pre_global || !services.additional_post_global ||
+      !services.mark_resource_initialized)
+    throw std::runtime_error("Incomplete outer global lifecycle services");
+  if(additional_resources.size()>(std::numeric_limits<std::size_t>::max()-static_cast<std::size_t>(sequence_.live_))/2U)
+    throw std::runtime_error("Global lifecycle progress denominator would overflow");
+
+  // Preflight rejects null resource handles before any external hook observes a
+  // partial scene.  It intentionally cannot snapshot live owners: the
+  // reviewed route resolves them again at every visit boundary.
+  for(const auto resource:additional_resources)
+    if(resource==0) throw std::runtime_error("Additional global lifecycle resource is null");
+  const auto denominator=additional_resources.size()*2U+static_cast<std::size_t>(sequence_.live_);
+  busy_=true;
+  sequence_.busy_=true;
+  completed_=false;
+  try {
+    services.capture_progress_denominator(denominator);
+    services.root_pre_global();
+    for(const auto resource:additional_resources) {
+      const auto owner=services.additional_owner(resource);
+      if(!owner) throw std::runtime_error("Additional global lifecycle resource is unresolved");
+      if(*owner!=0) services.additional_pre_global(*owner);
+    }
+
+    run_global_phases_locked(services.components);
+
+    services.root_post_global();
+    for(const auto resource:additional_resources) {
+      const auto owner=services.additional_owner(resource);
+      if(!owner) throw std::runtime_error("Additional global lifecycle resource is unresolved");
+      services.mark_resource_initialized(resource);
+      if(*owner!=0) services.additional_post_global(*owner);
+    }
+    completed_=true;
+    busy_=false;
+    sequence_.busy_=false;
+  } catch(...) {
+    failed_=true;
+    busy_=false;
+    sequence_.busy_=false;
+    throw;
+  }
 }
 } // namespace off::runtime

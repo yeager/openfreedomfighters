@@ -84,6 +84,7 @@ private:
   struct Schedule { float interval; std::uint32_t clock; };
   std::optional<Schedule> schedule_;
   std::optional<ConstructedComponent> instance_;
+  std::optional<std::size_t> previous_, next_;
   bool constructed_{}, removed_{};
 };
 
@@ -102,6 +103,26 @@ struct ComponentLifecycleServices {
   // some concrete destruction routes call cleanup again. Native tombstoning
   // happens only AFTER this operation succeeds, and does not replace it.
   ComponentCallback retire;
+};
+
+// The loader owns the root and additional-resource boundaries around the two
+// retained component passes.  These are deliberately service calls instead of
+// a guessed owner implementation: a host which cannot supply a concrete hook,
+// resource resolution, initialization mark, or progress setup must not report
+// global scene initialization as complete.
+struct GlobalComponentLifecycleServices {
+  ComponentLifecycleServices components;
+  // Captures the original bookkeeping denominator: two visits for every
+  // additional resource plus the live registry count at initializer entry.
+  std::function<void(std::size_t)> capture_progress_denominator;
+  std::function<void()> root_pre_global;
+  std::function<void()> root_post_global;
+  // Resolves a current owner at each additional-resource visit.  A null owner
+  // is valid and skips that owner's hook; an unresolved resource is not.
+  std::function<std::optional<std::uint64_t>(std::uint64_t)> additional_owner;
+  std::function<void(std::uint64_t)> additional_pre_global;
+  std::function<void(std::uint64_t)> additional_post_global;
+  std::function<void(std::uint64_t)> mark_resource_initialized;
 };
 
 // Retained construction list shared by both global passes. Catalog insertion
@@ -130,16 +151,25 @@ public:
   // service does not populate a guessed lookup table or reset the scene.
   void set_optional_lookup_removal(std::function<void(std::uint32_t)> removal);
   void run_global_phases(const ComponentLifecycleServices& services);
+  // Complete checked outer ordering around the retained reverse component
+  // passes.  `additional_resources` is loader order, not a component list and
+  // not the saved-flags list.  This does not provide concrete callbacks.
+  void run_global_lifecycle(std::span<const std::uint64_t> additional_resources,
+                            const GlobalComponentLifecycleServices& services);
   [[nodiscard]] bool failed() const noexcept { return failed_; }
   [[nodiscard]] bool phases_completed() const noexcept { return completed_; }
   [[nodiscard]] bool construction_mode() const noexcept {return sequence_.construction_mode_;}
 private:
   void check_idle() const;
+  void validate_global_phase_entry(const ComponentLifecycleServices& services) const;
+  void run_global_phases_locked(const ComponentLifecycleServices& services);
+  void unlink_live_node(std::size_t index);
   void construct_common(std::size_t index);
   void pass(bool second, const ComponentLifecycleServices& services, std::size_t& visited);
   SceneComponentSequence& sequence_;
   std::vector<std::unique_ptr<ComponentRecord>> records_;
   std::vector<std::size_t> order_;
+  std::optional<std::size_t> tail_;
   std::function<void(std::uint32_t)> optional_lookup_removal_;
   std::optional<std::size_t> constructing_;
   bool temporary_active_{};

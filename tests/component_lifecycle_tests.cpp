@@ -1,4 +1,5 @@
 #include "off/runtime/component_lifecycle.hpp"
+#include <array>
 #include <iostream>
 #include <map>
 #include <stdexcept>
@@ -399,6 +400,59 @@ int main() {
       check(list.failed() && sequence.live_count()==0 && sequence.next_identity()==0 &&
             sequence.scheduling_phase()==0.0F && !list.at(index).identity() && list.construction_order().empty(),
             "clock supplier failure retains no scheduling or serial mutation");
+    }
+    {
+      Fixture f;
+      f.add(10, 1);
+      f.add(20, 2);
+      std::vector<std::string> outer;
+      std::map<std::uint64_t,std::uint64_t> owners{{101,10},{102,20}};
+      auto services=GlobalComponentLifecycleServices{
+        f.services,
+        [&](std::size_t denominator) { outer.push_back("denominator:"+std::to_string(denominator)); },
+        [&] { outer.push_back("root-pre"); },
+        [&] { outer.push_back("root-post"); },
+        [&](std::uint64_t resource) -> std::optional<std::uint64_t> {
+          outer.push_back("resolve:"+std::to_string(resource));
+          const auto found=owners.find(resource);
+          return found==owners.end()?std::nullopt:std::optional(found->second);
+        },
+        [&](std::uint64_t owner) { outer.push_back("pre:"+std::to_string(owner)); },
+        [&](std::uint64_t owner) { outer.push_back("post:"+std::to_string(owner)); },
+        [&](std::uint64_t resource) {
+          outer.push_back("initialized:"+std::to_string(resource));
+          // The second resource has a different current owner for the post
+          // pass, proving this model re-resolves rather than snapshots it.
+          if(resource==101) owners[102]=30;
+        }};
+      f.services.progress=[&](bool second,ComponentRecord& record,std::size_t) {
+        outer.push_back(std::string(second?"phase-two:":"phase-one:")+std::to_string(record.source().owner));
+      };
+      f.services.owner_flags=[](std::uint64_t) { return std::optional<std::uint32_t>{0}; };
+      f.services.post_phase_one=[&](std::uint64_t owner) { outer.push_back("component-post:"+std::to_string(owner)); };
+      services.components=f.services;
+      const std::array<std::uint64_t,2> additional{101,102};
+      f.lifecycle.run_global_lifecycle(additional,services);
+      check(outer==std::vector<std::string>{
+                "denominator:6","root-pre","resolve:101","pre:10","resolve:102","pre:20",
+                "phase-one:10","component-post:10","phase-two:20",
+                "root-post","resolve:101","initialized:101","post:10","resolve:102","initialized:102","post:30"},
+            "outer lifecycle orders root/additional hooks around live reverse component passes and re-resolves post owners");
+      check(f.lifecycle.phases_completed(),"complete outer lifecycle marks component passes complete only after post hooks");
+    }
+    {
+      Fixture f; f.add(1,0);
+      GlobalComponentLifecycleServices missing{};
+      rejects([&] { f.lifecycle.run_global_lifecycle({},missing); });
+      check(!f.lifecycle.failed() && !f.lifecycle.phases_completed(),
+            "missing outer lifecycle services reject before fabricated hooks or component passes");
+      auto services=GlobalComponentLifecycleServices{
+          f.services,[](std::size_t){},[]{},[]{},
+          [](std::uint64_t)->std::optional<std::uint64_t> { return std::nullopt; },
+          [](std::uint64_t){},[](std::uint64_t){},[](std::uint64_t){}};
+      const std::array<std::uint64_t,1> unresolved{9};
+      rejects([&] { f.lifecycle.run_global_lifecycle(unresolved,services); });
+      check(f.lifecycle.failed(),"unresolved additional resource aborts checked outer lifecycle visibly");
     }
     std::cout << "Retained component identity, reverse global lifecycle, live admission and failure prefixes verified.\n";
   } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
