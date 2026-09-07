@@ -3,6 +3,7 @@
 #include "off/data/compact_typed_value_decoder.hpp"
 #include "off/data/component_reader_context.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
+#include "off/data/deferred_reader_session.hpp"
 #include "off/data/keys_property_materializer.hpp"
 #include "off/data/owner_buf_keys_profile.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
@@ -936,6 +937,99 @@ int main() {
             const std::array<DeferredComponentReader, 0> none{};
             static_cast<void>(DeferredComponentDispatcher::dispatch(bad, none));
         }, "component dispatcher rejects truncated generic values");
+    }
+    {
+        using off::data::DeferredComponentReader;
+        using off::data::DeferredOwnerReaderResult;
+        using off::data::DeferredReaderSession;
+        using off::data::DeferredReaderSessionState;
+        using off::data::DeferredReaderWorkIdentity;
+
+        constexpr DeferredReaderWorkIdentity identity{0x441U, 0x1234U, 17U};
+        std::array owner_block{
+            std::byte{0xa5},
+            std::byte{0x03}, std::byte{0x11}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
+            std::byte{0x06}, std::byte{0xff}, std::byte{0xee},
+        };
+        DeferredReaderSession session(identity, owner_block);
+        owner_block[1] = std::byte{0x04};
+        session.prepare(identity);
+        bool copied_input = false;
+        session.read_owner([&](std::span<const std::byte> copied) {
+            copied_input = copied.size() == 9U && copied[1] == std::byte{0x03};
+            return DeferredOwnerReaderResult{copied.subspan(1U), 7U};
+        });
+        std::size_t reader_input_size = 0U;
+        const std::array<DeferredComponentReader, 1> readers{
+            [&](std::span<const std::byte>& input) { reader_input_size = input.size(); },
+        };
+        const auto dispatched = session.read_components(readers);
+        check(copied_input && reader_input_size == 7U && dispatched.dispatched_components == 1U &&
+                  dispatched.continuation.size() == 1U && dispatched.continuation.front() == std::byte{0xff} &&
+                  session.state() == DeferredReaderSessionState::component_read,
+              "deferred reader session copies one owner block and dispatches only its explicit component extent");
+        session.deactivate();
+        check(session.state() == DeferredReaderSessionState::deactivated && session.owner_block().empty(),
+              "deferred reader session deactivates and releases its copied owner block after component reading");
+
+        check_rejected([&] { session.prepare(identity); },
+                       "deferred reader session rejects reuse after deactivation");
+        check_rejected([&] {
+            const std::array<DeferredComponentReader, 1> one_reader{[](auto&) {}};
+            static_cast<void>(session.read_components(one_reader));
+        }, "deferred reader session rejects component reuse after deactivation");
+        check_rejected([&] {
+            DeferredReaderSession wrong_work(identity, owner_block);
+            wrong_work.prepare({identity.resource, identity.source_offset + 1U, identity.source_directory_index});
+        }, "deferred reader session requires the queued work identity at prepare");
+        check_rejected([&] {
+            DeferredReaderSession foreign_cursor(identity, owner_block);
+            foreign_cursor.prepare(identity);
+            const std::array foreign{std::byte{0x06}, std::byte{0xff}};
+            foreign_cursor.read_owner([&](std::span<const std::byte>) {
+                return DeferredOwnerReaderResult{foreign, foreign.size()};
+            });
+        }, "deferred reader session rejects a foreign owner-reader cursor");
+        check_rejected([&] {
+            DeferredReaderSession prefix_cursor(identity, owner_block);
+            prefix_cursor.prepare(identity);
+            prefix_cursor.read_owner([](std::span<const std::byte> copied) {
+                return DeferredOwnerReaderResult{copied.first(2U), 2U};
+            });
+        }, "deferred reader session rejects an owner cursor that is not a suffix of its copied block");
+        check_rejected([&] {
+            DeferredReaderSession no_extent(identity, owner_block);
+            no_extent.prepare(identity);
+            no_extent.read_owner([](std::span<const std::byte> copied) {
+                return DeferredOwnerReaderResult{copied, 0U};
+            });
+        }, "deferred reader session requires an owner-declared component extent");
+        DeferredReaderSession failed_reader(identity, owner_block);
+        failed_reader.prepare(identity);
+        check_rejected([&] {
+            failed_reader.read_owner([](std::span<const std::byte>) -> DeferredOwnerReaderResult {
+                throw std::runtime_error("synthetic owner reader failure");
+            });
+        }, "deferred reader session propagates owner-reader failures");
+        check(failed_reader.state() == DeferredReaderSessionState::deactivated,
+              "deferred reader session permanently deactivates after an owner-reader failure");
+        check_rejected([&] {
+            const std::array<DeferredComponentReader, 0> no_readers{};
+            static_cast<void>(failed_reader.read_components(no_readers));
+        }, "deferred reader session rejects component work after a failed owner reader");
+        DeferredReaderSession failed_component(identity, owner_block);
+        failed_component.prepare(identity);
+        failed_component.read_owner([](std::span<const std::byte> copied) {
+            return DeferredOwnerReaderResult{copied.subspan(1U), 7U};
+        });
+        check_rejected([&] {
+            const std::array<DeferredComponentReader, 1> throwing_reader{
+                [](std::span<const std::byte>&) { throw std::runtime_error("synthetic component failure"); },
+            };
+            static_cast<void>(failed_component.read_components(throwing_reader));
+        }, "deferred reader session propagates component-reader failures");
+        check(failed_component.state() == DeferredReaderSessionState::deactivated,
+              "deferred reader session permanently deactivates after a component-reader failure");
     }
     {
         using off::data::ComponentReaderContext;
