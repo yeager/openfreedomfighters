@@ -134,6 +134,20 @@ uploads all 26 intro images. An earlier 45-second run timed out; the subsequent
 run with a 120-second ceiling completed. This proves the data-check,
 construction and GPU-upload path, not intro drawing, audio playback or the menu.
 
+## Support-library boundary
+
+The reviewed normal FF-Intro support-library route enumerates its source entries
+and forwards only the applicable entries to a factory-specific engine hook. In
+the examined startup factory, that hook completes as an inert notification: it
+does not create a dependency, resolve an export, or mutate scene state.
+
+This is a narrow behavior fact, not a global loader policy. It does not prove
+which dynamic-library APIs execute on other startup paths, their failure rules,
+or any renderer/plugin initialization. OpenFreedomFighters therefore does not
+load original DLLs, resolve original exports, or use original binaries as a
+runtime dependency. A future native equivalent must have separately recovered
+call order, inputs, outputs, and error semantics before it can affect a scene.
+
 ## Retained controller initialization
 
 `IntroRuntime` owns `IntroControllerInitialization`, including the controller's
