@@ -7,16 +7,16 @@
 
 namespace off::runtime {
 
-// The recovered owner-side notification boundary. It deliberately has no
-// resource, hierarchy, cache, or renderer identity.
+// A typed local notification boundary for the unresolved MatPos owner target.
+// It deliberately has no resource, hierarchy, cache, or renderer identity.
 class MatPosOwnerTransformInvalidation {
 public:
     virtual ~MatPosOwnerTransformInvalidation() = default;
     virtual void invalidate_matpos_owner_local_transform() noexcept = 0;
 };
 
-// Owner-local state written by the recovered shared MatPos transform bridge.
-// Downstream invalidation semantics are intentionally not inferred here.
+// A detached owner-local state model. The unresolved MatPos target is not yet
+// proven to write this state or to use this notification contract.
 class MatPosOwnerLocalTransformState final {
 public:
     using Basis = std::array<float, 9>;

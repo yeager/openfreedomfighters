@@ -60,17 +60,22 @@ every application, and rejects non-finite basis or translation values. Its
 receiver has no result channel and the binding retains none of the sampled
 values. Provider teardown and explicit invalidation both disable later calls.
 
-The shared provider bridge writes a typed owner-local transform state only when
-the complete basis or translation changes. A basis comparison preserves float
-bit identity; translation uses numeric equality. On change, the whole local
-state is committed, marked dirty, then synchronously notifies a typed
-invalidation service. This state has no resource, hierarchy, cache, or
-renderer identity, and rejects non-finite samples before any mutation.
+The concrete receiver of that virtual call remains unrecovered. In particular,
+it is not yet proven to be the separately recovered GMS object transform
+setter, position-notification service, picture system, or renderer path.
 
-Parent-world composition and any relation from the invalidation service to
-picture, camera, view, or render-pass state are still unrecovered.
-Consequently no current runtime binds this seam to an intro owner or uses it to
-claim animation or presentation.
+`MatPosOwnerLocalTransformState` is therefore a detached, typed test model for
+a possible owner-local state consumer. It compares a complete basis by float
+bit identity and translation numerically; a change commits the whole state,
+marks it dirty, then synchronously notifies a typed service. It has no resource,
+hierarchy, cache, or renderer identity and rejects non-finite samples before
+any mutation. The runtime does not bind it to an intro owner.
+
+The separately recovered GMS transform path reaches position/bounds processing
+only. Its later renderer traversal has independent mode, resource, renderer,
+view and enabled-camera gates. No concrete object identity or callback joins
+that path to MatPos. Consequently no current runtime uses either seam to claim
+animation or presentation.
 
 ## Lifecycle status
 

@@ -85,7 +85,7 @@ int main() {
         state.apply(second_basis, moved, invalidation);
         check(invalidation.calls == 3 && invalidation.observed_basis == second_basis,
               "each distinct accepted transform synchronously notifies once");
-        std::cout << "MatPos owner-local transform state commits and dirties without renderer admission.\n";
+        std::cout << "Detached owner-local transform state commits and dirties without renderer admission.\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         return 1;
