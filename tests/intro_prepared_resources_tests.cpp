@@ -36,14 +36,6 @@ int failures = 0;
 #define OFF_NOINLINE
 #endif
 
-// Keep independent integration scenarios out of one giant test-main frame.
-// MSVC's exception-cleanup layout made that frame exceed the Windows runner's
-// stack budget even though each scenario is independently bounded.
-template <class Function>
-OFF_NOINLINE void run_isolated(Function &&function) {
-    std::forward<Function>(function)();
-}
-
 void check(bool condition, const char* text) {
     if (!condition) { ++failures; std::cerr << "FAIL: " << text << '\n'; }
 }
@@ -728,10 +720,12 @@ void archive(const std::filesystem::path& path, const std::vector<std::pair<std:
 }
 }
 
-int main() {
+// These are deliberately named functions, rather than noinline lambdas.  MSVC
+// emits each lambda body as one function, so the earlier lambda wrappers still
+// left their large exception-cleanup frames intact on the Windows test runner.
+static OFF_NOINLINE void test_named_global_envelopes() {
     using off::graphics::IntroPreparedResources;
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
-    run_isolated([] {
     {
       Bytes image(40,std::byte{0x6d});
       constexpr std::uint32_t section_offset=7;
@@ -765,8 +759,9 @@ int main() {
       short_block[7]=std::byte{'X'}; short_block[8]=std::byte{0};
       rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(short_block,7,12); });
     }
-    });
-    run_isolated([] {
+}
+
+static OFF_NOINLINE void test_prepared_runtime_scopes() {
     {
       Bytes image(32, std::byte{0x6d});
       constexpr std::uint32_t section_offset=12;
@@ -840,6 +835,9 @@ int main() {
             app.component_class_notification_sequence("ZLIST_CutSequenceList")==0 && app.vert_anim_event()==29 &&
             app.cut_sequence_lists()==shared,"registration preserves unrelated application state and rejects duplicate reset");
     }
+}
+
+static OFF_NOINLINE void test_complete_runtime_scopes() {
     for(const bool policy:{false,true}) {
       Fixture complete(false,true,true,true,true,true,true,true,true,true,true);
       off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
@@ -1223,6 +1221,9 @@ int main() {
       rejects([&]{host.run_postconstruction_reader_bracket(0x9aU,reader_services);});
       rejects([&]{host.construct_remaining_directory_without_engine_renderer();});
     }
+}
+
+static OFF_NOINLINE void test_room_animation_runtime_scope() {
     for(const bool existing_shared_state:{false,true}) {
       Fixture room_fixture(false,true,true,true,true,true,true,true,true);
       off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
@@ -1417,8 +1418,9 @@ int main() {
             "room construction does not enable position collection, register renderer cameras or execute loader tail");
       rejects([&]{host.construct_room_animation_scope_without_engine_renderer();});
     }
-    });
-    run_isolated([] {
+}
+
+static OFF_NOINLINE void test_visual_scope_lifecycle() {
       Fixture fixture;
     {
       Fixture visual_fixture(false,true,true,true,true,true,true,true);
@@ -2182,8 +2184,9 @@ int main() {
             app.live_variables().enumerate("Show2d")==std::vector<off::runtime::LiveVariableHandle>{existing_show.handle()},
             "scene destruction releases the live console lease before Window scalar storage");
     }
-    });
-    run_isolated([] {
+}
+
+static OFF_NOINLINE void test_prepared_resource_variants() {
       Fixture fixture;
     {
       Fixture leading(false,true);
@@ -2475,8 +2478,9 @@ int main() {
       set(wrong_parameter.payload,wrong_parameter.attachment_offsets[9]+8,std::bit_cast<std::uint32_t>(1.0F));
       rejects([&] { (void)wrong_parameter.build(); });
     }
-    });
-    run_isolated([] {
+}
+
+static OFF_NOINLINE void test_runtime_and_archive_lifecycle() {
     Fixture fixture;
     std::int32_t clock_sample=1000;
     off::runtime::SceneComponentSequence component_sequence{[]{return std::uint32_t{0};}};
@@ -2686,6 +2690,16 @@ int main() {
       rejects([&] { host.project_selected_window_camera_state(); });
       check(!host.camera().associated_target(), "unsupported window projection has no camera effects");
     }
+}
+
+static OFF_NOINLINE void test_runtime_scene_identity_and_later() {
+    Fixture fixture;
+    std::int32_t clock_sample=1000;
+    off::runtime::SceneComponentSequence component_sequence{[]{return std::uint32_t{0};}};
+    off::runtime::ApplicationServices application(
+        off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+        {[] { return std::int64_t{99}; },[&] { return clock_sample; }},
+        []() -> off::audio::SoundVolumeBackend* { return nullptr; });
     {
       off::graphics::IntroRuntimeHandle expired_camera;
       {
@@ -2849,6 +2863,16 @@ int main() {
       check(queued==2 && first.camera_for_owner(*created).flags()==0x10020,"canonical pointer motion preserves separate owner flags");
       camera_application.sound_records().clear_scene_listener();
     }
+}
+
+static OFF_NOINLINE void test_default_camera_and_archive_lifecycle() {
+    Fixture fixture;
+    std::int32_t clock_sample=1000;
+    off::runtime::SceneComponentSequence component_sequence{[]{return std::uint32_t{0};}};
+    off::runtime::ApplicationServices application(
+        off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+        {[] { return std::int64_t{99}; },[&] { return clock_sample; }},
+        []() -> off::audio::SoundVolumeBackend* { return nullptr; });
     for(bool mode:{false,true}) for(std::uint32_t parent_flags:{0U,0x400U,0x800U,0xc00U,0x40000U,0x40000000U,0xffffffffU}) {
       off::graphics::IntroRuntime host(fixture.build(),application,component_sequence);
       host.assign_resource_state(host.root_handle(),{parent_flags,{}});
@@ -3235,6 +3259,17 @@ int main() {
         rejects([&] { (void)with_audio.audio()->read_encoded(0); });
         rejects([&] { (void)off::graphics::load_intro_prepared_resources(sound_path); });
     }
-    });
+}
+
+int main() {
+    test_named_global_envelopes();
+    test_prepared_runtime_scopes();
+    test_complete_runtime_scopes();
+    test_room_animation_runtime_scope();
+    test_visual_scope_lifecycle();
+    test_prepared_resource_variants();
+    test_runtime_and_archive_lifecycle();
+    test_runtime_scene_identity_and_later();
+    test_default_camera_and_archive_lifecycle();
     return failures == 0 ? 0 : 1;
 }
