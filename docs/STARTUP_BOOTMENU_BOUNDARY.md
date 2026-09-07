@@ -29,3 +29,10 @@ playable-scene target, a scene-manager request, or a main-menu selection in
 that chain. Public code must therefore not bind a key, controller button, F10
 action, or `PressStart` notification directly to a guessed level. The next
 required trace follows the notification recipient and the reached owner route.
+
+That owner route is now partially recovered too: its reached virtual operation
+can conditionally look up the retained `rGameMenu` object and changes internal
+owner state before delegating to common window handling. It still has no
+verified level identity, player/mission operation, or scene-manager request.
+`rGameMenu` is therefore an intermediate live-object boundary, not permission
+to infer a first campaign scene from a menu label or archive ordering.
