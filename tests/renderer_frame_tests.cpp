@@ -149,5 +149,66 @@ int main() {
           "backend-maintenance", "post", "end", "completion"} && clock.value() == 2,
           "outer coordinator can retain existing inner backend traversal without collapsing its distinct gates");
   }
+  {
+    OrdinarySceneUpdate update;
+    LiveRendererNode third{3, nullptr}, second{2, &third}, first{1, &second};
+    std::vector<std::string> order;
+    const OrdinarySceneUpdateHooks hooks{
+      [&] { order.push_back("scheduled"); }, [&] { order.push_back("ordinary"); },
+      [&] { order.push_back("bounds"); }, [&] { order.push_back("maintenance"); },
+      [&](LiveRendererNode& node) {
+        order.push_back("renderer:" + std::to_string(node.identity));
+        if (node.identity == 1) node.next = &third;
+      }, [&] { order.push_back("post"); }};
+    update.run(true, &first, hooks);
+    check(order == std::vector<std::string>{"scheduled", "ordinary", "bounds", "maintenance",
+          "renderer:1", "renderer:3", "post"},
+          "ordinary update preserves work order and reads next renderer after its callback");
+    order.clear(); update.run(false, &first, hooks);
+    check(order == std::vector<std::string>{"scheduled", "ordinary", "bounds", "maintenance"},
+          "render false suppresses only linked renderer traversal and post-render work");
+  }
+  {
+    RendererFrameClock clock; EligibleRendererFrame frame; EligibleRendererFrameState state{8, 9};
+    std::vector<std::string> order;
+    const EligibleRendererFrameHooks hooks{
+      [&] { order.push_back("suppressed"); return false; },
+      [&] { order.push_back("ready"); return true; }, [&] { order.push_back("begin"); return false; },
+      [&] { order.push_back("backend"); }, [&] { order.push_back("post"); },
+      [&] { order.push_back("end"); }, [&] { order.push_back("complete"); }};
+    check(frame.run(clock, state, true, true, hooks) == RendererFrameOutcome::admission_failed &&
+          state.local_counter_a == 0 && state.local_counter_b == 0 && !state.in_scene && clock.value() == 2 &&
+          order == std::vector<std::string>{"suppressed", "ready", "begin", "complete"},
+          "eligible device failure resets local counters but still completes and advances the engine word");
+    state = {4, 5}; order.clear();
+    check(frame.run(clock, state, false, true, hooks) == RendererFrameOutcome::skipped &&
+          state.local_counter_a == 4 && state.local_counter_b == 5 && !state.in_scene && clock.value() == 2 && order.empty(),
+          "failed initialized gate neither resets counters nor calls device services");
+  }
+  {
+    BackendTraversal traversal;
+    const std::array<BackendAdmittedView, 3> first_views{{{10, 100}, {11, std::nullopt}, {12, 102}}};
+    const std::array<BackendAdmittedView, 1> second_views{{{20, 200}}};
+    const std::array<BackendStateInput, 3> states{{{9, 90, first_views}, {9, 91, second_views}, {8, 80, {}}}};
+    std::vector<std::string> order;
+    unsigned rounds{};
+    const BackendTraversalHooks hooks{
+      [&](auto state) { order.push_back("state:" + std::to_string(state)); },
+      [](auto camera) { return camera != 102; },
+      [&](auto camera, auto view) { order.push_back("transform:" + std::to_string(camera) + ":" + std::to_string(view)); },
+      [&](auto state, auto view) { order.push_back("begin:" + std::to_string(state) + ":" + std::to_string(view)); },
+      [&](auto state, auto view) { order.push_back("view:" + std::to_string(state) + ":" + std::to_string(view)); },
+      [&](auto state, auto view) { order.push_back("end-view:" + std::to_string(state) + ":" + std::to_string(view)); },
+      [&](auto state) { order.push_back("maintenance:" + std::to_string(state)); },
+      [&] { order.push_back("prepare"); },
+      [&](auto retained) { order.push_back("preselect:" + std::to_string(retained.size())); },
+      [&](auto state) { order.push_back("draw:" + std::to_string(state)); return rounds++ == 0; },
+      [&] { order.push_back("restore"); }};
+    traversal.run(9, states, hooks);
+    check(order == std::vector<std::string>{"state:90", "transform:100:10", "begin:90:10", "view:90:10", "end-view:90:10",
+          "state:91", "transform:200:20", "begin:91:20", "view:91:20", "end-view:91:20",
+          "maintenance:90", "maintenance:91", "prepare", "preselect:2", "draw:90", "draw:91", "draw:90", "draw:91", "restore"},
+          "backend consumes one matching state snapshot, indexed live views, then whole-state drawing rounds");
+  }
   return failures == 0 ? 0 : 1;
 }
