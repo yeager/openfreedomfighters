@@ -396,7 +396,7 @@ void IntroRuntime::construct_first_authored_group() {
     ++count_group_selector_;
     first_authored_group_->source_word=source.child_value;
     first_authored_group_->flags=(first_authored_group_->flags&0x00ffffffU)|(source.object_flags&0xff000000U);
-    deferred_reader_work_.push_back({resource,source.deferred_source_offset});
+    deferred_reader_work_.push_back({resource,source.deferred_source_offset,0,false,{}});
     directory_resource_mapping_.resize(directory.size());
     directory_resource_mapping_[0]=resource;
     manager_row_edit_=false;
@@ -547,7 +547,7 @@ void IntroRuntime::construct_group_row_without_engine_renderer(std::size_t row) 
         group->component_mask=auxiliary.component_mask;
         scene_resource_edit_=true;
       }
-      if(source.deferred_source_offset) deferred_reader_work_.push_back({resource,source.deferred_source_offset});
+      if(source.deferred_source_offset) deferred_reader_work_.push_back({resource,source.deferred_source_offset,row,false,{}});
       directory_resource_mapping_.at(row)=resource;
       manager_row_edit_=false;
       scene_resource_edit_=false;
@@ -792,7 +792,7 @@ void IntroRuntime::construct_non_group_row_without_engine_renderer(std::size_t r
         construct_owner_attachments(row,*mask,*attachments);
         scene_resource_edit_=true;
       }
-      if(source.deferred_source_offset) deferred_reader_work_.push_back({resource,source.deferred_source_offset});
+      if(source.deferred_source_offset) deferred_reader_work_.push_back({resource,source.deferred_source_offset,row,false,{}});
       directory_resource_mapping_.at(row)=resource;
       manager_row_edit_=false;scene_resource_edit_=false;
 }
@@ -1155,7 +1155,7 @@ void IntroRuntime::construct_authored_camera_without_engine_renderer() {
     set_resource_flags_no_maintenance(resource,current,~current,{resource_allocation_enabled_,false});
     // Normal registration returns at resource hide. Camera enabled is a
     // separate word; neither renderer membership nor dimensions change here.
-    deferred_reader_work_.push_back({resource,source.deferred_source_offset});
+    deferred_reader_work_.push_back({resource,source.deferred_source_offset,row,false,{}});
     directory_resource_mapping_.at(row)=resource;
     manager_row_edit_=false;scene_resource_edit_=false;
     resource_load_stage_=IntroResourceLoadStage::authored_camera_ready;
@@ -1445,6 +1445,48 @@ void IntroRuntime::construct_remaining_directory_without_engine_renderer() {
   } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
 }
 
+void IntroRuntime::prepare_deferred_references(IntroDeferredReaderWork& work) {
+  const auto& sources=resources_.sources();
+  const auto& directory=sources.directory();
+  if(work.source_directory_index>=directory.size() ||
+      directory.at(work.source_directory_index).deferred_source_offset!=work.source_offset)
+    throw std::runtime_error("Deferred reader work has no matching source-directory block");
+
+  // This marker belongs to the deferred block, rather than to an owner class
+  // or allocation slot.  It is intentionally set before any concrete reader.
+  work.processed=true;
+
+  // The approved parser currently exposes authored object-reference lists only
+  // for the controller's two explicit list sources.  Do not guess at another
+  // tagged grammar merely because a later concrete reader has a source block.
+  const auto sequence_source=sources.local_source_for_authored_reference(
+      resources_.controller().sequence_reference);
+  const auto group_source=sources.local_source_for_authored_reference(
+      resources_.controller().group_reference);
+  std::span<const std::uint32_t> raw_references;
+  if(sequence_source && *sequence_source==work.source_directory_index)
+    raw_references=resources_.cut_references();
+  else if(group_source && *group_source==work.source_directory_index)
+    raw_references=resources_.group_references();
+  else
+    return;
+
+  std::vector<std::optional<IntroRuntimeResourceHandle>> translated;
+  translated.reserve(raw_references.size());
+  for(const auto raw_reference:raw_references) {
+    const auto source=sources.local_source_for_authored_reference(raw_reference);
+    if(!source) {
+      translated.push_back(std::nullopt);
+      continue;
+    }
+    if(*source>=directory_resource_mapping_.size() ||
+        !directory_resource_mapping_.at(*source))
+      throw std::runtime_error("Authored deferred reference has no runtime source-directory mapping");
+    translated.push_back(*directory_resource_mapping_.at(*source));
+  }
+  work.translated_references=std::move(translated);
+}
+
 void IntroRuntime::run_postconstruction_reader_bracket(
     std::uint64_t retained_saved_value,const IntroPostconstructionReaderServices& services) {
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
@@ -1464,11 +1506,9 @@ void IntroRuntime::run_postconstruction_reader_bracket(
         !resource_state_for_handle(work.resource))
       return false;
     const auto& directory=resources_.sources().directory();
-    for(std::size_t source=0;source<directory.size();++source)
-      if(directory_resource_mapping_.at(source)==work.resource &&
-          directory[source].deferred_source_offset==work.source_offset)
-        return true;
-    return false;
+    return work.source_directory_index<directory.size() &&
+        directory_resource_mapping_.at(work.source_directory_index)==work.resource &&
+        directory[work.source_directory_index].deferred_source_offset==work.source_offset;
   };
   const auto mapped_script=[this](const IntroSourceScriptWork& work) {
     return work.resource.value && work.source_offset && associated_resource_owner(work.resource) &&
@@ -1493,8 +1533,9 @@ void IntroRuntime::run_postconstruction_reader_bracket(
     }
     services.external_loader_service(retained_saved_value);
     services.pre_reader_service();
-    for(const auto& work:deferred_reader_work_) {
+    for(auto& work:deferred_reader_work_) {
       if(!mapped_deferred(work)) throw std::runtime_error("Deferred reader work lost its mapped owner or source span");
+      prepare_deferred_references(work);
       services.prepare_deferred_reader(work);
       services.owner_reader_boundary(work);
       services.component_reader_boundary(work);

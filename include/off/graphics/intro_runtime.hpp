@@ -261,6 +261,13 @@ struct IntroSavedResourceFlags {
 struct IntroDeferredReaderWork {
   IntroRuntimeResourceHandle resource;
   std::uint32_t source_offset;
+  // Directory identity is retained independently of the allocator resource.
+  // It is the only domain used for deferred authored-reference translation.
+  std::size_t source_directory_index{};
+  bool processed{};
+  // A null authored word remains null.  Non-null entries are immutable native
+  // resource identities resolved before either reader boundary observes work.
+  std::vector<std::optional<IntroRuntimeResourceHandle>> translated_references;
 };
 struct IntroSourceScriptWork {
   IntroRuntimeResourceHandle resource;
@@ -676,6 +683,7 @@ private:
   void assign_fresh_directory_metadata(IntroRuntimeResourceHandle resource,std::uint32_t metadata);
   void assign_directory_property(std::size_t source);
   void attach_directory_owner(std::size_t source,IntroRuntimeResourceHandle resource,IntroRuntimeHandle parent);
+  void prepare_deferred_references(IntroDeferredReaderWork& work);
   [[nodiscard]] IntroAuthoredGroupOwner* group_owner(IntroRuntimeHandle owner);
   [[nodiscard]] IntroConstructedRoomOwner* nearest_authored_room(IntroRuntimeHandle parent);
   [[nodiscard]] IntroOwnerAuxiliary& ensure_owner_auxiliary(std::size_t source);

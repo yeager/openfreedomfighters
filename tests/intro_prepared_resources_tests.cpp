@@ -919,11 +919,45 @@ int main() {
             segment->sound_segment->probability==1 && segment->sound_segment->subtitle.empty(),
             "sound attachments retain cold constructor-only state without reader playback or duration work");
       std::vector<std::string> reader_events;
+      std::size_t prepared_reader_count{};
+      std::size_t translated_reference_list_count{};
       off::graphics::IntroPostconstructionReaderServices reader_services{
           [&](std::uint64_t value){reader_events.push_back("external:"+std::to_string(value));},
           [&](const off::graphics::IntroSourceScriptWork&){reader_events.push_back("script");},
           [&]{reader_events.push_back("pre");},
-          [&](const off::graphics::IntroDeferredReaderWork&){reader_events.push_back("prepare");},
+          [&](const off::graphics::IntroDeferredReaderWork& work){
+            reader_events.push_back("prepare");
+            ++prepared_reader_count;
+            check(work.processed,
+                  "deferred owner block is marked processed before its concrete reader boundary");
+            const auto& sources=host.resources().sources();
+            const auto sequence_source=sources.local_source_for_authored_reference(
+                host.resources().controller().sequence_reference);
+            const auto group_source=sources.local_source_for_authored_reference(
+                host.resources().controller().group_reference);
+            std::span<const std::uint32_t> raw;
+            if(sequence_source && *sequence_source==work.source_directory_index)
+              raw=host.resources().cut_references();
+            else if(group_source && *group_source==work.source_directory_index)
+              raw=host.resources().group_references();
+            else {
+              check(work.translated_references.empty(),
+                    "unsupported deferred grammar does not invent native reference translations");
+              return;
+            }
+            ++translated_reference_list_count;
+            check(work.translated_references.size()==raw.size(),
+                  "supported deferred list preserves authored reference count");
+            for(std::size_t reference=0;reference<raw.size();++reference) {
+              const auto target=sources.local_source_for_authored_reference(raw[reference]);
+              if(!target)
+                check(!work.translated_references[reference],
+                      "zero authored deferred reference remains native null");
+              else
+                check(work.translated_references[reference]==host.directory_resource_mapping()[*target],
+                      "deferred reference uses source-directory identity rather than an allocation ordinal");
+            }
+          },
           [&](const off::graphics::IntroDeferredReaderWork&){reader_events.push_back("owner");},
           [&](const off::graphics::IntroDeferredReaderWork&){reader_events.push_back("component");},
           [&]{reader_events.push_back("end");}};
@@ -936,6 +970,7 @@ int main() {
       } else {
         check(host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete &&
               host.reader_bracket_retained_saved_value()==0x9aU && reader_events.size()==4+420*3 &&
+              prepared_reader_count==420 && translated_reference_list_count==2 &&
               reader_events[0]=="external:154" && reader_events[1]=="external:154" && reader_events[2]=="pre" &&
               reader_events[3]=="prepare" && reader_events[4]=="owner" && reader_events[5]=="component" &&
               reader_events.back()=="end" && host.deferred_reader_work().size()==420,
