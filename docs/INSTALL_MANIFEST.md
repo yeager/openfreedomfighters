@@ -59,6 +59,11 @@ cue resolver or audio lifecycle. There is still no verified cue mapping,
 soundtrack substitution, or audible fallback. Hash verification and successful
 decode are not playback-suitability tests.
 
+Private comparison currently finds title-only correspondences for Main Title
+and Final Battle. That is insufficient to establish payload identity, looping,
+gain, transitions, or adaptive-music behavior, so it does not authorize a
+soundtrack substitution for either cue.
+
 Tests use independent fixtures for missing/partial/corrupt optional files,
 same-size edits with unchanged timestamps, collisions, symlinks and cancellation.
 Retail contents are not needed by CI.

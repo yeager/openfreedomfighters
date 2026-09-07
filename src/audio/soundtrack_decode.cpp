@@ -18,9 +18,9 @@
 
 #include <algorithm>
 #include <cctype>
-#include <functional>
 #include <fstream>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -57,27 +57,66 @@ constexpr std::uint64_t maximum_decoded_sample_values = 64ULL * 1024ULL * 1024UL
   return extension;
 }
 
-[[nodiscard]] DecodedAudio make_decoded(Encoding encoding, unsigned channels,
-                                        unsigned sample_rate, std::uint64_t frames,
-                                        std::int16_t* samples,
-                                        const std::function<void(void*)>& release) {
-  if (samples == nullptr || (channels != 1U && channels != 2U) || sample_rate == 0U ||
-      frames == 0U || frames > maximum_decoded_sample_values / channels) {
-    if (samples != nullptr)
-      release(samples);
+[[nodiscard]] std::size_t checked_sample_values(unsigned channels,
+                                                 unsigned sample_rate,
+                                                 std::uint64_t frames) {
+  if ((channels != 1U && channels != 2U) || sample_rate == 0U || frames == 0U ||
+      frames > maximum_decoded_sample_values / channels)
     throw std::runtime_error("soundtrack stream has unsupported audio metadata");
-  }
   const auto values = frames * channels;
-  if (values > std::numeric_limits<std::size_t>::max()) {
-    release(samples);
+  if (values > std::numeric_limits<std::size_t>::max())
     throw std::runtime_error("decoded soundtrack exceeds the safety limit");
-  }
-  DecodedAudio result{.encoding = encoding,
-                      .sample_rate = sample_rate,
-                      .channels = channels,
+  return static_cast<std::size_t>(values);
+}
+
+[[nodiscard]] DecodedAudio decode_flac(std::span<const std::byte> bytes) {
+  std::unique_ptr<drflac, decltype(&drflac_close)> decoder(
+      drflac_open_memory(bytes.data(), bytes.size(), nullptr), drflac_close);
+  if (!decoder)
+    throw std::runtime_error("invalid FLAC soundtrack stream");
+  const auto values = checked_sample_values(decoder->channels, decoder->sampleRate,
+                                            decoder->totalPCMFrameCount);
+  DecodedAudio result{.encoding = Encoding::flac,
+                      .sample_rate = decoder->sampleRate,
+                      .channels = decoder->channels,
                       .interleaved_samples = {}};
-  result.interleaved_samples.assign(samples, samples + static_cast<std::size_t>(values));
-  release(samples);
+  result.interleaved_samples.resize(values);
+  std::uint64_t complete = 0;
+  while (complete < decoder->totalPCMFrameCount) {
+    const auto request = std::min<std::uint64_t>(4'096U,
+        decoder->totalPCMFrameCount - complete);
+    const auto read = drflac_read_pcm_frames_s16(
+        decoder.get(), request,
+        result.interleaved_samples.data() + complete * result.channels);
+    if (read != request)
+      throw std::runtime_error("FLAC soundtrack stream ended early");
+    complete += read;
+  }
+  return result;
+}
+
+[[nodiscard]] DecodedAudio decode_mp3(std::span<const std::byte> bytes) {
+  drmp3 decoder{};
+  if (!drmp3_init_memory(&decoder, bytes.data(), bytes.size(), nullptr))
+    throw std::runtime_error("invalid MP3 soundtrack stream");
+  struct Uninit final { drmp3 *value; ~Uninit() { drmp3_uninit(value); } } uninit{&decoder};
+  const auto frames = drmp3_get_pcm_frame_count(&decoder);
+  const auto values = checked_sample_values(decoder.channels, decoder.sampleRate, frames);
+  DecodedAudio result{.encoding = Encoding::mp3,
+                      .sample_rate = decoder.sampleRate,
+                      .channels = decoder.channels,
+                      .interleaved_samples = {}};
+  result.interleaved_samples.resize(values);
+  std::uint64_t complete = 0;
+  while (complete < frames) {
+    const auto request = std::min<std::uint64_t>(4'096U, frames - complete);
+    const auto read = drmp3_read_pcm_frames_s16(
+        &decoder, request,
+        result.interleaved_samples.data() + complete * result.channels);
+    if (read != request)
+      throw std::runtime_error("MP3 soundtrack stream ended early");
+    complete += read;
+  }
   return result;
 }
 
@@ -88,25 +127,7 @@ DecodedAudio decode_soundtrack_file(const std::filesystem::path& path) {
   if (extension != ".flac" && extension != ".mp3")
     throw std::runtime_error("soundtrack format must be FLAC or MP3");
   const auto bytes = read_soundtrack_file(path);
-  if (extension == ".flac") {
-    unsigned channels = 0;
-    unsigned sample_rate = 0;
-    drflac_uint64 frames = 0;
-    auto* samples = drflac_open_memory_and_read_pcm_frames_s16(
-        bytes.data(), bytes.size(), &channels, &sample_rate, &frames, nullptr);
-    return make_decoded(Encoding::flac, channels, sample_rate, frames, samples,
-                        [](void* memory) { drflac_free(memory, nullptr); });
-  }
-  if (extension == ".mp3") {
-    drmp3_config configuration{};
-    drmp3_uint64 frames = 0;
-    auto* samples = drmp3_open_memory_and_read_pcm_frames_s16(
-        bytes.data(), bytes.size(), &configuration, &frames, nullptr);
-    return make_decoded(Encoding::mp3, configuration.channels,
-                        configuration.sampleRate, frames, samples,
-                        [](void* memory) { drmp3_free(memory, nullptr); });
-  }
-  throw std::runtime_error("unreachable soundtrack decoder selection");
+  return extension == ".flac" ? decode_flac(bytes) : decode_mp3(bytes);
 }
 
 } // namespace off::audio
