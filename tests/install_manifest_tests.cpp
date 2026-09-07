@@ -31,6 +31,16 @@ bool has(const ManifestVerification& result, std::string_view path, ManifestFile
     return entry.path == path && entry.status == status;
   });
 }
+bool same_checks(const ManifestVerification& left, const ManifestVerification& right) {
+  if (left.cancelled != right.cancelled || left.files.size() != right.files.size()) return false;
+  for (std::size_t index = 0; index < left.files.size(); ++index) {
+    const auto& a = left.files[index];
+    const auto& b = right.files[index];
+    if (a.path != b.path || a.actual_path != b.actual_path || a.role != b.role ||
+        a.status != b.status || a.detail != b.detail) return false;
+  }
+  return true;
+}
 }
 
 int main() {
@@ -83,6 +93,19 @@ int main() {
           has(bad_optional, track_b, ManifestFileStatus::size_mismatch) &&
           has(bad_optional, "support.txt", ManifestFileStatus::hash_mismatch),
           "corrupt optional soundtrack/support never fail required data");
+    const auto bad_optional_serial = verify_file_manifest(root, manifest, {}, 1);
+    const auto bad_optional_parallel = verify_file_manifest(root, manifest, {}, 2);
+    check(same_checks(bad_optional_serial, bad_optional_parallel) &&
+              bad_optional_parallel.required_ok(),
+          "parallel hashing preserves serial optional-file reports and required-data success");
+    write(root / "streams.wav", "BANK");
+    const auto required_serial = verify_file_manifest(root, manifest, {}, 1);
+    const auto required_parallel = verify_file_manifest(root, manifest, {}, 2);
+    check(same_checks(required_serial, required_parallel) &&
+              !required_parallel.required_ok() &&
+              has(required_parallel, "streams.wav", ManifestFileStatus::hash_mismatch),
+          "parallel hashing preserves serial required-file failure semantics");
+    write(root / "streams.wav", "bank");
     write(root / "Freedom_Fighters_OST/extra.flac", "unrecognized");
     write(root / "savegame.bin", "mutable");
     write(root / "Freedom_Fighters_OST/FF_OST_MP3_320/Thumbs.db", "cache");

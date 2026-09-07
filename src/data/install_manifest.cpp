@@ -4,7 +4,10 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <mutex>
 #include <stdexcept>
+#include <thread>
 #include <unordered_map>
 
 namespace off::data {
@@ -32,6 +35,17 @@ struct Located {
   std::filesystem::file_status status;
   bool duplicate{false};
 };
+
+struct HashTask {
+  std::size_t check_index;
+  const ManifestFile *entry;
+  std::filesystem::path path;
+  std::uintmax_t size;
+  std::filesystem::file_time_type time;
+};
+
+constexpr std::size_t default_hash_workers = 2;
+constexpr std::size_t maximum_hash_workers = 4;
 bool regular_chain(const std::filesystem::path& root, const std::filesystem::path& path) {
   auto current = root;
   const auto relative = path.lexically_relative(root);
@@ -55,7 +69,8 @@ bool ManifestVerification::required_ok() const noexcept {
 }
 
 ManifestVerification verify_file_manifest(const std::filesystem::path& requested_root,
-    std::span<const ManifestFile> manifest, const std::function<bool()>& cancelled) {
+    std::span<const ManifestFile> manifest, const std::function<bool()>& cancelled,
+    std::size_t hash_workers) {
   std::unordered_map<std::string, const ManifestFile*> expected;
   for (const auto& entry : manifest) {
     if (!safe(entry.path) || entry.sha256.size() != 64 ||
@@ -89,14 +104,22 @@ ManifestVerification verify_file_manifest(const std::filesystem::path& requested
   const auto root = std::filesystem::canonical(requested_root);
   if (!std::filesystem::is_directory(root)) throw std::runtime_error("manifest root is not a directory");
   ManifestVerification result;
+  // The cancellation callback predates parallel hashing and callers are not
+  // required to make it reentrant.  Serialize calls while latching its result.
+  std::atomic_bool cancelled_latched{false};
+  std::mutex cancellation_callback_mutex;
   const auto stop = [&] {
-    if (!result.cancelled && cancelled && cancelled()) result.cancelled = true;
-    return result.cancelled;
+    if (cancelled_latched.load(std::memory_order_acquire)) return true;
+    if (!cancelled) return false;
+    std::lock_guard lock(cancellation_callback_mutex);
+    if (!cancelled_latched.load(std::memory_order_relaxed) && cancelled())
+      cancelled_latched.store(true, std::memory_order_release);
+    return cancelled_latched.load(std::memory_order_acquire);
   };
   std::unordered_map<std::string, Located> located;
   std::vector<std::filesystem::path> directories{root};
   while (!directories.empty()) {
-    if (stop()) return result;
+    if (stop()) { result.cancelled = true; return result; }
     const auto directory = directories.back(); directories.pop_back();
     const auto directory_key = folded(directory.lexically_relative(root).generic_string());
     if (const auto found = located.find(directory_key); found != located.end() && found->second.duplicate)
@@ -111,7 +134,7 @@ ManifestVerification verify_file_manifest(const std::filesystem::path& requested
     }
     for (; iterator != end; iterator.increment(ec)) {
       if (ec) break;
-      if (stop()) return result;
+      if (stop()) { result.cancelled = true; return result; }
       const auto path = iterator->path();
       const auto relative = path.lexically_relative(root).generic_string();
       const auto key = folded(relative);
@@ -143,8 +166,12 @@ ManifestVerification verify_file_manifest(const std::filesystem::path& requested
         role_for(directory_key),
         ManifestFileStatus::io_error, "directory enumeration failed"});
   }
+  std::vector<ManifestFileCheck> checks;
+  checks.reserve(manifest.size());
+  std::vector<HashTask> hash_tasks;
+  hash_tasks.reserve(manifest.size());
   for (const auto& entry : manifest) {
-    if (stop()) return result;
+    if (stop()) { result.cancelled = true; return result; }
     ManifestFileCheck check{std::string(entry.path), {}, entry.role, ManifestFileStatus::missing, "file is absent"};
     const auto key = folded(entry.path);
     bool ambiguous_chain = false;
@@ -156,7 +183,7 @@ ManifestVerification verify_file_manifest(const std::filesystem::path& requested
     if (ambiguous_chain) {
       check.status = ManifestFileStatus::ambiguous;
       check.detail = "case-insensitive collision in file or parent path";
-      result.files.push_back(std::move(check));
+      checks.push_back(std::move(check));
       continue;
     }
     const auto found = located.find(key);
@@ -174,25 +201,94 @@ ManifestVerification verify_file_manifest(const std::filesystem::path& requested
             check.status = ManifestFileStatus::size_mismatch;
             check.detail = "expected " + std::to_string(entry.size) + " bytes, found " + std::to_string(size);
           } else {
-            const auto digest = crypto::to_hex(crypto::sha256_file(check.actual_path, stop));
-            if (!regular_chain(root, check.actual_path) || size != std::filesystem::file_size(check.actual_path) ||
-                time != std::filesystem::last_write_time(check.actual_path)) {
-              check.status = ManifestFileStatus::io_error; check.detail = "file changed during verification";
-            } else if (digest != entry.sha256) {
-              check.status = ManifestFileStatus::hash_mismatch;
-              check.detail = "SHA-256 mismatch: expected " + std::string(entry.sha256) + ", found " + digest;
-            } else {
-              check.status = ManifestFileStatus::verified; check.detail.clear();
-            }
+            hash_tasks.push_back({checks.size(), &entry, check.actual_path, size, time});
           }
         }
       } catch (const std::exception& error) {
-        if (stop()) return result;
+        if (stop()) { result.cancelled = true; return result; }
         check.status = ManifestFileStatus::io_error; check.detail = error.what();
       }
     }
-    result.files.push_back(std::move(check));
+    checks.push_back(std::move(check));
   }
+
+  const auto initial_checks = checks;
+  const auto hash_one = [&](const HashTask& task) {
+    auto& check = checks[task.check_index];
+    try {
+      const auto digest = crypto::to_hex(crypto::sha256_file(task.path, stop));
+      if (!regular_chain(root, task.path) ||
+          task.size != std::filesystem::file_size(task.path) ||
+          task.time != std::filesystem::last_write_time(task.path)) {
+        check.status = ManifestFileStatus::io_error;
+        check.detail = "file changed during verification";
+      } else if (digest != task.entry->sha256) {
+        check.status = ManifestFileStatus::hash_mismatch;
+        check.detail = "SHA-256 mismatch: expected " + std::string(task.entry->sha256) +
+                       ", found " + digest;
+      } else {
+        check.status = ManifestFileStatus::verified;
+        check.detail.clear();
+      }
+    } catch (const std::exception& error) {
+      if (!stop()) {
+        check.status = ManifestFileStatus::io_error;
+        check.detail = error.what();
+      }
+    }
+  };
+  const auto run_serial = [&] {
+    for (const auto& task : hash_tasks) {
+      if (stop()) return;
+      hash_one(task);
+      if (cancelled_latched.load(std::memory_order_acquire)) return;
+    }
+  };
+
+  const auto requested_workers = hash_workers == 0 ? default_hash_workers : hash_workers;
+  const auto worker_count = std::min({requested_workers, maximum_hash_workers,
+                                      std::max<std::size_t>(std::size_t{1}, hash_tasks.size())});
+  if (worker_count == 1) {
+    run_serial();
+  } else {
+    std::atomic_size_t next_task{0};
+    std::atomic_bool halt_workers{false};
+    const auto run_worker = [&] {
+      while (!halt_workers.load(std::memory_order_acquire)) {
+        const auto index = next_task.fetch_add(1, std::memory_order_relaxed);
+        if (index >= hash_tasks.size()) return;
+        if (stop()) return;
+        hash_one(hash_tasks[index]);
+      }
+    };
+    std::vector<std::thread> workers;
+    workers.reserve(worker_count);
+    bool launch_failed = false;
+    try {
+      for (std::size_t index = 0; index < worker_count; ++index)
+        workers.emplace_back(run_worker);
+    } catch (...) {
+      launch_failed = true;
+      halt_workers.store(true, std::memory_order_release);
+    }
+    for (auto& worker : workers) worker.join();
+    if (launch_failed && !stop()) {
+      // Thread creation is an implementation detail, not an integrity result.
+      // Rehash the complete established list serially rather than certifying a
+      // partial set or weakening the verification requirement.
+      checks = initial_checks;
+      run_serial();
+    }
+  }
+  if (cancelled_latched.load(std::memory_order_acquire)) {
+    result.cancelled = true;
+    return result;
+  }
+  // Discovery diagnostics intentionally precede manifest rows, matching the
+  // serial verifier's report order.  Hash workers fill only the preallocated
+  // manifest portion above.
+  for (auto& check : checks)
+    result.files.push_back(std::move(check));
   return result;
 }
 
