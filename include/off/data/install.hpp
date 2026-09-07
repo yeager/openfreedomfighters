@@ -36,7 +36,14 @@ struct InstallVerification {
     }
 };
 
+struct InstallVerificationOptions {
+    // Empty disables the derived deep-audit cache. The full immutable manifest
+    // is always hash-verified before this cache can be consulted.
+    std::filesystem::path deep_audit_cache_root;
+};
+
 [[nodiscard]] InstallVerification verify_install(const std::filesystem::path& root,
-    const std::function<bool()>& cancelled = {});
+    const std::function<bool()>& cancelled = {},
+    const InstallVerificationOptions& options = {});
 
 }  // namespace off::data

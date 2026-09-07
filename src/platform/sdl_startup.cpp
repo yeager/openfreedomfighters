@@ -47,6 +47,14 @@ startup_splash_overlay_layout(int width, int height) noexcept {
           .baseline = height - margin - text_height};
 }
 
+std::filesystem::path application_deep_audit_cache_root() noexcept {
+  char* raw_path = SDL_GetPrefPath("OpenFreedomFighters", "OpenFreedomFighters");
+  if (raw_path == nullptr || *raw_path == '\0')
+    return {};
+  std::unique_ptr<char, decltype(&SDL_free)> path{raw_path, SDL_free};
+  return std::filesystem::path{path.get()} / "cache" / "deep-audit";
+}
+
 namespace {
 
 constexpr int startup_width = 1280;
@@ -219,7 +227,9 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
   std::future<StartupPreparationResult> verification_future;
   try {
     verification_future = std::async(std::launch::async, [&] {
-      return prepare_startup_cpu([&] { return data::verify_install(data_path, [&] { return cancelled.load(); }); },
+      return prepare_startup_cpu([&] { return data::verify_install(
+          data_path, [&] { return cancelled.load(); },
+          {.deep_audit_cache_root = application_deep_audit_cache_root()}); },
                                  prepare_assets, cancelled);
     });
   } catch (...) {

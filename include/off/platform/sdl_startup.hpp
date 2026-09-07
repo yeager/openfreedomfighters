@@ -52,6 +52,10 @@ struct StartupSplashOverlayLayout {
 [[nodiscard]] StartupSplashOverlayLayout
 startup_splash_overlay_layout(int width, int height) noexcept;
 
+// A platform-selected, application-owned cache location. Failure returns an
+// empty path and callers continue without a derived cache.
+[[nodiscard]] std::filesystem::path application_deep_audit_cache_root() noexcept;
+
 // Opens the project-owned splash before touching retail data. This entry point
 // is intentionally not used by --verify-only, --help, or --version.
 // prepare_assets runs on the verification worker after successful verification.

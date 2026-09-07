@@ -1,4 +1,5 @@
 #include "off/data/install.hpp"
+#include "off/data/install_audit_cache.hpp"
 #include "off/data/install_manifest.hpp"
 
 #include "off/audio/decode.hpp"
@@ -60,7 +61,8 @@ std::string lowercase(std::string value) {
 } // namespace
 
 InstallVerification verify_install(const std::filesystem::path &root,
-                                  const std::function<bool()>& cancelled) {
+                                  const std::function<bool()>& cancelled,
+                                  const InstallVerificationOptions& options) {
   std::error_code error;
   if (!std::filesystem::is_directory(root, error)) {
     return failure(InstallError::missing_root, root,
@@ -105,6 +107,7 @@ InstallVerification verify_install(const std::filesystem::path &root,
 
   std::string archive_context;
   std::string member_context;
+  std::string audit_identity;
   std::vector<std::filesystem::path> soundtrack_candidates;
   std::vector<std::string> optional_file_warnings;
   try {
@@ -121,6 +124,22 @@ InstallVerification verify_install(const std::filesystem::path &root,
           file.status != ManifestFileStatus::missing)
         optional_file_warnings.push_back(file.path + ": " + file.detail);
     }
+    std::string audit_identity_input{"openfreedomfighters-deep-audit-v1\n"};
+    audit_identity_input += supported_executable_sha256;
+    for (const auto& file : supported_install_manifest()) {
+      if (file.role != ManifestFileRole::required_game)
+        continue;
+      audit_identity_input += '\n';
+      audit_identity_input += file.path;
+      audit_identity_input += ':';
+      audit_identity_input += std::to_string(file.size);
+      audit_identity_input += ':';
+      audit_identity_input += file.sha256;
+    }
+    audit_identity = crypto::to_hex(crypto::sha256(audit_identity_input));
+    const bool deep_audit_required =
+        !install_audit_cache_hit(options.deep_audit_cache_root, audit_identity);
+    if (deep_audit_required) {
     ArchiveVfs installation_vfs;
     constexpr std::array<std::string_view, 5> excluded{
         "Freedom_Fighters_OST", "Launcher.exe", "eax.dll", "steam_api.dll", "steam_appid.txt"};
@@ -698,6 +717,7 @@ InstallVerification verify_install(const std::filesystem::path &root,
     member_context = scene_graph->name;
     const auto payload = startup_archive.read(*scene_graph);
     static_cast<void>(ZgfBundle::parse(PackedResource::parse(payload)));
+    }
   } catch (const std::exception &exception) {
     const auto context = archive_context.empty()
                              ? std::string{}
@@ -710,6 +730,10 @@ InstallVerification verify_install(const std::filesystem::path &root,
                    std::string{"game data failed integrity validation: "} +
                        context + exception.what());
   }
+
+  if (cancelled && cancelled())
+    return failure(InstallError::io_error, root, "game-data verification cancelled");
+  store_install_audit_cache(options.deep_audit_cache_root, audit_identity);
 
   return {
       .error = InstallError::none,

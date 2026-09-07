@@ -3,9 +3,14 @@
 Every startup, including `--verify-only`, checks immutable game files against
 the compiled SHA-256 reference in `src/data/install_manifest_reference.inc`.
 Files with the expected size are read in full. Modification times are not a
-shortcut for a successful hash. Existing structural checks still run afterward.
-The splash stays responsive while verification runs; reading all data can take
-longer than its three-second minimum display time.
+shortcut for a successful hash. After that full hash pass, a successful deep
+structural audit may be reused from an application-owned, disposable cache.
+The cache contains only a versioned success certificate keyed to the compiled
+supported manifest; it never contains game bytes, paths, actual hashes, or
+decoded assets. A missing, corrupt, stale, unreadable, or symlinked entry is a
+cache miss and reruns the structural audit. The splash stays responsive while
+verification runs; a cold audit can take longer than its three-second minimum
+display time.
 
 ## Reference snapshot
 

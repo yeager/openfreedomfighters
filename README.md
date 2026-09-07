@@ -18,8 +18,10 @@ executable code are included here.
 - Archive, texture, geometry and supported audio formats have working readers.
 - Startup shows the project splash for three seconds. Missing or invalid game
   data produces an error dialog over it.
-- Game files are checked against a SHA-256 manifest at startup. Soundtrack files
-  are optional. Their MP3 and FLAC files can now be decoded safely, but cue
+- Game files are fully checked against a SHA-256 manifest at every startup.
+  A local, disposable deep-audit certificate avoids repeating the much slower
+  archive parse after a successful hash pass; it never replaces hashing.
+  Soundtrack files are optional. Their MP3 and FLAC files can now be decoded safely, but cue
   mapping and music playback are not implemented yet.
 - The first intro sequence's camera, pictures and textures load from game data.
   One retained runtime owns their hierarchy and mutable picture state; intro

@@ -208,7 +208,9 @@ int main(int argc, char **argv) {
     verification = preflight.verification;
     startup_window = std::move(preflight.window);
   } else {
-    verification = off::data::verify_install(data_path);
+    verification = off::data::verify_install(
+        data_path, {}, {.deep_audit_cache_root =
+                            off::platform::application_deep_audit_cache_root()});
   }
 
   if (!*verification) {
