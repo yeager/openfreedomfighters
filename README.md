@@ -40,6 +40,9 @@ for a portable installation.
   share the scene's runtime identities, including across scene reloads.
   [Preview-camera controls](docs/PREVIEW_CAMERA.md) handle keyboard and pointer
   updates in tests; their normal input and component dispatch are not connected.
+- A normal two-frame smoke run on the supported owned installation reaches the
+  native SDL/Vulkan backend, validates all data, uploads six startup images and
+  26 intro images, and then exits. It does not draw the original intro yet.
 - Clock and sound preferences now share application-lifetime state across intro
   scenes. This does not add intro playback or audible sound.
 - The two intro sound definitions resolve to their original audio-bank streams
@@ -69,6 +72,9 @@ for a portable installation.
   diagnostic; matching the game's menu design is still on the roadmap.
 - A separate geometry preview is available with `--diagnostic-scene`. It is not
   a loaded level or a gameplay demo.
+- Project-authored deterministic simulation replays have a versioned `OFRP`
+  envelope with strict limits and a SHA-256 corruption check. They are tooling
+  data, not compatible with retail saves or recordings.
 
 The picture renderer has passed GPU tests on Linux/Vulkan, Windows/Direct3D 12
 and macOS/Metal. CI uses independent fixtures, not retail assets; these tests
