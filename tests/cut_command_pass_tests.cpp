@@ -1,5 +1,6 @@
 #include "off/cutscene/command_pass.hpp"
 #include "off/cutscene/first_cut_command_session.hpp"
+#include "off/cutscene/external_cut_sequence_command.hpp"
 #include "off/runtime/intro_live_target_registry.hpp"
 
 #include <array>
@@ -20,6 +21,9 @@ using off::cutscene::CommandDeliveryResult;
 using off::cutscene::CommandDeliveryServices;
 using off::cutscene::FirstCutCommandSession;
 using off::cutscene::FirstCutCommandSessionServices;
+using off::cutscene::ExternalCutSequenceCommand;
+using off::cutscene::ExternalCutSequenceCommandPhaseTwoServices;
+using off::cutscene::ExternalCutSequenceCommandReader;
 using off::runtime::IntroLiveTargetRegistry;
 using Command = off::data::GmsIntroCutCommandSource;
 int failures = 0;
@@ -294,5 +298,77 @@ int main() {
     targets.dispatch(400U, 0x402U, 55U, 200U, removal_services);
     check(removed_target_called && !targets.contains_owner(400U) &&
           targets.resolve_reference(12U) == std::nullopt);
+
+    ExternalCutSequenceCommand external_command;
+    rejects([&] { external_command.run_phase_two({}); });
+    std::vector<std::string> external_trace;
+    Command external_data{};
+    external_data.timeline_position = 385U;
+    external_data.event_reference = 198U;
+    external_data.target_reference = 0x8000000aU;
+    external_data.event_argument = 1000U;
+    external_command.read({
+        .read_common_command = [&] { external_trace.push_back("common"); return external_data; },
+        .read_external_list_reference = [&] { external_trace.push_back("external"); return 0x80000042U; },
+    });
+    check(external_command.read_complete() && external_command.command().event_reference == 198U &&
+          external_command.external_list_reference() == 0x80000042U);
+    rejects([&] { external_command.read({}); });
+    ExternalCutSequenceCommandPhaseTwoServices external_services{
+        .resolve_reference = [&](std::uint32_t ref) -> std::optional<std::uint64_t> {
+          external_trace.push_back("reference:" + std::to_string(ref));
+          return ref == 0x80000042U ? std::optional<std::uint64_t>{65U} : std::nullopt;
+        },
+        .find_owner_component = [&](std::uint64_t owner, std::string_view name)
+            -> std::optional<std::uint64_t> {
+          external_trace.push_back("component:" + std::to_string(owner) + ":" + std::string(name));
+          return owner == 65U && name == "CutSequenceList" ? std::optional<std::uint64_t>{84U} : std::nullopt;
+        },
+        .register_ordered_command = [&](std::uint64_t list, const Command& command) {
+          external_trace.push_back("register:" + std::to_string(list));
+          check(list == 84U && command.timeline_position == 385U);
+        },
+        .read_scene_handle = [&](std::string_view name) -> std::optional<std::uint64_t> {
+          external_trace.push_back("property:" + std::string(name)); return 77U;
+        },
+        .resolve_scene_object = [&](std::uint64_t handle) -> std::optional<std::uint64_t> {
+          external_trace.push_back("scene:" + std::to_string(handle)); return handle == 77U ? std::optional<std::uint64_t>{900U} : std::nullopt;
+        },
+        .retire_diagnostic = [&] { external_trace.push_back("retire"); },
+    };
+    external_command.run_phase_two(external_services);
+    check(external_command.phase_two_completed() && !external_command.retired() &&
+          external_command.cached_context() == std::optional<std::uint64_t>{900U} &&
+          external_trace == std::vector<std::string>({"common", "external", "reference:2147483714",
+              "component:65:CutSequenceList", "register:84", "property:rCutSequenceObjects", "scene:77"}));
+    rejects([&] { external_command.run_phase_two(external_services); });
+
+    ExternalCutSequenceCommand negative_external;
+    Command negative_external_data{};
+    negative_external_data.timeline_position = 0xffffffffU;
+    negative_external.read({.read_common_command = [&] { return negative_external_data; },
+                            .read_external_list_reference = [] { return 9U; }});
+    external_trace.clear();
+    auto negative_services = external_services;
+    negative_services.resolve_reference = [&](std::uint32_t) -> std::optional<std::uint64_t> { external_trace.push_back("reference"); return 65U; };
+    negative_services.find_owner_component = [&](std::uint64_t, std::string_view) -> std::optional<std::uint64_t> { external_trace.push_back("component"); return 84U; };
+    negative_services.register_ordered_command = [&](std::uint64_t, const Command&) { external_trace.push_back("register"); };
+    negative_services.read_scene_handle = [&](std::string_view) -> std::optional<std::uint64_t> { external_trace.push_back("property"); return std::nullopt; };
+    negative_services.resolve_scene_object = [&](std::uint64_t value) -> std::optional<std::uint64_t> { external_trace.push_back("scene:" + std::to_string(value)); return std::nullopt; };
+    negative_external.run_phase_two(negative_services);
+    check(negative_external.phase_two_completed() && !negative_external.cached_context() &&
+          external_trace == std::vector<std::string>({"reference", "component", "property", "scene:0"}));
+
+    ExternalCutSequenceCommand missing_external;
+    missing_external.read({.read_common_command = [] { return Command{}; },
+                           .read_external_list_reference = [] { return 3U; }});
+    external_trace.clear();
+    auto missing_services = external_services;
+    missing_services.resolve_reference = [&](std::uint32_t) -> std::optional<std::uint64_t> { external_trace.push_back("reference"); return std::nullopt; };
+    missing_services.retire_diagnostic = [&] { external_trace.push_back("retire"); };
+    missing_external.run_phase_two(missing_services);
+    check(missing_external.retired() && !missing_external.phase_two_completed() &&
+          external_trace == std::vector<std::string>({"reference", "retire"}));
+    rejects([&] { missing_external.run_phase_two(missing_services); });
     return failures == 0 ? 0 : 1;
 }
