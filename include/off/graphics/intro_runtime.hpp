@@ -2,6 +2,7 @@
 
 #include "off/graphics/fresh_intro_camera.hpp"
 #include "off/graphics/intro_prepared_resources.hpp"
+#include "off/data/keys_backing_evaluator.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_controller_initialization.hpp"
@@ -540,6 +541,16 @@ public:
   [[nodiscard]] const data::SceneLifetimeKeysRegistry* scene_lifetime_keys_registry() const noexcept {
     return scene_lifetime_keys_registry_ ? &*scene_lifetime_keys_registry_ : nullptr;
   }
+  // Freezes the complete retained FF-Intro BUF allocation for the already
+  // prepared owner-local KEYS registry. Every registered MatPos descriptor
+  // must bind and be readable at both ends of its declared range before this
+  // view is published. This is read-only preparation, not phase one.
+  void prepare_scene_lifetime_keys_backing();
+  [[nodiscard]] const data::ImmutableKeysBackingView* scene_lifetime_keys_backing() const noexcept {
+    return scene_lifetime_keys_backing_ ? &*scene_lifetime_keys_backing_ : nullptr;
+  }
+  [[nodiscard]] std::optional<data::KeysBackingSample> evaluate_scene_lifetime_keys(
+      IntroRuntimeHandle owner, float normalized_coordinate) const noexcept;
   [[nodiscard]] std::span<const IntroSavedResourceFlags> saved_resource_flags() const noexcept {return saved_resource_flags_;}
   [[nodiscard]] bool light_policy() const noexcept {return light_policy_;}
   void set_light_policy(bool value) noexcept {light_policy_=value;}
@@ -760,9 +771,17 @@ private:
   std::map<std::size_t,IntroConstructedListOwner> constructed_list_owners_;
   std::map<std::size_t,IntroConstructedPictureComponent> constructed_picture_components_;
   std::optional<data::SceneLifetimeKeysRegistry> scene_lifetime_keys_registry_;
+  std::optional<data::ImmutableKeysBackingView> scene_lifetime_keys_backing_;
+  struct SceneLifetimeKeysBackingBinding final {
+    std::uint64_t owner{};
+    std::uint64_t opaque_handle{};
+    data::BoundKeysDescriptorRange descriptor{};
+  };
+  std::vector<SceneLifetimeKeysBackingBinding> scene_lifetime_keys_backing_bindings_;
   // Dedicated native preparation identity stream. Values are opaque registry
   // identities, never source addresses, BUF offsets, or attachment ordinals.
   std::uint64_t next_scene_lifetime_keys_handle_{1};
+  std::uint64_t next_scene_lifetime_keys_backing_generation_{1};
   IntroRuntimeHandle current_source_parent_{};
   std::map<std::string,IntroSceneResourceProperty,std::less<>> scene_resource_properties_;
   std::optional<IntroRootOwnerState> root_owner_state_;

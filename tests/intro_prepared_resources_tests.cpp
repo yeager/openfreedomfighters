@@ -58,10 +58,23 @@ void real(Bytes& b, std::uint8_t tag, double v) {
 void finish(Bytes& b) { b.push_back(std::byte{0xff}); set(b, 0, static_cast<std::uint32_t>(b.size())); }
 std::size_t keys_property(Bytes& names) {
     const auto property=names.size();
-    names.resize(property+64);
+    names.resize(property+96);
     set(names,property,0U);set(names,property+4,0x80000040U);
     set(names,property+8,64U);set(names,property+12,1U);
     set(names,property+16,0x5359454bU);set(names,property+20,48U);
+    // Synthetic KEYS descriptors deliberately point into the same retained
+    // names/BUF allocation. This supplies only bounded read-only evaluator
+    // coverage; it is not authored game data or a pose fixture.
+    set(names,property+24,1U);set(names,property+28,0U);set(names,property+32,0U);
+    set(names,property+36,std::bit_cast<std::uint32_t>(1.F));
+    set(names,property+40,static_cast<std::uint32_t>(property+64));
+    set(names,property+44,static_cast<std::uint32_t>(property+68));
+    set(names,property+48,static_cast<std::uint32_t>(property+72));
+    set(names,property+52,static_cast<std::uint32_t>(property+80));
+    set(names,property+56,static_cast<std::uint32_t>(property+84));
+    set(names,property+60,static_cast<std::uint32_t>(property+88));
+    names[property+64]=std::byte{1};names[property+68]=std::byte{1};
+    names[property+80]=std::byte{1};names[property+84]=std::byte{1};
     return property;
 }
 struct FixtureReferenceMap {
@@ -1012,6 +1025,14 @@ int main() {
       check(keys_registry && keys_registry->size()==mat_pos_owners && mat_pos_owners>0,
             "scene KEYS registry atomically retains every supported owner-local property");
       rejects([&]{host.prepare_scene_lifetime_keys_registry();});
+      host.prepare_scene_lifetime_keys_backing();
+      const auto* keys_backing=host.scene_lifetime_keys_backing();
+      check(keys_backing && keys_backing->generation()==1U && !keys_backing->bytes().empty() &&
+                host.evaluate_scene_lifetime_keys(host.source_handle(59),0.F) &&
+                host.evaluate_scene_lifetime_keys(host.source_handle(59),1.F) &&
+                !host.evaluate_scene_lifetime_keys({},0.F),
+            "scene KEYS backing freezes one retained allocation and exposes only bound read-only owner samples");
+      rejects([&]{host.prepare_scene_lifetime_keys_backing();});
       const auto components467=host.owner_components(host.source_handle(467));
       const auto components468=host.owner_components(host.source_handle(468));
       check(components467.size()==4 && components468.size()==4 &&

@@ -1332,6 +1332,94 @@ void IntroRuntime::prepare_scene_lifetime_keys_registry() {
   next_scene_lifetime_keys_handle_=staged_next;
 }
 
+void IntroRuntime::prepare_scene_lifetime_keys_backing() {
+  if (!scene_lifetime_keys_registry_)
+    throw std::runtime_error("Scene KEYS backing requires the prepared owner-local registry");
+  if (scene_lifetime_keys_backing_)
+    throw std::runtime_error("Scene KEYS backing is already prepared");
+  if (next_scene_lifetime_keys_backing_generation_ == 0U)
+    throw std::runtime_error("Scene KEYS backing generation is exhausted");
+
+  const auto retained = resources_.source_names();
+  const auto staged_backing = data::ImmutableKeysBackingView::create(
+      next_scene_lifetime_keys_backing_generation_, retained);
+  if (!staged_backing)
+    throw std::runtime_error("Scene KEYS backing requires the retained FF-Intro BUF allocation");
+
+  std::vector<SceneLifetimeKeysBackingBinding> staged_bindings;
+  const auto& directory = resources_.sources().directory();
+  staged_bindings.reserve(scene_lifetime_keys_registry_->size());
+  for (std::size_t row = 0; row < directory.size(); ++row) {
+    const auto& source = directory[row];
+    bool has_mat_pos_anim = false;
+    for (std::size_t slot = 0; slot < source.attachments.size(); ++slot) {
+      if (resources_.sources().attachment_identifier(row, slot) == "ZGEOM_MatPosAnim") {
+        if (has_mat_pos_anim)
+          throw std::runtime_error("Scene KEYS backing rejects multiple MatPosAnim attachments for one owner");
+        has_mat_pos_anim = true;
+      }
+    }
+    if (!has_mat_pos_anim)
+      continue;
+
+    const auto owner = source_handle(row);
+    const auto* auxiliary = constructed_owner_auxiliary(row);
+    const auto offset = static_cast<std::size_t>(source.buf_auxiliary_offset);
+    if (owner.value == 0U || source.buf_auxiliary_offset == 0U || offset >= retained.size() ||
+        !auxiliary || !auxiliary->owned_property_data.empty() || auxiliary->borrowed_property_data.size() != 64U ||
+        auxiliary->borrowed_property_data.data() != retained.data() + offset) {
+      throw std::runtime_error("Scene KEYS backing requires canonical retained MatPos owner properties");
+    }
+
+    const data::OwnerAuxiliaryPropertyBlock property{
+        owner.value, source.buf_auxiliary_offset, auxiliary->borrowed_property_data};
+    const auto child = data::OwnerBufKeysProfileParser::parse(property);
+    const auto resolved = scene_lifetime_keys_registry_->resolve(property, child);
+    if (!resolved || resolved->owner != owner.value ||
+        resolved->buf_auxiliary_offset != source.buf_auxiliary_offset || resolved->opaque_handle == 0U) {
+      throw std::runtime_error("Scene KEYS backing could not resolve the canonical owner-local child");
+    }
+    const data::MaterializedOwnerKeysChild materialized{
+        resolved->owner, resolved->buf_auxiliary_offset, resolved->opaque_handle};
+    const auto bound = data::KeysDescriptorRangeBinder::bind(
+        materialized, child, [&staged_backing](const data::KeysDescriptorBackingRequest&) {
+          return !staged_backing->bytes().empty();
+        });
+    if (!bound)
+      throw std::runtime_error("Scene KEYS backing rejected an unavailable descriptor range");
+
+    // The evaluator is the recovered read-only consumer of this allocation.
+    // Probe both inclusive endpoints before publication so an apparent range
+    // cannot become a live binding when either stream/table endpoint is bad.
+    if (!data::KeysBackingEvaluator::evaluate(*staged_backing, *bound, 0.0F) ||
+        !data::KeysBackingEvaluator::evaluate(*staged_backing, *bound, 1.0F)) {
+      throw std::runtime_error("Scene KEYS backing rejected an unreadable descriptor range");
+    }
+    staged_bindings.push_back({owner.value, resolved->opaque_handle, *bound});
+  }
+  if (staged_bindings.size() != scene_lifetime_keys_registry_->size())
+    throw std::runtime_error("Scene KEYS backing did not bind every prepared MatPos owner");
+
+  scene_lifetime_keys_backing_.emplace(*staged_backing);
+  scene_lifetime_keys_backing_bindings_ = std::move(staged_bindings);
+  ++next_scene_lifetime_keys_backing_generation_;
+}
+
+std::optional<data::KeysBackingSample> IntroRuntime::evaluate_scene_lifetime_keys(
+    IntroRuntimeHandle owner, float normalized_coordinate) const noexcept {
+  if (!scene_lifetime_keys_backing_ || owner.value == 0U)
+    return std::nullopt;
+  const auto binding = std::find_if(scene_lifetime_keys_backing_bindings_.begin(),
+                                    scene_lifetime_keys_backing_bindings_.end(),
+                                    [owner](const SceneLifetimeKeysBackingBinding& candidate) {
+                                      return candidate.owner == owner.value;
+                                    });
+  if (binding == scene_lifetime_keys_backing_bindings_.end())
+    return std::nullopt;
+  return data::KeysBackingEvaluator::evaluate(*scene_lifetime_keys_backing_, binding->descriptor,
+                                              normalized_coordinate);
+}
+
 void IntroRuntime::construct_lens_flare_animation_scope_without_engine_renderer() {
   if(resource_load_stage_!=IntroResourceLoadStage::room_animation_scope_ready || loaded_resource_handles_.size()!=69 ||
       count_group_selector_!=9 || current_source_parent()!=source_handle(48) || resource_allocation_enabled_ ||
