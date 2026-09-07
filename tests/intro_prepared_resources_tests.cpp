@@ -1,4 +1,5 @@
 #include "off/graphics/intro_prepared_resources.hpp"
+#include "off/graphics/intro_renderer_resource_envelope.hpp"
 #include "off/graphics/intro_runtime.hpp"
 #include "off/graphics/preview_camera_component.hpp"
 #include "off/data/packed_resource.hpp"
@@ -692,6 +693,35 @@ void archive(const std::filesystem::path& path, const std::vector<std::pair<std:
 int main() {
     using off::graphics::IntroPreparedResources;
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
+    {
+      Bytes image(32, std::byte{0x6d});
+      constexpr std::uint32_t section_offset=12;
+      set(image,section_offset,3);
+      image[section_offset+4]=std::byte{0x11};
+      image[section_offset+5]=std::byte{0x22};
+      image[section_offset+6]=std::byte{0x33};
+      bool called=false;
+      const auto container=off::graphics::parse_intro_renderer_resource_envelope(
+          image,section_offset,[&](std::span<const std::byte> payload) {
+            called=true;
+            check(payload.size()==3 && payload[0]==std::byte{0x11} &&
+                      payload[1]==std::byte{0x22} && payload[2]==std::byte{0x33},
+                  "renderer envelope passes exactly the framed payload");
+            check(payload.data()!=image.data()+section_offset+sizeof(std::uint32_t),
+                  "renderer envelope does not borrow the framed source payload");
+            return off::graphics::IntroRendererResourceContainer{81};
+          });
+      check(called && container.identity==81,
+            "renderer envelope invokes the required container parser exactly once");
+      rejects([&] { (void)off::graphics::parse_intro_renderer_resource_envelope(image,0,{}); });
+      rejects([&] { (void)off::graphics::parse_intro_renderer_resource_envelope(
+          std::span<const std::byte>{image.data(),image.size()}.first(section_offset+3),section_offset,{}); });
+      Bytes oversized=image;
+      set(oversized,section_offset,static_cast<std::uint32_t>(oversized.size()));
+      rejects([&] { (void)off::graphics::parse_intro_renderer_resource_envelope(
+          oversized,section_offset,[](auto) { return off::graphics::IntroRendererResourceContainer{1}; }); });
+      rejects([&] { (void)off::graphics::parse_intro_renderer_resource_envelope(image,section_offset,{}); });
+    }
     Fixture fixture;
     {
       off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
