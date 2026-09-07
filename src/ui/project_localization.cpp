@@ -2,6 +2,7 @@
 
 #include <array>
 #include <stdexcept>
+#include <utility>
 
 namespace off::ui::l10n {
 namespace {
@@ -55,6 +56,63 @@ std::optional<Locale> locale_from_tag(std::string_view tag) noexcept {
   if (language.size() == 2 && (language[0] == 's' || language[0] == 'S') &&
       (language[1] == 'v' || language[1] == 'V'))
     return Locale::swedish;
+  constexpr std::array<std::pair<std::string_view, Locale>, 18> aliases{{
+      {"da", Locale::danish},       {"nb", Locale::norwegian_bokmal},
+      {"no", Locale::norwegian_bokmal}, {"fi", Locale::finnish},
+      {"de", Locale::german},       {"fr", Locale::french},
+      {"es", Locale::spanish},      {"it", Locale::italian},
+      {"pt", Locale::portuguese_brazil}, {"pl", Locale::polish},
+      {"cs", Locale::czech},        {"hu", Locale::hungarian},
+      {"ro", Locale::romanian},     {"tr", Locale::turkish},
+      {"ru", Locale::russian},      {"uk", Locale::ukrainian},
+      {"ja", Locale::japanese},     {"ko", Locale::korean},
+  }};
+  for (const auto &[alias, locale] : aliases) {
+    if (language.size() != alias.size())
+      continue;
+    bool matches = true;
+    for (std::size_t i = 0; i < alias.size(); ++i) {
+      const auto character = language[i];
+      const auto lower = character >= 'A' && character <= 'Z'
+                             ? static_cast<char>(character - 'A' + 'a')
+                             : character;
+      if (lower != alias[i]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches)
+      return locale;
+  }
+  if (language.size() == 2 && (language[0] == 'z' || language[0] == 'Z') &&
+      (language[1] == 'h' || language[1] == 'H')) {
+    // Do not silently substitute Simplified Chinese for a locale that
+    // explicitly requests a Traditional script.
+    const auto has_case_insensitive = [&](std::string_view needle) {
+      if (tag.size() < needle.size())
+        return false;
+      for (std::size_t start = 0; start + needle.size() <= tag.size(); ++start) {
+        bool matches = true;
+        for (std::size_t i = 0; i < needle.size(); ++i) {
+          const auto character = tag[start + i];
+          const auto lower = character >= 'A' && character <= 'Z'
+                                 ? static_cast<char>(character - 'A' + 'a')
+                                 : character;
+          if (lower != needle[i]) {
+            matches = false;
+            break;
+          }
+        }
+        if (matches)
+          return true;
+      }
+      return false;
+    };
+    if (has_case_insensitive("hant") || has_case_insensitive("tw") ||
+        has_case_insensitive("hk"))
+      return std::nullopt;
+    return Locale::simplified_chinese;
+  }
   return std::nullopt;
 }
 
@@ -67,78 +125,69 @@ std::optional<Locale> select_locale(std::string_view explicit_locale,
   return Locale::english;
 }
 
-constexpr std::array<CatalogEntry, message_id_count * locale_count> f10_entries{
-    {
-        {Locale::english, MessageId::graphics_settings, "GRAPHICS SETTINGS"},
-        {Locale::english, MessageId::profile, "Profile"},
-        {Locale::english, MessageId::window_mode, "Window mode"},
-        {Locale::english, MessageId::resolution, "Resolution"},
-        {Locale::english, MessageId::present_mode, "Present mode"},
-        {Locale::english, MessageId::render_scale, "Render scale"},
-        {Locale::english, MessageId::upscaler, "Upscaler"},
-        {Locale::english, MessageId::shadows, "Shadows"},
-        {Locale::english, MessageId::apply, "Apply"},
-        {Locale::english, MessageId::back, "Back"},
-        {Locale::english, MessageId::defaults, "Defaults"},
-        {Locale::english, MessageId::keep, "Keep"},
-        {Locale::english, MessageId::revert, "Revert"},
-        {Locale::english, MessageId::applying_settings, "Applying settings..."},
-        {Locale::english, MessageId::restoring_settings,
-         "Restoring settings..."},
-        {Locale::english, MessageId::keep_display_settings,
-         "Keep these display settings?"},
-        {Locale::english, MessageId::reverting_in_seconds,
-         "Reverting in {seconds} seconds"},
-        {Locale::english, MessageId::original, "Original"},
-        {Locale::english, MessageId::modern, "Modern"},
-        {Locale::english, MessageId::modern_plus, "Modern+"},
-        {Locale::english, MessageId::windowed, "Windowed"},
-        {Locale::english, MessageId::borderless_desktop, "Borderless desktop"},
-        {Locale::english, MessageId::vsync, "VSync"},
-        {Locale::english, MessageId::mailbox, "Mailbox"},
-        {Locale::english, MessageId::immediate, "Immediate"},
-        {Locale::english, MessageId::native, "Native"},
-        {Locale::english, MessageId::temporal, "Temporal"},
-        {Locale::english, MessageId::dlss, "DLSS"},
-        {Locale::english, MessageId::reference, "Reference"},
-        {Locale::english, MessageId::high, "High"},
-        {Locale::english, MessageId::ultra, "Ultra"},
-        {Locale::swedish, MessageId::graphics_settings, "GRAFIKINSTÄLLNINGAR"},
-        {Locale::swedish, MessageId::profile, "Profil"},
-        {Locale::swedish, MessageId::window_mode, "Fönsterläge"},
-        {Locale::swedish, MessageId::resolution, "Upplösning"},
-        {Locale::swedish, MessageId::present_mode, "Presentationsläge"},
-        {Locale::swedish, MessageId::render_scale, "Renderingsskala"},
-        {Locale::swedish, MessageId::upscaler, "Uppskalning"},
-        {Locale::swedish, MessageId::shadows, "Skuggor"},
-        {Locale::swedish, MessageId::apply, "Tillämpa"},
-        {Locale::swedish, MessageId::back, "Tillbaka"},
-        {Locale::swedish, MessageId::defaults, "Standardvärden"},
-        {Locale::swedish, MessageId::keep, "Behåll"},
-        {Locale::swedish, MessageId::revert, "Återställ"},
-        {Locale::swedish, MessageId::applying_settings,
-         "Tillämpar inställningar..."},
-        {Locale::swedish, MessageId::restoring_settings,
-         "Återställer inställningar..."},
-        {Locale::swedish, MessageId::keep_display_settings,
-         "Behålla dessa bildskärmsinställningar?"},
-        {Locale::swedish, MessageId::reverting_in_seconds,
-         "Återställer om {seconds} sekunder"},
-        {Locale::swedish, MessageId::original, "Original"},
-        {Locale::swedish, MessageId::modern, "Modern"},
-        {Locale::swedish, MessageId::modern_plus, "Modern+"},
-        {Locale::swedish, MessageId::windowed, "Fönster"},
-        {Locale::swedish, MessageId::borderless_desktop, "Kantlöst skrivbord"},
-        {Locale::swedish, MessageId::vsync, "VSync"},
-        {Locale::swedish, MessageId::mailbox, "Mailbox"},
-        {Locale::swedish, MessageId::immediate, "Omedelbar"},
-        {Locale::swedish, MessageId::native, "Inbyggd"},
-        {Locale::swedish, MessageId::temporal, "Temporal"},
-        {Locale::swedish, MessageId::dlss, "DLSS"},
-        {Locale::swedish, MessageId::reference, "Referens"},
-        {Locale::swedish, MessageId::high, "Hög"},
-        {Locale::swedish, MessageId::ultra, "Ultra"},
-    }};
+constexpr std::array<std::array<std::string_view, 17>, locale_count> localized_prose{{
+    {{"GRAPHICS SETTINGS", "Profile", "Window mode", "Resolution", "Present mode", "Render scale", "Upscaler", "Shadows", "Apply", "Back", "Defaults", "Keep", "Revert", "Applying settings...", "Restoring settings...", "Keep these display settings?", "Reverting in {seconds} seconds"}},
+    {{"GRAFIKINSTÄLLNINGAR", "Profil", "Fönsterläge", "Upplösning", "Presentationsläge", "Renderingsskala", "Uppskalning", "Skuggor", "Tillämpa", "Tillbaka", "Standardvärden", "Behåll", "Återställ", "Tillämpar inställningar...", "Återställer inställningar...", "Behålla dessa bildskärmsinställningar?", "Återställer om {seconds} sekunder"}},
+    {{"GRAFIKINDSTILLINGER", "Profil", "Vinduestilstand", "Opløsning", "Visningstilstand", "Renderingsskala", "Opskalering", "Skygger", "Anvend", "Tilbage", "Standarder", "Behold", "Gendan", "Anvender indstillinger...", "Gendanner indstillinger...", "Behold disse skærmindstillinger?", "Gendanner om {seconds} sekunder"}},
+    {{"GRAFIKKINNSTILLINGER", "Profil", "Vindusmodus", "Oppløsning", "Visningsmodus", "Renderingsskala", "Oppskalering", "Skygger", "Bruk", "Tilbake", "Standarder", "Behold", "Tilbakestill", "Bruker innstillinger...", "Gjenoppretter innstillinger...", "Beholde disse skjerminnstillingene?", "Gjenoppretter om {seconds} sekunder"}},
+    {{"GRAFIIKKA-ASETUKSET", "Profiili", "Ikkunatila", "Tarkkuus", "Esitystila", "Renderöintiasteikko", "Skaalaus", "Varjot", "Käytä", "Takaisin", "Oletukset", "Pidä", "Palauta", "Otetaan asetuksia käyttöön...", "Palautetaan asetuksia...", "Säilytetäänkö nämä näyttöasetukset?", "Palautetaan {seconds} sekunnissa"}},
+    {{"GRAFIKEINSTELLUNGEN", "Profil", "Fenstermodus", "Auflösung", "Präsentationsmodus", "Render-Skalierung", "Hochskalierung", "Schatten", "Anwenden", "Zurück", "Standardwerte", "Behalten", "Zurücksetzen", "Einstellungen werden angewendet...", "Einstellungen werden wiederhergestellt...", "Diese Anzeigeeinstellungen behalten?", "Wird in {seconds} Sekunden zurückgesetzt"}},
+    {{"PARAMÈTRES GRAPHIQUES", "Profil", "Mode fenêtre", "Résolution", "Mode d'affichage", "Échelle de rendu", "Mise à l'échelle", "Ombres", "Appliquer", "Retour", "Valeurs par défaut", "Conserver", "Rétablir", "Application des paramètres...", "Restauration des paramètres...", "Conserver ces paramètres d'affichage ?", "Rétablissement dans {seconds} secondes"}},
+    {{"AJUSTES GRÁFICOS", "Perfil", "Modo de ventana", "Resolución", "Modo de presentación", "Escala de renderizado", "Reescalado", "Sombras", "Aplicar", "Atrás", "Predeterminados", "Conservar", "Revertir", "Aplicando ajustes...", "Restaurando ajustes...", "¿Conservar estos ajustes de pantalla?", "Se revertirá en {seconds} segundos"}},
+    {{"IMPOSTAZIONI GRAFICHE", "Profilo", "Modalità finestra", "Risoluzione", "Modalità presentazione", "Scala rendering", "Upscaling", "Ombre", "Applica", "Indietro", "Predefiniti", "Mantieni", "Ripristina", "Applicazione impostazioni...", "Ripristino impostazioni...", "Mantenere queste impostazioni schermo?", "Ripristino tra {seconds} secondi"}},
+    {{"CONFIGURAÇÕES GRÁFICAS", "Perfil", "Modo de janela", "Resolução", "Modo de apresentação", "Escala de renderização", "Ampliação", "Sombras", "Aplicar", "Voltar", "Padrões", "Manter", "Reverter", "Aplicando configurações...", "Restaurando configurações...", "Manter estas configurações de vídeo?", "Reverter em {seconds} segundos"}},
+    {{"USTAWIENIA GRAFIKI", "Profil", "Tryb okna", "Rozdzielczość", "Tryb prezentacji", "Skala renderowania", "Skalowanie", "Cienie", "Zastosuj", "Wstecz", "Domyślne", "Zachowaj", "Przywróć", "Stosowanie ustawień...", "Przywracanie ustawień...", "Zachować te ustawienia obrazu?", "Przywracanie za {seconds} s"}},
+    {{"NASTAVENÍ GRAFIKY", "Profil", "Režim okna", "Rozlišení", "Režim prezentace", "Měřítko vykreslení", "Převzorkování", "Stíny", "Použít", "Zpět", "Výchozí", "Ponechat", "Vrátit", "Používání nastavení...", "Obnovování nastavení...", "Ponechat toto nastavení zobrazení?", "Vrácení za {seconds} sekund"}},
+    {{"GRAFIKAI BEÁLLÍTÁSOK", "Profil", "Ablakmód", "Felbontás", "Megjelenítési mód", "Renderelési skála", "Felskálázás", "Árnyékok", "Alkalmaz", "Vissza", "Alapértékek", "Megtart", "Visszaállít", "Beállítások alkalmazása...", "Beállítások visszaállítása...", "Megtartja ezeket a kijelzőbeállításokat?", "Visszaállítás {seconds} másodperc múlva"}},
+    {{"SETĂRI GRAFICE", "Profil", "Mod fereastră", "Rezoluție", "Mod prezentare", "Scară de randare", "Mărire", "Umbre", "Aplică", "Înapoi", "Implicite", "Păstrează", "Revino", "Se aplică setările...", "Se restaurează setările...", "Păstrați aceste setări de afișare?", "Revenire în {seconds} secunde"}},
+    {{"GRAFİK AYARLARI", "Profil", "Pencere modu", "Çözünürlük", "Sunum modu", "İşleme ölçeği", "Yükseltme", "Gölgeler", "Uygula", "Geri", "Varsayılanlar", "Koru", "Geri al", "Ayarlar uygulanıyor...", "Ayarlar geri yükleniyor...", "Bu görüntü ayarları korunsun mu?", "{seconds} saniye içinde geri alınacak"}},
+    {{"НАСТРОЙКИ ГРАФИКИ", "Профиль", "Режим окна", "Разрешение", "Режим вывода", "Масштаб рендеринга", "Масштабирование", "Тени", "Применить", "Назад", "По умолчанию", "Сохранить", "Отменить", "Применение настроек...", "Восстановление настроек...", "Сохранить эти настройки экрана?", "Возврат через {seconds} с"}},
+    {{"НАЛАШТУВАННЯ ГРАФІКИ", "Профіль", "Режим вікна", "Роздільність", "Режим показу", "Масштаб рендерингу", "Масштабування", "Тіні", "Застосувати", "Назад", "Типові", "Зберегти", "Скасувати", "Застосування налаштувань...", "Відновлення налаштувань...", "Зберегти ці налаштування екрана?", "Повернення через {seconds} с"}},
+    {{"グラフィック設定", "プロフィール", "ウィンドウモード", "解像度", "表示モード", "描画スケール", "アップスケーラー", "影", "適用", "戻る", "初期設定", "保持", "元に戻す", "設定を適用中...", "設定を復元中...", "この表示設定を維持しますか？", "{seconds} 秒後に元に戻します"}},
+    {{"그래픽 설정", "프로필", "창 모드", "해상도", "표시 모드", "렌더링 배율", "업스케일러", "그림자", "적용", "뒤로", "기본값", "유지", "되돌리기", "설정 적용 중...", "설정 복원 중...", "이 화면 설정을 유지할까요?", "{seconds}초 후 되돌립니다"}},
+    {{"图形设置", "配置", "窗口模式", "分辨率", "显示模式", "渲染比例", "超分辨率", "阴影", "应用", "返回", "默认值", "保留", "还原", "正在应用设置...", "正在恢复设置...", "保留这些显示设置？", "将在 {seconds} 秒后还原"}},
+}};
+
+// Profile names remain product names. All remaining F10 labels are authored
+// per locale too, including the display-mode value that the draw path shows.
+constexpr std::array<std::array<std::string_view, 14>, locale_count> localized_labels{{
+    {{"Original", "Modern", "Modern+", "Windowed", "Borderless desktop", "VSync", "Mailbox", "Immediate", "Native", "Temporal", "DLSS", "Reference", "High", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Fönster", "Kantlöst skrivbord", "VSync", "Mailbox", "Omedelbar", "Inbyggd", "Temporal", "DLSS", "Referens", "Hög", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Vindue", "Kantløst skrivebord", "VSync", "Postkasse", "Straks", "Indbygget", "Tidsbaseret", "DLSS", "Reference", "Høj", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Vindu", "Kantløst skrivebord", "VSync", "Postkasse", "Umiddelbar", "Innebygd", "Tidsbasert", "DLSS", "Referanse", "Høy", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Ikkuna", "Reunaton työpöytä", "VSync", "Postilaatikko", "Välitön", "Natiivi", "Ajallinen", "DLSS", "Viite", "Korkea", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Fenster", "Rahmenloser Desktop", "VSync", "Mailbox", "Sofort", "Nativ", "Temporal", "DLSS", "Referenz", "Hoch", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Fenêtré", "Bureau sans bordure", "VSync", "Boîte aux lettres", "Immédiat", "Natif", "Temporel", "DLSS", "Référence", "Élevé", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Ventana", "Escritorio sin bordes", "VSync", "Buzón", "Inmediato", "Nativo", "Temporal", "DLSS", "Referencia", "Alto", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Finestra", "Desktop senza bordi", "VSync", "Cassetta postale", "Immediato", "Nativo", "Temporale", "DLSS", "Riferimento", "Alto", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Janela", "Área de trabalho sem bordas", "VSync", "Caixa de correio", "Imediato", "Nativo", "Temporal", "DLSS", "Referência", "Alto", "Ultra"}},
+    {{"Oryginalny", "Nowoczesny", "Nowoczesny+", "Okno", "Pulpit bez obramowania", "VSync", "Skrzynka", "Natychmiast", "Natywny", "Czasowy", "DLSS", "Referencyjny", "Wysokie", "Ultra"}},
+    {{"Původní", "Moderní", "Moderní+", "Okno", "Plocha bez okrajů", "VSync", "Poštovní schránka", "Ihned", "Nativní", "Dočasný", "DLSS", "Referenční", "Vysoké", "Ultra"}},
+    {{"Eredeti", "Modern", "Modern+", "Ablakos", "Keret nélküli asztal", "VSync", "Postafiók", "Azonnali", "Natív", "Időbeli", "DLSS", "Referencia", "Magas", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Fereastră", "Desktop fără margini", "VSync", "Cutie poștală", "Imediat", "Nativ", "Temporal", "DLSS", "Referință", "Ridicat", "Ultra"}},
+    {{"Özgün", "Modern", "Modern+", "Pencereli", "Kenarlıksız masaüstü", "VSync", "Posta kutusu", "Anında", "Yerel", "Zamansal", "DLSS", "Başvuru", "Yüksek", "Ultra"}},
+    {{"Оригинал", "Современный", "Современный+", "В окне", "Полноэкранный без рамки", "VSync", "Почтовый ящик", "Сразу", "Нативный", "Временной", "DLSS", "Эталон", "Высокое", "Ультра"}},
+    {{"Оригінал", "Сучасний", "Сучасний+", "У вікні", "Безрамковий робочий стіл", "VSync", "Поштова скринька", "Негайно", "Нативний", "Часовий", "DLSS", "Еталон", "Високий", "Ультра"}},
+    {{"オリジナル", "モダン", "モダン+", "ウィンドウ", "ボーダーレスデスクトップ", "VSync", "メールボックス", "即時", "ネイティブ", "時間的", "DLSS", "基準", "高", "ウルトラ"}},
+    {{"오리지널", "모던", "모던+", "창", "테두리 없는 데스크톱", "VSync", "메일박스", "즉시", "네이티브", "시간적", "DLSS", "참조", "높음", "울트라"}},
+    {{"原版", "现代", "现代+", "窗口", "无边框桌面", "VSync", "邮箱", "立即", "原生", "时序", "DLSS", "参考", "高", "极高"}},
+}};
+
+constexpr std::array<CatalogEntry, message_id_count * locale_count>
+make_f10_entries() {
+  std::array<CatalogEntry, message_id_count * locale_count> entries{};
+  for (std::size_t locale = 0; locale < locale_count; ++locale)
+    for (std::size_t id = 0; id < message_id_count; ++id) {
+      const auto text = id < localized_prose[locale].size()
+                            ? localized_prose[locale][id]
+                            : localized_labels[locale][id - localized_prose[locale].size()];
+      entries[locale * message_id_count + id] = {
+          static_cast<Locale>(locale), static_cast<MessageId>(id), text};
+    }
+  return entries;
+}
+
+constexpr auto f10_entries = make_f10_entries();
 
 } // namespace
 

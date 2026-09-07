@@ -50,7 +50,31 @@ enum class MessageId : std::size_t {
 inline constexpr std::size_t message_id_count =
     static_cast<std::size_t>(MessageId::count);
 
-enum class Locale : std::size_t { english, swedish, count };
+// The supported values are intentionally language-level preferences. Region
+// subtags are accepted by the resolver but do not select a separate catalog.
+enum class Locale : std::size_t {
+  english,
+  swedish,
+  danish,
+  norwegian_bokmal,
+  finnish,
+  german,
+  french,
+  spanish,
+  italian,
+  portuguese_brazil,
+  polish,
+  czech,
+  hungarian,
+  romanian,
+  turkish,
+  russian,
+  ukrainian,
+  japanese,
+  korean,
+  simplified_chinese,
+  count
+};
 inline constexpr std::size_t locale_count =
     static_cast<std::size_t>(Locale::count);
 

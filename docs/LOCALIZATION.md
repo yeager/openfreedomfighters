@@ -3,12 +3,12 @@
 ## Current status
 
 The project has a deliberately small localization foundation for its own F10
-graphics-overlay vocabulary. It uses stable semantic message IDs, validates
-complete UTF-8 English and Swedish in-memory catalogs, and resolves an explicit
-locale first, a platform locale second, and English last. It does not read a
-retail LOC format or ship retail text. The draw path has not yet been given a
-user locale setting, so this is not localized Original presentation or a claim
-of complete game coverage.
+graphics-overlay vocabulary. It has complete, independently authored UTF-8
+catalog entries for the 20 target locales below, keyed by stable semantic IDs.
+It resolves an explicit locale first, a platform locale second, and English
+last. It does not read a retail LOC format or ship retail text. The draw path
+has not yet been given a user locale setting, so this is not localized Original
+presentation, game-wide l10n, or a claim of complete game coverage.
 
 The current catalog has no external catalog loader, plural/select support,
 bidirectional layout, shaping, font fallback, or locale-specific layout tests.
@@ -22,7 +22,11 @@ complex-script test exists. See [the retail-font runtime contract](RETAIL_FONT_R
 
 The engine will support Unicode, locale-aware formatting, font fallback, right-to-left layout, controller-glyph substitution, and UI expansion testing. Swedish is a launch requirement.
 
-Initial target set (20): English, Swedish, Danish, Norwegian Bokmal, Finnish, German, French, Spanish, Italian, Portuguese (Brazil), Polish, Czech, Hungarian, Romanian, Turkish, Russian, Ukrainian, Japanese, Korean, and Simplified Chinese.
+Current F10 target set (20): English, Swedish, Danish, Norwegian Bokmal,
+Finnish, German, French, Spanish, Italian, Portuguese (Brazil), Polish, Czech,
+Hungarian, Romanian, Turkish, Russian, Ukrainian, Japanese, Korean, and
+Simplified Chinese. This is coverage only for the project-authored F10 overlay;
+Original and the rest of the game do not yet meet this target set.
 
 The list balances the original market, Nordic coverage, broad PC/Steam audiences, and script/layout diversity. It can change after font licensing and community-maintainer review.
 

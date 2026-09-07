@@ -18,9 +18,9 @@ int main() {
   const auto &catalog = f10_catalog();
   check(catalog.resolve(MessageId::apply, "sv-SE", "en-US") == "Tillämpa",
         "explicit supported locale wins");
-  check(catalog.resolve(MessageId::apply, "fi-FI", "sv-SE") == "Tillämpa",
+  check(catalog.resolve(MessageId::apply, "xx-XX", "sv-SE") == "Tillämpa",
         "platform locale follows unavailable explicit locale");
-  check(catalog.resolve(MessageId::apply, "fi-FI", "ja-JP") == "Apply",
+  check(catalog.resolve(MessageId::apply, "xx-XX", "zz-ZZ") == "Apply",
         "English is the deterministic final fallback");
   check(catalog.resolve(MessageId::revert, "SV", "en") == "Återställ",
         "locale matching accepts language case");
@@ -29,6 +29,28 @@ int main() {
   check(catalog.format_seconds(MessageId::reverting_in_seconds, 12, "sv",
                                "en") == "Återställer om 12 sekunder",
         "UTF-8 catalog text survives formatted output");
+  constexpr std::array<std::string_view, locale_count> locale_tags{{
+      "en-US", "sv-SE", "da-DK", "nb-NO", "fi-FI", "de-DE", "fr-FR",
+      "es-ES", "it-IT", "pt-BR", "pl-PL", "cs-CZ", "hu-HU", "ro-RO",
+      "tr-TR", "ru-RU", "uk-UA", "ja-JP", "ko-KR", "zh-CN",
+  }};
+  for (const auto tag : locale_tags)
+    for (std::size_t id = 0; id < message_id_count; ++id)
+      check(catalog.resolve(static_cast<MessageId>(id), tag, "en-US")
+                .has_value(),
+            "every supported F10 catalog contains every stable message ID");
+  check(catalog.resolve(MessageId::apply, "ru-RU", "en-US") == "Применить",
+        "Cyrillic F10 text resolves from the Russian catalog");
+  check(catalog.resolve(MessageId::graphics_settings, "ja-JP", "en-US") ==
+            "グラフィック設定",
+        "Japanese F10 text resolves as UTF-8");
+  check(catalog.resolve(MessageId::graphics_settings, "zh-CN", "en-US") ==
+            "图形设置",
+        "Simplified Chinese F10 text resolves as UTF-8");
+  check(catalog.resolve(MessageId::apply, "xx-XX", "ko-KR") == "적용",
+        "a supported platform locale follows an unavailable explicit locale");
+  check(catalog.resolve(MessageId::apply, "zh-Hant", "en-US") == "Apply",
+        "a Traditional Chinese request does not select the Simplified catalog");
   check(!catalog.resolve(static_cast<MessageId>(message_id_count), "en", "en"),
         "invalid message IDs do not resolve");
   check(!catalog.format_seconds(MessageId::apply, 2, "en", "en"),

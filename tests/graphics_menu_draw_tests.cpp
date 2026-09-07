@@ -87,7 +87,7 @@ int main() {
             has_text(swedish, "Kantlöst skrivbord"),
         "explicit Swedish locale resolves only project-authored F10 text");
   const auto platform_swedish = off::ui::build_graphics_menu_draw_list(
-      menu, {640, 480}, now, 1.0F, "fi-FI", "sv_SE.UTF-8");
+      menu, {640, 480}, now, 1.0F, "xx-XX", "sv_SE.UTF-8");
   check(has_text(platform_swedish, "Tillbaka") &&
             !has_text(platform_swedish, "Back") && has_text(reference, "Apply"),
         "unsupported explicit locale falls through to platform then English "
