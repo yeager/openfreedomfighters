@@ -456,6 +456,19 @@ struct IntroSoundPreparationServices {
   std::function<void(IntroRuntimeHandle)> enable_owner;
 };
 
+// Explicit diagnostic/integration result for the two recovered intro sound
+// owners. This is deliberately not a global component lifecycle result.
+struct IntroSoundFamilyPhaseOneResult {
+  struct Owner {
+    std::size_t source{};
+    std::size_t extend_component{},notify_component{},segment_component{},define_component{};
+    float notify_duration{};
+    bool segment_restore{},extend_ordinary_removed{};
+    std::string defined_key;
+  };
+  std::array<Owner,2> owners{};
+};
+
 class IntroRuntimePicture final {
 public:
   [[nodiscard]] std::size_t source_index() const noexcept { return source_->directory_index; }
@@ -644,6 +657,13 @@ public:
   // owner binding. No binding means no writes. Only the approved unchanged
   // intro Extend subset is supported; this is not lifecycle admission.
   void apply_sound_extension(std::size_t source);
+  // Runs only the recovered first-phase sound-family probe. It requires both
+  // real owner readers and pre-hooks to have completed, never invokes generic
+  // component callbacks, and is intentionally unavailable to normal startup.
+  const IntroSoundFamilyPhaseOneResult& run_isolated_sound_family_phase_one();
+  [[nodiscard]] const IntroSoundFamilyPhaseOneResult* isolated_sound_family_phase_one() const noexcept {
+    return isolated_sound_family_phase_one_?&*isolated_sound_family_phase_one_:nullptr;
+  }
   // Catalog membership includes unconstructed/removed entries, not a live
   // owner attachment collection suitable for runtime lookup or disposal.
   [[nodiscard]] std::span<const std::size_t> owner_components(IntroRuntimeHandle owner) const;
@@ -756,6 +776,8 @@ private:
   IntroPreparedResources resources_;
   // Declared before components so their captures are destroyed before leases.
   std::vector<std::unique_ptr<IntroRuntimeSound>> sounds_;
+  std::optional<IntroSoundFamilyPhaseOneResult> isolated_sound_family_phase_one_;
+  bool isolated_sound_family_phase_one_busy_{},isolated_sound_family_phase_one_failed_{};
   std::shared_ptr<RootGroupComponent> root_group_;
   runtime::ComponentLifecycle components_;
   std::unique_ptr<runtime::OrdinaryComponentManager> ordinary_;

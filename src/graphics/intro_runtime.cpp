@@ -2242,6 +2242,68 @@ void IntroRuntime::apply_sound_extension(std::size_t source) {
   record.output_mode=2;
 }
 
+const IntroSoundFamilyPhaseOneResult& IntroRuntime::run_isolated_sound_family_phase_one() {
+  if(isolated_sound_family_phase_one_busy_ || isolated_sound_family_phase_one_failed_ ||
+      isolated_sound_family_phase_one_)
+    throw std::runtime_error("Isolated intro sound phase one cannot run twice");
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      components_.failed() || components_.phases_completed() || sounds_.size()!=2U)
+    throw std::runtime_error("Isolated intro sound phase one is unavailable for this scene");
+  struct BusyGuard {
+    bool& value;
+    explicit BusyGuard(bool& supplied) : value(supplied) { value=true; }
+    ~BusyGuard() { value=false; }
+  } guard(isolated_sound_family_phase_one_busy_);
+  try {
+    IntroSoundFamilyPhaseOneResult result;
+    constexpr std::array<std::string_view,4> factories{
+        "ZSNDOBJ_SoundExtend","ZSNDOBJ_SoundNotify","ZSNDOBJ_SoundSegment","ZGEOM_ZSetZDefine"};
+    for(std::size_t reverse=0;reverse<sounds_.size();++reverse) {
+      auto& sound=*sounds_.at(sounds_.size()-1U-reverse);
+      const auto source=sound.source_index();
+      if(!sound.source_applied_ || !sound.has_record() || !sound.owner_binding_ || sound.failed_ || !sound.active_)
+        throw std::runtime_error("Isolated intro sound phase one requires prepared reader-backed owners");
+      const auto attachment_indices=owner_components(sound.handle());
+      if(attachment_indices.size()!=factories.size())
+        throw std::runtime_error("Isolated intro sound phase one attachment count is unsupported");
+      for(std::size_t index=0;index<attachment_indices.size();++index) {
+        const auto& component=components_.at(attachment_indices[index]);
+        if(!component.constructed() || component.removed() || component.source().factory_name!=factories[index] ||
+            component.state().attached_owner!=sound.handle().value)
+          throw std::runtime_error("Isolated intro sound phase one attachment is unavailable");
+      }
+      auto& extend=constructed_picture_components_.at(attachment_indices[0]).sound_extend;
+      auto& notify=constructed_picture_components_.at(attachment_indices[1]).sound_notify;
+      auto& segment=constructed_picture_components_.at(attachment_indices[2]).sound_segment;
+      auto& define=constructed_picture_components_.at(attachment_indices[3]).sound_define;
+      if(!extend || !notify || !segment || !define || define->property_on_parent || define->property_key.empty() ||
+          !std::isfinite(sound.record().duration))
+        throw std::runtime_error("Isolated intro sound phase one reader state is unsupported");
+      auto& output=result.owners[reverse];
+      output={source,attachment_indices[0],attachment_indices[1],attachment_indices[2],attachment_indices[3],
+              sound.record().duration,restore_mode_,false,define->property_key};
+      // Real first-phase order: define, segment, notify, extend. Retire and
+      // phase-status mutation remain unavailable until the whole global pass.
+      set_scene_owner_property_native(define->property_key,sound.handle(),2U);
+      notify->duration_snapshot=sound.record().duration;
+      if(!restore_mode_) {
+        auto& state=components_.at(attachment_indices[0]).state();
+        if(state.admitted&0x10U) {
+          state.admitted&=~0x10U;
+          if(ordinary_) ordinary_->notify_removal();
+          output.extend_ordinary_removed=true;
+        }
+      }
+      apply_sound_extension(source);
+    }
+    isolated_sound_family_phase_one_=std::move(result);
+    return *isolated_sound_family_phase_one_;
+  } catch(...) {
+    isolated_sound_family_phase_one_failed_=true;
+    throw;
+  }
+}
+
 std::span<const std::size_t> IntroRuntime::owner_components(IntroRuntimeHandle owner) const {
   return owner_components_.at(hierarchy_index(owner));
 }

@@ -120,6 +120,14 @@ does not mutate a record. This reader does not resolve authored event or target
 references, prepare a record, allocate a channel, register component events or
 enter either lifecycle phase.
 
+An explicit isolated phase-one probe now verifies the recovered order for these
+two owners only: reverse owner order, then `ZSetZDefine`, `SoundSegment`,
+`SoundNotify` and `SoundExtend`. It requires completed readers and owner
+pre-hooks, snapshots the live duration, applies the approved Extend subset and
+retains the defined property. It never invokes generic component callbacks,
+sets global phase flags, retires components, emits readiness or starts a sound;
+normal startup does not call it.
+
 Failures keep completed mutations. Where the original would destroy an owner,
 the current host reports unsupported disposal and prevents further sound-owner
 use. It must not continue initialization as if destruction had succeeded.

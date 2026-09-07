@@ -205,6 +205,7 @@ struct Fixture {
     Bytes payload, names, prm, tex, snd;
     std::array<std::size_t, 10> block_offsets{};
     std::array<std::size_t, 10> attachment_offsets{};
+    std::size_t remaining_sound_source_offset{};
     explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false,bool room_animation_scope=false,bool lens_flare_scope=false,bool remaining_scope=false) : payload(1024), snd(16) {
         if(language_group && !leading_group) throw std::runtime_error("language fixture requires leading group");
         if(camera_row && !language_group) throw std::runtime_error("camera row fixture requires language group");
@@ -467,6 +468,7 @@ struct Fixture {
                 payload.insert(payload.end(),controller_source.begin(),controller_source.end());
                 while(payload.size()%4) payload.push_back(std::byte{0});
                 remaining_sound_source=payload.size();
+                remaining_sound_source_offset=remaining_sound_source;
                 payload.insert(payload.end(),blocks[9].begin(),blocks[9].end());
                 while(payload.size()%4) payload.push_back(std::byte{0});
             }
@@ -1172,6 +1174,23 @@ static OFF_NOINLINE void check_complete_outer_loader_tail(
 static OFF_NOINLINE void test_complete_runtime_scopes() {
     for(const bool policy:{false,true}) {
       Fixture complete(false,true,true,true,true,true,true,true,true,true,true);
+      if(!policy) {
+        // The complete scope fixture normally exercises a deliberately wider
+        // Extend grammar. This isolated phase-one route admits only the
+        // independently recovered unchanged form.
+        {
+          const auto extend=complete.remaining_sound_source_offset+70U;
+          for(std::size_t field=0;field<15;++field) set(complete.payload,extend+field*5U+1U,0U);
+          set(complete.payload,extend+1U,std::bit_cast<std::uint32_t>(-1.0F));
+          set(complete.payload,extend+11U*5U+1U,2U);
+          set(complete.payload,extend+12U*5U+1U,1U);
+          set(complete.payload,extend+13U*5U+1U,1U);
+          const auto segment_start=extend+76U+11U;
+          const auto property_start=segment_start+105U+1U+
+              std::string_view("Independent caption key").size()+1U+1U;
+          set(complete.payload,property_start+1U,0U);
+        }
+      }
       off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
           {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
       app.initialize_native_group_registration();app.initialize_native_window_language_registration();
@@ -1300,6 +1319,24 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
         check_complete_restore_reader_route(host);
       else {
         check_complete_ordinary_reader_bracket(host);
+        app.reset_clock();app.clock().assign_crt_mode(true);app.advance_crt();
+        const off::graphics::IntroSoundPreparationServices sound_services{
+            [&](auto handle) { return host.resource_state(handle)->flags; },
+            [&](auto) { return host.root_handle(); },
+            [](auto) { return off::graphics::IntroSoundSpatialState{{0,0,0},{0,0,1}}; },
+            [] { return false; },[](auto) { throw std::runtime_error("unexpected sound owner enable"); }};
+        host.prepare_sound_owner(467,sound_services);
+        host.prepare_sound_owner(468,sound_services);
+        const auto ordinary_removals=host.ordinary_components()->removal_count();
+        const auto& sound_phase=host.run_isolated_sound_family_phase_one();
+        check(sound_phase.owners[0].source==468 && sound_phase.owners[1].source==467 &&
+              sound_phase.owners[0].notify_duration==host.sound_for_source(468).record().duration &&
+              sound_phase.owners[1].notify_duration==host.sound_for_source(467).record().duration &&
+              sound_phase.owners[0].extend_ordinary_removed && sound_phase.owners[1].extend_ordinary_removed &&
+              host.ordinary_components()->removal_count()==ordinary_removals+2U &&
+              !host.components().phases_completed(),
+              "isolated sound phase one preserves reverse owner order, live duration snapshots and no global completion");
+        rejects([&]{host.run_isolated_sound_family_phase_one();});
         check_complete_outer_loader_tail(host);
       }
       rejects([&]{host.construct_remaining_directory_without_engine_renderer();});
