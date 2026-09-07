@@ -28,6 +28,22 @@
 namespace {
 using Bytes = std::vector<std::byte>;
 int failures = 0;
+#if defined(_MSC_VER)
+#define OFF_NOINLINE __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+#define OFF_NOINLINE __attribute__((noinline))
+#else
+#define OFF_NOINLINE
+#endif
+
+// Keep independent integration scenarios out of one giant test-main frame.
+// MSVC's exception-cleanup layout made that frame exceed the Windows runner's
+// stack budget even though each scenario is independently bounded.
+template <class Function>
+OFF_NOINLINE void run_isolated(Function &&function) {
+    std::forward<Function>(function)();
+}
+
 void check(bool condition, const char* text) {
     if (!condition) { ++failures; std::cerr << "FAIL: " << text << '\n'; }
 }
@@ -715,6 +731,7 @@ void archive(const std::filesystem::path& path, const std::vector<std::pair<std:
 int main() {
     using off::graphics::IntroPreparedResources;
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
+    run_isolated([] {
     {
       Bytes image(40,std::byte{0x6d});
       constexpr std::uint32_t section_offset=7;
@@ -748,6 +765,8 @@ int main() {
       short_block[7]=std::byte{'X'}; short_block[8]=std::byte{0};
       rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(short_block,7,12); });
     }
+    });
+    run_isolated([] {
     {
       Bytes image(32, std::byte{0x6d});
       constexpr std::uint32_t section_offset=12;
@@ -1398,6 +1417,9 @@ int main() {
             "room construction does not enable position collection, register renderer cameras or execute loader tail");
       rejects([&]{host.construct_room_animation_scope_without_engine_renderer();});
     }
+    });
+    run_isolated([] {
+      Fixture fixture;
     {
       Fixture visual_fixture(false,true,true,true,true,true,true,true);
       off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
@@ -2160,6 +2182,9 @@ int main() {
             app.live_variables().enumerate("Show2d")==std::vector<off::runtime::LiveVariableHandle>{existing_show.handle()},
             "scene destruction releases the live console lease before Window scalar storage");
     }
+    });
+    run_isolated([] {
+      Fixture fixture;
     {
       Fixture leading(false,true);
       const auto prepared=leading.build();
@@ -2450,6 +2475,9 @@ int main() {
       set(wrong_parameter.payload,wrong_parameter.attachment_offsets[9]+8,std::bit_cast<std::uint32_t>(1.0F));
       rejects([&] { (void)wrong_parameter.build(); });
     }
+    });
+    run_isolated([] {
+    Fixture fixture;
     std::int32_t clock_sample=1000;
     off::runtime::SceneComponentSequence component_sequence{[]{return std::uint32_t{0};}};
     off::runtime::ApplicationServices application(
@@ -3207,5 +3235,6 @@ int main() {
         rejects([&] { (void)with_audio.audio()->read_encoded(0); });
         rejects([&] { (void)off::graphics::load_intro_prepared_resources(sound_path); });
     }
+    });
     return failures == 0 ? 0 : 1;
 }
