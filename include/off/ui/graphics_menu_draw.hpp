@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace off::ui {
@@ -121,7 +122,9 @@ struct DiagnosticAsciiAtlas {
 [[nodiscard]] DiagnosticAsciiAtlas make_diagnostic_ascii_atlas();
 [[nodiscard]] GraphicsMenuDrawList build_graphics_menu_draw_list(
     const GraphicsMenuSession &menu, UiExtent physical_target,
-    GraphicsClock::time_point now, float ui_scale = 1.0F);
+    GraphicsClock::time_point now, float ui_scale = 1.0F,
+    std::string_view explicit_locale = {},
+    std::string_view platform_locale = {});
 [[nodiscard]] UiControl hit_test(const GraphicsMenuDrawList &list, float x,
                                  float y) noexcept;
 [[nodiscard]] bool

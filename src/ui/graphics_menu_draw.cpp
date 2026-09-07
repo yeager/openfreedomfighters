@@ -1,5 +1,6 @@
 #include "off/ui/graphics_menu_draw.hpp"
 #include "off/ui/detail/spleen_ascii_rows.hpp"
+#include "off/ui/project_localization.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -40,51 +41,76 @@ bool normalized(const UiRect &rect) {
 
 bool valid_layer(UiLayer layer) { return layer <= UiLayer::modal; }
 
-std::string profile_name(const settings::RequestedGraphicsSettings &value) {
-  return value.profile == Mode::original
-             ? "Original"
-             : (value.modern_plus ? "Modern+" : "Modern");
+std::string localized(l10n::MessageId id, std::string_view explicit_locale,
+                      std::string_view platform_locale) {
+  const auto text =
+      l10n::f10_catalog().resolve(id, explicit_locale, platform_locale);
+  return text ? std::string{*text} : std::string{};
 }
 
-std::string upscaler_name(settings::Upscaler value) {
+std::string profile_name(const settings::RequestedGraphicsSettings &value,
+                         std::string_view explicit_locale,
+                         std::string_view platform_locale) {
+  return localized(value.profile == Mode::original
+                       ? l10n::MessageId::original
+                       : (value.modern_plus ? l10n::MessageId::modern_plus
+                                            : l10n::MessageId::modern),
+                   explicit_locale, platform_locale);
+}
+
+std::string upscaler_name(settings::Upscaler value,
+                          std::string_view explicit_locale,
+                          std::string_view platform_locale) {
   switch (value) {
   case settings::Upscaler::native:
-    return "Native";
+    return localized(l10n::MessageId::native, explicit_locale, platform_locale);
   case settings::Upscaler::temporal:
-    return "Temporal";
+    return localized(l10n::MessageId::temporal, explicit_locale,
+                     platform_locale);
   case settings::Upscaler::dlss:
-    return "DLSS";
+    return localized(l10n::MessageId::dlss, explicit_locale, platform_locale);
   }
-  return "Invalid";
+  return {};
 }
 
-std::string shadow_name(settings::ShadowQuality value) {
+std::string shadow_name(settings::ShadowQuality value,
+                        std::string_view explicit_locale,
+                        std::string_view platform_locale) {
   switch (value) {
   case settings::ShadowQuality::reference:
-    return "Reference";
+    return localized(l10n::MessageId::reference, explicit_locale,
+                     platform_locale);
   case settings::ShadowQuality::high:
-    return "High";
+    return localized(l10n::MessageId::high, explicit_locale, platform_locale);
   case settings::ShadowQuality::ultra:
-    return "Ultra";
+    return localized(l10n::MessageId::ultra, explicit_locale, platform_locale);
   }
-  return "Invalid";
+  return {};
 }
 
-std::string window_name(settings::WindowMode mode) {
-  return mode == settings::WindowMode::borderless_desktop ? "Borderless desktop"
-                                                          : "Windowed";
+std::string window_name(settings::WindowMode mode,
+                        std::string_view explicit_locale,
+                        std::string_view platform_locale) {
+  return localized(mode == settings::WindowMode::borderless_desktop
+                       ? l10n::MessageId::borderless_desktop
+                       : l10n::MessageId::windowed,
+                   explicit_locale, platform_locale);
 }
 
-std::string present_name(settings::PresentMode mode) {
+std::string present_name(settings::PresentMode mode,
+                         std::string_view explicit_locale,
+                         std::string_view platform_locale) {
   switch (mode) {
   case settings::PresentMode::vsync:
-    return "VSync";
+    return localized(l10n::MessageId::vsync, explicit_locale, platform_locale);
   case settings::PresentMode::mailbox:
-    return "Mailbox";
+    return localized(l10n::MessageId::mailbox, explicit_locale,
+                     platform_locale);
   case settings::PresentMode::immediate:
-    return "Immediate";
+    return localized(l10n::MessageId::immediate, explicit_locale,
+                     platform_locale);
   }
-  return "Invalid";
+  return {};
 }
 
 } // namespace
@@ -120,7 +146,9 @@ DiagnosticAsciiAtlas make_diagnostic_ascii_atlas() {
 
 GraphicsMenuDrawList
 build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
-                              GraphicsClock::time_point now, float scale) {
+                              GraphicsClock::time_point now, float scale,
+                              std::string_view explicit_locale,
+                              std::string_view platform_locale) {
   GraphicsMenuDrawList out;
   out.target = target;
   out.ui_scale = scale;
@@ -182,7 +210,8 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
     return out;
   };
   if (!add_text(UiLayer::content, point_x(60.0F), point_y(155.0F),
-                "GRAPHICS SETTINGS")) {
+                localized(l10n::MessageId::graphics_settings, explicit_locale,
+                          platform_locale))) {
     out.rectangles.clear();
     out.texts.clear();
     return out;
@@ -199,15 +228,23 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
       seconds = (milliseconds + 999) / 1000;
     }
     add_text(UiLayer::modal, point_x(60.0F), point_y(185.0F),
-             "Keep these display settings?");
+             localized(l10n::MessageId::keep_display_settings, explicit_locale,
+                       platform_locale));
+    const auto countdown = l10n::f10_catalog().format_seconds(
+        l10n::MessageId::reverting_in_seconds, static_cast<unsigned>(seconds),
+        explicit_locale, platform_locale);
     add_text(UiLayer::modal, point_x(60.0F), point_y(203.0F),
-             "Reverting in " + std::to_string(seconds) + " seconds");
+             countdown ? std::string{*countdown} : std::string{});
     const UiRect keep = reference_rect(60.0F, 400.0F, 150.0F, 18.0F);
     const UiRect revert = reference_rect(230.0F, 400.0F, 150.0F, 18.0F);
     out.hit_targets.push_back({keep, UiControl::keep, seconds > 0});
     out.hit_targets.push_back({revert, UiControl::revert, true});
-    add_text(UiLayer::modal, keep.x, keep.y, "Keep");
-    add_text(UiLayer::modal, revert.x, revert.y, "Revert");
+    add_text(
+        UiLayer::modal, keep.x, keep.y,
+        localized(l10n::MessageId::keep, explicit_locale, platform_locale));
+    add_text(
+        UiLayer::modal, revert.x, revert.y,
+        localized(l10n::MessageId::revert, explicit_locale, platform_locale));
     return finish();
   }
 
@@ -215,23 +252,33 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
       menu.phase() == GraphicsMenuPhase::reverting) {
     add_text(UiLayer::modal, point_x(60.0F), point_y(185.0F),
              menu.phase() == GraphicsMenuPhase::applying
-                 ? "Applying settings..."
-                 : "Restoring settings...");
+                 ? localized(l10n::MessageId::applying_settings,
+                             explicit_locale, platform_locale)
+                 : localized(l10n::MessageId::restoring_settings,
+                             explicit_locale, platform_locale));
     return finish();
   }
 
   const auto &draft = menu.draft();
-  const std::array labels{"Profile",      "Window mode",  "Resolution",
-                          "Present mode", "Render scale", "Upscaler",
-                          "Shadows"};
-  const std::array values{profile_name(draft),
-                          window_name(draft.window_mode),
-                          std::to_string(draft.windowed_size.width) + " x " +
-                              std::to_string(draft.windowed_size.height),
-                          present_name(draft.present_mode),
-                          std::to_string(draft.render_scale_percent) + "%",
-                          upscaler_name(draft.upscaler),
-                          shadow_name(draft.shadow_quality)};
+  const std::array labels{
+      localized(l10n::MessageId::profile, explicit_locale, platform_locale),
+      localized(l10n::MessageId::window_mode, explicit_locale, platform_locale),
+      localized(l10n::MessageId::resolution, explicit_locale, platform_locale),
+      localized(l10n::MessageId::present_mode, explicit_locale,
+                platform_locale),
+      localized(l10n::MessageId::render_scale, explicit_locale,
+                platform_locale),
+      localized(l10n::MessageId::upscaler, explicit_locale, platform_locale),
+      localized(l10n::MessageId::shadows, explicit_locale, platform_locale)};
+  const std::array values{
+      profile_name(draft, explicit_locale, platform_locale),
+      window_name(draft.window_mode, explicit_locale, platform_locale),
+      std::to_string(draft.windowed_size.width) + " x " +
+          std::to_string(draft.windowed_size.height),
+      present_name(draft.present_mode, explicit_locale, platform_locale),
+      std::to_string(draft.render_scale_percent) + "%",
+      upscaler_name(draft.upscaler, explicit_locale, platform_locale),
+      shadow_name(draft.shadow_quality, explicit_locale, platform_locale)};
   const std::array controls{UiControl::profile,      UiControl::window_mode,
                             UiControl::window_size,  UiControl::present_mode,
                             UiControl::render_scale, UiControl::upscaler,
@@ -260,15 +307,24 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
   // Project diagnostic extension: expose all actions for pointer access.
   // Only the first anchor comes from retail layout evidence; these three
   // simultaneously accessible controls are not a recovered retail layout.
-  constexpr std::array actions{UiControl::apply, UiControl::cancel, UiControl::defaults};
-  constexpr std::array action_rows{GraphicsMenuRow::apply, GraphicsMenuRow::cancel, GraphicsMenuRow::defaults};
-  constexpr std::array action_labels{"Apply", "Back", "Defaults"};
+  constexpr std::array actions{UiControl::apply, UiControl::cancel,
+                               UiControl::defaults};
+  constexpr std::array action_rows{GraphicsMenuRow::apply,
+                                   GraphicsMenuRow::cancel,
+                                   GraphicsMenuRow::defaults};
+  const std::array action_labels{
+      localized(l10n::MessageId::apply, explicit_locale, platform_locale),
+      localized(l10n::MessageId::back, explicit_locale, platform_locale),
+      localized(l10n::MessageId::defaults, explicit_locale, platform_locale)};
   for (std::size_t i = 0; i < actions.size(); ++i) {
     const float x = 60.0F + static_cast<float>(i) * 180.0F;
-    out.hit_targets.push_back({reference_rect(x, 398.0F, 160.0F, 18.0F), actions[i], true});
+    out.hit_targets.push_back(
+        {reference_rect(x, 398.0F, 160.0F, 18.0F), actions[i], true});
     add_text(UiLayer::content, point_x(x), point_y(400.0F), action_labels[i]);
     if (menu.selected_row() == action_rows[i])
-      out.rectangles.push_back({UiLayer::focus, reference_rect(x - 16.0F, 398.0F, 16.0F, 16.0F), focus});
+      out.rectangles.push_back({UiLayer::focus,
+                                reference_rect(x - 16.0F, 398.0F, 16.0F, 16.0F),
+                                focus});
   }
   return finish();
 }

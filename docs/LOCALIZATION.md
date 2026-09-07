@@ -2,12 +2,18 @@
 
 ## Current status
 
-Localization is not implemented. The current F10 graphics overlay has a
-small, project-authored English diagnostic vocabulary embedded in its draw-list
-builder; it has no locale selection, catalog loader, message formatter,
-plural/select handling, bidirectional layout, shaping, fallback chain, or
-locale-specific layout tests. It must not be presented as localized Original
-presentation.
+The project has a deliberately small localization foundation for its own F10
+graphics-overlay vocabulary. It uses stable semantic message IDs, validates
+complete UTF-8 English and Swedish in-memory catalogs, and resolves an explicit
+locale first, a platform locale second, and English last. It does not read a
+retail LOC format or ship retail text. The draw path has not yet been given a
+user locale setting, so this is not localized Original presentation or a claim
+of complete game coverage.
+
+The current catalog has no external catalog loader, plural/select support,
+bidirectional layout, shaping, font fallback, or locale-specific layout tests.
+The countdown is the single constrained `{seconds}` project-authored pattern;
+other formatting contracts remain future work.
 
 The runtime can load bounded font bytes from the user's startup archive for the
 diagnostic overlay. That is not evidence that the fonts cover any target locale:
