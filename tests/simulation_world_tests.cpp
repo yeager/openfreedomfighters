@@ -66,6 +66,20 @@ int main() {
               replay.checkpoints.size() == 1 && replay.checkpoints[0].completed_tick == 1 &&
               replay.checkpoints[0].state_hash == replay_world.state_hash() && replay.commands.size() == 1,
           "replay recorder retains snapshot, accepted commands, input and post-step checkpoint");
+    SimulationWorld replay_target;
+    play_replay_atomically(replay_target, replay);
+    check(replay_target.state_hash() == replay_world.state_hash(),
+          "atomic replay applies accepted commands before its recorded input step");
+    SimulationWorld unchanged_target;
+    static_cast<void>(unchanged_target.queue_spawn({{9, 9, 9}, 9}));
+    static_cast<void>(unchanged_target.step(input(1)));
+    const auto target_hash = unchanged_target.state_hash();
+    auto divergent = replay;
+    divergent.checkpoints[0].state_hash[0] ^= 1U;
+    bool playback_rejected = false;
+    try { play_replay_atomically(unchanged_target, divergent); } catch (const std::runtime_error &) { playback_rejected = true; }
+    check(playback_rejected && unchanged_target.state_hash() == target_hash,
+          "late replay checkpoint divergence leaves the destination world unchanged");
   }
 
   SimulationWorld world;
