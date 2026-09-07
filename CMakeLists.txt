@@ -553,8 +553,21 @@ if(BUILD_TESTING)
     target_link_libraries(off_intro_prepared_resources_tests PRIVATE off_core)
     target_compile_definitions(off_intro_prepared_resources_tests PRIVATE
         OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/intro-prepared-resources-work")
-    add_test(NAME off_intro_prepared_resources_tests
-        COMMAND off_intro_prepared_resources_tests)
+    foreach(OFF_INTRO_PREPARED_RESOURCES_TEST_GROUP IN ITEMS
+            named-global-envelopes
+            prepared-runtime-scopes
+            complete-runtime-scopes
+            room-animation-runtime-scope
+            visual-scope-lifecycle
+            prepared-resource-variants
+            runtime-and-archive-lifecycle
+            runtime-scene-identity-and-later
+            default-camera-and-archive-lifecycle)
+        add_test(
+            NAME "off_intro_prepared_resources_${OFF_INTRO_PREPARED_RESOURCES_TEST_GROUP}_tests"
+            COMMAND off_intro_prepared_resources_tests
+                    "${OFF_INTRO_PREPARED_RESOURCES_TEST_GROUP}")
+    endforeach()
 
     add_executable(off_picture_transform_tests tests/picture_transform_tests.cpp)
     target_link_libraries(off_picture_transform_tests PRIVATE off_core)

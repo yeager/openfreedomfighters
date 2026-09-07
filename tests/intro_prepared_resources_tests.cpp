@@ -3261,15 +3261,41 @@ static OFF_NOINLINE void test_default_camera_and_archive_lifecycle() {
     }
 }
 
-int main() {
-    test_named_global_envelopes();
-    test_prepared_runtime_scopes();
-    test_complete_runtime_scopes();
-    test_room_animation_runtime_scope();
-    test_visual_scope_lifecycle();
-    test_prepared_resource_variants();
-    test_runtime_and_archive_lifecycle();
-    test_runtime_scene_identity_and_later();
-    test_default_camera_and_archive_lifecycle();
+int main(int argc, char* argv[]) {
+    struct TestGroup final {
+        std::string_view name;
+        void (*run)();
+    };
+    constexpr std::array groups{
+        TestGroup{"named-global-envelopes", test_named_global_envelopes},
+        TestGroup{"prepared-runtime-scopes", test_prepared_runtime_scopes},
+        TestGroup{"complete-runtime-scopes", test_complete_runtime_scopes},
+        TestGroup{"room-animation-runtime-scope", test_room_animation_runtime_scope},
+        TestGroup{"visual-scope-lifecycle", test_visual_scope_lifecycle},
+        TestGroup{"prepared-resource-variants", test_prepared_resource_variants},
+        TestGroup{"runtime-and-archive-lifecycle", test_runtime_and_archive_lifecycle},
+        TestGroup{"runtime-scene-identity-and-later", test_runtime_scene_identity_and_later},
+        TestGroup{"default-camera-and-archive-lifecycle", test_default_camera_and_archive_lifecycle},
+    };
+
+    if (argc == 1) {
+        for (const auto& group : groups) {
+            group.run();
+        }
+    } else if (argc == 2) {
+        const std::string_view selected{argv[1]};
+        const auto group = std::find_if(groups.begin(), groups.end(),
+                                        [selected](const TestGroup& candidate) {
+                                            return candidate.name == selected;
+                                        });
+        if (group == groups.end()) {
+            std::cerr << "Unknown intro prepared-resources test group: " << selected << '\n';
+            return 2;
+        }
+        group->run();
+    } else {
+        std::cerr << "Usage: off_intro_prepared_resources_tests [test-group]\n";
+        return 2;
+    }
     return failures == 0 ? 0 : 1;
 }
