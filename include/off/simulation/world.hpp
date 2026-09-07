@@ -2,6 +2,7 @@
 
 #include "off/crypto/sha256.hpp"
 #include "off/simulation/input.hpp"
+#include "off/simulation/world_snapshot.hpp"
 
 #include <array>
 #include <compare>
@@ -87,6 +88,12 @@ public:
   // of visible state and pending work. It is a divergence detector, not an
   // authenticity mechanism.
   [[nodiscard]] crypto::Sha256Digest state_hash() const;
+
+  // Portable project-authored snapshot format. It contains only the current
+  // SimulationWorld contract and is not compatible with retail save files.
+  [[nodiscard]] std::vector<std::byte> export_snapshot() const;
+  void import_snapshot(std::span<const std::byte> bytes,
+                       SnapshotReadLimits limits = {});
 
 private:
   struct Slot {

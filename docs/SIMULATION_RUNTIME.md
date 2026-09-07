@@ -48,5 +48,18 @@ state, or menu state.
 
 The digest is intended for deterministic checkpoint comparison. Its byte-stream
 version is an internal compatibility boundary and must change if canonical field
-meaning or ordering changes. Save-game serialization remains a separate future
-contract.
+meaning or ordering changes.
+
+## World snapshots
+
+`SimulationWorld` can export and import a project-authored portable snapshot of
+the complete state covered by its checkpoint: limits, clock and sequence state,
+last input, slots (including dead-slot data), and all pending queues. The format
+uses explicit little-endian fields, a fixed versioned envelope and a SHA-256
+payload checksum. Import verifies all declared limits, sequences, generations,
+future-event ticks, checksum and complete input consumption into a temporary
+world before replacing live state.
+
+This is deterministic infrastructure for future save and replay envelopes. It
+is not a retail-save format, does not contain presentation or game assets, and
+does not make the project compatible with the original game's serialization.

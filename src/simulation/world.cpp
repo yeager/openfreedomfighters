@@ -6,6 +6,7 @@
 #include <limits>
 #include <stdexcept>
 #include <type_traits>
+#include <unordered_set>
 
 namespace off::simulation {
 namespace {
@@ -34,6 +35,52 @@ void hash_entity(StableHash &hash, EntityId entity) {
   hash.integer(entity.index);
   hash.integer(entity.generation);
 }
+
+class SnapshotWriter final {
+public:
+  template <class Integer> void integer(Integer value) {
+    using Unsigned = std::make_unsigned_t<Integer>;
+    auto encoded = static_cast<Unsigned>(value);
+    for (std::size_t index = 0; index < sizeof(encoded); ++index) {
+      bytes_.push_back(static_cast<std::byte>(encoded & 0xffU));
+      encoded >>= 8U;
+    }
+  }
+  void byte(std::uint8_t value) { bytes_.push_back(static_cast<std::byte>(value)); }
+  [[nodiscard]] std::vector<std::byte> take() && { return std::move(bytes_); }
+private:
+  std::vector<std::byte> bytes_;
+};
+
+class SnapshotReader final {
+public:
+  explicit SnapshotReader(std::span<const std::byte> bytes) : bytes_(bytes) {}
+  template <class Integer> Integer integer() {
+    using Unsigned = std::make_unsigned_t<Integer>;
+    if (bytes_.size() - position_ < sizeof(Unsigned)) throw std::invalid_argument("truncated simulation snapshot");
+    Unsigned result{};
+    for (std::size_t index = 0; index < sizeof(Unsigned); ++index)
+      result |= static_cast<Unsigned>(std::to_integer<std::uint8_t>(bytes_[position_++])) << (index * 8U);
+    return static_cast<Integer>(result);
+  }
+  [[nodiscard]] bool exhausted() const noexcept { return position_ == bytes_.size(); }
+private:
+  std::span<const std::byte> bytes_;
+  std::size_t position_{};
+};
+
+void snapshot_input(SnapshotWriter &writer, const InputSnapshot &input) {
+  writer.integer(input.tick); writer.integer(input.held); writer.integer(input.pressed); writer.integer(input.released);
+  for (const auto axis : input.axes) writer.integer(axis);
+}
+InputSnapshot read_snapshot_input(SnapshotReader &reader) {
+  InputSnapshot input{.tick=reader.integer<std::uint64_t>(), .held=reader.integer<std::uint64_t>(),
+                      .pressed=reader.integer<std::uint64_t>(), .released=reader.integer<std::uint64_t>()};
+  for (auto &axis : input.axes) axis=reader.integer<std::int16_t>();
+  return input;
+}
+void snapshot_entity(SnapshotWriter &writer, EntityId entity) { writer.integer(entity.index); writer.integer(entity.generation); }
+EntityId read_snapshot_entity(SnapshotReader &reader) { return {reader.integer<std::uint32_t>(),reader.integer<std::uint32_t>()}; }
 
 } // namespace
 
@@ -225,6 +272,51 @@ crypto::Sha256Digest SimulationWorld::state_hash() const {
     hash.integer(event.value);
   }
   return hash.finish();
+}
+
+std::vector<std::byte> SimulationWorld::export_snapshot() const {
+  SnapshotWriter payload;
+  payload.integer(limits_.maximum_entities); payload.integer(limits_.maximum_pending_spawns);
+  payload.integer(limits_.maximum_pending_destroys); payload.integer(limits_.maximum_pending_events);
+  payload.integer(tick_); payload.integer(next_sequence_); snapshot_input(payload,last_input_);
+  payload.integer(static_cast<std::uint32_t>(slots_.size()));
+  for(const auto &slot:slots_) { payload.integer(slot.generation); payload.byte(slot.alive?1:0); for(auto value:slot.position) payload.integer(value); payload.integer(slot.flags); }
+  payload.integer(static_cast<std::uint32_t>(pending_spawns_.size()));
+  for(const auto &spawn:pending_spawns_) { payload.integer(spawn.request_id); for(auto value:spawn.state.position) payload.integer(value); payload.integer(spawn.state.flags); }
+  payload.integer(static_cast<std::uint32_t>(pending_destroys_.size())); for(auto entity:pending_destroys_) snapshot_entity(payload,entity);
+  payload.integer(static_cast<std::uint32_t>(pending_events_.size()));
+  for(const auto &event:pending_events_) { payload.integer(event.tick); payload.integer(event.sequence); payload.integer(event.type); snapshot_entity(payload,event.source); snapshot_entity(payload,event.target); payload.integer(event.value); }
+  auto body=std::move(payload).take();
+  crypto::Sha256 checksum; checksum.update(body); const auto hash=checksum.finish();
+  SnapshotWriter output;
+  for(const auto value:std::array<std::uint8_t,8>{'O','F','F','S','I','M',0,0}) output.byte(value);
+  output.integer<std::uint32_t>(1); output.integer<std::uint32_t>(1); output.integer<std::uint32_t>(0x01020304U); output.integer<std::uint32_t>(64);
+  output.integer(static_cast<std::uint64_t>(body.size())); for(auto byte:hash) output.byte(byte);
+  auto result=std::move(output).take(); result.insert(result.end(),body.begin(),body.end()); return result;
+}
+
+void SimulationWorld::import_snapshot(std::span<const std::byte> bytes, SnapshotReadLimits policy) {
+  if(bytes.size()<64 || bytes.size()>policy.maximum_bytes) throw std::invalid_argument("simulation snapshot size is invalid");
+  SnapshotReader header(bytes.first(64));
+  for(const auto expected:std::array<std::uint8_t,8>{'O','F','F','S','I','M',0,0}) if(header.integer<std::uint8_t>()!=expected) throw std::invalid_argument("simulation snapshot magic is invalid");
+  if(header.integer<std::uint32_t>()!=1 || header.integer<std::uint32_t>()!=1 || header.integer<std::uint32_t>()!=0x01020304U || header.integer<std::uint32_t>()!=64) throw std::invalid_argument("simulation snapshot version is unsupported");
+  const auto payload_size=header.integer<std::uint64_t>(); std::array<std::uint8_t,32> expected{}; for(auto &byte:expected) byte=header.integer<std::uint8_t>();
+  if(!header.exhausted() || payload_size!=bytes.size()-64U) throw std::invalid_argument("simulation snapshot length is invalid");
+  const auto body=bytes.subspan(64); crypto::Sha256 checksum; checksum.update(body); if(checksum.finish()!=expected) throw std::invalid_argument("simulation snapshot checksum is invalid");
+  SnapshotReader reader(body); WorldLimits limits{reader.integer<std::uint32_t>(),reader.integer<std::uint32_t>(),reader.integer<std::uint32_t>(),reader.integer<std::uint32_t>()};
+  if(limits.maximum_entities==0 || limits.maximum_pending_spawns==0 || limits.maximum_pending_destroys==0 || limits.maximum_pending_events==0 || limits.maximum_entities>policy.maximum_entities || limits.maximum_pending_spawns>policy.maximum_pending_spawns || limits.maximum_pending_destroys>policy.maximum_pending_destroys || limits.maximum_pending_events>policy.maximum_pending_events) throw std::invalid_argument("simulation snapshot limits are invalid");
+  SimulationWorld staged(limits); staged.tick_=reader.integer<std::uint64_t>(); staged.next_sequence_=reader.integer<std::uint64_t>(); staged.last_input_=read_snapshot_input(reader);
+  if(staged.next_sequence_==0 || staged.last_input_.tick!=staged.tick_) throw std::invalid_argument("simulation snapshot clock is invalid");
+  const auto read_count=[&](std::uint32_t maximum){const auto count=reader.integer<std::uint32_t>();if(count>maximum)throw std::invalid_argument("simulation snapshot count exceeds limits");return count;};
+  const auto slot_count=read_count(limits.maximum_entities); staged.slots_.reserve(slot_count);
+  for(std::uint32_t i=0;i<slot_count;++i) { Slot slot; slot.generation=reader.integer<std::uint32_t>(); const auto alive=reader.integer<std::uint8_t>(); if(slot.generation==0 || alive>1 || (!alive && slot.generation==1) || (alive && slot.generation==std::numeric_limits<std::uint32_t>::max())) throw std::invalid_argument("simulation snapshot slot is invalid"); slot.alive=alive!=0; for(auto &value:slot.position)value=reader.integer<std::int32_t>();slot.flags=reader.integer<std::uint32_t>();staged.slots_.push_back(slot); }
+  std::unordered_set<std::uint64_t> used;
+  const auto spawns=read_count(limits.maximum_pending_spawns); staged.pending_spawns_.reserve(spawns);
+  for(std::uint32_t i=0;i<spawns;++i){PendingSpawn spawn;spawn.request_id=reader.integer<std::uint64_t>();if(spawn.request_id==0 || spawn.request_id>=staged.next_sequence_ || !used.insert(spawn.request_id).second)throw std::invalid_argument("simulation snapshot spawn sequence is invalid");for(auto &v:spawn.state.position)v=reader.integer<std::int32_t>();spawn.state.flags=reader.integer<std::uint32_t>();staged.pending_spawns_.push_back(spawn);}
+  const auto destroys=read_count(limits.maximum_pending_destroys); staged.pending_destroys_.reserve(destroys);for(std::uint32_t i=0;i<destroys;++i)staged.pending_destroys_.push_back(read_snapshot_entity(reader));
+  const auto events=read_count(limits.maximum_pending_events); staged.pending_events_.reserve(events);
+  for(std::uint32_t i=0;i<events;++i){SimulationEvent event;event.tick=reader.integer<std::uint64_t>();event.sequence=reader.integer<std::uint64_t>();event.type=reader.integer<std::uint32_t>();event.source=read_snapshot_entity(reader);event.target=read_snapshot_entity(reader);event.value=reader.integer<std::int64_t>();if(event.tick<=staged.tick_ || event.sequence==0 || event.sequence>=staged.next_sequence_ || !used.insert(event.sequence).second)throw std::invalid_argument("simulation snapshot event is invalid");staged.pending_events_.push_back(event);}
+  if(!reader.exhausted())throw std::invalid_argument("simulation snapshot has trailing payload bytes"); staged.rebuild_live_entities(); *this=std::move(staged);
 }
 
 } // namespace off::simulation

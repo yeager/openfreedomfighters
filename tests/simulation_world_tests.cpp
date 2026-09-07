@@ -2,6 +2,7 @@
 #include "off/simulation/world.hpp"
 
 #include <cstdlib>
+#include <algorithm>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -136,6 +137,34 @@ int main() {
   static_cast<void>(modern_profile.step(input(1)));
   check(original_profile.state_hash() == modern_profile.state_hash(),
         "keep canonical simulation state independent of presentation profile");
+
+  const auto snapshot = world.export_snapshot();
+  SimulationWorld restored;
+  restored.import_snapshot(snapshot);
+  check(restored.state_hash() == world.state_hash() && std::ranges::equal(restored.entities(), world.entities()) &&
+            restored.last_input() == world.last_input(),
+        "round trip every authoritative world field through the portable snapshot");
+  const auto restored_hash = restored.state_hash();
+  auto damaged_snapshot = snapshot;
+  damaged_snapshot.back() ^= std::byte{1};
+  rejected = false;
+  try {
+    restored.import_snapshot(damaged_snapshot);
+  } catch (const std::invalid_argument &) {
+    rejected = true;
+  }
+  check(rejected && restored.state_hash() == restored_hash,
+        "checksum failure leaves the live world unchanged");
+  for (std::size_t length = 0; length < snapshot.size(); ++length) {
+    rejected = false;
+    try {
+      restored.import_snapshot(std::span<const std::byte>(snapshot.data(), length));
+    } catch (const std::invalid_argument &) {
+      rejected = true;
+    }
+    check(rejected && restored.state_hash() == restored_hash,
+          "every snapshot truncation is rejected atomically");
+  }
 
   SimulationWorld bounded({8, 2, 4, 4});
   for (std::size_t index = 0; index < 4; ++index)
