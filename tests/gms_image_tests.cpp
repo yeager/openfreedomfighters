@@ -1425,10 +1425,18 @@ int main() {
             },
         };
         backing[16] = std::byte{0}; // the view must retain an immutable copy.
+        const auto initial = view ? KeysBackingEvaluator::evaluate(*view, bound, 0.0F) : std::nullopt;
+        check(initial && initial->first_group == std::array<float, 4>{-10.0F, 10.0F, 20.0F, -20.0F},
+              "KEYS backing evaluator retains its immutable first sample after the caller mutates the source");
         const auto middle = view ? KeysBackingEvaluator::evaluate(*view, bound, 0.25F) : std::nullopt;
-        check(middle && middle->first_group == std::array<float, 4>{0.0F, 20.0F, 30.0F, -30.0F} &&
-                  middle->second_group == std::array<float, 3>{3.0F, 4.0F, 5.0F},
-              "KEYS backing evaluator reads both bounded indirection groups and interpolates before the final sample");
+        if (!middle) {
+            check(false, "KEYS backing evaluator did not produce the bounded interpolation sample");
+        } else {
+            check(middle->first_group == std::array<float, 4>{0.0F, 20.0F, 30.0F, -30.0F},
+                  "KEYS backing evaluator produced an unexpected interpolated first group");
+            check(middle->second_group == std::array<float, 3>{3.0F, 4.0F, 5.0F},
+                  "KEYS backing evaluator produced an unexpected interpolated second group");
+        }
         const auto final = view ? KeysBackingEvaluator::evaluate(*view, bound, 1.0F) : std::nullopt;
         check(final && final->first_group == std::array<float, 4>{10.0F, 30.0F, 40.0F, -40.0F} &&
                   final->second_group == std::array<float, 3>{5.0F, 6.0F, 7.0F},
@@ -1445,6 +1453,22 @@ int main() {
         const auto invalid_width = ImmutableKeysBackingView::create(0x1234U, width);
         check(invalid_width && !KeysBackingEvaluator::evaluate(*invalid_width, bound, 0.0F),
               "KEYS backing evaluator rejects unsupported packed widths");
+
+        auto unaligned_wide = backing;
+        std::fill(unaligned_wide.begin(), unaligned_wide.end(), std::byte{0});
+        unaligned_wide[0] = std::byte{23};
+        const auto unaligned_wide_view = ImmutableKeysBackingView::create(0x1234U, unaligned_wide);
+        auto two_samples = bound;
+        two_samples.descriptor.count_like = 2U;
+        check(unaligned_wide_view && !KeysBackingEvaluator::evaluate(*unaligned_wide_view, two_samples, 0.0F),
+              "KEYS backing evaluator rejects a 23-bit field that exceeds the recovered three-byte window");
+
+        const std::array<std::byte, 3> truncated_stream{
+            std::byte{2}, std::byte{0}, std::byte{0}};
+        const auto truncated_stream_view = ImmutableKeysBackingView::create(0x1234U, truncated_stream);
+        check(truncated_stream_view &&
+                  !KeysBackingEvaluator::evaluate(*truncated_stream_view, bound, 0.0F),
+              "KEYS backing evaluator rejects a packed stream without its recovered three-byte window");
     }
     {
         using off::data::KeysBackingSample;

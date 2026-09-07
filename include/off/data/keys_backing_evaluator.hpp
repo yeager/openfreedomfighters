@@ -128,7 +128,16 @@ private:
                             (static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(bytes[byte_offset + 1U])) << 8U) |
                             static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(bytes[byte_offset + 2U]));
         const auto intra_byte = static_cast<unsigned int>(bit_offset % 8U);
-        return (window >> (24U - intra_byte - width)) & ((std::uint32_t{1} << width) - 1U);
+        // The recovered reader has only a three-byte window. A field that
+        // starts partway through that window must still end within its 24
+        // bits; otherwise extracting it would require an unobserved fourth
+        // byte (and the shift count below would be invalid).
+        if (static_cast<unsigned int>(width) > 24U - intra_byte) {
+            return std::nullopt;
+        }
+        const auto shift = 24U - intra_byte - static_cast<unsigned int>(width);
+        const auto mask = (std::uint32_t{1} << width) - 1U;
+        return (window >> shift) & mask;
     }
 
     [[nodiscard]] static std::optional<std::uint32_t> final_index(
@@ -159,8 +168,9 @@ private:
         for (std::size_t i = 0; i < result.size(); ++i) {
             const auto low = std::to_integer<std::uint8_t>(bytes[base + i * 2U]);
             const auto high = std::to_integer<std::uint8_t>(bytes[base + i * 2U + 1U]);
-            const std::uint16_t bits = static_cast<std::uint16_t>(low) |
-                                       (static_cast<std::uint16_t>(high) << 8U);
+            const auto bits = static_cast<std::uint16_t>(
+                static_cast<std::uint16_t>(low) |
+                (static_cast<std::uint16_t>(high) << 8U));
             result[i] = static_cast<float>(std::bit_cast<std::int16_t>(bits));
         }
         return result;
