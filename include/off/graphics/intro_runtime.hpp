@@ -47,7 +47,7 @@ struct IntroSynthesizedCameraMetadata {
   std::uint32_t class_identifier;
 };
 enum class IntroResourceLoadStage {
-  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, authored_camera_ready, second_window_picture_ready, second_window_scope_ready, following_visual_scope_ready, room_animation_scope_ready, failed
+  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, authored_camera_ready, second_window_picture_ready, second_window_scope_ready, following_visual_scope_ready, room_animation_scope_ready, lens_flare_animation_scope_ready, failed
 };
 struct IntroConstructedCameraOwner {
   IntroRuntimeHandle owner;
@@ -124,6 +124,17 @@ struct IntroConstructedPictureComponent {
   std::optional<std::uint32_t> list_index;
   std::optional<std::int32_t> list_sentinel;
   std::optional<std::vector<std::uint64_t>> commands,auxiliary_list_a,auxiliary_list_b;
+  struct ParamAnimationStorage {
+    std::array<std::uint32_t,2> local_words{};
+    std::uint32_t capacity{32},growth{32},count{},element_control{1};
+    std::array<std::uint64_t,2> backing_references{};
+  };
+  struct ParticleEmitterStorage {
+    std::uint64_t local_reference{};
+    std::vector<std::uint64_t> handles;
+  };
+  std::optional<ParamAnimationStorage> param_animation;
+  std::optional<ParticleEmitterStorage> particle_emitter;
 };
 struct IntroConstructedCharacterOwner {
   IntroConstructedPictureOwner visual;
@@ -147,12 +158,15 @@ struct IntroAuthoredGroupOwner {
   std::uint32_t source_word{};
   std::uint32_t aggregate_flags{},component_mask{};
   IntroRuntimeHandle auxiliary{};
+  std::optional<IntroRuntimeHandle> cached_window{},derived_reference{};
+  std::vector<IntroRuntimeResourceHandle> category_two{};
+  std::shared_ptr<IntroOwnerAuxiliary> auxiliary_state{};
 };
 struct IntroConstructedRoomOwner {
   IntroAuthoredGroupOwner group;
   bool room_mode{},enabled{};
   std::vector<IntroRuntimeHandle> rooms;
-  std::vector<IntroRuntimeResourceHandle> category_two,ordinary_members;
+  std::vector<IntroRuntimeResourceHandle> ordinary_members;
 };
 struct IntroConstructedObjectOwner {
   IntroRuntimeHandle owner;
@@ -161,6 +175,11 @@ struct IntroConstructedObjectOwner {
   std::uint32_t class_identifier{},flags{};
   bool classification{},backing_available{};
   std::unique_ptr<IntroOwnerAuxiliary> auxiliary;
+  std::optional<bool> byte_control;
+  std::optional<std::uint32_t> local_control;
+  std::optional<IntroRuntimeHandle> local_reference;
+  std::optional<std::array<IntroRuntimeHandle,2>> self_links,associated_references;
+  std::optional<std::array<float,2>> scalar_pair;
 };
 struct IntroSavedResourceFlags {
   IntroRuntimeResourceHandle resource;
@@ -321,6 +340,7 @@ public:
   void construct_second_window_scope_without_engine_renderer();
   void construct_following_visual_scope_without_engine_renderer();
   void construct_room_animation_scope_without_engine_renderer();
+  void construct_lens_flare_animation_scope_without_engine_renderer();
   [[nodiscard]] const IntroConstructedRoomOwner* constructed_room_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroConstructedObjectOwner* constructed_object_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroOwnerAuxiliary* constructed_owner_auxiliary(std::size_t source) const noexcept;

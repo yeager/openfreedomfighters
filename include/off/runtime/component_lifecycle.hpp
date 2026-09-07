@@ -123,16 +123,26 @@ public:
   // Registers the common-base identity before invoking the concrete factory.
   // The factory owes actual class setup, owner wiring and event enrollment.
   void construct(std::size_t index, const Factory& factory);
+  // Reviewed nested common constructor/destructor, not arbitrary factory
+  // reentry. Only callable from the current concrete construction callback.
+  void construct_and_destroy_temporary_common();
+  // Optional retained scene lookup service. Absence is explicit; installing a
+  // service does not populate a guessed lookup table or reset the scene.
+  void set_optional_lookup_removal(std::function<void(std::uint32_t)> removal);
   void run_global_phases(const ComponentLifecycleServices& services);
   [[nodiscard]] bool failed() const noexcept { return failed_; }
   [[nodiscard]] bool phases_completed() const noexcept { return completed_; }
   [[nodiscard]] bool construction_mode() const noexcept {return sequence_.construction_mode_;}
 private:
   void check_idle() const;
+  void construct_common(std::size_t index);
   void pass(bool second, const ComponentLifecycleServices& services, std::size_t& visited);
   SceneComponentSequence& sequence_;
   std::vector<std::unique_ptr<ComponentRecord>> records_;
   std::vector<std::size_t> order_;
+  std::function<void(std::uint32_t)> optional_lookup_removal_;
+  std::optional<std::size_t> constructing_;
+  bool temporary_active_{};
   bool busy_{}, failed_{}, completed_{};
 };
 } // namespace off::runtime

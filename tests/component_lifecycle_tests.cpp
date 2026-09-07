@@ -60,6 +60,72 @@ struct Fixture {
 
 int main() {
   try {
+    for(const bool allocation_status:{false,true}) {
+      std::uint32_t samples=0;
+      SceneComponentSequence sequence{[&]{++samples;return std::uint32_t{100};}};
+      sequence.set_construction_mode(allocation_status);
+      {
+        ComponentLifecycle lifecycle(sequence),foreign(sequence);
+        rejects([&]{lifecycle.construct_and_destroy_temporary_common();});
+        const auto index=lifecycle.append(source(11));
+        unsigned removals=0;
+        lifecycle.set_optional_lookup_removal([&](std::uint32_t serial) {
+          ++removals;
+          check(serial==1 && sequence.next_identity()==2 && sequence.live_count()==2 &&
+                lifecycle.construction_order().size()==1 && lifecycle.construction_order()[0]==index,
+                "temporary is unlinked before lookup removal but still counted live");
+          const auto& temporary=lifecycle.at(lifecycle.size()-1);
+          check(temporary.identity()==serial && temporary.state().attached_owner==0 &&
+                temporary.state().status==0x20 && temporary.state().requested==0 &&
+                temporary.scheduling_clock()==110 && !temporary.removed(),
+                "lookup observes real unbound temporary constructor state and second clock sample");
+          rejects([&]{lifecycle.construct_and_destroy_temporary_common();});
+          rejects([&]{foreign.construct_and_destroy_temporary_common();});
+          rejects([&]{lifecycle.set_optional_lookup_removal({});});
+        });
+        lifecycle.construct(index,[&](ComponentRecord& record) {
+          const auto status=record.state().status;
+          lifecycle.construct_and_destroy_temporary_common();
+          check(sequence.live_count()==1 && sequence.next_identity()==2 && samples==2 &&
+                lifecycle.size()==1 && lifecycle.construction_order().size()==1,
+                "temporary consumes shared serial and schedule but leaves no catalog or live node");
+          auto result=instance(11,0);result.state.status|=status;return result;
+        });
+        check(removals==(allocation_status?0U:1U) && !lifecycle.failed(),
+              "temporary allocation-status bit suppresses only optional lookup removal");
+        const auto next=lifecycle.append(source(12));
+        lifecycle.construct(next,[](auto&){return instance(12,0);});
+        check(lifecycle.at(next).identity()==2 && lifecycle.at(next).scheduling_clock()==120 && samples==3,
+              "temporary serial and binary32 phase step are not rewound");
+      }
+      check(sequence.live_count()==0 && sequence.next_identity()==3,
+            "native teardown does not decrement a destroyed temporary twice");
+    }
+    {
+      Fixture f;
+      const auto index=f.lifecycle.append(source(8));
+      f.lifecycle.construct(index,[&](auto&) {
+        f.lifecycle.construct_and_destroy_temporary_common();
+        return instance(8,0);
+      });
+      f.lifecycle.run_global_phases(f.services);
+      check(f.lifecycle.phases_completed() && f.log.empty() && f.lifecycle.size()==1 &&
+            f.sequence.live_count()==1 && f.sequence.next_identity()==2,
+            "absent lookup still unlinks temporary and global phases visit only retained components");
+    }
+    {
+      Fixture f;
+      const auto index=f.lifecycle.append(source(8));
+      f.lifecycle.set_optional_lookup_removal([](auto){throw std::runtime_error("lookup removal failed");});
+      rejects([&]{f.lifecycle.construct(index,[&](auto&) {
+        f.lifecycle.construct_and_destroy_temporary_common();
+        return instance(8,0);
+      });});
+      check(f.lifecycle.failed() && f.sequence.next_identity()==2 && f.sequence.live_count()==2 &&
+            f.lifecycle.construction_order().size()==1 && f.lifecycle.size()==2 &&
+            !f.lifecycle.at(1).removed(),
+            "failed lookup retains completed unlink prefix without granting later live-count decrement");
+    }
     {
       Fixture f;
       const auto index = f.lifecycle.append(source(1));

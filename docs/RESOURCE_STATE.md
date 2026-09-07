@@ -294,6 +294,38 @@ notification without erasing existing state. Normal startup executes this
 construction prefix; readers, animation updates, camera admission and rendering
 remain pending.
 
+## Lens-flare and animation scope
+
+Rows 69–199 add another Window, 25 lens-flare Pictures, seven particle-template
+owners, banked model resources, ordinary objects, lights, two cameras and Lists.
+The loader processes all 131 owners, including the 31 without deferred readers.
+Eight new batches add 130 resources without resetting earlier allocation cursors.
+Class `0x04000022` explicitly uses category one; the following camera consumes
+its scope's sole category-three slot. Class high bits alone do not select a pool.
+
+Category-two resources join their direct Group's retained collection and
+propagate the capability bit through their ancestors. The earlier Room uses that
+same group collection, not a duplicated mirror. No new Room or renderer context
+is created here. Two more saved-flags entries remain queued for the loader tail.
+All 27 new property sections borrow their original BUF backing, including those
+on ordinary/model owners; later attachments retain the same auxiliary storage.
+
+Six additional component factories cover film grain setup, lens flare control,
+lens flare Pictures, parameter animation, particle emitters and flare lights.
+They produce constructor state, not effects or loaded animation data.
+ParticleEmitter declares its shared event through the scene registry.
+ParticleTemplates and CutSequenceList reuse their existing application collections.
+LensFlareControl constructs and destroys a real temporary common component;
+its serial and clock contribution survive cleanup. The new scope therefore adds
+80 retained components but advances common construction 81 times.
+
+The owned-data probe and normal startup reach 200 owners, 214 batch resources
+plus ROOT, 166 queued readers, 139 retained components and 22 ordinary pending
+additions. Independent fixtures also check an existing optional lookup service,
+bank separation, source transforms, property ownership and saved-flags order.
+These are construction checks. The remaining 270 owners, deferred readers and
+loader tail still precede intro playback and gameplay.
+
 Tests use independently constructed states to check ancestor propagation,
 maintenance gates, picture views and subsequent DefaultCam hide inheritance.
 They do not establish the retail root's post-load flags. The explicit `root_ready`

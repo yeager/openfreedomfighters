@@ -84,8 +84,9 @@ policies, not replicas of the original allocator.
 
 ## Remaining startup work
 
-Normal startup constructs RootGroup but does not construct or globally initialize
-the authored component population. Concrete constructors/readers/callbacks, live
+Normal startup constructs RootGroup and the reviewed authored prefix, but does
+not yet construct the entire population or run global initialization.
+The remaining concrete constructors/readers/callbacks, live
 owner flags, root/additional-owner loader hooks, progress behavior, retirement,
 scene properties and shared command containers remain needed. The ordinary
 dispatcher exists, but most admitted concrete callbacks are still missing.
@@ -95,6 +96,21 @@ The intro sound owners are a real dependency: their initialization reads retaine
 sound records. A missing output backend does not justify empty sound callbacks.
 Actual source binding and sound metadata must be established before that path
 can run. No readiness event is manufactured to bypass it.
+
+## Constructor-owned temporary
+
+LensFlareControl uses a bounded nested common construction/destruction operation,
+not general factory reentry. The temporary joins the real construction list and
+consumes the shared serial, live count and scheduling step. It receives status
+`0x20`, has no owner and performs no class notification or ordinary enrollment.
+
+Cleanup unlinks it first, invokes an existing optional lookup-removal service
+with its serial when its own status `0x10` is clear, then decrements live count.
+The callback therefore observes an unlinked but still-counted temporary. Serial
+and phase are not rewound. Retained lookup absence remains absence; construction
+does not manufacture a lookup table. Native transient metadata is released after
+successful cleanup and never enlarges the authored catalog. A service failure
+preserves the completed prefix and poisons the lifecycle rather than retrying.
 
 ## Tests
 

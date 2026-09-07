@@ -453,7 +453,7 @@ void IntroRuntime::construct_window_language_groups_without_engine_renderer() {
 
 void IntroRuntime::construct_group_row_without_engine_renderer(std::size_t row) {
       const auto& source=resources_.sources().directory().at(row);
-      if(source.source_type!=0x00100030U && source.source_type!=0x00101389U && source.source_type!=0x00100001U && source.source_type!=0x00100021U)
+      if(source.source_type!=0x00100030U && source.source_type!=0x00101389U && source.source_type!=0x00100001U && source.source_type!=0x00100021U && source.source_type!=0x0010002eU && source.source_type!=0x00100031U)
         throw std::runtime_error("Unsupported registered group factory");
       if(!application_.has_class_registration(source.source_type))
         throw std::runtime_error("Group concrete class is not registered");
@@ -515,12 +515,15 @@ void IntroRuntime::construct_group_row_without_engine_renderer(std::size_t row) 
         group=&constructed_group_owners_.emplace(row,IntroAuthoredGroupOwner{owner,resource,std::move(name),source.source_type}).first->second;
         resource_owners_[index]=owner;
       }
+      if(source.source_type==0x0010002eU || source.source_type==0x00100031U) group->cached_window=IntroRuntimeHandle{};
+      if(source.source_type==0x00100031U) group->derived_reference=IntroRuntimeHandle{};
       const auto previous=application_.register_class_instance(source.source_type);
       static_cast<void>(previous); // Both concrete notifications have no additional effects.
       manager_row_edit_=true;
       scene_resource_edit_=true;
       loaded_resource_handles_.push_back(resource);
       assign_fresh_directory_metadata(resource,source.class_data_value);
+      if(source.buf_auxiliary_offset) assign_directory_property(row);
       resource_states_[index]->directory_auxiliary=source.auxiliary_value;
       apply_directory_transform(row,resource);
       attach_directory_owner(row,resource,parent);
@@ -528,6 +531,13 @@ void IntroRuntime::construct_group_row_without_engine_renderer(std::size_t row) 
       current_source_parent_=owner;
       group->source_word=source.child_value;
       group->flags=(group->flags&0x00ffffffU)|(source.object_flags&0xff000000U);
+      if(!source.attachments.empty()) {
+        auto& auxiliary=ensure_owner_auxiliary(row);
+        scene_resource_edit_=false;
+        construct_owner_attachments(row,auxiliary.component_mask,auxiliary.attachments);
+        group->component_mask=auxiliary.component_mask;
+        scene_resource_edit_=true;
+      }
       if(source.deferred_source_offset) deferred_reader_work_.push_back({resource,source.deferred_source_offset});
       directory_resource_mapping_.at(row)=resource;
       manager_row_edit_=false;
@@ -625,7 +635,8 @@ void IntroRuntime::construct_non_group_row_without_engine_renderer(std::size_t r
         throw std::runtime_error("Concrete non-group factory is not registered");
       if(source.source_type!=0x00200046U && source.source_type!=0x0020002dU && source.source_type!=0x0020003aU &&
           source.source_type!=0x0800001aU && source.source_type!=0x00400003U && source.source_type!=0x00200002U &&
-          source.source_type!=0x00800024U && source.source_type!=0x002000e5U)
+          source.source_type!=0x00800024U && source.source_type!=0x002000e5U && source.source_type!=0x0080000dU &&
+          source.source_type!=0x0020000bU && source.source_type!=0x00800023U && source.source_type!=0x04000022U)
         throw std::runtime_error("Unsupported concrete non-group factory");
       const auto& root_state=resource_state(root_handle());
       if(!root_state || (root_state->flags&~0xffU)!=0x09000000U || root_state->context.value ||
@@ -637,7 +648,7 @@ void IntroRuntime::construct_non_group_row_without_engine_renderer(std::size_t r
       if(scope_it==source_resource_scopes_.end()) throw std::runtime_error("Picture allocation scope is absent");
       auto& scope=*scope_it;
       const auto category=source.pool_class;
-      if(category!=1 && category!=2 && category!=3) throw std::runtime_error("Unsupported non-group partition");
+      if(category>=scope.counts.size() || (category%8!=1 && category%8!=2 && category%8!=3)) throw std::runtime_error("Unsupported non-group partition");
       auto& cursor=scope.next_in_partition[category];
       std::uint64_t partition_begin=0;
       for(std::size_t i=0;i<category;++i) partition_begin+=scope.counts[i];
@@ -684,7 +695,17 @@ void IntroRuntime::construct_non_group_row_without_engine_renderer(std::size_t r
       } else {
         auto& object=constructed_object_owners_.try_emplace(row).first->second;
         object.owner=owner;object.resource=resource;object.name=std::move(name);object.class_identifier=source.source_type;
-        if(source.source_type==0x00800024U && light_policy_) object.flags|=1;
+        if((source.source_type==0x00800024U || source.source_type==0x0080000dU || source.source_type==0x00800023U) && light_policy_) object.flags|=1;
+        if(source.source_type==0x0020000bU) object.byte_control=false;
+        if(source.source_type==0x0080000dU) {
+          object.local_control=0x3000U;
+          object.self_links=std::array{owner,owner};
+        }
+        if(source.source_type==0x00800024U || source.source_type==0x00800023U || source.source_type==0x04000022U) object.local_reference=IntroRuntimeHandle{};
+        if(source.source_type==0x04000022U) {
+          object.scalar_pair=std::array{-1.0F,std::bit_cast<float>(0x7e967699U)};
+          object.associated_references=std::array<IntroRuntimeHandle,2>{};
+        }
         resource_owners_[index]=owner;
         if(source.source_type==0x002000e5U) {
           const auto property=scene_resource_property("ParticleTemplates");
@@ -747,7 +768,14 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
       const bool mat=factory=="ZGEOM_MatPosAnim";
       const bool cut=factory=="ZLIST_CutSequence";
       const bool cut_list=factory=="ZLIST_CutSequenceList";
-      if((!center && !black && !character && !logo && !external && !vert && !mat && !cut && !cut_list) ||
+      const bool grain=factory=="ZGEOM_FilmGrainCamSetup";
+      const bool flare_control=factory=="ZWINDOW_LensFlareControl";
+      const bool flare=factory=="ZWINPIC_LensFlare";
+      const bool param=factory=="ZGEOM_ParamAnim";
+      const bool emitter=factory=="ZGEOM_ParticleEmitter";
+      const bool flare_lights=factory=="ZLIST_LensFlareLights";
+      if((!center && !black && !character && !logo && !external && !vert && !mat && !cut && !cut_list &&
+          !grain && !flare_control && !flare && !param && !emitter && !flare_lights) ||
           !application_.has_component_class_registration(factory))
         throw std::runtime_error("Actual attachment factory is unavailable");
       components_.construct(component_index,[&](runtime::ComponentRecord& record) {
@@ -755,10 +783,16 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
         state.status|=0x20U;
         auto& payload=constructed_picture_components_.try_emplace(component_index).first->second;
         payload.raw_attachment_argument=std::bit_cast<std::uint32_t>(source.attachments[slot].parameter);
-        payload.attachment_argument=external || vert || mat || cut?std::bit_cast<std::int32_t>(payload.raw_attachment_argument):center?1:0;
-        state.class_ordinal=static_cast<std::uint16_t>(center?280:black?307:character?332:logo?313:external?112:vert?85:mat?86:cut?96:97);
-        state.priority=vert || mat?100U:center || external || cut?1U:0U;
-        state.requested=center?1U:external?0x803U:mat?0x435U:cut?0x825U:cut_list?0x837U:0x35U;
+        payload.attachment_argument=external || vert || mat || cut || param || emitter?std::bit_cast<std::int32_t>(payload.raw_attachment_argument):center?1:0;
+        state.class_ordinal=static_cast<std::uint16_t>(center?280:black?307:character?332:logo?313:external?112:vert?85:mat?86:cut?96:cut_list?97:grain?308:flare_control?311:flare?310:param?80:emitter?145:312);
+        state.priority=vert || mat || param?100U:center || external || cut?1U:0U;
+        state.requested=center?1U:external?0x803U:mat?0x435U:cut?0x825U:cut_list?0x837U:grain || flare_lights?7U:flare?0x25U:param?0x15U:emitter?0x805U:0x35U;
+        if(flare_control) components_.construct_and_destroy_temporary_common();
+        if(param) payload.param_animation.emplace();
+        if(emitter) {
+          payload.particle_emitter.emplace();
+          application_.set_particle_emitter_event(event_names_.declare("FrameCurrent"));
+        }
         if(black || character || logo) {payload.fade_start=0;payload.fade_deadline=0;}
         if(black) payload.fade_state=3;
         if(external) {payload.target_name="";payload.script_reference=0;}
@@ -834,6 +868,10 @@ IntroOwnerAuxiliary& IntroRuntime::ensure_owner_auxiliary(std::size_t source) {
     if(!object->second.auxiliary) object->second.auxiliary=std::make_unique<IntroOwnerAuxiliary>();
     return *object->second.auxiliary;
   }
+  if(auto* group=group_owner(source_handle(source))) {
+    if(!group->auxiliary_state) group->auxiliary_state=std::make_shared<IntroOwnerAuxiliary>();
+    return *group->auxiliary_state;
+  }
   throw std::runtime_error("Owner auxiliary factory is not admitted for this class");
 }
 void IntroRuntime::assign_directory_property(std::size_t source) {
@@ -902,8 +940,9 @@ void IntroRuntime::attach_directory_owner(std::size_t source_index,IntroRuntimeR
     else root_owner_state_->rooms.push_back(source_handle(source_index));
   }
   if(source.pool_class%8==2) {
-    if(!room) throw std::runtime_error("Category-two attachment requires its actual Room");
-    room->category_two.push_back(resource);
+    auto* direct=group_owner(parent);
+    if(!direct) throw std::runtime_error("Category-two attachment requires its actual group");
+    direct->category_two.push_back(resource);
     auto ancestor=parent;
     for(std::size_t steps=0;;++steps) {
       if(steps>hierarchy_.size()) throw std::runtime_error("Capability ancestry is cyclic");
@@ -1115,6 +1154,9 @@ const IntroConstructedPictureOwner* IntroRuntime::constructed_visual_owner(std::
 }
 const IntroAuthoredGroupOwner* IntroRuntime::constructed_group_owner(std::size_t source) const noexcept {
   if(source==0) return first_authored_group_?&*first_authored_group_:nullptr;
+  if(language_owner_ && source<resources_.sources().directory().size() && source_handle(source)==language_owner_->owner) return &*language_owner_;
+  if(const auto window=window_owners_.find(source);window!=window_owners_.end()) return &window->second->group;
+  if(const auto room=constructed_room_owners_.find(source);room!=constructed_room_owners_.end()) return &room->second.group;
   const auto found=constructed_group_owners_.find(source);
   return found==constructed_group_owners_.end()?nullptr:&found->second;
 }
@@ -1129,7 +1171,99 @@ const IntroConstructedObjectOwner* IntroRuntime::constructed_object_owner(std::s
 const IntroOwnerAuxiliary* IntroRuntime::constructed_owner_auxiliary(std::size_t source) const noexcept {
   if(const auto found=live_cameras_.find(source);found!=live_cameras_.end()) return found->second->auxiliary.get();
   if(const auto found=constructed_object_owners_.find(source);found!=constructed_object_owners_.end()) return found->second.auxiliary.get();
+  if(const auto* group=constructed_group_owner(source)) return group->auxiliary_state.get();
   return nullptr;
+}
+
+void IntroRuntime::construct_lens_flare_animation_scope_without_engine_renderer() {
+  if(resource_load_stage_!=IntroResourceLoadStage::room_animation_scope_ready || loaded_resource_handles_.size()!=69 ||
+      count_group_selector_!=9 || current_source_parent()!=source_handle(48) || resource_allocation_enabled_ ||
+      components_.construction_mode() || manager_row_edit_ || scene_resource_edit_ || !directory_position_controls_prepared_ ||
+      position_mode_.immediate || position_mode_.collection_enabled || position_updates_.failed())
+    throw std::runtime_error("Lens flare animation scope requires completed Room construction and retained loader controls");
+  const auto& directory=resources_.sources().directory();
+  if(directory.size()<200) throw std::runtime_error("Lens flare animation sources are absent");
+  const auto expected_type=[](std::size_t row)->std::uint32_t {
+    if(row==69 || row==100 || row==108 || row==109 || row==124) return 0x00100001U;
+    if(row==70) return 0x00100030U;
+    if(row==71) return 0x0010002eU;
+    if(row==72) return 0x00100031U;
+    if(row<=97) return 0x00200046U;
+    if(row==98 || row==179) return 0x00400003U;
+    if(row==99) return 0x0080000dU;
+    if(row>=101 && row<=107) return 0x002000e5U;
+    if(row==110 || row==111) return 0x0020000bU;
+    if(row==140 || row==142) return 0x00800023U;
+    if(row==141 || row==157 || row==162 || row==194 || row==196) return 0x00800024U;
+    if(row==178) return 0x04000022U;
+    if(row>=197) return 0x0800001aU;
+    return 0x00200002U;
+  };
+  for(std::size_t row=69;row<=199;++row) {
+    const auto& source=directory[row];
+    const auto type=expected_type(row);
+    const bool group=type==0x00100001U || type==0x00100030U || type==0x0010002eU || type==0x00100031U;
+    const auto pop=row==100 || row==124?2U:row==69 || row==98 || row==108 || row==197?1U:0U;
+    const auto bank=row==110 || row==111?1U:row==154 || row==158?2U:0U;
+    const auto category=group?0U:type==0x0080000dU || type==0x00800023U || type==0x00800024U?2U:
+        type==0x00400003U || type==0x0800001aU?3U:1U;
+    const bool property=row==111 || row==157 || row==160 || row==161 || (row>=169 && row<=177) ||
+        (row>=179 && row<=190) || row==192 || row==193;
+    const bool no_reader=row==112 || row==113 || (row>=115 && row<=123) || (row>=143 && row<=153) ||
+        row==155 || row==156 || row==159 || row==163 || (row>=165 && row<=168) || row==195;
+    if(source.source_type!=type || !application_.has_class_registration(type) || source.parent_steps!=pop ||
+        source.enters_child_pool!=group || source.pool_class!=bank*8+category || source.source_variant!=bank ||
+        source.post_load_source_offset || owner_components(source_handle(row)).size()!=source.attachments.size() ||
+        (source.buf_auxiliary_offset!=0)!=property || (source.deferred_source_offset!=0)==no_reader ||
+        !std::ranges::all_of(source.position,[](float value){return std::isfinite(value);}) ||
+        !std::ranges::all_of(source.basis,[](float value){return std::isfinite(value);}))
+      throw std::runtime_error("Unsupported lens flare animation source shape");
+    std::vector<std::pair<std::string_view,std::uint32_t>> expected;
+    if(row==70) expected.emplace_back("ZGEOM_FilmGrainCamSetup",0);
+    if(row==72) expected.emplace_back("ZWINDOW_LensFlareControl",0);
+    if(row>=73 && row<=97) expected.emplace_back("ZWINPIC_LensFlare",0);
+    if(row==114 || (row>=125 && row<=139) || row==154 || row==158 || row==191)
+      expected.emplace_back("ZSTDOBJ_VertAnim",0x3f800000U);
+    if(row==111 || row==160 || row==161 || (row>=169 && row<=177) || (row>=179 && row<=190) || row==192 || row==193)
+      expected.emplace_back("ZGEOM_MatPosAnim",row==179?0x42c80000U:0x3f800000U);
+    if(row==157) expected.emplace_back("ZGEOM_ParamAnim",0x3f800000U);
+    if(row==164 || row==169 || row==172 || row==180) expected.emplace_back("ZGEOM_ParticleEmitter",0x3f800000U);
+    if(row==197) expected.emplace_back("ZLIST_CutSequence",0);
+    if(row==198) expected.emplace_back("ZLIST_CutSequenceList",0);
+    if(row==199) expected.emplace_back("ZLIST_LensFlareLights",0);
+    if(source.attachments.size()!=expected.size() || (expected.empty() && source.attachment_table_offset))
+      throw std::runtime_error("Unsupported lens flare animation attachment count");
+    if(!expected.empty()) {
+      const bool hidden=(row>=125 && row<=139) || row==154 || row==157 || row==158 || row==160 || row==161 ||
+          row==164 || (row>=169 && row<=193);
+      if(((source.object_flags&0x400U)!=0)!=hidden)
+        throw std::runtime_error("Unsupported lens flare animation owner hide state");
+    }
+    for(std::size_t slot=0;slot<expected.size();++slot) {
+      const auto factory=resources_.sources().attachment_identifier(row,slot);
+      if(factory!=expected[slot].first || !application_.has_component_class_registration(factory) ||
+          std::bit_cast<std::uint32_t>(source.attachments[slot].parameter)!=expected[slot].second)
+        throw std::runtime_error("Unsupported lens flare animation attachment factory or raw argument");
+    }
+  }
+  try {
+    for(std::size_t row=69;row<=199;++row) {
+      const auto& source=directory[row];
+      advance_source_loading_progress_without_engine_renderer(row);
+      for(std::size_t pop=0;pop<source.parent_steps;++pop) {
+        const auto parent=resource_parent(current_source_parent());
+        if(!parent.value) throw std::runtime_error("Directory scope pop exceeds ROOT");
+        current_source_parent_=resource_owner(parent);
+      }
+      if(std::ranges::find(source_resource_scopes_,source.pool_group,&IntroSourceResourceScope::count_group)==source_resource_scopes_.end()) {
+        if(source.pool_group!=count_group_selector_) throw std::runtime_error("Directory scope allocation selector mismatch");
+        allocate_source_scope(source.pool_group);
+      }
+      if(source.pool_class%8==0) construct_group_row_without_engine_renderer(row);
+      else construct_non_group_row_without_engine_renderer(row);
+    }
+    resource_load_stage_=IntroResourceLoadStage::lens_flare_animation_scope_ready;
+  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
 }
 
 void IntroRuntime::construct_room_animation_scope_without_engine_renderer() {

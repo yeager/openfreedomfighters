@@ -68,6 +68,18 @@ void ComponentLifecycle::construct(std::size_t index, const Factory& supplied) {
   busy_ = true;
   sequence_.busy_ = true;
   try {
+    construct_common(index);
+    constructing_=index;
+    record.instance_ = factory(record);
+    if(failed_) throw std::runtime_error("Nested component construction previously failed");
+    record.constructed_ = true;
+    constructing_.reset();
+    busy_ = false;
+    sequence_.busy_ = false;
+  } catch (...) { failed_ = true; constructing_.reset(); busy_ = false; sequence_.busy_ = false; throw; }
+}
+void ComponentLifecycle::construct_common(std::size_t index) {
+  auto& record=at(index);
   const auto dispatch_time=sequence_.dispatch_clock_();
   // Force each approved binary32 rounding boundary independently of contraction.
   const volatile float scaled_phase=sequence_.phase_*0.1F;
@@ -82,11 +94,39 @@ void ComponentLifecycle::construct(std::size_t index, const Factory& supplied) {
   record.instance_ = ConstructedComponent{
       {0,0,0,0,0,sequence_.construction_mode_ ? 0x10U : 0U,0,0},{},{}};
   completed_ = false;
-    record.instance_ = factory(record);
-    record.constructed_ = true;
-    busy_ = false;
-    sequence_.busy_ = false;
-  } catch (...) { failed_ = true; busy_ = false; sequence_.busy_ = false; throw; }
+}
+void ComponentLifecycle::set_optional_lookup_removal(std::function<void(std::uint32_t)> removal) {
+  check_idle();
+  optional_lookup_removal_=std::move(removal);
+}
+void ComponentLifecycle::construct_and_destroy_temporary_common() {
+  if(failed_ || !busy_ || !sequence_.busy_ || !constructing_ || temporary_active_)
+    throw std::runtime_error("Temporary common construction requires its active concrete factory");
+  if(sequence_.next_>std::numeric_limits<std::uint32_t>::max())
+    throw std::runtime_error("Scene component identity exhausted");
+  const auto index=records_.size();
+  records_.reserve(index+1);
+  order_.reserve(order_.size()+1);
+  // Native transient metadata: no authored attachment, owner or class event.
+  auto temporary=std::unique_ptr<ComponentRecord>(new ComponentRecord(
+      {0,std::nullopt,std::nullopt,"TemporaryCommon",0,0,0.0F,true}));
+  records_.push_back(std::move(temporary));
+  temporary_active_=true;
+  try {
+    construct_common(index);
+    auto& record=at(index);
+    record.state().status|=0x20U;
+    record.constructed_=true;
+    // Unlink the actual newest node before the optional lookup callback. No
+    // callback may mutate construction order while this nested route runs.
+    order_.pop_back();
+    if(!(record.state().status&0x10U) && optional_lookup_removal_)
+      optional_lookup_removal_(*record.identity_);
+    --sequence_.live_;
+    record.removed_=true;
+    records_.pop_back();
+    temporary_active_=false;
+  } catch(...) {failed_=true;temporary_active_=false;throw;}
 }
 void ComponentLifecycle::pass(bool second, const ComponentLifecycleServices& services, std::size_t& visited) {
   // Stable native boundary: callbacks may change live fields, not this list.

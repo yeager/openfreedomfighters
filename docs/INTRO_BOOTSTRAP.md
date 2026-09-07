@@ -18,17 +18,19 @@ completed in that same host. Normal startup now executes the actual fresh
 initializer and retained console/input-map registrations.
 CPU preflight also executes first-row loading progress under an explicit native
 load-begin reset policy and allocates the first scope's 20 ownerless resources.
-It then constructs the first 69 source owners through the second Window and
-first nested Room. Nine allocated scopes contain 84 resources, separate from ROOT. Each Window
+It then constructs the first 200 source owners through the first Room and
+following lens-flare/animation scope. Seventeen allocated scopes contain 214
+resources, separate from ROOT. Each Window
 retains its own console descriptor; the scene property points to the latest one.
-The two Window cameras keep separate storage and ROOT contexts; three more
-cameras belong to the Room. None has renderer membership or source-reader effects yet.
-Center, fades, external commands, animation and cut-sequence attachments bring
-the constructed component count to 59 including RootGroup. The event table is
+Seven cameras retain separate storage and ROOT contexts. None has renderer
+membership or source-reader effects yet. Picture, animation, particle-emitter and
+cut-sequence attachments bring the retained component count to 139 including
+RootGroup. A temporary LensFlareControl construction consumes an extra serial
+and phase step but is removed from the live list. The event table is
 prepared before ROOT; CharFader reuses Fade events, while LogoFade declares none.
-All 66 deferred readers remain queued; three constructed objects have no reader.
+All 166 deferred readers remain queued; 34 constructed objects have no reader.
 No later owner or global initialization is executed. See
-[Room construction](RESOURCE_STATE.md#room-and-animation-scope).
+[lens-flare and animation construction](RESOURCE_STATE.md#lens-flare-and-animation-scope).
 The conditional DefaultCam factory now constructs its real PreviewCamera and
 ordinary membership in that host. Its callback writes directly into the scene
 hierarchy after the complete global initializer. The post-load root state and

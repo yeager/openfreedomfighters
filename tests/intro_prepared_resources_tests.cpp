@@ -61,13 +61,14 @@ struct FixtureReferenceMap {
     bool full_second_scope{};
     bool following_visual_scope{};
     bool room_animation_scope{};
+    bool lens_flare_scope{};
     std::uint32_t operator()(std::uint32_t value) const {
         if(!value) return 0;
         if(picture_order) {
             if(camera_row) {
                 if(value==9) return 6;
-                if(value==3) return room_animation_scope?70U:following_visual_scope?49U:full_second_scope?43U:second_window?9U:7U;
-                if(value>=5 && value<=8) return value+(room_animation_scope?66U:following_visual_scope?45U:full_second_scope?39U:second_window?5U:3U);
+                if(value==3) return lens_flare_scope?201U:room_animation_scope?70U:following_visual_scope?49U:full_second_scope?43U:second_window?9U:7U;
+                if(value>=5 && value<=8) return value+(lens_flare_scope?197U:room_animation_scope?66U:following_visual_scope?45U:full_second_scope?39U:second_window?5U:3U);
             }
             if(value==2) return 5;
             if(value==3) return 6;
@@ -172,13 +173,14 @@ struct Fixture {
     Bytes payload, names, prm, tex, snd;
     std::array<std::size_t, 10> block_offsets{};
     std::array<std::size_t, 10> attachment_offsets{};
-    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false,bool room_animation_scope=false) : payload(1024), snd(16) {
+    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false,bool room_animation_scope=false,bool lens_flare_scope=false) : payload(1024), snd(16) {
         if(language_group && !leading_group) throw std::runtime_error("language fixture requires leading group");
         if(camera_row && !language_group) throw std::runtime_error("camera row fixture requires language group");
         if(second_window && !camera_row) throw std::runtime_error("second Window fixture requires Camera row");
         if(full_second_scope && !second_window) throw std::runtime_error("full second scope requires second Window");
         if(following_visual_scope && !full_second_scope) throw std::runtime_error("following visual scope requires full second scope");
         if(room_animation_scope && !following_visual_scope) throw std::runtime_error("Room fixture requires preceding visual scope");
+        if(lens_flare_scope && !room_animation_scope) throw std::runtime_error("Lens fixture requires preceding Room scope");
         // Deliberately permuted directory roles; no retail source indices.
         set(payload, 0, 32); set(payload, 4, 128); set(payload, 12, 4); set(payload, 20, 176);
         set(payload, 32, include_sound?10:9); set(payload, 128, 1); set(payload, 132, 144);
@@ -219,7 +221,7 @@ struct Fixture {
                                   {"ZSNDOBJ_SoundSegment",1},{"ZGEOM_ZSetZDefine",0}});
         // All nonnull references emitted below target original rows after the
         // first window, so both inserted rows precede those referenced owners.
-        const FixtureReferenceMap bias{leading_group?(language_group?2U:1U):0U,language_group,camera_row,second_window,full_second_scope,following_visual_scope,room_animation_scope};
+        const FixtureReferenceMap bias{leading_group?(language_group?2U:1U):0U,language_group,camera_row,second_window,full_second_scope,following_visual_scope,room_animation_scope,lens_flare_scope};
         const std::array<Bytes, 10> blocks{camera(), picture(false), controller(bias), picture(true), member(bias), list({8, 8},bias), list({4, 2, 4},bias), first_cut(bias,include_events), window(bias),sound_owner(bias)};
         for (std::size_t i = 0; i < node_count; ++i) {
             block_offsets[i] = payload.size(); set(payload, 512 + 48 * i + 32, static_cast<std::uint32_t>(payload.size()));
@@ -361,8 +363,55 @@ struct Fixture {
                 }
                 while(payload.size()%4) payload.push_back(std::byte{0});
             }
+            const auto lens_records=payload.size();
+            if(lens_flare_scope) {
+                payload.resize(payload.size()+131*48);
+                for(std::size_t row=69;row<=199;++row) {
+                    const auto at=lens_records+(row-69)*48;
+                    const bool group=row==69 || row==100 || row==108 || row==109 || row==124;
+                    const bool picture_owner=row>=73 && row<=97;
+                    const bool camera_owner=row==98 || row==179;
+                    const bool light=row==141 || row==157 || row==162 || row==194 || row==196;
+                    const auto type=group?0x00100001U:row==70?0x00100030U:row==71?0x0010002eU:row==72?0x00100031U:
+                        picture_owner?0x00200046U:camera_owner?0x00400003U:row==99?0x0080000dU:row<=107?0x002000e5U:
+                        row==110 || row==111?0x0020000bU:row==140 || row==142?0x00800023U:light?0x00800024U:
+                        row==178?0x04000022U:row>=197?0x0800001aU:0x00200002U;
+                    set(payload,at,static_cast<std::uint32_t>(names.size()));text(names,"IndependentFlareOwner"+std::to_string(row));
+                    set(payload,at+4,384);set(payload,at+8,420);set(payload,at+16,type);
+                    const bool hidden=(row>=125 && row<=139) || row==154 || row==157 || row==158 || row==160 || row==161 || row==164 || (row>=169 && row<=193);
+                    set(payload,at+24,row==154?0x00060471U:row==158?0x0004c4f1U:
+                        group || row==71 || row==72?0x43000000U:hidden?0x400U:row==111?0x80000U:0x200000U);
+                    if(row==110 || row==111 || row==154 || row==158) payload.at(at+45)=std::byte{static_cast<unsigned char>(row<112?1:2)};
+                    const bool no_reader=row==112 || row==113 || (row>=115 && row<=123) || (row>=143 && row<=153) || row==155 || row==156 || row==159 || row==163 || (row>=165 && row<=168) || row==195;
+                    if(!no_reader) set(payload,at+32,static_cast<std::uint32_t>(deferred));
+                    set(payload,at+12,static_cast<std::uint32_t>(0x8000+row*16));
+                    if(row==71 || row==100 || row==109 || row==124) set(payload,at+36,row==71?0x40000230U:row==100?0x400002a0U:row==109?0x400003f0U:0x40000310U);
+                    const bool property=row==111 || row==157 || row==160 || row==161 || (row>=169 && row<=177) || (row>=179 && row<=190) || row==192 || row==193;
+                    if(property) {
+                        const auto start=names.size();names.resize(start+64,std::byte{0x6d});
+                        set(names,start,static_cast<std::uint32_t>(row));set(names,start+4,0x80000040U);set(payload,at+28,static_cast<std::uint32_t>(start));
+                    }
+                    std::vector<std::pair<std::string_view,std::uint32_t>> components;
+                    if(row==70) components.emplace_back("ZGEOM_FilmGrainCamSetup",0);
+                    if(row==72) components.emplace_back("ZWINDOW_LensFlareControl",0);
+                    if(picture_owner) components.emplace_back("ZWINPIC_LensFlare",0);
+                    if(row==114 || (row>=125 && row<=139) || row==154 || row==158 || row==191) components.emplace_back("ZSTDOBJ_VertAnim",0x3f800000U);
+                    if(property && row!=157) components.emplace_back("ZGEOM_MatPosAnim",row==179?0x42c80000U:0x3f800000U);
+                    if(row==157) components.emplace_back("ZGEOM_ParamAnim",0x3f800000U);
+                    if(row==164 || row==169 || row==172 || row==180) components.emplace_back("ZGEOM_ParticleEmitter",0x3f800000U);
+                    if(row>=197) components.emplace_back(row==197?"ZLIST_CutSequence":row==198?"ZLIST_CutSequenceList":"ZLIST_LensFlareLights",0);
+                    if(!components.empty()) {
+                        const auto table=payload.size();word(payload,static_cast<std::uint32_t>(components.size()));payload.resize(payload.size()+components.size()*8);
+                        for(std::size_t i=0;i<components.size();++i) {
+                            set(payload,table+4+i*8,static_cast<std::uint32_t>(payload.size()));set(payload,table+8+i*8,components[i].second);text(payload,components[i].first);
+                        }
+                        set(payload,at+20,static_cast<std::uint32_t>(table));
+                    }
+                }
+                while(payload.size()%4) payload.push_back(std::byte{0});
+            }
             const auto directory=payload.size();
-            word(payload,static_cast<std::uint32_t>(node_count+1+(language_group?1:0)+(second_window?2:0)+(full_second_scope?34:0)+(following_visual_scope?6:0)+(room_animation_scope?21:0)));
+            word(payload,static_cast<std::uint32_t>(node_count+1+(language_group?1:0)+(second_window?2:0)+(full_second_scope?34:0)+(following_visual_scope?6:0)+(room_animation_scope?21:0)+(lens_flare_scope?131:0)));
             word(payload,static_cast<std::uint32_t>(record/4));word(payload,0);
             const Bytes entries(payload.begin()+36,payload.begin()+static_cast<std::ptrdiff_t>(36+8*node_count));
             if(language_group) {
@@ -397,6 +446,12 @@ struct Fixture {
                                 (row>=54 && row<=58) || row==64?static_cast<std::uint32_t>(0x3000+row):0U);
                         }
                     }
+                    if(lens_flare_scope) for(std::size_t row=69;row<=199;++row) {
+                        const auto pops=row==100 || row==124?2U:row==69 || row==98 || row==108 || row==197?1U:0U;
+                        const bool enter=row==69 || row==70 || row==71 || row==72 || row==100 || row==108 || row==109 || row==124;
+                        word(payload,(pops<<25U)|(enter?1U<<24U:0U)|static_cast<std::uint32_t>((lens_records+(row-69)*48)/4));
+                        word(payload,static_cast<std::uint32_t>(0x5000+row)); // Independent identifiers, deliberately unlike retained check vectors.
+                    }
                     word(payload,(1U<<25U)|static_cast<std::uint32_t>((512+48*2)/4));word(payload,0);
                 } else payload.insert(payload.end(),entries.begin()+16,entries.begin()+24);
                 if(camera_row) {
@@ -405,10 +460,10 @@ struct Fixture {
                 } else payload.insert(payload.end(),entries.begin()+32,entries.end());
             } else payload.insert(payload.end(),entries.begin(),entries.end());
             set(payload,0,static_cast<std::uint32_t>(directory));
-            const auto pool_count=room_animation_scope?10U:following_visual_scope?6U:second_window?5U:language_group?4U:3U;
+            const auto pool_count=lens_flare_scope?18U:room_animation_scope?10U:following_visual_scope?6U:second_window?5U:language_group?4U:3U;
             const auto pools=payload.size();word(payload,pool_count);
             payload.resize(payload.size()+pool_count*24*4);
-            set(payload,pools+4,room_animation_scope?5U:following_visual_scope?4U:second_window?3U:2U); // ROOT's group/Window category.
+            set(payload,pools+4,lens_flare_scope?6U:room_animation_scope?5U:following_visual_scope?4U:second_window?3U:2U); // ROOT's group/Window category.
             if(full_second_scope) set(payload,pools+4+12,include_sound?6U:5U);
             set(payload,pools+4+2*24*4+4,language_group?1U:2U);
             set(payload,pools+4+2*24*4+12,second_window?1U:include_sound?7U:6U);
@@ -428,6 +483,12 @@ struct Fixture {
                 set(payload,pools+4+8*24*4+4,2);set(payload,pools+4+9*24*4+4,1);
             }
             set(payload,20,static_cast<std::uint32_t>(pools));
+            if(lens_flare_scope) {
+                const auto count=[&](std::size_t selector,std::size_t category,std::uint32_t n){set(payload,pools+4+selector*96+category*4,n);};
+                count(10,0,4);count(10,3,3);count(11,0,1);count(12,0,1);count(12,2,1);count(12,3,1);
+                count(13,1,25);count(14,1,7);count(15,0,1);count(16,1,12);count(16,9,2);
+                count(17,1,62);count(17,2,7);count(17,3,1);count(17,17,2);
+            }
         }
         prm.resize(16); word(prm, 1);
         for (float v : {3.F, 4.F, 9.F, 0.F, 1.F, 1.F, 0.F, 6.F, 8.F}) word(prm, std::bit_cast<std::uint32_t>(v));
@@ -541,6 +602,125 @@ int main() {
             app.component_class_notification_sequence("ZLIST_CutSequenceList")==0 && app.vert_anim_event()==29 &&
             app.cut_sequence_lists()==shared,"registration preserves unrelated application state and rejects duplicate reset");
     }
+    for(const bool policy:{false,true}) {
+      Fixture complete(false,true,true,true,true,true,true,true,true,true);
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
+      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+      app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
+      app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
+      app.set_particle_emitter_event(123);app.set_particle_emitter_event(456);
+      rejects([&]{app.initialize_native_lens_flare_animation_scope_registration();});
+      check(app.particle_emitter_event()==456 && app.class_notification_sequence(0x0010002eU)==0 &&
+            app.component_class_notification_sequence("ZWINDOW_LensFlareControl")==0,
+            "duplicate new registration rejects atomically and preserves replaceable shared emitter slot");
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
+      off::graphics::IntroRuntime host(complete.build(),app,sequence);
+      check(host.resources().controller_index()==200 && host.resources().first_cut_index()==204,
+            "complete synthetic scope moves selected controller and first-cut references beyond row199");
+      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+      host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
+      host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
+      host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
+      host.construct_room_animation_scope_without_engine_renderer();host.set_light_policy(policy);
+      const auto serial=sequence.next_identity(),live=sequence.live_count();
+      auto expected_phase=sequence.scheduling_phase();
+      for(std::size_t step=0;step<81;++step) {
+        const volatile float next_phase=expected_phase+0.1F;
+        expected_phase=next_phase>=1.F?0.F:next_phase;
+      }
+      const auto pending=host.ordinary_components()->pending().size();
+      std::size_t batches=0;for(const auto& scope:host.source_resource_scopes()) batches+=scope.resources.size();
+      const auto token=*host.scene_resource_property("ParticleTemplates")->object_token;
+      const auto* lists=app.cut_sequence_lists();
+      std::vector<std::uint32_t> lookup_removals;
+      if(policy) host.components().set_optional_lookup_removal([&](std::uint32_t identity){
+        lookup_removals.push_back(identity);
+        check(sequence.live_count()==live+3 && host.components().construction_order().size()==live+2,
+              "temporary cleanup callback sees unlinked temporary before shared live-count decrement");
+      });
+      app.set_particle_emitter_event(9876);
+      host.construct_lens_flare_animation_scope_without_engine_renderer();
+      std::size_t final_batches=0;for(const auto& scope:host.source_resource_scopes()) final_batches+=scope.resources.size();
+      check(host.loaded_resource_handles().size()==200 && host.deferred_reader_work().size()==166 &&
+            !host.directory_resource_mapping()[200] && host.count_group_selector()==17 &&
+            host.current_source_parent()==host.source_handle(69) && final_batches==batches+130 &&
+            host.resource_load_stage()==off::graphics::IntroResourceLoadStage::lens_flare_animation_scope_ready,
+            "full scope adds131 owners,100 sparse readers and130 partitioned resources and stops constructing at199");
+      check(sequence.live_count()==live+80 && sequence.next_identity()==serial+81 && sequence.scheduling_phase()==expected_phase &&
+            host.components().construction_order().size()==live+80 && host.ordinary_components()->pending().size()==pending+4,
+            "eighty retained components consume81 shared serials with one cleaned temporary and four ordinary admissions");
+      const auto control=host.owner_components(host.source_handle(72)).front();
+      check(lookup_removals==(policy?std::vector<std::uint32_t>{*host.components().at(control).identity()+1}:std::vector<std::uint32_t>{}),
+            "existing optional lookup receives exactly temporary serial; absent service remains absent");
+      check(host.child_owners(host.source_handle(69))==std::vector<off::graphics::IntroRuntimeHandle>{host.source_handle(70),host.source_handle(100),host.source_handle(108),host.source_handle(124),host.source_handle(197),host.source_handle(198),host.source_handle(199)} &&
+            host.child_owners(host.source_handle(71))==std::vector<off::graphics::IntroRuntimeHandle>{host.source_handle(72),host.source_handle(98),host.source_handle(99)} &&
+            host.child_owners(host.source_handle(72)).size()==25 && host.child_owners(host.source_handle(124)).size()==72,
+            "entered groups and two-level pops preserve full source hierarchy");
+      std::size_t reader=66,properties=0,attachments=0;
+      for(std::size_t row=69;row<=199;++row) {
+        const auto owner=host.source_handle(row);const auto& source=host.resources().sources().directory()[row];
+        const auto& resource=host.resource_state(owner);
+        check(host.directory_resource_mapping()[row]==host.resource_handle(owner) && resource->directory_auxiliary==0x5000+row &&
+              !resource->context.value,"all new canonical resources preserve independent directory identifiers without context");
+        if(source.deferred_source_offset) {
+          check(host.deferred_reader_work()[reader].resource==host.resource_handle(owner) &&
+                host.deferred_reader_work()[reader].source_offset==source.deferred_source_offset,
+                "sparse full-scope reader order follows actual source identity");++reader;
+        }
+        if(source.buf_auxiliary_offset) {
+          ++properties;const auto* auxiliary=host.constructed_owner_auxiliary(row);
+          check(auxiliary && auxiliary->borrowed_property_data.data()==host.resources().source_names().data()+source.buf_auxiliary_offset &&
+                auxiliary->borrowed_property_data.size()==64 && auxiliary->attachments.size()==source.attachments.size(),
+                "all property-bearing ordinary and camera owners retain exact shared auxiliary data");
+        }
+        attachments+=host.owner_components(owner).size();
+        for(const auto index:host.owner_components(owner)) {
+          const auto& state=host.components().at(index).state();
+          check(state.status==0x20 && state.attached_owner==owner.value &&
+                state.admitted==((row==72 || row==111 || row==114 || row==198)?0x10U:0U),
+                "real constructor owner assignment and hide predicate determine admission independently of source readers");
+        }
+      }
+      check(reader==166 && properties==27 && attachments==80,"all property and component rows survive full construction");
+      check(host.resources().sources().directory()[110].pool_class==9 && host.resources().sources().directory()[111].pool_class==9 &&
+            host.resources().sources().directory()[154].pool_class==17 && host.resources().sources().directory()[158].pool_class==17,
+            "model bank one and saved-output bank two remain distinct source partitions");
+      check(host.saved_resource_flags().size()==3 && host.saved_resource_flags()[1].flags==0x09160471U &&
+            host.saved_resource_flags()[2].flags==0x0914c4f1U && host.resource_state(host.source_handle(154))->flags==0x09120471U &&
+            host.resource_state(host.source_handle(158))->flags==0x091084f1U,
+            "saved flags append in source order and remain unapplied until loader tail");
+      check(host.constructed_group_owner(71)->cached_window && !host.constructed_group_owner(71)->cached_window->value &&
+            host.constructed_group_owner(72)->derived_reference && !host.constructed_group_owner(72)->derived_reference->value,
+            "new group-derived classes initialize absent references explicitly");
+      const auto* sun=host.constructed_object_owner(99);const auto* scalar_owner=host.constructed_object_owner(178);
+      check(sun && sun->flags==(policy?1U:0U) && sun->local_control==0x3000U && sun->self_links &&
+            (*sun->self_links)[0]==host.source_handle(99) && (*sun->self_links)[1]==host.source_handle(99) &&
+            host.constructed_object_owner(110)->byte_control==false && host.constructed_object_owner(111)->byte_control==false &&
+            scalar_owner && scalar_owner->scalar_pair && (*scalar_owner->scalar_pair)[0]==-1.F &&
+            std::bit_cast<std::uint32_t>((*scalar_owner->scalar_pair)[1])==0x7e967699U,
+            "new concrete owner constructors retain self links, byte controls and exact binary32 state");
+      const auto* param=host.constructed_attachment(host.owner_components(host.source_handle(157)).front());
+      check(param && param->param_animation && param->param_animation->capacity==32 && param->param_animation->growth==32 &&
+            param->param_animation->count==0 && param->param_animation->element_control==1 &&
+            param->param_animation->local_words==std::array<std::uint32_t,2>{},"ParamAnim retains empty constructor storage");
+      for(const auto row:{164U,169U,172U,180U}) {
+        const auto* emitter=host.constructed_attachment(host.owner_components(host.source_handle(row)).back());
+        check(emitter && emitter->particle_emitter && !emitter->particle_emitter->local_reference && emitter->particle_emitter->handles.empty(),
+              "each ParticleEmitter retains its own empty handle wrapper after ordered attachment");
+      }
+      check(app.particle_emitter_event()==host.scene_event_names().find("FrameCurrent") &&
+            app.component_class_notification_sequence("ZGEOM_ParticleEmitter")==4 && app.cut_sequence_lists()==lists &&
+            host.constructed_attachment(host.owner_components(host.source_handle(198)).front())->list_index==1 &&
+            *host.scene_resource_property("ParticleTemplates")->object_token==token && app.resolve_handle_collection(token)->members.size()==8,
+            "shared event slot and existing particle and cut collections survive constructor notifications");
+      check(host.root_owner_state()->rooms.size()==1 && host.constructed_group_owner(71)->category_two.size()==1 &&
+            host.constructed_group_owner(124)->category_two.size()==7 && host.position_updates().pending_count()==0 &&
+            !host.directory_position_mode().collection_enabled && host.registered_cameras().entries().empty(),
+            "category-two ancestry does not invent Rooms, spatial updates or renderer lifecycle");
+      rejects([&]{host.construct_lens_flare_animation_scope_without_engine_renderer();});
+    }
     for(const bool existing_shared_state:{false,true}) {
       Fixture room_fixture(false,true,true,true,true,true,true,true,true);
       off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
@@ -597,7 +777,7 @@ int main() {
             "saved Room flags remain retained while actual child low-byte propagation updates resource ancestors");
       std::vector<off::graphics::IntroRuntimeResourceHandle> ordinary;
       for(const auto row:{51U,52U,57U,58U,62U}) ordinary.push_back(host.resource_handle(host.source_handle(row)));
-      check(room->ordinary_members==ordinary && room->category_two==std::vector<off::graphics::IntroRuntimeResourceHandle>{
+      check(room->ordinary_members==ordinary && room->group.category_two==std::vector<off::graphics::IntroRuntimeResourceHandle>{
                 host.resource_handle(host.source_handle(53)),host.resource_handle(host.source_handle(54)),
                 host.resource_handle(host.source_handle(55)),host.resource_handle(host.source_handle(56))},
             "Room ordinary-resource bucket and category-two collection preserve distinct source-ordered membership");
