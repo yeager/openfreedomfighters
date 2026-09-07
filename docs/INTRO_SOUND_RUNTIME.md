@@ -128,6 +128,16 @@ retains the defined property. It never invokes generic component callbacks,
 sets global phase flags, retires components, emits readiness or starts a sound;
 normal startup does not call it.
 
+The probe intentionally stops before second phase. `ZSetZDefine` retirement
+belongs to the complete global traversal: the property survives independently,
+but component disposal, attachment unlinking and serial-map removal cannot be
+substituted by clearing retained metadata. `SoundSegment` second phase needs a
+live hide flag, native random source, ordinary-membership operation and actual
+owner deleting-disposal; a binding stop alone is not equivalent. `SoundExtend`
+second phase has no direct work, but its lifecycle completion bit still belongs
+to the same global traversal. These paths remain fail-closed until their real
+services and the full first pass exist.
+
 Failures keep completed mutations. Where the original would destroy an owner,
 the current host reports unsupported disposal and prevents further sound-owner
 use. It must not continue initialization as if destruction had succeeded.
