@@ -133,6 +133,17 @@ std::string selection_error(const std::filesystem::path &root) {
   return {};
 }
 
+std::string owned_selection_error(const std::filesystem::path &root,
+                                  const std::filesystem::path &relative) {
+  try {
+    static_cast<void>(
+        off::graphics::load_owned_diagnostic_scene_render_asset(root, relative));
+  } catch (const std::exception &error) {
+    return error.what();
+  }
+  return {};
+}
+
 } // namespace
 
 int main() {
@@ -208,6 +219,25 @@ int main() {
   check(selection_error(budget_root) ==
             "scene archive directory exceeds the safety entry limit",
         "bound enumeration by all directory entries, not only ZIP candidates");
+
+  const auto explicit_root = work / "explicit";
+  std::filesystem::create_directories(explicit_root / "Scenes" / "nested");
+  check(owned_selection_error(explicit_root, "../outside.ZIP") ==
+            "diagnostic scene archive path is invalid",
+        "explicit diagnostic archive rejects parent traversal");
+  check(owned_selection_error(explicit_root, "/outside.ZIP") ==
+            "diagnostic scene archive path is invalid",
+        "explicit diagnostic archive rejects absolute paths");
+  check(owned_selection_error(explicit_root, "nested/missing.ZIP") ==
+            "diagnostic scene archive is unavailable",
+        "explicit diagnostic archive does not expose missing local paths");
+  const auto linked_archive = explicit_root / "Scenes" / "nested" / "linked.ZIP";
+  std::filesystem::create_symlink(external_archive, linked_archive, error);
+  if (!error) {
+    check(owned_selection_error(explicit_root, "nested/linked.ZIP") ==
+              "diagnostic scene archive is unavailable",
+          "explicit diagnostic archive rejects symlink escape");
+  }
 
   std::filesystem::remove_all(work, error);
   return failures == 0 ? 0 : 1;

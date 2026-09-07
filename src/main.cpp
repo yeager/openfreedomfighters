@@ -26,7 +26,8 @@ namespace {
 void usage(std::ostream &output) {
   output << "Usage: openfreedomfighters [--data PATH] [--mode original|modern] "
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
-            "[--screenshot FILE.bmp] [--locale TAG] [--diagnostic-scene]\n";
+            "[--screenshot FILE.bmp] [--locale TAG] "
+            "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]]\n";
 }
 
 [[nodiscard]] std::filesystem::path default_game_data_path() {
@@ -54,6 +55,7 @@ int main(int argc, char **argv) {
   std::size_t frame_limit = 0;
   bool show_graphics_menu = false;
   bool diagnostic_scene = false;
+  std::optional<std::filesystem::path> diagnostic_scene_archive;
   std::filesystem::path screenshot_path;
   std::string locale;
   for (int index = 1; index < argc; ++index) {
@@ -82,6 +84,8 @@ int main(int argc, char **argv) {
       show_graphics_menu = true;
     } else if (argument == "--diagnostic-scene") {
       diagnostic_scene = true;
+      if (index + 1 < argc && std::string_view{argv[index + 1]}.front() != '-')
+        diagnostic_scene_archive = argv[++index];
     } else if (argument == "--screenshot" && index + 1 < argc) {
       screenshot_path = argv[++index];
     } else if (argument == "--locale" && index + 1 < argc) {
@@ -172,8 +176,11 @@ int main(int argc, char **argv) {
   if (!verify_only) {
     auto preflight = off::platform::run_sdl_startup_preflight(data_path, [&] {
       if (diagnostic_scene) {
-        scene.emplace(off::graphics::prepare_scene_gpu_plan(
-            off::graphics::load_diagnostic_scene_render_asset(data_path)));
+        const auto asset = diagnostic_scene_archive
+                               ? off::graphics::load_owned_diagnostic_scene_render_asset(
+                                     data_path, *diagnostic_scene_archive)
+                               : off::graphics::load_diagnostic_scene_render_asset(data_path);
+        scene.emplace(off::graphics::prepare_scene_gpu_plan(asset));
       } else {
         // Supported normal (non-restore) cold-load boundary, before resources.
         // Native monotonic samples are an explicit CRT portability policy.

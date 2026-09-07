@@ -455,4 +455,23 @@ load_diagnostic_scene_render_asset(const std::filesystem::path &install_root) {
       "installation contains no renderable direct-local scene archive");
 }
 
+SceneRenderAsset load_owned_diagnostic_scene_render_asset(
+    const std::filesystem::path &install_root,
+    const std::filesystem::path &relative_archive_path) {
+  if (relative_archive_path.empty() || relative_archive_path.is_absolute() ||
+      lowercase(relative_archive_path.extension().string()) != ".zip")
+    throw std::runtime_error("diagnostic scene archive path is invalid");
+  for (const auto &component : relative_archive_path) {
+    if (component == "..")
+      throw std::runtime_error("diagnostic scene archive path is invalid");
+  }
+  const auto archive_path = install_root / "Scenes" / relative_archive_path;
+  std::error_code error;
+  const auto status = std::filesystem::symlink_status(archive_path, error);
+  if (error || std::filesystem::is_symlink(status) ||
+      !std::filesystem::is_regular_file(status))
+    throw std::runtime_error("diagnostic scene archive is unavailable");
+  return load_scene_render_asset(archive_path);
+}
+
 } // namespace off::graphics

@@ -90,4 +90,11 @@ load_startup_scene_render_asset(const std::filesystem::path &install_root);
 [[nodiscard]] SceneRenderAsset
 load_diagnostic_scene_render_asset(const std::filesystem::path &install_root);
 
+// Opens one explicitly selected archive below the owned installation's Scenes
+// directory. This remains the source-only diagnostic renderer: it establishes
+// neither an original camera nor gameplay scene activation.
+[[nodiscard]] SceneRenderAsset load_owned_diagnostic_scene_render_asset(
+    const std::filesystem::path &install_root,
+    const std::filesystem::path &relative_archive_path);
+
 } // namespace off::graphics

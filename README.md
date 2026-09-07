@@ -152,6 +152,9 @@ F10 toggles settings. Close the window to exit. For development:
 - `--frame-limit N` exits after a bounded number of rendered frames.
 - `--show-graphics-menu` opens settings immediately.
 - `--diagnostic-scene` opens the geometry preview instead of normal startup.
+- `--diagnostic-scene relative/archive.ZIP` inspects one owned scene archive
+  below `Scenes/` through the source-only diagnostic renderer. It is not
+  gameplay, original camera behavior, or a faithful level renderer.
 - `--screenshot /path/outside/repo/frame.bmp` saves a GPU readback. The file must
   not already exist. With a frame limit it captures the last frame; otherwise
   it captures the first.
