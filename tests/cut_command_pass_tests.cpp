@@ -1,4 +1,5 @@
 #include "off/cutscene/command_pass.hpp"
+#include "off/cutscene/cut_sequence_list.hpp"
 #include "off/cutscene/first_cut_command_session.hpp"
 #include "off/cutscene/external_cut_sequence_command.hpp"
 #include "off/runtime/intro_live_target_registry.hpp"
@@ -370,5 +371,33 @@ int main() {
     check(missing_external.retired() && !missing_external.phase_two_completed() &&
           external_trace == std::vector<std::string>({"reference", "retire"}));
     rejects([&] { missing_external.run_phase_two(missing_services); });
+
+    off::cutscene::CutSequenceList external_list;
+    rejects([&] { external_list.register_ordered_command(Command{}); });
+    std::vector<std::string> list_trace;
+    rejects([&] { external_list.run_phase_one({}); });
+    external_list.run_phase_one({
+        .source_directory = 65U,
+        .source_type = 0x0800001aU,
+        .class_data_value = 0U,
+        .read_retained_source = [&] { list_trace.push_back("read"); },
+    });
+    check(external_list.phase_one_complete() && !external_list.phase_two_complete() &&
+          list_trace == std::vector<std::string>({"read"}));
+    Command list_late{}; list_late.timeline_position = 385U;
+    Command early{}; early.timeline_position = 1U;
+    Command equal{}; equal.timeline_position = 1U;
+    external_list.register_ordered_command(list_late);
+    external_list.register_ordered_command(early);
+    external_list.register_ordered_command(equal);
+    check(external_list.commands().size() == 3U &&
+          external_list.commands()[0].timeline_position == 1U &&
+          external_list.commands()[1].timeline_position == 1U &&
+          external_list.commands()[2].timeline_position == 385U);
+    external_list.run_phase_two({.phase_complete = [&] { list_trace.push_back("phase-two"); }});
+    check(external_list.phase_two_complete() &&
+          list_trace == std::vector<std::string>({"read", "phase-two"}));
+    rejects([&] { external_list.register_ordered_command(early); });
+    rejects([&] { external_list.run_phase_two({.phase_complete = [] {}}); });
     return failures == 0 ? 0 : 1;
 }
