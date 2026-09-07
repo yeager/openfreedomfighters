@@ -1424,7 +1424,17 @@ int main() {
                 .second_offsets = {32U, 40U, 48U},
             },
         };
+        check(view && view->bytes().size() == backing.size() &&
+                  view->bytes()[0U] == std::byte{2} && view->bytes()[1U] == std::byte{0x14} &&
+                  view->bytes()[16U] == std::byte{0xf6} && view->bytes()[17U] == std::byte{0xff} &&
+                  view->bytes()[48U] == std::byte{0},
+              "KEYS backing view captures the complete source allocation before evaluation");
         backing[16] = std::byte{0}; // the view must retain an immutable copy.
+        check(view && view->bytes().size() == backing.size() &&
+                  view->bytes()[0U] == std::byte{2} && view->bytes()[1U] == std::byte{0x14} &&
+                  view->bytes()[16U] == std::byte{0xf6} && view->bytes()[17U] == std::byte{0xff} &&
+                  view->bytes()[48U] == std::byte{0},
+              "KEYS backing view retains its snapshot after the caller mutates the source");
         const auto initial = view ? KeysBackingEvaluator::evaluate(*view, bound, 0.0F) : std::nullopt;
         check(initial && initial->first_group == std::array<float, 4>{-10.0F, 10.0F, 20.0F, -20.0F},
               "KEYS backing evaluator retains its immutable first sample after the caller mutates the source");
