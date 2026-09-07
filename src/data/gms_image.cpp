@@ -666,6 +666,29 @@ std::optional<std::size_t> GmsImage::local_source_for_authored_reference(
     return one_based_index - 1U;
 }
 
+std::span<const std::byte> GmsImage::deferred_source_block(
+    std::size_t directory_index
+) const {
+    if (directory_index >= directory_.size()) {
+        throw std::runtime_error("GMS deferred source directory index is out of range");
+    }
+    const auto offset = static_cast<std::size_t>(
+        directory_[directory_index].deferred_source_offset
+    );
+    const auto payload = resource_.payload();
+    if (offset == 0U || offset > payload.size() ||
+        sizeof(std::uint32_t) > payload.size() - offset) {
+        throw std::runtime_error("GMS deferred source block is missing or truncated");
+    }
+    const auto header = ByteReader(payload).u32(offset);
+    const auto size = static_cast<std::size_t>(header & tagged_block_size_mask);
+    if ((header >> 24U) != 0U || size < sizeof(std::uint32_t) ||
+        size > payload.size() - offset) {
+        throw std::runtime_error("GMS deferred source block has an invalid header");
+    }
+    return payload.subspan(offset, size);
+}
+
 std::vector<std::uint32_t> GmsImage::intro_source_reference_list(
     std::size_t directory_index
 ) const {

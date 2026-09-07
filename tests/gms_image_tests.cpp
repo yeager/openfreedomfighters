@@ -1211,6 +1211,82 @@ int main() {
         [&image] { static_cast<void>(image.startup_window_picture_source(3)); },
         "reject an out-of-range startup picture directory index"
     );
+    {
+        auto bytes = packed_fixture();
+        constexpr std::size_t block_offset = 452;
+        set_u32(bytes, 9 + 80 + 32, block_offset);
+        set_u32(bytes, 9 + block_offset, 8U);
+        bytes[9 + block_offset + 4] = std::byte{0xaa};
+        bytes[9 + block_offset + 5] = std::byte{0xbb};
+        bytes[9 + block_offset + 6] = std::byte{0xcc};
+        bytes[9 + block_offset + 7] = std::byte{0xdd};
+        const auto deferred_image = off::data::GmsImage::parse(
+            off::data::PackedResource::parse(bytes)
+        );
+        const auto block = deferred_image.deferred_source_block(0);
+        check(block.size() == 8U && block[0] == std::byte{8} &&
+                  block[4] == std::byte{0xaa} && block[7] == std::byte{0xdd},
+              "return the exact header-inclusive deferred source block");
+        check_rejected(
+            [&deferred_image] {
+                static_cast<void>(deferred_image.deferred_source_block(1));
+            },
+            "reject a directory entry without deferred source data"
+        );
+        check_rejected(
+            [&deferred_image] {
+                static_cast<void>(deferred_image.deferred_source_block(3));
+            },
+            "reject an out-of-range deferred source directory index"
+        );
+    }
+    check_rejected(
+        [] {
+            auto bytes = packed_fixture();
+            set_u32(bytes, 9 + 80 + 32, 452);
+            set_u32(bytes, 9 + 452, 0x01000004U);
+            const auto deferred_image = off::data::GmsImage::parse(
+                off::data::PackedResource::parse(bytes)
+            );
+            static_cast<void>(deferred_image.deferred_source_block(0));
+        },
+        "reject a deferred source block with nonzero header high byte"
+    );
+    check_rejected(
+        [] {
+            auto bytes = packed_fixture();
+            set_u32(bytes, 9 + 80 + 32, 452);
+            set_u32(bytes, 9 + 452, 3U);
+            const auto deferred_image = off::data::GmsImage::parse(
+                off::data::PackedResource::parse(bytes)
+            );
+            static_cast<void>(deferred_image.deferred_source_block(0));
+        },
+        "reject a deferred source block smaller than its header"
+    );
+    check_rejected(
+        [] {
+            auto bytes = packed_fixture();
+            set_u32(bytes, 9 + 80 + 32, 508);
+            const auto deferred_image = off::data::GmsImage::parse(
+                off::data::PackedResource::parse(bytes)
+            );
+            static_cast<void>(deferred_image.deferred_source_block(0));
+        },
+        "reject a truncated deferred source block header"
+    );
+    check_rejected(
+        [] {
+            auto bytes = packed_fixture();
+            set_u32(bytes, 9 + 80 + 32, 452);
+            set_u32(bytes, 9 + 452, 61U);
+            const auto deferred_image = off::data::GmsImage::parse(
+                off::data::PackedResource::parse(bytes)
+            );
+            static_cast<void>(deferred_image.deferred_source_block(0));
+        },
+        "reject a deferred source block extending beyond the image"
+    );
     check_rejected(
         [&image] {
             std::vector<std::byte> short_buf(16);

@@ -226,6 +226,12 @@ public:
     [[nodiscard]] std::optional<std::size_t> local_source_for_authored_reference(
         std::uint32_t raw_reference
     ) const;
+    // Returns the complete, header-inclusive deferred source block for one
+    // directory entry. The returned bytes are borrowed from this image and are
+    // deliberately not decoded or classified here.
+    [[nodiscard]] std::span<const std::byte> deferred_source_block(
+        std::size_t directory_index
+    ) const;
     // Caller must establish supported intro provenance; returns raw words without
     // relocation, preserving ordering, duplicates, and unresolved values.
     [[nodiscard]] std::vector<std::uint32_t> intro_source_reference_list(
