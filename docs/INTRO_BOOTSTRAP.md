@@ -579,6 +579,19 @@ The snapshot is deliberately not wired into normal startup or advertised as
 intro playback. Picture visibility, ordering, camera admission, pass state and
 the original external basis-scale policy still require independent recovery.
 
+## Conditional first-cut presentation
+
+On the recovered zero-or-missing `MainCamera` property route, synchronous
+requested-camera registration can admit a state-zero view before the renderer
+traversal of the same scene update. Its rectangle uses the live renderer extent;
+the retained camera supplies its authored normalized viewport and projection
+parameters. This route is conditional on backend and state readiness.
+
+It reaches inputs for picture-cache construction but does not establish that
+normal startup has a ready view, an enabled camera, admitted pictures, a GPU
+draw, or presentation. Those gates remain required before it can enable the
+normal intro path.
+
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
 copied controller payloads. Runtime acceptance additionally requires an actual
