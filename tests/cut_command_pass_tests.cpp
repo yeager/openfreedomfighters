@@ -1,5 +1,6 @@
 #include "off/cutscene/command_pass.hpp"
 #include "off/cutscene/first_cut_command_session.hpp"
+#include "off/runtime/intro_live_target_registry.hpp"
 
 #include <array>
 #include <cmath>
@@ -19,6 +20,7 @@ using off::cutscene::CommandDeliveryResult;
 using off::cutscene::CommandDeliveryServices;
 using off::cutscene::FirstCutCommandSession;
 using off::cutscene::FirstCutCommandSessionServices;
+using off::runtime::IntroLiveTargetRegistry;
 using Command = off::data::GmsIntroCutCommandSource;
 int failures = 0;
 void check(bool value) { if (!value) { ++failures; std::cerr << "FAIL: cut command pass\n"; } }
@@ -216,5 +218,81 @@ int main() {
         1235U);
     named_session.run(1.0F);
     check(session_trace == std::vector<std::string>({"name:unavailable", "named-dispatch"}));
+
+    static_assert(!std::is_copy_constructible_v<IntroLiveTargetRegistry> &&
+                  !std::is_move_constructible_v<IntroLiveTargetRegistry>);
+    IntroLiveTargetRegistry targets;
+    targets.register_owner({.owner = 100U, .authored_reference = 9U, .name = "leader"});
+    targets.register_owner({.owner = 200U, .authored_reference = 10U, .name = "sender"});
+    targets.register_owner({.owner = 300U, .authored_reference = 11U, .name = ""});
+    targets.register_component(100U, 101U);
+    targets.register_component(100U, 102U, false);
+    targets.register_component(100U, 103U);
+    check(targets.resolve_reference(9U) == std::optional<std::uint64_t>{100U} &&
+          targets.resolve_reference(0U) == std::nullopt &&
+          targets.resolve_name("leader") == std::optional<std::uint64_t>{100U} &&
+          targets.resolve_name("missing") == std::nullopt && targets.resolve_name("") == std::nullopt);
+    rejects([&] { targets.register_owner({.owner = 100U, .authored_reference = 11U, .name = "other"}); });
+    rejects([&] { targets.register_owner({.owner = 101U, .authored_reference = 9U, .name = "other"}); });
+    rejects([&] { targets.register_owner({.owner = 101U, .authored_reference = 11U, .name = "leader"}); });
+    rejects([&] { targets.register_component(999U, 104U); });
+    rejects([&] { targets.register_component(100U, 101U); });
+    std::vector<std::string> target_trace;
+    IntroLiveTargetRegistry::DispatchServices target_services{
+        .direct_target = [&](std::uint64_t target, std::uint16_t event, std::uint32_t argument,
+                             std::uint64_t sender) {
+          target_trace.push_back("target");
+          check(target == 100U && event == 0x402U && argument == 55U && sender == 200U);
+          rejects([&] { targets.register_component(100U, 104U); });
+          rejects([&] { targets.dispatch(100U, event, argument, sender, target_services); });
+        },
+        .direct_component = [&](std::uint64_t target, std::uint64_t component, std::uint16_t,
+                                std::uint32_t, std::uint64_t) {
+          target_trace.push_back("component:" + std::to_string(component));
+          check(target == 100U);
+        },
+    };
+    targets.dispatch(100U, 0x402U, 55U, 200U, target_services);
+    check(target_trace == std::vector<std::string>({"target", "component:101", "component:103"}));
+    targets.set_component_eligible(102U, true);
+    target_trace.clear();
+    targets.dispatch(100U, 0x402U, 55U, 200U, target_services);
+    check(target_trace == std::vector<std::string>({"target", "component:101", "component:102", "component:103"}));
+    targets.unregister_component(102U);
+    check(!targets.contains_component(102U));
+    target_trace.clear();
+    targets.dispatch(100U, 0x402U, 55U, 200U, target_services);
+    check(target_trace == std::vector<std::string>({"target", "component:101", "component:103"}));
+    // The component sequence is snapshotted after the target hook, then the
+    // registry checks each handle again before its callback. Removing 103
+    // while 101 is running must therefore skip the stale tail entry.
+    target_services.direct_component = [&](std::uint64_t, std::uint64_t component, std::uint16_t,
+                                           std::uint32_t, std::uint64_t) {
+      target_trace.push_back("component:" + std::to_string(component));
+      if (component == 101U) targets.unregister_component(103U);
+    };
+    target_trace.clear();
+    targets.dispatch(100U, 0x402U, 55U, 200U, target_services);
+    check(target_trace == std::vector<std::string>({"target", "component:101"}) &&
+          !targets.contains_component(103U));
+    targets.unregister_owner(100U);
+    check(!targets.contains_owner(100U) && !targets.contains_component(101U) &&
+          targets.resolve_reference(9U) == std::nullopt && targets.resolve_name("leader") == std::nullopt);
+    rejects([&] { targets.dispatch(100U, 0x402U, 55U, 200U, target_services); });
+    rejects([&] { targets.dispatch(200U, 0x402U, 55U, 100U, target_services); });
+    targets.register_owner({.owner = 400U, .authored_reference = 12U, .name = "ephemeral"});
+    targets.register_component(400U, 401U);
+    bool removed_target_called = false;
+    IntroLiveTargetRegistry::DispatchServices removal_services{
+        .direct_target = [&](std::uint64_t target, std::uint16_t, std::uint32_t, std::uint64_t) {
+          removed_target_called = true;
+          targets.unregister_owner(target);
+        },
+        .direct_component = [&](std::uint64_t, std::uint64_t, std::uint16_t, std::uint32_t,
+                                std::uint64_t) { check(false); },
+    };
+    targets.dispatch(400U, 0x402U, 55U, 200U, removal_services);
+    check(removed_target_called && !targets.contains_owner(400U) &&
+          targets.resolve_reference(12U) == std::nullopt);
     return failures == 0 ? 0 : 1;
 }
