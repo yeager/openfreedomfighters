@@ -40,14 +40,19 @@ void RendererCameraViewAdmission::admit(
     if (!state->value || !services.state_ready)
       throw std::runtime_error("Camera view admission requires a live state and readiness service");
     if (!services.state_ready(*state)) {
-      if (!services.queue_pending) throw std::runtime_error("Non-ready state requires a pending-camera service");
-      services.queue_pending(*state,camera);
+      if (!services.pending_count || !services.queue_pending)
+        throw std::runtime_error("Non-ready state requires bounded pending-camera services");
+      if (services.pending_count(*state)>=RendererPendingCameraQueue::capacity)
+        throw std::runtime_error("Renderer pending-camera capacity is exhausted");
+      services.queue_pending(*state,camera,camera_priority);
       return;
     }
-    if (!services.allocate_view || !services.associate_camera_intermediate ||
+    if (!services.admitted_view_count || !services.allocate_view || !services.associate_camera_intermediate ||
         !services.register_backend_records || !services.insert_view ||
         !services.increment_view_use || !services.renumber_view_ordinals)
       throw std::runtime_error("Ready state requires concrete view allocation services");
+    if (services.admitted_view_count(*state)>=RendererPendingCameraQueue::capacity)
+      throw std::runtime_error("Renderer admitted-view capacity is exhausted");
     const auto view = services.allocate_view(*state,camera);
     if (!view) throw std::runtime_error("View allocation did not return a live view");
     services.associate_camera_intermediate(view,camera);
@@ -60,6 +65,42 @@ void RendererCameraViewAdmission::admit(
     failed_ = true;
     throw;
   }
+}
+
+void RendererPendingCameraQueue::append(RendererViewState state,std::uint64_t camera,
+                                        std::int32_t priority) {
+  if(busy_ || failed_) throw std::runtime_error("Renderer pending-camera queue is busy or failed");
+  if(!state.value || !camera) throw std::runtime_error("Pending renderer camera requires live state and camera");
+  if(state_ && state_->value!=state.value)
+    throw std::runtime_error("Pending renderer camera queue belongs to another state");
+  if(entries_.size()>=capacity) {
+    failed_=true;
+    throw std::runtime_error("Renderer pending-camera capacity is exhausted");
+  }
+  state_=state;
+  entries_.push_back({camera,priority});
+}
+
+void RendererPendingCameraQueue::materialize(RendererViewState state,
+                                              const RendererPendingMaterializationServices& supplied) {
+  if(busy_ || failed_) throw std::runtime_error("Renderer pending-camera queue is busy or failed");
+  if(!state.value || !state_ || state_->value!=state.value || !supplied.initialize_state || !supplied.admit_ready_camera)
+    throw std::runtime_error("Pending renderer camera materialization requires its state and services");
+  const auto services=supplied;
+  Guard guard(busy_);
+  try {
+    if(!services.initialize_state(state))
+      throw std::runtime_error("Renderer state initialization did not establish ready admission");
+    // Do not erase incrementally: a failed later admission retains the exact
+    // source order, making incomplete materialization visible to the host.
+    for(const auto entry:entries_) services.admit_ready_camera(entry.camera,entry.priority);
+    entries_.clear();
+  } catch(...) {failed_=true;throw;}
+}
+
+std::vector<RendererPendingCamera> RendererPendingCameraQueue::entries() const {
+  if(busy_) throw std::runtime_error("Renderer pending-camera queue snapshot reentered materialization");
+  return entries_;
 }
 
 void RendererCameraRegistry::register_camera(std::uint64_t owner,float key,
@@ -108,5 +149,42 @@ std::uint64_t RendererCameraRegistry::camera_at(std::size_t index,
 std::vector<RegisteredCamera> RendererCameraRegistry::entries() const {
   if(busy_) throw std::runtime_error("Camera snapshot cannot reenter registry mutation");
   return {entries_.begin(),entries_.end()};
+}
+
+void RendererCameraRegistry::visit_retained(const std::function<void(const RegisteredCamera&)>& supplied) {
+  check_idle();
+  if(!supplied) throw std::runtime_error("Renderer retained traversal requires a visitor");
+  const auto visitor=supplied;
+  Guard guard(busy_);
+  try {
+    // Do not use camera_at here: that indexed query removes stale entries,
+    // while renderer initialization is required to leave them retained.
+    for(const auto& entry:entries_) visitor(entry);
+  } catch(...) {failed_=true;throw;}
+}
+
+void RendererRegistryReplay::initialize(RendererCameraRegistry& registry,
+                                        const RendererRegistryReplayServices& supplied) {
+  if(busy_ || failed_) throw std::runtime_error("Renderer registry replay is busy or failed");
+  if(!supplied.setup_renderer || !supplied.backend_ready_before_initialization ||
+     !supplied.initialize_backend || !supplied.state_zero || !supplied.resolve_live_camera || !supplied.admit_camera)
+    throw std::runtime_error("Renderer registry replay requires explicit initialization services");
+  const auto services=supplied;
+  Guard guard(busy_);
+  try {
+    if(!services.setup_renderer()) throw std::runtime_error("Renderer setup did not complete");
+    if(services.backend_ready_before_initialization()) return;
+    if(!services.initialize_backend()) throw std::runtime_error("Renderer backend initialization did not complete");
+    // An existing zero state suppresses this one initialization replay.  A
+    // later ready-bit change is not an authorization to retry it.
+    if(services.state_zero()) return;
+    registry.visit_retained([&](const RegisteredCamera& registered) {
+      const auto live=services.resolve_live_camera(registered.owner);
+      if(!live) return;
+      if(!live->camera || live->camera!=registered.owner)
+        throw std::runtime_error("Renderer replay resolved an invalid camera identity");
+      services.admit_camera(live->camera,live->priority);
+    });
+  } catch(...) {failed_=true;throw;}
 }
 } // namespace off::graphics

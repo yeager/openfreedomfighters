@@ -13,6 +13,9 @@ using off::graphics::RendererCameraViewAdmission;
 using off::graphics::RendererCameraViewAdmissionServices;
 using off::graphics::RendererViewRectangle;
 using off::graphics::RendererViewState;
+using off::graphics::RendererPendingCameraQueue;
+using off::graphics::RendererRegistryReplay;
+using off::graphics::RendererRegistryReplayServices;
 void check(bool condition,const char* message) {if(!condition) throw std::runtime_error(message);}
 template<class F> void rejects(F operation) {
   bool rejected=false;try{operation();}catch(const std::runtime_error&){rejected=true;}
@@ -41,6 +44,7 @@ struct ViewHarness {
   RendererCameraViewAdmission admission;
   std::vector<std::string> effects;
   bool has_backend{}, backend_ready{}, ready{};
+  std::size_t pending{}, views{};
   std::optional<RendererViewState> state;
   std::int32_t width{1280}, height{720};
   RendererCameraViewAdmissionServices services() {
@@ -56,7 +60,9 @@ struct ViewHarness {
         state={7}; return *state;
       },
       [&](RendererViewState){ effects.push_back("state-ready"); return ready; },
-      [&](RendererViewState value,std::uint64_t camera) { effects.push_back("pending:"+std::to_string(value.value)+":"+std::to_string(camera)); },
+      [&](RendererViewState) { return pending; },
+      [&](RendererViewState value,std::uint64_t camera,std::int32_t priority) { effects.push_back("pending:"+std::to_string(value.value)+":"+std::to_string(camera)+":"+std::to_string(priority)); },
+      [&](RendererViewState) { return views; },
       [&](RendererViewState value,std::uint64_t camera) { effects.push_back("allocate:"+std::to_string(value.value)+":"+std::to_string(camera)); return std::uint64_t{12}; },
       [&](std::uint64_t view,std::uint64_t camera) { effects.push_back("associate:"+std::to_string(view)+":"+std::to_string(camera)); },
       [&](std::uint64_t view) { effects.push_back("backend-records:"+std::to_string(view)); },
@@ -82,16 +88,77 @@ int main() {
     check(h.at(99)==0,"out of range index has no owner");
   }
   {
+    RendererPendingCameraQueue pending;
+    pending.append({7},9,42);pending.append({7},10,-2);
+    std::vector<std::string> effects;
+    pending.materialize({7},{
+      [&](RendererViewState state) { effects.push_back("initialize:"+std::to_string(state.value)); return true; },
+      [&](std::uint64_t camera,std::int32_t priority) { effects.push_back("admit:"+std::to_string(camera)+":"+std::to_string(priority)); }});
+    check(effects==std::vector<std::string>{"initialize:7","admit:9:42","admit:10:-2"} && pending.entries().empty(),
+          "pending materialization initializes then preserves stored admission order before clearing");
+    RendererPendingCameraQueue failed;failed.append({8},1,0);failed.append({8},2,0);
+    rejects([&]{failed.materialize({8},{[](RendererViewState){return true;},[&](std::uint64_t camera,std::int32_t){if(camera==2) throw std::runtime_error("fail");}});});
+    check(failed.failed() && failed.entries()==std::vector<off::graphics::RendererPendingCamera>{{1,0},{2,0}},
+          "failed materialization retains all pending entries instead of clearing a prefix");
+    RendererPendingCameraQueue cap;for(std::uint64_t camera=1;camera<=16;++camera) cap.append({9},camera,0);
+    rejects([&]{cap.append({9},17,0);});check(cap.failed() && cap.entries().size()==16,"pending cap keeps its bounded prefix and becomes incomplete");
+  }
+  {
+    ViewHarness h;h.has_backend=true;h.backend_ready=true;h.state={7};
+    RendererPendingCameraQueue pending;auto services=h.services();
+    services.pending_count=[&](RendererViewState){return pending.entries().size();};
+    services.queue_pending=[&](RendererViewState state,std::uint64_t camera,std::int32_t priority){pending.append(state,camera,priority);};
+    h.admission.admit(9,-42,services);
+    check(pending.entries()==std::vector<off::graphics::RendererPendingCamera>{{9,-42}},"non-ready admission preserves priority for later state materialization");
+    h.ready=true;pending.materialize({7},{[](RendererViewState){return true;},[&](std::uint64_t camera,std::int32_t priority){h.admission.admit(camera,priority,services);}});
+    check(pending.entries().empty() && h.effects.back()=="renumber:7","pending queue composes with the normal ready admission instead of synthesizing a view");
+  }
+  {
+    Harness h;h.add(1);h.add(2);h.add(3);h.live.erase(2);
+    RendererRegistryReplay replay;std::vector<std::string> effects;
+    RendererRegistryReplayServices services{
+      [&]{effects.push_back("setup");return true;},
+      [&]{effects.push_back("initial-ready");return false;},
+      [&]{effects.push_back("initialize");return true;},
+      [&]{effects.push_back("state");return std::optional<RendererViewState>{};},
+      [&](std::uint64_t owner)->std::optional<off::graphics::RendererRegistryReplayCamera>{
+        effects.push_back("resolve:"+std::to_string(owner));
+        if(!h.live.contains(owner)) return std::nullopt;
+        return off::graphics::RendererRegistryReplayCamera{owner,static_cast<std::int32_t>(owner*10)};},
+      [&](std::uint64_t camera,std::int32_t priority){effects.push_back("admit:"+std::to_string(camera)+":"+std::to_string(priority));}};
+    replay.initialize(h.registry,services);
+    check(effects==std::vector<std::string>{"setup","initial-ready","initialize","state","resolve:3","admit:3:30","resolve:2","resolve:1","admit:1:10"} &&
+          owners(h.registry)==std::vector<std::uint64_t>{3,2,1},"initially-unready replay visits retained registry order without pruning stale cameras");
+    RendererRegistryReplay existing;effects.clear();auto existing_services=services;
+    existing_services.state_zero=[&]{effects.push_back("state");return std::optional<RendererViewState>{{7}};};
+    existing.initialize(h.registry,existing_services);
+    check(effects==std::vector<std::string>{"setup","initial-ready","initialize","state"},"existing state suppresses registry replay");
+    RendererRegistryReplay ready;effects.clear();auto ready_services=services;
+    ready_services.backend_ready_before_initialization=[&]{effects.push_back("initial-ready");return true;};
+    ready.initialize(h.registry,ready_services);
+    check(effects==std::vector<std::string>{"setup","initial-ready"},"initially-ready branch neither initializes nor traverses");
+    RendererRegistryReplay bad;auto bad_services=services;bad_services.setup_renderer=[] {return false;};
+    rejects([&]{bad.initialize(h.registry,bad_services);});check(bad.failed(),"failed replay setup remains explicit incomplete state");
+  }
+  {
+    ViewHarness h;h.has_backend=true;h.backend_ready=true;h.state={8};h.ready=false;h.pending=16;
+    rejects([&]{h.admission.admit(1,0,h.services());});check(h.admission.failed() && h.effects==std::vector<std::string>{"backend","ready","state","state-ready"},
+          "non-ready state rejects pending overflow before host queue mutation");
+    ViewHarness views;views.has_backend=true;views.backend_ready=true;views.state={8};views.ready=true;views.views=16;
+    rejects([&]{views.admission.admit(1,0,views.services());});check(views.admission.failed() && views.effects==std::vector<std::string>{"backend","ready","state","state-ready"},
+          "ready state rejects view overflow before allocation");
+  }
+  {
     ViewHarness h;
     h.admission.admit(9,42,h.services());
     check(h.effects==std::vector<std::string>{"backend"},"absent backend has no state or pending effect");
     h.has_backend=true; h.effects.clear(); h.admission.admit(9,42,h.services());
     check(h.effects==std::vector<std::string>{"backend","ready"},"unready backend has no state or pending effect");
     h.backend_ready=true; h.effects.clear(); h.admission.admit(9,42,h.services());
-    check(h.effects==std::vector<std::string>{"backend","ready","state","width","height","create:0,0,1280,720","state-ready","pending:7:9"},
+    check(h.effects==std::vector<std::string>{"backend","ready","state","width","height","create:0,0,1280,720","state-ready","pending:7:9:42"},
           "new non-ready state creates a full rectangle then queues without allocating");
     h.effects.clear(); h.admission.admit(9,42,h.services());
-    check(h.effects==std::vector<std::string>{"backend","ready","state","state-ready","pending:7:9"},
+    check(h.effects==std::vector<std::string>{"backend","ready","state","state-ready","pending:7:9:42"},
           "non-ready admission preserves pending insertion order without deduplication");
     h.ready=true; h.effects.clear(); h.admission.admit(10,-42,h.services());
     check(h.effects==std::vector<std::string>{"backend","ready","state","state-ready","allocate:7:10","associate:12:10","backend-records:12","insert:12:42","use:12","renumber:7"},
