@@ -10,7 +10,8 @@ Every push to `main`, pull request targeting `main`, and manual dispatch runs:
 
 - a tracked-file extension audit plus full-history and working-tree Gitleaks scans using a checksum-pinned CLI;
 - CMake/Ninja builds with SDL3, zlib, and Xiph Vorbis dependencies, followed by CTest on Ubuntu 24.04 and macOS 14;
-- a CMake/MSVC build and CTest on Windows Server 2022 using source-built or checksum-pinned native dependencies;
+- an explicitly x64 CMake/MSVC build and CTest on Windows Server 2022 using
+  source-built, pinned zlib, FreeType, libogg, and libvorbis dependencies;
 - Python analysis-tool tests and ASan/UBSan tests on Linux.
 - checksum-pinned DXC compilation and validation of the project-owned picture
   shader's generated HLSL, with a generated-header artifact and mandatory exact

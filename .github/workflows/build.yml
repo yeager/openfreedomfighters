@@ -133,7 +133,7 @@ jobs:
       - name: Build
         shell: pwsh
         run: |
-          cmake -S . -B build -DCMAKE_PREFIX_PATH="${{ github.workspace }}/zlib-install;${{ github.workspace }}/freetype-install;${{ github.workspace }}/ogg-install;${{ github.workspace }}/vorbis-install"
+          cmake -S . -B build -A x64 -DCMAKE_PREFIX_PATH="${{ github.workspace }}/zlib-install;${{ github.workspace }}/freetype-install;${{ github.workspace }}/ogg-install;${{ github.workspace }}/vorbis-install"
           cmake --build build --config Release --parallel 2
       - name: Test
         shell: pwsh
