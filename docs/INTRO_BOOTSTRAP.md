@@ -601,6 +601,13 @@ engine, renderer and device admission for traversal. Ordinary startup proves
 only the opportunity to execute this order. The one-shot renderer-init replay
 for an initially unready state must not be generalized into a readiness policy.
 
+`FirstCutViewAdmissionGate` now preserves this distinction as a non-rendering,
+one-shot boundary. It accepts only a completed startup activation, the current
+event-16 result `activated`, the selected zero-route camera, visible same-update
+mutation, and a matching enabled live camera owner. Its result distinguishes an
+absent or unready backend, a queued pending state, and a fully admitted view.
+It does not invoke picture activation, frame traversal, GPU drawing, or present.
+
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
 copied controller payloads. Runtime acceptance additionally requires an actual

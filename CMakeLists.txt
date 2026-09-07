@@ -121,6 +121,7 @@ add_library(off_core
     src/graphics/picture_draw_reset.cpp
     src/graphics/renderer_frame.cpp
     src/graphics/renderer_camera_registry.cpp
+    src/graphics/first_cut_view_admission_gate.cpp
     src/graphics/intro_camera_state.cpp
     src/graphics/fresh_intro_camera.cpp
     src/graphics/preview_camera_update.cpp
@@ -275,6 +276,10 @@ if(BUILD_TESTING)
     add_executable(off_renderer_camera_registry_tests tests/renderer_camera_registry_tests.cpp)
     target_link_libraries(off_renderer_camera_registry_tests PRIVATE off_core)
     add_test(NAME off_renderer_camera_registry_tests COMMAND off_renderer_camera_registry_tests)
+
+    add_executable(off_first_cut_view_admission_gate_tests tests/first_cut_view_admission_gate_tests.cpp)
+    target_link_libraries(off_first_cut_view_admission_gate_tests PRIVATE off_core)
+    add_test(NAME off_first_cut_view_admission_gate_tests COMMAND off_first_cut_view_admission_gate_tests)
     add_executable(off_intro_audio_stream_tests tests/intro_audio_stream_tests.cpp)
     target_link_libraries(off_intro_audio_stream_tests PRIVATE off_core Vorbis::vorbisenc)
     add_test(NAME off_intro_audio_stream_tests COMMAND off_intro_audio_stream_tests)

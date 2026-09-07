@@ -15,7 +15,7 @@ void RendererCameraRegistry::check_idle() const {
   if(busy_ || failed_) throw std::runtime_error("Renderer camera registry is busy or failed");
 }
 
-void RendererCameraViewAdmission::admit(
+RendererCameraViewAdmissionResult RendererCameraViewAdmission::admit(
     std::uint64_t camera, std::int32_t camera_priority,
     const RendererCameraViewAdmissionServices& supplied) {
   if (busy_ || failed_) throw std::runtime_error("Renderer camera view admission is busy or failed");
@@ -26,7 +26,10 @@ void RendererCameraViewAdmission::admit(
   try {
     // Registry membership is retained even when no renderer backend is live.
     // In that case the distinct backend initialization route owns any replay.
-    if (!services.renderer_has_backend() || !services.renderer_backend_ready()) return;
+    if (!services.renderer_has_backend())
+      return RendererCameraViewAdmissionResult::backend_absent;
+    if (!services.renderer_backend_ready())
+      return RendererCameraViewAdmissionResult::backend_not_ready;
     if (!services.state_zero)
       throw std::runtime_error("Ready renderer backend requires state-zero lookup");
     auto state = services.state_zero();
@@ -45,7 +48,7 @@ void RendererCameraViewAdmission::admit(
       if (services.pending_count(*state)>=RendererPendingCameraQueue::capacity)
         throw std::runtime_error("Renderer pending-camera capacity is exhausted");
       services.queue_pending(*state,camera,camera_priority);
-      return;
+      return RendererCameraViewAdmissionResult::pending_queued;
     }
     if (!services.admitted_view_count || !services.allocate_view || !services.associate_camera_intermediate ||
         !services.register_backend_records || !services.insert_view ||
@@ -61,6 +64,7 @@ void RendererCameraViewAdmission::admit(
     services.insert_view(view,-static_cast<std::int64_t>(camera_priority));
     services.increment_view_use(view);
     services.renumber_view_ordinals(*state);
+    return RendererCameraViewAdmissionResult::view_admitted;
   } catch (...) {
     failed_ = true;
     throw;

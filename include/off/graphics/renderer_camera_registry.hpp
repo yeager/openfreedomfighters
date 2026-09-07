@@ -46,14 +46,25 @@ struct RendererCameraViewAdmissionServices {
   std::function<void(RendererViewState)> renumber_view_ordinals;
 };
 
+// The caller needs this distinction to preserve the recovered first-cut
+// ordering: an unavailable backend is not a queued camera, and a queued
+// camera is not a view that can already be traversed.
+enum class RendererCameraViewAdmissionResult {
+  backend_absent,
+  backend_not_ready,
+  pending_queued,
+  view_admitted,
+};
+
 // An explicit post-loader admission service.  A backend that is absent or not
 // ready deliberately has no state/pending/view side effect.  Once backend
 // admission begins, a missing concrete state or allocation service is a
 // failure, never a placeholder state or successful present.
 class RendererCameraViewAdmission final {
 public:
-  void admit(std::uint64_t camera, std::int32_t camera_priority,
-             const RendererCameraViewAdmissionServices& services);
+  RendererCameraViewAdmissionResult admit(
+      std::uint64_t camera, std::int32_t camera_priority,
+      const RendererCameraViewAdmissionServices& services);
   [[nodiscard]] bool failed() const noexcept { return failed_; }
 private:
   bool busy_{}, failed_{};
