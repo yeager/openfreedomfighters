@@ -105,6 +105,81 @@ int main() {
     mutation.services.input_manager_exists=[&] { mutation.services.clear={}; return false; };
     mutation.controller.run_phase_two(mutation.services);
     check(mutation.controller.phase_two_completed(),"service callable snapshot survives caller table mutation");
+    {
+      MovieControlFirstUpdate movie{17,91,2048};
+      std::vector<std::string> events;
+      std::int32_t clock=100;
+      MovieControlPhaseTwoServices phase_two{
+        [&]{events.push_back("input?");return true;},
+        [&]{events.push_back("map");},
+        [&](bool value){check(value,"phase two assigns clock mode");events.push_back("mode");},
+        [&]{events.push_back("audio");},
+        [&]{events.push_back("clock");return clock;},
+        [&]{events.push_back("renderer");}};
+      movie.run_phase_two(phase_two);
+      check(events==std::vector<std::string>{"input?","map","mode","audio","clock","renderer"} &&
+            movie.deadline()==2148 && movie.deadline_assigned() && movie.phase_two_callback_returned() &&
+            !movie.activated(),"MovieControl phase two uses ordered live boundaries without activation");
+      MovieControlEvent16Services event16{
+        [&]{events.push_back("live");return true;},
+        [&]{events.push_back("enrolled");return true;},
+        [&]{events.push_back("paused");return false;},
+        [&]{events.push_back("filter");return std::optional<std::uint64_t>{};},
+        [&]{events.push_back("phase1");return true;},
+        [&]{events.push_back("updateclock");return clock;},
+        [&]{events.push_back("prepare");},
+        [&](std::uint64_t caller){check(caller==91,"cut start retains real owner caller");events.push_back("start");},
+        [&](std::uint64_t caller){check(caller==91,"group requests retain real owner caller");events.push_back("groups");}};
+      events.clear(); clock=2148;
+      check(movie.dispatch_event16(event16)==MovieControlEvent16Result::waiting_for_deadline &&
+            events==std::vector<std::string>{"live","enrolled","paused","filter","phase1","updateclock"} &&
+            !movie.activated(),"MovieControl deadline equality does not prepare or activate");
+      events.clear(); clock=2149;
+      check(movie.dispatch_event16(event16)==MovieControlEvent16Result::activated &&
+            events==std::vector<std::string>{"live","enrolled","paused","filter","phase1","updateclock","prepare","start","groups"} &&
+            movie.activated() && movie.playback_baseline()==2149,
+            "strictly expired deadline prepares before synchronous cut delivery");
+      events.clear();
+      check(movie.dispatch_event16(event16)==MovieControlEvent16Result::already_active &&
+            events==std::vector<std::string>{"live","enrolled","paused","filter","phase1"},
+            "active callback does not replay cut delivery");
+    }
+    {
+      MovieControlFirstUpdate movie{17,91,1};
+      std::vector<std::string> events;
+      MovieControlEvent16Services gates{
+        [&]{events.push_back("live");return true;},
+        [&]{events.push_back("enrolled");return true;},
+        [&]{events.push_back("paused");return true;},
+        [&]{events.push_back("filter");return std::optional<std::uint64_t>{99};},
+        [&]{events.push_back("phase1");return false;},{},{},{},{}};
+      check(movie.dispatch_event16(gates)==MovieControlEvent16Result::skipped_paused &&
+            events==std::vector<std::string>{"live","enrolled","paused"},
+            "paused MovieControl never performs deferred catch-up");
+      gates.paused=[] {return false;}; events.clear();
+      check(movie.dispatch_event16(gates)==MovieControlEvent16Result::skipped_filtered &&
+            events==std::vector<std::string>{"live","enrolled","filter"},
+            "captured nonmatching filter skips MovieControl");
+      gates.captured_component_filter=[] {return std::optional<std::uint64_t>{};}; events.clear();
+      check(movie.dispatch_event16(gates)==MovieControlEvent16Result::phase_one_incomplete &&
+            events==std::vector<std::string>{"live","enrolled","phase1"},
+            "event16 requires phase one but does not synthesize phase two");
+      MovieControlPhaseTwoServices missing{};
+      rejects([&]{movie.run_phase_two(missing);});
+      check(!movie.failed()&&!movie.deadline_assigned(),"missing MovieControl phase-two service rejects before effects");
+      MovieControlFirstUpdate failure{17,91,1};
+      MovieControlPhaseTwoServices fail_phase{[]{return false;},[]{},[](bool){},[]{},[]{return 7;},[]{throw std::runtime_error("renderer missing");}};
+      rejects([&]{failure.run_phase_two(fail_phase);});
+      check(failure.deadline_assigned()&&!failure.phase_two_callback_returned()&&failure.failed(),
+            "phase-two renderer failure retains deadline but no successful callback");
+      MovieControlFirstUpdate prefix_failure{17,91,1};
+      MovieControlPhaseTwoServices ready{[]{return false;},[]{},[](bool){},[]{},[]{return 7;},[]{}};
+      prefix_failure.run_phase_two(ready);
+      MovieControlEvent16Services activation{[]{return true;},[]{return true;},[]{return false;},[]{return std::optional<std::uint64_t>{};},
+        []{return true;},[]{return 9;},[]{throw std::runtime_error("sequence unavailable");},[](auto){},[](auto){}};
+      rejects([&]{static_cast<void>(prefix_failure.dispatch_event16(activation));});
+      check(!prefix_failure.activated()&&prefix_failure.failed(),"failed preparation cannot fabricate MovieControl activation");
+    }
     std::cout<<"Controller phase-two ordering, properties, deadline and presentation boundaries verified.\n";
     return 0;
   } catch(const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }

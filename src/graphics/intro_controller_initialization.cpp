@@ -1,4 +1,5 @@
 #include "off/graphics/intro_controller_initialization.hpp"
+#include <bit>
 #include <stdexcept>
 
 namespace off::graphics {
@@ -54,5 +55,80 @@ void IntroControllerInitialization::run_phase_two(const IntroControllerPhaseTwoS
     }
     completed_=true; running_=false;
   } catch(...) { running_=false; failed_=true; throw; }
+}
+
+namespace {
+[[nodiscard]] std::int32_t wrapping_clock_add(std::int32_t left,std::int32_t right) noexcept {
+  return std::bit_cast<std::int32_t>(static_cast<std::uint32_t>(left)+static_cast<std::uint32_t>(right));
+}
+}
+
+MovieControlFirstUpdate::MovieControlFirstUpdate(std::uint64_t component_handle,
+    std::uint64_t owner_handle,std::int32_t delay)
+  :component_handle_(component_handle),owner_handle_(owner_handle),delay_(delay) {
+  if(!component_handle_ || !owner_handle_)
+    throw std::runtime_error("MovieControl requires live component and owner handles");
+}
+
+void MovieControlFirstUpdate::run_phase_two(const MovieControlPhaseTwoServices& supplied) {
+  if(phase_two_running_ || event_running_ || failed_)
+    throw std::runtime_error("MovieControl phase two is reentrant or previously failed");
+  const auto services=supplied;
+  if(!services.input_manager_exists || !services.register_action_map ||
+      !services.assign_engine_clock_mode || !services.setup_audio_volume ||
+      !services.scene_integer_clock || !services.setup_and_clear_first_renderer)
+    throw std::runtime_error("MovieControl phase two requires every named service");
+  phase_two_running_=true;
+  phase_two_returned_=false;
+  try {
+    if(services.input_manager_exists()) services.register_action_map();
+    services.assign_engine_clock_mode(true);
+    services.setup_audio_volume();
+    deadline_=wrapping_clock_add(services.scene_integer_clock(),delay_);
+    deadline_assigned_=true;
+    services.setup_and_clear_first_renderer();
+    phase_two_returned_=true;
+    phase_two_running_=false;
+  } catch(...) {
+    phase_two_running_=false;
+    failed_=true;
+    throw;
+  }
+}
+
+MovieControlEvent16Result MovieControlFirstUpdate::dispatch_event16(
+    const MovieControlEvent16Services& supplied) {
+  if(phase_two_running_ || event_running_ || failed_)
+    throw std::runtime_error("MovieControl event16 is reentrant or previously failed");
+  const auto services=supplied;
+  if(!services.component_is_live || !services.event16_enrolled || !services.paused ||
+      !services.captured_component_filter || !services.phase_one_completed)
+    throw std::runtime_error("MovieControl event16 requires manager admission services");
+  if(!services.component_is_live()) return MovieControlEvent16Result::skipped_not_live;
+  if(!services.event16_enrolled()) return MovieControlEvent16Result::skipped_not_enrolled;
+  if(services.paused()) return MovieControlEvent16Result::skipped_paused;
+  if(const auto filter=services.captured_component_filter();filter && *filter!=component_handle_)
+    return MovieControlEvent16Result::skipped_filtered;
+  if(!services.phase_one_completed()) return MovieControlEvent16Result::phase_one_incomplete;
+  if(activated_) return MovieControlEvent16Result::already_active;
+  if(!deadline_assigned_ || !services.scene_integer_clock || !services.prepare_sequence_resources ||
+      !services.send_cut_sequence_start || !services.send_group_state_requests)
+    throw std::runtime_error("MovieControl admitted event16 requires deadline and direct services");
+  event_running_=true;
+  try {
+    const auto now=services.scene_integer_clock();
+    if(now<=deadline_) {event_running_=false;return MovieControlEvent16Result::waiting_for_deadline;}
+    services.prepare_sequence_resources();
+    activated_=true;
+    playback_baseline_=now;
+    services.send_cut_sequence_start(owner_handle_);
+    services.send_group_state_requests(owner_handle_);
+    event_running_=false;
+    return MovieControlEvent16Result::activated;
+  } catch(...) {
+    event_running_=false;
+    failed_=true;
+    throw;
+  }
 }
 } // namespace off::graphics
