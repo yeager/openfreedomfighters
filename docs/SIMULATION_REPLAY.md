@@ -36,6 +36,23 @@ The grammar requires consecutive input/checkpoint ticks, command ordinals
 starting at one without gaps, nondecreasing command boundaries, and command
 boundaries from the initial tick through the tick before the final input.
 Each command must contain only the payload for its declared kind. This makes
-the in-memory representation canonical before a binary envelope exists.
+the in-memory representation canonical before it crosses a file boundary.
 
-Binary replay envelopes and command-stream serialization remain separate work.
+## Binary envelope
+
+`serialize_replay` and `deserialize_replay` use the project-authored `OFRP`
+envelope, schema version 1. All scalar fields are explicit little-endian
+integers; no C++ object layout, pointer, host endianness, or retail file format
+is involved. The envelope contains a bounded portable world snapshot, followed
+by fixed-size input, command, and checkpoint records, and a trailing SHA-256
+digest over every preceding byte.
+
+The reader validates the magic, schema version, digest, declared counts,
+reserved bytes, exact end of input, configured size limits, the imported
+snapshot, input action bits, and the complete replay grammar before it returns
+a replay. It rejects truncated or appended data before playback. The digest is
+an accidental-corruption detector, not an authenticity or trust boundary.
+
+The format is deliberately only for OpenFreedomFighters deterministic
+simulation testing and future project tooling. It is not compatible with retail
+recordings, save files, scripts, resources, paths, or presentation state.

@@ -66,6 +66,7 @@
 - [Audio mixing and positional runtime specification](AUDIO_RUNTIME.md)
 - [Deterministic simulation runtime](SIMULATION_RUNTIME.md)
 - [Gameplay simulation execution specification](GAMEPLAY_SIMULATION.md)
+- [Simulation replay boundary and binary envelope](SIMULATION_REPLAY.md)
 - [Owning scene render asset](SCENE_RENDER_ASSET.md)
 - [Architecture](ARCHITECTURE.md)
 - [Modern graphics specification](MODERN_GRAPHICS.md)

@@ -70,6 +70,45 @@ int main() {
     play_replay_atomically(replay_target, replay);
     check(replay_target.state_hash() == replay_world.state_hash(),
           "atomic replay applies accepted commands before its recorded input step");
+
+    const auto envelope = serialize_replay(replay);
+    const auto decoded = deserialize_replay(envelope);
+    check(decoded.initial_snapshot == replay.initial_snapshot && decoded.inputs == replay.inputs &&
+              decoded.commands.size() == replay.commands.size() &&
+              decoded.commands[0].kind == replay.commands[0].kind &&
+              decoded.commands[0].spawn.position == replay.commands[0].spawn.position &&
+              decoded.commands[0].accepted_identifier == replay.commands[0].accepted_identifier &&
+              decoded.checkpoints.size() == replay.checkpoints.size() &&
+              decoded.checkpoints[0].state_hash == replay.checkpoints[0].state_hash &&
+              serialize_replay(decoded) == envelope,
+          "versioned replay envelope round-trips canonical project replay data");
+    SimulationWorld decoded_target;
+    play_replay_atomically(decoded_target, decoded);
+    check(decoded_target.state_hash() == replay_world.state_hash(),
+          "decoded replay remains eligible for atomic deterministic playback");
+    const auto rejects_envelope = [](std::span<const std::byte> bytes) {
+      try { static_cast<void>(deserialize_replay(bytes)); } catch (const std::runtime_error &) { return true; }
+      return false;
+    };
+    bool every_truncation_rejected = true;
+    for (std::size_t length = 0; length < envelope.size(); ++length) {
+      every_truncation_rejected = every_truncation_rejected && rejects_envelope({envelope.data(), length});
+    }
+    check(every_truncation_rejected, "replay envelope rejects every truncated prefix");
+    auto corrupted_envelope = envelope;
+    corrupted_envelope[12] ^= std::byte{1};
+    check(rejects_envelope(corrupted_envelope),
+          "replay envelope rejects payload changes protected by SHA-256");
+    auto unsupported_version = envelope;
+    unsupported_version[4] = std::byte{2};
+    off::crypto::Sha256 version_hasher;
+    version_hasher.update({unsupported_version.data(), unsupported_version.size() - 32});
+    const auto version_digest = version_hasher.finish();
+    for (std::size_t index = 0; index < version_digest.size(); ++index) {
+      unsupported_version[unsupported_version.size() - version_digest.size() + index] = static_cast<std::byte>(version_digest[index]);
+    }
+    check(rejects_envelope(unsupported_version),
+          "replay envelope rejects an integrity-valid unsupported schema version");
     SimulationWorld unchanged_target;
     static_cast<void>(unchanged_target.queue_spawn({{9, 9, 9}, 9}));
     static_cast<void>(unchanged_target.step(input(1)));
