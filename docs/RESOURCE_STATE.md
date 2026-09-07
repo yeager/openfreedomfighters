@@ -362,6 +362,12 @@ follows from that relocation pass. A verified producer from relocated payload
 to the container's runtime entries is still required before this boundary can
 participate in intro playback.
 
+The reviewed ordinary tail association is likewise a live list-relation setup
+with internal member containers, not a renderer association. It must be
+implemented as its own typed runtime relationship when its complete receiver
+and member contract is recovered; it cannot be used to claim renderer
+readiness or replace the missing runtime-entry producer.
+
 Tests use independently constructed states to check ancestor propagation,
 maintenance gates, picture views and subsequent DefaultCam hide inheritance.
 They do not establish the retail root's post-load flags. The explicit `root_ready`
