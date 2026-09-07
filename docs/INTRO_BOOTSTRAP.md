@@ -656,6 +656,9 @@ traversal and frame end while still reaching completion and the counter update.
 The separately recovered clear/present startup wrapper belongs to MovieControl
 phase two and is not joined to the ordinary renderer frame. Normal first-cut
 presentation and loss handling therefore remain an explicit outer-frame service.
+The recovered Present/loss/reset owner has no known ordinary first-cut caller;
+its only recovered startup caller is that separate phase-two wrapper. It must
+remain disconnected until a concrete outer caller proves the join.
 
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
