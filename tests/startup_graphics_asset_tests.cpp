@@ -4,6 +4,7 @@
 #include "off/graphics/picture_material_state.hpp"
 #include "off/graphics/picture_submission_cache.hpp"
 #include "off/graphics/startup_graphics_expanded_plan.hpp"
+#include "off/graphics/startup_source_picture_draw_admission.hpp"
 
 #include <bit>
 #include <algorithm>
@@ -30,6 +31,7 @@ constexpr std::size_t index_bytes = 2048 * sizeof(std::uint32_t);
 static_assert(!std::is_default_constructible_v<off::graphics::StartupGraphicsAsset>);
 static_assert(
     !std::is_default_constructible_v<off::graphics::StartupGraphicsPreparedPlan>);
+static_assert(!std::is_copy_constructible_v<off::graphics::StartupSourcePictureDrawAdmission>);
 template <typename T>
 concept HasPixels = requires(T value) { value.pixels; };
 template <typename T>
@@ -360,6 +362,121 @@ int main(int argc, char **argv) {
     std::reverse(transforms.begin(), transforms.end());
     return transforms;
   };
+  {
+    // Test-only live hierarchy snapshot: it has the recovered container-first
+    // / leaf-last partition and uses the prepared source plan only as its
+    // independently checked expected picture sequence.
+    std::vector<off::graphics::StartupLiveWindowNode> nodes;
+    nodes.reserve(36);
+    nodes.push_back({.identity = 1,
+                     .kind = off::graphics::StartupLiveWindowKind::container,
+                     .linked = true,
+                     .candidate_eligible = true,
+                     .has_render_component = true,
+                     .first_child = 1006});
+    std::vector<off::graphics::StartupPictureOwnerView> owner_views;
+    std::uint64_t next_group = 2000;
+    for (std::size_t row = 7; row-- > 0;) {
+      const auto row_identity = 1000 + row;
+      const auto next_row = row == 0 ? std::optional<std::uint64_t>{} :
+          std::optional<std::uint64_t>{row_identity - 1};
+      const auto group_identity = next_group++;
+      nodes.push_back({.identity = row_identity,
+                       .kind = off::graphics::StartupLiveWindowKind::container,
+                       .source_sibling_ordinal = row,
+                       .linked = true,
+                       .candidate_eligible = true,
+                       .has_render_component = true,
+                       .first_child = group_identity,
+                       .next_sibling = next_row});
+      std::vector<const off::graphics::StartupGraphicsPreparedPicture*> chrome;
+      const off::graphics::StartupGraphicsPreparedPicture* background = nullptr;
+      for (const auto &picture : prepared.pictures()) {
+        if (picture.row_index != row) continue;
+        if (picture.role == off::data::StartupGraphicsCompositionRole::row_background)
+          background = &picture;
+        else chrome.push_back(&picture);
+      }
+      check(background != nullptr && chrome.size() == 2,
+            "synthetic live snapshot retains each visible source row's three pictures");
+      const auto first_chrome = 3000 + row * 3;
+      nodes.push_back({.identity = group_identity,
+                       .kind = off::graphics::StartupLiveWindowKind::container,
+                       .source_sibling_ordinal = 0,
+                       .linked = true,
+                       .candidate_eligible = true,
+                       .has_render_component = true,
+                       .first_child = first_chrome,
+                       .next_sibling = 3000 + row * 3 + 2});
+      for (std::size_t index = 0; index < chrome.size(); ++index) {
+        const auto *picture = chrome[index];
+        const auto identity = first_chrome + index;
+        nodes.push_back({.identity = identity,
+                         .picture_directory_index = picture->picture_directory_index,
+                         .kind = off::graphics::StartupLiveWindowKind::leaf,
+                         .source_sibling_ordinal = index,
+                         .linked = true,
+                         .candidate_eligible = true,
+                         .has_render_component = true,
+                         .next_sibling = index + 1 == chrome.size()
+                             ? std::optional<std::uint64_t>{}
+                             : std::optional<std::uint64_t>{identity + 1}});
+        owner_views.push_back({picture->picture_directory_index, identity, 4000 + row});
+      }
+      const auto background_identity = 3000 + row * 3 + 2;
+      nodes.push_back({.identity = background_identity,
+                       .picture_directory_index = background->picture_directory_index,
+                       .kind = off::graphics::StartupLiveWindowKind::leaf,
+                       .source_sibling_ordinal = 1,
+                       .linked = true,
+                       .candidate_eligible = true,
+                       .has_render_component = true});
+      owner_views.push_back(
+          {background->picture_directory_index, background_identity, 4000 + row});
+    }
+    const off::graphics::StartupSourcePictureTraversalSnapshot snapshot{
+        .root_identity = 1, .pass_context_identity = 9, .pass_value = 11,
+        .nodes = nodes, .owner_views = owner_views};
+    std::vector<std::string> trace;
+    const off::graphics::StartupSourcePictureBackendHooks hooks{
+        [&] { trace.push_back("device"); return true; },
+        [&] { trace.push_back("state"); return true; },
+        [&](const auto &, const auto &, auto pass) {
+          trace.push_back("record:" + std::to_string(pass)); return true;
+        },
+        [&] { trace.push_back("preselect"); return true; },
+        [&](auto, auto) { trace.push_back("texture"); return true; },
+        [&](std::span<const off::graphics::StartupGraphicsExpandedSubmission> draws) {
+          trace.push_back("ordered:" + std::to_string(draws.size())); return true;
+        },
+        [&](const auto &, const auto &, auto pass) {
+          trace.push_back("submit:" + std::to_string(pass)); return true; }};
+    off::graphics::StartupSourcePictureDrawAdmission admission;
+    const auto output = admission.submit(asset, 0x01U, snapshot,
+                                         transforms_for(prepared), hooks);
+    check(output.prepared_picture_count == 21 && output.submitted_group_count == 77 &&
+              trace.size() == 1 + 1 + 21 + 1 + 6 + 1 + 77 &&
+              trace.front() == "device" && trace[1] == "state" &&
+              trace[23] == "preselect" && trace[30] == "ordered:77" &&
+              trace.back() == "submit:9",
+          "source-backed admission preserves live hierarchy, owner/view and backend stage order");
+    auto hidden_nodes = nodes;
+    for (auto &node : hidden_nodes) {
+      if (node.picture_directory_index == prepared.pictures().front().picture_directory_index) {
+        node.hide_control_bits = 0x2c00U;
+        break;
+      }
+    }
+    const off::graphics::StartupSourcePictureTraversalSnapshot hidden{
+        .root_identity = 1, .pass_context_identity = 9, .pass_value = 11,
+        .nodes = hidden_nodes, .owner_views = owner_views};
+    bool hidden_rejected = false;
+    try { static_cast<void>(admission.submit(asset, 0x01U, hidden,
+                                              transforms_for(prepared), hooks)); }
+    catch (const std::runtime_error &) { hidden_rejected = true; }
+    check(hidden_rejected,
+          "source-backed admission rejects an unproven visibility mismatch before backend calls");
+  }
   for (const auto state : {0x01U, 0x08U, 0x04U}) {
     const auto input = off::graphics::prepare_startup_graphics_plan(asset, state);
     auto transforms = transforms_for(input);
