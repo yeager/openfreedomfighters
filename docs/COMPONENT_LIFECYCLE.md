@@ -15,8 +15,10 @@ through the separate [ordinary manager](ORDINARY_COMPONENTS.md). The existing
 authored catalog is not treated as a collection of completed factories.
 
 A local run against the owned supported intro found 384 records: 383 authored
-attachments plus RootGroup. Normal startup now constructs and immediately
-initializes RootGroup; the 383 authored entries still await their factories.
+attachments plus RootGroup. Normal startup now constructs every supported
+authored attachment with its recovered cold constructor state, while RootGroup
+also receives its immediate initializer. This is not lifecycle completion:
+the authored callbacks still require their real reader and runtime services.
 
 ## Construction and ownership
 
@@ -96,6 +98,15 @@ The intro sound owners are a real dependency: their initialization reads retaine
 sound records. A missing output backend does not justify empty sound callbacks.
 Actual source binding and sound metadata must be established before that path
 can run. No readiness event is manufactured to bypass it.
+
+MovieControl now has one checked owner-reader boundary. It accepts only the
+processed deferred record for the uniquely prepared controller, retains the raw
+controller fields, and resolves the mandatory sequence/group list resources and
+their ordered members in the live source-directory domain. It neither resolves
+the remaining raw fields nor changes component status, lifecycle membership,
+events, clocks, camera state, or rendering. Normal startup does not invoke this
+single reader independently: the ordinary reader bracket remains all-or-fail
+across every queued owner record.
 
 ## Constructor-owned temporary
 
