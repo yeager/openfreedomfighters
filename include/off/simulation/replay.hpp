@@ -22,7 +22,7 @@ public:
   [[nodiscard]] bool active() const noexcept { return capture_.active(); }
   void record_completed_step(const SimulationWorld&, const InputSnapshot&);
   [[nodiscard]] SimulationReplay finish();
-  void cancel() noexcept { capture_.end(); inputs_.clear(); checkpoints_.clear(); next_tick_=0; }
+  void cancel() noexcept { capture_.end(); world_=nullptr; inputs_.clear(); checkpoints_.clear(); next_tick_=0; }
 private:
   WorldCommandCapture capture_;
   const SimulationWorld* world_{};

@@ -80,6 +80,28 @@ int main() {
     try { play_replay_atomically(unchanged_target, divergent); } catch (const std::runtime_error &) { playback_rejected = true; }
     check(playback_rejected && unchanged_target.state_hash() == target_hash,
           "late replay checkpoint divergence leaves the destination world unchanged");
+
+    const auto rejects_atomically = [&](SimulationReplay malformed) {
+      bool rejected_replay = false;
+      try { play_replay_atomically(unchanged_target, malformed); } catch (const std::runtime_error &) { rejected_replay = true; }
+      return rejected_replay && unchanged_target.state_hash() == target_hash;
+    };
+    auto noncanonical_spawn = replay;
+    noncanonical_spawn.commands[0].destroy = {2, 3};
+    check(rejects_atomically(noncanonical_spawn),
+          "replay rejects inactive command payload fields before playback");
+    auto terminal_command = replay;
+    terminal_command.commands[0].issued_after_tick = terminal_command.inputs.back().tick;
+    check(rejects_atomically(terminal_command),
+          "replay rejects commands after its final recorded step atomically");
+    auto invalid_ordinal = replay;
+    invalid_ordinal.commands[0].ordinal = 7;
+    check(rejects_atomically(invalid_ordinal),
+          "replay validates every command ordinal before playback");
+    auto unknown_command = replay;
+    unknown_command.commands[0].kind = static_cast<WorldCommandKind>(99);
+    check(rejects_atomically(unknown_command),
+          "replay rejects unknown command discriminants atomically");
   }
 
   SimulationWorld world;

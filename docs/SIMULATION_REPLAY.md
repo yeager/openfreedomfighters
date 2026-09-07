@@ -24,6 +24,18 @@ must use the separate capture-local ordinal. Playback applies every command
 whose completed tick is `N` in ordinal order before stepping the input for tick
 `N + 1`, and checks the request or event ID returned by the world.
 
-Binary replay envelopes, command-stream serialization and playback are separate
-work. They must validate all data into a temporary world and replace an active
-world only when replayed checkpoints match.
+## In-memory playback
+
+The project has an in-memory recorder and atomic playback path. Playback first
+imports the initial snapshot into an isolated world, validates the complete
+input/checkpoint and command grammar, then applies command groups and input
+steps there. It replaces the destination only when every checkpoint matches.
+Malformed streams therefore leave the destination unchanged.
+
+The grammar requires consecutive input/checkpoint ticks, command ordinals
+starting at one without gaps, nondecreasing command boundaries, and command
+boundaries from the initial tick through the tick before the final input.
+Each command must contain only the payload for its declared kind. This makes
+the in-memory representation canonical before a binary envelope exists.
+
+Binary replay envelopes and command-stream serialization remain separate work.
