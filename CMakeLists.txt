@@ -67,6 +67,7 @@ add_library(off_core
     src/audio/stereo_source_command.cpp
     src/audio/stereo_stream_playback.cpp
     src/audio/intro_audio_stream.cpp
+    src/audio/soundtrack_decode.cpp
     src/runtime/application_clock.cpp
     src/runtime/component_lifecycle.cpp
     src/runtime/live_variables.cpp
@@ -146,6 +147,7 @@ add_library(off_core
     src/ui/retail_ui_textures.cpp
 )
 target_include_directories(off_core PUBLIC include)
+target_include_directories(off_core PRIVATE third_party/dr_libs)
 target_compile_features(off_core PUBLIC cxx_std_23)
 target_link_libraries(off_core PUBLIC Vorbis::vorbisfile ZLIB::ZLIB Threads::Threads)
 set_target_properties(off_core PROPERTIES CXX_EXTENSIONS OFF)
@@ -352,6 +354,9 @@ if(BUILD_TESTING)
     add_executable(off_audio_decode_tests tests/audio_decode_tests.cpp)
     target_link_libraries(off_audio_decode_tests PRIVATE off_core Vorbis::vorbisenc)
     add_test(NAME off_audio_decode_tests COMMAND off_audio_decode_tests)
+    add_executable(off_soundtrack_decode_tests tests/soundtrack_decode_tests.cpp)
+    target_link_libraries(off_soundtrack_decode_tests PRIVATE off_core)
+    add_test(NAME off_soundtrack_decode_tests COMMAND off_soundtrack_decode_tests)
 
     add_executable(off_scene_support_tests tests/scene_support_tests.cpp)
     target_link_libraries(off_scene_support_tests PRIVATE off_core)

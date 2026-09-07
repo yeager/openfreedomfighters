@@ -19,7 +19,8 @@ executable code are included here.
 - Startup shows the project splash for three seconds. Missing or invalid game
   data produces an error dialog over it.
 - Game files are checked against a SHA-256 manifest at startup. Soundtrack files
-  are optional; music playback is not implemented yet.
+  are optional. Their MP3 and FLAC files can now be decoded safely, but cue
+  mapping and music playback are not implemented yet.
 - The first intro sequence's camera, pictures and textures load from game data.
   One retained runtime owns their hierarchy and mutable picture state; intro
   textures upload to the GPU. Indexed drawing works in explicit integration

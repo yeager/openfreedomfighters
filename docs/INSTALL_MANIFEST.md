@@ -52,9 +52,12 @@ MP3 version, otherwise the game's original music. Missing or unusable album
 tracks must never disable original music or create a startup requirement.
 
 **Current implementation:** startup exposes hash-verified soundtrack candidates
-and reports optional failures. There is no music playback, FLAC/MP3 decoder or
-verified cue mapping yet, so neither soundtrack substitution nor audible
-fallback is implemented. Hash verification is not a playback suitability test.
+and reports optional failures. A bounded standalone decoder now accepts local
+FLAC and MP3 files and produces 16-bit PCM after validating file size, channels,
+sample rate, decoded length and complete input read. It is not connected to a
+cue resolver or audio lifecycle. There is still no verified cue mapping,
+soundtrack substitution, or audible fallback. Hash verification and successful
+decode are not playback-suitability tests.
 
 Tests use independent fixtures for missing/partial/corrupt optional files,
 same-size edits with unchanged timestamps, collisions, symlinks and cancellation.

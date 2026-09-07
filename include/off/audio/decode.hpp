@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <span>
 #include <vector>
 
@@ -13,6 +14,8 @@ enum class Encoding {
     pcm_s16le,
     ima_adpcm,
     vorbis,
+    flac,
+    mp3,
 };
 
 struct DecodedAudio {
@@ -40,5 +43,11 @@ struct DecodedAudio {
     const data::AudioStreamRecord& record,
     std::span<const std::byte> encoded
 );
+
+// Decodes a standalone, user-owned soundtrack file. Only FLAC and MP3 are
+// accepted. The whole-file API is deliberately bounded; playback streaming and
+// cue selection are separate runtime work.
+[[nodiscard]] DecodedAudio
+decode_soundtrack_file(const std::filesystem::path& path);
 
 }  // namespace off::audio
