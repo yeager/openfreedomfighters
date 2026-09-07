@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
           data_path / "Scenes" / "FF-StartUp.ZIP"));
       ui_fonts = off::ui::load_retail_ui_fonts(
           data_path / "Scenes" / "FF-StartUp.ZIP");
-    });
+    }, locale);
     if (preflight.outcome ==
         off::platform::StartupPreflightOutcome::quit_requested)
       return 0;

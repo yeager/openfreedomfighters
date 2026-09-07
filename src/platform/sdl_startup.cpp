@@ -1,5 +1,6 @@
 #include "off/platform/sdl_startup.hpp"
 
+#include "off/platform/sdl_locale.hpp"
 #include "off/platform/startup_lifecycle.hpp"
 #include "off/platform/startup_preparation.hpp"
 
@@ -106,12 +107,19 @@ data_error_message(const std::filesystem::path &path,
 
 [[nodiscard]] StartupPreflightResult
 run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
-                             const std::function<void()> &prepare_assets) {
+                             const std::function<void()> &prepare_assets,
+                             std::string_view explicit_locale) {
   if (!SDL_Init(SDL_INIT_VIDEO))
     return {.outcome = StartupPreflightOutcome::platform_error,
             .message =
                 "SDL initialization failed: " + std::string{SDL_GetError()}};
   SdlSession session;
+  // Capture the platform preference once for this launch. The explicit value
+  // remains a testing/user override; the startup UI must not infer a locale
+  // from the game-data directory or terminal environment.
+  const auto platform_locale = preferred_system_locale();
+  static_cast<void>(explicit_locale);
+  static_cast<void>(platform_locale);
 
   Window window{
       SDL_CreateWindow("OpenFreedomFighters", startup_width, startup_height,
@@ -232,9 +240,11 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
 
 StartupPreflightResult
 run_sdl_startup_preflight(const std::filesystem::path &data_path,
-                          const std::function<void()> &prepare_assets) {
+                          const std::function<void()> &prepare_assets,
+                          std::string_view explicit_locale) {
   try {
-    return run_sdl_startup_preflight_impl(data_path, prepare_assets);
+    return run_sdl_startup_preflight_impl(data_path, prepare_assets,
+                                          explicit_locale);
   } catch (...) {
     return {.outcome = StartupPreflightOutcome::platform_error,
             .message = "Native startup encountered an unexpected error"};

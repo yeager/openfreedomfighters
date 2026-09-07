@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 
 struct SDL_Window;
 
@@ -40,6 +41,7 @@ struct StartupPreflightResult {
 // The worker is always joined before return, including cancellation and errors.
 [[nodiscard]] StartupPreflightResult
 run_sdl_startup_preflight(const std::filesystem::path &data_path,
-                          const std::function<void()> &prepare_assets);
+                          const std::function<void()> &prepare_assets,
+                          std::string_view explicit_locale = {});
 
 } // namespace off::platform

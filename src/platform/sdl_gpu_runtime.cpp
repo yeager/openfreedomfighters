@@ -1,11 +1,11 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
+#include "off/platform/sdl_locale.hpp"
 #include "off/platform/sdl_menu_gamepad.hpp"
 #include "off/ui/graphics_menu_draw.hpp"
 #include "off/ui/graphics_menu_pointer.hpp"
 
 #include <SDL3/SDL.h>
-#include <SDL3/SDL_locale.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
 #include "testgputext/shaders/shader.frag.dxil.h"
@@ -31,23 +31,6 @@
 
 namespace off::platform {
 namespace {
-
-[[nodiscard]] std::string preferred_system_locale() {
-  int count = 0;
-  SDL_Locale **locales = SDL_GetPreferredLocales(&count);
-  if (locales == nullptr || count <= 0 || locales[0] == nullptr ||
-      locales[0]->language == nullptr) {
-    SDL_free(locales);
-    return {};
-  }
-  std::string result{locales[0]->language};
-  if (locales[0]->country != nullptr && locales[0]->country[0] != '\0') {
-    result += '-';
-    result += locales[0]->country;
-  }
-  SDL_free(locales);
-  return result;
-}
 
 struct GamepadSession {
   GamepadSession() = default;
