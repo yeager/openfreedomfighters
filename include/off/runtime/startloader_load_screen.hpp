@@ -14,6 +14,7 @@
 namespace off::runtime {
 
 class SceneTransitionPump;
+class StartupSceneLoader;
 
 // This is a checked handoff from a caller-owned, scene-specific parser. It is
 // deliberately not a GMS reader and does not make a scene target loadable.
@@ -104,6 +105,7 @@ public:
 
 private:
   friend class SceneTransitionPump;
+  friend class StartupSceneLoader;
 
   void commit_supported_transition() {
     entries_.erase(std::remove_if(entries_.begin(), entries_.end(),

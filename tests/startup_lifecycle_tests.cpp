@@ -1,6 +1,7 @@
 #include "off/platform/startup_lifecycle.hpp"
 #include "off/runtime/startup_boot_menu_admission.hpp"
 #include "off/runtime/startloader_load_screen.hpp"
+#include "off/runtime/startup_scene_loader.hpp"
 
 #include <chrono>
 #include <cstdlib>
@@ -211,6 +212,136 @@ int main() {
                 off::runtime::SceneTransitionPumpResult::rejected &&
             recursive_call_rejected && !pump.active() && reentrant_queue.pending(),
         "pump rejects recursive consumption and resets its active guard");
+
+  const auto lease = [](std::uint64_t value) {
+    return std::shared_ptr<const void>(std::make_shared<const std::uint64_t>(value));
+  };
+  const auto package = [&] {
+    return off::runtime::StartupSceneLoadPackage::complete(
+        "FF-Startup", lease(100U), lease(101U), lease(102U));
+  };
+  rejected = false;
+  try {
+    static_cast<void>(off::runtime::StartupSceneLoadPackage::complete(
+        "FF-Startup", lease(100U), {}, lease(102U)));
+  } catch (const std::runtime_error&) {
+    rejected = true;
+  }
+  check(rejected, "startup transaction rejects a package without complete source leases");
+  const auto old_scene = off::runtime::StartupLiveScene::from_factory(71U, lease(71U));
+  off::runtime::StartupSceneLoadState startup_state;
+  {
+    off::runtime::SceneTransitionQueue initial_queue;
+    initial_queue.request_clear();
+    check(initial_queue.request_target("FF-Startup"),
+          "initial transaction retains supported target");
+    off::runtime::StartupSceneLoader initial_loader;
+    const off::runtime::StartupSceneLoaderServices initial_services{
+        .prepare_complete_checked_package = [&](std::string_view target)
+            -> std::optional<off::runtime::StartupSceneLoadPackage> {
+          return target == "FF-Startup" ? std::optional{package()} : std::nullopt;
+        },
+        .construct_live_scene = [&](const off::runtime::StartupSceneLoadPackage&)
+            -> std::optional<off::runtime::StartupLiveScene> { return old_scene; },
+    };
+    check(initial_loader.consume(initial_queue, startup_state, initial_services) ==
+              off::runtime::StartupSceneLoaderResult::committed &&
+              startup_state.current_scene()->identity() == 71U,
+          "transaction commits only a factory-produced live scene token");
+  }
+
+  off::runtime::SceneTransitionQueue failed_load_queue;
+  failed_load_queue.retain_scene_entry(72U);
+  failed_load_queue.request_clear();
+  check(failed_load_queue.request_target("FF-Startup"),
+        "failed transaction retains supported target");
+  off::runtime::StartupSceneLoader loader;
+  const off::runtime::StartupSceneLoaderServices package_failure{
+      .prepare_complete_checked_package = [](std::string_view)
+          -> std::optional<off::runtime::StartupSceneLoadPackage> { return std::nullopt; },
+      .construct_live_scene = [](const off::runtime::StartupSceneLoadPackage&)
+          -> std::optional<off::runtime::StartupLiveScene> { std::abort(); },
+  };
+  check(loader.consume(failed_load_queue, startup_state, package_failure) ==
+                off::runtime::StartupSceneLoaderResult::rejected &&
+            failed_load_queue.pending() && failed_load_queue.entries().size() == 1U &&
+            failed_load_queue.targets() == std::vector<std::string>{"FF-Startup"} &&
+            startup_state.current_scene()->identity() == 71U,
+        "package preparation failure retains the request and prior committed scene");
+
+  const off::runtime::StartupSceneLoaderServices factory_failure{
+      .prepare_complete_checked_package = [&](std::string_view)
+          -> std::optional<off::runtime::StartupSceneLoadPackage> { return package(); },
+      .construct_live_scene = [](const off::runtime::StartupSceneLoadPackage&)
+          -> std::optional<off::runtime::StartupLiveScene> { return std::nullopt; },
+  };
+  check(loader.consume(failed_load_queue, startup_state, factory_failure) ==
+                off::runtime::StartupSceneLoaderResult::rejected &&
+            failed_load_queue.pending() && startup_state.current_scene()->identity() == 71U,
+        "factory failure cannot retire the prior scene or request");
+
+  const off::runtime::StartupSceneLoaderServices throwing_factory{
+      .prepare_complete_checked_package = [&](std::string_view)
+          -> std::optional<off::runtime::StartupSceneLoadPackage> { return package(); },
+      .construct_live_scene = [](const off::runtime::StartupSceneLoadPackage&)
+          -> std::optional<off::runtime::StartupLiveScene> {
+        throw std::runtime_error("factory failed");
+      },
+  };
+  rejected = false;
+  try {
+    static_cast<void>(loader.consume(failed_load_queue, startup_state, throwing_factory));
+  } catch (const std::runtime_error&) {
+    rejected = true;
+  }
+  check(rejected && !loader.active() && failed_load_queue.pending() &&
+            startup_state.current_scene()->identity() == 71U,
+        "factory exceptions preserve deferred and committed ownership state");
+
+  std::vector<std::string> load_order;
+  const off::runtime::StartupSceneLoaderServices committed_loader_services{
+      .prepare_complete_checked_package = [&](std::string_view target)
+          -> std::optional<off::runtime::StartupSceneLoadPackage> {
+        load_order.emplace_back("prepare:" + std::string(target));
+        return package();
+      },
+      .construct_live_scene = [&](const off::runtime::StartupSceneLoadPackage&)
+          -> std::optional<off::runtime::StartupLiveScene> {
+        load_order.emplace_back("factory");
+        return off::runtime::StartupLiveScene::from_factory(73U, lease(73U));
+      },
+  };
+  check(loader.consume(failed_load_queue, startup_state, committed_loader_services) ==
+                off::runtime::StartupSceneLoaderResult::committed &&
+            !failed_load_queue.pending() && failed_load_queue.entries().empty() &&
+            failed_load_queue.targets().empty() &&
+            startup_state.current_scene()->identity() == 73U &&
+            load_order == std::vector<std::string>{"prepare:FF-Startup", "factory"},
+        "successful transaction prepares then constructs before committing retirement");
+
+  off::runtime::SceneTransitionQueue loader_reentrant_queue;
+  loader_reentrant_queue.request_clear();
+  check(loader_reentrant_queue.request_target("FF-Startup"),
+        "reentrant scene-loader test retains target");
+  bool loader_recursive_call_rejected = false;
+  const off::runtime::StartupSceneLoaderServices loader_reentrant_services{
+      .prepare_complete_checked_package = [&](std::string_view)
+          -> std::optional<off::runtime::StartupSceneLoadPackage> {
+        try {
+          static_cast<void>(loader.consume(loader_reentrant_queue, startup_state, {}));
+        } catch (const std::runtime_error&) {
+          loader_recursive_call_rejected = true;
+        }
+        return std::nullopt;
+      },
+      .construct_live_scene = [](const off::runtime::StartupSceneLoadPackage&)
+          -> std::optional<off::runtime::StartupLiveScene> { return std::nullopt; },
+  };
+  check(loader.consume(loader_reentrant_queue, startup_state, loader_reentrant_services) ==
+                off::runtime::StartupSceneLoaderResult::rejected &&
+            loader_recursive_call_rejected && !loader.active() &&
+            loader_reentrant_queue.pending(),
+        "scene-loader rejects reentrant consumption without consuming the request");
 
   off::runtime::StartupBootMenuAdmission boot_menu;
   const off::runtime::StartupBootMenuSource boot_source{91U, 101U, 102U};

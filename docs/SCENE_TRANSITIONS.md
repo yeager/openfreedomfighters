@@ -25,6 +25,25 @@ load, rendering, presentation, input, or FF-StartUp menu construction. The
 source of LoadScreen's initial counter and setup flag remains a separate
 construction requirement.
 
+## Checked FF-StartUp loading transaction
+
+`StartupSceneLoader` is a disconnected, fail-closed replacement transaction for
+the one retained `FF-Startup` request. Its caller supplies a callback which has
+already resolved and completely prepared the checked owned archive, GMS source,
+and SUP support input, plus a separate concrete factory that returns an explicit
+live-scene token. The transaction owns opaque leases for all three inputs until
+that scene is replaced.
+
+Any missing service, incomplete package, failed factory result, or exception
+leaves the deferred request and previously committed scene unchanged. There is
+no automatic retry. Only after both callbacks have succeeded does it retire the
+marked entries and commit the new scene. It is nonreentrant and deliberately is
+not wired to normal startup.
+
+It is not a generic archive parser or a reconstruction of the FF-StartUp GMS
+factory. It does not initialize lifecycle callbacks, render, present, expose a
+menu, or accept input.
+
 ## Startup boot-menu admission
 
 `StartupBootMenuAdmission` is a fail-closed boundary for a future
