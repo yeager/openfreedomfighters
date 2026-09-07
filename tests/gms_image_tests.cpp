@@ -1435,6 +1435,20 @@ int main() {
                   view->bytes()[16U] == std::byte{0xf6} && view->bytes()[17U] == std::byte{0xff} &&
                   view->bytes()[48U] == std::byte{0},
               "KEYS backing view retains its snapshot after the caller mutates the source");
+        auto first_only = bound;
+        first_only.descriptor.count_like = 1U;
+        const auto first_direct = view ? KeysBackingEvaluator::evaluate(*view, first_only, 0.0F) : std::nullopt;
+        check(first_direct &&
+                  first_direct->first_group == std::array<float, 4>{-10.0F, 10.0F, 20.0F, -20.0F} &&
+                  first_direct->second_group == std::array<float, 3>{1.0F, 2.0F, 3.0F},
+              "KEYS backing evaluator reads sample zero without a successor");
+        auto first_two = bound;
+        first_two.descriptor.count_like = 2U;
+        const auto second_direct = view ? KeysBackingEvaluator::evaluate(*view, first_two, 1.0F) : std::nullopt;
+        check(second_direct &&
+                  second_direct->first_group == std::array<float, 4>{10.0F, 30.0F, 40.0F, -40.0F} &&
+                  second_direct->second_group == std::array<float, 3>{5.0F, 6.0F, 7.0F},
+              "KEYS backing evaluator reads sample one without interpolation");
         const auto initial = view ? KeysBackingEvaluator::evaluate(*view, bound, 0.0F) : std::nullopt;
         check(initial && initial->first_group == std::array<float, 4>{-10.0F, 10.0F, 20.0F, -20.0F},
               "KEYS backing evaluator retains its immutable first sample after the caller mutates the source");
