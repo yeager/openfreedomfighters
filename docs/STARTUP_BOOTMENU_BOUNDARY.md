@@ -104,3 +104,10 @@ the fallback lookup, so it bypasses the name lookup but converges on the same
 active-window state update. It likewise establishes no direct scene-manager
 request, archive, mission, or gameplay construction. Any later effect must be
 traced from the emitted state updates rather than inferred from this route.
+
+The recovered direct consumers of the active-window update are also bounded to
+the UI layer: window-context dispatch and local scroll/select/show/hide
+behavior. Neither recovered implementation calls a known scene-manager clear
+or request. A further recipient remains runtime and data dependent, so it is
+not evidence of a level launch; any downstream scene transition must be
+recovered from that recipient rather than inferred from menu state updates.
