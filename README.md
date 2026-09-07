@@ -85,12 +85,28 @@ also planned.
 
 ## Build and run
 
-Requires a C++23 compiler, CMake 3.25+, zlib, libogg and libvorbis development
-packages. CMake uses a compatible installed SDL 3.2+ or downloads the pinned SDL
-source release.
+The build requires a C++23 compiler, CMake 3.25+, Git, zlib, libogg,
+libvorbis, and FreeType development packages. Ninja is the recommended CMake
+generator. It is not required: CMake also supports the platform's default
+generator.
+
+| Platform | Toolchain and packages |
+|---|---|
+| Ubuntu/Debian | `build-essential cmake ninja-build pkg-config zlib1g-dev libvorbis-dev libfreetype-dev` |
+| macOS | Xcode Command Line Tools, then `brew install cmake ninja zlib libvorbis freetype` |
+| Windows | Visual Studio 2022 with the Desktop development with C++ workload and a current Windows SDK; install CMake and Ninja, or select the Visual Studio generator |
+
+CMake finds a compatible installed SDL 3.2+ package when one is available.
+Otherwise it downloads checksum-pinned SDL 3.4.10 and SDL_ttf 3.2.2 source
+archives during configuration, so network access is required for that fallback.
+SDL_ttf uses the system FreeType library. The project vendors the small MP3/FLAC
+decoder headers it uses; no separate MP3 or FLAC development package is needed.
+Optional shader regeneration additionally requires the tools listed in
+[THIRD_PARTY.md](THIRD_PARTY.md); normal builds use the checked-in generated
+shaders.
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
 ctest --test-dir build --output-on-failure
 
