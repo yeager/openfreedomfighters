@@ -6,9 +6,10 @@ The project has a deliberately small localization foundation for its own F10
 graphics-overlay vocabulary. It has complete, independently authored UTF-8
 catalog entries for the 20 target locales below, keyed by stable semantic IDs.
 It resolves an explicit locale first, a platform locale second, and English
-last. It does not read a retail LOC format or ship retail text. The draw path
-has not yet been given a user locale setting, so this is not localized Original
-presentation, game-wide l10n, or a claim of complete game coverage.
+last. The live F10 draw path always reads the system-preferred locale through
+SDL. `--locale TAG` is an explicit override (for example, `--locale sv-SE`).
+It does not read a retail LOC format or ship retail text. This is not localized
+Original presentation, game-wide l10n, or a claim of complete game coverage.
 
 The current catalog has no external catalog loader, plural/select support,
 bidirectional layout, shaping, font fallback, or locale-specific layout tests.

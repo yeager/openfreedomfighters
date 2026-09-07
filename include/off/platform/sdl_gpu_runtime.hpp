@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <string>
+#include <string_view>
 
 namespace off::platform {
 
@@ -34,6 +35,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     graphics::IntroRuntime *intro,
                     std::size_t frame_limit = 0,
                     bool show_graphics_menu = false,
-                    const std::filesystem::path &screenshot_path = {});
+                    const std::filesystem::path &screenshot_path = {},
+                    std::string_view explicit_locale = {});
 
 } // namespace off::platform

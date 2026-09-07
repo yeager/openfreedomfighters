@@ -5,6 +5,7 @@
 #include "off/ui/graphics_menu_pointer.hpp"
 
 #include <SDL3/SDL.h>
+#include <SDL3/SDL_locale.h>
 #include <SDL3_ttf/SDL_ttf.h>
 
 #include "testgputext/shaders/shader.frag.dxil.h"
@@ -30,6 +31,23 @@
 
 namespace off::platform {
 namespace {
+
+[[nodiscard]] std::string preferred_system_locale() {
+  int count = 0;
+  SDL_Locale **locales = SDL_GetPreferredLocales(&count);
+  if (locales == nullptr || count <= 0 || locales[0] == nullptr ||
+      locales[0]->language == nullptr) {
+    SDL_free(locales);
+    return {};
+  }
+  std::string result{locales[0]->language};
+  if (locales[0]->country != nullptr && locales[0]->country[0] != '\0') {
+    result += '-';
+    result += locales[0]->country;
+  }
+  SDL_free(locales);
+  return result;
+}
 
 struct GamepadSession {
   GamepadSession() = default;
@@ -1088,7 +1106,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     const ui::RetailUiTextureSet &ui_textures,
                     graphics::IntroRuntime *intro,
                     std::size_t frame_limit, bool show_graphics_menu,
-                    const std::filesystem::path &screenshot_path) {
+                    const std::filesystem::path &screenshot_path,
+                    std::string_view explicit_locale) {
   if (ui_fonts.fonts.empty())
     return failure("retail UI font set is empty");
   if ((scene != nullptr) == (intro != nullptr))
@@ -1108,6 +1127,9 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
     return failure("SDL gamepad initialization failed");
   const GamepadSession gamepad_session;
+  // Always read the host language. The catalog uses it whenever the caller
+  // has not deliberately supplied an explicit preference.
+  const std::string platform_locale = preferred_system_locale();
   // SDL's software window surface and a 3D swapchain cannot coexist. Release
   // the splash surface on its creator thread before claiming this SAME window.
   if (SDL_WindowHasSurface(window) && !SDL_DestroyWindowSurface(window))
@@ -1412,7 +1434,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       break;
     }
     const auto draw_list = ui::build_graphics_menu_draw_list(
-        menu, {swapchain_width, swapchain_height}, ui::GraphicsClock::now());
+        menu, {swapchain_width, swapchain_height}, ui::GraphicsClock::now(),
+        1.0F, explicit_locale, platform_locale);
     const auto overlay_batch =
         draw_list.status == ui::UiBuildStatus::ok
             ? build_overlay_batch(draw_list, overlay.font)

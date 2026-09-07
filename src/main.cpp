@@ -16,6 +16,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -24,7 +25,7 @@ namespace {
 void usage(std::ostream &output) {
   output << "Usage: openfreedomfighters --data PATH [--mode original|modern] "
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
-            "[--screenshot FILE.bmp] [--diagnostic-scene]\n";
+            "[--screenshot FILE.bmp] [--locale TAG] [--diagnostic-scene]\n";
 }
 
 } // namespace
@@ -37,6 +38,7 @@ int main(int argc, char **argv) {
   bool show_graphics_menu = false;
   bool diagnostic_scene = false;
   std::filesystem::path screenshot_path;
+  std::string locale;
   for (int index = 1; index < argc; ++index) {
     const std::string_view argument{argv[index]};
     if (argument == "--data" && index + 1 < argc) {
@@ -65,6 +67,12 @@ int main(int argc, char **argv) {
       diagnostic_scene = true;
     } else if (argument == "--screenshot" && index + 1 < argc) {
       screenshot_path = argv[++index];
+    } else if (argument == "--locale" && index + 1 < argc) {
+      locale = argv[++index];
+      if (locale.empty() || locale.size() > 35U) {
+        std::cerr << "Locale tag must contain 1 to 35 characters.\n";
+        return 2;
+      }
     } else if (argument == "--help" || argument == "-h") {
       usage(std::cout);
       return 0;
@@ -246,7 +254,7 @@ int main(int argc, char **argv) {
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       startup_window, mode, scene ? &*scene : nullptr, *startup_graphics,
       ui_fonts, ui_textures, intro.get(),
-      frame_limit, show_graphics_menu, screenshot_path);
+      frame_limit, show_graphics_menu, screenshot_path, locale);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';
     return 4;
