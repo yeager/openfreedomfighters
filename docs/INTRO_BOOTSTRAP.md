@@ -79,6 +79,14 @@ calls, nonnull auxiliary references and any change in all nine stored identity
 basis words; this is stricter than the original six-word comparison. It modifies
 the canonical camera state rather than maintaining another enabled flag.
 
+The reviewed first-cut `ZWINDOWS` reader can now be opted into explicitly from
+the deferred owner-reader callback. It accepts only its checked 63-byte source
+form, validates the completed directory mapping and live Window/Camera pair
+before mutation, adds the selected camera to the Window-local collection, and
+applies the reviewed camera-control/visibility projection. It neither registers
+a renderer camera nor enables a view, runs component readers, or advances normal
+startup. All other deferred owner readers remain required boundaries.
+
 The window uploads the retained intro images once per device lifetime, separately
 from startup UI images, and releases them after GPU completion. Normal intro and
 diagnostic-scene ownership are mutually exclusive. Frame and view state remain

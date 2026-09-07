@@ -554,6 +554,10 @@ public:
   [[nodiscard]] const IntroWindowOwner* window_owner() const noexcept {return window_owner_;}
   [[nodiscard]] IntroWindowOwner& window_for_owner(IntroRuntimeHandle owner);
   [[nodiscard]] const IntroWindowOwner& window_for_owner(IntroRuntimeHandle owner) const;
+  // One reviewed ZWINDOWS owner-reader form only. The caller explicitly opts
+  // into it from owner_reader_boundary after deferred preparation; this does
+  // not make the surrounding reader bracket or normal startup complete.
+  void apply_supported_window_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::optional<IntroAuthoredGroupOwner>& language_owner() const noexcept {return language_owner_;}
   [[nodiscard]] IntroRuntimeHandle current_source_parent() const noexcept {return current_source_parent_.value?current_source_parent_:root_handle();}
   [[nodiscard]] std::optional<IntroSceneResourceProperty> scene_resource_property(std::string_view key) const;

@@ -35,6 +35,9 @@ public:
   void enable_preview_flag();
   [[nodiscard]] float renderer_width() const noexcept { return renderer_width_; }
   [[nodiscard]] float renderer_height() const noexcept { return renderer_height_; }
+  [[nodiscard]] bool can_apply_window_state_projection(std::uint64_t window_handle) const noexcept {
+    return window_handle!=0U && !enabled_state_.changing_;
+  }
   // Query/store width, then query/store height. A later exception preserves the
   // completed prefix; no projection, viewport, flags or context are changed.
   void notify_renderer_dimensions(const std::function<std::int32_t()>& width,
@@ -57,6 +60,10 @@ public:
   // Input/scheduler work and renderer registration remain caller responsibilities.
   void apply_window_state_projection(bool option_a, bool option_b,
                                      std::uint64_t window_handle);
+  // Split only for the reviewed deferred Window reader, whose visibility
+  // sentinel is written between these two camera operations.
+  void begin_window_state_projection(bool option_a, bool option_b);
+  void complete_window_state_projection(std::uint64_t window_handle);
   [[nodiscard]] const std::optional<PictureCameraServices>& picture_services() const noexcept {
     return picture_services_;
   }

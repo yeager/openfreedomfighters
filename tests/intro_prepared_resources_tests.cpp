@@ -985,6 +985,7 @@ int main() {
       std::vector<std::string> reader_events;
       std::size_t prepared_reader_count{};
       std::size_t translated_reference_list_count{};
+      std::size_t applied_window_readers{};
       off::graphics::IntroPostconstructionReaderServices reader_services{
           [&](std::uint64_t value){reader_events.push_back("external:"+std::to_string(value));},
           [&](const off::graphics::IntroSourceScriptWork&){reader_events.push_back("script");},
@@ -1022,8 +1023,22 @@ int main() {
                       "deferred reference uses source-directory identity rather than an allocation ordinal");
             }
           },
-          [&](const off::graphics::IntroDeferredReaderWork&){reader_events.push_back("owner");},
-          [&](const off::graphics::IntroDeferredReaderWork&){reader_events.push_back("component");},
+          [&](const off::graphics::IntroDeferredReaderWork& work){
+            reader_events.push_back("owner");
+            if(work.source_directory_index==host.resources().window_index()) {
+              host.apply_supported_window_deferred_reader(work);
+              ++applied_window_readers;
+            }
+          },
+          [&](const off::graphics::IntroDeferredReaderWork& work){
+            reader_events.push_back("component");
+            if(work.source_directory_index==host.resources().window_index()) {
+              const auto& window=host.window_for_owner(host.source_handle(work.source_directory_index));
+              check(host.window_camera_projection_applied() && window.cameras==std::vector{host.source_handle(host.resources().camera_index())} &&
+                    std::bit_cast<std::uint32_t>(window.pending_visibility)==std::bit_cast<std::uint32_t>(-1.0F),
+                    "Window owner reader completes its camera projection before that owner's component boundary");
+            }
+          },
           [&]{reader_events.push_back("end");}};
       host.run_postconstruction_reader_bracket(0x9aU,reader_services);
       if(policy) {
@@ -1039,6 +1054,19 @@ int main() {
               reader_events[3]=="prepare" && reader_events[4]=="owner" && reader_events[5]=="component" &&
               reader_events.back()=="end" && host.deferred_reader_work().size()==420,
               "ordinary reader bracket retains two external calls and forward owner-before-component boundaries without consuming work");
+        const auto& window=host.window_for_owner(host.source_handle(host.resources().window_index()));
+        const auto& camera=host.camera_for_owner(host.source_handle(host.resources().camera_index()));
+        check(applied_window_readers==1 && (window.group.flags&0x400U)!=0U &&
+              camera.associated_target()==host.source_handle(host.resources().window_index()).value &&
+              camera.render_control()==0U && (camera.flags()&0x8000U)==0U && (camera.flags()&0x210000U)==0x210000U &&
+              camera.enabled(),
+              "explicit first-cut Window reader applies ordered owner and canonical camera state without registration");
+        const auto window_work=std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
+          return work.source_directory_index==host.resources().window_index();
+        });
+        check(window_work!=host.deferred_reader_work().end(),"first-cut Window retains deferred reader identity");
+        if(window_work!=host.deferred_reader_work().end())
+          rejects([&]{host.apply_supported_window_deferred_reader(*window_work);});
         std::vector<std::string> tail_events;
         std::vector<off::graphics::IntroRuntimeResourceHandle> spatial,flag_4000;
         const std::array<std::byte,11> named_payload{std::byte{'G'},std::byte{'l'},std::byte{'o'},

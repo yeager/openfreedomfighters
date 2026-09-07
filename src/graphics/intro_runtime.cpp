@@ -1873,6 +1873,53 @@ const IntroWindowOwner& IntroRuntime::window_for_owner(IntroRuntimeHandle owner)
   throw std::runtime_error("Intro owner is not a constructed Window");
 }
 
+void IntroRuntime::apply_supported_window_deferred_reader(const IntroDeferredReaderWork& work) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || projected_ ||
+      !work.processed || work.source_directory_index>=directory_resource_mapping_.size())
+    throw std::runtime_error("Supported Window reader is unavailable at this loader stage");
+
+  const auto& sources=resources_.sources();
+  const auto& directory=sources.directory();
+  if(work.source_directory_index>=directory.size())
+    throw std::runtime_error("Supported Window reader has no source-directory entry");
+  const auto& source=directory[work.source_directory_index];
+  if(source.source_type!=0x00100030U || source.class_data_value!=0U || !source.attachments.empty() ||
+      !source.deferred_source_offset || source.deferred_source_offset!=work.source_offset ||
+      directory_resource_mapping_[work.source_directory_index]!=work.resource)
+    throw std::runtime_error("Deferred work is not the supported Window owner form");
+
+  // Parse and resolve all identities before changing either owner.  This is a
+  // deliberately narrow policy for the reviewed first-cut Window form.
+  const auto decoded=sources.intro_window_source(work.source_directory_index);
+  const auto selected_source=sources.local_source_for_authored_reference(decoded.selected_camera_reference);
+  if(!selected_source || *selected_source!=resources_.camera_index() ||
+      *selected_source>=directory_resource_mapping_.size() ||
+      !directory_resource_mapping_[*selected_source])
+    throw std::runtime_error("Supported Window reader has no mapped selected camera");
+  const auto window_handle=source_handle(work.source_directory_index);
+  const auto camera_handle=source_handle(*selected_source);
+  auto& window=window_for_owner(window_handle);
+  auto& selected_camera=camera_for_owner(camera_handle);
+  if(window.group.resource!=work.resource || resource_handle(camera_handle)!=*directory_resource_mapping_[*selected_source])
+    throw std::runtime_error("Supported Window reader mapped an inconsistent live owner");
+  if(!selected_camera.can_apply_window_state_projection(window_handle.value))
+    throw std::runtime_error("Supported Window reader requires a stable selected camera");
+  const auto& basis=hierarchy_.at(hierarchy_index(window_handle)).matrix;
+  if(!engine_identity_bits(basis))
+    throw std::runtime_error("Supported Window reader requires unchanged engine identity orientation");
+
+  // The owner-local collection is ordered and never duplicates the selected
+  // camera. The following mutations preserve the reviewed reader sequence.
+  if(std::ranges::find(window.cameras,camera_handle)==window.cameras.end())
+    window.cameras.push_back(camera_handle);
+  window.group.flags|=0x400U;
+  selected_camera.begin_window_state_projection(decoded.options[0]!=0U,decoded.options[1]!=0U);
+  window.pending_visibility=-1.0F;
+  selected_camera.complete_window_state_projection(window_handle.value);
+  window.group.flags|=0x400U;
+  projected_=true;
+}
+
 FreshIntroCamera& IntroRuntime::camera() {
   if(resource_load_stage_==IntroResourceLoadStage::failed)
     throw std::runtime_error("Failed intro construction has no usable camera");

@@ -70,11 +70,21 @@ void FreshIntroCamera::prepare_picture_services(const PictureVisitorRectangle& r
 
 void FreshIntroCamera::apply_window_state_projection(bool option_a, bool option_b,
                                                     std::uint64_t window_handle) {
-  if (window_handle == 0 || enabled_state_.changing_)
-    throw std::runtime_error("window camera projection requires a live nonreentrant target");
+  begin_window_state_projection(option_a,option_b);
+  complete_window_state_projection(window_handle);
+}
+
+void FreshIntroCamera::begin_window_state_projection(bool option_a, bool option_b) {
+  if(enabled_state_.changing_)
+    throw std::runtime_error("window camera projection requires a nonreentrant target");
   render_control_ = option_b ? 0U : 5U;
   if (option_a && !option_b) enabled_state_.flags_ |= 0x8000U;
   else enabled_state_.flags_ &= ~0x8000U;
+}
+
+void FreshIntroCamera::complete_window_state_projection(std::uint64_t window_handle) {
+  if(!can_apply_window_state_projection(window_handle))
+    throw std::runtime_error("window camera projection requires a live nonreentrant target");
   associated_target_ = window_handle;
   enabled_state_.flags_ |= 0x210000U;
 }
