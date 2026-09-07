@@ -1,5 +1,6 @@
 #include "off/data/gms_image.hpp"
 #include "off/data/compact_typed_value_decoder.hpp"
+#include "off/data/deferred_component_dispatcher.hpp"
 #include "off/data/typed_value_cursor.hpp"
 
 #include <algorithm>
@@ -757,6 +758,58 @@ int main() {
             CompactTypedValueDecoder decoder(unterminated);
             static_cast<void>(decoder.next());
         }, "compact decoder rejects an unterminated string within its supplied boundary");
+    }
+    {
+        using off::data::DeferredComponentDispatcher;
+        using off::data::DeferredComponentReader;
+        const std::array stream{
+            std::byte{0x83}, std::byte{0x11}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
+            std::byte{0x06},
+            std::byte{0x04}, std::byte{'a'}, std::byte{0},
+            std::byte{0x06},
+            std::byte{0x03}, std::byte{0x22}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
+            std::byte{0xff}, std::byte{0xa5},
+        };
+        std::array<std::size_t, 2> received{};
+        std::array<DeferredComponentReader, 2> readers{
+            [&](std::span<const std::byte>& child) {
+                received[0] = child.size();
+                child = child.subspan(3U);
+            },
+            [&](std::span<const std::byte>& child) {
+                received[1] = child.size();
+                child = {};
+            },
+        };
+        const auto result = DeferredComponentDispatcher::dispatch(stream, readers);
+        check(result.dispatched_components == 2U && received[0] == 11U && received[1] == 7U &&
+                  result.continuation.size() == 2U && result.continuation.front() == std::byte{0xff},
+              "component dispatcher isolates child reader cursors and retains the terminator");
+        check_rejected([&] {
+            const std::array bad{std::byte{0x06}, std::byte{0xff}};
+            const std::array<DeferredComponentReader, 0> none{};
+            static_cast<void>(DeferredComponentDispatcher::dispatch(bad, none));
+        }, "component dispatcher rejects an unmatched delimiter");
+        check_rejected([&] {
+            const std::array bad{std::byte{0x06}, std::byte{0xff}};
+            const std::array<DeferredComponentReader, 2> too_many{[](auto&) {}, [](auto&) {}};
+            static_cast<void>(DeferredComponentDispatcher::dispatch(bad, too_many));
+        }, "component dispatcher rejects a missing attachment delimiter");
+        check_rejected([&] {
+            const std::array bad{std::byte{0x86}, std::byte{0xff}};
+            const std::array<DeferredComponentReader, 0> none{};
+            static_cast<void>(DeferredComponentDispatcher::dispatch(bad, none));
+        }, "component dispatcher compares delimiters by their low-six-bit class");
+        check_rejected([&] {
+            const std::array bad{std::byte{0x09}, std::byte{0xff}};
+            const std::array<DeferredComponentReader, 0> none{};
+            static_cast<void>(DeferredComponentDispatcher::dispatch(bad, none));
+        }, "component dispatcher rejects unknown advancing tags");
+        check_rejected([&] {
+            const std::array bad{std::byte{0x03}, std::byte{0x00}};
+            const std::array<DeferredComponentReader, 0> none{};
+            static_cast<void>(DeferredComponentDispatcher::dispatch(bad, none));
+        }, "component dispatcher rejects truncated generic values");
     }
     {
         using off::data::TypedValue;
