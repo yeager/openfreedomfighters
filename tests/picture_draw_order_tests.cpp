@@ -72,5 +72,66 @@ int main() {
         "new-only list uses unsigned order");
   const std::array<PictureKeyedRecord, 2> invalid{{{1, 0x80000000U}, {2, 0x7fffffffU}}};
   rejects([&] { (void)merge_picture_draw_order(invalid, rebuilt); }, "unsorted retained partition rejects rather than silently rebuilding it");
+  {
+    PictureRecordRebuild route;
+    std::vector<std::string> events;
+    PictureRecordRebuildHooks hooks{
+      [&](const auto& record) { events.push_back("prepare" + std::to_string(record.record_identity)); },
+      [&](const auto& record) { events.push_back("register" + std::to_string(record.record_identity)); },
+      [](const auto& record) -> std::optional<PictureCurrentDrawView> {
+        if (record.record_identity == 101) return PictureCurrentDrawView{71, 2};
+        return std::nullopt;
+      }};
+    const PictureQueuedDrawRecord first{101, 201, 301, resource(0x120), 4};
+    const PictureQueuedDrawRecord second{102, 202, 302, resource(0x110), 8};
+    route.accept(first, hooks);
+    route.accept(second, hooks);
+    const std::array<PictureOrderedDrawEntry, 1> old{{
+      {make_picture_order_key(0, 1, resource(0x115)), 99, std::nullopt, 399}}};
+    const auto route_entries = route.rebuild(old, hooks);
+    check(events == std::vector<std::string>{"prepare101", "register101", "prepare102", "register102"} &&
+      route.queued_count() == 0 && route_entries.size() == 3 &&
+      route_entries[0].record_identity == 99 && route_entries[1].record_identity == 102 &&
+      !route_entries[1].associated_view && route_entries[2].record_identity == 101 &&
+      route_entries[2].associated_view == 71 && route_entries[2].resource == 301,
+      "source-backed queued records prepare/register before rebuild and preserve live view/resource association");
+  }
+  {
+    PictureRecordRebuild route;
+    auto hooks = PictureRecordRebuildHooks{
+      [](const auto&) {}, [](const auto&) {},
+      [](const auto&) -> std::optional<PictureCurrentDrawView> { return {}; }};
+    rejects([&] { route.accept({0, 2, 3, resource(1), 0}, hooks); },
+      "missing record identity rejects before preparation");
+    rejects([&] { route.accept({1, 2, 3, resource(1), 0}, {}); },
+      "incomplete record hooks reject before preparation");
+    route.accept({1, 2, 3, resource(1), 0}, hooks);
+    const std::array<PictureOrderedDrawEntry, 1> duplicate{{{2, 1, {}, 3}}};
+    rejects([&] { (void)route.rebuild(duplicate, hooks); },
+      "ambiguous retained and queued record identity rejects without clearing queue");
+    check(route.queued_count() == 1 && !route.poisoned(),
+      "rebuild validation retains queued record and leaves route reusable");
+  }
+  {
+    PictureRecordRebuild route;
+    const auto accept_hooks = PictureRecordRebuildHooks{
+      [](const auto&) {}, [](const auto&) {},
+      [](const auto&) -> std::optional<PictureCurrentDrawView> { return {}; }};
+    route.accept({1, 2, 3, resource(1), 0}, accept_hooks);
+    const auto view_only_hooks = PictureRecordRebuildHooks{
+      {}, {}, [](const auto&) -> std::optional<PictureCurrentDrawView> { return {}; }};
+    check(route.rebuild({}, view_only_hooks).size() == 1,
+      "rebuild requires only live view resolution after record acceptance");
+  }
+  {
+    PictureRecordRebuild route;
+    auto hooks = PictureRecordRebuildHooks{
+      [](const auto&) { throw std::runtime_error("registration failure"); },
+      [](const auto&) {}, [](const auto&) -> std::optional<PictureCurrentDrawView> { return {}; }};
+    rejects([&] { route.accept({1, 2, 3, resource(1), 0}, hooks); },
+      "record preparation failure aborts acceptance");
+    check(route.poisoned() && route.queued_count() == 0,
+      "callback failure poisons route without publishing its record");
+  }
   return failures == 0 ? 0 : 1;
 }
