@@ -81,6 +81,36 @@ authored flags are not substituted for runtime flags.
 Live callbacks must preserve host/application lifetimes. Recursive preparation
 or stop through the same host is rejected; this is not a mutation-safe traversal.
 
+## Component lifecycle contract
+
+The two authored sound owners have a recovered ordering contract. It is a
+contract for a complete lifecycle implementation, not permission to invoke one
+callback from the current startup path.
+
+1. Run both owner pre-hooks in forward owner order. Each one needs its live
+   canonical record, assigned source, retained bank, clock, parent, flags and
+   spatial services before it can publish its prepared state.
+2. Run the first component phase in reverse owner order: owner 468, then owner
+   467. Within an owner, invoke `ZSetZDefine`, `SoundSegment`, `SoundNotify`,
+   then `SoundExtend`.
+3. Complete every first-phase callback before starting the second phase.
+4. Run the second phase in the same reverse owner order. Within each owner,
+   invoke `SoundSegment`, then `SoundExtend`.
+
+`SoundNotify` first phase snapshots the duration from the live canonical record
+and rejects a missing record; it never sends readiness. `SoundExtend` first
+phase applies only its proven unchanged parameter subset after its ordinary
+membership rule, while its second phase is a no-op. `SoundSegment` first phase
+only queries restore mode; its second phase additionally requires live hide,
+random, record and complete disposal/stop services. `ZSetZDefine` needs a
+property store with independent key/value ownership and complete component
+retirement semantics.
+
+The generic lifecycle deliberately rejects these callbacks today. Enabling only
+the sound callbacks would violate the all-or-fail global pass and could invent
+playback or readiness, so native startup keeps this contract unreachable until
+the complete lifecycle and output-channel services are admitted.
+
 Failures keep completed mutations. Where the original would destroy an owner,
 the current host reports unsupported disposal and prevents further sound-owner
 use. It must not continue initialization as if destruction had succeeded.
