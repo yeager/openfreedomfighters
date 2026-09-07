@@ -5,6 +5,7 @@
 #include "off/data/deferred_component_dispatcher.hpp"
 #include "off/data/deferred_reader_session.hpp"
 #include "off/data/keys_descriptor_range.hpp"
+#include "off/data/keys_backing_evaluator.hpp"
 #include "off/data/keys_property_materializer.hpp"
 #include "off/data/owner_buf_keys_profile.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
@@ -1379,6 +1380,69 @@ int main() {
                 materialized, {0x120U, {'K', 'E', 'Y', 'S'}, 48U, malformed},
                 [](const KeysDescriptorBackingRequest&) { return true; }));
         }, "KEYS descriptor rejects non-finite spacing or rate");
+    }
+    {
+        using off::data::BoundKeysDescriptorRange;
+        using off::data::ImmutableKeysBackingView;
+        using off::data::KeysBackingEvaluator;
+        using off::data::KeysDescriptorRange;
+
+        const auto set_i16 = [](std::vector<std::byte>& bytes, std::size_t offset,
+                                std::int16_t value) {
+            const auto bits = static_cast<std::uint16_t>(value);
+            bytes[offset] = static_cast<std::byte>(bits & 0xffU);
+            bytes[offset + 1U] = static_cast<std::byte>((bits >> 8U) & 0xffU);
+        };
+        std::vector<std::byte> backing(80U);
+        // Each packed stream uses width two. The first stream selects 0, 1,
+        // 1 for the three samples; the second maps its sole lookup to 1.
+        backing[0] = std::byte{2}; backing[1] = std::byte{0x14};
+        backing[8] = std::byte{2}; backing[9] = std::byte{0x40};
+        backing[32] = std::byte{2}; backing[33] = std::byte{0x14};
+        backing[40] = std::byte{2}; backing[41] = std::byte{0x40};
+        const std::array<std::int16_t, 8> packed_values{-10, 10, 20, -20, 10, 30, 40, -40};
+        for (std::size_t i = 0; i < packed_values.size(); ++i) {
+            set_i16(backing, 16U + i * 2U, packed_values[i]);
+        }
+        const std::array<float, 6> floating_values{1.0F, 2.0F, 3.0F, 5.0F, 6.0F, 7.0F};
+        for (std::size_t i = 0; i < floating_values.size(); ++i) {
+            set_f32(backing, 48U + i * 4U, floating_values[i]);
+        }
+        const auto view = ImmutableKeysBackingView::create(0x1234U, backing);
+        const BoundKeysDescriptorRange bound{
+            .owner = 0x42U,
+            .buf_auxiliary_offset = 0x120U,
+            .opaque_handle = 0x700U,
+            .descriptor = KeysDescriptorRange{
+                .count_like = 3U,
+                .inclusive_first = 0,
+                .inclusive_last = 2,
+                .spacing_or_rate = 1.0F,
+                .first_offsets = {0U, 8U, 16U},
+                .second_offsets = {32U, 40U, 48U},
+            },
+        };
+        backing[16] = std::byte{0}; // the view must retain an immutable copy.
+        const auto middle = view ? KeysBackingEvaluator::evaluate(*view, bound, 0.25F) : std::nullopt;
+        check(middle && middle->first_group == std::array<float, 4>{0.0F, 20.0F, 30.0F, -30.0F} &&
+                  middle->second_group == std::array<float, 3>{3.0F, 4.0F, 5.0F},
+              "KEYS backing evaluator reads both bounded indirection groups and interpolates before the final sample");
+        const auto final = view ? KeysBackingEvaluator::evaluate(*view, bound, 1.0F) : std::nullopt;
+        check(final && final->first_group == std::array<float, 4>{10.0F, 30.0F, 40.0F, -40.0F} &&
+                  final->second_group == std::array<float, 3>{5.0F, 6.0F, 7.0F},
+              "KEYS backing evaluator uses the final sample directly without reading or blending a successor");
+        check(view && !KeysBackingEvaluator::evaluate(*view, bound, -0.1F) &&
+                  !KeysBackingEvaluator::evaluate(*view, bound, std::numeric_limits<float>::infinity()) &&
+                  !ImmutableKeysBackingView::create(0U, backing),
+              "KEYS backing evaluator requires a finite normalized coordinate and a live generation");
+        auto malformed = ImmutableKeysBackingView::create(0x1234U, std::span<const std::byte>(backing).first(18U));
+        check(malformed && !KeysBackingEvaluator::evaluate(*malformed, bound, 0.0F),
+              "KEYS backing evaluator rejects incomplete final tables instead of manufacturing a sample");
+        auto width = backing;
+        width[0] = std::byte{25};
+        const auto invalid_width = ImmutableKeysBackingView::create(0x1234U, width);
+        check(invalid_width && !KeysBackingEvaluator::evaluate(*invalid_width, bound, 0.0F),
+              "KEYS backing evaluator rejects unsupported packed widths");
     }
     {
         using off::data::TypedValue;
