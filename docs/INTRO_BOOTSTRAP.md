@@ -649,6 +649,14 @@ draw request with the corresponding vertex, index and primitive counts. The
 terminal result is ignored. This proves request construction only, not device
 acceptance, pixels, loss handling, frame completion or presentation.
 
+The first-cut request runs inside an admitted renderer frame: successful frame
+begin, traversal and draw request, post-render, frame end, completion hook and
+frame-word advance. These are not presentation. A failed frame begin skips
+traversal and frame end while still reaching completion and the counter update.
+The separately recovered clear/present startup wrapper belongs to MovieControl
+phase two and is not joined to the ordinary renderer frame. Normal first-cut
+presentation and loss handling therefore remain an explicit outer-frame service.
+
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
 copied controller payloads. Runtime acceptance additionally requires an actual
