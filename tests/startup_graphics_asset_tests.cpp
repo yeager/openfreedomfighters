@@ -5,6 +5,7 @@
 #include "off/graphics/picture_submission_cache.hpp"
 #include "off/graphics/startup_graphics_expanded_plan.hpp"
 #include "off/graphics/startup_source_picture_draw_admission.hpp"
+#include "off/graphics/startup_picture_pass_admission.hpp"
 
 #include <bit>
 #include <algorithm>
@@ -476,6 +477,66 @@ int main(int argc, char **argv) {
     catch (const std::runtime_error &) { hidden_rejected = true; }
     check(hidden_rejected,
           "source-backed admission rejects an unproven visibility mismatch before backend calls");
+
+    const off::graphics::StartupSceneLease scene{.identity = 73};
+    const off::graphics::StartupActiveWindowTraversalRoot active_root{
+        .scene_lease_identity = scene.identity, .root_identity = snapshot.root_identity};
+    const off::graphics::StartupAdmittedCameraView camera_view{
+        .scene_lease_identity = scene.identity, .camera_identity = 74,
+        .view_identity = 4000, .enabled = true,
+        .normalized_viewport = {0, 0, 1, 1}, .owner_projection_scalar = 1};
+    const off::graphics::StartupRendererStatePassContext pass{
+        .scene_lease_identity = scene.identity,
+        .identity = snapshot.pass_context_identity,
+        .rectangle = {0, 0, 640, 480}};
+    auto pass_owner_views = owner_views;
+    for (auto& association : pass_owner_views)
+      association.admitted_view_identity = camera_view.view_identity;
+    const off::graphics::StartupSourcePictureTraversalSnapshot pass_snapshot{
+        .root_identity = snapshot.root_identity,
+        .pass_context_identity = snapshot.pass_context_identity,
+        .pass_value = snapshot.pass_value, .nodes = nodes,
+        .owner_views = pass_owner_views};
+    const auto pass_transforms = transforms_for(prepared);
+    const off::graphics::StartupSourcePictureRuntimeSnapshot source{
+        .scene_lease_identity = scene.identity, .traversal = pass_snapshot,
+        .transforms = pass_transforms};
+    off::graphics::StartupPicturePassAdmission pass_admission;
+    const auto pass_result = pass_admission.submit(
+        scene, active_root, camera_view, pass, source, 1.0F, asset, 0x01U, hooks);
+    check(pass_result.prepared_picture_count == 21 &&
+              pass_result.submitted_group_count == 77,
+          "conditional picture pass delegates only after matching live root/view/context admission");
+    auto wrong_view = camera_view;
+    wrong_view.view_identity = 4001;
+    bool view_rejected = false;
+    const auto before_view_rejection = trace.size();
+    try {
+      static_cast<void>(pass_admission.submit(scene, active_root, wrong_view, pass,
+                                              source, 1.0F, asset, 0x01U, hooks));
+    } catch (const std::runtime_error&) { view_rejected = true; }
+    check(view_rejected,
+          "conditional picture pass rejects owner/view disagreement before downstream hooks");
+    check(trace.size() == before_view_rejection,
+          "conditional picture pass fails closed before downstream hooks on view disagreement");
+    auto wrong_pass = pass;
+    wrong_pass.identity = 10;
+    bool pass_rejected = false;
+    try {
+      static_cast<void>(pass_admission.submit(scene, active_root, camera_view, wrong_pass,
+                                              source, 1.0F, asset, 0x01U, hooks));
+    } catch (const std::runtime_error&) { pass_rejected = true; }
+    check(pass_rejected,
+          "conditional picture pass rejects a mismatched renderer-state pass context");
+    auto disabled = camera_view;
+    disabled.enabled = false;
+    bool disabled_rejected = false;
+    try {
+      static_cast<void>(pass_admission.submit(scene, active_root, disabled, pass,
+                                              source, 1.0F, asset, 0x01U, hooks));
+    } catch (const std::runtime_error&) { disabled_rejected = true; }
+    check(disabled_rejected,
+          "conditional picture pass rejects a camera that is not explicitly enabled");
   }
   for (const auto state : {0x01U, 0x08U, 0x04U}) {
     const auto input = off::graphics::prepare_startup_graphics_plan(asset, state);
