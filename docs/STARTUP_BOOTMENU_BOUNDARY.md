@@ -36,3 +36,12 @@ owner state before delegating to common window handling. It still has no
 verified level identity, player/mission operation, or scene-manager request.
 `rGameMenu` is therefore an intermediate live-object boundary, not permission
 to infer a first campaign scene from a menu label or archive ordering.
+
+A further private trace shows that the reached route retains an opaque target,
+changes its internal menu state from 2 to 4, and triggers a related runtime
+transition. Adjacent dispatchers likewise pass only opaque retained targets;
+the direct consumers observed so far are menu/window synchronization and event
+paths. No scene-manager request, archive path, mission, player creation, or
+single-player target occurs in this recovered segment. It remains a menu-state
+transition only. The next evidence target is the `rGameMenu` factory and its
+target-array population, followed by the eventual selection action.
