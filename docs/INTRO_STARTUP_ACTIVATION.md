@@ -16,3 +16,17 @@ Successful completion only means MovieControl has received its phase-two
 deadline/setup boundary.  A later admitted ordinary update must strictly pass
 that deadline before cut preparation, and rendering still requires separate
 camera, state/view, device and backend admission.
+
+## First-cut admission boundary
+
+The recovered first-cut route is fail closed: ordinary load and global lifecycle
+must complete, MovieControl phase two assigns its absolute scene-clock deadline,
+and a later admitted event-16 update must be strictly past that deadline. Only
+then does preparation complete, the active latch and playback baseline change,
+and `CutSequence_Start` run synchronously.
+
+The normal inactive-list receiver then selects the `MainCamera` property branch.
+For the recovered first option, it first sweeps registered cameras and then
+resolves and registers the explicit requested camera. A nonzero named-camera
+branch remains unsupported. This proves neither a renderer view, GPU submission,
+audio playback, presentation, nor cut completion.

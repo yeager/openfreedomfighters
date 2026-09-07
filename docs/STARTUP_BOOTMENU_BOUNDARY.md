@@ -23,12 +23,13 @@ proves the ordinary-window owner and exact `ZWINDOW_BootMenu` attachment exist
 in one scene transaction; it does not complete the owner reader, component
 reader, common initialization, or retained routing step.
 
-Private clean-room tracing has established a separate `STARTGAME` to
-`PressStart` notification/subscription boundary. It has not established a
-playable-scene target, a scene-manager request, or a main-menu selection in
-that chain. Public code must therefore not bind a key, controller button, F10
-action, or `PressStart` notification directly to a guessed level. The next
-required trace follows the notification recipient and the reached owner route.
+Private clean-room tracing has established that the LinkMenu state-one route
+first invokes a named `PressStart` action service, then releases the resolved
+action entry before it directly invokes LinkMenu's `STARTGAME` operation. The
+action service lookup/release path has no recovered subscriber fanout, callback,
+menu owner, scene-manager request, or archive loader. Public code must therefore
+not bind a key, controller button, F10 action, or `PressStart` directly to a
+guessed level. The direct LinkMenu owner route remains a separate boundary.
 
 That owner route is now partially recovered too: its reached virtual operation
 can conditionally look up the retained `rGameMenu` object and changes internal
