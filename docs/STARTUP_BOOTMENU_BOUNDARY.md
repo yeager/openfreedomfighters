@@ -65,3 +65,12 @@ selection. The target and receiver types remain runtime/data-dependent. This
 path contains no recovered scene-manager clear/request, archive, scene,
 mission, or loader identity. The next trace follows the verified receiver; the
 portable runtime must not equate the selected object with a campaign level.
+
+The next receiver-binding trace establishes that the LinkMenu field which leads
+to the dynamic owner interface is not populated by the LinkMenu factory,
+constructor, source reader, or preparation path. Construction initializes it
+empty and teardown clears it; the factory receives no owner argument. The
+binding must therefore be made by generic component attachment or a later
+generic post-creation route. No owner vtable, final receiver, scene request,
+level, or mission edge has yet been recovered. The next trace targets that
+generic attachment boundary rather than serialized LinkMenu data.
