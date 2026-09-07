@@ -2,6 +2,7 @@
 #include "off/cutscene/cut_sequence_list.hpp"
 #include "off/cutscene/first_cut_command_session.hpp"
 #include "off/cutscene/external_cut_sequence_command.hpp"
+#include "off/cutscene/external_cut_sequence_list_join.hpp"
 #include "off/runtime/intro_live_target_registry.hpp"
 
 #include <array>
@@ -399,5 +400,54 @@ int main() {
           list_trace == std::vector<std::string>({"read", "phase-two"}));
     rejects([&] { external_list.register_ordered_command(early); });
     rejects([&] { external_list.run_phase_two({.phase_complete = [] {}}); });
+
+    // Source 466 runs its reverse-order command callbacks while source 65's
+    // retained list is phase-one complete and before its phase-two callback.
+    off::cutscene::CutSequenceList joined_list;
+    std::vector<std::string> join_trace;
+    joined_list.run_phase_one({.source_directory = 65U, .source_type = 0x0800001aU,
+                               .class_data_value = 0U,
+                               .read_retained_source = [&] { join_trace.push_back("list-read"); }});
+    off::cutscene::ExternalCutSequenceListJoin join(
+        84U, joined_list,
+        {.resolve_reference = [&](std::uint32_t reference) -> std::optional<std::uint64_t> {
+             join_trace.push_back("reference:" + std::to_string(reference));
+             return reference == 0x80000042U ? std::optional<std::uint64_t>{65U} : std::nullopt;
+         },
+         .find_owner_component = [&](std::uint64_t owner, std::string_view name)
+             -> std::optional<std::uint64_t> {
+             join_trace.push_back("component:" + std::to_string(owner) + ":" + std::string(name));
+             return owner == 65U && name == "CutSequenceList" ? std::optional<std::uint64_t>{84U} : std::nullopt;
+         },
+         .read_scene_handle = [&](std::string_view name) -> std::optional<std::uint64_t> {
+             join_trace.push_back("property:" + std::string(name)); return std::nullopt;
+         },
+         .resolve_scene_object = [&](std::uint64_t handle) -> std::optional<std::uint64_t> {
+             join_trace.push_back("scene:" + std::to_string(handle)); return std::nullopt;
+         },
+         .retire_diagnostic = [&] { join_trace.push_back("retire"); }});
+    ExternalCutSequenceCommand late_external;
+    ExternalCutSequenceCommand early_external;
+    Command joined_late{}; joined_late.timeline_position = 385U;
+    Command joined_early{}; joined_early.timeline_position = 1U;
+    late_external.read({.read_common_command = [&] { return joined_late; },
+                        .read_external_list_reference = [] { return 0x80000042U; }});
+    early_external.read({.read_common_command = [&] { return joined_early; },
+                         .read_external_list_reference = [] { return 0x80000042U; }});
+    join.run_phase_two(late_external);
+    join.run_phase_two(early_external);
+    check(joined_list.commands().size() == 2U &&
+              joined_list.commands()[0].timeline_position == 1U &&
+              joined_list.commands()[1].timeline_position == 385U &&
+              !late_external.cached_context() && !early_external.cached_context() &&
+              join_trace == std::vector<std::string>({"list-read", "reference:2147483714",
+                  "component:65:CutSequenceList", "property:rCutSequenceObjects", "scene:0",
+                  "reference:2147483714", "component:65:CutSequenceList",
+                  "property:rCutSequenceObjects", "scene:0"}));
+    joined_list.run_phase_two({.phase_complete = [&] { join_trace.push_back("list-phase-two"); }});
+    rejects([&] { join.run_phase_two(early_external); });
+
+    off::cutscene::CutSequenceList rejected_list;
+    rejects([&] { off::cutscene::ExternalCutSequenceListJoin invalid_join(84U, rejected_list, {}); });
     return failures == 0 ? 0 : 1;
 }
