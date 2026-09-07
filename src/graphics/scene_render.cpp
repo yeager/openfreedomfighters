@@ -119,6 +119,31 @@ build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
 
 } // namespace
 
+SceneRenderResolutionSummary
+summarize_scene_render_resolutions(const SceneRenderAsset &asset) noexcept {
+  SceneRenderResolutionSummary result;
+  for (const auto &resolution : asset.resolutions) {
+    switch (resolution.geometry.status) {
+    case SceneGeometryStatus::local_primitive:
+      ++result.local_primitive;
+      break;
+    case SceneGeometryStatus::no_local_source:
+      ++result.no_local_source;
+      break;
+    case SceneGeometryStatus::source_without_primitive:
+      ++result.source_without_primitive;
+      break;
+    case SceneGeometryStatus::missing_primitive:
+      ++result.missing_primitive;
+      break;
+    case SceneGeometryStatus::unresolved_primitive_alias:
+      ++result.unresolved_primitive_alias;
+      break;
+    }
+  }
+  return result;
+}
+
 void validate_scene_render_asset(const SceneRenderAsset &asset) {
   if (asset.resolutions.size() > maximum_scene_instances ||
       asset.instances.size() > maximum_scene_instances) {

@@ -220,6 +220,20 @@ int main() {
             "scene archive directory exceeds the safety entry limit",
         "bound enumeration by all directory entries, not only ZIP candidates");
 
+  off::graphics::SceneRenderAsset summary_asset;
+  summary_asset.resolutions = {
+      {.geometry = {.status = off::graphics::SceneGeometryStatus::local_primitive}},
+      {.geometry = {.status = off::graphics::SceneGeometryStatus::no_local_source}},
+      {.geometry = {.status = off::graphics::SceneGeometryStatus::source_without_primitive}},
+      {.geometry = {.status = off::graphics::SceneGeometryStatus::missing_primitive}},
+      {.geometry = {.status = off::graphics::SceneGeometryStatus::unresolved_primitive_alias}},
+  };
+  const auto summary = off::graphics::summarize_scene_render_resolutions(summary_asset);
+  check(summary.local_primitive == 1 && summary.no_local_source == 1 &&
+            summary.source_without_primitive == 1 && summary.missing_primitive == 1 &&
+            summary.unresolved_primitive_alias == 1,
+        "scene diagnostics aggregate every resolution status without source details");
+
   const auto explicit_root = work / "explicit";
   std::filesystem::create_directories(explicit_root / "Scenes" / "nested");
   check(owned_selection_error(explicit_root, "../outside.ZIP") ==

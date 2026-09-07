@@ -161,6 +161,7 @@ int main(int argc, char **argv) {
     application.initialize_native_remaining_intro_scope_registration();
   }
   std::optional<off::graphics::SceneGpuPlan> scene;
+  std::optional<off::graphics::SceneRenderResolutionSummary> scene_summary;
   // Scene-manager identity lifetime, independent of source archive catalogs.
   off::runtime::SceneComponentSequence component_sequence{[&application] {
     const auto time=application.component_dispatch_time();
@@ -180,6 +181,7 @@ int main(int argc, char **argv) {
                                ? off::graphics::load_owned_diagnostic_scene_render_asset(
                                      data_path, *diagnostic_scene_archive)
                                : off::graphics::load_diagnostic_scene_render_asset(data_path);
+        scene_summary.emplace(off::graphics::summarize_scene_render_resolutions(asset));
         scene.emplace(off::graphics::prepare_scene_gpu_plan(asset));
       } else {
         // Supported normal (non-restore) cold-load boundary, before resources.
@@ -253,6 +255,15 @@ int main(int argc, char **argv) {
             << " hash-verified files; cue mapping and playback not implemented.\n";
   if (verify_only) {
     return 0;
+  }
+  if (scene_summary) {
+    const auto &summary = *scene_summary;
+    std::cout << "Diagnostic scene geometry: "
+              << summary.local_primitive << " local, "
+              << summary.no_local_source << " external, "
+              << summary.source_without_primitive << " source-without-primitive, "
+              << summary.missing_primitive << " missing-primitive, "
+              << summary.unresolved_primitive_alias << " unresolved-alias.\n";
   }
   if (!diagnostic_scene)
     std::cout << "Authored startup resources loaded; world rendering pending. "

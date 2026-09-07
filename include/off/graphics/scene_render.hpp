@@ -73,7 +73,19 @@ struct SceneRenderAsset {
   std::vector<SceneRenderResolution> resolutions;
 };
 
+// Aggregate, source-free diagnostics for an owned scene. Counts deliberately
+// omit object names, handles, paths, vertices and any retail payload.
+struct SceneRenderResolutionSummary {
+  std::size_t local_primitive{};
+  std::size_t no_local_source{};
+  std::size_t source_without_primitive{};
+  std::size_t missing_primitive{};
+  std::size_t unresolved_primitive_alias{};
+};
+
 void validate_scene_render_asset(const SceneRenderAsset &asset);
+[[nodiscard]] SceneRenderResolutionSummary
+summarize_scene_render_resolutions(const SceneRenderAsset &asset) noexcept;
 
 [[nodiscard]] SceneRenderAsset build_scene_render_asset(
     std::span<const data::PrimitiveEntry> primitives,
