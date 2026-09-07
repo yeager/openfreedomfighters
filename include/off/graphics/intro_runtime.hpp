@@ -291,6 +291,19 @@ struct IntroDeferredReaderWork {
   // resource identities resolved before either reader boundary observes work.
   std::vector<std::optional<IntroRuntimeResourceHandle>> translated_references;
 };
+enum class IntroLifecyclePreflightFailure : std::uint8_t {
+  none,stage,reader_coverage,component_coverage,owner_coverage,live_mapping,unsupported
+};
+// Snapshot of the dynamic scene inventory required before normal startup may
+// enter its reader bracket or global lifecycle. Counts are evidence, never a
+// substitute for typed implementation registration.
+struct IntroLifecyclePreflightReport {
+  std::size_t expected_readers{},covered_readers{};
+  std::size_t expected_components{},covered_components{};
+  std::size_t expected_owners{},covered_owners{};
+  IntroLifecyclePreflightFailure failure{IntroLifecyclePreflightFailure::unsupported};
+  [[nodiscard]] bool ready() const noexcept { return failure==IntroLifecyclePreflightFailure::none; }
+};
 // Published by the concrete MovieControl owner reader only.  Mandatory list
 // references are resolved in the live source-directory domain; all other
 // controller fields deliberately stay raw until their consumers are recovered.
@@ -623,6 +636,10 @@ public:
   [[nodiscard]] std::span<const IntroRuntimeResourceHandle> loaded_resource_handles() const noexcept {return loaded_resource_handles_;}
   [[nodiscard]] std::span<const std::optional<IntroRuntimeResourceHandle>> directory_resource_mapping() const noexcept {return directory_resource_mapping_;}
   [[nodiscard]] std::span<const IntroDeferredReaderWork> deferred_reader_work() const noexcept {return deferred_reader_work_;}
+  // Does not execute a reader, lifecycle callback or host service. Current
+  // concrete coverage is intentionally incomplete, so ordinary startup must
+  // remain outside this boundary until typed registrations are installed.
+  [[nodiscard]] IntroLifecyclePreflightReport preflight_global_lifecycle() const;
   [[nodiscard]] std::span<const IntroSourceScriptWork> source_script_work() const noexcept {return source_script_work_;}
   [[nodiscard]] std::span<const IntroSourceResourceScope> source_resource_scopes() const noexcept {return source_resource_scopes_;}
   [[nodiscard]] std::optional<IntroRuntimeResourceHandle> allocated_source_resource(std::size_t source) const;

@@ -20,6 +20,14 @@ authored attachment with its recovered cold constructor state, while RootGroup
 also receives its immediate initializer. This is not lifecycle completion:
 the authored callbacks still require their real reader and runtime services.
 
+`IntroRuntime::preflight_global_lifecycle()` derives its inventory from the
+loaded scene and remains read-only. The complete supported fixture has 420
+deferred reader identities, 383 authored attachment identities and 471 owner
+identities including ROOT. It reports zero concrete coverage today: the
+constructed placeholder closures deliberately fail closed and do not count as
+implementations. Normal startup remains outside the reader bracket and global
+lifecycle until typed coverage exists for every identity.
+
 ## Construction and ownership
 
 Catalog insertion does not execute a factory. Concrete construction registers a

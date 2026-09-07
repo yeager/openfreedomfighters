@@ -1711,6 +1711,45 @@ void IntroRuntime::prepare_deferred_references(IntroDeferredReaderWork& work) {
   work.translated_references=std::move(translated);
 }
 
+IntroLifecyclePreflightReport IntroRuntime::preflight_global_lifecycle() const {
+  IntroLifecyclePreflightReport report;
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete) {
+    report.failure=IntroLifecyclePreflightFailure::stage;
+    return report;
+  }
+  report.expected_readers=deferred_reader_work_.size();
+  report.expected_owners=1U+loaded_resource_handles_.size();
+  for(const auto component_index:components_.construction_order()) {
+    const auto& component=components_.at(component_index);
+    if(component.source().synthesized) continue;
+    ++report.expected_components;
+    if(!component.constructed() || component.removed()) {
+      report.failure=IntroLifecyclePreflightFailure::component_coverage;
+      return report;
+    }
+  }
+  if(loaded_resource_handles_.size()!=resources_.sources().directory().size() ||
+      directory_resource_mapping_.size()!=resources_.sources().directory().size()) {
+    report.failure=IntroLifecyclePreflightFailure::live_mapping;
+    return report;
+  }
+  for(std::size_t source=0;source<directory_resource_mapping_.size();++source) {
+    const auto resource=directory_resource_mapping_[source];
+    if(!resource || !associated_resource_owner(*resource) ||
+        *associated_resource_owner(*resource)!=source_handle(source)) {
+      report.failure=IntroLifecyclePreflightFailure::live_mapping;
+      return report;
+    }
+  }
+  // Concrete typed registration is deliberately absent until every reader,
+  // owner hook and callback family has been recovered. Placeholder closures do
+  // not increment any coverage field.
+  report.failure=report.expected_readers?IntroLifecyclePreflightFailure::reader_coverage:
+      report.expected_components?IntroLifecyclePreflightFailure::component_coverage:
+      IntroLifecyclePreflightFailure::owner_coverage;
+  return report;
+}
+
 void IntroRuntime::run_postconstruction_reader_bracket(
     std::uint64_t retained_saved_value,const IntroPostconstructionReaderServices& services) {
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||

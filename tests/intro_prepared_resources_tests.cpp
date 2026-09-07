@@ -1315,6 +1315,13 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
       rejects([&]{host.construct_lens_flare_animation_scope_without_engine_renderer();});
 
       check_complete_runtime_post_directory(host,sequence);
+      const auto lifecycle_preflight=host.preflight_global_lifecycle();
+      check(!lifecycle_preflight.ready() &&
+            lifecycle_preflight.expected_readers==420 && lifecycle_preflight.covered_readers==0 &&
+            lifecycle_preflight.expected_components==383 && lifecycle_preflight.covered_components==0 &&
+            lifecycle_preflight.expected_owners==471 && lifecycle_preflight.covered_owners==0 &&
+            lifecycle_preflight.failure==off::graphics::IntroLifecyclePreflightFailure::reader_coverage,
+            "global lifecycle preflight derives complete live identities but rejects placeholder coverage before any reader runs");
       if(policy)
         check_complete_restore_reader_route(host);
       else {
