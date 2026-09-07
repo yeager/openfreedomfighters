@@ -5,6 +5,7 @@
 #include "off/data/deferred_component_dispatcher.hpp"
 #include "off/data/keys_property_materializer.hpp"
 #include "off/data/owner_buf_keys_profile.hpp"
+#include "off/data/scene_lifetime_keys_registry.hpp"
 #include "off/data/typed_value_cursor.hpp"
 
 #include <algorithm>
@@ -1034,6 +1035,89 @@ int main() {
             });
         check(!no_mapping && !stale_mapping,
               "KEYS materializer never synthesizes a child handle without a valid scene-lifetime mapping");
+    }
+    {
+        using off::data::ComponentReaderContext;
+        using off::data::ComponentReaderIdentity;
+        using off::data::ComponentReaderInput;
+        using off::data::KeysPropertyMaterializer;
+        using off::data::OwnerAuxiliaryPropertyBlock;
+        using off::data::OwnerBufKeysProfileParser;
+        using off::data::SceneLifetimeKeysRegistry;
+        using off::data::SceneLifetimeKeysRegistryInput;
+
+        const auto write_word = [](std::span<std::byte> bytes, std::size_t offset,
+                                   std::uint32_t value) {
+            bytes[offset] = static_cast<std::byte>(value & 0xffU);
+            bytes[offset + 1U] = static_cast<std::byte>((value >> 8U) & 0xffU);
+            bytes[offset + 2U] = static_cast<std::byte>((value >> 16U) & 0xffU);
+            bytes[offset + 3U] = static_cast<std::byte>((value >> 24U) & 0xffU);
+        };
+        const auto supported_property = [&] {
+            std::array<std::byte, 64> bytes{};
+            write_word(bytes, 4U, 0x80000040U);
+            write_word(bytes, 8U, 64U);
+            write_word(bytes, 12U, 1U);
+            write_word(bytes, 16U, 0x5359454bU);
+            write_word(bytes, 20U, 48U);
+            return bytes;
+        };
+        auto first_bytes = supported_property();
+        auto second_bytes = supported_property();
+        const OwnerAuxiliaryPropertyBlock first{0x42U, 0x120U, first_bytes};
+        const OwnerAuxiliaryPropertyBlock second{0x43U, 0x140U, second_bytes};
+        const std::array inputs{SceneLifetimeKeysRegistryInput{first, 0x700U},
+                                SceneLifetimeKeysRegistryInput{second, 0x701U}};
+        const auto registry = SceneLifetimeKeysRegistry::construct(inputs);
+        const auto child = OwnerBufKeysProfileParser::parse(first);
+        const std::array children{child};
+        const auto materialized = KeysPropertyMaterializer::materialize(
+            first, children, registry.materializer_resolver());
+        bool reader_called = false;
+        const int opaque_input = 7;
+        const auto invoked = ComponentReaderContext::invoke_required_keys(
+            ComponentReaderIdentity{first.owner, 0U}, ComponentReaderInput(&opaque_input),
+            registry.component_reader_resolver(),
+            [&](const ComponentReaderInput& input, std::uint64_t handle) {
+                reader_called = input.opaque_context() == &opaque_input && handle == 0x700U;
+            });
+        check(registry.size() == 2U && materialized && materialized->opaque_handle == 0x700U &&
+                  invoked == off::data::ComponentReaderInvocationResult::invoked && reader_called,
+              "scene KEYS registry binds canonical owner-local properties to existing scene handles");
+
+        const auto second_child = OwnerBufKeysProfileParser::parse(second);
+        check(!registry.resolve(first, second_child) &&
+                  !registry.resolve_required_keys(0x44U, {'K', 'E', 'Y', 'S'}),
+              "scene KEYS registry rejects cross-owner and missing-owner lookups");
+
+        first_bytes[0] = std::byte{1};
+        const OwnerAuxiliaryPropertyBlock stale_first{0x42U, 0x120U, first_bytes};
+        auto pristine_bytes = supported_property();
+        const OwnerAuxiliaryPropertyBlock pristine_first{0x42U, 0x120U, pristine_bytes};
+        const auto stale_child = OwnerBufKeysProfileParser::parse(pristine_first);
+        check(!registry.resolve(stale_first, stale_child),
+              "scene KEYS registry rejects a stale property source after construction");
+
+        check_rejected([&] {
+            const std::array duplicate{SceneLifetimeKeysRegistryInput{first, 0x702U},
+                                       SceneLifetimeKeysRegistryInput{first, 0x703U}};
+            static_cast<void>(SceneLifetimeKeysRegistry::construct(duplicate));
+        }, "scene KEYS registry preflights duplicate owner-offset-key identities");
+        check_rejected([&] {
+            const std::array duplicate_handle{SceneLifetimeKeysRegistryInput{first, 0x702U},
+                                              SceneLifetimeKeysRegistryInput{second, 0x702U}};
+            static_cast<void>(SceneLifetimeKeysRegistry::construct(duplicate_handle));
+        }, "scene KEYS registry preflights reused opaque handles");
+        check_rejected([&] {
+            const OwnerAuxiliaryPropertyBlock same_owner{0x42U, 0x121U, second_bytes};
+            const std::array ambiguous_owner{SceneLifetimeKeysRegistryInput{first, 0x702U},
+                                             SceneLifetimeKeysRegistryInput{same_owner, 0x703U}};
+            static_cast<void>(SceneLifetimeKeysRegistry::construct(ambiguous_owner));
+        }, "scene KEYS registry rejects ambiguous KEYS children for one component owner");
+        check_rejected([&] {
+            const std::array zero_handle{SceneLifetimeKeysRegistryInput{first, 0U}};
+            static_cast<void>(SceneLifetimeKeysRegistry::construct(zero_handle));
+        }, "scene KEYS registry rejects stale or zero scene handles");
     }
     {
         using off::data::TypedValue;
