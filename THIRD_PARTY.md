@@ -1,15 +1,28 @@
 # Third-party dependencies
 
 OpenFreedomFighters uses established portable libraries through their public APIs.
+The first group is needed to configure and build from a normal source checkout.
+The second group is either fetched automatically by CMake or is optional
+developer tooling; it is not a manually installed prerequisite. A new build
+tree still needs network access for CMake's pinned SDL downloads unless its
+FetchContent cache has already been populated.
+
+## Build dependencies
 
 | Dependency | Purpose | Upstream license | Integration |
 |---|---|---|---|
-| [SDL3](https://github.com/libsdl-org/SDL) | native window, input, gamepad, audio-device, and Vulkan/Metal/D3D12 GPU portability | zlib License | system package when compatible; checksum-pinned 3.4.10 source fallback |
-| [SDL_ttf GPU example shaders](https://github.com/libsdl-org/SDL_ttf/tree/release-3.2.2/examples/testgputext/shaders) | portable diagnostic textured-mesh pipeline in SPIR-V, DXIL, and MSL | zlib License | checksum-pinned 3.2.2 source archive; only generated shader headers are compiled |
-| [zlib](https://github.com/madler/zlib) | ZIP deflate and CRC-32 | zlib License | system development package; commit-pinned source build on Windows CI |
-| [libogg](https://github.com/xiph/ogg) | Ogg container support | BSD-style license | system development package; commit-pinned source build on Windows CI |
-| [libvorbis](https://github.com/xiph/vorbis) | Vorbis decode and synthetic test encoding | BSD-style license | system development package; commit-pinned source build on Windows CI |
-| [dr_flac](https://github.com/mackron/dr_libs/blob/flac-0.13.3/dr_flac.h) and [dr_mp3](https://github.com/mackron/dr_libs/blob/mp3-0.7.2/dr_mp3.h) | standalone user-owned FLAC and MP3 soundtrack decode | MIT-0 (upstream also offers Unlicense) | vendored headers; one bounded implementation translation unit, no system codec ABI |
+| [zlib](https://github.com/madler/zlib) | ZIP deflate and CRC-32 | zlib License | required system development package; commit-pinned source build on Windows CI |
+| [libogg](https://github.com/xiph/ogg) | Ogg container support | BSD-style license | required system development package; commit-pinned source build on Windows CI |
+| [libvorbis](https://github.com/xiph/vorbis) | Vorbis decode and synthetic test encoding | BSD-style license | required system development package, including `vorbisfile` and `vorbisenc`; commit-pinned source build on Windows CI |
+| [FreeType](https://freetype.org/) | font rasterization used by SDL_ttf | FTL or GPL-2.0-only | required system development package; commit-pinned source build on Windows CI |
+
+## Automatically fetched and optional dependencies
+
+| Dependency | Purpose | Upstream license | Integration |
+|---|---|---|---|
+| [SDL3](https://github.com/libsdl-org/SDL) | native window, input, gamepad, audio-device, and Vulkan/Metal/D3D12 GPU portability | zlib License | compatible installed package, or checksum-pinned 3.4.10 source fallback fetched during configuration |
+| [SDL_ttf GPU example shaders](https://github.com/libsdl-org/SDL_ttf/tree/release-3.2.2/examples/testgputext/shaders) | portable diagnostic textured-mesh pipeline in SPIR-V, DXIL, and MSL | zlib License | checksum-pinned 3.2.2 source archive fetched during configuration; SDL_ttf links the required system FreeType; only its generated shader headers are compiled |
+| [dr_flac](https://github.com/mackron/dr_libs/blob/flac-0.13.3/dr_flac.h) and [dr_mp3](https://github.com/mackron/dr_libs/blob/mp3-0.7.2/dr_mp3.h) | standalone user-owned FLAC and MP3 soundtrack decode | MIT-0 (upstream also offers Unlicense) | vendored headers; no system codec ABI or package |
 | [Spleen 2.2.0](https://github.com/fcambus/spleen/releases/tag/2.2.0) | Temporary diagnostic 8x16 UI glyphs | BSD-2-Clause | generated printable-ASCII row table; license vendored in `third_party/spleen/LICENSE` |
 | [Rajdhani SemiBold](https://github.com/google/fonts/tree/main/ofl/rajdhani) | project splash version and credit overlay | SIL OFL-1.1 | vendored TTF with its license in `third_party/rajdhani/OFL.txt`; SHA-256 `94bbd25a18ca665999feb05a537de9fd2b860dcfb78bbe9ca00270825bf235da` |
 | [Capstone](https://github.com/capstone-engine/capstone) | private code-boundary analysis | BSD 3-Clause | pinned optional Python analysis dependency |

@@ -85,25 +85,35 @@ also planned.
 
 ## Build and run
 
-The build requires a C++23 compiler, CMake 3.25+, Git, zlib, libogg,
-libvorbis, and FreeType development packages. Ninja is the recommended CMake
-generator. It is not required: CMake also supports the platform's default
-generator.
+### Required
 
-| Platform | Toolchain and packages |
+Build from source needs a C++23 compiler, CMake 3.25 or newer, and development
+files for zlib, libogg, libvorbis, and FreeType. `libvorbisenc` is required too:
+the test suite uses it to create independent Ogg/Vorbis fixtures. Ninja is the
+recommended generator, but any CMake generator can be used. Git is only needed
+to obtain the source tree; it is not consulted by CMake.
+
+| Platform | Toolchain and direct dependencies |
 |---|---|
 | Ubuntu/Debian | `build-essential cmake ninja-build pkg-config zlib1g-dev libvorbis-dev libfreetype-dev` |
 | macOS | Xcode Command Line Tools, then `brew install cmake ninja zlib libvorbis freetype` |
-| Windows | Visual Studio 2022 with the Desktop development with C++ workload and a current Windows SDK; install CMake and Ninja, or select the Visual Studio generator |
+| Windows | Visual Studio 2022 with **Desktop development with C++**, a current Windows SDK, CMake, and either Ninja or the Visual Studio generator. Provide zlib, FreeType, libogg, and libvorbis (including `vorbisfile` and `vorbisenc`) through `CMAKE_PREFIX_PATH`. The pinned source-build recipe used by CI is [`.github/actions/windows-dependencies/action.yml`](.github/actions/windows-dependencies/action.yml). |
 
-CMake finds a compatible installed SDL 3.2+ package when one is available.
-Otherwise it downloads checksum-pinned SDL 3.4.10 and SDL_ttf 3.2.2 source
-archives during configuration, so network access is required for that fallback.
-SDL_ttf uses the system FreeType library. The project vendors the small MP3/FLAC
-decoder headers it uses; no separate MP3 or FLAC development package is needed.
-Optional shader regeneration additionally requires the tools listed in
-[THIRD_PARTY.md](THIRD_PARTY.md); normal builds use the checked-in generated
-shaders.
+SDL3 is the only graphics/window/input dependency. CMake uses an installed SDL
+3.2+ package when available; otherwise it downloads checksum-pinned SDL 3.4.10
+and SDL_ttf 3.2.2 source archives while configuring. That fallback requires
+network access and the platform headers SDL itself enables. On Ubuntu/Debian,
+the complete fallback package set used in CI is recorded in
+[`.github/workflows/build.yml`](.github/workflows/build.yml); installing a
+compatible system SDL3 package is usually simpler for local builds. SDL_ttf is
+always built from the pinned archive and uses the required system FreeType.
+
+MP3 and FLAC soundtrack support uses the vendored `dr_mp3` and `dr_flac`
+headers, so no MP3 or FLAC development package is needed. Shader compiler tools,
+Capstone, and Python analysis dependencies are optional developer tooling;
+normal builds use the checked-in generated shaders. See
+[THIRD_PARTY.md](THIRD_PARTY.md) for versions, licenses, and the exact optional
+tooling roles.
 
 ```sh
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
