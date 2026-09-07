@@ -90,6 +90,27 @@ the list-owner direct dispatcher with the registered event identifier, authored
 argument and owner sender. `CommandPass` remains scheduler-only; delivery needs
 an explicit adapter rather than a generic event queue.
 
+## First-cut command session boundary
+
+`FirstCutCommandSession` binds the prepared first-cut command records to the
+`IntroRuntime`'s prepared source-event mapping. It remains an explicitly driven
+sub-boundary: the caller provides an already sampled position and the owner
+dispatch services. Constructing or running it does not start a cut, sample a
+clock, create a view, frame, submit pixels, invoke SDL, or select a fallback
+target by name.
+
+For the supported first cut, all five commands use nonzero authored target
+references and have empty target names. Those references decode to directory
+objects 4, 7 and 9, the three picture-family fade owners. This establishes
+authored identity only. `local_source_for_authored_reference()` decodes a
+checked directory index, while `source_handle()` exists before that source row
+is constructed. A nonnull directory resource mapping proves construction of a
+resource, not a live dispatch target, component eligibility or a direct event
+route. The runtime therefore still requires an injected reference resolver and
+direct dispatcher; it must not convert an authored reference directly to a
+source handle or fall back to name lookup. A future automatic resolver needs a
+verified live-owner registry and shared owner/component dispatcher first.
+
 ## Cut-sequence completion coordinator
 
 `CutSequenceCoordinator` models the recovered handoff after an already-admitted
