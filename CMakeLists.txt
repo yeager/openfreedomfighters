@@ -372,7 +372,7 @@ if(BUILD_TESTING)
     add_executable(off_install_audit_cache_tests tests/install_audit_cache_tests.cpp)
     target_link_libraries(off_install_audit_cache_tests PRIVATE off_core)
     target_compile_definitions(off_install_audit_cache_tests PRIVATE
-        OFF_AUDIT_CACHE_TEST_WORK_DIR="/install-audit-cache-test-work")
+        OFF_AUDIT_CACHE_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/install-audit-cache-test-work")
     add_test(NAME off_install_audit_cache_tests COMMAND off_install_audit_cache_tests)
 
     add_executable(off_audio_bank_header_tests tests/audio_bank_header_tests.cpp)
