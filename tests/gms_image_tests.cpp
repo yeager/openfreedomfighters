@@ -3,6 +3,7 @@
 #include "off/data/compact_typed_value_decoder.hpp"
 #include "off/data/component_reader_context.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
+#include "off/data/keys_property_materializer.hpp"
 #include "off/data/typed_value_cursor.hpp"
 
 #include <algorithm>
@@ -893,6 +894,56 @@ int main() {
             });
         check(invoked == ComponentReaderInvocationResult::invoked && called,
               "component reader context preserves opaque input separately from the KEYS handle");
+    }
+    {
+        using off::data::KeysPropertyMaterializer;
+        using off::data::OwnerAuxiliaryPropertyBlock;
+        using off::data::OwnerAuxiliaryPropertyChild;
+        using off::data::SceneLifetimeKeysChildMapping;
+
+        std::array<std::byte, 64> property_bytes{};
+        const OwnerAuxiliaryPropertyBlock property{0x42U, 0x120U, property_bytes};
+        const OwnerAuxiliaryPropertyChild keys{0x120U, {'K', 'E', 'Y', 'S'}, 48U,
+                                               std::span(property_bytes).subspan(16U, 48U)};
+        const std::array children{keys};
+        const auto materialized = KeysPropertyMaterializer::materialize(
+            property, children,
+            [](const OwnerAuxiliaryPropertyBlock& requested_property,
+               const OwnerAuxiliaryPropertyChild& requested_child)
+                -> std::optional<SceneLifetimeKeysChildMapping> {
+                return SceneLifetimeKeysChildMapping{
+                    requested_property.owner, requested_property.buf_auxiliary_offset,
+                    requested_child.name, requested_child.declared_extent, 0x700U};
+            });
+        check(materialized && materialized->owner == 0x42U &&
+                  materialized->buf_auxiliary_offset == 0x120U && materialized->opaque_handle == 0x700U,
+              "KEYS materializer joins the owner-local BUF child to a supplied scene-lifetime handle");
+
+        check_rejected([&] {
+            const std::array duplicate{keys, keys};
+            static_cast<void>(KeysPropertyMaterializer::materialize(property, duplicate, {}));
+        }, "KEYS materializer rejects duplicate owner-local children");
+        check_rejected([&] {
+            const OwnerAuxiliaryPropertyChild missing{0x120U, {'N', 'O', 'P', 'E'}, 48U,
+                                                       std::span(property_bytes).subspan(16U, 48U)};
+            const std::array children_without_keys{missing};
+            static_cast<void>(KeysPropertyMaterializer::materialize(property, children_without_keys, {}));
+        }, "KEYS materializer rejects a missing KEYS child");
+        check_rejected([&] {
+            const OwnerAuxiliaryPropertyChild malformed{0x120U, {'K', 'E', 'Y', 'S'}, 47U,
+                                                         std::span(property_bytes).subspan(16U, 47U)};
+            const std::array malformed_children{malformed};
+            static_cast<void>(KeysPropertyMaterializer::materialize(property, malformed_children, {}));
+        }, "KEYS materializer rejects a malformed declared extent");
+        const auto no_mapping = KeysPropertyMaterializer::materialize(property, children, {});
+        const auto stale_mapping = KeysPropertyMaterializer::materialize(
+            property, children,
+            [](const OwnerAuxiliaryPropertyBlock&, const OwnerAuxiliaryPropertyChild&)
+                -> std::optional<SceneLifetimeKeysChildMapping> {
+                return SceneLifetimeKeysChildMapping{0x42U, 0x120U, {'K', 'E', 'Y', 'S'}, 48U, 0U};
+            });
+        check(!no_mapping && !stale_mapping,
+              "KEYS materializer never synthesizes a child handle without a valid scene-lifetime mapping");
     }
     {
         using off::data::TypedValue;
