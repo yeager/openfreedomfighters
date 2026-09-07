@@ -81,6 +81,15 @@ natural end comparison. Its release/press state machine can request the same
 ordered end actions as natural end. A tail-created pending end is observed by
 the next update, never cleaned up in that same update.
 
+Due commands execute after both member passes and before pending cleanup using
+the same sampled timeline position. A pending end requested by one command does
+not suppress later due commands. Resolution is exclusive: a nonzero reference
+uses the reference resolver without name fallback; otherwise a nonempty name
+uses the name resolver. Successful resolution delivers synchronously through
+the list-owner direct dispatcher with the registered event identifier, authored
+argument and owner sender. `CommandPass` remains scheduler-only; delivery needs
+an explicit adapter rather than a generic event queue.
+
 ## Cut-sequence completion coordinator
 
 `CutSequenceCoordinator` models the recovered handoff after an already-admitted
