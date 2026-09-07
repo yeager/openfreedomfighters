@@ -73,15 +73,35 @@ input admission, focus, rendering, or scene selection. A missing registration,
 allocation, canonical owner, exact attachment, or live component fails closed.
 Normal startup does not call this boundary.
 
+## Startup hierarchy construction snapshot
+
+`StartupWindowHierarchyFactory` is a separate, disconnected construction-link
+boundary for a future factory-built FF-StartUp tree. It receives a complete
+parsed source scope, a scene lease and factory generation, then reads only
+factory-proven runtime nodes while an explicit hierarchy read guard is held.
+It validates that every retained source child has one canonical runtime owner
+and that the live sibling chain matches the recovered attachment policy:
+container-family children in reverse source order, followed by leaf-family
+children in source order. Its move-only snapshot is bound to the lease,
+factory generation and a guarded hierarchy epoch; it invalidates on a changed
+binding.
+
+The snapshot contains only source/runtime parent and intrinsic child/sibling
+links plus factory-derived family metadata. Its preorder helper is a pure
+construction traversal. It does not select an active root, evaluate hide or
+component filters, establish visibility, choose a view, construct transforms,
+or submit/present a draw. Normal startup does not call this boundary.
+
 ## Startup boot-menu admission
 
 `StartupBootMenuAdmission` is a fail-closed boundary for a future
-factory-produced FF-StartUp boot-menu controller. It requires caller-owned live
-event-registry, window-coordinator, and action-map services. The caller supplies
-only opaque runtime/action/routing identities; the boundary resolves and retains
-the two event IDs, then performs one coordinator initialization.
+factory-produced FF-StartUp boot-menu controller. It consumes the move-only
+construction token in two stages: component reading resolves/stores its first
+opaque registry result before the common reader; initialization runs the common
+window step, resolves a second opaque result, routes the retained object, and
+only then sets its completion latch. Both lookup keys and results are runtime
+registry identities, not serialized action IDs.
 
-It records delivery of the resolved typed action only. It does not parse a scene,
-bind a keyboard/mouse/controller input, create a widget, decide focus or
-selection, request another scene, or expose a retail menu. Normal startup does
-not call it yet.
+It does not deliver actions, parse a scene, bind keyboard/mouse/controller
+input, create a widget, decide focus or selection, request another scene, or
+expose a retail menu. Normal startup does not call it yet.

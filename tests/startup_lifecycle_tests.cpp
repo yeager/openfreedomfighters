@@ -4,8 +4,10 @@
 #include "off/runtime/startup_boot_scene_construction.hpp"
 #include "off/runtime/startup_scene_loader.hpp"
 #include "off/runtime/startup_scene_package_source.hpp"
+#include "off/runtime/startup_window_hierarchy_snapshot.hpp"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <chrono>
 #include <cstddef>
@@ -13,9 +15,11 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <span>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 #include <vector>
 
 #include <zlib.h>
@@ -739,53 +743,254 @@ int main() {
       rejected,
       "boot construction fails closed when the factory component is not live");
 
+  static_assert(!std::is_copy_constructible_v<
+                off::runtime::StartupWindowHierarchySnapshot>);
+  const std::array<std::size_t, 4> hierarchy_root_children{11U, 12U, 13U, 14U};
+  const std::array<std::size_t, 1> hierarchy_first_container_children{15U};
+  const std::array<off::runtime::StartupWindowHierarchySourceNode, 6>
+      hierarchy_source{{
+          {10U, std::nullopt, hierarchy_root_children},
+          {11U, 10U, hierarchy_first_container_children},
+          {12U, 10U, {}}, {13U, 10U, {}}, {14U, 10U, {}}, {15U, 11U, {}},
+      }};
+  const off::runtime::StartupWindowHierarchySourceScope hierarchy_scope{
+      true, 10U, hierarchy_source};
+  std::unordered_map<std::size_t, off::runtime::StartupFactoryProvenWindowNode>
+      live_hierarchy{{
+          {10U, {100U, 10U, std::nullopt,
+                 off::runtime::StartupWindowNodeFamily::container, 103U,
+                 std::nullopt}},
+          {11U, {101U, 11U, 100U,
+                 off::runtime::StartupWindowNodeFamily::container, 105U, 102U}},
+          {12U, {102U, 12U, 100U,
+                 off::runtime::StartupWindowNodeFamily::leaf, std::nullopt,
+                 104U}},
+          {13U, {103U, 13U, 100U,
+                 off::runtime::StartupWindowNodeFamily::container, std::nullopt,
+                 101U}},
+          {14U, {104U, 14U, 100U,
+                 off::runtime::StartupWindowNodeFamily::leaf, std::nullopt,
+                 std::nullopt}},
+          {15U, {105U, 15U, 101U,
+                 off::runtime::StartupWindowNodeFamily::leaf, std::nullopt,
+                 std::nullopt}},
+      }};
+  std::uint32_t guard_begins{};
+  std::uint32_t guard_ends{};
+  std::uint64_t observed_guard{};
+  std::uint64_t hierarchy_epoch = 71U;
+  const off::runtime::StartupWindowHierarchySnapshotServices hierarchy_services{
+      .begin_read_guard = [&]() -> std::optional<std::uint64_t> {
+        ++guard_begins;
+        return 91U;
+      },
+      .end_read_guard = [&](std::uint64_t guard) {
+        ++guard_ends;
+        observed_guard = guard;
+      },
+      .hierarchy_epoch = [&] { return hierarchy_epoch; },
+      .factory_generation_live = [](std::uint64_t generation) {
+        return generation == 9U;
+      },
+      .read_factory_proven_node = [&](std::size_t source)
+          -> std::optional<off::runtime::StartupFactoryProvenWindowNode> {
+        const auto found = live_hierarchy.find(source);
+        return found == live_hierarchy.end()
+                   ? std::nullopt
+                   : std::optional<off::runtime::StartupFactoryProvenWindowNode>{
+                         found->second};
+      },
+  };
+  const auto hierarchy_lease =
+      off::runtime::StartupWindowHierarchyLease::live(lease(100U));
+  off::runtime::StartupWindowHierarchyFactory hierarchy_factory;
+  auto hierarchy_snapshot = hierarchy_factory.capture(
+      hierarchy_lease, 9U, hierarchy_scope, hierarchy_services);
+  check(hierarchy_snapshot.valid() && hierarchy_snapshot.bound_to(9U, 71U) &&
+            hierarchy_snapshot.root_identity() == 100U &&
+            hierarchy_snapshot.construction_preorder() ==
+                std::vector<std::uint64_t>{100U, 103U, 101U, 105U, 102U, 104U} &&
+            guard_begins == 1U && guard_ends == 1U && observed_guard == 91U,
+        "factory-proven startup hierarchy snapshots reverse containers, retain "
+        "leaves and preorder links");
+
+  rejected = false;
+  try {
+    auto source_only_services = hierarchy_services;
+    source_only_services.read_factory_proven_node =
+        [](std::size_t)
+        -> std::optional<off::runtime::StartupFactoryProvenWindowNode> {
+      return std::nullopt;
+    };
+    static_cast<void>(hierarchy_factory.capture(hierarchy_lease, 9U,
+                                                hierarchy_scope, source_only_services));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected,
+        "startup hierarchy rejects source-only nodes without factory provenance");
+
+  rejected = false;
+  try {
+    auto cyclic = live_hierarchy;
+    cyclic.at(14U).next_sibling_identity = 103U;
+    auto cycle_services = hierarchy_services;
+    cycle_services.read_factory_proven_node = [&](std::size_t source)
+        -> std::optional<off::runtime::StartupFactoryProvenWindowNode> {
+      const auto found = cyclic.find(source);
+      return found == cyclic.end()
+                 ? std::nullopt
+                 : std::optional<off::runtime::StartupFactoryProvenWindowNode>{
+                       found->second};
+    };
+    static_cast<void>(hierarchy_factory.capture(hierarchy_lease, 9U,
+                                                hierarchy_scope, cycle_services));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected,
+        "startup hierarchy rejects a cyclic or policy-invalid live sibling chain");
+
+  rejected = false;
+  try {
+    const std::array<off::runtime::StartupWindowHierarchySourceNode, 5>
+        partial_source{{
+            {10U, std::nullopt, hierarchy_root_children},
+            {11U, 10U, hierarchy_first_container_children}, {12U, 10U, {}},
+            {13U, 10U, {}}, {14U, 10U, {}},
+        }};
+    static_cast<void>(hierarchy_factory.capture(
+        hierarchy_lease, 9U, {true, 10U, partial_source}, hierarchy_services));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected, "startup hierarchy rejects a partial source scope");
+
+  rejected = false;
+  try {
+    std::uint32_t reads{};
+    auto changed_epoch_services = hierarchy_services;
+    changed_epoch_services.hierarchy_epoch = [&] {
+      return reads++ == 0U ? 71U : 72U;
+    };
+    static_cast<void>(hierarchy_factory.capture(
+        hierarchy_lease, 9U, hierarchy_scope, changed_epoch_services));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected,
+        "startup hierarchy invalidates a snapshot when the guarded epoch changes");
+
+  static_assert(
+      !std::is_copy_constructible_v<off::runtime::StartupBootMenuReaderToken>);
   off::runtime::StartupBootMenuAdmission boot_menu;
-  const off::runtime::StartupBootMenuSource boot_source{91U, 101U, 102U};
   std::uint32_t resolve_calls{};
-  std::uint64_t initialized_owner{};
-  std::uint16_t initialized_route{};
-  const off::runtime::StartupBootMenuAdmissionServices boot_services{
+  std::vector<std::string> lifecycle_order;
+  const off::runtime::StartupBootMenuReaderServices reader_services{
       .event_registry_live = [] { return true; },
       .resolve_identity =
           [&](std::uint64_t identity) -> std::optional<std::uint16_t> {
         ++resolve_calls;
-        if (identity == 101U)
-          return 31U;
-        if (identity == 102U)
-          return 32U;
-        return std::nullopt;
+        return identity == 101U ? std::optional<std::uint16_t>{31U}
+                                : std::nullopt;
       },
-      .live_window_owner = [](std::uint64_t owner) { return owner == 91U; },
-      .initialize_window =
-          [&](std::uint64_t owner, std::uint16_t route) {
-            initialized_owner = owner;
-            initialized_route = route;
-            return true;
-          },
+      .live_window_owner = [](std::uint64_t owner) { return owner == 81U; },
+      .live_boot_menu_component =
+          [](std::uint64_t component) { return component == 82U; },
+      .common_component_reader = [&](std::uint64_t owner, std::uint64_t component) {
+        lifecycle_order.push_back("common-reader");
+        return owner == 81U && component == 82U;
+      },
   };
-  boot_menu.initialize(boot_source, boot_services);
+  auto reader_token =
+      boot_menu.read_component(std::move(boot_token), 101U, reader_services);
+  check(boot_menu.reader_complete() && !boot_menu.initialized() &&
+            !boot_menu.failed() && reader_token.valid() && resolve_calls == 1U &&
+            boot_menu.reader_id() == 31U && lifecycle_order.size() == 1U &&
+            lifecycle_order[0] == "common-reader",
+        "boot-menu reader resolves only its first opaque identity before the "
+        "common reader");
+
+  std::uint64_t initialized_owner{};
+  std::uint64_t initialized_component{};
+  std::uint16_t initialized_route{};
+  const off::runtime::StartupBootMenuInitializationServices
+      initialization_services{
+          .event_registry_live = [] { return true; },
+          .resolve_identity =
+              [&](std::uint64_t identity) -> std::optional<std::uint16_t> {
+            ++resolve_calls;
+            lifecycle_order.push_back("second-lookup");
+            return identity == 102U ? std::optional<std::uint16_t>{32U}
+                                    : std::nullopt;
+          },
+          .live_window_owner = [](std::uint64_t owner) { return owner == 81U; },
+          .live_boot_menu_component =
+              [](std::uint64_t component) { return component == 82U; },
+          .common_window_initialization =
+              [&](std::uint64_t owner, std::uint64_t component) {
+                lifecycle_order.push_back("common-initialization");
+                return owner == 81U && component == 82U;
+              },
+          .route_retained_object =
+              [&](std::uint64_t owner, std::uint64_t component,
+                  std::uint16_t route) {
+                lifecycle_order.push_back("retained-route");
+                initialized_owner = owner;
+                initialized_component = component;
+                initialized_route = route;
+                return true;
+              },
+      };
+  boot_menu.initialize_component(std::move(reader_token), 102U,
+                                 initialization_services);
   check(boot_menu.initialized() && !boot_menu.failed() && resolve_calls == 2U &&
-            initialized_owner == 91U && initialized_route == 32U &&
-            boot_menu.reader_id() == 31U &&
-            boot_menu.routing_id() == 32U,
-        "boot-menu admission retains only live opaque reader and routing IDs");
-  check(!boot_menu.observe({32U}) && boot_menu.observe({31U}) &&
-            boot_menu.observations() == 1U,
-        "boot-menu observation records an opaque reader identity without input "
-        "or selection semantics");
+            initialized_owner == 81U && initialized_component == 82U &&
+            initialized_route == 32U && boot_menu.reader_id() == 31U &&
+            boot_menu.routing_id() == 32U && lifecycle_order.size() == 4U &&
+            lifecycle_order[1] == "common-initialization" &&
+            lifecycle_order[2] == "second-lookup" &&
+            lifecycle_order[3] == "retained-route",
+        "boot-menu initialization runs common initialization, second opaque "
+        "lookup, and retained routing in order");
 
   off::runtime::StartupBootMenuAdmission missing_registry;
-  auto unavailable_registry_services = boot_services;
+  auto missing_token = boot_construction.construct(
+      boot_package, boot_scene, boot_directory, 10U, boot_construction_services);
+  auto unavailable_registry_services = reader_services;
   unavailable_registry_services.event_registry_live = [] { return false; };
   rejected = false;
   try {
-    missing_registry.initialize(boot_source, unavailable_registry_services);
+    static_cast<void>(missing_registry.read_component(
+        std::move(missing_token), 101U, unavailable_registry_services));
   } catch (const std::runtime_error &) {
     rejected = true;
   }
-  check(rejected && missing_registry.failed() && !missing_registry.initialized(),
-        "boot-menu admission fails closed when the caller-owned registry is "
-        "absent");
+  check(rejected && missing_registry.failed() &&
+            !missing_registry.reader_complete() &&
+            !missing_registry.initialized() && missing_registry.reader_id() == 0U,
+        "boot-menu reader fails closed without exposing an identity when the "
+        "registry is absent");
+
+  off::runtime::StartupBootMenuAdmission routing_failure;
+  auto routing_token = boot_construction.construct(
+      boot_package, boot_scene, boot_directory, 11U, boot_construction_services);
+  auto routing_reader = routing_failure.read_component(
+      std::move(routing_token), 101U, reader_services);
+  auto failed_routing_services = initialization_services;
+  failed_routing_services.route_retained_object =
+      [](std::uint64_t, std::uint64_t, std::uint16_t) { return false; };
+  rejected = false;
+  try {
+    routing_failure.initialize_component(std::move(routing_reader), 102U,
+                                         failed_routing_services);
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected && routing_failure.failed() && !routing_failure.initialized() &&
+            routing_failure.reader_id() == 0U && routing_failure.routing_id() == 0U,
+        "boot-menu initialization does not expose partial state when retained "
+        "routing fails");
 
   std::cout << "startup lifecycle tests passed\n";
 }
