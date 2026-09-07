@@ -155,10 +155,9 @@ the recovery paths.
 | DLSS 5 | Not a current setting or deliverable | Not a current setting or deliverable | Not a current setting or deliverable |
 
 DLSS labels must name the API version actually loaded. The overlay must never
-label a community shader, post-process filter, portable upscaler, or unavailable
-future SDK as DLSS. The `Merserk/dlss5-visual-enhancer` project is not an engine
-backend; see [DLSS.md](DLSS.md). If DLSS 4.5 cannot load, the retained request may
-resolve to portable temporal upscaling or native rendering with a visible reason.
+label a shader, post-process filter, portable upscaler, or unavailable future SDK
+as DLSS. If DLSS 4.5 cannot load, the retained request may resolve to portable
+temporal upscaling or native rendering with a visible reason.
 This fallback must not remove resolution controls or prevent Modern+ from running.
 
 Graphics settings cannot affect fixed simulation time, input timestamps, RNG,

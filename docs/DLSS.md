@@ -49,23 +49,6 @@ falling back. NVIDIA's open-source
 adapter boundary, but its presence does not prove that every plugin or native
 target is available or redistributable.
 
-## Evaluated community projects
-
-[`Merserk/dlss5-visual-enhancer`](https://github.com/Merserk/dlss5-visual-enhancer)
-was evaluated on 2026-09-05 and is not an engine dependency. It is a Windows 11
-image/video processing application, not an in-engine temporal upscaler. Its
-published Python code communicates with an external native worker and expects a
-ReShade/DXGI host, a RenoDX add-on, and NVIDIA runtime binaries. Those executable
-components are not implemented by the repository's reviewable source tree, and
-the project's MIT license explicitly does not relicense its third-party binaries.
-
-Importing that runtime would make Windows-only opaque components part of a
-security- and frame-critical render path, would not provide the depth and motion
-vector integration required by the game, and would violate this project's
-portable clean-room dependency policy. Its public preset names or output examples
-may be used as non-normative research comparisons, but no source, binary, protocol,
-or claimed DLSS generation is adopted from it.
-
 ## Delivery order
 
 1. Ship correct native rendering, depth, exposure, and resolution-independent UI.
