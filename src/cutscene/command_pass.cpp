@@ -3,6 +3,7 @@
 #include <bit>
 #include <cmath>
 #include <stdexcept>
+#include <utility>
 
 namespace off::cutscene {
 namespace {
@@ -42,6 +43,34 @@ CommandPass::CommandPass(std::span<const data::GmsIntroCutCommandSource> registr
         order_.insert(order_.begin() + static_cast<std::ptrdiff_t>(insertion), input);
         cached = insertion;
     }
+}
+
+CommandDeliveryAdapter::CommandDeliveryAdapter(CommandDeliveryServices services,
+                                               std::uint64_t owner_sender)
+    : services_(std::move(services)), owner_sender_(owner_sender) {
+    if (!services_.resolve_event || !services_.resolve_reference ||
+        !services_.resolve_name || !services_.direct_dispatch) {
+        throw std::runtime_error("cut command delivery services are incomplete");
+    }
+}
+
+CommandDeliveryResult CommandDeliveryAdapter::deliver(
+    const data::GmsIntroCutCommandSource& command) const {
+    const auto event = services_.resolve_event(command.event_reference);
+    if (!event) return CommandDeliveryResult::event_unresolved;
+
+    std::optional<std::uint64_t> target;
+    if (command.target_reference != 0U) {
+        target = services_.resolve_reference(command.target_reference);
+    } else if (!command.target_name.empty()) {
+        target = services_.resolve_name(command.target_name);
+    } else {
+        return CommandDeliveryResult::no_target;
+    }
+    if (!target) return CommandDeliveryResult::target_unresolved;
+
+    services_.direct_dispatch(*target, *event, command.event_argument, owner_sender_);
+    return CommandDeliveryResult::delivered;
 }
 
 void CommandPass::reset_start() {

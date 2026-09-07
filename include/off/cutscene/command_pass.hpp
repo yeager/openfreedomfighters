@@ -7,6 +7,7 @@
 #include <functional>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 namespace off::cutscene {
@@ -36,6 +37,48 @@ private:
     std::int32_t empty_sentinel_{0};
     std::int32_t exhausted_sentinel_{0};
     bool running_{false};
+};
+
+// Delivers one command that CommandPass has already selected.  This is kept
+// separate from CommandPass so scheduling does not imply scene mutation.
+enum class CommandDeliveryResult {
+    delivered,
+    event_unresolved,
+    target_unresolved,
+    no_target,
+};
+
+struct CommandDeliveryServices {
+    // Resolves an authored event-table reference to the list owner's
+    // registered 16-bit event identity.
+    std::function<std::optional<std::uint16_t>(std::uint32_t)> resolve_event;
+    // A nonzero authored reference selects this resolver exclusively.
+    std::function<std::optional<std::uint64_t>(std::uint32_t)> resolve_reference;
+    // This resolver is considered only when the authored reference is zero.
+    std::function<std::optional<std::uint64_t>(std::string_view)> resolve_name;
+    // The list owner performs the direct synchronous dispatch; this adapter
+    // deliberately does not enqueue a generic scene event.
+    std::function<void(std::uint64_t target, std::uint16_t event,
+                       std::uint32_t argument, std::uint64_t sender)> direct_dispatch;
+};
+
+class CommandDeliveryAdapter final {
+public:
+    CommandDeliveryAdapter(CommandDeliveryServices services, std::uint64_t owner_sender);
+    CommandDeliveryAdapter(const CommandDeliveryAdapter&) = delete;
+    CommandDeliveryAdapter& operator=(const CommandDeliveryAdapter&) = delete;
+    CommandDeliveryAdapter(CommandDeliveryAdapter&&) = delete;
+    CommandDeliveryAdapter& operator=(CommandDeliveryAdapter&&) = delete;
+
+    // Resolves the event first, then exactly one target route.  A target
+    // resolution failure is not eligible for fallback.  Exceptions from the
+    // direct dispatcher intentionally propagate synchronously.
+    [[nodiscard]] CommandDeliveryResult deliver(
+        const data::GmsIntroCutCommandSource& command) const;
+
+private:
+    CommandDeliveryServices services_;
+    std::uint64_t owner_sender_{};
 };
 
 } // namespace off::cutscene

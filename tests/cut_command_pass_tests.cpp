@@ -3,13 +3,19 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 #include <iostream>
 
 namespace {
 using off::cutscene::CommandPass;
+using off::cutscene::CommandDeliveryAdapter;
+using off::cutscene::CommandDeliveryResult;
+using off::cutscene::CommandDeliveryServices;
 using Command = off::data::GmsIntroCutCommandSource;
 int failures = 0;
 void check(bool value) { if (!value) { ++failures; std::cerr << "FAIL: cut command pass\n"; } }
@@ -21,6 +27,8 @@ template<class F> void rejects(F operation) {
 }
 int main() {
     static_assert(!std::is_copy_constructible_v<CommandPass> && !std::is_move_constructible_v<CommandPass>);
+    static_assert(!std::is_copy_constructible_v<CommandDeliveryAdapter> &&
+                  !std::is_move_constructible_v<CommandDeliveryAdapter>);
     std::array<Command, 4> commands{};
     commands[2].timeline_position = 1;
     commands[0].target_name = "owned";
@@ -92,5 +100,52 @@ int main() {
     rejects([&] { CommandPass invalid({}, 2147000000.0F); });
     for (float end : {std::numeric_limits<float>::infinity(), std::numeric_limits<float>::quiet_NaN(),
                        0x1p31F, -0x1p32F}) rejects([&] { CommandPass invalid({}, end); });
+
+    std::vector<std::string> delivery_trace;
+    std::vector<std::uint64_t> dispatched_targets;
+    CommandDeliveryServices delivery_services{
+        .resolve_event = [&](std::uint32_t reference) -> std::optional<std::uint16_t> {
+            delivery_trace.push_back("event:" + std::to_string(reference));
+            return reference == 7U ? std::optional<std::uint16_t>{0x401U} : std::nullopt;
+        },
+        .resolve_reference = [&](std::uint32_t reference) -> std::optional<std::uint64_t> {
+            delivery_trace.push_back("reference:" + std::to_string(reference));
+            return reference == 44U ? std::optional<std::uint64_t>{1001U} : std::nullopt;
+        },
+        .resolve_name = [&](std::string_view name) -> std::optional<std::uint64_t> {
+            delivery_trace.push_back("name:" + std::string(name));
+            return name == "named" ? std::optional<std::uint64_t>{1002U} : std::nullopt;
+        },
+        .direct_dispatch = [&](std::uint64_t target, std::uint16_t event, std::uint32_t argument,
+                               std::uint64_t sender) {
+            delivery_trace.push_back("dispatch"); dispatched_targets.push_back(target);
+            check(event == 0x401U && argument == 99U && sender == 77U);
+        },
+    };
+    CommandDeliveryAdapter delivery(std::move(delivery_services), 77U);
+    Command due{}; due.event_reference = 7U; due.target_reference = 44U;
+    due.target_name = "named"; due.event_argument = 99U;
+    check(delivery.deliver(due) == CommandDeliveryResult::delivered &&
+          delivery_trace == std::vector<std::string>({"event:7", "reference:44", "dispatch"}) &&
+          dispatched_targets == std::vector<std::uint64_t>({1001U}));
+
+    delivery_trace.clear(); dispatched_targets.clear(); due.target_reference = 0U;
+    check(delivery.deliver(due) == CommandDeliveryResult::delivered &&
+          delivery_trace == std::vector<std::string>({"event:7", "name:named", "dispatch"}) &&
+          dispatched_targets == std::vector<std::uint64_t>({1002U}));
+
+    delivery_trace.clear(); due.event_reference = 6U;
+    check(delivery.deliver(due) == CommandDeliveryResult::event_unresolved &&
+          delivery_trace == std::vector<std::string>({"event:6"}));
+
+    delivery_trace.clear(); due.event_reference = 7U; due.target_reference = 45U;
+    check(delivery.deliver(due) == CommandDeliveryResult::target_unresolved &&
+          delivery_trace == std::vector<std::string>({"event:7", "reference:45"}));
+
+    delivery_trace.clear(); due.target_reference = 0U; due.target_name.clear();
+    check(delivery.deliver(due) == CommandDeliveryResult::no_target &&
+          delivery_trace == std::vector<std::string>({"event:7"}));
+
+    rejects([&] { CommandDeliveryAdapter invalid({}, 0U); });
     return failures == 0 ? 0 : 1;
 }
