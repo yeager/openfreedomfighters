@@ -22,3 +22,10 @@ The source-backed construction token remains a separate earlier boundary. It
 proves the ordinary-window owner and exact `ZWINDOW_BootMenu` attachment exist
 in one scene transaction; it does not complete the owner reader, component
 reader, common initialization, or retained routing step.
+
+Private clean-room tracing has established a separate `STARTGAME` to
+`PressStart` notification/subscription boundary. It has not established a
+playable-scene target, a scene-manager request, or a main-menu selection in
+that chain. Public code must therefore not bind a key, controller button, F10
+action, or `PressStart` notification directly to a guessed level. The next
+required trace follows the notification recipient and the reached owner route.
