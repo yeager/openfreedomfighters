@@ -65,6 +65,14 @@ clears active state, synchronously dispatches completion, then clears caller
 state. Existing `CommandPass` and `CutSequenceCoordinator` are deliberate
 sub-boundaries, not a complete automatic player.
 
+Member-end processing first decrements the primary tracking entry and removes it
+after its conditional zero-count operation. Only a primary miss searches the
+secondary tracking collection; a zero count there resolves the retained source
+before its conditional operation, then removes the entry even when resolution
+fails. Final cleanup instead drains both collections without decrementing,
+re-fetching cursor state after callbacks before fired arrays and active state
+are cleared.
+
 ## Cut-sequence completion coordinator
 
 `CutSequenceCoordinator` models the recovered handoff after an already-admitted
