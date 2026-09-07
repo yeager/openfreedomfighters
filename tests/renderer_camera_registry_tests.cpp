@@ -9,6 +9,10 @@
 namespace {
 using off::graphics::RendererCameraRegistry;
 using off::graphics::CameraRegistrationServices;
+using off::graphics::RendererCameraViewAdmission;
+using off::graphics::RendererCameraViewAdmissionServices;
+using off::graphics::RendererViewRectangle;
+using off::graphics::RendererViewState;
 void check(bool condition,const char* message) {if(!condition) throw std::runtime_error(message);}
 template<class F> void rejects(F operation) {
   bool rejected=false;try{operation();}catch(const std::runtime_error&){rejected=true;}
@@ -33,6 +37,35 @@ struct Harness {
   std::uint64_t at(std::size_t index){return registry.camera_at(index,services.live_owner);}
   void mixed() {add(1,0);add(2,2);add(3,0);add(4,2);add(5,0);}
 };
+struct ViewHarness {
+  RendererCameraViewAdmission admission;
+  std::vector<std::string> effects;
+  bool has_backend{}, backend_ready{}, ready{};
+  std::optional<RendererViewState> state;
+  std::int32_t width{1280}, height{720};
+  RendererCameraViewAdmissionServices services() {
+    return {
+      [&]{ effects.push_back("backend"); return has_backend; },
+      [&]{ effects.push_back("ready"); return backend_ready; },
+      [&]{ effects.push_back("state"); return state; },
+      [&]{ effects.push_back("width"); return width; },
+      [&]{ effects.push_back("height"); return height; },
+      [&](RendererViewRectangle rectangle) {
+        effects.push_back("create:"+std::to_string(rectangle.left)+","+std::to_string(rectangle.top)+","+
+            std::to_string(rectangle.width)+","+std::to_string(rectangle.height));
+        state={7}; return *state;
+      },
+      [&](RendererViewState){ effects.push_back("state-ready"); return ready; },
+      [&](RendererViewState value,std::uint64_t camera) { effects.push_back("pending:"+std::to_string(value.value)+":"+std::to_string(camera)); },
+      [&](RendererViewState value,std::uint64_t camera) { effects.push_back("allocate:"+std::to_string(value.value)+":"+std::to_string(camera)); return std::uint64_t{12}; },
+      [&](std::uint64_t view,std::uint64_t camera) { effects.push_back("associate:"+std::to_string(view)+":"+std::to_string(camera)); },
+      [&](std::uint64_t view) { effects.push_back("backend-records:"+std::to_string(view)); },
+      [&](std::uint64_t view,std::int64_t key) { effects.push_back("insert:"+std::to_string(view)+":"+std::to_string(key)); },
+      [&](std::uint64_t view) { effects.push_back("use:"+std::to_string(view)); },
+      [&](RendererViewState value) { effects.push_back("renumber:"+std::to_string(value.value)); }
+    };
+  }
+};
 }
 int main() {
  try {
@@ -47,6 +80,33 @@ int main() {
     check(owners(h.registry)==std::vector<std::uint64_t>{4,3,2,1},"duplicate leaves insertion cursor unchanged");
     check(h.at(0)==4 && owners(h.registry)==std::vector<std::uint64_t>{4,3,2},"query prunes all stale entries");
     check(h.at(99)==0,"out of range index has no owner");
+  }
+  {
+    ViewHarness h;
+    h.admission.admit(9,42,h.services());
+    check(h.effects==std::vector<std::string>{"backend"},"absent backend has no state or pending effect");
+    h.has_backend=true; h.effects.clear(); h.admission.admit(9,42,h.services());
+    check(h.effects==std::vector<std::string>{"backend","ready"},"unready backend has no state or pending effect");
+    h.backend_ready=true; h.effects.clear(); h.admission.admit(9,42,h.services());
+    check(h.effects==std::vector<std::string>{"backend","ready","state","width","height","create:0,0,1280,720","state-ready","pending:7:9"},
+          "new non-ready state creates a full rectangle then queues without allocating");
+    h.effects.clear(); h.admission.admit(9,42,h.services());
+    check(h.effects==std::vector<std::string>{"backend","ready","state","state-ready","pending:7:9"},
+          "non-ready admission preserves pending insertion order without deduplication");
+    h.ready=true; h.effects.clear(); h.admission.admit(10,-42,h.services());
+    check(h.effects==std::vector<std::string>{"backend","ready","state","state-ready","allocate:7:10","associate:12:10","backend-records:12","insert:12:42","use:12","renumber:7"},
+          "existing ready state retains rectangle and completes checked allocation ordering");
+  }
+  {
+    ViewHarness h; h.has_backend=true; h.backend_ready=true; h.state={8}; h.ready=true;
+    auto services=h.services(); services.allocate_view={};
+    rejects([&]{h.admission.admit(1,std::numeric_limits<std::int32_t>::min(),services);});
+    check(h.admission.failed() && h.effects==std::vector<std::string>{"backend","ready","state","state-ready"},
+          "missing allocation service fails without inventing a view");
+    rejects([&]{h.admission.admit(2,0,h.services());});
+    ViewHarness negated; negated.has_backend=true; negated.backend_ready=true; negated.state={8}; negated.ready=true;
+    negated.admission.admit(1,std::numeric_limits<std::int32_t>::min(),negated.services());
+    check(negated.effects[7]=="insert:12:2147483648","priority negation widens signed minimum");
   }
   {
     Harness h;h.mixed();

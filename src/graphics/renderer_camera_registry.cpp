@@ -14,6 +14,54 @@ struct Guard {
 void RendererCameraRegistry::check_idle() const {
   if(busy_ || failed_) throw std::runtime_error("Renderer camera registry is busy or failed");
 }
+
+void RendererCameraViewAdmission::admit(
+    std::uint64_t camera, std::int32_t camera_priority,
+    const RendererCameraViewAdmissionServices& supplied) {
+  if (busy_ || failed_) throw std::runtime_error("Renderer camera view admission is busy or failed");
+  if (!camera || !supplied.renderer_has_backend || !supplied.renderer_backend_ready)
+    throw std::runtime_error("Camera view admission requires a live camera and backend gates");
+  const auto services = supplied;
+  Guard guard(busy_);
+  try {
+    // Registry membership is retained even when no renderer backend is live.
+    // In that case the distinct backend initialization route owns any replay.
+    if (!services.renderer_has_backend() || !services.renderer_backend_ready()) return;
+    if (!services.state_zero)
+      throw std::runtime_error("Ready renderer backend requires state-zero lookup");
+    auto state = services.state_zero();
+    if (!state) {
+      if (!services.application_width || !services.application_height || !services.create_state_zero)
+        throw std::runtime_error("Missing state-zero creation service");
+      const RendererViewRectangle rectangle{0,0,services.application_width(),services.application_height()};
+      state = services.create_state_zero(rectangle);
+      if (!state->value) throw std::runtime_error("State-zero creation did not return a live state");
+    }
+    if (!state->value || !services.state_ready)
+      throw std::runtime_error("Camera view admission requires a live state and readiness service");
+    if (!services.state_ready(*state)) {
+      if (!services.queue_pending) throw std::runtime_error("Non-ready state requires a pending-camera service");
+      services.queue_pending(*state,camera);
+      return;
+    }
+    if (!services.allocate_view || !services.associate_camera_intermediate ||
+        !services.register_backend_records || !services.insert_view ||
+        !services.increment_view_use || !services.renumber_view_ordinals)
+      throw std::runtime_error("Ready state requires concrete view allocation services");
+    const auto view = services.allocate_view(*state,camera);
+    if (!view) throw std::runtime_error("View allocation did not return a live view");
+    services.associate_camera_intermediate(view,camera);
+    services.register_backend_records(view);
+    // Widen before negation so INT32_MIN retains its reviewed signed ordering.
+    services.insert_view(view,-static_cast<std::int64_t>(camera_priority));
+    services.increment_view_use(view);
+    services.renumber_view_ordinals(*state);
+  } catch (...) {
+    failed_ = true;
+    throw;
+  }
+}
+
 void RendererCameraRegistry::register_camera(std::uint64_t owner,float key,
     const CameraRegistrationServices& supplied) {
   check_idle();
