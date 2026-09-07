@@ -1438,10 +1438,14 @@ int main() {
         auto first_only = bound;
         first_only.descriptor.count_like = 1U;
         const auto first_direct = view ? KeysBackingEvaluator::evaluate(*view, first_only, 0.0F) : std::nullopt;
-        check(first_direct &&
-                  first_direct->first_group == std::array<float, 4>{-10.0F, 10.0F, 20.0F, -20.0F} &&
-                  first_direct->second_group == std::array<float, 3>{1.0F, 2.0F, 3.0F},
-              "KEYS backing evaluator reads sample zero without a successor");
+        check(first_direct.has_value(),
+              "KEYS backing evaluator produces sample zero without a successor");
+        if(first_direct) {
+            check(first_direct->first_group == std::array<float, 4>{-10.0F, 10.0F, 20.0F, -20.0F},
+                  "KEYS backing evaluator reads sample-zero first group without a successor");
+            check(first_direct->second_group == std::array<float, 3>{1.0F, 2.0F, 3.0F},
+                  "KEYS backing evaluator reads sample-zero second group without a successor");
+        }
         auto first_two = bound;
         first_two.descriptor.count_like = 2U;
         const auto second_direct = view ? KeysBackingEvaluator::evaluate(*view, first_two, 1.0F) : std::nullopt;

@@ -941,8 +941,21 @@ static OFF_NOINLINE void check_complete_runtime_post_directory(
             "sound attachments retain cold constructor-only state without reader playback or duration work");
 }
 
-static OFF_NOINLINE void check_complete_runtime_readers_and_tail(
-    off::graphics::IntroRuntime& host, bool policy) {
+static OFF_NOINLINE void check_complete_restore_reader_route(
+    off::graphics::IntroRuntime& host) {
+      // Restore returns before ordinary service validation.  Keep this route in
+      // its own frame: MSVC otherwise reserves the ordinary reader and loader
+      // tail captures for a path which must not execute them.
+      host.run_postconstruction_reader_bracket(0x9aU,{});
+      check(host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::restore_mode_selected &&
+            host.reader_bracket_retained_saved_value()==0x9aU &&
+            host.deferred_reader_work().size()==420,
+            "restore chooses its distinct unresolved route without running ordinary services or readers");
+      rejects([&]{host.run_postconstruction_reader_bracket(0x9aU,{});});
+}
+
+static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
+    off::graphics::IntroRuntime& host) {
       std::vector<std::string> reader_events;
       std::size_t prepared_reader_count{};
       std::size_t translated_reference_list_count{};
@@ -1002,12 +1015,6 @@ static OFF_NOINLINE void check_complete_runtime_readers_and_tail(
           },
           [&]{reader_events.push_back("end");}};
       host.run_postconstruction_reader_bracket(0x9aU,reader_services);
-      if(policy) {
-        check(host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::restore_mode_selected &&
-              host.reader_bracket_retained_saved_value()==0x9aU && reader_events.empty() &&
-              host.deferred_reader_work().size()==420,
-              "restore chooses its distinct unresolved route without running ordinary services or readers");
-      } else {
         check(host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete &&
               host.reader_bracket_retained_saved_value()==0x9aU && reader_events.size()==4+420*3 &&
               prepared_reader_count==420 && translated_reference_list_count==2 &&
@@ -1028,6 +1035,11 @@ static OFF_NOINLINE void check_complete_runtime_readers_and_tail(
         check(window_work!=host.deferred_reader_work().end(),"first-cut Window retains deferred reader identity");
         if(window_work!=host.deferred_reader_work().end())
           rejects([&]{host.apply_supported_window_deferred_reader(*window_work);});
+        /* The loader tail has a separate frame below. */
+}
+
+static OFF_NOINLINE void check_complete_outer_loader_tail(
+    off::graphics::IntroRuntime& host) {
         std::vector<std::string> tail_events;
         std::vector<off::graphics::IntroRuntimeResourceHandle> spatial,flag_4000;
         const std::array<std::byte,11> named_payload{std::byte{'G'},std::byte{'l'},std::byte{'o'},
@@ -1094,8 +1106,6 @@ static OFF_NOINLINE void check_complete_runtime_readers_and_tail(
         check(tail_events==expected_tail && flag_4000==expected_4000,
               "outer tail keeps concrete section boundaries, releases only its lease, registers camera zero and consumes saved entries through services");
         rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
-      }
-      rejects([&]{host.run_postconstruction_reader_bracket(0x9aU,reader_services);});
 }
 
 static OFF_NOINLINE void test_complete_runtime_scopes() {
@@ -1225,7 +1235,12 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
       rejects([&]{host.construct_lens_flare_animation_scope_without_engine_renderer();});
 
       check_complete_runtime_post_directory(host,sequence);
-      check_complete_runtime_readers_and_tail(host,policy);
+      if(policy)
+        check_complete_restore_reader_route(host);
+      else {
+        check_complete_ordinary_reader_bracket(host);
+        check_complete_outer_loader_tail(host);
+      }
       rejects([&]{host.construct_remaining_directory_without_engine_renderer();});
     }
 }
