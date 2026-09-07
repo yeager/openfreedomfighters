@@ -303,15 +303,39 @@ struct IntroPostconstructionReaderServices {
   std::function<void(const IntroDeferredReaderWork&)> component_reader_boundary;
   std::function<void()> end_reader_service;
 };
-// Opaque, concrete-service boundaries in the ordinary loader tail.  Callers
-// provide real services; this type deliberately has no substitute data model
-// for the named/global section, renderer associations, auxiliary arrays, or
-// scene operations.
+// Pre-release loader-tail inputs retain only the boundary shape established by
+// the observed route.  They are deliberately not a public GMS grammar.
+struct IntroNamedGlobalPayload {
+  std::span<const std::byte> bytes;
+};
+struct IntroRendererResourcePayload {
+  std::span<const std::byte> bytes;
+};
+struct IntroRendererResourceContainer {
+  std::uint64_t identity{};
+  bool operator==(const IntroRendererResourceContainer&) const = default;
+};
+struct IntroResourceAssociationRecord {
+  std::uint32_t first_reference{},second_reference{};
+};
+struct IntroAuxiliaryArraySources {
+  std::optional<std::vector<std::array<std::byte,12>>> first;
+  std::optional<std::vector<std::array<std::byte,8>>> second;
+};
+// Opaque, concrete-service boundaries in the ordinary loader tail. Callers
+// must supply actual readers/parsers/resolvers. The runtime never treats a
+// present source section as successfully consumed by a no-op substitute.
 struct IntroOuterLoaderTailServices {
-  std::function<void()> named_global_section;
-  std::function<void()> renderer_resource_section;
-  std::function<void()> renderer_owner_associations;
-  std::function<void()> auxiliary_array_load;
+  std::optional<IntroNamedGlobalPayload> named_global_payload;
+  std::function<std::string(std::string_view)> relocate_named_global_subject;
+  std::function<void(std::string_view,std::span<const std::byte>)> read_named_global_payload;
+  std::optional<IntroRendererResourcePayload> renderer_resource_payload;
+  std::function<IntroRendererResourceContainer(std::span<const std::byte>)> parse_renderer_resource_payload;
+  std::function<void(IntroRendererResourceContainer)> release_renderer_construction_reference;
+  std::vector<IntroResourceAssociationRecord> resource_associations;
+  std::function<std::optional<IntroRuntimeResourceHandle>(std::uint32_t)> resolve_marked_resource_reference;
+  std::function<void(IntroRuntimeResourceHandle,IntroRuntimeResourceHandle)> associate_live_resources;
+  IntroAuxiliaryArraySources auxiliary_arrays;
   std::function<void()> release_loader_source_lease;
   std::function<bool()> camera_zero_present;
   bool single_allocation_mode{};
@@ -492,6 +516,15 @@ public:
   void run_outer_loader_tail_through_saved_services(const IntroOuterLoaderTailServices& services);
   [[nodiscard]] IntroOuterLoaderTailStage outer_loader_tail_stage() const noexcept {return outer_loader_tail_stage_;}
   [[nodiscard]] bool loader_source_lease_released() const noexcept {return loader_source_lease_released_;}
+  [[nodiscard]] std::optional<IntroRendererResourceContainer> renderer_resource_container() const noexcept {
+    return renderer_resource_container_;
+  }
+  [[nodiscard]] std::span<const std::array<std::byte,12>> first_auxiliary_array() const noexcept {
+    return first_auxiliary_array_;
+  }
+  [[nodiscard]] std::span<const std::array<std::byte,8>> second_auxiliary_array() const noexcept {
+    return second_auxiliary_array_;
+  }
   [[nodiscard]] const IntroConstructedRoomOwner* constructed_room_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroConstructedObjectOwner* constructed_object_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroOwnerAuxiliary* constructed_owner_auxiliary(std::size_t source) const noexcept;
@@ -686,6 +719,9 @@ private:
   std::optional<std::uint64_t> reader_bracket_retained_saved_value_;
   IntroOuterLoaderTailStage outer_loader_tail_stage_{IntroOuterLoaderTailStage::not_started};
   bool loader_source_lease_released_{};
+  std::optional<IntroRendererResourceContainer> renderer_resource_container_;
+  std::vector<std::array<std::byte,12>> first_auxiliary_array_;
+  std::vector<std::array<std::byte,8>> second_auxiliary_array_;
   runtime::SceneEventNames event_names_;
   std::vector<std::optional<std::uint32_t>> source_event_name_mapping_;
   bool source_event_names_prepared_{};

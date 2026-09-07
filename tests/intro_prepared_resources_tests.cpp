@@ -977,31 +977,52 @@ int main() {
               "ordinary reader bracket retains two external calls and forward owner-before-component boundaries without consuming work");
         std::vector<std::string> tail_events;
         std::vector<off::graphics::IntroRuntimeResourceHandle> spatial,flag_4000;
+        const std::array<std::byte,7> named_payload{std::byte{'G'},std::byte{'l'},std::byte{'o'},
+            std::byte{'b'},std::byte{'a'},std::byte{'l'},std::byte{}};
+        const std::array<std::byte,3> renderer_payload{std::byte{1},std::byte{2},std::byte{3}};
         off::graphics::IntroOuterLoaderTailServices tail_services{
-            [&]{tail_events.push_back("named");},
-            [&]{tail_events.push_back("renderer");},
-            [&]{tail_events.push_back("associations");},
-            [&]{tail_events.push_back("auxiliary");},
-            [&]{tail_events.push_back("release");},
-            [&]{tail_events.push_back("camera-query");return false;},
-            false,
-            [&](auto resource){tail_events.push_back("transform");
+            .named_global_payload=off::graphics::IntroNamedGlobalPayload{named_payload},
+            .relocate_named_global_subject=[&](std::string_view subject) {tail_events.push_back("relocate:"+std::string(subject));return "relocated-global";},
+            .read_named_global_payload=[&](std::string_view subject,std::span<const std::byte> remaining) {
+              check(subject=="relocated-global" && remaining.empty(),"named payload reader receives relocated identity and bounded remainder");
+              tail_events.push_back("named-reader");},
+            .renderer_resource_payload=off::graphics::IntroRendererResourcePayload{renderer_payload},
+            .parse_renderer_resource_payload=[&](std::span<const std::byte> payload) {
+              check(payload.size()==renderer_payload.size() && std::equal(payload.begin(),payload.end(),renderer_payload.begin()),"renderer parser receives the complete encoded payload");tail_events.push_back("renderer-parse");return off::graphics::IntroRendererResourceContainer{42};},
+            .release_renderer_construction_reference=[&](auto container) {check(container.identity==42,"release only the parsed renderer construction reference");tail_events.push_back("renderer-release");},
+            .resource_associations={{7,9},{17,18}},
+            .resolve_marked_resource_reference=[&](std::uint32_t reference) -> std::optional<off::graphics::IntroRuntimeResourceHandle> {
+              tail_events.push_back("resolve:"+std::to_string(reference));
+              if(reference==0x80000007U) return host.directory_resource_mapping()[6];
+              if(reference==0x80000009U) return host.directory_resource_mapping()[8];
+              return std::nullopt;
+            },
+            .associate_live_resources=[&](auto first,auto second) {check(first==host.directory_resource_mapping()[6] && second==host.directory_resource_mapping()[8],"association receives both independently resolved live resources");tail_events.push_back("associate");},
+            .auxiliary_arrays={},
+            .release_loader_source_lease=[&]{tail_events.push_back("release");},
+            .camera_zero_present=[&]{tail_events.push_back("camera-query");return false;},
+            .single_allocation_mode=false,
+            .enqueue_transform=[&](auto resource){tail_events.push_back("transform");
               check(resource==host.resource_handle(*host.default_camera_handle()),
                     "DefaultCam queue preserves its canonical child resource");},
-            {[]{return 1280;},[]{return 720;},[]{return false;},{}},
-            [&]{tail_events.push_back("scene");},
-            [&]{tail_events.push_back("between");},
-            [&]{tail_events.push_back("finalize");},
-            [&](auto resource,bool admitted){check(admitted,"saved spatial service receives true");spatial.push_back(resource);tail_events.push_back("spatial");},
-            [&](auto resource,bool enabled){check(enabled,"saved 0x4000 service receives true");flag_4000.push_back(resource);tail_events.push_back("4000");}};
+            .fallback_camera_registration={[]{return 1280;},[]{return 720;},[]{return false;},{}},
+            .outer_scene_operation=[&]{tail_events.push_back("scene");},
+            .between_saved_scene_operation=[&]{tail_events.push_back("between");},
+            .intermediate_scene_finalization=[&]{tail_events.push_back("finalize");},
+            .spatial_admission=[&](auto resource,bool admitted){check(admitted,"saved spatial service receives true");spatial.push_back(resource);tail_events.push_back("spatial");},
+            .saved_0x4000_service=[&](auto resource,bool enabled){check(enabled,"saved 0x4000 service receives true");flag_4000.push_back(resource);tail_events.push_back("4000");}};
         host.run_outer_loader_tail_through_saved_services(tail_services);
         check(host.outer_loader_tail_stage()==off::graphics::IntroOuterLoaderTailStage::second_saved_pass_complete,
               "outer tail reaches the second saved-resource pass");
         check(host.loader_source_lease_released() && host.default_camera_handle() &&
               host.registered_cameras().camera_at(0,[&](auto owner){return owner==host.default_camera_handle()->value;}),
               "outer tail releases its lease and registers DefaultCam at zero");
+        check(host.renderer_resource_container()==off::graphics::IntroRendererResourceContainer{42} &&
+              host.first_auxiliary_array().empty() && host.second_auxiliary_array().empty(),
+              "tail retains parsed renderer ownership and preserves absent auxiliary arrays as zero-count");
         check(spatial.size()==host.saved_resource_flags().size(),"first saved pass visits every saved entry");
-        std::vector<std::string> expected_tail{"named","renderer","associations","auxiliary","release","camera-query",
+        std::vector<std::string> expected_tail{"relocate:Global","named-reader","renderer-parse","renderer-release",
+            "resolve:2147483655","resolve:2147483657","associate","resolve:2147483665","resolve:2147483666","release","camera-query",
             "transform","scene","scene","scene"};
         for(const auto& saved:host.saved_resource_flags()) expected_tail.push_back("spatial");
         expected_tail.push_back("between");expected_tail.push_back("finalize");

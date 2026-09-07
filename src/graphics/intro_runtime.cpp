@@ -1556,10 +1556,16 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
     throw std::runtime_error("Outer loader tail is unavailable at this loader stage");
 
   // These are explicit external boundaries, not native stand-ins for their
-  // still-unimplemented concrete readers and scene operations.  Validate the
+  // still-unimplemented concrete readers and scene operations. Validate the
   // complete required ordinary path before doing any externally visible work.
-  if(!services.named_global_section || !services.renderer_resource_section ||
-      !services.renderer_owner_associations || !services.auxiliary_array_load ||
+  const bool named_requires_reader=services.named_global_payload.has_value();
+  const bool renderer_requires_parser=services.renderer_resource_payload.has_value();
+  const bool associations_require_services=!services.resource_associations.empty();
+  if((named_requires_reader && (!services.relocate_named_global_subject || !services.read_named_global_payload)) ||
+      (renderer_requires_parser && (!services.parse_renderer_resource_payload ||
+          !services.release_renderer_construction_reference)) ||
+      (associations_require_services && (!services.resolve_marked_resource_reference ||
+          !services.associate_live_resources)) ||
       !services.release_loader_source_lease || !services.camera_zero_present ||
       !services.outer_scene_operation || !services.between_saved_scene_operation ||
       !services.intermediate_scene_finalization || !services.spatial_admission ||
@@ -1575,10 +1581,46 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
     return saved.resource;
   };
   try {
-    services.named_global_section();
-    services.renderer_resource_section();
-    services.renderer_owner_associations();
-    services.auxiliary_array_load();
+    if(const auto& named=services.named_global_payload) {
+      const auto terminator=std::find(named->bytes.begin(),named->bytes.end(),std::byte{});
+      if(terminator==named->bytes.end())
+        throw std::runtime_error("Named/global payload has no NUL-delimited relocation subject");
+      std::string subject;
+      subject.reserve(static_cast<std::size_t>(terminator-named->bytes.begin()));
+      for(auto cursor=named->bytes.begin();cursor!=terminator;++cursor)
+        subject.push_back(static_cast<char>(std::to_integer<unsigned char>(*cursor)));
+      const auto relocated=services.relocate_named_global_subject(subject);
+      if(relocated.empty()) throw std::runtime_error("Named/global payload relocation did not produce an identity");
+      const auto remaining=std::span<const std::byte>{terminator+1,named->bytes.end()};
+      services.read_named_global_payload(relocated,remaining);
+    }
+
+    if(const auto& renderer=services.renderer_resource_payload) {
+      const auto parsed=services.parse_renderer_resource_payload(renderer->bytes);
+      if(!parsed.identity) throw std::runtime_error("Renderer-resource parser did not return a live container");
+      // Retain the manager's logical ownership before releasing only the
+      // construction reference. This is not renderer readiness.
+      renderer_resource_container_=parsed;
+      services.release_renderer_construction_reference(parsed);
+    }
+
+    constexpr std::uint32_t reference_domain_marker=0x80000000U;
+    for(const auto& association:services.resource_associations) {
+      // Both lookups are independent and deliberately happen even if the
+      // first one misses; a miss merely suppresses the association callback.
+      const auto first=services.resolve_marked_resource_reference(
+          association.first_reference|reference_domain_marker);
+      const auto second=services.resolve_marked_resource_reference(
+          association.second_reference|reference_domain_marker);
+      if(first && second) services.associate_live_resources(*first,*second);
+    }
+
+    // Reset before each ordinary load. Absent source arrays stay absent rather
+    // than gaining native placeholder records.
+    first_auxiliary_array_.clear();
+    second_auxiliary_array_.clear();
+    if(services.auxiliary_arrays.first) first_auxiliary_array_=*services.auxiliary_arrays.first;
+    if(services.auxiliary_arrays.second) second_auxiliary_array_=*services.auxiliary_arrays.second;
 
     // The public host retains prepared source views.  Releasing this logical
     // loader lease therefore cannot clear or invalidate those borrowed spans.
