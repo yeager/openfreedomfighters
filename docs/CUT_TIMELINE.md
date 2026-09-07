@@ -49,6 +49,19 @@ cursor behavior, admission branches, callback delivery and resource
 activation still block a faithful complete player. No 60 Hz queue or splash timer
 is substituted for those contracts.
 
+## Cut-sequence completion coordinator
+
+`CutSequenceCoordinator` models the recovered handoff after an already-admitted
+natural cut cleanup. Completion clears the active cut, increments the sequence
+index, then checks the bound. When another entry exists it synchronously starts
+that cut and each retained parallel-group handle. The active index is stored
+before callbacks, allowing a start callback to complete and advance the same
+coordinator in one call stack.
+
+At the end of the list it returns `sequence_exhausted`. It does not select a
+scene, menu, camera, or terminal destination; those effects remain separate,
+unrecovered runtime services.
+
 ## Bounded admitted command pass
 
 `off::cutscene::CommandPass` owns copies of commands supplied in an explicit

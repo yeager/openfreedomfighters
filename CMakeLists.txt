@@ -57,6 +57,7 @@ endif()
 add_library(off_core
     src/cutscene/timeline_position.cpp
     src/cutscene/command_pass.cpp
+    src/cutscene/cut_sequence_coordinator.cpp
     src/cutscene/picture_fade.cpp
     src/cutscene/picture_activation_prefix.cpp
     src/audio/decode.cpp
@@ -399,6 +400,10 @@ if(BUILD_TESTING)
     add_executable(off_cut_command_pass_tests tests/cut_command_pass_tests.cpp)
     target_link_libraries(off_cut_command_pass_tests PRIVATE off_core)
     add_test(NAME off_cut_command_pass_tests COMMAND off_cut_command_pass_tests)
+
+    add_executable(off_cut_sequence_coordinator_tests tests/cut_sequence_coordinator_tests.cpp)
+    target_link_libraries(off_cut_sequence_coordinator_tests PRIVATE off_core)
+    add_test(NAME off_cut_sequence_coordinator_tests COMMAND off_cut_sequence_coordinator_tests)
 
     add_executable(off_picture_fade_tests tests/picture_fade_tests.cpp)
     target_link_libraries(off_picture_fade_tests PRIVATE off_core)
