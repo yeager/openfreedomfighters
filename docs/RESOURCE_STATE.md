@@ -355,6 +355,13 @@ normal startup, and they do not provide concrete reader fields, renderer
 associations, scene updates, rendering, or gameplay. Those integrations still
 precede intro playback.
 
+The reviewed ordinary renderer-payload reader performs bounded retained-payload
+reference relocation only. It is not a renderer-resource materializer: no
+runtime render entry, view, texture binding, backend request, or presentation
+follows from that relocation pass. A verified producer from relocated payload
+to the container's runtime entries is still required before this boundary can
+participate in intro playback.
+
 Tests use independently constructed states to check ancestor propagation,
 maintenance gates, picture views and subsequent DefaultCam hide inheritance.
 They do not establish the retail root's post-load flags. The explicit `root_ready`
