@@ -14,6 +14,9 @@ struct PictureOrderedDrawEntry {
   // Retained record -> owner context -> admitted view, never a decoded key index.
   std::optional<std::uint64_t> associated_view;
   std::optional<std::uint64_t> resource;
+  // Preserved from a source-backed queued record. This is an owner-context
+  // identity, not a record, resource, scene-owner or view identity.
+  std::optional<std::uint64_t> owner_context;
 };
 struct PictureOrderedDrawHooks {
   // Concrete ordinary backend/material reset, including on exhausted rounds.

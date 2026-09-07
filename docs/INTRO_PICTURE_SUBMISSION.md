@@ -13,6 +13,12 @@ caller retains those responsibilities. In particular, this boundary is not
 wired into normal startup: the original first-cut lifecycle, camera/view and
 renderer-admission evidence are still incomplete.
 
+Ordered picture entries retain the opaque owner-context identity of an accepted
+queued record. It is deliberately distinct from the record, view and generic
+renderer-resource identities, and is not an `IntroRuntime` owner/resource
+binding. A future first-cut frame bridge must obtain that typed binding from the
+actual admission producer rather than infer it from an ordered entry.
+
 An empty group list or an empty group is rejected. The lower-level descriptor
 expander and SDL renderer validate geometry, transforms and GPU state. The
 public test uses independently authored descriptor data and verifies the

@@ -92,9 +92,10 @@ int main() {
     check(events == std::vector<std::string>{"prepare101", "register101", "prepare102", "register102"} &&
       route.queued_count() == 0 && route_entries.size() == 3 &&
       route_entries[0].record_identity == 99 && route_entries[1].record_identity == 102 &&
-      !route_entries[1].associated_view && route_entries[2].record_identity == 101 &&
-      route_entries[2].associated_view == 71 && route_entries[2].resource == 301,
-      "source-backed queued records prepare/register before rebuild and preserve live view/resource association");
+      !route_entries[1].associated_view && route_entries[1].owner_context == 202 &&
+      route_entries[2].record_identity == 101 && route_entries[2].associated_view == 71 &&
+      route_entries[2].resource == 301 && route_entries[2].owner_context == 201,
+      "source-backed queued records prepare/register before rebuild and preserve live view/resource/owner association");
   }
   {
     PictureRecordRebuild route;

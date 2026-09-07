@@ -106,7 +106,8 @@ std::vector<PictureOrderedDrawEntry> PictureRecordRebuild::rebuild(
     PictureOrderedDrawEntry entry{key, record.record_identity,
                                   view ? std::optional{view->identity}
                                        : std::nullopt,
-                                  record.runtime_resource};
+                                  record.runtime_resource,
+                                  record.owner_context_identity};
     insert(record.record_identity, entry);
     new_keys.push_back({record.record_identity, key});
   }
