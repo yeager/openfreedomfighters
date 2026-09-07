@@ -13,7 +13,6 @@
 
 namespace off::runtime {
 
-class SceneTransitionPump;
 class StartupSceneLoader;
 
 // This is a checked handoff from a caller-owned, scene-specific parser. It is
@@ -104,10 +103,9 @@ public:
   }
 
 private:
-  friend class SceneTransitionPump;
   friend class StartupSceneLoader;
 
-  void commit_supported_transition() {
+  void commit_supported_transition() noexcept {
     entries_.erase(std::remove_if(entries_.begin(), entries_.end(),
                                   [](const DeferredSceneEntry& entry) {
                                     return entry.removal_requested;
@@ -122,66 +120,6 @@ private:
   std::optional<std::uint64_t> current_scene_;
   bool pending_{};
   std::uint32_t clear_requests_{};
-};
-
-// Caller-owned services for the one verified StartLoader target. They establish
-// whether the checked Scenes route is live and whether its archive preparation
-// succeeded. The handoff is notification-only: it must not load or present.
-struct SceneTransitionPumpServices {
-  std::function<bool(std::string_view)> checked_scenes_resolver;
-  std::function<bool(std::string_view)> archive_preparer;
-  std::function<void(std::string_view)> scene_loader_handoff;
-};
-
-enum class SceneTransitionPumpResult {
-  no_pending,
-  rejected,
-  handed_off,
-};
-
-// Explicit, caller-driven consumer for the proven FF-Startup request route.
-// It deliberately has no archive search/opening policy and no scene loading.
-class SceneTransitionPump final {
-public:
-  [[nodiscard]] SceneTransitionPumpResult consume(
-      SceneTransitionQueue& queue, const SceneTransitionPumpServices& services) {
-    if (active_) {
-      throw std::runtime_error("SceneTransitionPump is nonreentrant");
-    }
-    if (!queue.pending_) {
-      return SceneTransitionPumpResult::no_pending;
-    }
-
-    active_ = true;
-    try {
-      // The private trace establishes this route only for one exact target;
-      // accepting a general target list would invent archive-selection policy.
-      if (queue.targets_.size() != 1U || queue.targets_.front() != "FF-Startup" ||
-          !services.checked_scenes_resolver || !services.archive_preparer ||
-          !services.scene_loader_handoff ||
-          !services.checked_scenes_resolver(queue.targets_.front()) ||
-          !services.archive_preparer(queue.targets_.front())) {
-        active_ = false;
-        return SceneTransitionPumpResult::rejected;
-      }
-
-      const std::string target = queue.targets_.front();
-      // Retirement is committed only after both caller-owned checks succeed.
-      // This retains the native ordering: eligible removals precede handoff.
-      queue.commit_supported_transition();
-      services.scene_loader_handoff(target);
-      active_ = false;
-      return SceneTransitionPumpResult::handed_off;
-    } catch (...) {
-      active_ = false;
-      throw;
-    }
-  }
-
-  [[nodiscard]] bool active() const noexcept { return active_; }
-
-private:
-  bool active_{};
 };
 
 // Models the proven request boundary only. Its caller must establish ordinary

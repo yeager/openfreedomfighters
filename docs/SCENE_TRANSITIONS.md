@@ -12,18 +12,25 @@ the current retained scene entries before queuing its copied target. The queue
 only records deferred removal and target requests. It never loads a scene,
 creates GPU resources, presents a frame, or accepts input.
 
-`SceneTransitionPump` is an explicit caller-driven consumer for this one
-verified route. It accepts exactly one retained `FF-Startup` target and requires
-caller-owned checked Scenes resolution plus archive preparation callbacks. A
-missing service or either failed check leaves the deferred queue and current
-scene state unchanged. After both checks succeed, it removes only entries marked
-for removal, clears the retained target, and makes a notification-only
-scene-loader handoff. The pump is nonreentrant; normal startup does not call it.
+`SceneTransitionPump` is the one explicit manager-owned consumer for this
+verified route. It accepts exactly one retained `FF-Startup` target and delegates
+the complete package preparation and source-backed construction transaction to
+`StartupSceneLoader`; it has no separate resolver, preparer, or notification
+handoff. This avoids consuming the pending request before the loader can use it.
 
-It has no generic target handling, archive search/opening policy, actual scene
-load, rendering, presentation, input, or FF-StartUp menu construction. The
-source of LoadScreen's initial counter and setup flag remains a separate
-construction requirement.
+The candidate package and factory-produced live scene are staged while the
+deferred request, marked entries, and prior committed scene lease remain owned.
+Only after both stages succeed does the manager retire marked entries, publish
+the replacement scene, clear the retained target, and clear pending work. This
+staging-before-retirement is an explicit portable safety policy: the observed
+retail manager visits eligible removals before target selection. A failed or
+throwing stage preserves the queue and prior scene state and does not retry.
+The pump is nonreentrant; normal startup does not call it.
+
+It has no generic target ordering/coalescing, archive search/opening policy,
+rendering, presentation, input, or FF-StartUp menu construction. The source of
+LoadScreen's initial counter and setup flag remains a separate construction
+requirement.
 
 ## Checked FF-StartUp loading transaction
 
@@ -44,9 +51,9 @@ policy, does not select companion resources, and does not construct a scene.
 
 Any missing service, incomplete package, failed factory result, or exception
 leaves the deferred request and previously committed scene unchanged. There is
-no automatic retry. Only after both callbacks have succeeded does it retire the
-marked entries and commit the new scene. It is nonreentrant and deliberately is
-not wired to normal startup.
+no automatic retry. The manager-owned pump invokes this transaction and, only
+after both callbacks have succeeded, retires marked entries before publishing the
+new scene. It is nonreentrant and deliberately is not wired to normal startup.
 
 It is not a generic archive parser or a reconstruction of the FF-StartUp GMS
 factory. It does not initialize lifecycle callbacks, render, present, expose a

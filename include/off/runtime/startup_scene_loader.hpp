@@ -76,7 +76,7 @@ public:
 private:
   friend class StartupSceneLoader;
 
-  void commit(StartupSceneLoadPackage package, StartupLiveScene scene) {
+  void commit(StartupSceneLoadPackage package, StartupLiveScene scene) noexcept {
     package_ = std::move(package);
     current_scene_ = std::move(scene);
   }
@@ -128,10 +128,11 @@ public:
         return StartupSceneLoaderResult::rejected;
       }
 
-      // Everything that may fail has completed. Commit replacement ownership
-      // and retire only the deferred entries now.
-      state.commit(std::move(*package), std::move(*scene));
+      // Everything that may fail has completed. The retail manager's removal
+      // pass precedes target selection. We stage the replacement first as a
+      // portable safety policy, then retain that commit ordering below.
       queue.commit_supported_transition();
+      state.commit(std::move(*package), std::move(*scene));
       active_ = false;
       return StartupSceneLoaderResult::committed;
     } catch (...) {
@@ -143,6 +144,56 @@ public:
   [[nodiscard]] bool active() const noexcept { return active_; }
 
 private:
+  bool active_{};
+};
+
+// The verified pending-work route has one manager consumer: it must not clear
+// the request and then notify a disconnected loader. Archive preparation and
+// source-backed construction belong solely to StartupSceneLoaderServices.
+struct SceneTransitionPumpServices {
+  StartupSceneLoaderServices startup_loader;
+};
+
+enum class SceneTransitionPumpResult { no_pending, rejected, committed };
+
+// Manager-owned coordinator for the one supported StartLoader request. It
+// delegates the full candidate transaction to StartupSceneLoader, which keeps
+// both the deferred request and the previous live-scene lease on every failed
+// stage. It has no generic queue ordering, renderer, input, or presentation
+// policy.
+class SceneTransitionPump final {
+public:
+  [[nodiscard]] SceneTransitionPumpResult consume(
+      SceneTransitionQueue& queue, StartupSceneLoadState& state,
+      const SceneTransitionPumpServices& services) {
+    if (active_) {
+      throw std::runtime_error("SceneTransitionPump is nonreentrant");
+    }
+    if (!queue.pending()) return SceneTransitionPumpResult::no_pending;
+
+    active_ = true;
+    try {
+      const auto result = loader_.consume(queue, state, services.startup_loader);
+      active_ = false;
+      switch (result) {
+        case StartupSceneLoaderResult::no_pending:
+          return SceneTransitionPumpResult::no_pending;
+        case StartupSceneLoaderResult::rejected:
+          return SceneTransitionPumpResult::rejected;
+        case StartupSceneLoaderResult::committed:
+          return SceneTransitionPumpResult::committed;
+      }
+      throw std::runtime_error("unknown StartupSceneLoader result");
+    } catch (...) {
+      active_ = false;
+      throw;
+    }
+  }
+
+  [[nodiscard]] bool active() const noexcept { return active_; }
+
+private:
+  StartupSceneLoader loader_;
   bool active_{};
 };
 

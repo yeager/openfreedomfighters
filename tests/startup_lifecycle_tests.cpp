@@ -374,34 +374,45 @@ int main() {
         "pump test retains the supported target");
   off::runtime::SceneTransitionPump pump;
   std::vector<std::string> pump_events;
-  bool removals_precede_handoff = false;
-  const off::runtime::SceneTransitionPumpServices pump_services{
-      .checked_scenes_resolver =
-          [&](std::string_view target) {
-            pump_events.emplace_back("resolve:" + std::string(target));
-            return target == "FF-Startup";
-          },
-      .archive_preparer =
-          [&](std::string_view target) {
-            pump_events.emplace_back("prepare:" + std::string(target));
-            return target == "FF-Startup";
-          },
-      .scene_loader_handoff =
-          [&](std::string_view target) {
-            removals_precede_handoff = pump_queue.entries().empty();
-            pump_events.emplace_back("handoff:" + std::string(target));
-          },
+  off::runtime::StartupSceneLoadState pump_state;
+  const auto pump_lease = [](std::uint64_t value) {
+    return std::shared_ptr<const void>(
+        std::make_shared<const std::uint64_t>(value));
   };
-  check(pump.consume(pump_queue, pump_services) ==
-                off::runtime::SceneTransitionPumpResult::handed_off &&
+  const off::runtime::SceneTransitionPumpServices pump_services{
+      .startup_loader = {
+          .prepare_complete_checked_package =
+              [&](std::string_view target)
+              -> std::optional<off::runtime::StartupSceneLoadPackage> {
+            pump_events.emplace_back("prepare:" + std::string(target));
+            return off::runtime::StartupSceneLoadPackage::complete(
+                target, pump_lease(31U), pump_lease(32U), pump_lease(33U));
+          },
+          .construct_live_scene =
+              [&](const off::runtime::StartupSceneLoadPackage&)
+              -> std::optional<off::runtime::StartupLiveScene> {
+            // Regression: the old notification pump had already consumed this
+            // request before invoking its handoff. Construction must instead
+            // observe the still-owned pending request and marked removals.
+            check(pump_queue.pending() && pump_queue.entries().size() == 2U &&
+                      pump_queue.targets() ==
+                          std::vector<std::string>{"FF-Startup"},
+                  "manager pump retains request until the live candidate exists");
+            pump_events.emplace_back("factory");
+            return off::runtime::StartupLiveScene::from_factory(
+                34U, pump_lease(34U));
+          },
+      },
+  };
+  check(pump.consume(pump_queue, pump_state, pump_services) ==
+                off::runtime::SceneTransitionPumpResult::committed &&
             !pump_queue.pending() && pump_queue.entries().empty() &&
             pump_queue.targets().empty() &&
             !pump_queue.current_scene().has_value() &&
-            removals_precede_handoff &&
-            pump_events == std::vector<std::string>{"resolve:FF-Startup",
-                                                    "prepare:FF-Startup",
-                                                    "handoff:FF-Startup"},
-        "pump validates and prepares before retiring entries then handing off");
+            pump_state.current_scene()->identity() == 34U &&
+            pump_events == std::vector<std::string>{"prepare:FF-Startup",
+                                                    "factory"},
+        "manager pump keeps its request through construction then commits once");
 
   off::runtime::SceneTransitionQueue rejected_queue;
   rejected_queue.retain_scene_entry(41U);
@@ -410,37 +421,68 @@ int main() {
   check(rejected_queue.request_target("FF-Startup"),
         "rejection test retains the supported target");
   const off::runtime::SceneTransitionPumpServices rejected_services{
-      .checked_scenes_resolver = [](std::string_view) { return false; },
-      .archive_preparer = [](std::string_view) { return true; },
-      .scene_loader_handoff = [](std::string_view) {},
+      .startup_loader = {
+          .prepare_complete_checked_package = [](std::string_view)
+              -> std::optional<off::runtime::StartupSceneLoadPackage> {
+            return std::nullopt;
+          },
+          .construct_live_scene = [](const off::runtime::StartupSceneLoadPackage&)
+              -> std::optional<off::runtime::StartupLiveScene> {
+            return std::nullopt;
+          },
+      },
   };
   check(
-      pump.consume(rejected_queue, rejected_services) ==
+      pump.consume(rejected_queue, pump_state, rejected_services) ==
               off::runtime::SceneTransitionPumpResult::rejected &&
           rejected_queue.pending() && rejected_queue.entries().size() == 1U &&
           rejected_queue.entries().front().removal_requested &&
           rejected_queue.targets() == std::vector<std::string>{"FF-Startup"} &&
-          !rejected_queue.current_scene().has_value(),
-      "resolver rejection preserves the pending queue and current scene state");
+          !rejected_queue.current_scene().has_value() &&
+          pump_state.current_scene()->identity() == 34U,
+      "manager-pump rejection preserves its pending request and prior scene");
 
-  off::runtime::SceneTransitionQueue prepare_rejected_queue;
-  prepare_rejected_queue.retain_scene_entry(42U);
-  prepare_rejected_queue.request_clear();
-  check(prepare_rejected_queue.request_target("FF-Startup"),
-        "preparer rejection test retains the supported target");
-  const off::runtime::SceneTransitionPumpServices prepare_rejected_services{
-      .checked_scenes_resolver = [](std::string_view) { return true; },
-      .archive_preparer = [](std::string_view) { return false; },
-      .scene_loader_handoff = [](std::string_view) { std::abort(); },
-  };
-  check(pump.consume(prepare_rejected_queue, prepare_rejected_services) ==
+  off::runtime::SceneTransitionQueue multiple_targets_queue;
+  multiple_targets_queue.request_clear();
+  check(multiple_targets_queue.request_target("FF-Startup") &&
+            multiple_targets_queue.request_target("FF-Startup"),
+        "multiple-target test retains both requests");
+  check(pump.consume(multiple_targets_queue, pump_state, pump_services) ==
                 off::runtime::SceneTransitionPumpResult::rejected &&
-            prepare_rejected_queue.pending() &&
-            prepare_rejected_queue.entries().size() == 1U &&
-            prepare_rejected_queue.entries().front().removal_requested &&
-            prepare_rejected_queue.targets() ==
-                std::vector<std::string>{"FF-Startup"},
-        "archive preparation rejection preserves deferred removals and target");
+            multiple_targets_queue.pending() &&
+            multiple_targets_queue.targets().size() == 2U &&
+            pump_state.current_scene()->identity() == 34U,
+        "manager pump leaves unsupported target ordering untouched");
+
+  off::runtime::SceneTransitionQueue throwing_queue;
+  throwing_queue.retain_scene_entry(43U);
+  throwing_queue.request_clear();
+  check(throwing_queue.request_target("FF-Startup"),
+        "throwing manager-pump test retains target");
+  bool pump_threw = false;
+  try {
+    static_cast<void>(pump.consume(
+        throwing_queue, pump_state,
+        {.startup_loader = {
+             .prepare_complete_checked_package = [](std::string_view)
+                 -> std::optional<off::runtime::StartupSceneLoadPackage> {
+               throw std::runtime_error("package failed");
+             },
+             .construct_live_scene =
+                 [](const off::runtime::StartupSceneLoadPackage&)
+                 -> std::optional<off::runtime::StartupLiveScene> {
+               return std::nullopt;
+             },
+         }}));
+  } catch (const std::runtime_error&) {
+    pump_threw = true;
+  }
+  check(pump_threw && !pump.active() && throwing_queue.pending() &&
+            throwing_queue.entries().size() == 1U &&
+            throwing_queue.targets() ==
+                std::vector<std::string>{"FF-Startup"} &&
+            pump_state.current_scene()->identity() == 34U,
+        "manager-pump exceptions preserve deferred and committed state");
 
   off::runtime::SceneTransitionQueue reentrant_queue;
   reentrant_queue.request_clear();
@@ -448,19 +490,23 @@ int main() {
         "nonreentrant test retains the supported target");
   bool recursive_call_rejected = false;
   const off::runtime::SceneTransitionPumpServices reentrant_services{
-      .checked_scenes_resolver =
-          [&](std::string_view) {
+      .startup_loader = {
+          .prepare_complete_checked_package =
+          [&](std::string_view) -> std::optional<off::runtime::StartupSceneLoadPackage> {
             try {
-              static_cast<void>(pump.consume(reentrant_queue, {}));
+              static_cast<void>(pump.consume(reentrant_queue, pump_state, {}));
             } catch (const std::runtime_error &) {
               recursive_call_rejected = true;
             }
-            return false;
+            return std::nullopt;
           },
-      .archive_preparer = [](std::string_view) { return true; },
-      .scene_loader_handoff = [](std::string_view) {},
+          .construct_live_scene = [](const off::runtime::StartupSceneLoadPackage&)
+              -> std::optional<off::runtime::StartupLiveScene> {
+            return std::nullopt;
+          },
+      },
   };
-  check(pump.consume(reentrant_queue, reentrant_services) ==
+  check(pump.consume(reentrant_queue, pump_state, reentrant_services) ==
                 off::runtime::SceneTransitionPumpResult::rejected &&
             recursive_call_rejected && !pump.active() &&
             reentrant_queue.pending(),
@@ -698,10 +744,9 @@ int main() {
   std::uint32_t resolve_calls{};
   std::uint64_t initialized_owner{};
   std::uint16_t initialized_route{};
-  std::uint16_t retained_action{};
   const off::runtime::StartupBootMenuAdmissionServices boot_services{
       .event_registry_live = [] { return true; },
-      .resolve_event =
+      .resolve_identity =
           [&](std::uint64_t identity) -> std::optional<std::uint16_t> {
         ++resolve_calls;
         if (identity == 101U)
@@ -717,35 +762,29 @@ int main() {
             initialized_route = route;
             return true;
           },
-      .action_map_live = [] { return true; },
-      .retain_action =
-          [&](std::uint16_t action) {
-            retained_action = action;
-            return true;
-          },
   };
   boot_menu.initialize(boot_source, boot_services);
-  check(boot_menu.interactive() && !boot_menu.failed() && resolve_calls == 2U &&
+  check(boot_menu.initialized() && !boot_menu.failed() && resolve_calls == 2U &&
             initialized_owner == 91U && initialized_route == 32U &&
-            retained_action == 31U && boot_menu.action_id() == 31U &&
+            boot_menu.reader_id() == 31U &&
             boot_menu.routing_id() == 32U,
-        "boot-menu admission retains only live opaque action and routing IDs");
+        "boot-menu admission retains only live opaque reader and routing IDs");
   check(!boot_menu.observe({32U}) && boot_menu.observe({31U}) &&
-            boot_menu.observed_actions() == 1U,
-        "boot-menu observation records the resolved action without a selection "
-        "side effect");
+            boot_menu.observations() == 1U,
+        "boot-menu observation records an opaque reader identity without input "
+        "or selection semantics");
 
-  off::runtime::StartupBootMenuAdmission missing_map;
-  auto unavailable_map_services = boot_services;
-  unavailable_map_services.action_map_live = [] { return false; };
+  off::runtime::StartupBootMenuAdmission missing_registry;
+  auto unavailable_registry_services = boot_services;
+  unavailable_registry_services.event_registry_live = [] { return false; };
   rejected = false;
   try {
-    missing_map.initialize(boot_source, unavailable_map_services);
+    missing_registry.initialize(boot_source, unavailable_registry_services);
   } catch (const std::runtime_error &) {
     rejected = true;
   }
-  check(rejected && missing_map.failed() && !missing_map.interactive(),
-        "boot-menu admission fails closed when the caller-owned action map is "
+  check(rejected && missing_registry.failed() && !missing_registry.initialized(),
+        "boot-menu admission fails closed when the caller-owned registry is "
         "absent");
 
   std::cout << "startup lifecycle tests passed\n";
