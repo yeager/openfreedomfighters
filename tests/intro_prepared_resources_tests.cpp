@@ -1,4 +1,5 @@
 #include "off/graphics/intro_prepared_resources.hpp"
+#include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_renderer_resource_envelope.hpp"
 #include "off/graphics/intro_runtime.hpp"
 #include "off/graphics/preview_camera_component.hpp"
@@ -693,6 +694,38 @@ void archive(const std::filesystem::path& path, const std::vector<std::pair<std:
 int main() {
     using off::graphics::IntroPreparedResources;
     static_assert(!std::is_copy_constructible_v<IntroPreparedResources> && std::is_move_constructible_v<IntroPreparedResources>);
+    {
+      Bytes image(40,std::byte{0x6d});
+      constexpr std::uint32_t section_offset=7;
+      constexpr std::uint32_t next_section_offset=25;
+      image[7]=std::byte{'G'}; image[8]=std::byte{'l'}; image[9]=std::byte{'o'};
+      image[10]=std::byte{'b'}; image[11]=std::byte{'a'}; image[12]=std::byte{'l'};
+      image[13]=std::byte{0};
+      image[14]=std::byte{0x31}; image[15]=std::byte{0x32};
+      image[16]=std::byte{0x33}; image[17]=std::byte{0x34};
+      image[18]=std::byte{0x88}; image[19]=std::byte{0x12}; image[20]=std::byte{0x34};
+      image[21]=std::byte{0x56}; image[22]=std::byte{0x78}; image[23]=std::byte{0xff};
+      image[24]=std::byte{0x99};
+      const auto envelope=off::graphics::parse_intro_named_global_section_envelope(
+          image,section_offset,next_section_offset);
+      check(envelope.relocated_label=="Global" &&
+                envelope.relocated_label.data()==reinterpret_cast<const char*>(image.data()+section_offset),
+            "named/global envelope exposes the bounded relocated label");
+      check(envelope.typed_reader_span.size()==7 && envelope.typed_reader_span[0]==std::byte{0x88} &&
+                envelope.typed_reader_span[5]==std::byte{0xff} && envelope.typed_reader_span[6]==std::byte{0x99},
+            "named/global envelope preserves every post-prelude byte for the typed reader");
+      rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(image,0,next_section_offset); });
+      rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(image,section_offset,0); });
+      rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(image,next_section_offset,section_offset); });
+      rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(image,section_offset,41); });
+      Bytes unterminated=image;
+      for(std::size_t index=section_offset;index<next_section_offset;++index) unterminated[index]=std::byte{'x'};
+      rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(
+          unterminated,section_offset,next_section_offset); });
+      Bytes short_prelude(12,std::byte{0x6d});
+      short_prelude[7]=std::byte{'X'}; short_prelude[8]=std::byte{0};
+      rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(short_prelude,7,12); });
+    }
     {
       Bytes image(32, std::byte{0x6d});
       constexpr std::uint32_t section_offset=12;
