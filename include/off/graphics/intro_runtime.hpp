@@ -687,6 +687,9 @@ public:
                            const std::array<float,3>& position);
   [[nodiscard]] std::span<const std::unique_ptr<IntroRuntimePicture>> pictures() const noexcept { return pictures_; }
   [[nodiscard]] IntroRuntimePicture& picture_for_source(std::size_t source);
+  // Read-only source lookup for renderer-neutral consumers.  It neither
+  // constructs a picture owner nor changes picture submission state.
+  [[nodiscard]] const IntroRuntimePicture& picture_for_source(std::size_t source) const;
   [[nodiscard]] std::uint32_t paired_material(std::uint32_t prm_offset) const;
   // Explicit bounded projection only: caller still owes input-map and generic
   // scheduling effects. Never invoked by construction or interpreted as ready.

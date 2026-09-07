@@ -566,6 +566,19 @@ The [explicit-clock timeline conversion](CUT_TIMELINE.md) is now implemented
 without a host-clock adapter or command executor. It preserves the reviewed
 integer and float boundaries; it does not resolve the remaining scheduling gates.
 
+## Explicit picture preview snapshot
+
+`build_intro_preview` is a renderer-neutral diagnostic boundary for one
+explicitly selected, already-retained picture source. It copies only that
+picture's current draw plan and the exact decoded images referenced by it, and
+rejects non-picture sources, empty plans, missing or invalid images, duplicate
+image identities, and invalid target extents. It does not select a camera,
+compute a view, alter runtime state, activate a cut, or issue GPU work.
+
+The snapshot is deliberately not wired into normal startup or advertised as
+intro playback. Picture visibility, ordering, camera admission, pass state and
+the original external basis-scale policy still require independent recovery.
+
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
 copied controller payloads. Runtime acceptance additionally requires an actual

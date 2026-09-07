@@ -2394,6 +2394,10 @@ IntroRuntimePicture& IntroRuntime::picture_for_source(std::size_t source) {
   for (auto& picture : pictures_) if (picture->source_index() == source) return *picture;
   throw std::runtime_error("intro source has no retained picture owner");
 }
+const IntroRuntimePicture& IntroRuntime::picture_for_source(std::size_t source) const {
+  for (const auto& picture : pictures_) if (picture->source_index() == source) return *picture;
+  throw std::runtime_error("intro source has no retained picture owner");
+}
 std::uint32_t IntroRuntime::paired_material(std::uint32_t prm_offset) const {
   const auto found = materials_.find(prm_offset);
   if (found == materials_.end()) throw std::runtime_error("intro paired frame resource is not retained");

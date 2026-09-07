@@ -101,6 +101,7 @@ add_library(off_core
     src/graphics/startup_graphics_asset.cpp
     src/graphics/intro_prepared_resources.cpp
     src/graphics/intro_runtime.cpp
+    src/graphics/intro_preview_builder.cpp
     src/graphics/intro_controller_initialization.cpp
     src/graphics/startup_graphics_prepared_plan.cpp
     src/graphics/startup_graphics_expanded_plan.cpp

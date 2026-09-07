@@ -2,6 +2,7 @@
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_renderer_resource_envelope.hpp"
 #include "off/graphics/intro_runtime.hpp"
+#include "off/graphics/intro_preview_builder.hpp"
 #include "off/graphics/preview_camera_component.hpp"
 #include "off/data/packed_resource.hpp"
 #include "off/data/archive_vfs.hpp"
@@ -757,6 +758,22 @@ int main() {
       rejects([&] { (void)off::graphics::parse_intro_renderer_resource_envelope(image,section_offset,{}); });
     }
     Fixture fixture;
+    {
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+      off::graphics::IntroRuntime host(fixture.build(),app,sequence);
+      const auto snapshot=off::graphics::build_intro_preview(host,1,{1280,720});
+      check(snapshot.target.width==1280 && snapshot.target.height==720 &&
+                snapshot.draw.source_index==1 && !snapshot.draw.draw_plan.groups().empty() &&
+                snapshot.images.size()==1 && !snapshot.images[0].mip_zero.pixels.empty(),
+            "intro preview snapshots an exact retained picture and its image");
+      rejects([&]{(void)off::graphics::build_intro_preview(host,1,{0,720});});
+      rejects([&]{(void)off::graphics::build_intro_preview(host,0,{1280,720});});
+      rejects([&]{(void)off::graphics::build_intro_preview(host,999,{1280,720});});
+      rejects([&]{(void)off::graphics::build_intro_preview(host,1,{1280,720},
+          static_cast<off::graphics::IntroPreviewPolicy>(99));});
+    }
     {
       off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
           {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
