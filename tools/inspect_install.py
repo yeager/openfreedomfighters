@@ -121,18 +121,34 @@ def _load_config_summary(
             return None
         return struct.unpack_from("<I", image, offset + field_offset)[0]
 
-    # PE32 fields through SecurityCookie. PE32+ moves the pointer-width fields
-    # after offset 24; only common fixed fields are reported for it here.
+    def u64(field_offset: int) -> int | None:
+        if field_offset + 8 > readable_size:
+            return None
+        return struct.unpack_from("<Q", image, offset + field_offset)[0]
+
     result: dict[str, object] = {
         "declared_size": declared_size,
         "directory_size": size,
         "parsed_size": readable_size,
         "layout": "PE32" if bitness == 32 else "PE32+",
+        "timestamp": u32(4),
+        "major_version": u16(8),
+        "minor_version": u16(10),
         "global_flags_clear": u32(12),
         "global_flags_set": u32(16),
-        "process_heap_flags": u32(44) if bitness == 32 else None,
+        "critical_section_default_timeout": u32(20),
     }
     if bitness == 32:
+        decommit_free = u32(24)
+        decommit_total = u32(28)
+        lock_prefix = u32(32)
+        maximum_allocation = u32(36)
+        virtual_memory = u32(40)
+        process_heap_flags = u32(44)
+        affinity = u32(48)
+        csd_version = u16(52)
+        dependent_load_flags = u16(54)
+        edit_list = u32(56)
         security_cookie = u32(60)
         seh_table = u32(64)
         seh_count = u32(68)
@@ -141,6 +157,16 @@ def _load_config_summary(
         guard_flags = u32(88)
         result.update(
             {
+                "decommit_free_block_threshold": decommit_free,
+                "decommit_total_free_threshold": decommit_total,
+                "lock_prefix_table_present": lock_prefix is not None and lock_prefix != 0,
+                "maximum_allocation_size": maximum_allocation,
+                "virtual_memory_threshold": virtual_memory,
+                "process_heap_flags": process_heap_flags,
+                "process_affinity_mask": affinity,
+                "csd_version": csd_version,
+                "dependent_load_flags": dependent_load_flags,
+                "edit_list_present": edit_list is not None and edit_list != 0,
                 "security_cookie_present": security_cookie is not None
                 and security_cookie != 0,
                 "seh_metadata_available": seh_table is not None,
@@ -151,6 +177,34 @@ def _load_config_summary(
                 and guard_table != 0,
                 "guard_cf_function_count": guard_count,
                 "guard_flags": guard_flags,
+            }
+        )
+    else:
+        decommit_free = u64(24)
+        decommit_total = u64(32)
+        lock_prefix = u64(40)
+        maximum_allocation = u64(48)
+        virtual_memory = u64(56)
+        process_heap_flags = u32(64)
+        affinity = u64(68)
+        csd_version = u16(76)
+        dependent_load_flags = u16(78)
+        edit_list = u64(80)
+        security_cookie = u64(88)
+        result.update(
+            {
+                "decommit_free_block_threshold": decommit_free,
+                "decommit_total_free_threshold": decommit_total,
+                "lock_prefix_table_present": lock_prefix is not None and lock_prefix != 0,
+                "maximum_allocation_size": maximum_allocation,
+                "virtual_memory_threshold": virtual_memory,
+                "process_heap_flags": process_heap_flags,
+                "process_affinity_mask": affinity,
+                "csd_version": csd_version,
+                "dependent_load_flags": dependent_load_flags,
+                "edit_list_present": edit_list is not None and edit_list != 0,
+                "security_cookie_present": security_cookie is not None
+                and security_cookie != 0,
             }
         )
     return result

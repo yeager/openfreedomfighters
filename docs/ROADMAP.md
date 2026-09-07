@@ -35,7 +35,8 @@ as delivery requirements. Modern graphics polish follows a working Original path
 - [x] Map PE data directories, exports, delay-import absence, and TLS callbacks.
 - [x] Resolve all imported ordinals and record IAT addresses.
 - [x] Identify statically named dynamic APIs and direct IAT call boundaries.
-- [ ] Resolve runtime-computed module/API arguments and map load-config metadata.
+- [ ] Resolve runtime-computed module/API arguments.
+- [x] Map bounded PE load-config metadata without exporting pointers or tables.
 - [ ] Convert the 332 exported class registrations into behavior-only subsystem specifications.
 - [x] Produce aggregate archive/resource magic and size census.
 - [x] Complete the first three-scene field-level consistency report.

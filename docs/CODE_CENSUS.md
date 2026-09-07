@@ -29,8 +29,9 @@ The supported PE32 build's load-config data directory exposes 64 bytes, while
 its header declares a longer 92-byte structure. The safely bounded prefix ends
 at the SecurityCookie field, and a cookie is present. SafeSEH and Control Flow
 Guard fields are therefore *unavailable to this report*, not treated as absent.
-The installer records only bounded scalar metadata and field availability; it
-never exports handler pointers, function tables, code bytes, or disassembly.
+The installer records bounded version, timeout, memory/heap and affinity
+scalars, plus presence flags for pointer fields and field availability. It never
+exports pointer values, handler/function tables, code bytes, or disassembly.
 
 This avoids using unbounded load-config reads to explain runtime control flow
 or dynamically chosen modules. Those remaining module and API arguments still

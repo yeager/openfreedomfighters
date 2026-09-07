@@ -111,7 +111,7 @@ Files named `.WAV` are often banks rather than conventional RIFF WAV files. All 
 
 ## Next probes
 
-1. Resolve runtime-computed dynamic module/API arguments and map load-config metadata.
+1. Resolve runtime-computed dynamic module/API arguments.
 2. Decode the ten type-specific auxiliary BUF schemas and identify the four bootstrap handles external to empty local images.
 3. Determine the `RMC`/`RMI` runtime distinction, follow BUF materialization into `PRM`, then bind decoded `TEX` pixels to renderable geometry.
 4. Record black-box boot, menu, input, timing, and first-level traces from the retail game.
