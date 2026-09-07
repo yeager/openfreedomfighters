@@ -34,6 +34,24 @@ struct StartupPreflightResult {
   StartupWindow window{};
 };
 
+// Immutable layout for the project-owned startup artwork metadata. The text is
+// supplied by the build's release version, rather than by a runtime setting.
+// Coordinates name the foreground glyph origin; the shadow is drawn one scale
+// unit down and right of the same origin.
+struct StartupSplashOverlayLayout {
+  std::string_view version;
+  std::string_view credit;
+  int pixel_size{};
+  int version_left{};
+  int credit_left{};
+  int baseline{};
+};
+
+// Pure placement contract used by the SDL splash renderer. Width and height
+// must be positive window-surface dimensions.
+[[nodiscard]] StartupSplashOverlayLayout
+startup_splash_overlay_layout(int width, int height) noexcept;
+
 // Opens the project-owned splash before touching retail data. This entry point
 // is intentionally not used by --verify-only, --help, or --version.
 // prepare_assets runs on the verification worker after successful verification.

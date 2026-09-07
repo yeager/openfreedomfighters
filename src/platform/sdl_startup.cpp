@@ -24,17 +24,33 @@ void StartupWindowDeleter::operator()(SDL_Window *window) const noexcept {
   }
 }
 
-namespace {
-
-constexpr int startup_width = 1280;
-constexpr int startup_height = 720;
-
 #ifndef OFF_VERSION
 #error "OFF_VERSION must be supplied by the CMake release version"
 #endif
 
 constexpr std::string_view splash_version = "v" OFF_VERSION;
 constexpr std::string_view splash_credit = "Daniel Nylander";
+
+StartupSplashOverlayLayout
+startup_splash_overlay_layout(int width, int height) noexcept {
+  const int scale = std::max(1, std::min(width / 640, height / 360));
+  const int pixel_size = 2 * scale;
+  const int margin = 18 * scale;
+  const int text_height = 7 * pixel_size;
+  const int credit_width =
+      static_cast<int>(splash_credit.size()) * 6 * pixel_size;
+  return {.version = splash_version,
+          .credit = splash_credit,
+          .pixel_size = pixel_size,
+          .version_left = margin,
+          .credit_left = width - margin - credit_width,
+          .baseline = height - margin - text_height};
+}
+
+namespace {
+
+constexpr int startup_width = 1280;
+constexpr int startup_height = 720;
 
 struct SdlSession {
   SdlSession() = default;
@@ -121,22 +137,21 @@ void draw_splash_text(SDL_Surface *target, int left, int top,
 }
 
 void draw_splash_overlays(SDL_Surface *target) {
-  const int scale = std::max(1, std::min(target->w / 640, target->h / 360));
-  const int pixel_size = 2 * scale;
-  const int margin = 18 * scale;
-  const int text_height = 7 * pixel_size;
-  const int credit_width = static_cast<int>(splash_credit.size()) * 6 * pixel_size;
-  const int baseline = target->h - margin - text_height;
+  const auto layout = startup_splash_overlay_layout(target->w, target->h);
+  const int scale = layout.pixel_size / 2;
   const auto shadow = SDL_MapSurfaceRGB(target, 0, 0, 0);
   const auto foreground = SDL_MapSurfaceRGB(target, 238, 238, 232);
-  draw_splash_text(target, margin + scale, baseline + scale, splash_version,
-                   pixel_size, shadow);
-  draw_splash_text(target, margin, baseline, splash_version, pixel_size,
+  draw_splash_text(target, layout.version_left + scale,
+                   layout.baseline + scale, layout.version, layout.pixel_size,
+                   shadow);
+  draw_splash_text(target, layout.version_left, layout.baseline, layout.version,
+                   layout.pixel_size,
                    foreground);
-  draw_splash_text(target, target->w - margin - credit_width + scale,
-                   baseline + scale, splash_credit, pixel_size, shadow);
-  draw_splash_text(target, target->w - margin - credit_width, baseline,
-                   splash_credit, pixel_size, foreground);
+  draw_splash_text(target, layout.credit_left + scale,
+                   layout.baseline + scale, layout.credit, layout.pixel_size,
+                   shadow);
+  draw_splash_text(target, layout.credit_left, layout.baseline, layout.credit,
+                   layout.pixel_size, foreground);
 }
 
 [[nodiscard]] bool draw_splash(SDL_Window *window, SDL_Surface *image) {

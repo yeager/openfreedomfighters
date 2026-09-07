@@ -22,6 +22,15 @@ int main() {
   static_assert(std::is_nothrow_move_constructible_v<StartupWindow>);
   static_assert(!std::is_copy_constructible_v<
                 off::platform::StartupPreflightResult>);
+  const auto overlay = off::platform::startup_splash_overlay_layout(1280, 720);
+  check(overlay.version == std::string_view{"v" OFF_VERSION},
+        "splash version comes from the build release version");
+  check(overlay.credit == "Daniel Nylander", "splash carries the project credit");
+  check(overlay.pixel_size == 4, "splash overlay scales for 1280x720");
+  check(overlay.version_left == 36 && overlay.baseline == 656,
+        "version is placed at the lower-left splash margin");
+  check(overlay.credit_left == 884 && overlay.baseline == 656,
+        "credit is placed at the lower-right splash margin");
   check(SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy"), "select dummy video");
   check(SDL_Init(SDL_INIT_VIDEO), "initialize video without a display");
   {
