@@ -2,6 +2,7 @@
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_renderer_resource_envelope.hpp"
 #include "off/graphics/intro_runtime.hpp"
+#include "off/graphics/intro_accepted_picture_registry.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
 #include "off/graphics/preview_camera_component.hpp"
 #include "off/data/packed_resource.hpp"
@@ -1341,6 +1342,20 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
               center_status==1U && position_updates==1U &&
               activation_trace.back()==off::cutscene::PictureActivationPrefix::Stage::record_requested,
               "first-cut adapter resolves the legal member identity and runs only ordered activation plus Center");
+        off::graphics::IntroAcceptedPictureRecordRegistry accepted_records;
+        const off::graphics::PictureQueuedDrawRecord accepted{17,7,9,{},1};
+        const auto legal_owner=host.source_handle(*legal_source);
+        const auto legal_resource=host.resource_handle(legal_owner);
+        accepted_records.begin_frame(44);
+        accepted_records.register_accepted(accepted,legal_owner,legal_resource);
+        check(accepted_records.resolve(accepted) &&
+              accepted_records.resolve(accepted)->owner==legal_owner &&
+              accepted_records.resolve(accepted)->resource==legal_resource,
+              "frame-local accepted record keeps typed legal-picture provenance separate from generic fields");
+        auto changed=accepted;changed.owner_context_identity=8;
+        check(!accepted_records.resolve(changed),"changed generic provenance cannot reuse an accepted typed binding");
+        accepted_records.end_frame(44);
+        check(!accepted_records.resolve(accepted),"accepted picture bindings expire at their exact frame boundary");
       }
       if(policy)
         check_complete_restore_reader_route(host);

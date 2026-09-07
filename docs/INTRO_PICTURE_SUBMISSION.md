@@ -19,6 +19,12 @@ renderer-resource identities, and is not an `IntroRuntime` owner/resource
 binding. A future first-cut frame bridge must obtain that typed binding from the
 actual admission producer rather than infer it from an ordered entry.
 
+`IntroAcceptedPictureRecordRegistry` is the frame-local post-accept bridge for
+that future producer. It retains full generic record provenance alongside
+separate typed owner/resource handles and expires all bindings at exact frame
+end. It does not claim that a generic owner-context or renderer-resource value
+equals either typed handle, and normal startup does not open this registry.
+
 An empty group list or an empty group is rejected. The lower-level descriptor
 expander and SDL renderer validate geometry, transforms and GPU state. The
 public test uses independently authored descriptor data and verifies the
