@@ -1,4 +1,5 @@
 #include "off/ui/project_localization.hpp"
+#include "off/platform/startup_data_error_presentation.hpp"
 
 #include <array>
 #include <iostream>
@@ -55,6 +56,30 @@ int main() {
         "invalid message IDs do not resolve");
   check(!catalog.format_seconds(MessageId::apply, 2, "en", "en"),
         "only the declared countdown pattern is formatted");
+
+  const off::data::InstallVerification missing_executable{
+      .error = off::data::InstallError::missing_executable,
+      .message = "exact verifier diagnostic"};
+  const auto startup_error = off::platform::make_startup_data_error_presentation(
+      missing_executable, catalog, "sv-SE", "en-US");
+  check(startup_error.title == "Speldata krävs",
+        "startup error title follows the selected locale");
+  check(startup_error.summary ==
+            "Freedom.Exe saknas i den valda speldata-mappen.",
+        "stable install error selects a localized explanation");
+  check(startup_error.technical_message == "exact verifier diagnostic",
+        "raw verifier diagnostic remains separate from localized UI text");
+  check(startup_error.dialog_text().find("exact verifier diagnostic") !=
+            std::string::npos,
+        "dialog composition retains the raw technical diagnostic");
+  check(off::platform::startup_data_error_message_id(
+            off::data::InstallError::unsupported_executable_hash) ==
+            MessageId::game_executable_unsupported,
+        "executable hash failure has a stable presentation mapping");
+  check(off::platform::startup_data_error_message_id(
+            off::data::InstallError::none) ==
+            MessageId::game_data_verification_failed,
+        "unexpected verification result has a safe presentation mapping");
 
   const std::array<CatalogEntry, 1> incomplete{{
       {Locale::english, MessageId::apply, "Apply"},

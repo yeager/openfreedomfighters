@@ -45,3 +45,14 @@ paths. No scene-manager request, archive path, mission, player creation, or
 single-player target occurs in this recovered segment. It remains a menu-state
 transition only. The next evidence target is the `rGameMenu` factory and its
 target-array population, followed by the eventual selection action.
+
+That factory investigation corrects an earlier assumption: `rGameMenu` is a
+named runtime-object lookup, not a registered class or executable factory.
+`BootMenu`, `LinkMenu`, and `LevelMenuSinglePlayer` are distinct registered
+factories. The recovered `STARTGAME` handler belongs to `LinkMenu`; its source
+reader carries six opaque object identifiers which preparation
+resolves/filters/binds without making them scene targets. The owned startup
+data contains a separate single-player menu root with a selectable `C01A`
+child, but static evidence does not connect that object to `rGameMenu` or to a
+scene request. The native scene-manager request pair remains unreached, so no
+selection is wired in the portable runtime.

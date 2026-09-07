@@ -11,6 +11,12 @@ SDL. `--locale TAG` is an explicit override (for example, `--locale sv-SE`).
 It does not read a retail LOC format or ship retail text. This is not localized
 Original presentation, game-wide l10n, or a claim of complete game coverage.
 
+The native startup data-error dialog uses the same catalog. Its concise title,
+cause and relaunch instruction are selected from the stable `InstallError`
+value; the verifier's raw diagnostic remains a separate technical field and is
+included only as labelled diagnostic detail. This keeps user-facing wording
+translatable without discarding the exact reason needed for support.
+
 The current catalog has no external catalog loader, plural/select support,
 bidirectional layout, shaping, font fallback, or locale-specific layout tests.
 The countdown is the single constrained `{seconds}` project-authored pattern;

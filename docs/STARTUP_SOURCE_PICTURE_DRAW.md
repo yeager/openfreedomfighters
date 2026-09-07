@@ -40,5 +40,14 @@ renderer-state rectangle, projection and Y-basis together. The provider checks
 that the root remains in the complete live hierarchy and binds the result to
 scene, factory, hierarchy and coordinator epochs. The renderer boundary can
 consume this move-only snapshot instead of mixing fields from separate reads.
+
+The next private disassembly pass followed the ordinary state visitor and
+window-pass consumers. They consume an already selected root/state, but do not
+recover the FF-StartUp coordinator assignment, initial visibility or pass
+mutation, camera registration/view creation, pass rectangle producer, or
+presenter completion. The common virtual traversal wrapper occurs in multiple
+derived tables, so a table match cannot identify a live FF-StartUp receiver.
+The normal startup path remains deliberately disconnected until those producer
+boundaries are recovered.
 It is disconnected from normal startup until the original coordinator producer
 is recovered.
