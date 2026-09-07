@@ -624,6 +624,15 @@ The fresh legal-picture owner has no extension-gated preselection membership,
 but that does not permit skipping the coordinator or treating the registry as
 empty.
 
+The first positive-time activation additionally requires an unfired member, a
+resolved member target and member information. Its fresh resolver path retains
+the existing object on a cache miss, appends tracking before changing flags, and
+handles any replacement service explicitly. The supported picture then performs
+conditional maintenance, owner notification and phase one before the common
+resource-registration handoff. That handoff is not a draw call: dynamic hide,
+camera/view selection, preselection, backend submission and present remain
+separate gates.
+
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
 copied controller payloads. Runtime acceptance additionally requires an actual
