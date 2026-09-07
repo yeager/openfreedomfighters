@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cstdint>
 #include <iostream>
+#include <optional>
 
 namespace {
 
@@ -43,6 +44,25 @@ int main() {
         "preserve requested settings and report a deterministic present "
         "fallback");
 
+  unsigned initial_apply_calls = 0;
+  std::optional<off::settings::EffectiveGraphicsSettings> initial_applied;
+  check(off::settings::initialize_graphics_settings(
+            resolution, [&](const off::settings::EffectiveGraphicsSettings &value) {
+              ++initial_apply_calls;
+              initial_applied = value;
+              return true;
+            }) == off::settings::InitialGraphicsSetup::ready &&
+            initial_apply_calls == 1 && initial_applied == resolution.effective,
+        "apply the resolved boot configuration exactly once before rendering");
+  initial_apply_calls = 0;
+  check(off::settings::initialize_graphics_settings(
+            resolution, [&](const off::settings::EffectiveGraphicsSettings &) {
+              ++initial_apply_calls;
+              return false;
+            }) == off::settings::InitialGraphicsSetup::apply_failed &&
+            initial_apply_calls == 1,
+        "surface a boot display-configuration failure after one apply attempt");
+
   auto unavailable = capabilities;
   unavailable.modern_profile = false;
   unavailable.borderless_desktop = false;
@@ -69,6 +89,15 @@ int main() {
             invalid_resolution.error ==
                 off::settings::GraphicsValidationError::zero_window_dimension,
         "reject a zero output dimension without partially resolving settings");
+  initial_apply_calls = 0;
+  check(off::settings::initialize_graphics_settings(
+            invalid_resolution,
+            [&](const off::settings::EffectiveGraphicsSettings &) {
+              ++initial_apply_calls;
+              return true;
+            }) == off::settings::InitialGraphicsSetup::invalid_resolution &&
+            initial_apply_calls == 0,
+        "do not call a display backend for an invalid boot configuration");
   invalid = requested;
   invalid.window_mode = static_cast<off::settings::WindowMode>(255);
   check(off::settings::resolve_graphics_settings(invalid, capabilities).error ==

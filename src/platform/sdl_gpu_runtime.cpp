@@ -1192,6 +1192,23 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   initial.profile = mode;
   const auto initial_resolution =
       settings::resolve_graphics_settings(initial, capabilities);
+  const auto initial_setup = settings::initialize_graphics_settings(
+      initial_resolution, [&](const settings::EffectiveGraphicsSettings &value) {
+        return apply_graphics(device, window, value);
+      });
+  if (initial_setup != settings::InitialGraphicsSetup::ready) {
+    const auto result = failure(initial_setup ==
+                                        settings::InitialGraphicsSetup::apply_failed
+                                    ? "initial graphics configuration failed"
+                                    : "initial graphics configuration is invalid");
+    gpu_intro.reset();
+    release_startup_images(device, gpu_startup);
+    release_overlay(device, overlay);
+    release_scene(device, gpu);
+    SDL_ReleaseWindowFromGPUDevice(device, window);
+    SDL_DestroyGPUDevice(device);
+    return result;
+  }
   menu.set_confirmed(initial, *initial_resolution.effective);
   if (show_graphics_menu) {
     static_cast<void>(menu.handle_key(ui::GraphicsMenuKey::f10, true, false));

@@ -3,6 +3,7 @@
 #include "off/mode.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -98,9 +99,22 @@ struct GraphicsResolution {
   std::optional<GraphicsValidationError> error;
 };
 
+enum class InitialGraphicsSetup : std::uint8_t {
+  ready,
+  invalid_resolution,
+  apply_failed,
+};
+
 [[nodiscard]] GraphicsResolution
 resolve_graphics_settings(const RequestedGraphicsSettings &requested,
                           const GraphicsCapabilities &capabilities);
+
+// The native backend owns the actual display calls.  This small boundary makes
+// the boot contract explicit: apply the already-resolved configuration once,
+// before any frame is acquired, and surface a backend failure to the caller.
+[[nodiscard]] InitialGraphicsSetup initialize_graphics_settings(
+    const GraphicsResolution &resolution,
+    const std::function<bool(const EffectiveGraphicsSettings &)> &apply);
 
 [[nodiscard]] bool
 requires_display_confirmation(const EffectiveGraphicsSettings &before,

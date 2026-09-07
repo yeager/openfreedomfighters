@@ -132,6 +132,16 @@ resolve_graphics_settings(const RequestedGraphicsSettings &requested,
   return {.effective = std::move(effective), .error = std::nullopt};
 }
 
+InitialGraphicsSetup initialize_graphics_settings(
+    const GraphicsResolution &resolution,
+    const std::function<bool(const EffectiveGraphicsSettings &)> &apply) {
+  if (!resolution.effective)
+    return InitialGraphicsSetup::invalid_resolution;
+  if (!apply || !apply(*resolution.effective))
+    return InitialGraphicsSetup::apply_failed;
+  return InitialGraphicsSetup::ready;
+}
+
 bool requires_display_confirmation(
     const EffectiveGraphicsSettings &before,
     const EffectiveGraphicsSettings &after) noexcept {
