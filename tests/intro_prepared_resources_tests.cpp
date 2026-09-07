@@ -837,6 +837,267 @@ static OFF_NOINLINE void test_prepared_runtime_scopes() {
     }
 }
 
+static OFF_NOINLINE void check_complete_runtime_post_directory(
+    off::graphics::IntroRuntime& host,
+    off::runtime::SceneComponentSequence& sequence) {
+      const auto before_components=host.components().construction_order().size();
+      const auto before_serial=sequence.next_identity();
+      const auto before_pending=host.ordinary_components()->pending().size();
+      host.construct_remaining_directory_without_engine_renderer();
+      std::size_t all_batches=0; for(const auto& scope:host.source_resource_scopes()) all_batches+=scope.resources.size();
+      check(host.resource_load_stage()==off::graphics::IntroResourceLoadStage::directory_construction_complete &&
+            host.loaded_resource_handles().size()==470 && host.directory_resource_mapping().size()==470 &&
+            host.deferred_reader_work().size()==420 && all_batches==470 && host.count_group_selector()==28 &&
+            host.current_source_parent()==host.root_handle(),
+            "synthetic rows200-469 close directory construction with 470 resources, 420 readers and no pending scope");
+      check(host.components().construction_order().size()==before_components+245 && sequence.next_identity()==before_serial+245 &&
+            host.ordinary_components()->pending().size()==before_pending+12,
+            "remaining attachment inventory advances exactly245 live serials and appends twelve ordinary pending entries");
+      check(host.saved_resource_flags().size()==5 && host.saved_resource_flags()[3].resource==host.resource_handle(host.source_handle(215)) &&
+            host.saved_resource_flags()[4].resource==host.resource_handle(host.source_handle(223)) &&
+            host.saved_resource_flags()[3].flags==0x0904c480U && host.saved_resource_flags()[4].flags==0x0904c480U &&
+            host.resource_state(host.source_handle(215))->flags==0x09008480U && host.resource_state(host.source_handle(223))->flags==0x09008480U,
+            "two synthetic bank-two saved flags append after established items without restoration");
+      const auto* room201=host.constructed_room_owner(201);
+      check(room201 && !room201->room_mode && !room201->enabled && room201->ordinary_members.size()==16 &&
+            host.root_owner_state()->rooms.size()==2 && host.root_owner_state()->rooms.back()==host.source_handle(201),
+            "Room201 retains root room membership and only its concrete ordinary member bucket");
+      for(const auto row:{215U,223U}) check(host.resources().sources().directory()[row].pool_class==18 &&
+            host.resources().sources().directory()[row].source_variant==2,
+            "saved sources select bank two/category two without a bank-one substitute");
+      std::size_t scope_properties=0,scope_attachments=0,reader_cursor=166;
+      for(std::size_t row=200;row<=469;++row) {
+        const auto& source=host.resources().sources().directory()[row];
+        const auto owner=host.source_handle(row);
+        check(host.directory_resource_mapping()[row]==host.resource_handle(owner) &&
+              host.resource_state(owner)->directory_auxiliary==0x9000U+row,
+              "each remaining source retains its synthetic auxiliary identity through attachment");
+        if(source.deferred_source_offset) {
+          check(host.deferred_reader_work()[reader_cursor].resource==host.resource_handle(owner) &&
+                host.deferred_reader_work()[reader_cursor].source_offset==source.deferred_source_offset,
+                "remaining deferred readers retain directory ordering while no-reader rows are skipped");
+          ++reader_cursor;
+        }
+        if(source.buf_auxiliary_offset) { ++scope_properties; const auto* aux=host.constructed_owner_auxiliary(row);
+          check(aux && aux->borrowed_property_data.data()==host.resources().source_names().data()+source.buf_auxiliary_offset && aux->borrowed_property_data.size()==64,
+                "property-bearing remaining owners retain their distinct synthetic auxiliary blob"); }
+        scope_attachments+=host.owner_components(owner).size();
+      }
+      check(reader_cursor==420 && scope_properties==210 && scope_attachments==245,"remaining source fixture preserves all210 property sections and245 ordered attachments");
+      const auto* owner462=host.constructed_list_owner(462);
+      const auto property462=host.scene_resource_property("rWINOBJSPRITEHOLDER");
+      const auto* owner469=host.constructed_object_owner(469);
+      check(owner462 && owner462->animation_storage && owner462->animation_storage->capacity==32 && owner462->animation_storage->growth==32 &&
+            !owner462->animation_storage->count && owner462->animation_storage->element_control==1 && property462 &&
+            property462->owner_handle==host.source_handle(462) && property462->setter_flags==4,
+            "owner462 retains an empty animation store and publishes its canonical scene owner handle");
+      check(owner469 && owner469->particle_usage && !owner469->particle_usage->diagnostic_enabled && owner469->particle_usage->pool &&
+            owner469->particle_usage->pool->available_count==64 && owner469->particle_usage->pool->available_slots.front()==0 &&
+            owner469->particle_usage->pool->available_slots.back()==63 && owner469->particle_usage->descriptor &&
+            owner469->particle_usage->descriptor->key=="particle_usage",
+            "owner469 keeps its disabled diagnostic control, ascending 64-slot pool and console descriptor");
+      host.prepare_scene_lifetime_keys_registry();
+      const auto* keys_registry=host.scene_lifetime_keys_registry();
+      std::size_t mat_pos_owners{};
+      std::uint64_t expected_keys_handle{1};
+      for(std::size_t row=0;row<host.resources().sources().directory().size();++row) {
+        const auto& source=host.resources().sources().directory()[row];
+        bool mat_pos=false;
+        for(std::size_t slot=0;slot<source.attachments.size();++slot)
+          mat_pos=mat_pos || host.resources().sources().attachment_identifier(row,slot)=="ZGEOM_MatPosAnim";
+        if(!mat_pos) continue;
+        ++mat_pos_owners;
+        const auto resolved=keys_registry->resolve_required_keys(host.source_handle(row).value,{'K','E','Y','S'});
+        check(resolved && resolved->opaque_handle==expected_keys_handle++ &&
+              resolved->owner==host.source_handle(row).value,
+              "scene KEYS preparation assigns opaque local handles through canonical MatPos owners");
+      }
+      check(keys_registry && keys_registry->size()==mat_pos_owners && mat_pos_owners>0,
+            "scene KEYS registry atomically retains every supported owner-local property");
+      rejects([&]{host.prepare_scene_lifetime_keys_registry();});
+      host.prepare_scene_lifetime_keys_backing();
+      const auto* keys_backing=host.scene_lifetime_keys_backing();
+      check(keys_backing && keys_backing->generation()==1U && !keys_backing->bytes().empty() &&
+                host.evaluate_scene_lifetime_keys(host.source_handle(59),0.F) &&
+                host.evaluate_scene_lifetime_keys(host.source_handle(59),1.F) &&
+                !host.evaluate_scene_lifetime_keys({},0.F),
+            "scene KEYS backing freezes one retained allocation and exposes only bound read-only owner samples");
+      rejects([&]{host.prepare_scene_lifetime_keys_backing();});
+      const auto components467=host.owner_components(host.source_handle(467));
+      const auto components468=host.owner_components(host.source_handle(468));
+      check(components467.size()==4 && components468.size()==4 &&
+            host.components().at(components467[0]).source().factory_name=="ZSNDOBJ_SoundExtend" &&
+            host.components().at(components467[1]).source().factory_name=="ZSNDOBJ_SoundNotify" &&
+            host.components().at(components467[2]).source().factory_name=="ZSNDOBJ_SoundSegment" &&
+            host.components().at(components467[3]).source().factory_name=="ZGEOM_ZSetZDefine",
+            "both sound owners preserve the authored Extend/Notify/Segment/ZSetZDefine attachment order");
+      const auto* extend=host.constructed_attachment(components467[0]);
+      const auto* notify=host.constructed_attachment(components467[1]);
+      const auto* segment=host.constructed_attachment(components467[2]);
+      check(extend && extend->sound_extend && extend->sound_extend->output_mode==2 &&
+            notify && notify->sound_notify && !notify->sound_notify->target.value && !notify->sound_notify->duration_snapshot &&
+            segment && segment->sound_segment && segment->sound_segment->controls==std::array<bool,5>{true,true,false,false,true} &&
+            segment->sound_segment->probability==1 && segment->sound_segment->subtitle.empty(),
+            "sound attachments retain cold constructor-only state without reader playback or duration work");
+}
+
+static OFF_NOINLINE void check_complete_runtime_readers_and_tail(
+    off::graphics::IntroRuntime& host, bool policy) {
+      std::vector<std::string> reader_events;
+      std::size_t prepared_reader_count{};
+      std::size_t translated_reference_list_count{};
+      std::size_t applied_window_readers{};
+      off::graphics::IntroPostconstructionReaderServices reader_services{
+          [&](std::uint64_t value){reader_events.push_back("external:"+std::to_string(value));},
+          [&](const off::graphics::IntroSourceScriptWork&){reader_events.push_back("script");},
+          [&]{reader_events.push_back("pre");},
+          [&](const off::graphics::IntroDeferredReaderWork& work){
+            reader_events.push_back("prepare");
+            ++prepared_reader_count;
+            check(work.processed,
+                  "deferred owner block is marked processed before its concrete reader boundary");
+            const auto& sources=host.resources().sources();
+            const auto sequence_source=sources.local_source_for_authored_reference(
+                host.resources().controller().sequence_reference);
+            const auto group_source=sources.local_source_for_authored_reference(
+                host.resources().controller().group_reference);
+            std::span<const std::uint32_t> raw;
+            if(sequence_source && *sequence_source==work.source_directory_index)
+              raw=host.resources().cut_references();
+            else if(group_source && *group_source==work.source_directory_index)
+              raw=host.resources().group_references();
+            else {
+              check(work.translated_references.empty(),
+                    "unsupported deferred grammar does not invent native reference translations");
+              return;
+            }
+            ++translated_reference_list_count;
+            check(work.translated_references.size()==raw.size(),
+                  "supported deferred list preserves authored reference count");
+            for(std::size_t reference=0;reference<raw.size();++reference) {
+              const auto target=sources.local_source_for_authored_reference(raw[reference]);
+              if(!target)
+                check(!work.translated_references[reference],
+                      "zero authored deferred reference remains native null");
+              else
+                check(work.translated_references[reference]==host.directory_resource_mapping()[*target],
+                      "deferred reference uses source-directory identity rather than an allocation ordinal");
+            }
+          },
+          [&](const off::graphics::IntroDeferredReaderWork& work){
+            reader_events.push_back("owner");
+            if(work.source_directory_index==host.resources().window_index()) {
+              host.apply_supported_window_deferred_reader(work);
+              ++applied_window_readers;
+            }
+          },
+          [&](const off::graphics::IntroDeferredReaderWork& work){
+            reader_events.push_back("component");
+            if(work.source_directory_index==host.resources().window_index()) {
+              const auto& window=host.window_for_owner(host.source_handle(work.source_directory_index));
+              check(host.window_camera_projection_applied() && window.cameras==std::vector{host.source_handle(host.resources().camera_index())} &&
+                    std::bit_cast<std::uint32_t>(window.pending_visibility)==std::bit_cast<std::uint32_t>(-1.0F),
+                    "Window owner reader completes its camera projection before that owner's component boundary");
+            }
+          },
+          [&]{reader_events.push_back("end");}};
+      host.run_postconstruction_reader_bracket(0x9aU,reader_services);
+      if(policy) {
+        check(host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::restore_mode_selected &&
+              host.reader_bracket_retained_saved_value()==0x9aU && reader_events.empty() &&
+              host.deferred_reader_work().size()==420,
+              "restore chooses its distinct unresolved route without running ordinary services or readers");
+      } else {
+        check(host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete &&
+              host.reader_bracket_retained_saved_value()==0x9aU && reader_events.size()==4+420*3 &&
+              prepared_reader_count==420 && translated_reference_list_count==2 &&
+              reader_events[0]=="external:154" && reader_events[1]=="external:154" && reader_events[2]=="pre" &&
+              reader_events[3]=="prepare" && reader_events[4]=="owner" && reader_events[5]=="component" &&
+              reader_events.back()=="end" && host.deferred_reader_work().size()==420,
+              "ordinary reader bracket retains two external calls and forward owner-before-component boundaries without consuming work");
+        const auto& window=host.window_for_owner(host.source_handle(host.resources().window_index()));
+        const auto& camera=host.camera_for_owner(host.source_handle(host.resources().camera_index()));
+        check(applied_window_readers==1 && (window.group.flags&0x400U)!=0U &&
+              camera.associated_target()==host.source_handle(host.resources().window_index()).value &&
+              camera.render_control()==0U && (camera.flags()&0x8000U)==0U && (camera.flags()&0x210000U)==0x210000U &&
+              camera.enabled(),
+              "explicit first-cut Window reader applies ordered owner and canonical camera state without registration");
+        const auto window_work=std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
+          return work.source_directory_index==host.resources().window_index();
+        });
+        check(window_work!=host.deferred_reader_work().end(),"first-cut Window retains deferred reader identity");
+        if(window_work!=host.deferred_reader_work().end())
+          rejects([&]{host.apply_supported_window_deferred_reader(*window_work);});
+        std::vector<std::string> tail_events;
+        std::vector<off::graphics::IntroRuntimeResourceHandle> spatial,flag_4000;
+        const std::array<std::byte,11> named_payload{std::byte{'G'},std::byte{'l'},std::byte{'o'},
+            std::byte{'b'},std::byte{'a'},std::byte{'l'},std::byte{},std::byte{0x31},std::byte{0x32},
+            std::byte{0x33},std::byte{0x34}};
+        const std::array<std::byte,3> renderer_payload{std::byte{1},std::byte{2},std::byte{3}};
+        off::graphics::IntroOuterLoaderTailServices tail_services{
+            .named_global_payload=off::graphics::IntroNamedGlobalPayload{named_payload},
+            .relocate_named_global_references=[&](off::graphics::IntroNamedGlobalPreparedReader& reader) {
+              check(reader.complete_block().size()==4 && reader.complete_block()[0]==std::byte{0x31},
+                  "named relocation receives a complete owned tagged block including its header");
+              reader.mutable_block()[1]=std::byte{0x77}; reader.cursor=reader.complete_block().size();
+              tail_events.push_back("relocate");},
+            .read_named_global_payload=[&](std::string_view subject,off::graphics::IntroNamedGlobalPreparedReader& reader) {
+              check(subject=="Global" && reader.cursor==0 && reader.complete_block().size()==4 &&
+                        reader.complete_block()[0]==std::byte{0x31} && reader.complete_block()[1]==std::byte{0x77},
+                    "named reader receives the original label plus reset, relocated complete block");
+              check(named_payload[8]==std::byte{0x32},"named relocation never mutates the source payload");
+              tail_events.push_back("named-reader");},
+            .renderer_resource_payload=off::graphics::IntroRendererResourcePayload{renderer_payload},
+            .parse_renderer_resource_payload=[&](std::span<const std::byte> payload) {
+              check(payload.size()==renderer_payload.size() && std::equal(payload.begin(),payload.end(),renderer_payload.begin()),"renderer parser receives the complete encoded payload");tail_events.push_back("renderer-parse");return off::graphics::IntroRendererResourceContainer{42};},
+            .release_renderer_construction_reference=[&](auto container) {check(container.identity==42,"release only the parsed renderer construction reference");tail_events.push_back("renderer-release");},
+            .resource_associations={{7,9},{17,18}},
+            .resolve_marked_resource_reference=[&](std::uint32_t reference) -> std::optional<off::graphics::IntroRuntimeResourceHandle> {
+              tail_events.push_back("resolve:"+std::to_string(reference));
+              if(reference==0x80000007U) return host.directory_resource_mapping()[6];
+              if(reference==0x80000009U) return host.directory_resource_mapping()[8];
+              return std::nullopt;
+            },
+            .associate_live_resources=[&](auto first,auto second) {check(first==host.directory_resource_mapping()[6] && second==host.directory_resource_mapping()[8],"association receives both independently resolved live resources");tail_events.push_back("associate");},
+            .auxiliary_arrays={},
+            .release_loader_source_lease=[&]{tail_events.push_back("release");},
+            .camera_zero_present=[&]{tail_events.push_back("camera-query");return false;},
+            .single_allocation_mode=false,
+            .enqueue_transform=[&](auto resource){tail_events.push_back("transform");
+              check(resource==host.resource_handle(*host.default_camera_handle()),
+                    "DefaultCam queue preserves its canonical child resource");},
+            .fallback_camera_registration={[]{return 1280;},[]{return 720;},[]{return false;},{}},
+            .outer_scene_operation=[&]{tail_events.push_back("scene");},
+            .between_saved_scene_operation=[&]{tail_events.push_back("between");},
+            .intermediate_scene_finalization=[&]{tail_events.push_back("finalize");},
+            .spatial_admission=[&](auto resource,bool admitted){check(admitted,"saved spatial service receives true");spatial.push_back(resource);tail_events.push_back("spatial");},
+            .saved_0x4000_service=[&](auto resource,bool enabled){check(enabled,"saved 0x4000 service receives true");flag_4000.push_back(resource);tail_events.push_back("4000");}};
+        host.run_outer_loader_tail_through_saved_services(tail_services);
+        check(host.outer_loader_tail_stage()==off::graphics::IntroOuterLoaderTailStage::second_saved_pass_complete,
+              "outer tail reaches the second saved-resource pass");
+        check(host.loader_source_lease_released() && host.default_camera_handle() &&
+              host.registered_cameras().camera_at(0,[&](auto owner){return owner==host.default_camera_handle()->value;}),
+              "outer tail releases its lease and registers DefaultCam at zero");
+        check(host.renderer_resource_container()==off::graphics::IntroRendererResourceContainer{42} &&
+              host.first_auxiliary_array().empty() && host.second_auxiliary_array().empty(),
+              "tail retains parsed renderer ownership and preserves absent auxiliary arrays as zero-count");
+        check(spatial.size()==host.saved_resource_flags().size(),"first saved pass visits every saved entry");
+        std::vector<std::string> expected_tail{"relocate","named-reader","renderer-parse","renderer-release",
+            "resolve:2147483655","resolve:2147483657","associate","resolve:2147483665","resolve:2147483666","release","camera-query",
+            "transform","scene","scene","scene"};
+        for(const auto& saved:host.saved_resource_flags()) expected_tail.push_back("spatial");
+        expected_tail.push_back("between");expected_tail.push_back("finalize");
+        std::vector<off::graphics::IntroRuntimeResourceHandle> expected_4000;
+        for(const auto& saved:host.saved_resource_flags()) if(saved.flags&0x4000U) {
+          expected_tail.push_back("4000");expected_4000.push_back(saved.resource);
+        }
+        check(tail_events==expected_tail && flag_4000==expected_4000,
+              "outer tail keeps concrete section boundaries, releases only its lease, registers camera zero and consumes saved entries through services");
+        rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
+      }
+      rejects([&]{host.run_postconstruction_reader_bracket(0x9aU,reader_services);});
+}
+
 static OFF_NOINLINE void test_complete_runtime_scopes() {
     for(const bool policy:{false,true}) {
       Fixture complete(false,true,true,true,true,true,true,true,true,true,true);
@@ -963,109 +1224,7 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
             "category-two ancestry does not invent Rooms, spatial updates or renderer lifecycle");
       rejects([&]{host.construct_lens_flare_animation_scope_without_engine_renderer();});
 
-      // This is a wholly synthetic continuation: every source name, property
-      // blob, identifier and attachment table above is authored here rather
-      // than copied from a game installation.
-      const auto before_resources=host.loaded_resource_handles().size();
-      const auto before_components=host.components().construction_order().size();
-      const auto before_serial=sequence.next_identity();
-      const auto before_pending=host.ordinary_components()->pending().size();
-      host.construct_remaining_directory_without_engine_renderer();
-      std::size_t all_batches=0; for(const auto& scope:host.source_resource_scopes()) all_batches+=scope.resources.size();
-      check(host.resource_load_stage()==off::graphics::IntroResourceLoadStage::directory_construction_complete &&
-            host.loaded_resource_handles().size()==470 && host.directory_resource_mapping().size()==470 &&
-            host.deferred_reader_work().size()==420 && all_batches==470 && host.count_group_selector()==28 &&
-            host.current_source_parent()==host.root_handle(),
-            "synthetic rows200-469 close directory construction with 470 resources, 420 readers and no pending scope");
-      check(host.components().construction_order().size()==before_components+245 && sequence.next_identity()==before_serial+245 &&
-            host.ordinary_components()->pending().size()==before_pending+12,
-            "remaining attachment inventory advances exactly245 live serials and appends twelve ordinary pending entries");
-      check(host.saved_resource_flags().size()==5 && host.saved_resource_flags()[3].resource==host.resource_handle(host.source_handle(215)) &&
-            host.saved_resource_flags()[4].resource==host.resource_handle(host.source_handle(223)) &&
-            host.saved_resource_flags()[3].flags==0x0904c480U && host.saved_resource_flags()[4].flags==0x0904c480U &&
-            host.resource_state(host.source_handle(215))->flags==0x09008480U && host.resource_state(host.source_handle(223))->flags==0x09008480U,
-            "two synthetic bank-two saved flags append after established items without restoration");
-      const auto* room201=host.constructed_room_owner(201);
-      check(room201 && !room201->room_mode && !room201->enabled && room201->ordinary_members.size()==16 &&
-            host.root_owner_state()->rooms.size()==2 && host.root_owner_state()->rooms.back()==host.source_handle(201),
-            "Room201 retains root room membership and only its concrete ordinary member bucket");
-      for(const auto row:{215U,223U}) check(host.resources().sources().directory()[row].pool_class==18 &&
-            host.resources().sources().directory()[row].source_variant==2,
-            "saved sources select bank two/category two without a bank-one substitute");
-      std::size_t scope_properties=0,scope_attachments=0,reader_cursor=166;
-      for(std::size_t row=200;row<=469;++row) {
-        const auto& source=host.resources().sources().directory()[row];
-        const auto owner=host.source_handle(row);
-        check(host.directory_resource_mapping()[row]==host.resource_handle(owner) &&
-              host.resource_state(owner)->directory_auxiliary==0x9000U+row,
-              "each remaining source retains its synthetic auxiliary identity through attachment");
-        if(source.deferred_source_offset) {
-          check(host.deferred_reader_work()[reader_cursor].resource==host.resource_handle(owner) &&
-                host.deferred_reader_work()[reader_cursor].source_offset==source.deferred_source_offset,
-                "remaining deferred readers retain directory ordering while no-reader rows are skipped");
-          ++reader_cursor;
-        }
-        if(source.buf_auxiliary_offset) { ++scope_properties; const auto* aux=host.constructed_owner_auxiliary(row);
-          check(aux && aux->borrowed_property_data.data()==host.resources().source_names().data()+source.buf_auxiliary_offset && aux->borrowed_property_data.size()==64,
-                "property-bearing remaining owners retain their distinct synthetic auxiliary blob"); }
-        scope_attachments+=host.owner_components(owner).size();
-      }
-      check(reader_cursor==420 && scope_properties==210 && scope_attachments==245,"remaining source fixture preserves all210 property sections and245 ordered attachments");
-      const auto* owner462=host.constructed_list_owner(462);
-      const auto property462=host.scene_resource_property("rWINOBJSPRITEHOLDER");
-      const auto* owner469=host.constructed_object_owner(469);
-      check(owner462 && owner462->animation_storage && owner462->animation_storage->capacity==32 && owner462->animation_storage->growth==32 &&
-            !owner462->animation_storage->count && owner462->animation_storage->element_control==1 && property462 &&
-            property462->owner_handle==host.source_handle(462) && property462->setter_flags==4,
-            "owner462 retains an empty animation store and publishes its canonical scene owner handle");
-      check(owner469 && owner469->particle_usage && !owner469->particle_usage->diagnostic_enabled && owner469->particle_usage->pool &&
-            owner469->particle_usage->pool->available_count==64 && owner469->particle_usage->pool->available_slots.front()==0 &&
-            owner469->particle_usage->pool->available_slots.back()==63 && owner469->particle_usage->descriptor &&
-            owner469->particle_usage->descriptor->key=="particle_usage",
-            "owner469 keeps its disabled diagnostic control, ascending 64-slot pool and console descriptor");
-      host.prepare_scene_lifetime_keys_registry();
-      const auto* keys_registry=host.scene_lifetime_keys_registry();
-      std::size_t mat_pos_owners{};
-      std::uint64_t expected_keys_handle{1};
-      for(std::size_t row=0;row<host.resources().sources().directory().size();++row) {
-        const auto& source=host.resources().sources().directory()[row];
-        bool mat_pos=false;
-        for(std::size_t slot=0;slot<source.attachments.size();++slot)
-          mat_pos=mat_pos || host.resources().sources().attachment_identifier(row,slot)=="ZGEOM_MatPosAnim";
-        if(!mat_pos) continue;
-        ++mat_pos_owners;
-        const auto resolved=keys_registry->resolve_required_keys(host.source_handle(row).value,{'K','E','Y','S'});
-        check(resolved && resolved->opaque_handle==expected_keys_handle++ &&
-              resolved->owner==host.source_handle(row).value,
-              "scene KEYS preparation assigns opaque local handles through canonical MatPos owners");
-      }
-      check(keys_registry && keys_registry->size()==mat_pos_owners && mat_pos_owners>0,
-            "scene KEYS registry atomically retains every supported owner-local property");
-      rejects([&]{host.prepare_scene_lifetime_keys_registry();});
-      host.prepare_scene_lifetime_keys_backing();
-      const auto* keys_backing=host.scene_lifetime_keys_backing();
-      check(keys_backing && keys_backing->generation()==1U && !keys_backing->bytes().empty() &&
-                host.evaluate_scene_lifetime_keys(host.source_handle(59),0.F) &&
-                host.evaluate_scene_lifetime_keys(host.source_handle(59),1.F) &&
-                !host.evaluate_scene_lifetime_keys({},0.F),
-            "scene KEYS backing freezes one retained allocation and exposes only bound read-only owner samples");
-      rejects([&]{host.prepare_scene_lifetime_keys_backing();});
-      const auto components467=host.owner_components(host.source_handle(467));
-      const auto components468=host.owner_components(host.source_handle(468));
-      check(components467.size()==4 && components468.size()==4 &&
-            host.components().at(components467[0]).source().factory_name=="ZSNDOBJ_SoundExtend" &&
-            host.components().at(components467[1]).source().factory_name=="ZSNDOBJ_SoundNotify" &&
-            host.components().at(components467[2]).source().factory_name=="ZSNDOBJ_SoundSegment" &&
-            host.components().at(components467[3]).source().factory_name=="ZGEOM_ZSetZDefine",
-            "both sound owners preserve the authored Extend/Notify/Segment/ZSetZDefine attachment order");
-      const auto* extend=host.constructed_attachment(components467[0]);
-      const auto* notify=host.constructed_attachment(components467[1]);
-      const auto* segment=host.constructed_attachment(components467[2]);
-      check(extend && extend->sound_extend && extend->sound_extend->output_mode==2 &&
-            notify && notify->sound_notify && !notify->sound_notify->target.value && !notify->sound_notify->duration_snapshot &&
-            segment && segment->sound_segment && segment->sound_segment->controls==std::array<bool,5>{true,true,false,false,true} &&
-            segment->sound_segment->probability==1 && segment->sound_segment->subtitle.empty(),
-            "sound attachments retain cold constructor-only state without reader playback or duration work");
+      check_complete_runtime_post_directory(host,sequence);
       std::vector<std::string> reader_events;
       std::size_t prepared_reader_count{};
       std::size_t translated_reference_list_count{};
