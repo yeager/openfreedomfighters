@@ -317,6 +317,14 @@ The private probe feeds the real legal object's authored position through an
 explicit phase-one request, including the parent-blocked activation path. Its
 engine dimensions and service callback are test conditions, not an observed
 original frame or a complete scene-transform implementation.
+
+`IntroRuntime` now exposes this as an explicit first-cut legal-picture adapter.
+It resolves the legal picture from the first member reference, validates its
+unique Center attachment, and accepts mutable flags, position and component
+status only from the lifecycle caller. It requires that caller to attest a
+completed global lifecycle and positive-time member activation. The adapter
+does not attest either condition itself and remains disconnected from normal
+startup, camera admission, ordered traversal and GPU submission.
 All 46 local CTest executables pass with this composition, along with targeted
 Center ASan/UBSan and GCC tests and the private owned-resource probe.
 The [shared position service](POSITION_UPDATE_SERVICE.md) now supplies the

@@ -19,6 +19,8 @@
 #include "off/graphics/position_update_service.hpp"
 #include "off/graphics/root_group_component.hpp"
 #include "off/graphics/picture_ordered_coordinator.hpp"
+#include "off/graphics/center_picture_position.hpp"
+#include "off/cutscene/picture_activation_prefix.hpp"
 #include <map>
 #include <memory>
 
@@ -303,6 +305,22 @@ struct IntroLifecyclePreflightReport {
   std::size_t expected_owners{},covered_owners{};
   IntroLifecyclePreflightFailure failure{IntroLifecyclePreflightFailure::unsupported};
   [[nodiscard]] bool ready() const noexcept { return failure==IntroLifecyclePreflightFailure::none; }
+};
+// Live values are owned by the real lifecycle caller. This adapter must never
+// derive them from archived source flags or prepared picture positions.
+struct FirstCutLegalPictureActivationPrerequisites {
+  bool global_lifecycle_complete{},positive_time_member_activated{},owner_present{true};
+  std::uint32_t& picture_runtime_flags;
+  std::optional<std::uint32_t> parent_runtime_flags;
+  std::array<float,3>& picture_position;
+  std::uint32_t& center_component_status;
+  std::int32_t engine_width{},engine_height{};
+  std::function<void()> position_update_service;
+  std::function<void(cutscene::PictureActivationPrefix::Stage)> activation_stage;
+};
+struct FirstCutLegalPictureActivationResult {
+  std::size_t source{},center_component{};
+  bool activation_prefix_complete{};
 };
 // Published by the concrete MovieControl owner reader only.  Mandatory list
 // references are resolved in the live source-directory domain; all other
@@ -640,6 +658,10 @@ public:
   // concrete coverage is intentionally incomplete, so ordinary startup must
   // remain outside this boundary until typed registrations are installed.
   [[nodiscard]] IntroLifecyclePreflightReport preflight_global_lifecycle() const;
+  // Explicit first-cut activation bridge. It is disconnected from normal
+  // startup and does not create a view, submit a draw or dispatch cut events.
+  [[nodiscard]] FirstCutLegalPictureActivationResult activate_first_cut_legal_picture(
+      const FirstCutLegalPictureActivationPrerequisites& prerequisites);
   [[nodiscard]] std::span<const IntroSourceScriptWork> source_script_work() const noexcept {return source_script_work_;}
   [[nodiscard]] std::span<const IntroSourceResourceScope> source_resource_scopes() const noexcept {return source_resource_scopes_;}
   [[nodiscard]] std::optional<IntroRuntimeResourceHandle> allocated_source_resource(std::size_t source) const;

@@ -1750,6 +1750,46 @@ IntroLifecyclePreflightReport IntroRuntime::preflight_global_lifecycle() const {
   return report;
 }
 
+FirstCutLegalPictureActivationResult IntroRuntime::activate_first_cut_legal_picture(
+    const FirstCutLegalPictureActivationPrerequisites& prerequisites) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      !prerequisites.global_lifecycle_complete || !prerequisites.positive_time_member_activated ||
+      !prerequisites.position_update_service)
+    throw std::runtime_error("First-cut legal picture activation prerequisites are unavailable");
+  const auto legal_source=resources_.sources().local_source_for_authored_reference(
+      resources_.member().references[1]);
+  if(!legal_source || *legal_source>=resources_.sources().directory().size())
+    throw std::runtime_error("First-cut legal picture has no source-directory identity");
+  auto& picture=picture_for_source(*legal_source);
+  if(picture.handle()!=source_handle(*legal_source))
+    throw std::runtime_error("First-cut legal picture has inconsistent live owner identity");
+  const auto attachments=owner_components(picture.handle());
+  std::optional<std::size_t> center;
+  for(const auto component:attachments) {
+    const auto& source=components_.at(component).source();
+    if(source.factory_name!="ZGEOM_Center") continue;
+    if(std::bit_cast<std::uint32_t>(source.authored_parameter)!=std::bit_cast<std::uint32_t>(1.0F) || center)
+      throw std::runtime_error("First-cut legal picture Center shape is unsupported");
+    center=component;
+  }
+  if(!center || !components_.at(*center).constructed() || components_.at(*center).removed() ||
+      components_.at(*center).state().attached_owner!=picture.handle().value)
+    throw std::runtime_error("First-cut legal picture Center is unavailable");
+  bool requested{};
+  cutscene::PictureActivationPrefix prefix;
+  CenterPicturePosition center_position;
+  prefix.run(prerequisites.picture_runtime_flags,prerequisites.parent_runtime_flags,
+      prerequisites.owner_present,[&](cutscene::PictureActivationPrefix::Stage stage) {
+        if(prerequisites.activation_stage) prerequisites.activation_stage(stage);
+        if(stage==cutscene::PictureActivationPrefix::Stage::phase_one)
+          center_position.initialize(prerequisites.picture_position,prerequisites.picture_runtime_flags,
+              prerequisites.center_component_status,prerequisites.engine_width,prerequisites.engine_height,
+              picture.submission_cache(),prerequisites.position_update_service);
+        if(stage==cutscene::PictureActivationPrefix::Stage::record_requested) requested=true;
+      });
+  return {*legal_source,*center,requested};
+}
+
 void IntroRuntime::run_postconstruction_reader_bracket(
     std::uint64_t retained_saved_value,const IntroPostconstructionReaderServices& services) {
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||

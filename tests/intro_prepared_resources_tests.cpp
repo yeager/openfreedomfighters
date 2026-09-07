@@ -1322,6 +1322,26 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
             lifecycle_preflight.expected_owners==471 && lifecycle_preflight.covered_owners==0 &&
             lifecycle_preflight.failure==off::graphics::IntroLifecyclePreflightFailure::reader_coverage,
             "global lifecycle preflight derives complete live identities but rejects placeholder coverage before any reader runs");
+      const auto legal_source=host.resources().sources().local_source_for_authored_reference(
+          host.resources().member().references[1]);
+      check(legal_source.has_value(),"first-cut member retains a legal-picture source identity");
+      if(legal_source) {
+        std::uint32_t legal_flags=0x400U,center_status{};
+        std::optional<std::uint32_t> parent_flags{0U};
+        std::array<float,3> legal_position{4,5,6};
+        std::vector<off::cutscene::PictureActivationPrefix::Stage> activation_trace;
+        std::size_t position_updates{};
+        const auto activated=host.activate_first_cut_legal_picture({
+            true,true,true,legal_flags,parent_flags,legal_position,center_status,1280,720,
+            [&] { ++position_updates; },[&](auto stage) { activation_trace.push_back(stage); }});
+        const auto expected_center=host.owner_components(host.source_handle(*legal_source));
+        check(activated.source==*legal_source && activated.activation_prefix_complete &&
+              std::ranges::find(expected_center,activated.center_component)!=expected_center.end() &&
+              (legal_flags&0x400U)==0U && legal_position==std::array<float,3>{640,360,0} &&
+              center_status==1U && position_updates==1U &&
+              activation_trace.back()==off::cutscene::PictureActivationPrefix::Stage::record_requested,
+              "first-cut adapter resolves the legal member identity and runs only ordered activation plus Center");
+      }
       if(policy)
         check_complete_restore_reader_route(host);
       else {
