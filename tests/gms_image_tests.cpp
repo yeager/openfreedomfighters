@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -1456,6 +1457,29 @@ int main() {
         check(orientation && orientation->normalized_orientation == std::array<float, 4>{0.5F, -0.5F, 0.5F, -0.5F} &&
                   orientation->translation == std::array<float, 3>{4.0F, -5.0F, 6.0F},
               "MatPos pose evaluator normalizes quantized orientation without reordering it and preserves translation");
+
+        const auto identity = MatPosPoseEvaluator::evaluate({
+            .first_group = {0.0F, 0.0F, 0.0F, 32512.0F},
+            .second_group = {},
+        });
+        check(identity && identity->basis == std::array<float, 9>{1.0F, 0.0F, 0.0F,
+                                                                   0.0F, 1.0F, 0.0F,
+                                                                   0.0F, 0.0F, 1.0F},
+              "MatPos pose evaluator converts an identity x-y-z-w quaternion to the logical row-major identity basis");
+
+        constexpr float quarter_turn_component = 22989.0F;
+        const auto x_quarter_turn = MatPosPoseEvaluator::evaluate({
+            .first_group = {quarter_turn_component, 0.0F, 0.0F, quarter_turn_component},
+            .second_group = {},
+        });
+        constexpr std::array<float, 9> x_quarter_turn_basis{1.0F, 0.0F, 0.0F,
+                                                              0.0F, 0.0F, 1.0F,
+                                                              0.0F, -1.0F, 0.0F};
+        check(x_quarter_turn && std::equal(x_quarter_turn->basis.begin(), x_quarter_turn->basis.end(),
+                                            x_quarter_turn_basis.begin(), [](float actual, float expected) {
+                                                return std::abs(actual - expected) < 0.000001F;
+                                            }),
+              "MatPos pose evaluator uses the recovered row-major quaternion basis signs and layout");
 
         const auto arbitrary_scale = MatPosPoseEvaluator::evaluate({
             .first_group = {65024.0F, 0.0F, 0.0F, 0.0F},

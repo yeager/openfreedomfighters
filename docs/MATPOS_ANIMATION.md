@@ -39,10 +39,11 @@ transforms.
 
 The bounded numeric KEYS sample can be converted into a detached local pose.
 Its first group is linearly interpolated before this boundary, scaled from
-signed quantized components by `1 / 32512`, normalized without reordering, and
-returned with the unmodified three-float translation group. The component order
-and quaternion-to-basis convention remain unrecovered, so no basis is produced.
-This does not attach the pose to an owner, a resource, or a renderer. It cannot
+signed quantized components by `1 / 32512`, and normalized as `x, y, z, w`.
+The evaluator also produces the recovered logical row-major quaternion basis;
+it is an inert value and is not composed with an owner-local transform or sent
+to a renderer. The three-float translation group is returned unchanged. This
+does not attach the pose to an owner, a resource, or a renderer. It cannot
 activate scene animation or make the intro visible.
 
 ## Lifecycle status
