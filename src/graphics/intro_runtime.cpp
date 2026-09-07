@@ -1261,6 +1261,77 @@ const IntroOwnerAuxiliary* IntroRuntime::constructed_owner_auxiliary(std::size_t
   return nullptr;
 }
 
+void IntroRuntime::prepare_scene_lifetime_keys_registry() {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete)
+    throw std::runtime_error("Scene KEYS registry requires complete directory construction");
+  if(scene_lifetime_keys_registry_)
+    throw std::runtime_error("Scene KEYS registry is already prepared");
+
+  const auto& directory=resources_.sources().directory();
+  const auto retained=resources_.source_names();
+  std::vector<data::OwnerAuxiliaryPropertyBlock> properties;
+  properties.reserve(directory.size());
+
+  // Preflight the entire candidate set before allocating/publishing the
+  // registry. A MatPosAnim attachment is the sole admission route; a generic
+  // BUF owner is never promoted just because it happens to resemble KEYS.
+  for(std::size_t row=0;row<directory.size();++row) {
+    const auto& source=directory[row];
+    bool has_mat_pos_anim=false;
+    for(std::size_t slot=0;slot<source.attachments.size();++slot) {
+      if(resources_.sources().attachment_identifier(row,slot)=="ZGEOM_MatPosAnim") {
+        if(has_mat_pos_anim)
+          throw std::runtime_error("Scene KEYS registry rejects multiple MatPosAnim attachments for one owner");
+        has_mat_pos_anim=true;
+      }
+    }
+    if(!has_mat_pos_anim) continue;
+    if(source.buf_auxiliary_offset==0U || source.buf_auxiliary_offset>=retained.size())
+      throw std::runtime_error("MatPosAnim owner lacks a canonical BUF property offset");
+    const auto owner=source_handle(row);
+    if(!live_owner(owner.value))
+      throw std::runtime_error("MatPosAnim owner is not live during KEYS preparation");
+    const auto* auxiliary=constructed_owner_auxiliary(row);
+    const auto offset=static_cast<std::size_t>(source.buf_auxiliary_offset);
+    if(!auxiliary || !auxiliary->owned_property_data.empty() || auxiliary->borrowed_property_data.size()!=64U ||
+        auxiliary->borrowed_property_data.data()!=retained.data()+offset)
+      throw std::runtime_error("MatPosAnim owner lacks its canonical retained BUF property view");
+    const data::OwnerAuxiliaryPropertyBlock property{
+        owner.value,source.buf_auxiliary_offset,auxiliary->borrowed_property_data};
+    // Parser validation occurs before any opaque identity is reserved.
+    static_cast<void>(data::OwnerBufKeysProfileParser::parse(property));
+    properties.push_back(property);
+  }
+  if(properties.empty())
+    throw std::runtime_error("Scene KEYS registry found no supported MatPosAnim owners");
+  if(properties.size()>std::numeric_limits<std::uint64_t>::max()-next_scene_lifetime_keys_handle_+1U)
+    throw std::runtime_error("Scene KEYS registry opaque handle range is exhausted");
+
+  std::vector<data::SceneLifetimeKeysRegistryInput> inputs;
+  inputs.reserve(properties.size());
+  std::uint64_t staged_next=next_scene_lifetime_keys_handle_;
+  for(const auto& property:properties) {
+    if(staged_next==0U)
+      throw std::runtime_error("Scene KEYS registry opaque handle range is exhausted");
+    inputs.push_back({property,staged_next++});
+  }
+
+  auto staged=data::SceneLifetimeKeysRegistry::construct(inputs);
+  for(const auto& input:inputs) {
+    const auto child=data::OwnerBufKeysProfileParser::parse(input.property);
+    const std::array children{child};
+    const auto materialized=data::KeysPropertyMaterializer::materialize(
+        input.property,children,staged.materializer_resolver());
+    if(!materialized || materialized->owner!=input.property.owner ||
+        materialized->buf_auxiliary_offset!=input.property.buf_auxiliary_offset ||
+        materialized->opaque_handle!=input.opaque_handle)
+      throw std::runtime_error("Scene KEYS registry materialization did not preserve the canonical owner join");
+  }
+
+  scene_lifetime_keys_registry_.emplace(std::move(staged));
+  next_scene_lifetime_keys_handle_=staged_next;
+}
+
 void IntroRuntime::construct_lens_flare_animation_scope_without_engine_renderer() {
   if(resource_load_stage_!=IntroResourceLoadStage::room_animation_scope_ready || loaded_resource_handles_.size()!=69 ||
       count_group_selector_!=9 || current_source_parent()!=source_handle(48) || resource_allocation_enabled_ ||

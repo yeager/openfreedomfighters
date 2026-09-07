@@ -2,6 +2,7 @@
 
 #include "off/graphics/fresh_intro_camera.hpp"
 #include "off/graphics/intro_prepared_resources.hpp"
+#include "off/data/scene_lifetime_keys_registry.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_controller_initialization.hpp"
 #include "off/runtime/application_services.hpp"
@@ -532,6 +533,13 @@ public:
   [[nodiscard]] const IntroConstructedRoomOwner* constructed_room_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroConstructedObjectOwner* constructed_object_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroOwnerAuxiliary* constructed_owner_auxiliary(std::size_t source) const noexcept;
+  // Builds the immutable, owner-local KEYS resolver from the completed
+  // directory's retained MatPosAnim property blocks. This is preparation only:
+  // it neither reads a component source nor runs a lifecycle phase.
+  void prepare_scene_lifetime_keys_registry();
+  [[nodiscard]] const data::SceneLifetimeKeysRegistry* scene_lifetime_keys_registry() const noexcept {
+    return scene_lifetime_keys_registry_ ? &*scene_lifetime_keys_registry_ : nullptr;
+  }
   [[nodiscard]] std::span<const IntroSavedResourceFlags> saved_resource_flags() const noexcept {return saved_resource_flags_;}
   [[nodiscard]] bool light_policy() const noexcept {return light_policy_;}
   void set_light_policy(bool value) noexcept {light_policy_=value;}
@@ -751,6 +759,10 @@ private:
   std::map<std::size_t,IntroConstructedCharacterOwner> constructed_character_owners_;
   std::map<std::size_t,IntroConstructedListOwner> constructed_list_owners_;
   std::map<std::size_t,IntroConstructedPictureComponent> constructed_picture_components_;
+  std::optional<data::SceneLifetimeKeysRegistry> scene_lifetime_keys_registry_;
+  // Dedicated native preparation identity stream. Values are opaque registry
+  // identities, never source addresses, BUF offsets, or attachment ordinals.
+  std::uint64_t next_scene_lifetime_keys_handle_{1};
   IntroRuntimeHandle current_source_parent_{};
   std::map<std::string,IntroSceneResourceProperty,std::less<>> scene_resource_properties_;
   std::optional<IntroRootOwnerState> root_owner_state_;

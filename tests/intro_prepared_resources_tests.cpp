@@ -56,6 +56,14 @@ void real(Bytes& b, std::uint8_t tag, double v) {
     word(b, static_cast<std::uint32_t>(bits)); word(b, static_cast<std::uint32_t>(bits >> 32));
 }
 void finish(Bytes& b) { b.push_back(std::byte{0xff}); set(b, 0, static_cast<std::uint32_t>(b.size())); }
+std::size_t keys_property(Bytes& names) {
+    const auto property=names.size();
+    names.resize(property+64);
+    set(names,property,0U);set(names,property+4,0x80000040U);
+    set(names,property+8,64U);set(names,property+12,1U);
+    set(names,property+16,0x5359454bU);set(names,property+20,48U);
+    return property;
+}
 struct FixtureReferenceMap {
     std::uint32_t offset{};
     bool picture_order{};
@@ -353,8 +361,7 @@ struct Fixture {
                         for(const auto value:std::array<float,9>{1,0,0,0,1,0,0,0,-1}) word(payload,std::bit_cast<std::uint32_t>(value));
                     }
                     if(camera_owner) {
-                        const auto property=names.size();names.resize(property+64,std::byte{0x5c});
-                        set(names,property,static_cast<std::uint32_t>(row));set(names,property+4,0x80000040U);
+                        const auto property=keys_property(names);
                         set(payload,at+28,static_cast<std::uint32_t>(property));
                     }
                     const std::string_view attachment=row==51 || row==52?"ZSTDOBJ_VertAnim":
@@ -392,8 +399,8 @@ struct Fixture {
                     if(row==71 || row==100 || row==109 || row==124) set(payload,at+36,row==71?0x40000230U:row==100?0x400002a0U:row==109?0x400003f0U:0x40000310U);
                     const bool property=row==111 || row==157 || row==160 || row==161 || (row>=169 && row<=177) || (row>=179 && row<=190) || row==192 || row==193;
                     if(property) {
-                        const auto start=names.size();names.resize(start+64,std::byte{0x6d});
-                        set(names,start,static_cast<std::uint32_t>(row));set(names,start+4,0x80000040U);set(payload,at+28,static_cast<std::uint32_t>(start));
+                        const auto start=keys_property(names);
+                        set(payload,at+28,static_cast<std::uint32_t>(start));
                     }
                     std::vector<std::pair<std::string_view,std::uint32_t>> components;
                     if(row==70) components.emplace_back("ZGEOM_FilmGrainCamSetup",0);
@@ -500,7 +507,7 @@ struct Fixture {
                     else if(row==465) set(payload,at+32,static_cast<std::uint32_t>(remaining_controller_source));
                     else if(row==467||row==468) set(payload,at+32,static_cast<std::uint32_t>(remaining_sound_source));
                     else if(!no_reader(row)) set(payload,at+32,static_cast<std::uint32_t>(deferred));
-                    if(property_row(row)) { const auto p=names.size();names.resize(p+64,std::byte{0x71});set(names,p,static_cast<std::uint32_t>(row));set(names,p+4,0x80000040U);set(payload,at+28,static_cast<std::uint32_t>(p)); }
+                    if(property_row(row)) { const auto p=keys_property(names);set(payload,at+28,static_cast<std::uint32_t>(p)); }
                     const auto components=attachment(row);
                     if(!components.empty()) { const auto table=payload.size();word(payload,static_cast<std::uint32_t>(components.size()));payload.resize(payload.size()+components.size()*8);for(std::size_t i=0;i<components.size();++i){set(payload,table+4+i*8,static_cast<std::uint32_t>(payload.size()));set(payload,table+8+i*8,components[i].second);text(payload,components[i].first);}set(payload,at+20,static_cast<std::uint32_t>(table)); }
                     if(group(row)) set(payload,at+36,row==201?0x40000460U:row==285||row==400?0x40000770U:row==291?0x40000620U:row==292?0x40000690U:row==406?0x400007e0U:row==407?0x40000850U:row==422?0x400008c0U:0U);
@@ -819,6 +826,9 @@ int main() {
       off::graphics::IntroRuntime host(complete.build(),app,sequence,"FF-Intro.gms",
           off::graphics::IntroSoundLoadPolicy::directory_construction);
       host.set_restore_mode(policy);
+      rejects([&]{host.prepare_scene_lifetime_keys_registry();});
+      check(!host.scene_lifetime_keys_registry(),
+            "scene KEYS preparation cannot publish a partial registry before every owner is constructed");
       check(host.resources().controller_index()==465 && host.resources().first_cut_index()==460,
             "complete synthetic scope moves selected controller and first-cut references beyond row199");
       host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
@@ -983,6 +993,25 @@ int main() {
             owner469->particle_usage->pool->available_slots.back()==63 && owner469->particle_usage->descriptor &&
             owner469->particle_usage->descriptor->key=="particle_usage",
             "owner469 keeps its disabled diagnostic control, ascending 64-slot pool and console descriptor");
+      host.prepare_scene_lifetime_keys_registry();
+      const auto* keys_registry=host.scene_lifetime_keys_registry();
+      std::size_t mat_pos_owners{};
+      std::uint64_t expected_keys_handle{1};
+      for(std::size_t row=0;row<host.resources().sources().directory().size();++row) {
+        const auto& source=host.resources().sources().directory()[row];
+        bool mat_pos=false;
+        for(std::size_t slot=0;slot<source.attachments.size();++slot)
+          mat_pos=mat_pos || host.resources().sources().attachment_identifier(row,slot)=="ZGEOM_MatPosAnim";
+        if(!mat_pos) continue;
+        ++mat_pos_owners;
+        const auto resolved=keys_registry->resolve_required_keys(host.source_handle(row).value,{'K','E','Y','S'});
+        check(resolved && resolved->opaque_handle==expected_keys_handle++ &&
+              resolved->owner==host.source_handle(row).value,
+              "scene KEYS preparation assigns opaque local handles through canonical MatPos owners");
+      }
+      check(keys_registry && keys_registry->size()==mat_pos_owners && mat_pos_owners>0,
+            "scene KEYS registry atomically retains every supported owner-local property");
+      rejects([&]{host.prepare_scene_lifetime_keys_registry();});
       const auto components467=host.owner_components(host.source_handle(467));
       const auto components468=host.owner_components(host.source_handle(468));
       check(components467.size()==4 && components468.size()==4 &&
