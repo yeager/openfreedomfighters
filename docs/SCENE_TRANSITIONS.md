@@ -92,6 +92,15 @@ construction traversal. It does not select an active root, evaluate hide or
 component filters, establish visibility, choose a view, construct transforms,
 or submit/present a draw. Normal startup does not call this boundary.
 
+`StartupActiveWindowRootProvider` is the distinct proof boundary for that
+missing selection. It accepts only a coordinator/manager-returned live root,
+then checks it remains a member of the complete factory hierarchy with the
+same generation and epoch. It retains the manager's opaque scene-lease and
+pass-context identities; it never derives either one from a directory index,
+BootMenu component, graphics subtree, source order, or host viewport. A root
+token still does not admit a camera/view or renderer pass, and normal startup
+does not call it.
+
 ## Startup boot-menu admission
 
 `StartupBootMenuAdmission` is a fail-closed boundary for a future

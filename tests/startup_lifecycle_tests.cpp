@@ -1,5 +1,6 @@
 #include "off/platform/startup_lifecycle.hpp"
 #include "off/runtime/startloader_load_screen.hpp"
+#include "off/runtime/startup_active_window_root.hpp"
 #include "off/runtime/startup_boot_menu_admission.hpp"
 #include "off/runtime/startup_boot_scene_construction.hpp"
 #include "off/runtime/startup_scene_loader.hpp"
@@ -880,6 +881,49 @@ int main() {
   }
   check(rejected,
         "startup hierarchy invalidates a snapshot when the guarded epoch changes");
+
+  static_assert(!std::is_copy_constructible_v<
+                off::runtime::StartupActiveWindowRootToken>);
+  off::runtime::StartupActiveWindowRootProvider active_root_provider;
+  const off::runtime::StartupActiveWindowRootServices active_root_services{
+      .selected_root = []() -> std::optional<off::runtime::StartupManagerSelectedRoot> {
+        return {{.scene_lease_identity = 700U, .root_identity = 103U,
+                 .pass_context_identity = 701U}};
+      },
+      .scene_lease_live = [](std::uint64_t identity) { return identity == 700U; },
+      .factory_generation_live = [](std::uint64_t generation) {
+        return generation == 9U;
+      },
+      .hierarchy_epoch = [] { return 71U; },
+  };
+  const auto active_root = active_root_provider.admit(
+      lease(700U), hierarchy_snapshot, active_root_services);
+  check(active_root.valid() && active_root.selection().root_identity == 103U &&
+            active_root.selection().pass_context_identity == 701U,
+        "startup root requires a manager-selected live hierarchy member");
+
+  rejected = false;
+  try {
+    auto outside_root_services = active_root_services;
+    outside_root_services.selected_root =
+        []() -> std::optional<off::runtime::StartupManagerSelectedRoot> {
+      return {{.scene_lease_identity = 700U, .root_identity = 999U,
+               .pass_context_identity = 701U}};
+    };
+    static_cast<void>(active_root_provider.admit(
+        lease(700U), hierarchy_snapshot, outside_root_services));
+  } catch (const std::runtime_error&) { rejected = true; }
+  check(rejected,
+        "startup root rejects a directory or subtree stand-in outside live hierarchy");
+
+  rejected = false;
+  try {
+    auto stale_root_services = active_root_services;
+    stale_root_services.hierarchy_epoch = [] { return 72U; };
+    static_cast<void>(active_root_provider.admit(
+        lease(700U), hierarchy_snapshot, stale_root_services));
+  } catch (const std::runtime_error&) { rejected = true; }
+  check(rejected, "startup root rejects a changed hierarchy epoch");
 
   static_assert(
       !std::is_copy_constructible_v<off::runtime::StartupBootMenuReaderToken>);
