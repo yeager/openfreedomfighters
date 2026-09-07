@@ -633,6 +633,15 @@ resource-registration handoff. That handoff is not a draw call: dynamic hide,
 camera/view selection, preselection, backend submission and present remain
 separate gates.
 
+An accepted picture group during enabled admitted-view traversal produces only
+a candidate: its paired-resource record retains the current owner and view,
+prepares/registers, then enters the per-frame rebuild queue. GPU-side callback
+eligibility follows all view phases, maintenance rebuild/sort/merge, real
+coordinator preselection and cursor setup, followed by ordinary non-reserved
+view, subtype and binding gates. Only then can the record callback emit its
+supported descriptor batches. Device acceptance, texture upload and present are
+still independent, unrecovered boundaries.
+
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
 copied controller payloads. Runtime acceptance additionally requires an actual
