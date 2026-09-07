@@ -4,6 +4,7 @@
 #include "off/data/component_reader_context.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
 #include "off/data/deferred_reader_session.hpp"
+#include "off/data/keys_descriptor_range.hpp"
 #include "off/data/keys_property_materializer.hpp"
 #include "off/data/owner_buf_keys_profile.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
@@ -1304,6 +1305,80 @@ int main() {
             const std::array zero_handle{SceneLifetimeKeysRegistryInput{first, 0U}};
             static_cast<void>(SceneLifetimeKeysRegistry::construct(zero_handle));
         }, "scene KEYS registry rejects stale or zero scene handles");
+    }
+    {
+        using off::data::KeysDescriptorBackingRequest;
+        using off::data::KeysDescriptorRangeBinder;
+        using off::data::MaterializedOwnerKeysChild;
+        using off::data::OwnerAuxiliaryPropertyChild;
+
+        const auto write_word = [](std::span<std::byte> bytes, std::size_t offset,
+                                   std::uint32_t value) {
+            bytes[offset] = static_cast<std::byte>(value & 0xffU);
+            bytes[offset + 1U] = static_cast<std::byte>((value >> 8U) & 0xffU);
+            bytes[offset + 2U] = static_cast<std::byte>((value >> 16U) & 0xffU);
+            bytes[offset + 3U] = static_cast<std::byte>((value >> 24U) & 0xffU);
+        };
+        const auto supported_child = [&] {
+            std::array<std::byte, 48> bytes{};
+            write_word(bytes, 0U, 0x5359454bU);
+            write_word(bytes, 4U, 48U);
+            write_word(bytes, 8U, 5U);
+            write_word(bytes, 12U, static_cast<std::uint32_t>(-2));
+            write_word(bytes, 16U, 2U);
+            write_word(bytes, 20U, std::bit_cast<std::uint32_t>(0.25F));
+            write_word(bytes, 24U, 0x10U);
+            write_word(bytes, 28U, 0x20U);
+            write_word(bytes, 32U, 0x30U);
+            write_word(bytes, 36U, 0x40U);
+            write_word(bytes, 40U, 0x50U);
+            write_word(bytes, 44U, 0x60U);
+            return bytes;
+        };
+
+        auto bytes = supported_child();
+        const OwnerAuxiliaryPropertyChild child{0x120U, {'K', 'E', 'Y', 'S'}, 48U, bytes};
+        const MaterializedOwnerKeysChild materialized{0x42U, 0x120U, 0x700U};
+        bool request_seen = false;
+        const auto bound = KeysDescriptorRangeBinder::bind(
+            materialized, child, [&](const KeysDescriptorBackingRequest& request) {
+                request_seen = request.owner == 0x42U && request.buf_auxiliary_offset == 0x120U &&
+                               request.opaque_handle == 0x700U && request.descriptor.count_like == 5U &&
+                               request.descriptor.inclusive_first == -2 &&
+                               request.descriptor.inclusive_last == 2 &&
+                               request.descriptor.spacing_or_rate == 0.25F &&
+                               request.descriptor.first_offsets == std::array{0x10U, 0x20U, 0x30U} &&
+                               request.descriptor.second_offsets == std::array{0x40U, 0x50U, 0x60U};
+                return true;
+            });
+        check(bound && request_seen && bound->opaque_handle == 0x700U,
+              "KEYS descriptor preserves fixed words and requires explicit backing availability");
+
+        check(!KeysDescriptorRangeBinder::bind(materialized, child, {}) &&
+                  !KeysDescriptorRangeBinder::bind(materialized, child,
+                    [](const KeysDescriptorBackingRequest&) { return false; }),
+              "KEYS descriptor does not synthesize unavailable backing");
+        check_rejected([&] {
+            auto malformed = bytes;
+            write_word(malformed, 16U, static_cast<std::uint32_t>(-3));
+            static_cast<void>(KeysDescriptorRangeBinder::bind(
+                materialized, {0x120U, {'K', 'E', 'Y', 'S'}, 48U, malformed},
+                [](const KeysDescriptorBackingRequest&) { return true; }));
+        }, "KEYS descriptor rejects reversed signed inclusive bounds");
+        check_rejected([&] {
+            auto malformed = bytes;
+            write_word(malformed, 8U, 4U);
+            static_cast<void>(KeysDescriptorRangeBinder::bind(
+                materialized, {0x120U, {'K', 'E', 'Y', 'S'}, 48U, malformed},
+                [](const KeysDescriptorBackingRequest&) { return true; }));
+        }, "KEYS descriptor rejects an inclusive range beyond its count-like word");
+        check_rejected([&] {
+            auto malformed = bytes;
+            write_word(malformed, 20U, 0x7f800000U);
+            static_cast<void>(KeysDescriptorRangeBinder::bind(
+                materialized, {0x120U, {'K', 'E', 'Y', 'S'}, 48U, malformed},
+                [](const KeysDescriptorBackingRequest&) { return true; }));
+        }, "KEYS descriptor rejects non-finite spacing or rate");
     }
     {
         using off::data::TypedValue;
