@@ -2310,6 +2310,43 @@ runtime::ComponentCallback IntroRuntime::controller_phase_two_callback(
   };
 }
 
+void IntroRuntime::apply_supported_movie_control_deferred_reader(const IntroDeferredReaderWork& work) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      !work.processed || work.source_directory_index!=resources_.controller_index() ||
+      work.source_offset!=resources_.sources().directory().at(work.source_directory_index).deferred_source_offset ||
+      work.resource!=directory_resource_mapping_.at(work.source_directory_index).value_or(IntroRuntimeResourceHandle{}))
+    throw std::runtime_error("MovieControl reader requires its live deferred owner work");
+  auto& component=components_.at(controller_component_);
+  if(!component.constructed() || component.source().factory_name!="ZGEOM_MovieControl")
+    throw std::runtime_error("MovieControl reader has no constructed controller component");
+  if(movie_controller_reader_state_)
+    throw std::runtime_error("MovieControl source reader cannot run twice");
+  const auto resolve=[this](std::uint32_t reference) -> IntroRuntimeResourceHandle {
+    const auto source=resources_.sources().local_source_for_authored_reference(reference);
+    if(!source || *source>=directory_resource_mapping_.size() || !directory_resource_mapping_[*source])
+      throw std::runtime_error("MovieControl reader has an unresolved mandatory source reference");
+    return *directory_resource_mapping_[*source];
+  };
+  const auto translate=[&resolve](std::span<const std::uint32_t> references) {
+    std::vector<std::optional<IntroRuntimeResourceHandle>> result;
+    result.reserve(references.size());
+    for(const auto reference:references) {
+      if(reference==0U) result.push_back(std::nullopt);
+      else result.push_back(resolve(reference));
+    }
+    return result;
+  };
+  const auto& authored=resources_.controller();
+  IntroMovieControllerReaderState state{
+      .owner=source_handle(work.source_directory_index), .resource=work.resource,
+      .component_index=controller_component_, .authored=authored,
+      .sequence_list_resource=resolve(authored.sequence_reference),
+      .group_list_resource=resolve(authored.group_reference),
+      .sequence_members=translate(resources_.cut_references()),
+      .group_members=translate(resources_.group_references())};
+  movie_controller_reader_state_=std::move(state);
+}
+
 IntroRuntimeHandle IntroRuntime::source_handle(std::size_t source) const {
   if (source >= resources_.sources().directory().size()) throw std::runtime_error("intro source index is out of range");
   return {owner_base_+static_cast<std::uint64_t>(source)+1};

@@ -284,6 +284,19 @@ struct IntroDeferredReaderWork {
   // resource identities resolved before either reader boundary observes work.
   std::vector<std::optional<IntroRuntimeResourceHandle>> translated_references;
 };
+// Published by the concrete MovieControl owner reader only.  Mandatory list
+// references are resolved in the live source-directory domain; all other
+// controller fields deliberately stay raw until their consumers are recovered.
+struct IntroMovieControllerReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t component_index{};
+  data::GmsIntroMovieControllerSource authored;
+  IntroRuntimeResourceHandle sequence_list_resource;
+  IntroRuntimeResourceHandle group_list_resource;
+  std::vector<std::optional<IntroRuntimeResourceHandle>> sequence_members;
+  std::vector<std::optional<IntroRuntimeResourceHandle>> group_members;
+};
 struct IntroSourceScriptWork {
   IntroRuntimeResourceHandle resource;
   std::uint32_t source_offset;
@@ -625,6 +638,10 @@ public:
   // Component 0 describes the synthesized RootGroup; all authored attachments
   // follow in directory/attachment order. Catalog order is not construction.
   [[nodiscard]] std::size_t controller_component_index() const noexcept { return controller_component_; }
+  // Complete only the checked MovieControl owner-reader boundary.  This does
+  // not run component phases, enroll events, or activate the controller.
+  void apply_supported_movie_control_deferred_reader(const IntroDeferredReaderWork& work);
+  [[nodiscard]] const IntroMovieControllerReaderState* movie_controller_reader_state() const noexcept {return movie_controller_reader_state_?&*movie_controller_reader_state_:nullptr;}
   // Caller still owes actual global lifecycle admission and external services.
   // Clock/audio resolve through the same application state retained by this scene.
   void run_controller_phase_two(const IntroControllerPhaseTwoServices& external);
@@ -732,6 +749,7 @@ private:
   std::unique_ptr<runtime::OrdinaryComponentManager> ordinary_;
   std::vector<std::vector<std::size_t>> owner_components_;
   std::size_t controller_component_{};
+  std::optional<IntroMovieControllerReaderState> movie_controller_reader_state_;
   IntroControllerInitialization controller_initialization_;
   FreshIntroCamera prepared_camera_;
   std::map<std::size_t,std::unique_ptr<IntroLiveCameraOwner>> live_cameras_;

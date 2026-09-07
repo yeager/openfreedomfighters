@@ -999,6 +999,8 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
           },
           [&](const off::graphics::IntroDeferredReaderWork& work){
             reader_events.push_back("owner");
+            if(work.source_directory_index==host.resources().controller_index())
+              host.apply_supported_movie_control_deferred_reader(work);
             if(work.source_directory_index==host.resources().window_index()) {
               host.apply_supported_window_deferred_reader(work);
               ++applied_window_readers;
@@ -1029,6 +1031,15 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               camera.render_control()==0U && (camera.flags()&0x8000U)==0U && (camera.flags()&0x210000U)==0x210000U &&
               camera.enabled(),
               "explicit first-cut Window reader applies ordered owner and canonical camera state without registration");
+        const auto* controller=host.movie_controller_reader_state();
+        check(controller && controller->owner==host.source_handle(host.resources().controller_index()) &&
+              controller->resource==host.directory_resource_mapping()[host.resources().controller_index()] &&
+              controller->component_index==host.controller_component_index() &&
+              controller->authored.sequence_reference==host.resources().controller().sequence_reference &&
+              controller->authored.destination==host.resources().controller().destination &&
+              controller->sequence_members.size()==host.resources().cut_references().size() &&
+              controller->group_members.size()==host.resources().group_references().size(),
+              "MovieControl owner reader retains real authored data and only proven list-resource mappings");
         const auto window_work=std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
           return work.source_directory_index==host.resources().window_index();
         });
