@@ -659,6 +659,9 @@ presentation and loss handling therefore remain an explicit outer-frame service.
 The recovered Present/loss/reset owner has no known ordinary first-cut caller;
 its only recovered startup caller is that separate phase-two wrapper. It must
 remain disconnected until a concrete outer caller proves the join.
+Whole-image caller triage found no ordinary renderer-frame-to-Present call. The
+only concrete renderer callers are the phase-two wrapper and device
+initialization, both of which present cleared buffers rather than the first cut.
 
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
