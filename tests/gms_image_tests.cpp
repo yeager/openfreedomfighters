@@ -7,6 +7,7 @@
 #include "off/data/owner_buf_keys_profile.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
 #include "off/data/typed_value_cursor.hpp"
+#include "off/runtime/owner_component_provider_binding.hpp"
 
 #include <algorithm>
 #include <array>
@@ -29,6 +30,18 @@ void check(bool condition, const char* message) {
         ++failures;
     }
 }
+
+class TestOwnerComponentProvider final : public off::runtime::OwnerComponentProvider {
+public:
+    [[nodiscard]] const void* find_child_exact(std::array<char, 4> key) const noexcept override {
+        ++queries;
+        return live && key == std::array<char, 4>{'K', 'E', 'Y', 'S'} ? &keys_child : nullptr;
+    }
+
+    mutable std::size_t queries{};
+    bool live{true};
+    std::uint32_t keys_child{0x4b455953U};
+};
 
 void append_u32(std::vector<std::byte>& bytes, std::uint32_t value) {
     for (unsigned int shift = 0; shift < 32; shift += 8) {
@@ -712,6 +725,58 @@ void intro_fade_picture_tests() {
 }  // namespace
 
 int main() {
+    {
+        using off::runtime::OwnerComponentProviderBinding;
+        using off::runtime::OwnerComponentProviderBindings;
+
+        TestOwnerComponentProvider provider;
+        OwnerComponentProviderBindings bindings;
+        OwnerComponentProviderBinding first;
+        OwnerComponentProviderBinding second;
+        check(!first.bound() && !first.invalidated() && bindings.size() == 0U,
+              "factory-produced provider binding begins empty");
+
+        first.bind(provider, bindings);
+        second.bind(provider, bindings);
+        const auto* first_child = first.find_required_keys_child();
+        const auto* second_child = second.find_required_keys_child();
+        check(first.bound() && second.bound() && bindings.size() == 2U &&
+                  first_child == &provider.keys_child && second_child == &provider.keys_child &&
+                  provider.queries == 2U,
+              "provider binding performs exact borrowed KEYS lookup only after attachment binding");
+
+        provider.live = false;
+        check(first.find_required_keys_child() == nullptr && provider.queries == 3U,
+              "provider binding does not cache a detached KEYS child result");
+        provider.live = true;
+
+        bool rejected_rebind = false;
+        try {
+            first.bind(provider, bindings);
+        } catch (const std::runtime_error&) {
+            rejected_rebind = true;
+        }
+        check(rejected_rebind, "provider binding rejects a live component rebind");
+
+        first.invalidate();
+        check(!first.bound() && first.invalidated() && bindings.size() == 1U &&
+                  first.find_required_keys_child() == nullptr,
+              "component teardown clears its borrowed provider before later use");
+
+        bindings.invalidate_all();
+        check(!second.bound() && second.invalidated() && bindings.size() == 0U &&
+                  second.find_required_keys_child() == nullptr,
+              "provider teardown invalidates every enrolled component before provider destruction");
+
+        bool rejected_after_invalidation = false;
+        try {
+            second.bind(provider, bindings);
+        } catch (const std::runtime_error&) {
+            rejected_after_invalidation = true;
+        }
+        check(rejected_after_invalidation,
+              "invalidated provider binding cannot silently rebind to a new owner lifetime");
+    }
     {
         using off::data::CompactTypedValueDecoder;
         using off::data::CompactTypedValueKind;
