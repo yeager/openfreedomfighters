@@ -317,6 +317,9 @@ if(BUILD_TESTING)
     add_executable(off_matpos_owner_transform_apply_tests tests/matpos_owner_transform_apply_tests.cpp)
     target_link_libraries(off_matpos_owner_transform_apply_tests PRIVATE off_core)
     add_test(NAME off_matpos_owner_transform_apply_tests COMMAND off_matpos_owner_transform_apply_tests)
+    add_executable(off_matpos_owner_local_transform_state_tests tests/matpos_owner_local_transform_state_tests.cpp)
+    target_link_libraries(off_matpos_owner_local_transform_state_tests PRIVATE off_core)
+    add_test(NAME off_matpos_owner_local_transform_state_tests COMMAND off_matpos_owner_local_transform_state_tests)
     add_test(NAME off_shader_source_hash_tests COMMAND ${CMAKE_COMMAND}
         "-DOFF_TEST_WORK_DIR=${CMAKE_BINARY_DIR}/test-work/shader-source-hash"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/shader_source_hash_tests.cmake")

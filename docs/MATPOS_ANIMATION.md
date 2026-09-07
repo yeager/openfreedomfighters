@@ -46,6 +46,32 @@ to a renderer. The three-float translation group is returned unchanged. This
 does not attach the pose to an owner, a resource, or a renderer. It cannot
 activate scene animation or make the intro visible.
 
+## Recovered owner application seam
+
+After sampling, the native path calls a virtual operation on the same live
+owner/provider that supplies the exact `KEYS` child. It passes the transient
+local translation and basis values and ignores the operation's return value.
+This is not a generic scene-transform write, resource update, or renderer
+submission.
+
+`MatPosOwnerTransformApplyBinding` models only that narrow seam. It requires a
+currently enrolled typed provider, performs a fresh exact `KEYS` lookup on
+every application, and rejects non-finite basis or translation values. Its
+receiver has no result channel and the binding retains none of the sampled
+values. Provider teardown and explicit invalidation both disable later calls.
+
+The shared provider bridge writes a typed owner-local transform state only when
+the complete basis or translation changes. A basis comparison preserves float
+bit identity; translation uses numeric equality. On change, the whole local
+state is committed, marked dirty, then synchronously notifies a typed
+invalidation service. This state has no resource, hierarchy, cache, or
+renderer identity, and rejects non-finite samples before any mutation.
+
+Parent-world composition and any relation from the invalidation service to
+picture, camera, view, or render-pass state are still unrecovered.
+Consequently no current runtime binds this seam to an intro owner or uses it to
+claim animation or presentation.
+
 ## Lifecycle status
 
 MatPosAnim phase one remains unavailable until its existing-state/provider
