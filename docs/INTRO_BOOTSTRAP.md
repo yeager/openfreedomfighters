@@ -592,6 +592,15 @@ normal startup has a ready view, an enabled camera, admitted pictures, a GPU
 draw, or presentation. Those gates remain required before it can enable the
 normal intro path.
 
+The verified state-zero admission gates are: completed ordinary loader and
+lifecycle work; the strict deadline event; a zero `MainCamera` result with a
+live camera-capable reference; a present and ready backend at registration;
+state-zero creation or acquisition; ready state or its separate pending replay;
+view/intermediate/backend-record registration; and an enabled camera plus
+engine, renderer and device admission for traversal. Ordinary startup proves
+only the opportunity to execute this order. The one-shot renderer-init replay
+for an initially unready state must not be generalized into a readiness policy.
+
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
 copied controller payloads. Runtime acceptance additionally requires an actual
