@@ -1,6 +1,7 @@
 #include "off/crypto/sha256.hpp"
 #include "off/simulation/world.hpp"
 #include "off/simulation/world_command_capture.hpp"
+#include "off/simulation/replay.hpp"
 
 #include <cstdlib>
 #include <algorithm>
@@ -51,6 +52,20 @@ int main() {
     check(!capture.active() && capture.invalidated() && capture.commands().size() == 3 &&
               captured.queue_spawn({}) == 1,
           "world reset terminates capture without recording a discontinuity");
+  }
+  {
+    SimulationWorld replay_world;
+    SimulationReplayRecorder recorder;
+    recorder.begin(replay_world);
+    static_cast<void>(replay_world.queue_spawn({{1, 0, 0}, 1}));
+    const auto first_input = input(1);
+    static_cast<void>(replay_world.step(first_input));
+    recorder.record_completed_step(replay_world, first_input);
+    const auto replay = recorder.finish();
+    check(replay.initial_snapshot.size() >= 64 && replay.inputs == std::vector{first_input} &&
+              replay.checkpoints.size() == 1 && replay.checkpoints[0].completed_tick == 1 &&
+              replay.checkpoints[0].state_hash == replay_world.state_hash() && replay.commands.size() == 1,
+          "replay recorder retains snapshot, accepted commands, input and post-step checkpoint");
   }
 
   SimulationWorld world;
