@@ -155,6 +155,38 @@ IntroRuntimeSound& IntroRuntime::sound_for_source(std::size_t source) {
   throw std::runtime_error("Intro source has no retained sound owner");
 }
 
+void IntroRuntime::apply_supported_sound_owner_deferred_reader(
+    const IntroDeferredReaderWork& work) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      !work.processed)
+    throw std::runtime_error("Sound owner reader requires processed directory work");
+  const auto& directory=resources_.sources().directory();
+  if(work.source_directory_index>=directory.size())
+    throw std::runtime_error("Sound owner reader source is out of range");
+  const auto& owner_source=directory[work.source_directory_index];
+  if(owner_source.source_type!=0x00200012U || !owner_source.deferred_source_offset ||
+      owner_source.deferred_source_offset!=work.source_offset ||
+      directory_resource_mapping_.at(work.source_directory_index)!=work.resource ||
+      !associated_resource_owner(work.resource) ||
+      associated_resource_owner(work.resource)!=source_handle(work.source_directory_index))
+    throw std::runtime_error("Deferred work is not a supported sound owner form");
+
+  auto& sound=sound_for_source(work.source_directory_index);
+  if(sound.handle()!=source_handle(work.source_directory_index) || sound.source_applied_ ||
+      sound.owner_binding_ || sound.active_)
+    throw std::runtime_error("Sound owner source reader cannot run twice or after preparation");
+
+  // A scene can retain its parsed sound graph without an output registry. That
+  // path still consumes this reader boundary, but owns no canonical record to
+  // mutate and therefore cannot accidentally issue a playback operation.
+  if(!sound.has_record()) {
+    sound.source_applied_=true;
+    return;
+  }
+  application_.sound_records().apply_source(sound.record(),sound.source_->source);
+  sound.source_applied_=true;
+}
+
 void IntroRuntime::construct_root() {
   if(root_owner_state_ && root_owner_state_->enabled && resource_load_stage_!=IntroResourceLoadStage::failed) return;
   if(resource_load_stage_!=IntroResourceLoadStage::prepared)

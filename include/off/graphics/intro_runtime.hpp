@@ -421,13 +421,14 @@ public:
   [[nodiscard]] bool active() const noexcept { return active_; }
   [[nodiscard]] bool failed() const noexcept { return failed_; }
   [[nodiscard]] bool has_record() const noexcept {return lease_.binding()!=0;}
+  [[nodiscard]] bool source_applied() const noexcept { return source_applied_; }
 private:
   friend class IntroRuntime;
   const IntroPreparedSound* source_{};
   IntroRuntimeHandle handle_;
   audio::SoundRecordLease lease_;
   std::uint64_t owner_binding_{};
-  bool active_{}, failed_{};
+  bool active_{}, failed_{}, source_applied_{};
 };
 
 struct IntroSoundSpatialState {
@@ -620,6 +621,10 @@ public:
   [[nodiscard]] std::uint64_t component_handle(std::size_t index) const;
   [[nodiscard]] std::span<const std::unique_ptr<IntroRuntimeSound>> sounds() const noexcept { return sounds_; }
   [[nodiscard]] IntroRuntimeSound& sound_for_source(std::size_t source);
+  // Applies one parsed sound-owner prefix at its matching owner-reader
+  // boundary. This does not prepare playback, register an attachment event or
+  // admit a global lifecycle phase.
+  void apply_supported_sound_owner_deferred_reader(const IntroDeferredReaderWork& work);
   // A concrete owner pre-hook, not the complete global traversal. All owner
   // pre-hooks must finish before either component phase; normal startup does
   // not call this until the live resource services exist. Failure poisons the

@@ -960,6 +960,7 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
       std::size_t prepared_reader_count{};
       std::size_t translated_reference_list_count{};
       std::size_t applied_window_readers{};
+      std::size_t applied_sound_readers{};
       off::graphics::IntroPostconstructionReaderServices reader_services{
           [&](std::uint64_t value){reader_events.push_back("external:"+std::to_string(value));},
           [&](const off::graphics::IntroSourceScriptWork&){reader_events.push_back("script");},
@@ -1001,6 +1002,10 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
             reader_events.push_back("owner");
             if(work.source_directory_index==host.resources().controller_index())
               host.apply_supported_movie_control_deferred_reader(work);
+            if(host.resources().sources().directory().at(work.source_directory_index).source_type==0x00200012U) {
+              host.apply_supported_sound_owner_deferred_reader(work);
+              ++applied_sound_readers;
+            }
             if(work.source_directory_index==host.resources().window_index()) {
               host.apply_supported_window_deferred_reader(work);
               ++applied_window_readers;
@@ -1031,6 +1036,9 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               camera.render_control()==0U && (camera.flags()&0x8000U)==0U && (camera.flags()&0x210000U)==0x210000U &&
               camera.enabled(),
               "explicit first-cut Window reader applies ordered owner and canonical camera state without registration");
+        check(applied_sound_readers==host.resources().sounds().size() &&
+              std::ranges::all_of(host.sounds(),[](const auto& sound) { return sound->source_applied(); }),
+              "sound owner readers consume both parsed source prefixes without preparing playback");
         const auto* controller=host.movie_controller_reader_state();
         check(controller && controller->owner==host.source_handle(host.resources().controller_index()) &&
               controller->resource==host.directory_resource_mapping()[host.resources().controller_index()] &&
@@ -1052,6 +1060,20 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
         check(window_work!=host.deferred_reader_work().end(),"first-cut Window retains deferred reader identity");
         if(window_work!=host.deferred_reader_work().end())
           rejects([&]{host.apply_supported_window_deferred_reader(*window_work);});
+        const auto sound_work=std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
+          return host.resources().sources().directory().at(work.source_directory_index).source_type==0x00200012U;
+        });
+        check(sound_work!=host.deferred_reader_work().end(),"intro sound owner retains deferred reader identity");
+        if(sound_work!=host.deferred_reader_work().end()) {
+          const auto& sound=host.sound_for_source(sound_work->source_directory_index);
+          const auto authored=std::ranges::find_if(host.resources().sounds(),[&](const auto& candidate) {
+            return candidate.directory_index==sound_work->source_directory_index;
+          });
+          check(authored!=host.resources().sounds().end() && sound.source_applied() &&
+                sound.record().active_source==authored->source.sound_definition_reference,
+                "sound owner reader applies the parsed source to its canonical record only");
+          rejects([&]{host.apply_supported_sound_owner_deferred_reader(*sound_work);});
+        }
         /* The loader tail has a separate frame below. */
 }
 
