@@ -105,9 +105,8 @@ active-window state update. It likewise establishes no direct scene-manager
 request, archive, mission, or gameplay construction. Any later effect must be
 traced from the emitted state updates rather than inferred from this route.
 
-The recovered direct consumers of the active-window update are also bounded to
-the UI layer: window-context dispatch and local scroll/select/show/hide
-behavior. Neither recovered implementation calls a known scene-manager clear
-or request. A further recipient remains runtime and data dependent, so it is
-not evidence of a level launch; any downstream scene transition must be
-recovered from that recipient rather than inferred from menu state updates.
+The direct recipient of the active-window update remains under trace. An
+earlier vtable attribution was rejected during verification and is not used as
+evidence here. The verified root state update alone is not a scene-manager
+request or proof of a level launch; any downstream transition must be recovered
+from the correctly identified recipient rather than inferred from menu state.
