@@ -110,3 +110,10 @@ earlier vtable attribution was rejected during verification and is not used as
 evidence here. The verified root state update alone is not a scene-manager
 request or proof of a level launch; any downstream transition must be recovered
 from the correctly identified recipient rather than inferred from menu state.
+
+The corrected root path filters data-backed records, resolves a reference
+selected by each record, and dispatches the resolved receiver through its
+runtime interface. The startup source proves the root object but not a concrete
+record payload or receiver type. No direct scene-manager clear or request is
+recovered on this path, so it remains insufficient evidence for a mission
+launch.
