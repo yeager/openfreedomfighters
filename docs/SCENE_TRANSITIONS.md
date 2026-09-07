@@ -15,3 +15,16 @@ creates GPU resources, presents a frame, or accepts input.
 The later manager pump, archive selection, lifecycle handoff, and `FF-StartUp`
 menu construction are not implemented. The source of LoadScreen's initial
 counter and setup flag also remains a separate construction requirement.
+
+## Startup boot-menu admission
+
+`StartupBootMenuAdmission` is a fail-closed boundary for a future
+factory-produced FF-StartUp boot-menu controller. It requires caller-owned live
+event-registry, window-coordinator, and action-map services. The caller supplies
+only opaque runtime/action/routing identities; the boundary resolves and retains
+the two event IDs, then performs one coordinator initialization.
+
+It records delivery of the resolved typed action only. It does not parse a scene,
+bind a keyboard/mouse/controller input, create a widget, decide focus or
+selection, request another scene, or expose a retail menu. Normal startup does
+not call it yet.

@@ -1,4 +1,5 @@
 #include "off/platform/startup_lifecycle.hpp"
+#include "off/runtime/startup_boot_menu_admission.hpp"
 #include "off/runtime/startloader_load_screen.hpp"
 
 #include <chrono>
@@ -116,6 +117,55 @@ int main() {
   check(slash_queue.request_target("Scenes/FF-StartUp") &&
             slash_queue.targets().front() == "Scenes\\FF-StartUp",
         "target requests retain a copied slash-normalized path");
+
+  off::runtime::StartupBootMenuAdmission boot_menu;
+  const off::runtime::StartupBootMenuSource boot_source{91U, 101U, 102U};
+  std::uint32_t resolve_calls{};
+  std::uint64_t initialized_owner{};
+  std::uint16_t initialized_route{};
+  std::uint16_t retained_action{};
+  const off::runtime::StartupBootMenuAdmissionServices boot_services{
+      .event_registry_live = [] { return true; },
+      .resolve_event = [&](std::uint64_t identity)
+          -> std::optional<std::uint16_t> {
+        ++resolve_calls;
+        if (identity == 101U) return 31U;
+        if (identity == 102U) return 32U;
+        return std::nullopt;
+      },
+      .live_window_owner = [](std::uint64_t owner) { return owner == 91U; },
+      .initialize_window = [&](std::uint64_t owner, std::uint16_t route) {
+        initialized_owner = owner;
+        initialized_route = route;
+        return true;
+      },
+      .action_map_live = [] { return true; },
+      .retain_action = [&](std::uint16_t action) {
+        retained_action = action;
+        return true;
+      },
+  };
+  boot_menu.initialize(boot_source, boot_services);
+  check(boot_menu.interactive() && !boot_menu.failed() && resolve_calls == 2U &&
+            initialized_owner == 91U && initialized_route == 32U &&
+            retained_action == 31U && boot_menu.action_id() == 31U &&
+            boot_menu.routing_id() == 32U,
+        "boot-menu admission retains only live opaque action and routing IDs");
+  check(!boot_menu.observe({32U}) && boot_menu.observe({31U}) &&
+            boot_menu.observed_actions() == 1U,
+        "boot-menu observation records the resolved action without a selection side effect");
+
+  off::runtime::StartupBootMenuAdmission missing_map;
+  auto unavailable_map_services = boot_services;
+  unavailable_map_services.action_map_live = [] { return false; };
+  rejected = false;
+  try {
+    missing_map.initialize(boot_source, unavailable_map_services);
+  } catch (const std::runtime_error&) {
+    rejected = true;
+  }
+  check(rejected && missing_map.failed() && !missing_map.interactive(),
+        "boot-menu admission fails closed when the caller-owned action map is absent");
 
   std::cout << "startup lifecycle tests passed\n";
 }
