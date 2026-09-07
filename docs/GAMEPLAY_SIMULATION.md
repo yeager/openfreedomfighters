@@ -142,9 +142,11 @@ sequential, idempotent, bounded, preserve the source until success, and never
 downgrade. Retail-save import is optional, isolated, and one-way.
 
 Replays contain a declared initial-state reference, simulation-contract version,
-ordered tick input/external deterministic events, and expected checkpoints--never
-retail resources. Incompatible contracts or fingerprints are rejected rather
-than approximated.
+ordered tick inputs, every ordered deterministic world command issued between
+ticks (including lifecycle and future-event requests), and expected checkpoints--
+never retail resources. Input snapshots alone are insufficient because queued
+world work changes authoritative state before a later step. Incompatible
+contracts or fingerprints are rejected rather than approximated.
 
 ## Delivery and evidence
 
