@@ -73,6 +73,14 @@ fails. Final cleanup instead drains both collections without decrementing,
 re-fetching cursor state after callbacks before fired arrays and active state
 are cleared.
 
+The input/debug prelude runs its entry predicates before active admission. They
+can send the shared owner event and toggle transient state only while inactive;
+active calls may sample them but do not mutate. The tail has an explicit
+source-derived bypass gate for its ordered input predicates, but not for the
+natural end comparison. Its release/press state machine can request the same
+ordered end actions as natural end. A tail-created pending end is observed by
+the next update, never cleaned up in that same update.
+
 ## Cut-sequence completion coordinator
 
 `CutSequenceCoordinator` models the recovered handoff after an already-admitted
