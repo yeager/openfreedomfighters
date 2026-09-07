@@ -148,6 +148,14 @@ never retail resources. Input snapshots alone are insufficient because queued
 world work changes authoritative state before a later step. Incompatible
 contracts or fingerprints are rejected rather than approximated.
 
+Command capture records only successfully accepted world mutations. Each record
+has the completed world tick at which it was issued and a separate capture-local
+ordinal spanning spawn, destroy and event commands; destroys do not consume the
+world sequence allocator. A replay applies every command group in ordinal order
+before stepping the input for the following tick, and verifies the request or
+event sequence returned by the world. Reset and snapshot import are capture
+boundaries, never silently recorded mutations.
+
 ## Delivery and evidence
 
 1. Freeze the segment inventory and authoritative-field registry.
