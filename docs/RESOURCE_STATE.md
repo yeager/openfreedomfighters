@@ -337,9 +337,11 @@ The owned-data probe and normal startup now reach the complete directory:
 470 authored owners and resources, 420 queued readers, and 383 constructed
 attachments. Independent fixtures also check an existing optional lookup
 service, bank separation, source transforms, property ownership and saved-flags
-order. These are construction checks only. Deferred reading, reference
-translation, the loader tail, lifecycle, rendering, and gameplay still precede
-intro playback.
+order. Separate checked APIs model deferred-reader dispatch, the approved
+reference translation forms, loader-tail boundaries, and global component-pass
+ordering. These APIs are not part of normal startup, and they do not provide
+concrete reader fields, renderer associations, scene updates, rendering, or
+gameplay. Those integrations still precede intro playback.
 
 Tests use independently constructed states to check ancestor propagation,
 maintenance gates, picture views and subsequent DefaultCam hide inheritance.

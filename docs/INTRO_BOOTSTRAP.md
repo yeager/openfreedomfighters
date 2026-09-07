@@ -25,8 +25,12 @@ Seven cameras retain separate storage and ROOT contexts. None has renderer
 membership or source-reader effects yet. The event table is prepared before ROOT;
 CharFader reuses Fade events, while LogoFade declares none. Temporary component
 construction is removed from the live list while preserving its construction
-serial effects. No reader, reference translation, global initialization, or
-component lifecycle is executed. See [live resource flags](RESOURCE_STATE.md).
+serial effects. The host also exposes checked, explicit boundaries for the
+post-construction reader bracket, approved reference translation, loader tail,
+and global component passes. They are not called by normal startup. No concrete
+reader, renderer association, scene update, or rendering path follows from
+construction. See [live resource flags](RESOURCE_STATE.md) and the
+[component lifecycle](COMPONENT_LIFECYCLE.md).
 The conditional DefaultCam factory now constructs its real PreviewCamera and
 ordinary membership in that host. Its callback writes directly into the scene
 hierarchy after the complete global initializer. The post-load root state and
