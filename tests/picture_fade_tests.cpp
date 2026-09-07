@@ -1,4 +1,5 @@
 #include "off/cutscene/picture_fade.hpp"
+#include "off/cutscene/first_cut_fade_target_component.hpp"
 
 #include <cstdint>
 #include <iostream>
@@ -11,6 +12,7 @@ namespace {
 using Fade = off::cutscene::PictureFade;
 using State = Fade::State;
 using Effect = Fade::Effect;
+using FirstCutFade = off::cutscene::FirstCutFadeTargetComponent;
 constexpr auto control = Fade::EffectKind::owner_control;
 constexpr auto alpha = Fade::EffectKind::alpha;
 int failures = 0;
@@ -132,5 +134,28 @@ int main() {
     check(fade.state() == State::idle_covered, "uncaught recursion prevents following state write");
     fade.event("FadeIn", 0, 0, record);
     check(fade.state() == State::idle_clear, "guard releases after recursive exception");
+
+    std::vector<Effect> target_effects;
+    FirstCutFade target{0x100000004ULL, 2, 4,
+                        [&](bool enabled) { target_effects.push_back({control, static_cast<std::uint8_t>(enabled)}); },
+                        [&](std::uint8_t value) { target_effects.push_back({alpha, value}); }};
+    static_assert(!std::is_copy_constructible_v<FirstCutFade> && !std::is_move_constructible_v<FirstCutFade>);
+    check(target.owner_identity() == 0x100000004ULL && target.fade_in_event() == 2 && target.fade_out_event() == 4 &&
+          target.state() == State::idle_covered, "first-cut target retains admitted owner and concrete events only");
+    target.event(9, 0xffffffffU, std::numeric_limits<std::int32_t>::max());
+    check(target_effects.empty() && target.state() == State::idle_covered,
+          "unknown typed event is inert without forwarding a synthetic name");
+    target.event(4, 125, 100);
+    check(target_effects == std::vector<Effect>{{control, 0}, {alpha, 1}},
+          "typed fade out sends owner control then alpha");
+    target_effects.clear(); target.update(229);
+    check(target_effects == std::vector<Effect>{{alpha, 254}} && target.state() == State::idle_covered,
+          "typed update delegates completion to picture fade");
+    target.event(2, 0, 300);
+    check(target_effects == std::vector<Effect>{{alpha, 254}, {control, 1}} && target.state() == State::idle_clear,
+          "typed fade in sends owner control through injected sink");
+    rejects([&] { FirstCutFade{0, 2, 4, [](bool) {}, [](std::uint8_t) {}}; });
+    rejects([&] { FirstCutFade{1, 2, 2, [](bool) {}, [](std::uint8_t) {}}; });
+    rejects([&] { FirstCutFade{1, 2, 4, {}, [](std::uint8_t) {}}; });
     return failures == 0 ? 0 : 1;
 }

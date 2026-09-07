@@ -9,6 +9,9 @@ namespace off::cutscene {
 // Conditional receiver only: no initial owner color or render admission.
 class PictureFade final {
 public:
+    // The source-backed receiver may already have resolved its event identity.
+    // Keep that path typed: event names are only a compatibility boundary.
+    enum class Event { fade_in, fade_out };
     enum class State { idle_clear, fading_in, fading_out, idle_covered };
     enum class EffectKind { owner_control, alpha };
     struct Effect {
@@ -28,6 +31,8 @@ public:
     // Visitors must not reenter or destroy this object. Exceptions preserve
     // emitted prefix effects; state writes following the throw have not happened.
     void event(std::string_view name, std::uint32_t argument, std::int32_t clock,
+               const Visitor& visitor);
+    void event(Event event, std::uint32_t argument, std::int32_t clock,
                const Visitor& visitor);
     void update(std::int32_t clock, const Visitor& visitor);
     [[nodiscard]] State state() const noexcept { return state_; }

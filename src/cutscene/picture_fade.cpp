@@ -34,11 +34,17 @@ std::int32_t deadline_for(std::uint32_t raw, std::int32_t clock) {
 
 void PictureFade::event(std::string_view name, std::uint32_t argument, std::int32_t clock,
                         const Visitor& visitor) {
+    if (name == "FadeIn") return event(Event::fade_in, argument, clock, visitor);
+    if (name == "FadeOut") return event(Event::fade_out, argument, clock, visitor);
     Guard guard(running_);
-    if (name != "FadeIn" && name != "FadeOut") return;
+}
+
+void PictureFade::event(Event event, std::uint32_t argument, std::int32_t clock,
+                        const Visitor& visitor) {
+    Guard guard(running_);
     if (!visitor) throw std::runtime_error("picture fade visitor is required");
     const auto end = argument == 0 ? clock : deadline_for(argument, clock);
-    if (name == "FadeIn") {
+    if (event == Event::fade_in) {
         if (argument == 0) {
             visitor({EffectKind::owner_control, 1});
             state_ = State::idle_clear;
@@ -54,7 +60,7 @@ void PictureFade::event(std::string_view name, std::uint32_t argument, std::int3
     }
     start_ = clock;
     deadline_ = end;
-    state_ = name == "FadeIn" ? State::fading_in : State::fading_out;
+    state_ = event == Event::fade_in ? State::fading_in : State::fading_out;
 }
 
 void PictureFade::update(std::int32_t clock, const Visitor& visitor) {
