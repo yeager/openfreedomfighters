@@ -124,6 +124,25 @@ int main() {
     check(update.update(services) == ActiveCutUpdateResult::completed && primary_ends == 0);
   }
   {
+    // Start consults both collections before accepting a resolver's fresh
+    // collection choice, retaining the original selected identity on a hit.
+    ActiveCutUpdate update({{10U, 0.0F, 100.0F}, {20U, 0.0F, 100.0F}}, 1000.0F);
+    std::vector<std::uint64_t> starts;
+    int primary_ends = 0;
+    ActiveCutUpdateServices services{
+      .sample_scene_clock = [] { return 1U; },
+      .resolve_member = [](std::uint64_t target) { return std::optional<ActiveCutTrackingRegistration>{target == 10U ? ActiveCutTrackingRegistration{110U, 77U, ActiveCutTrackingCollection::primary} : ActiveCutTrackingRegistration{220U, 77U, ActiveCutTrackingCollection::secondary}}; },
+      .start_member = [&](std::uint64_t target, std::size_t index) { starts.push_back(target); if (index == 1U) update.request_end(); },
+      .end_primary_member = [&](std::uint64_t, std::uint64_t, std::size_t, bool) { ++primary_ends; },
+      .resolve_retained_source = [](std::uint64_t) { return std::optional<std::uint64_t>{}; },
+      .end_secondary_member = [](std::uint64_t, std::uint64_t, std::size_t, bool) { check(false); },
+      .complete = [](std::uint64_t) {},
+    };
+    update.start(0U);
+    check(update.update(services) == ActiveCutUpdateResult::completed &&
+          starts == std::vector<std::uint64_t>({110U, 110U}) && primary_ends == 1);
+  }
+  {
     // Final cleanup does not decrement and sends an unconditional primary end,
     // then a resolved secondary end with true.
     ActiveCutUpdate pending({{10U, 0.0F, 100.0F}, {20U, 0.0F, 100.0F}}, 1000.0F);
