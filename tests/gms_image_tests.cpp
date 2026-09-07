@@ -1,4 +1,5 @@
 #include "off/data/gms_image.hpp"
+#include "off/data/compact_typed_value_decoder.hpp"
 #include "off/data/typed_value_cursor.hpp"
 
 #include <algorithm>
@@ -705,6 +706,58 @@ void intro_fade_picture_tests() {
 }  // namespace
 
 int main() {
+    {
+        using off::data::CompactTypedValueDecoder;
+        using off::data::CompactTypedValueKind;
+        const std::array stream{
+            std::byte{0x81}, std::byte{0x01}, std::byte{0x02}, std::byte{0x03}, std::byte{0x04},
+            std::byte{0x05}, std::byte{0x06}, std::byte{0x07}, std::byte{0x08},
+            std::byte{0x42}, std::byte{0x00}, std::byte{0x00}, std::byte{0x80}, std::byte{0x3f},
+            std::byte{0x88}, std::byte{0xff}, std::byte{0xff}, std::byte{0xff}, std::byte{0xff},
+            std::byte{0x44}, std::byte{'x'}, std::byte{0},
+            std::byte{0x87}, std::byte{0x10}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
+            std::byte{0xff},
+        };
+        CompactTypedValueDecoder decoder(stream);
+        const auto wide = decoder.next();
+        const auto scalar = decoder.next();
+        const auto integer = decoder.next();
+        const auto string = decoder.next();
+        const auto length = decoder.next();
+        const auto terminal = decoder.next();
+        check(wide.kind == CompactTypedValueKind::binary64 && wide.value_class == 1U &&
+                  wide.raw_tag == 0x81U && wide.binary64_bits() == 0x0807060504030201U &&
+                  wide.encoded.size() == 9U,
+              "compact decoder retains raw binary64 tag and little-endian payload bytes");
+        check(scalar.kind == CompactTypedValueKind::binary32 && scalar.continuation &&
+                  scalar.value_class == 2U && scalar.binary32_bits() == 0x3f800000U,
+              "compact decoder ignores bit seven and retains bit-six continuation");
+        check(integer.kind == CompactTypedValueKind::signed32 && integer.value_class == 8U &&
+                  integer.signed32() == -1,
+              "compact decoder admits recovered signed32 classes without assigning field semantics");
+        check(string.kind == CompactTypedValueKind::nul_terminated_string && string.payload.size() == 2U &&
+                  string.encoded.size() == 3U && length.kind == CompactTypedValueKind::length_u32 &&
+                  length.u32_bits() == 16U && terminal.kind == CompactTypedValueKind::terminator &&
+                  terminal.raw_tag == 0xffU && terminal.encoded.size() == 1U && decoder.empty(),
+              "compact decoder bounds NUL strings, length values, and exact terminators");
+        check_rejected([&] { static_cast<void>(wide.signed32()); },
+                       "compact decoder rejects an incompatible typed representation");
+        check_rejected([] {
+            const std::array<std::byte, 1> unknown{std::byte{0x06}};
+            CompactTypedValueDecoder decoder(unknown);
+            static_cast<void>(decoder.next());
+        }, "compact decoder does not advance an unrecovered class-six encoding");
+        check_rejected([] {
+            const std::array<std::byte, 2> truncated{std::byte{0x83}, std::byte{0}};
+            CompactTypedValueDecoder decoder(truncated);
+            static_cast<void>(decoder.next());
+        }, "compact decoder rejects a truncated fixed-width payload");
+        check_rejected([] {
+            const std::array<std::byte, 2> unterminated{std::byte{0x84}, std::byte{'x'}};
+            CompactTypedValueDecoder decoder(unterminated);
+            static_cast<void>(decoder.next());
+        }, "compact decoder rejects an unterminated string within its supplied boundary");
+    }
     {
         using off::data::TypedValue;
         using off::data::TypedValueCursor;
