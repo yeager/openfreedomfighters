@@ -56,3 +56,12 @@ data contains a separate single-player menu root with a selectable `C01A`
 child, but static evidence does not connect that object to `rGameMenu` or to a
 scene request. The native scene-manager request pair remains unreached, so no
 selection is wired in the portable runtime.
+
+The first concrete selection boundary is now recovered without assigning a
+mission to it: a recognized menu command selects an index, resolves one of the
+retained runtime targets, and passes that object to an owning menu/window
+virtual receiver. A paired action target is toggled for the corresponding
+selection. The target and receiver types remain runtime/data-dependent. This
+path contains no recovered scene-manager clear/request, archive, scene,
+mission, or loader identity. The next trace follows the verified receiver; the
+portable runtime must not equate the selected object with a campaign level.
