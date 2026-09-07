@@ -34,6 +34,14 @@ and SUP support input, plus a separate concrete factory that returns an explicit
 live-scene token. The transaction owns opaque leases for all three inputs until
 that scene is replaced.
 
+`StartupScenePackageSource::prepare_checked` is the narrow source-backed
+preparation helper for that callback. It accepts only `FF-Startup` and an
+already chosen archive path, then opens the archive, requires exactly one named
+GMS and SUP member, CRC-reads both, decodes/parses GMS, and parses the nonempty
+SUP dependency list. Its three aliasing leases retain the archive, raw source
+bytes, and parsed forms for the later factory call. It is not an archive search
+policy, does not select companion resources, and does not construct a scene.
+
 Any missing service, incomplete package, failed factory result, or exception
 leaves the deferred request and previously committed scene unchanged. There is
 no automatic retry. Only after both callbacks have succeeded does it retire the
