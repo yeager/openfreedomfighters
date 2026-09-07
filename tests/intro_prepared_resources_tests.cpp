@@ -975,6 +975,43 @@ int main() {
               reader_events[3]=="prepare" && reader_events[4]=="owner" && reader_events[5]=="component" &&
               reader_events.back()=="end" && host.deferred_reader_work().size()==420,
               "ordinary reader bracket retains two external calls and forward owner-before-component boundaries without consuming work");
+        std::vector<std::string> tail_events;
+        std::vector<off::graphics::IntroRuntimeResourceHandle> spatial,flag_4000;
+        off::graphics::IntroOuterLoaderTailServices tail_services{
+            [&]{tail_events.push_back("named");},
+            [&]{tail_events.push_back("renderer");},
+            [&]{tail_events.push_back("associations");},
+            [&]{tail_events.push_back("auxiliary");},
+            [&]{tail_events.push_back("release");},
+            [&]{tail_events.push_back("camera-query");return false;},
+            false,
+            [&](auto resource){tail_events.push_back("transform");
+              check(resource==host.resource_handle(*host.default_camera_handle()),
+                    "DefaultCam queue preserves its canonical child resource");},
+            {[]{return 1280;},[]{return 720;},[]{return false;},{}},
+            [&]{tail_events.push_back("scene");},
+            [&]{tail_events.push_back("between");},
+            [&]{tail_events.push_back("finalize");},
+            [&](auto resource,bool admitted){check(admitted,"saved spatial service receives true");spatial.push_back(resource);tail_events.push_back("spatial");},
+            [&](auto resource,bool enabled){check(enabled,"saved 0x4000 service receives true");flag_4000.push_back(resource);tail_events.push_back("4000");}};
+        host.run_outer_loader_tail_through_saved_services(tail_services);
+        check(host.outer_loader_tail_stage()==off::graphics::IntroOuterLoaderTailStage::second_saved_pass_complete,
+              "outer tail reaches the second saved-resource pass");
+        check(host.loader_source_lease_released() && host.default_camera_handle() &&
+              host.registered_cameras().camera_at(0,[&](auto owner){return owner==host.default_camera_handle()->value;}),
+              "outer tail releases its lease and registers DefaultCam at zero");
+        check(spatial.size()==host.saved_resource_flags().size(),"first saved pass visits every saved entry");
+        std::vector<std::string> expected_tail{"named","renderer","associations","auxiliary","release","camera-query",
+            "transform","scene","scene","scene"};
+        for(const auto& saved:host.saved_resource_flags()) expected_tail.push_back("spatial");
+        expected_tail.push_back("between");expected_tail.push_back("finalize");
+        std::vector<off::graphics::IntroRuntimeResourceHandle> expected_4000;
+        for(const auto& saved:host.saved_resource_flags()) if(saved.flags&0x4000U) {
+          expected_tail.push_back("4000");expected_4000.push_back(saved.resource);
+        }
+        check(tail_events==expected_tail && flag_4000==expected_4000,
+              "outer tail keeps concrete section boundaries, releases only its lease, registers camera zero and consumes saved entries through services");
+        rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
       }
       rejects([&]{host.run_postconstruction_reader_bracket(0x9aU,reader_services);});
       rejects([&]{host.construct_remaining_directory_without_engine_renderer();});

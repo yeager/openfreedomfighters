@@ -58,6 +58,18 @@ enum class IntroReaderBracketStage {
   ordinary_reader_boundary_complete,
   failed
 };
+// This describes only the verified outer-loader tail boundaries.  It is not a
+// claim that named/global data, renderer associations, or component lifecycle
+// semantics have been implemented by this host.
+enum class IntroOuterLoaderTailStage {
+  not_started,
+  source_lease_released,
+  camera_zero_complete,
+  first_saved_pass_complete,
+  second_saved_pass_complete,
+  incomplete,
+  failed
+};
 struct IntroConstructedCameraOwner {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
@@ -273,6 +285,11 @@ struct IntroSourceScriptWork {
   IntroRuntimeResourceHandle resource;
   std::uint32_t source_offset;
 };
+struct IntroCameraRegistrationServices {
+  std::function<std::int32_t()> width,height;
+  std::function<bool()> backend_ready;
+  std::function<void(IntroRuntimeHandle)> admit_view;
+};
 // Opaque service boundary recovered from the loader tail.  The retained value
 // is deliberately passed through without assigning it a native meaning.
 // Reader callbacks are ordering hooks only; parsing and translation belong to
@@ -285,6 +302,26 @@ struct IntroPostconstructionReaderServices {
   std::function<void(const IntroDeferredReaderWork&)> owner_reader_boundary;
   std::function<void(const IntroDeferredReaderWork&)> component_reader_boundary;
   std::function<void()> end_reader_service;
+};
+// Opaque, concrete-service boundaries in the ordinary loader tail.  Callers
+// provide real services; this type deliberately has no substitute data model
+// for the named/global section, renderer associations, auxiliary arrays, or
+// scene operations.
+struct IntroOuterLoaderTailServices {
+  std::function<void()> named_global_section;
+  std::function<void()> renderer_resource_section;
+  std::function<void()> renderer_owner_associations;
+  std::function<void()> auxiliary_array_load;
+  std::function<void()> release_loader_source_lease;
+  std::function<bool()> camera_zero_present;
+  bool single_allocation_mode{};
+  std::function<void(IntroRuntimeResourceHandle)> enqueue_transform;
+  IntroCameraRegistrationServices fallback_camera_registration;
+  std::function<void()> outer_scene_operation;
+  std::function<void()> between_saved_scene_operation;
+  std::function<void()> intermediate_scene_finalization;
+  std::function<void(IntroRuntimeResourceHandle,bool)> spatial_admission;
+  std::function<void(IntroRuntimeResourceHandle,bool)> saved_0x4000_service;
 };
 struct IntroWindowOwner {
   IntroAuthoredGroupOwner group;
@@ -318,11 +355,6 @@ struct IntroRootOwnerState {
   bool room_mode{}, enabled{};
   std::map<std::uint32_t,std::vector<IntroRuntimeResourceHandle>> category_memberships{};
   std::vector<IntroRuntimeHandle> rooms{};
-};
-struct IntroCameraRegistrationServices {
-  std::function<std::int32_t()> width,height;
-  std::function<bool()> backend_ready;
-  std::function<void(IntroRuntimeHandle)> admit_view;
 };
 struct IntroSoundListener {
   IntroRuntimeHandle owner,context;
@@ -454,6 +486,12 @@ public:
   [[nodiscard]] std::optional<std::uint64_t> reader_bracket_retained_saved_value() const noexcept {
     return reader_bracket_retained_saved_value_;
   }
+  // Ordinary-only outer tail through the two saved-resource service passes.
+  // Global lifecycle, rendering, audio, and later scene operations remain
+  // outside this boundary. Missing concrete services fail visibly.
+  void run_outer_loader_tail_through_saved_services(const IntroOuterLoaderTailServices& services);
+  [[nodiscard]] IntroOuterLoaderTailStage outer_loader_tail_stage() const noexcept {return outer_loader_tail_stage_;}
+  [[nodiscard]] bool loader_source_lease_released() const noexcept {return loader_source_lease_released_;}
   [[nodiscard]] const IntroConstructedRoomOwner* constructed_room_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroConstructedObjectOwner* constructed_object_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroOwnerAuxiliary* constructed_owner_auxiliary(std::size_t source) const noexcept;
@@ -646,6 +684,8 @@ private:
   IntroResourceLoadStage resource_load_stage_{IntroResourceLoadStage::prepared};
   IntroReaderBracketStage reader_bracket_stage_{IntroReaderBracketStage::not_started};
   std::optional<std::uint64_t> reader_bracket_retained_saved_value_;
+  IntroOuterLoaderTailStage outer_loader_tail_stage_{IntroOuterLoaderTailStage::not_started};
+  bool loader_source_lease_released_{};
   runtime::SceneEventNames event_names_;
   std::vector<std::optional<std::uint32_t>> source_event_name_mapping_;
   bool source_event_names_prepared_{};

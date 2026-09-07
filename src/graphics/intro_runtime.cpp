@@ -1548,6 +1548,79 @@ void IntroRuntime::run_postconstruction_reader_bracket(
   }
 }
 
+void IntroRuntime::run_outer_loader_tail_through_saved_services(
+    const IntroOuterLoaderTailServices& services) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      reader_bracket_stage_!=IntroReaderBracketStage::ordinary_reader_boundary_complete ||
+      outer_loader_tail_stage_!=IntroOuterLoaderTailStage::not_started)
+    throw std::runtime_error("Outer loader tail is unavailable at this loader stage");
+
+  // These are explicit external boundaries, not native stand-ins for their
+  // still-unimplemented concrete readers and scene operations.  Validate the
+  // complete required ordinary path before doing any externally visible work.
+  if(!services.named_global_section || !services.renderer_resource_section ||
+      !services.renderer_owner_associations || !services.auxiliary_array_load ||
+      !services.release_loader_source_lease || !services.camera_zero_present ||
+      !services.outer_scene_operation || !services.between_saved_scene_operation ||
+      !services.intermediate_scene_finalization || !services.spatial_admission ||
+      !services.saved_0x4000_service) {
+    outer_loader_tail_stage_=IntroOuterLoaderTailStage::incomplete;
+    throw std::runtime_error("Outer loader tail requires every concrete service boundary");
+  }
+
+  const auto resolve_saved=[this](const IntroSavedResourceFlags& saved) {
+    if(!saved.resource.value || !associated_resource_owner(saved.resource) ||
+        !resource_state_for_handle(saved.resource))
+      throw std::runtime_error("Saved resource has no current live identity");
+    return saved.resource;
+  };
+  try {
+    services.named_global_section();
+    services.renderer_resource_section();
+    services.renderer_owner_associations();
+    services.auxiliary_array_load();
+
+    // The public host retains prepared source views.  Releasing this logical
+    // loader lease therefore cannot clear or invalidate those borrowed spans.
+    services.release_loader_source_lease();
+    loader_source_lease_released_=true;
+    outer_loader_tail_stage_=IntroOuterLoaderTailStage::source_lease_released;
+
+    if(!services.camera_zero_present()) {
+      if(!services.enqueue_transform || !services.fallback_camera_registration.width ||
+          !services.fallback_camera_registration.height ||
+          !services.fallback_camera_registration.backend_ready) {
+        outer_loader_tail_stage_=IntroOuterLoaderTailStage::incomplete;
+        throw std::runtime_error("Default camera fallback requires concrete transform and registration services");
+      }
+      const auto fallback=ensure_default_camera(services.single_allocation_mode,
+          services.enqueue_transform,services.fallback_camera_registration);
+      if(!fallback || !registered_cameras_.camera_at(0,[this](std::uint64_t owner){return live_owner(owner);}))
+        throw std::runtime_error("Default camera fallback did not register camera zero");
+    }
+    outer_loader_tail_stage_=IntroOuterLoaderTailStage::camera_zero_complete;
+
+    // The three observed outer scene operations are opaque service boundaries.
+    // They must precede spatial admission; no native scene state is fabricated.
+    for(unsigned operation=0;operation<3;++operation) services.outer_scene_operation();
+    for(const auto& saved:saved_resource_flags_)
+      services.spatial_admission(resolve_saved(saved),true);
+    outer_loader_tail_stage_=IntroOuterLoaderTailStage::first_saved_pass_complete;
+
+    services.between_saved_scene_operation();
+    services.intermediate_scene_finalization();
+    for(const auto& saved:saved_resource_flags_)
+      if(saved.flags&0x4000U) services.saved_0x4000_service(resolve_saved(saved),true);
+    outer_loader_tail_stage_=IntroOuterLoaderTailStage::second_saved_pass_complete;
+  } catch(...) {
+    if(outer_loader_tail_stage_!=IntroOuterLoaderTailStage::incomplete) {
+      outer_loader_tail_stage_=IntroOuterLoaderTailStage::failed;
+      resource_load_stage_=IntroResourceLoadStage::failed;
+    }
+    throw;
+  }
+}
+
 void IntroRuntime::construct_room_animation_scope_without_engine_renderer() {
   if(resource_load_stage_!=IntroResourceLoadStage::following_visual_scope_ready || loaded_resource_handles_.size()!=48 ||
       count_group_selector_!=5 || current_source_parent()!=source_handle(42) || resource_allocation_enabled_ ||
@@ -2095,7 +2168,9 @@ std::optional<IntroRuntimeHandle> IntroRuntime::create_default_camera_resource(
     throw std::runtime_error("Default camera construction reentry or prior failure");
   if(registered_cameras_.camera_at(0,[this](std::uint64_t owner){return live_owner(owner);}))
     return std::nullopt;
-  if(resource_load_stage_!=IntroResourceLoadStage::prepared)
+  const bool ordinary_tail=(resource_load_stage_==IntroResourceLoadStage::directory_construction_complete &&
+      reader_bracket_stage_==IntroReaderBracketStage::ordinary_reader_boundary_complete);
+  if(resource_load_stage_!=IntroResourceLoadStage::prepared && !ordinary_tail)
     throw std::runtime_error("Authored resource loading must complete after ROOT construction before DefaultCam fallback");
   if(default_camera_) throw std::runtime_error("Default camera already awaits component admission");
   if(components_.phases_completed() || components_.failed())
