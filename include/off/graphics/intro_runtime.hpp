@@ -2,6 +2,7 @@
 
 #include "off/graphics/fresh_intro_camera.hpp"
 #include "off/graphics/intro_prepared_resources.hpp"
+#include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_controller_initialization.hpp"
 #include "off/runtime/application_services.hpp"
 #include "off/runtime/component_lifecycle.hpp"
@@ -327,8 +328,11 @@ struct IntroAuxiliaryArraySources {
 // present source section as successfully consumed by a no-op substitute.
 struct IntroOuterLoaderTailServices {
   std::optional<IntroNamedGlobalPayload> named_global_payload;
-  std::function<std::string(std::string_view)> relocate_named_global_subject;
-  std::function<void(std::string_view,std::span<const std::byte>)> read_named_global_payload;
+  // The relocation callback receives an owned copy of the complete tagged
+  // block (including its header). It is responsible for only independently
+  // verified reference relocations; it must not imply typed-reader success.
+  std::function<void(IntroNamedGlobalPreparedReader&)> relocate_named_global_references;
+  std::function<void(std::string_view,IntroNamedGlobalPreparedReader&)> read_named_global_payload;
   std::optional<IntroRendererResourcePayload> renderer_resource_payload;
   std::function<IntroRendererResourceContainer(std::span<const std::byte>)> parse_renderer_resource_payload;
   std::function<void(IntroRendererResourceContainer)> release_renderer_construction_reference;

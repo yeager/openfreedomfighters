@@ -1561,7 +1561,7 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
   const bool named_requires_reader=services.named_global_payload.has_value();
   const bool renderer_requires_parser=services.renderer_resource_payload.has_value();
   const bool associations_require_services=!services.resource_associations.empty();
-  if((named_requires_reader && (!services.relocate_named_global_subject || !services.read_named_global_payload)) ||
+  if((named_requires_reader && (!services.relocate_named_global_references || !services.read_named_global_payload)) ||
       (renderer_requires_parser && (!services.parse_renderer_resource_payload ||
           !services.release_renderer_construction_reference)) ||
       (associations_require_services && (!services.resolve_marked_resource_reference ||
@@ -1584,15 +1584,23 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
     if(const auto& named=services.named_global_payload) {
       const auto terminator=std::find(named->bytes.begin(),named->bytes.end(),std::byte{});
       if(terminator==named->bytes.end())
-        throw std::runtime_error("Named/global payload has no NUL-delimited relocation subject");
-      std::string subject;
-      subject.reserve(static_cast<std::size_t>(terminator-named->bytes.begin()));
+        throw std::runtime_error("Named/global payload has no NUL-delimited label");
+      std::string label;
+      label.reserve(static_cast<std::size_t>(terminator-named->bytes.begin()));
       for(auto cursor=named->bytes.begin();cursor!=terminator;++cursor)
-        subject.push_back(static_cast<char>(std::to_integer<unsigned char>(*cursor)));
-      const auto relocated=services.relocate_named_global_subject(subject);
-      if(relocated.empty()) throw std::runtime_error("Named/global payload relocation did not produce an identity");
-      const auto remaining=std::span<const std::byte>{terminator+1,named->bytes.end()};
-      services.read_named_global_payload(relocated,remaining);
+        label.push_back(static_cast<char>(std::to_integer<unsigned char>(*cursor)));
+      auto block_begin=terminator;
+      ++block_begin;
+      if(static_cast<std::size_t>(named->bytes.end()-block_begin)<4U)
+        throw std::runtime_error("Named/global payload has no complete tagged-block header after its label");
+      IntroNamedGlobalPreparedReader prepared{
+          .owned_block={block_begin,named->bytes.end()}};
+      services.relocate_named_global_references(prepared);
+      // The retail traversal restores its tagged-reader cursor before scene
+      // dispatch. Preserve that observable handoff even when the native
+      // relocation service used a cursor while walking its owned copy.
+      prepared.reset_to_base();
+      services.read_named_global_payload(label,prepared);
     }
 
     if(const auto& renderer=services.renderer_resource_payload) {

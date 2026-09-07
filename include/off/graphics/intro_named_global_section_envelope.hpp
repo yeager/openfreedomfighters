@@ -5,17 +5,31 @@
 #include <span>
 #include <stdexcept>
 #include <string_view>
+#include <vector>
 
 namespace off::graphics {
 
 // The reviewed intro has a named/global section whose caller supplies both
-// GMS-relative boundaries.  The only admitted layout here is its leading
-// NUL-terminated label followed by a four-byte reader prelude.  The remaining
-// bounded bytes belong to a still-required typed reader: this is deliberately
-// not a tagged-value parser or a general GMS section schema.
+// GMS-relative boundaries. The only admitted layout here is a leading
+// NUL-terminated label followed by one bounded tagged block. The block header
+// is part of the typed reader's input. This is deliberately not a tagged-value
+// parser or a general GMS section schema.
 struct IntroNamedGlobalSectionEnvelope {
-  std::string_view relocated_label;
-  std::span<const std::byte> typed_reader_span;
+  std::string_view label;
+  std::span<const std::byte> tagged_block;
+};
+
+// An owned, mutable view handed through the relocation and typed-reader
+// boundaries. Relocation may advance cursor while traversing the block; the
+// caller that prepares this view restores it to zero before the typed reader
+// observes it. No tag semantics are implemented by this type.
+struct IntroNamedGlobalPreparedReader {
+  std::vector<std::byte> owned_block;
+  std::size_t cursor{};
+
+  [[nodiscard]] std::span<std::byte> mutable_block() { return owned_block; }
+  [[nodiscard]] std::span<const std::byte> complete_block() const { return owned_block; }
+  void reset_to_base() { cursor=0; }
 };
 
 inline IntroNamedGlobalSectionEnvelope parse_intro_named_global_section_envelope(
@@ -35,16 +49,15 @@ inline IntroNamedGlobalSectionEnvelope parse_intro_named_global_section_envelope
     throw std::runtime_error("Named/global section label is not NUL-terminated within its bounds");
 
   const auto after_label=label_end+1U;
-  constexpr std::size_t reader_prelude_size=4U;
-  if(reader_prelude_size>end-after_label)
-    throw std::runtime_error("Named/global section lacks its fixed reader prelude");
+  constexpr std::size_t tagged_block_header_size=4U;
+  if(end-after_label<tagged_block_header_size)
+    throw std::runtime_error("Named/global section lacks a complete tagged-block header");
 
   const auto label_data=reinterpret_cast<const char*>(decoded_gms_image.data()+
                                                        static_cast<std::ptrdiff_t>(begin));
   return {
-      .relocated_label=std::string_view(label_data,label_end-begin),
-      .typed_reader_span=decoded_gms_image.subspan(after_label+reader_prelude_size,
-                                                   end-(after_label+reader_prelude_size))};
+      .label=std::string_view(label_data,label_end-begin),
+      .tagged_block=decoded_gms_image.subspan(after_label,end-after_label)};
 }
 
 }  // namespace off::graphics
