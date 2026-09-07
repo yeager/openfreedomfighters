@@ -60,9 +60,14 @@ every application, and rejects non-finite basis or translation values. Its
 receiver has no result channel and the binding retains none of the sampled
 values. Provider teardown and explicit invalidation both disable later calls.
 
-The concrete receiver of that virtual call remains unrecovered. In particular,
-it is not yet proven to be the separately recovered GMS object transform
-setter, position-notification service, picture system, or renderer path.
+For 226 of the 227 supported intro owners, the concrete receiver is now
+recovered: 219 ordinary geometry owners and seven authored Camera owners share
+the resource-local transform setter. It compares three translation and nine
+basis words, returns unchanged on equality, otherwise writes the complete
+resource-local pose, sets the resource transform-dirty bit, and calls the scene
+position service. It is not a picture submission or renderer call. The one
+special geometry-derived owner family remains unresolved and is explicitly
+excluded from this evidence.
 
 `MatPosOwnerLocalTransformState` is therefore a detached, typed test model for
 a possible owner-local state consumer. It compares a complete basis by float
@@ -71,11 +76,14 @@ marks it dirty, then synchronously notifies a typed service. It has no resource,
 hierarchy, cache, or renderer identity and rejects non-finite samples before
 any mutation. The runtime does not bind it to an intro owner.
 
-The separately recovered GMS transform path reaches position/bounds processing
-only. Its later renderer traversal has independent mode, resource, renderer,
-view and enabled-camera gates. No concrete object identity or callback joins
-that path to MatPos. Consequently no current runtime uses either seam to claim
-animation or presentation.
+The existing runtime's generic `set_local_transform()` and its construction-only
+directory transform are not this receiver: the former invalidates picture
+caches and accepts unsupported owner families, while the latter has loader-only
+position semantics. `PositionUpdateService` is likewise not yet wired to the
+runtime's live resource registry. The verified native setter's later
+position/bounds processing has independent mode, handle, resource, renderer,
+view and enabled-camera gates. No current runtime invokes this path from
+MatPos, so it does not claim animation or presentation.
 
 ## Lifecycle status
 
