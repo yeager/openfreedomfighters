@@ -1,51 +1,79 @@
-# Renderer frame lifecycle
+# Ordinary scene and renderer traversal
 
-The engine owns one unsigned 32-bit renderer frame word, initially 1. A view
-retains its own last-clear word, initially 0. Neither is an application-update
-counter or a timer for skipping the intro.
+This document records the recovered ordering boundaries represented by the
+native scene/renderer models. It does not describe an active retail intro or a
+complete graphics backend.
 
-The recovered renderer operation has these boundaries:
+## Ordinary scene update
+
+Every modeled ordinary update calls these services in order:
+
+1. Scheduled events.
+2. Ordinary components.
+3. Position and bounds propagation.
+4. Queued maintenance.
+
+When rendering is disabled, the update stops there. Rendering enabled means
+that the live renderer chain is traversed and then the scene post-render service
+runs. A renderer callback executes before its node's next link is read, so a
+callback can affect the link followed by the same traversal. The bounded native
+model requires that chain to remain finite and alive for the call.
+
+The update does not itself admit a camera, renderer state, device, draw, or
+presentation. `OrdinarySceneUpdate` is deliberately a caller-wired boundary;
+it does not make normal startup render merely because its callbacks return.
+
+## Renderer-frame gates
+
+The engine owns one unsigned 32-bit renderer frame word, initially 1. It is
+shared by the engine rather than reconstructed per scene, renderer, view, or
+application update. A view's last-clear word is separate. Drawing sees the
+pre-increment word.
+
+The eligible frame operation has this order:
 
 1. If the engine is not running or the renderer is not initialized, return
-   without backend work or a counter increment.
-2. Attempt device-scene admission.
-3. On success, traverse the renderer, run admitted post-render work and end the
-   device scene, in that order. On failed admission, skip all three.
-4. Run the renderer completion hook in either case, then increment the shared
-   word with unsigned wrapping arithmetic.
+   without resetting local counters, running hooks, or advancing the shared word.
+2. Reset the two renderer-local counters and clear the in-scene marker.
+3. Apply device suppression, backend readiness, and scene-begin admission.
+4. If admitted, run backend traversal, admitted post-render work, and scene end,
+   in that order.
+5. Run renderer completion whether admission succeeded or failed, then advance
+   the shared word with unsigned wrapping arithmetic.
 
-Drawing therefore sees the pre-increment word. Multiple qualifying renderer
-invocations during one application update advance the same counter independently.
-A failed device admission also advances it; an update with rendering disabled
-never enters this operation.
+Consequently, a failed device admission after the outer gates still runs
+completion and advances the word, but performs no backend traversal or scene
+end. Multiple qualifying renderer calls in one scene update advance the same
+word independently. Callback failures retain their already completed prefix and
+abort the operation; they are not interpreted as ordinary admission failures.
 
-This establishes a producer for `PictureViewTransition`'s frame input. It does
-not establish the counter at the first intro picture: earlier renderer calls
-must be retained. It also does not admit a camera, prepare an ordered draw list,
-or provide successful device admission on behalf of an absent backend.
+`RendererFrameClock`, `RendererFrame`, and `EligibleRendererFrame` provide this
+separation. Recursive use of either a frame coordinator or its shared clock is
+rejected. These guards are not synchronization: callers must serialize use and
+keep the callback and clock storage alive for the operation.
 
-The native coordinator requires explicit callbacks. Callback exceptions retain
-completed effects and abort the operation; they are not interpreted as ordinary
-device admission failure. This exception policy is a native safety boundary,
-not a recovered original exception-handling claim.
-Native guards reject recursive use of either the coordinator or its shared clock.
-They are not synchronization primitives: callers must serialize renderer calls
-and keep callback and clock storage alive throughout the operation.
+## Admitted backend traversal
 
-`RendererFrame` and its caller-owned `RendererFrameClock` provide this lifecycle.
-They are distinct from `RendererFramePass`, which snapshots registered renderer
-states for their frame/maintenance callbacks; that pass does not own or advance
-the engine clock. A clock is shared across renderers, not reconstructed per view
-or scene. Explicit adoption of a known existing word supports retained state;
-it does not establish an unknown startup history.
+`BackendTraversal` receives a caller-provided snapshot of states already matched
+to one renderer. It retains only those matching states, then performs the
+following sequence:
 
-The GPU witness test connects the coordinator to `PictureViewTransition` and
-`SdlPictureClear`. With an explicitly admitted synthetic view, it checks that
-failed device admission advances the clock without clearing, repeated transitions
-within a render call clear only once, and the next admitted frame uses its new
-word. This tests actual attachment effects, not real intro admission.
+1. Run each retained state's frame-begin service.
+2. Visit its indexed views in their supplied order. A view without a camera, or
+   with a disabled camera, is skipped. Each enabled view runs transform setup,
+   begin-view, common-view, and end-view services.
+3. Run maintenance for every retained state.
+4. Run backend preparation, then preselect the retained state identities.
+5. Run whole-state drawing rounds until no state requests another round, then
+   restore selection.
 
-Unit tests cover callback order, both outer gates, missing hooks, shared clocks,
-unsigned wrap, each callback failure prefix and recursive calls. All 62 local
-CTest executables pass. The connected Vulkan witness also passes targeted GCC
-and ASan/UBSan runs with SDL's offscreen backend.
+View storage is consumed in place: it is not sorted, copied, or re-resolved by
+the model. The bounded limits on views and drawing rounds are native safety
+limits, not a statement about original ownership or capacity.
+
+Successful callbacks do not prove source-payload decoding, state matching, view
+allocation, camera admission, geometry submission, GPU work, swapchain
+presentation, or an intro-to-menu path. Those services must be supplied and
+verified independently. The existing picture clear and ordered-draw facilities
+remain separate from this traversal until normal scene activation wires them
+together.
