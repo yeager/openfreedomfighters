@@ -25,6 +25,15 @@ separate typed owner/resource handles and expires all bindings at exact frame
 end. It does not claim that a generic owner-context or renderer-resource value
 equals either typed handle, and normal startup does not open this registry.
 
+`IntroFirstCutAcceptedPictureRegistry` is the narrower first-cut adapter. It
+accepts a binding only after the generic route has accepted the record, and
+checks that its separately supplied owner and resource are the live legal
+picture recovered from the authored member reference. It never derives those
+typed values from record identity, owner context, or renderer-resource fields.
+Rejected typed bindings leave its frame registry unchanged. It is also
+disconnected from normal startup and performs no view, GPU, or presentation
+work.
+
 An empty group list or an empty group is rejected. The lower-level descriptor
 expander and SDL renderer validate geometry, transforms and GPU state. The
 public test uses independently authored descriptor data and verifies the

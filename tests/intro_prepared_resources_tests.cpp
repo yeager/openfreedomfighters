@@ -3,6 +3,7 @@
 #include "off/graphics/intro_renderer_resource_envelope.hpp"
 #include "off/graphics/intro_runtime.hpp"
 #include "off/graphics/intro_accepted_picture_registry.hpp"
+#include "off/graphics/intro_first_cut_accepted_picture_registry.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
 #include "off/graphics/preview_camera_component.hpp"
 #include "off/data/packed_resource.hpp"
@@ -1356,6 +1357,26 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
         check(!accepted_records.resolve(changed),"changed generic provenance cannot reuse an accepted typed binding");
         accepted_records.end_frame(44);
         check(!accepted_records.resolve(accepted),"accepted picture bindings expire at their exact frame boundary");
+
+        off::graphics::IntroFirstCutAcceptedPictureRegistry first_cut_records(host);
+        first_cut_records.begin_frame(45);
+        rejects([&] { first_cut_records.register_after_generic_accept(
+            accepted,host.root_handle(),legal_resource); });
+        rejects([&] { first_cut_records.register_after_generic_accept(
+            accepted,legal_owner,host.resource_handle(host.root_handle())); });
+        check(first_cut_records.size()==0 && !first_cut_records.poisoned(),
+              "wrong first-cut typed bindings reject before the frame registry changes");
+        first_cut_records.register_after_generic_accept(accepted,legal_owner,legal_resource);
+        check(first_cut_records.resolve(accepted) &&
+              first_cut_records.resolve(accepted)->owner==legal_owner &&
+              first_cut_records.resolve(accepted)->resource==legal_resource,
+              "first-cut registry binds an accepted generic record to the live legal picture only");
+        auto changed_resource=accepted;changed_resource.runtime_resource=10;
+        check(!first_cut_records.resolve(changed_resource),
+              "first-cut registry retains generic renderer provenance without treating it as a typed resource");
+        first_cut_records.end_frame(45);
+        check(!first_cut_records.resolve(accepted),
+              "first-cut accepted bindings expire at the exact frame boundary");
       }
       if(policy)
         check_complete_restore_reader_route(host);
