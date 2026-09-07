@@ -12,11 +12,14 @@ Consequently, the normal deferred-reader bracket supplies no MatPosAnim
 component cursor. A deferred owner tail, attachment name, or neighbouring record
 must not be used as a substitute input.
 
-The corresponding component reader and writer are a separate pair. Their
-recovered boundary is a fixed object stream used by the component's phase-one
-work; it is not the deferred reader/writer grammar. The producer of that object
-stream has not yet been recovered, so the native runtime deliberately does not
-invoke this reader or claim its fields are initialized.
+The corresponding component reader and writer are a separate persistence and
+restore virtual route. Their recovered boundary is a fixed object stream; it is
+not the deferred reader/writer grammar and it is not phase one. Phase one takes
+no object-stream argument: it initializes runtime behavior from existing
+component state and its runtime providers. The persistence/restore producer and
+the runtime provider behavior have not yet been recovered, so the native
+runtime deliberately does not invoke either route or claim its fields are
+initialized.
 
 ## Prepared `KEYS` state
 
@@ -27,17 +30,19 @@ owner-local registry only after every entry is valid. Lookups are scoped to the
 live owner identity; they do not fall back to global names, adjacent BUF data, or
 invented handles.
 
-This is preparation for a future recovered object-stream producer. It does not
-decode a general BUF language, execute a MatPosAnim reader, register animation
-events, advance animation time, or modify transforms.
+This is preparation for future recovered persistence/restore and runtime
+provider routes. It does not decode a general BUF language, execute a
+MatPosAnim reader, register animation events, advance animation time, or modify
+transforms.
 
 ## Lifecycle status
 
-MatPosAnim phase one remains unavailable until its object-stream producer,
-`KEYS` object semantics, event declaration behavior, and the complete scene
-lifecycle can be recovered and run together. The global lifecycle must cover
-the whole eligible scene; a MatPosAnim-only pass would not establish original
-ordering or readiness.
+MatPosAnim phase one remains unavailable until its existing-state/provider
+initialization behavior, `KEYS` object semantics, event declaration behavior,
+and the complete scene lifecycle can be recovered and run together. The fixed
+object stream belongs to the separate persistence/restore route. The global
+lifecycle must cover the whole eligible scene; a MatPosAnim-only pass would not
+establish original ordering or readiness.
 
 No current path renders, updates, or plays the original intro. The prepared
 registry and its tests are data-integrity boundaries, not evidence of visible
