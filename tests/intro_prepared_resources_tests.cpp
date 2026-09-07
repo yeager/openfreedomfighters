@@ -737,6 +737,7 @@ int main() {
       off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
       off::graphics::IntroRuntime host(complete.build(),app,sequence,"FF-Intro.gms",
           off::graphics::IntroSoundLoadPolicy::directory_construction);
+      host.set_restore_mode(policy);
       check(host.resources().controller_index()==465 && host.resources().first_cut_index()==460,
             "complete synthetic scope moves selected controller and first-cut references beyond row199");
       host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
@@ -917,6 +918,30 @@ int main() {
             segment && segment->sound_segment && segment->sound_segment->controls==std::array<bool,5>{true,true,false,false,true} &&
             segment->sound_segment->probability==1 && segment->sound_segment->subtitle.empty(),
             "sound attachments retain cold constructor-only state without reader playback or duration work");
+      std::vector<std::string> reader_events;
+      off::graphics::IntroPostconstructionReaderServices reader_services{
+          [&](std::uint64_t value){reader_events.push_back("external:"+std::to_string(value));},
+          [&](const off::graphics::IntroSourceScriptWork&){reader_events.push_back("script");},
+          [&]{reader_events.push_back("pre");},
+          [&](const off::graphics::IntroDeferredReaderWork&){reader_events.push_back("prepare");},
+          [&](const off::graphics::IntroDeferredReaderWork&){reader_events.push_back("owner");},
+          [&](const off::graphics::IntroDeferredReaderWork&){reader_events.push_back("component");},
+          [&]{reader_events.push_back("end");}};
+      host.run_postconstruction_reader_bracket(0x9aU,reader_services);
+      if(policy) {
+        check(host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::restore_mode_selected &&
+              host.reader_bracket_retained_saved_value()==0x9aU && reader_events.empty() &&
+              host.deferred_reader_work().size()==420,
+              "restore chooses its distinct unresolved route without running ordinary services or readers");
+      } else {
+        check(host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete &&
+              host.reader_bracket_retained_saved_value()==0x9aU && reader_events.size()==4+420*3 &&
+              reader_events[0]=="external:154" && reader_events[1]=="external:154" && reader_events[2]=="pre" &&
+              reader_events[3]=="prepare" && reader_events[4]=="owner" && reader_events[5]=="component" &&
+              reader_events.back()=="end" && host.deferred_reader_work().size()==420,
+              "ordinary reader bracket retains two external calls and forward owner-before-component boundaries without consuming work");
+      }
+      rejects([&]{host.run_postconstruction_reader_bracket(0x9aU,reader_services);});
       rejects([&]{host.construct_remaining_directory_without_engine_renderer();});
     }
     for(const bool existing_shared_state:{false,true}) {

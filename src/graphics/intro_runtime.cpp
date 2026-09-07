@@ -1445,6 +1445,68 @@ void IntroRuntime::construct_remaining_directory_without_engine_renderer() {
   } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
 }
 
+void IntroRuntime::run_postconstruction_reader_bracket(
+    std::uint64_t retained_saved_value,const IntroPostconstructionReaderServices& services) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      reader_bracket_stage_!=IntroReaderBracketStage::not_started)
+    throw std::runtime_error("Post-construction reader bracket is unavailable at this loader stage");
+
+  // The restore decision is a real branch. This approved boundary contains no
+  // restore reader sequence, so it must not borrow the ordinary route.
+  if(restore_mode_) {
+    reader_bracket_retained_saved_value_=retained_saved_value;
+    reader_bracket_stage_=IntroReaderBracketStage::restore_mode_selected;
+    return;
+  }
+
+  const auto mapped_deferred=[this](const IntroDeferredReaderWork& work) {
+    if(!work.resource.value || !work.source_offset || !associated_resource_owner(work.resource) ||
+        !resource_state_for_handle(work.resource))
+      return false;
+    const auto& directory=resources_.sources().directory();
+    for(std::size_t source=0;source<directory.size();++source)
+      if(directory_resource_mapping_.at(source)==work.resource &&
+          directory[source].deferred_source_offset==work.source_offset)
+        return true;
+    return false;
+  };
+  const auto mapped_script=[this](const IntroSourceScriptWork& work) {
+    return work.resource.value && work.source_offset && associated_resource_owner(work.resource) &&
+        resource_state_for_handle(work.resource).has_value();
+  };
+  const auto fail=[this] {
+    reader_bracket_stage_=IntroReaderBracketStage::failed;
+    resource_load_stage_=IntroResourceLoadStage::failed;
+  };
+  try {
+    if(!services.external_loader_service || !services.pre_reader_service || !services.end_reader_service ||
+        (!source_script_work_.empty() && !services.source_script_work) ||
+        (!deferred_reader_work_.empty() && (!services.prepare_deferred_reader ||
+            !services.owner_reader_boundary || !services.component_reader_boundary)))
+      throw std::runtime_error("Post-construction reader bracket requires every available boundary service");
+
+    reader_bracket_retained_saved_value_=retained_saved_value;
+    services.external_loader_service(retained_saved_value);
+    for(const auto& work:source_script_work_) {
+      if(!mapped_script(work)) throw std::runtime_error("Queued source-script work lost its mapped owner");
+      services.source_script_work(work);
+    }
+    services.external_loader_service(retained_saved_value);
+    services.pre_reader_service();
+    for(const auto& work:deferred_reader_work_) {
+      if(!mapped_deferred(work)) throw std::runtime_error("Deferred reader work lost its mapped owner or source span");
+      services.prepare_deferred_reader(work);
+      services.owner_reader_boundary(work);
+      services.component_reader_boundary(work);
+    }
+    services.end_reader_service();
+    reader_bracket_stage_=IntroReaderBracketStage::ordinary_reader_boundary_complete;
+  } catch(...) {
+    fail();
+    throw;
+  }
+}
+
 void IntroRuntime::construct_room_animation_scope_without_engine_renderer() {
   if(resource_load_stage_!=IntroResourceLoadStage::following_visual_scope_ready || loaded_resource_handles_.size()!=48 ||
       count_group_selector_!=5 || current_source_parent()!=source_handle(42) || resource_allocation_enabled_ ||

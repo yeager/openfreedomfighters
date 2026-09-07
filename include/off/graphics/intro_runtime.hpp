@@ -50,6 +50,14 @@ enum class IntroResourceLoadStage {
   prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, authored_camera_ready, second_window_picture_ready, second_window_scope_ready, following_visual_scope_ready, room_animation_scope_ready, lens_flare_animation_scope_ready, directory_construction_complete, failed
 };
 enum class IntroSoundLoadPolicy {prepared_compatibility,directory_construction};
+// This is the boundary around the deferred reader queue, not evidence that a
+// reader, reference translation, activation, or global lifecycle has run.
+enum class IntroReaderBracketStage {
+  not_started,
+  restore_mode_selected,
+  ordinary_reader_boundary_complete,
+  failed
+};
 struct IntroConstructedCameraOwner {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
@@ -258,6 +266,19 @@ struct IntroSourceScriptWork {
   IntroRuntimeResourceHandle resource;
   std::uint32_t source_offset;
 };
+// Opaque service boundary recovered from the loader tail.  The retained value
+// is deliberately passed through without assigning it a native meaning.
+// Reader callbacks are ordering hooks only; parsing and translation belong to
+// later approved work.
+struct IntroPostconstructionReaderServices {
+  std::function<void(std::uint64_t)> external_loader_service;
+  std::function<void(const IntroSourceScriptWork&)> source_script_work;
+  std::function<void()> pre_reader_service;
+  std::function<void(const IntroDeferredReaderWork&)> prepare_deferred_reader;
+  std::function<void(const IntroDeferredReaderWork&)> owner_reader_boundary;
+  std::function<void(const IntroDeferredReaderWork&)> component_reader_boundary;
+  std::function<void()> end_reader_service;
+};
 struct IntroWindowOwner {
   IntroAuthoredGroupOwner group;
   IntroRuntimeHandle enclosing_window{},selected_camera{},cursor{},auxiliary{};
@@ -418,6 +439,14 @@ public:
   void set_restore_mode(bool value);
   [[nodiscard]] bool restore_mode() const noexcept {return restore_mode_;}
   [[nodiscard]] IntroSoundLoadPolicy sound_load_policy() const noexcept {return sound_load_policy_;}
+  // Runs only the evidenced tail bracket. Restore deliberately does not fall
+  // through to ordinary scripts/readers; its later route remains unrecovered.
+  void run_postconstruction_reader_bracket(std::uint64_t retained_saved_value,
+                                           const IntroPostconstructionReaderServices& services);
+  [[nodiscard]] IntroReaderBracketStage reader_bracket_stage() const noexcept {return reader_bracket_stage_;}
+  [[nodiscard]] std::optional<std::uint64_t> reader_bracket_retained_saved_value() const noexcept {
+    return reader_bracket_retained_saved_value_;
+  }
   [[nodiscard]] const IntroConstructedRoomOwner* constructed_room_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroConstructedObjectOwner* constructed_object_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroOwnerAuxiliary* constructed_owner_auxiliary(std::size_t source) const noexcept;
@@ -608,6 +637,8 @@ private:
   std::vector<std::optional<IntroRuntimeHandle>> resource_owners_;
   std::vector<std::optional<IntroRuntimeResourceState>> resource_states_;
   IntroResourceLoadStage resource_load_stage_{IntroResourceLoadStage::prepared};
+  IntroReaderBracketStage reader_bracket_stage_{IntroReaderBracketStage::not_started};
+  std::optional<std::uint64_t> reader_bracket_retained_saved_value_;
   runtime::SceneEventNames event_names_;
   std::vector<std::optional<std::uint32_t>> source_event_name_mapping_;
   bool source_event_names_prepared_{};
