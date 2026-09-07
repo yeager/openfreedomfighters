@@ -1,5 +1,6 @@
 #include "off/graphics/intro_controller_initialization.hpp"
 #include <bit>
+#include <cctype>
 #include <stdexcept>
 
 namespace off::graphics {
@@ -127,6 +128,99 @@ MovieControlEvent16Result MovieControlFirstUpdate::dispatch_event16(
     return MovieControlEvent16Result::activated;
   } catch(...) {
     event_running_=false;
+    failed_=true;
+    throw;
+  }
+}
+
+namespace {
+[[nodiscard]] bool equal_case_insensitive(std::string_view left,std::string_view right) {
+  if(left.size()!=right.size()) return false;
+  for(std::size_t index=0;index<left.size();++index) {
+    const auto a=static_cast<unsigned char>(left[index]);
+    const auto b=static_cast<unsigned char>(right[index]);
+    if(std::tolower(a)!=std::tolower(b)) return false;
+  }
+  return true;
+}
+[[nodiscard]] std::uint32_t little_endian_word(const std::vector<std::uint8_t>& bytes) {
+  if(bytes.size()!=4) throw std::runtime_error("MainCamera property must be exactly four bytes");
+  return static_cast<std::uint32_t>(bytes[0]) |
+         (static_cast<std::uint32_t>(bytes[1])<<8U) |
+         (static_cast<std::uint32_t>(bytes[2])<<16U) |
+         (static_cast<std::uint32_t>(bytes[3])<<24U);
+}
+}
+
+FirstCutRequestedCameraRoute::FirstCutRequestedCameraRoute(bool first_option,
+    bool optional_renderer_flag,std::uint64_t requested_reference)
+  :first_option_(first_option),optional_renderer_flag_(optional_renderer_flag),
+   requested_reference_(requested_reference) {
+  if(!requested_reference_) throw std::runtime_error("first cut requires a live requested camera reference");
+}
+
+FirstCutRequestedCameraResult FirstCutRequestedCameraRoute::run(
+    const FirstCutRequestedCameraServices& supplied) {
+  if(running_||failed_) throw std::runtime_error("first-cut requested-camera route is reentrant or previously failed");
+  const auto s=supplied;
+  if(!s.read_scene_property||!s.resolve_requested_camera)
+    throw std::runtime_error("first-cut requested-camera route requires property and requested-reference services");
+  running_=true;
+  same_update_visible_=false;
+  try {
+    std::uint32_t main_camera=0;
+    if(const auto property=s.read_scene_property("MainCamera");property)
+      main_camera=little_endian_word(*property);
+    const auto requested=s.resolve_requested_camera(requested_reference_);
+    if(!requested || !requested->reference || !requested->runtime_owner)
+      throw std::runtime_error("first-cut requested camera resolution failed");
+    if(first_option_ && main_camera!=0) {
+      if(!s.resolve_named_camera||!s.run_named_camera_route)
+        throw std::runtime_error("nonzero MainCamera requires the separate named-camera service");
+      if(!s.resolve_named_camera(main_camera))
+        throw std::runtime_error("nonzero MainCamera named-camera resolution failed");
+      s.run_named_camera_route(main_camera,*requested);
+      same_update_visible_=true;
+      running_=false;
+      return FirstCutRequestedCameraResult::named_camera_route;
+    }
+    if(first_option_ && main_camera==0) {
+      if(!s.increment_renderer_control||!s.assign_renderer_optional_flag||
+         !s.visit_registered_cameras_live||!s.resolve_registered_camera||
+         !s.current_scene_identifier||!s.disable_camera)
+        throw std::runtime_error("zero MainCamera sweep requires every renderer service");
+      if(!selected_reference_) {
+        s.increment_renderer_control();
+        s.assign_renderer_optional_flag(optional_renderer_flag_);
+      }
+      const auto scene=s.current_scene_identifier();
+      s.visit_registered_cameras_live([&](const FirstCutRegisteredCamera& entry) {
+        const auto owner=s.resolve_registered_camera(entry.runtime_owner);
+        if(!owner) return;
+        const bool preserve=equal_case_insensitive(owner->name,"FFTVOSDCam") ||
+          equal_case_insensitive(owner->name,"FFTVNoiseCam") ||
+          (equal_case_insensitive(owner->name,"ZWindowsCamera") &&
+           scene.find("Eidos_IntroController")!=std::string::npos);
+        if(!preserve) s.disable_camera(owner->runtime_owner);
+      });
+    }
+    if(!s.assign_scene_root_background)
+      throw std::runtime_error("requested-camera continuation requires scene background service");
+    s.assign_scene_root_background(requested->packed_background);
+    if(requested->camera_class) {
+      if(!s.register_first_renderer_camera||!s.notify_renderer_dimensions)
+        throw std::runtime_error("camera-class requested continuation requires renderer services");
+      static_cast<void>(s.register_first_renderer_camera(requested->runtime_owner,
+          static_cast<float>(requested->priority)));
+      s.notify_renderer_dimensions(requested->runtime_owner);
+      if(s.notify_audio_camera) s.notify_audio_camera(requested->runtime_owner);
+    }
+    selected_reference_=requested->reference;
+    same_update_visible_=true;
+    running_=false;
+    return FirstCutRequestedCameraResult::requested_camera_selected;
+  } catch(...) {
+    running_=false;
     failed_=true;
     throw;
   }

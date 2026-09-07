@@ -180,6 +180,81 @@ int main() {
       rejects([&]{static_cast<void>(prefix_failure.dispatch_event16(activation));});
       check(!prefix_failure.activated()&&prefix_failure.failed(),"failed preparation cannot fabricate MovieControl activation");
     }
+    {
+      std::vector<std::string> log;
+      std::vector<FirstCutRegisteredCamera> registry{{1,"ignored"},{2,"ignored"},{3,"ignored"},{4,"ignored"},{5,"ignored"}};
+      std::vector<std::uint64_t> disabled;
+      std::vector<std::uint64_t> rendered;
+      FirstCutRequestedCameraServices services{
+        [&](std::string_view key)->std::optional<std::vector<std::uint8_t>> {
+          check(key=="MainCamera","first cut reads exact scene property key"); log.push_back("property"); return std::vector<std::uint8_t>{0,0,0,0};},
+        [&](std::uint64_t reference)->std::optional<FirstCutRequestedCamera> {
+          check(reference==90,"first cut retains explicit requested reference"); log.push_back("requested"); return FirstCutRequestedCamera{90,900,0x112233,7,true};},
+        {},{},
+        [&]{log.push_back("nest");},[&](bool){log.push_back("flag");},
+        [&](const auto& visit){log.push_back("walk");for(const auto& entry:registry) visit(entry);},
+        [&](std::uint64_t owner)->std::optional<FirstCutRegisteredCamera> {
+          if(owner==1) return FirstCutRegisteredCamera{1,"fftvosdcam"};
+          if(owner==2) return FirstCutRegisteredCamera{2,"FFTVNoiseCam"};
+          if(owner==3) return FirstCutRegisteredCamera{3,"ZWindowsCamera"};
+        if(owner==4) return std::nullopt;
+        return FirstCutRegisteredCamera{owner,"ordinary"};},
+        []{return "Eidos_IntroController_01";},
+        [&](std::uint64_t owner){disabled.push_back(owner);log.push_back("disable");},
+        [&](std::uint32_t color){check(color==0x112233,"requested packed background reaches root");log.push_back("background");},
+        [&](std::uint64_t owner,float priority){check(owner==900&&priority==7.0F,"requested owner/priority reach first renderer");rendered.push_back(owner);log.push_back("register");return rendered.size()==1;},
+        [&](std::uint64_t owner){check(owner==900,"outer notification keeps requested owner");log.push_back("outer");},
+        [&](std::uint64_t owner){check(owner==900,"optional audio sees requested owner");log.push_back("audio");}};
+      FirstCutRequestedCameraRoute route{true,true,90};
+      check(route.run(services)==FirstCutRequestedCameraResult::requested_camera_selected &&
+            route.selected_reference()==std::optional<std::uint64_t>{90} && route.renderer_walk_can_observe_mutation(),
+            "zero MainCamera continues to selected requested camera in same update");
+      check(disabled==std::vector<std::uint64_t>{5} && log==std::vector<std::string>{"property","requested","nest","flag","walk","disable","background","register","outer","audio"},
+            "case-insensitive retained camera predicates and matching scene substring preserve every reviewed owner");
+      FirstCutRequestedCameraRoute no_scene_match{true,false,90};
+      services.current_scene_identifier=[] {return "Eidos_introcontroller_01";};
+      log.clear(); disabled.clear(); rendered.clear();
+      check(no_scene_match.run(services)==FirstCutRequestedCameraResult::requested_camera_selected &&
+            disabled==std::vector<std::uint64_t>({3,5}),"ZWindowsCamera needs the case-sensitive scene predicate");
+    }
+    {
+      std::vector<std::string> log;
+      int registrations=0,outer_notifications=0;
+      FirstCutRequestedCameraServices services{
+        [](std::string_view)->std::optional<std::vector<std::uint8_t>> {return std::nullopt;},
+        [](std::uint64_t)->std::optional<FirstCutRequestedCamera> {return FirstCutRequestedCamera{4,44,9,3,true};},
+        {},{},[]{},[](bool){},[](const auto&){},[](auto)->std::optional<FirstCutRegisteredCamera>{return std::nullopt;},
+        []{return "";},[](auto){},[&](auto){log.push_back("background");},
+        [&](auto,float){++registrations;log.push_back("inner");return registrations==1;},
+        [&](auto){++outer_notifications;log.push_back("outer");},{}};
+      FirstCutRequestedCameraRoute first{false,false,4};
+      FirstCutRequestedCameraRoute duplicate{false,false,4};
+      first.run(services); duplicate.run(services);
+      check(registrations==2&&outer_notifications==2&&log==std::vector<std::string>{"background","inner","outer","background","inner","outer"},
+            "renderer helper dedup result never suppresses the distinct outer dimension notification");
+      FirstCutRequestedCameraRoute malformed{false,false,4};
+      services.read_scene_property=[](std::string_view)->std::optional<std::vector<std::uint8_t>> {return std::vector<std::uint8_t>{0,0,0};};
+      rejects([&]{malformed.run(services);});
+      check(malformed.failed()&&!malformed.renderer_walk_can_observe_mutation(),"malformed MainCamera cannot select a fallback");
+    }
+    {
+      std::vector<std::string> log;
+      FirstCutRequestedCameraServices named{
+        [](std::string_view)->std::optional<std::vector<std::uint8_t>> {return std::vector<std::uint8_t>{5,0,0,0};},
+        [](std::uint64_t)->std::optional<FirstCutRequestedCamera> {return FirstCutRequestedCamera{8,80,0,0,false};},
+        [&](std::uint32_t handle){log.push_back("resolve-named");return handle==5;},
+        [&](std::uint32_t handle,const FirstCutRequestedCamera& requested){check(handle==5&&requested.reference==8,"named route receives independently resolved handles");log.push_back("named");},
+        {}, {}, {}, {}, {}, {}, {}, {}, {}, {}};
+      FirstCutRequestedCameraRoute route{true,false,8};
+      check(route.run(named)==FirstCutRequestedCameraResult::named_camera_route &&
+            route.renderer_walk_can_observe_mutation() && !route.selected_reference() &&
+            log==std::vector<std::string>{"resolve-named","named"},
+            "nonzero MainCamera never substitutes the zero sweep or requested-camera tail");
+      FirstCutRequestedCameraRoute unavailable{true,false,8};
+      named.run_named_camera_route={};
+      rejects([&]{unavailable.run(named);});
+      check(unavailable.failed(),"nonzero MainCamera requires separate named-camera service");
+    }
     std::cout<<"Controller phase-two ordering, properties, deadline and presentation boundaries verified.\n";
     return 0;
   } catch(const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
