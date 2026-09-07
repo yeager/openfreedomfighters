@@ -1,5 +1,6 @@
 #include "off/data/gms_image.hpp"
 #include "off/data/compact_typed_value_decoder.hpp"
+#include "off/data/component_reader_context.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
 #include "off/data/typed_value_cursor.hpp"
 
@@ -810,6 +811,58 @@ int main() {
             const std::array<DeferredComponentReader, 0> none{};
             static_cast<void>(DeferredComponentDispatcher::dispatch(bad, none));
         }, "component dispatcher rejects truncated generic values");
+    }
+    {
+        using off::data::ComponentReaderContext;
+        using off::data::ComponentReaderIdentity;
+        using off::data::ComponentReaderInput;
+        using off::data::ComponentReaderInvocationResult;
+        using off::data::ComponentReaderKeysChild;
+
+        constexpr ComponentReaderIdentity requested{0x42U, 3U};
+        const int opaque_input = 17;
+        const ComponentReaderInput input(&opaque_input);
+        bool resolved = false;
+        bool called = false;
+        const auto absent = ComponentReaderContext::invoke_required_keys(
+            requested, input,
+            [&](std::uint64_t owner, std::array<char, 4> key)
+                -> std::optional<ComponentReaderKeysChild> {
+                resolved = owner == requested.owner && key == std::array<char, 4>{'K', 'E', 'Y', 'S'};
+                return std::nullopt;
+            },
+            [&](const ComponentReaderInput&, std::uint64_t) { called = true; });
+        check(absent == ComponentReaderInvocationResult::absent && resolved && !called,
+              "component reader context queries the exact owner attachment and skips absent KEYS");
+
+        const auto wrong_owner = ComponentReaderContext::invoke_required_keys(
+            requested, input,
+            [](std::uint64_t, std::array<char, 4>) -> std::optional<ComponentReaderKeysChild> {
+                return ComponentReaderKeysChild{0x43U, 0x500U};
+            },
+            [&](const ComponentReaderInput&, std::uint64_t) { called = true; });
+        check(wrong_owner == ComponentReaderInvocationResult::wrong_owner && !called,
+              "component reader context rejects a KEYS child from another owner before reading");
+
+        const auto unbound = ComponentReaderContext::invoke_required_keys(
+            requested, input,
+            [](std::uint64_t owner, std::array<char, 4>) -> std::optional<ComponentReaderKeysChild> {
+                return ComponentReaderKeysChild{owner, 0U};
+            },
+            [&](const ComponentReaderInput&, std::uint64_t) { called = true; });
+        check(unbound == ComponentReaderInvocationResult::unbound && !called,
+              "component reader context rejects an unbound KEYS handle before reading");
+
+        const auto invoked = ComponentReaderContext::invoke_required_keys(
+            requested, input,
+            [](std::uint64_t owner, std::array<char, 4>) -> std::optional<ComponentReaderKeysChild> {
+                return ComponentReaderKeysChild{owner, 0x501U};
+            },
+            [&](const ComponentReaderInput& received, std::uint64_t handle) {
+                called = received.opaque_context() == &opaque_input && handle == 0x501U;
+            });
+        check(invoked == ComponentReaderInvocationResult::invoked && called,
+              "component reader context preserves opaque input separately from the KEYS handle");
     }
     {
         using off::data::TypedValue;
