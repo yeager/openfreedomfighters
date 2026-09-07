@@ -49,6 +49,22 @@ cursor behavior, admission branches, callback delivery and resource
 activation still block a faithful complete player. No 60 Hz queue or splash timer
 is substituted for those contracts.
 
+## Active-cut update contract
+
+The active update samples the scene clock once and derives one binary32 timeline
+position shared by its member and command passes. Member starts and ends are
+separate ascending, re-resolving passes with strict comparisons; their fired
+flags are written only after the corresponding callback returns. End handling is
+reference counted across two tracking collections, rather than a simple member
+deactivation.
+
+Pending cleanup runs before the natural-end tail. The tail can request a new
+pending end without invoking cleanup a second time in the same update. Cleanup
+drains both tracking collections, clears fired arrays and transient execution,
+clears active state, synchronously dispatches completion, then clears caller
+state. Existing `CommandPass` and `CutSequenceCoordinator` are deliberate
+sub-boundaries, not a complete automatic player.
+
 ## Cut-sequence completion coordinator
 
 `CutSequenceCoordinator` models the recovered handoff after an already-admitted
