@@ -82,3 +82,9 @@ state; it issues no scene request. Multiple generic call sites exist, but the
 source-load/post-creation caller that attaches this LinkMenu and the concrete
 owner vtable remain unresolved. The receiver chain must therefore remain
 disconnected while tracing those callers.
+
+The startup source model distinguishes two identically labelled objects. The
+menu-controller attachment belongs to the window object; the similarly named
+picture has no such attachment. The recovered generic attachment path still
+stops before a concrete selection receiver or scene transition, so no
+game-start behavior is inferred.
