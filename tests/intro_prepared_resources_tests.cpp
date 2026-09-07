@@ -1038,52 +1038,60 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
         /* The loader tail has a separate frame below. */
 }
 
-static OFF_NOINLINE void check_complete_outer_loader_tail(
-    off::graphics::IntroRuntime& host) {
+struct CompleteOuterLoaderTailObservation final {
+    off::graphics::IntroRuntime& host;
         std::vector<std::string> tail_events;
         std::vector<off::graphics::IntroRuntimeResourceHandle> spatial,flag_4000;
         const std::array<std::byte,11> named_payload{std::byte{'G'},std::byte{'l'},std::byte{'o'},
             std::byte{'b'},std::byte{'a'},std::byte{'l'},std::byte{},std::byte{0x31},std::byte{0x32},
             std::byte{0x33},std::byte{0x34}};
         const std::array<std::byte,3> renderer_payload{std::byte{1},std::byte{2},std::byte{3}};
-        off::graphics::IntroOuterLoaderTailServices tail_services{
+    [[nodiscard]] off::graphics::IntroOuterLoaderTailServices services() {
+        return {
             .named_global_payload=off::graphics::IntroNamedGlobalPayload{named_payload},
-            .relocate_named_global_references=[&](off::graphics::IntroNamedGlobalPreparedReader& reader) {
+            .relocate_named_global_references=[this](off::graphics::IntroNamedGlobalPreparedReader& reader) {
               check(reader.complete_block().size()==4 && reader.complete_block()[0]==std::byte{0x31},
                   "named relocation receives a complete owned tagged block including its header");
               reader.mutable_block()[1]=std::byte{0x77}; reader.cursor=reader.complete_block().size();
               tail_events.push_back("relocate");},
-            .read_named_global_payload=[&](std::string_view subject,off::graphics::IntroNamedGlobalPreparedReader& reader) {
+            .read_named_global_payload=[this](std::string_view subject,off::graphics::IntroNamedGlobalPreparedReader& reader) {
               check(subject=="Global" && reader.cursor==0 && reader.complete_block().size()==4 &&
                         reader.complete_block()[0]==std::byte{0x31} && reader.complete_block()[1]==std::byte{0x77},
                     "named reader receives the original label plus reset, relocated complete block");
               check(named_payload[8]==std::byte{0x32},"named relocation never mutates the source payload");
               tail_events.push_back("named-reader");},
             .renderer_resource_payload=off::graphics::IntroRendererResourcePayload{renderer_payload},
-            .parse_renderer_resource_payload=[&](std::span<const std::byte> payload) {
+            .parse_renderer_resource_payload=[this](std::span<const std::byte> payload) {
               check(payload.size()==renderer_payload.size() && std::equal(payload.begin(),payload.end(),renderer_payload.begin()),"renderer parser receives the complete encoded payload");tail_events.push_back("renderer-parse");return off::graphics::IntroRendererResourceContainer{42};},
-            .release_renderer_construction_reference=[&](auto container) {check(container.identity==42,"release only the parsed renderer construction reference");tail_events.push_back("renderer-release");},
+            .release_renderer_construction_reference=[this](auto container) {check(container.identity==42,"release only the parsed renderer construction reference");tail_events.push_back("renderer-release");},
             .resource_associations={{7,9},{17,18}},
-            .resolve_marked_resource_reference=[&](std::uint32_t reference) -> std::optional<off::graphics::IntroRuntimeResourceHandle> {
+            .resolve_marked_resource_reference=[this](std::uint32_t reference) -> std::optional<off::graphics::IntroRuntimeResourceHandle> {
               tail_events.push_back("resolve:"+std::to_string(reference));
               if(reference==0x80000007U) return host.directory_resource_mapping()[6];
               if(reference==0x80000009U) return host.directory_resource_mapping()[8];
               return std::nullopt;
             },
-            .associate_live_resources=[&](auto first,auto second) {check(first==host.directory_resource_mapping()[6] && second==host.directory_resource_mapping()[8],"association receives both independently resolved live resources");tail_events.push_back("associate");},
+            .associate_live_resources=[this](auto first,auto second) {check(first==host.directory_resource_mapping()[6] && second==host.directory_resource_mapping()[8],"association receives both independently resolved live resources");tail_events.push_back("associate");},
             .auxiliary_arrays={},
-            .release_loader_source_lease=[&]{tail_events.push_back("release");},
-            .camera_zero_present=[&]{tail_events.push_back("camera-query");return false;},
+            .release_loader_source_lease=[this]{tail_events.push_back("release");},
+            .camera_zero_present=[this]{tail_events.push_back("camera-query");return false;},
             .single_allocation_mode=false,
-            .enqueue_transform=[&](auto resource){tail_events.push_back("transform");
+            .enqueue_transform=[this](auto resource){tail_events.push_back("transform");
               check(resource==host.resource_handle(*host.default_camera_handle()),
                     "DefaultCam queue preserves its canonical child resource");},
             .fallback_camera_registration={[]{return 1280;},[]{return 720;},[]{return false;},{}},
-            .outer_scene_operation=[&]{tail_events.push_back("scene");},
-            .between_saved_scene_operation=[&]{tail_events.push_back("between");},
-            .intermediate_scene_finalization=[&]{tail_events.push_back("finalize");},
-            .spatial_admission=[&](auto resource,bool admitted){check(admitted,"saved spatial service receives true");spatial.push_back(resource);tail_events.push_back("spatial");},
-            .saved_0x4000_service=[&](auto resource,bool enabled){check(enabled,"saved 0x4000 service receives true");flag_4000.push_back(resource);tail_events.push_back("4000");}};
+            .outer_scene_operation=[this]{tail_events.push_back("scene");},
+            .between_saved_scene_operation=[this]{tail_events.push_back("between");},
+            .intermediate_scene_finalization=[this]{tail_events.push_back("finalize");},
+            .spatial_admission=[this](auto resource,bool admitted){check(admitted,"saved spatial service receives true");spatial.push_back(resource);tail_events.push_back("spatial");},
+            .saved_0x4000_service=[this](auto resource,bool enabled){check(enabled,"saved 0x4000 service receives true");flag_4000.push_back(resource);tail_events.push_back("4000");}};
+    }
+};
+
+static OFF_NOINLINE void check_complete_outer_loader_tail(
+    off::graphics::IntroRuntime& host) {
+        CompleteOuterLoaderTailObservation observation{host};
+        auto tail_services=observation.services();
         host.run_outer_loader_tail_through_saved_services(tail_services);
         check(host.outer_loader_tail_stage()==off::graphics::IntroOuterLoaderTailStage::second_saved_pass_complete,
               "outer tail reaches the second saved-resource pass");
@@ -1093,7 +1101,7 @@ static OFF_NOINLINE void check_complete_outer_loader_tail(
         check(host.renderer_resource_container()==off::graphics::IntroRendererResourceContainer{42} &&
               host.first_auxiliary_array().empty() && host.second_auxiliary_array().empty(),
               "tail retains parsed renderer ownership and preserves absent auxiliary arrays as zero-count");
-        check(spatial.size()==host.saved_resource_flags().size(),"first saved pass visits every saved entry");
+        check(observation.spatial.size()==host.saved_resource_flags().size(),"first saved pass visits every saved entry");
         std::vector<std::string> expected_tail{"relocate","named-reader","renderer-parse","renderer-release",
             "resolve:2147483655","resolve:2147483657","associate","resolve:2147483665","resolve:2147483666","release","camera-query",
             "transform","scene","scene","scene"};
@@ -1103,7 +1111,7 @@ static OFF_NOINLINE void check_complete_outer_loader_tail(
         for(const auto& saved:host.saved_resource_flags()) if(saved.flags&0x4000U) {
           expected_tail.push_back("4000");expected_4000.push_back(saved.resource);
         }
-        check(tail_events==expected_tail && flag_4000==expected_4000,
+        check(observation.tail_events==expected_tail && observation.flag_4000==expected_4000,
               "outer tail keeps concrete section boundaries, releases only its lease, registers camera zero and consumes saved entries through services");
         rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
 }

@@ -148,7 +148,10 @@ private:
             return std::nullopt;
         }
         if (*first == 0U) {
-            return 0U;
+            // Zero is a valid direct table index, not an absent optional.
+            // Preserve the populated result from the first stream so this
+            // sentinel route does not rely on an implicit optional conversion.
+            return first;
         }
         return packed_index(bytes, offsets[1], static_cast<std::uint64_t>(*first) - 1U);
     }
