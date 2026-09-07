@@ -88,3 +88,12 @@ menu-controller attachment belongs to the window object; the similarly named
 picture has no such attachment. The recovered generic attachment path still
 stops before a concrete selection receiver or scene transition, so no
 game-start behavior is inferred.
+
+The recovered GameMenu owner is an ordinary window. Its selection receiver
+first resolves either an optional nested owner or the scene's window root. In
+the recovered fallback path, the window root replaces retained active-window
+state, emits paired window-state updates, and calls a configuration/input
+helper. It contains no recovered scene-manager clear or request, archive,
+mission, or gameplay construction. The optional nested-owner route and the
+subscribers to the state updates remain untraced, so this is a fallback-path
+boundary rather than proof that all selection processing stops there.
