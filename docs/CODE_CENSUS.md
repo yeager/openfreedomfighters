@@ -23,6 +23,19 @@ Six direct IAT references to `GetProcAddress` and two to `LoadLibraryA` were obs
 
 One `LoadLibraryA` call receives its module name from a runtime argument, so the renderer/plugin module selection must still be traced. One `GetProcAddress` wrapper likewise receives a runtime symbol argument. Nearby-string counts are hints; the names above were manually checked at the associated call boundaries before being promoted to this specification.
 
+## Load-config metadata
+
+The supported PE32 build's load-config data directory exposes 64 bytes, while
+its header declares a longer 92-byte structure. The safely bounded prefix ends
+at the SecurityCookie field, and a cookie is present. SafeSEH and Control Flow
+Guard fields are therefore *unavailable to this report*, not treated as absent.
+The installer records only bounded scalar metadata and field availability; it
+never exports handler pointers, function tables, code bytes, or disassembly.
+
+This avoids using unbounded load-config reads to explain runtime control flow
+or dynamically chosen modules. Those remaining module and API arguments still
+require isolated call-boundary observations.
+
 ## High-value direct boundaries
 
 The census sees one reference each to the Direct3D factory, DirectInput factory, DirectSound enumeration, EAX device creation, XInput state, and the three Steam lifecycle imports. The Winsock surface is small (one or two references per imported function). This supports isolated platform adapters rather than a broad Win32 emulation layer.
@@ -35,4 +48,3 @@ python3 tools/code_census.py /path/to/FreedomFighters/Freedom.Exe
 ```
 
 Reports must be reviewed before publication. Do not add disassembly, original code bytes, or unrelated extracted strings.
-

@@ -85,6 +85,77 @@ def _cstring(image: bytes, offset: int, limit: int = 4096) -> str:
     return image[offset:end].decode("ascii", "replace")
 
 
+def _load_config_summary(
+    image: bytes,
+    rva: int,
+    size: int,
+    sections: list[dict[str, object]],
+    bitness: int,
+) -> dict[str, object] | None:
+    """Return bounded, address-free PE load-config metadata.
+
+    Load-config layouts are append-only and differ between PE32 and PE32+.
+    This reader only exposes presence and scalar policy metadata for fields
+    wholly contained in the declared directory. It deliberately never exports
+    a pointer value or a handler/function table from the owned executable.
+    """
+    if not rva and not size:
+        return None
+    if not rva or size < 4:
+        raise ValueError("invalid load-config directory")
+    offset = _rva_to_offset(rva, sections)
+    if offset + 4 > len(image):
+        raise ValueError("truncated load-config directory")
+    declared_size = struct.unpack_from("<I", image, offset)[0]
+    readable_size = min(declared_size, size, len(image) - offset)
+    if readable_size < 4:
+        raise ValueError("truncated load-config directory")
+
+    def u16(field_offset: int) -> int | None:
+        if field_offset + 2 > readable_size:
+            return None
+        return struct.unpack_from("<H", image, offset + field_offset)[0]
+
+    def u32(field_offset: int) -> int | None:
+        if field_offset + 4 > readable_size:
+            return None
+        return struct.unpack_from("<I", image, offset + field_offset)[0]
+
+    # PE32 fields through SecurityCookie. PE32+ moves the pointer-width fields
+    # after offset 24; only common fixed fields are reported for it here.
+    result: dict[str, object] = {
+        "declared_size": declared_size,
+        "directory_size": size,
+        "parsed_size": readable_size,
+        "layout": "PE32" if bitness == 32 else "PE32+",
+        "global_flags_clear": u32(12),
+        "global_flags_set": u32(16),
+        "process_heap_flags": u32(44) if bitness == 32 else None,
+    }
+    if bitness == 32:
+        security_cookie = u32(60)
+        seh_table = u32(64)
+        seh_count = u32(68)
+        guard_table = u32(80)
+        guard_count = u32(84)
+        guard_flags = u32(88)
+        result.update(
+            {
+                "security_cookie_present": security_cookie is not None
+                and security_cookie != 0,
+                "seh_metadata_available": seh_table is not None,
+                "seh_table_present": seh_table is not None and seh_table != 0,
+                "seh_handler_count": seh_count,
+                "guard_cf_metadata_available": guard_table is not None,
+                "guard_cf_table_present": guard_table is not None
+                and guard_table != 0,
+                "guard_cf_function_count": guard_count,
+                "guard_flags": guard_flags,
+            }
+        )
+    return result
+
+
 def pe_summary(path: pathlib.Path) -> dict[str, object]:
     image = path.read_bytes()
     with path.open("rb") as handle:
@@ -300,6 +371,13 @@ def pe_summary(path: pathlib.Path) -> dict[str, object]:
                     tls_callbacks.append(callback_va - image_base)
                 else:
                     raise ValueError("TLS callback array is not terminated")
+    load_config = None
+    if len(directory_rows) > 10:
+        load_config_rva, load_config_size = directory_rows[10]
+        load_config = _load_config_summary(
+            image, load_config_rva, load_config_size, section_rows,
+            32 if magic == 0x10B else 64,
+        )
     return {
         "machine": f"0x{machine:04x}",
         "bitness": 32 if magic == 0x10B else 64,
@@ -312,6 +390,7 @@ def pe_summary(path: pathlib.Path) -> dict[str, object]:
         "exports": exports,
         "data_directories": directories,
         "tls_callback_rvas": tls_callbacks,
+        "load_config": load_config,
     }
 
 
