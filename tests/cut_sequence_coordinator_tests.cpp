@@ -16,6 +16,8 @@ using off::cutscene::ActiveCutMember;
 using off::cutscene::ActiveCutUpdate;
 using off::cutscene::ActiveCutUpdateResult;
 using off::cutscene::ActiveCutUpdateServices;
+using off::cutscene::ActiveCutTrackingCollection;
+using off::cutscene::ActiveCutTrackingRegistration;
 int failures = 0;
 void check(bool value) { if (!value) { ++failures; std::cerr << "FAIL: cut sequence coordinator\n"; } }
 template <class F> void rejects(F operation) { bool rejected = false; try { operation(); } catch (const std::runtime_error&) { rejected = true; } check(rejected); }
@@ -52,77 +54,113 @@ int main() {
   check(bad_group.active_index() == 0U);
   {
     static_assert(!std::is_copy_constructible_v<ActiveCutUpdate> && !std::is_move_constructible_v<ActiveCutUpdate>);
-    ActiveCutUpdate update({{10U, 0.0F, 1.0F}, {20U, 0.0F, 2.0F}}, 3.0F);
-    std::uint32_t sampled = 0U;
+    ActiveCutUpdate update({{10U, 0.0F, 1.0F}, {10U, 0.0F, 2.0F}}, 3.0F);
+    std::uint32_t sampled = 1U;
     int samples = 0;
     std::vector<std::string> trace;
-    ActiveCutUpdateServices update_services{
+    ActiveCutUpdateServices services{
       .sample_scene_clock = [&] { ++samples; return sampled; },
-      .resolve_member = [](std::uint64_t target) { return std::optional<std::uint64_t>{target + 100U}; },
+      .resolve_member = [](std::uint64_t) { return std::optional<ActiveCutTrackingRegistration>{{110U, 10U, ActiveCutTrackingCollection::primary}}; },
       .start_member = [&](std::uint64_t target, std::size_t index) { trace.push_back("start" + std::to_string(index) + ":" + std::to_string(target)); },
-      .end_member = [&](std::uint64_t target, std::size_t index) { trace.push_back("end" + std::to_string(index) + ":" + std::to_string(target)); },
-      .cleanup_started_member = [&](std::uint64_t target, std::size_t index) { trace.push_back("cleanup-start" + std::to_string(index) + ":" + std::to_string(target)); },
-      .cleanup_ended_member = [&](std::uint64_t target, std::size_t index) { trace.push_back("cleanup-end" + std::to_string(index) + ":" + std::to_string(target)); },
+      .end_primary_member = [&](std::uint64_t target, std::uint64_t source, std::size_t index, bool enabled) { trace.push_back("primary" + std::to_string(index) + ":" + std::to_string(target) + ":" + std::to_string(source) + ":" + std::to_string(enabled)); },
+      .resolve_retained_source = [](std::uint64_t source) { return std::optional<std::uint64_t>{source + 1000U}; },
+      .end_secondary_member = [&](std::uint64_t, std::uint64_t, std::size_t, bool) { trace.push_back("secondary"); },
       .complete = [&](std::uint64_t caller) { trace.push_back("complete:" + std::to_string(caller)); },
     };
-    rejects([&] { static_cast<void>(update.update(update_services)); });
+    rejects([&] { static_cast<void>(update.update(services)); });
     update.start(0U, 77U);
-    check(update.update(update_services) == ActiveCutUpdateResult::updated && samples == 1 && trace.empty());
-    sampled = 1U;
-    check(update.update(update_services) == ActiveCutUpdateResult::updated && samples == 2 &&
-          trace == std::vector<std::string>({"start0:110", "start1:120"}));
+    check(update.update(services) == ActiveCutUpdateResult::updated && samples == 1 &&
+          trace == std::vector<std::string>({"start0:110", "start1:110"}));
     sampled = 42U;
-    check(update.update(update_services) == ActiveCutUpdateResult::updated &&
-          trace == std::vector<std::string>({"start0:110", "start1:120", "end0:110"}) && !update.pending_end());
+    check(update.update(services) == ActiveCutUpdateResult::updated && trace == std::vector<std::string>({"start0:110", "start1:110"}));
     sampled = 124U;
-    check(update.update(update_services) == ActiveCutUpdateResult::updated &&
-          trace == std::vector<std::string>({"start0:110", "start1:120", "end0:110", "end1:120"}) && update.pending_end());
-    check(update.update(update_services) == ActiveCutUpdateResult::completed && !update.active() && !update.caller() &&
-          trace == std::vector<std::string>({"start0:110", "start1:120", "end0:110", "end1:120",
-                                             "cleanup-end0:110", "cleanup-end1:120", "cleanup-start0:110",
-                                             "cleanup-start1:120", "complete:77"}));
+    check(update.update(services) == ActiveCutUpdateResult::updated && update.pending_end() &&
+          trace == std::vector<std::string>({"start0:110", "start1:110", "primary0:110:10:1"}));
+    check(update.update(services) == ActiveCutUpdateResult::completed && !update.active() && !update.caller() &&
+          trace == std::vector<std::string>({"start0:110", "start1:110", "primary0:110:10:1", "complete:77"}));
   }
   {
-    ActiveCutUpdate pending({{10U, 0.0F, 100.0F}}, 1000.0F);
+    // A primary miss alone reaches the identity-matched secondary fallback.
+    ActiveCutUpdate update({{200U, 0.0F, 1.0F}, {200U, 0.0F, 2.0F, false}}, 100.0F);
     std::uint32_t sampled = 1U;
     std::vector<std::string> trace;
     ActiveCutUpdateServices services{
       .sample_scene_clock = [&] { return sampled; },
-      .resolve_member = [](std::uint64_t target) { return std::optional<std::uint64_t>{target}; },
-      .start_member = [&](std::uint64_t, std::size_t) { trace.push_back("start"); pending.request_end(); },
-      .end_member = [&](std::uint64_t, std::size_t) { trace.push_back("end"); },
-      .cleanup_started_member = [&](std::uint64_t, std::size_t) { trace.push_back("cleanup-start"); },
-      .cleanup_ended_member = [&](std::uint64_t, std::size_t) { trace.push_back("cleanup-end"); },
+      .resolve_member = [](std::uint64_t) { return std::optional<ActiveCutTrackingRegistration>{{200U, 900U, ActiveCutTrackingCollection::secondary}}; },
+      .start_member = [](std::uint64_t, std::size_t) {},
+      .end_primary_member = [](std::uint64_t, std::uint64_t, std::size_t, bool) {},
+      .resolve_retained_source = [](std::uint64_t source) { return std::optional<std::uint64_t>{source + 1U}; },
+      .end_secondary_member = [&](std::uint64_t resource, std::uint64_t target, std::size_t index, bool enabled) { trace.push_back(std::to_string(resource) + ":" + std::to_string(target) + ":" + std::to_string(index) + ":" + std::to_string(enabled)); },
+      .complete = [](std::uint64_t) {},
+    };
+    update.start(0U);
+    check(update.update(services) == ActiveCutUpdateResult::updated);
+    sampled = 42U;
+    check(update.update(services) == ActiveCutUpdateResult::updated && trace.empty());
+    sampled = 124U;
+    check(update.update(services) == ActiveCutUpdateResult::updated &&
+          trace == std::vector<std::string>({"901:200:0:0"}));
+  }
+  {
+    // A false member-info Boolean suppresses only the primary callback. The
+    // zero-count entry is still removed, so final cleanup cannot replay it.
+    ActiveCutUpdate update({{10U, 0.0F, 1.0F, false}}, 100.0F);
+    std::uint32_t sampled = 1U;
+    int primary_ends = 0;
+    ActiveCutUpdateServices services{
+      .sample_scene_clock = [&] { return sampled; },
+      .resolve_member = [](std::uint64_t) { return std::optional<ActiveCutTrackingRegistration>{{110U, 10U, ActiveCutTrackingCollection::primary}}; },
+      .start_member = [](std::uint64_t, std::size_t) {},
+      .end_primary_member = [&](std::uint64_t, std::uint64_t, std::size_t, bool) { ++primary_ends; },
+      .resolve_retained_source = [](std::uint64_t) { return std::optional<std::uint64_t>{}; },
+      .end_secondary_member = [](std::uint64_t, std::uint64_t, std::size_t, bool) { check(false); },
+      .complete = [](std::uint64_t) {},
+    };
+    update.start(0U);
+    check(update.update(services) == ActiveCutUpdateResult::updated);
+    sampled = 42U;
+    check(update.update(services) == ActiveCutUpdateResult::updated && primary_ends == 0);
+    update.request_end();
+    check(update.update(services) == ActiveCutUpdateResult::completed && primary_ends == 0);
+  }
+  {
+    // Final cleanup does not decrement and sends an unconditional primary end,
+    // then a resolved secondary end with true.
+    ActiveCutUpdate pending({{10U, 0.0F, 100.0F}, {20U, 0.0F, 100.0F}}, 1000.0F);
+    std::vector<std::string> trace;
+    ActiveCutUpdateServices services{
+      .sample_scene_clock = [] { return 1U; },
+      .resolve_member = [](std::uint64_t target) { return std::optional<ActiveCutTrackingRegistration>{target == 10U ? ActiveCutTrackingRegistration{110U, 10U, ActiveCutTrackingCollection::primary} : ActiveCutTrackingRegistration{220U, 20U, ActiveCutTrackingCollection::secondary}}; },
+      .start_member = [&](std::uint64_t, std::size_t index) { if (index == 1U) pending.request_end(); },
+      .end_primary_member = [&](std::uint64_t target, std::uint64_t, std::size_t, bool enabled) { trace.push_back("primary:" + std::to_string(target) + ":" + std::to_string(enabled)); },
+      .resolve_retained_source = [](std::uint64_t source) { return std::optional<std::uint64_t>{source + 1000U}; },
+      .end_secondary_member = [&](std::uint64_t resource, std::uint64_t target, std::size_t, bool enabled) { trace.push_back("secondary:" + std::to_string(resource) + ":" + std::to_string(target) + ":" + std::to_string(enabled)); },
       .complete = [&](std::uint64_t) { trace.push_back("complete"); },
     };
     pending.start(0U);
     check(pending.update(services) == ActiveCutUpdateResult::completed &&
-          trace == std::vector<std::string>({"start", "cleanup-start", "complete"}));
+          trace == std::vector<std::string>({"primary:110:1", "secondary:1020:220:1", "complete"}));
   }
   {
-    ActiveCutUpdate retry({{10U, 0.0F, 100.0F}}, 1000.0F);
-    bool available = false;
-    int starts = 0;
+    // A failed secondary resolution still consumes its zero-count record.
+    ActiveCutUpdate update({{200U, 0.0F, 1.0F}}, 100.0F);
+    std::uint32_t sampled = 1U;
+    int resolves = 0;
     ActiveCutUpdateServices services{
-      .sample_scene_clock = [] { return 1U; },
-      .resolve_member = [&](std::uint64_t target) -> std::optional<std::uint64_t> {
-        return available ? std::optional<std::uint64_t>{target} : std::nullopt;
-      },
-      .start_member = [&](std::uint64_t, std::size_t) {
-        ++starts;
-        if (starts == 1) throw std::runtime_error("test callback");
-      },
-      .end_member = [](std::uint64_t, std::size_t) {},
-      .cleanup_started_member = [](std::uint64_t, std::size_t) {},
-      .cleanup_ended_member = [](std::uint64_t, std::size_t) {},
+      .sample_scene_clock = [&] { return sampled; },
+      .resolve_member = [](std::uint64_t) { return std::optional<ActiveCutTrackingRegistration>{{200U, 900U, ActiveCutTrackingCollection::secondary}}; },
+      .start_member = [](std::uint64_t, std::size_t) {},
+      .end_primary_member = [](std::uint64_t, std::uint64_t, std::size_t, bool) {},
+      .resolve_retained_source = [&](std::uint64_t) -> std::optional<std::uint64_t> { ++resolves; return std::nullopt; },
+      .end_secondary_member = [](std::uint64_t, std::uint64_t, std::size_t, bool) { check(false); },
       .complete = [](std::uint64_t) {},
     };
-    retry.start(0U);
-    check(retry.update(services) == ActiveCutUpdateResult::updated && starts == 0);
-    available = true;
-    rejects([&] { static_cast<void>(retry.update(services)); });
-    check(retry.active() && starts == 1);
-    check(retry.update(services) == ActiveCutUpdateResult::updated && starts == 2);
+    update.start(0U);
+    check(update.update(services) == ActiveCutUpdateResult::updated);
+    sampled = 42U;
+    check(update.update(services) == ActiveCutUpdateResult::updated && resolves == 1);
+    update.request_end();
+    check(update.update(services) == ActiveCutUpdateResult::completed && resolves == 1);
   }
   return failures == 0 ? 0 : 1;
 }

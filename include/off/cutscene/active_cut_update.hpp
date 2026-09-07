@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <utility>
@@ -21,19 +22,37 @@ struct ActiveCutMember {
   std::uint64_t target{};
   float start{};
   float end{};
+  // This is the member-info Boolean consumed by the tracked end operations.
+  // It suppresses only the primary zero-count operation; it never suppresses
+  // accounting or record removal.
+  bool end_operation_enabled{true};
 };
 
 enum class ActiveCutUpdateResult { updated, completed };
 
-// All side effects are supplied explicitly.  A target is re-resolved for each
-// due start/end pass, so a member never implies a retained live object.
+enum class ActiveCutTrackingCollection { primary, secondary };
+
+// A resolver returns both the selected runtime identity and the retained
+// source key used by the two native-compatible tracking routes.  Keeping them
+// separate prevents a member-end target from being treated as a source key.
+struct ActiveCutTrackingRegistration {
+  std::uint64_t selected_target{};
+  std::uint64_t retained_source{};
+  ActiveCutTrackingCollection collection{ActiveCutTrackingCollection::primary};
+};
+
+// All side effects are supplied explicitly. A member is resolved only for its
+// due start pass; member end uses the retained tracking collections instead of
+// assuming that its target is a live object or source key.
 struct ActiveCutUpdateServices {
   std::function<std::uint32_t()> sample_scene_clock;
-  std::function<std::optional<std::uint64_t>(std::uint64_t)> resolve_member;
+  std::function<std::optional<ActiveCutTrackingRegistration>(std::uint64_t)> resolve_member;
   std::function<void(std::uint64_t, std::size_t)> start_member;
-  std::function<void(std::uint64_t, std::size_t)> end_member;
-  std::function<void(std::uint64_t, std::size_t)> cleanup_started_member;
-  std::function<void(std::uint64_t, std::size_t)> cleanup_ended_member;
+  // The primary operation owns any source resolution it needs.  The secondary
+  // route is deliberately different: its source must resolve first.
+  std::function<void(std::uint64_t, std::uint64_t, std::size_t, bool)> end_primary_member;
+  std::function<std::optional<std::uint64_t>(std::uint64_t)> resolve_retained_source;
+  std::function<void(std::uint64_t, std::uint64_t, std::size_t, bool)> end_secondary_member;
   std::function<void(std::uint64_t)> complete;
 };
 
@@ -72,8 +91,8 @@ public:
     pending_end_ = false;
     std::fill(started_.begin(), started_.end(), false);
     std::fill(ended_.begin(), ended_.end(), false);
-    started_tracking_.clear();
-    ended_tracking_.clear();
+    primary_tracking_.clear();
+    secondary_tracking_.clear();
     active_ = true;
   }
 
@@ -86,8 +105,8 @@ public:
 
   [[nodiscard]] ActiveCutUpdateResult update(const ActiveCutUpdateServices& services) {
     if (!active_ || updating_ || !services.sample_scene_clock || !services.resolve_member ||
-        !services.start_member || !services.end_member || !services.cleanup_started_member ||
-        !services.cleanup_ended_member || !services.complete) {
+        !services.start_member || !services.end_primary_member || !services.resolve_retained_source ||
+        !services.end_secondary_member || !services.complete) {
       throw std::runtime_error("active cut update requires an active player and all services");
     }
     struct UpdateGuard {
@@ -127,14 +146,25 @@ private:
     return result;
   }
 
+  struct TrackingEntry {
+    std::uint64_t selected_target{};
+    std::uint64_t retained_source{};
+    std::size_t index{};
+    std::int32_t references{};
+  };
+
   void run_start_pass(float position, const ActiveCutUpdateServices& services) {
     for (const auto index : start_order_) {
       if (started_[index] || !(position > members_[index].start)) continue;
       const auto resolved = services.resolve_member(members_[index].target);
       if (!resolved) continue;
-      services.start_member(*resolved, index);
-      // Tracking is retained before the post-callback fired flag.
-      started_tracking_.push_back({*resolved, index});
+      if (resolved->selected_target == 0U || resolved->retained_source == 0U) {
+        throw std::runtime_error("active cut member resolver returned an invalid tracking registration");
+      }
+      // Both collections are consulted before creating a new selected
+      // identity. Tracking is retained before the post-callback fired flag.
+      const auto selected_target = retain(*resolved, index);
+      services.start_member(selected_target, index);
       started_[index] = true;
     }
   }
@@ -142,20 +172,27 @@ private:
   void run_end_pass(float position, const ActiveCutUpdateServices& services) {
     for (const auto index : end_order_) {
       if (!started_[index] || ended_[index] || !(position > members_[index].end)) continue;
-      const auto resolved = services.resolve_member(members_[index].target);
-      if (!resolved) continue;
-      services.end_member(*resolved, index);
-      // A separate retained collection models the second cleanup reference.
-      ended_tracking_.push_back({*resolved, index});
+      end_tracked_member(members_[index], index, services);
       ended_[index] = true;
     }
   }
 
   void cleanup(const ActiveCutUpdateServices& services) {
-    for (const auto& [target, index] : ended_tracking_) services.cleanup_ended_member(target, index);
-    for (const auto& [target, index] : started_tracking_) services.cleanup_started_member(target, index);
-    ended_tracking_.clear();
-    started_tracking_.clear();
+    // Reacquire the front after every callback. The public model rejects
+    // reentrant update/start calls, but this avoids iterator lifetime claims
+    // across service calls and preserves callback-before-removal ordering.
+    while (!primary_tracking_.empty()) {
+      const auto entry = primary_tracking_.front();
+      services.end_primary_member(entry.selected_target, entry.retained_source, entry.index, true);
+      erase_primary(entry.retained_source);
+    }
+    while (!secondary_tracking_.empty()) {
+      const auto entry = secondary_tracking_.front();
+      if (const auto resolved = services.resolve_retained_source(entry.retained_source)) {
+        services.end_secondary_member(*resolved, entry.selected_target, entry.index, true);
+      }
+      erase_secondary(entry.retained_source);
+    }
     std::fill(started_.begin(), started_.end(), false);
     std::fill(ended_.begin(), ended_.end(), false);
     pending_end_ = false;
@@ -165,13 +202,98 @@ private:
     caller_.reset();
   }
 
+  [[nodiscard]] std::uint64_t retain(const ActiveCutTrackingRegistration& registration, std::size_t index) {
+    const auto retain_existing = [&](std::vector<TrackingEntry>& collection) -> std::optional<std::uint64_t> {
+      const auto found = std::find_if(collection.begin(), collection.end(), [&](const TrackingEntry& entry) {
+        return entry.retained_source == registration.retained_source;
+      });
+      if (found == collection.end()) return std::nullopt;
+      if (found->references == std::numeric_limits<std::int32_t>::max()) {
+        throw std::runtime_error("active cut tracking reference count overflow");
+      }
+      ++found->references;
+      return found->selected_target;
+    };
+    if (const auto selected = retain_existing(primary_tracking_)) return *selected;
+    if (const auto selected = retain_existing(secondary_tracking_)) return *selected;
+    auto& collection = registration.collection == ActiveCutTrackingCollection::primary
+                           ? primary_tracking_
+                           : secondary_tracking_;
+    collection.push_back({registration.selected_target, registration.retained_source, index, 1});
+    return registration.selected_target;
+  }
+
+  void end_tracked_member(const ActiveCutMember& member, std::size_t index,
+                          const ActiveCutUpdateServices& services) {
+    const auto primary = std::find_if(primary_tracking_.begin(), primary_tracking_.end(), [&](const TrackingEntry& entry) {
+      return entry.retained_source == member.target;
+    });
+    if (primary != primary_tracking_.end()) {
+      decrement_primary(*primary, member.end_operation_enabled, services);
+      return;
+    }
+    const auto secondary = std::find_if(secondary_tracking_.begin(), secondary_tracking_.end(), [&](const TrackingEntry& entry) {
+      return entry.selected_target == member.target;
+    });
+    if (secondary == secondary_tracking_.end()) return;
+    decrement_secondary(*secondary, member.end_operation_enabled, services);
+  }
+
+  void decrement_primary(const TrackingEntry& entry, bool enabled,
+                         const ActiveCutUpdateServices& services) {
+    auto found = std::find_if(primary_tracking_.begin(), primary_tracking_.end(), [&](const TrackingEntry& current) {
+      return current.retained_source == entry.retained_source;
+    });
+    if (found == primary_tracking_.end()) return;
+    if (found->references <= 0) {
+      throw std::runtime_error("active cut primary tracking reference count underflow");
+    }
+    if (--found->references != 0) return;
+    // The entry remains present while the operation runs.
+    if (enabled) services.end_primary_member(found->selected_target, found->retained_source, found->index, enabled);
+    erase_primary(found->retained_source);
+  }
+
+  void decrement_secondary(const TrackingEntry& entry, bool enabled,
+                           const ActiveCutUpdateServices& services) {
+    auto found = std::find_if(secondary_tracking_.begin(), secondary_tracking_.end(), [&](const TrackingEntry& current) {
+      return current.selected_target == entry.selected_target;
+    });
+    if (found == secondary_tracking_.end()) return;
+    if (found->references <= 0) {
+      throw std::runtime_error("active cut secondary tracking reference count underflow");
+    }
+    if (--found->references != 0) return;
+    const auto retained_source = found->retained_source;
+    const auto selected_target = found->selected_target;
+    const auto tracking_index = found->index;
+    if (const auto resolved = services.resolve_retained_source(retained_source)) {
+      services.end_secondary_member(*resolved, selected_target, tracking_index, enabled);
+    }
+    erase_secondary(retained_source);
+  }
+
+  void erase_primary(std::uint64_t retained_source) {
+    const auto found = std::find_if(primary_tracking_.begin(), primary_tracking_.end(), [&](const TrackingEntry& entry) {
+      return entry.retained_source == retained_source;
+    });
+    if (found != primary_tracking_.end()) primary_tracking_.erase(found);
+  }
+
+  void erase_secondary(std::uint64_t retained_source) {
+    const auto found = std::find_if(secondary_tracking_.begin(), secondary_tracking_.end(), [&](const TrackingEntry& entry) {
+      return entry.retained_source == retained_source;
+    });
+    if (found != secondary_tracking_.end()) secondary_tracking_.erase(found);
+  }
+
   std::vector<ActiveCutMember> members_;
   std::vector<std::size_t> start_order_;
   std::vector<std::size_t> end_order_;
   std::vector<bool> started_;
   std::vector<bool> ended_;
-  std::vector<std::pair<std::uint64_t, std::size_t>> started_tracking_;
-  std::vector<std::pair<std::uint64_t, std::size_t>> ended_tracking_;
+  std::vector<TrackingEntry> primary_tracking_;
+  std::vector<TrackingEntry> secondary_tracking_;
   float natural_end_{};
   std::uint32_t scene_clock_start_{};
   std::optional<std::uint64_t> caller_;
