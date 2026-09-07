@@ -6,6 +6,7 @@
 #include "off/data/deferred_reader_session.hpp"
 #include "off/data/keys_descriptor_range.hpp"
 #include "off/data/keys_backing_evaluator.hpp"
+#include "off/data/matpos_pose_evaluator.hpp"
 #include "off/data/keys_property_materializer.hpp"
 #include "off/data/owner_buf_keys_profile.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
@@ -1443,6 +1444,32 @@ int main() {
         const auto invalid_width = ImmutableKeysBackingView::create(0x1234U, width);
         check(invalid_width && !KeysBackingEvaluator::evaluate(*invalid_width, bound, 0.0F),
               "KEYS backing evaluator rejects unsupported packed widths");
+    }
+    {
+        using off::data::KeysBackingSample;
+        using off::data::MatPosPoseEvaluator;
+
+        const auto orientation = MatPosPoseEvaluator::evaluate({
+            .first_group = {32512.0F, -32512.0F, 32512.0F, -32512.0F},
+            .second_group = {4.0F, -5.0F, 6.0F},
+        });
+        check(orientation && orientation->normalized_orientation == std::array<float, 4>{0.5F, -0.5F, 0.5F, -0.5F} &&
+                  orientation->translation == std::array<float, 3>{4.0F, -5.0F, 6.0F},
+              "MatPos pose evaluator normalizes quantized orientation without reordering it and preserves translation");
+
+        const auto arbitrary_scale = MatPosPoseEvaluator::evaluate({
+            .first_group = {65024.0F, 0.0F, 0.0F, 0.0F},
+            .second_group = {},
+        });
+        check(arbitrary_scale && arbitrary_scale->normalized_orientation == std::array<float, 4>{1.0F, 0.0F, 0.0F, 0.0F},
+              "MatPos pose evaluator scales before normalizing instead of assuming a fixed input magnitude");
+
+        check(!MatPosPoseEvaluator::evaluate({.first_group = {}, .second_group = {}}) &&
+                  !MatPosPoseEvaluator::evaluate({
+                      .first_group = {0.0F, 0.0F, 0.0F, 32512.0F},
+                      .second_group = {std::numeric_limits<float>::infinity(), 0.0F, 0.0F},
+                  }),
+              "MatPos pose evaluator rejects degenerate or non-finite detached samples");
     }
     {
         using off::data::TypedValue;

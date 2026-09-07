@@ -35,6 +35,16 @@ provider routes. It does not decode a general BUF language, execute a
 MatPosAnim reader, register animation events, advance animation time, or modify
 transforms.
 
+## Detached pose evaluation
+
+The bounded numeric KEYS sample can be converted into a detached local pose.
+Its first group is linearly interpolated before this boundary, scaled from
+signed quantized components by `1 / 32512`, normalized without reordering, and
+returned with the unmodified three-float translation group. The component order
+and quaternion-to-basis convention remain unrecovered, so no basis is produced.
+This does not attach the pose to an owner, a resource, or a renderer. It cannot
+activate scene animation or make the intro visible.
+
 ## Lifecycle status
 
 MatPosAnim phase one remains unavailable until its existing-state/provider
