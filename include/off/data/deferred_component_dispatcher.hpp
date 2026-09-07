@@ -1,6 +1,6 @@
 #pragma once
 
-#include "off/data/compact_typed_value_decoder.hpp"
+#include "off/data/bounded_component_block_cursor.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -33,42 +33,25 @@ public:
     [[nodiscard]] static DeferredComponentDispatchResult dispatch(
         std::span<const std::byte> input,
         std::span<const DeferredComponentReader> attachment_readers) {
-        std::size_t cursor = 0;
+        auto shared_cursor = input;
+        BoundedComponentBlockCursor cursor(shared_cursor, input.size());
         std::size_t reader_index = 0;
 
-        while (cursor < input.size()) {
-            const auto tag = std::to_integer<std::uint8_t>(input[cursor]);
-            if (tag == terminal_tag) {
-                if (reader_index != attachment_readers.size()) {
-                    fail("deferred component stream ends before every attachment reader");
-                }
-                return {input.subspan(cursor), reader_index};
+        DeferredComponentAttachmentSnapshot snapshot;
+        while (cursor.next_attachment(snapshot)) {
+            if (reader_index == attachment_readers.size()) {
+                fail("deferred component stream has more delimiters than attachment readers");
             }
-            if ((tag & class_mask) == component_delimiter) {
-                if (reader_index == attachment_readers.size()) {
-                    fail("deferred component stream has more delimiters than attachment readers");
-                }
-                ++cursor;
-                auto child_cursor = input.subspan(cursor);
-                attachment_readers[reader_index++](child_cursor);
-                continue;
-            }
-
-            CompactTypedValueDecoder decoder(input.subspan(cursor));
-            const auto value = decoder.next();
-            if (value.kind == CompactTypedValueKind::terminator) {
-                fail("deferred component scanner lost its terminator boundary");
-            }
-            cursor += value.encoded.size();
+            auto child_cursor = snapshot.remaining();
+            attachment_readers[reader_index++](child_cursor);
         }
-        fail("deferred component stream is truncated before its terminator");
+        if (reader_index != attachment_readers.size()) {
+            fail("deferred component stream ends before every attachment reader");
+        }
+        return {shared_cursor, reader_index};
     }
 
 private:
-    static constexpr std::uint8_t component_delimiter = 0x06U;
-    static constexpr std::uint8_t terminal_tag = 0xffU;
-    static constexpr std::uint8_t class_mask = 0x3fU;
-
     [[noreturn]] static void fail(const char* message) { throw std::runtime_error(message); }
 };
 

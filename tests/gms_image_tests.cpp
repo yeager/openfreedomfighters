@@ -1,4 +1,5 @@
 #include "off/data/gms_image.hpp"
+#include "off/data/bounded_component_block_cursor.hpp"
 #include "off/data/compact_typed_value_decoder.hpp"
 #include "off/data/component_reader_context.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
@@ -759,6 +760,35 @@ int main() {
             CompactTypedValueDecoder decoder(unterminated);
             static_cast<void>(decoder.next());
         }, "compact decoder rejects an unterminated string within its supplied boundary");
+    }
+    {
+        using off::data::BoundedComponentBlockCursor;
+        using off::data::DeferredComponentAttachmentSnapshot;
+        const std::array stream{
+            std::byte{0x03}, std::byte{0x11}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
+            std::byte{0x06}, std::byte{0x04}, std::byte{'a'}, std::byte{0},
+            std::byte{0x06}, std::byte{0xff}, std::byte{0xa5},
+        };
+        auto shared = std::span<const std::byte>(stream);
+        BoundedComponentBlockCursor cursor(shared, stream.size() - 1U);
+        DeferredComponentAttachmentSnapshot first;
+        DeferredComponentAttachmentSnapshot second;
+        const auto found_first = cursor.next_attachment(first);
+        first.consume(3U);
+        const auto found_second = cursor.next_attachment(second);
+        const auto finished = !cursor.next_attachment(first);
+        check(found_first && found_second && finished && first.remaining().size() == 2U &&
+                  second.remaining().size() == 1U && cursor.remaining().size() == 1U &&
+                  shared.size() == 2U && shared.front() == std::byte{0xff},
+              "bounded component block cursor keeps attachment snapshots independent and leaves its terminator external");
+        check_rejected([&] {
+            auto short_shared = std::span<const std::byte>(stream);
+            BoundedComponentBlockCursor short_cursor(short_shared, 10U);
+            DeferredComponentAttachmentSnapshot ignored;
+            static_cast<void>(short_cursor.next_attachment(ignored));
+            static_cast<void>(short_cursor.next_attachment(ignored));
+            static_cast<void>(short_cursor.next_attachment(ignored));
+        }, "bounded component block cursor never reads a terminator outside its supplied block");
     }
     {
         using off::data::DeferredComponentDispatcher;
