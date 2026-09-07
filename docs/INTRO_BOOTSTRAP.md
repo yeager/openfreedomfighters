@@ -608,6 +608,22 @@ mutation, and a matching enabled live camera owner. Its result distinguishes an
 absent or unready backend, a queued pending state, and a fully admitted view.
 It does not invoke picture activation, frame traversal, GPU drawing, or present.
 
+## First-cut picture eligibility
+
+Starting a cut and admitting its state-zero camera does not make a picture
+drawable. The recovered first member activates only in a later admitted active
+cut update with a timeline position strictly greater than zero. It retains the
+resolved picture identity and appends tracking before considering visibility.
+
+For the supported legal-picture path, the authored-hide contribution is cleared
+only when the live parent allows it; remaining runtime eligibility bits are
+preserved before maintenance and registration. The resulting order is owner/view
+traversal, resource preparation and registration, rebuild queue and state-key
+rebuild, full preselection, ordered dispatch, then texture/backend submission.
+The fresh legal-picture owner has no extension-gated preselection membership,
+but that does not permit skipping the coordinator or treating the registry as
+empty.
+
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
 copied controller payloads. Runtime acceptance additionally requires an actual
