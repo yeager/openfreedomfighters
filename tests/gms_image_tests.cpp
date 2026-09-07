@@ -4,6 +4,7 @@
 #include "off/data/component_reader_context.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
 #include "off/data/keys_property_materializer.hpp"
+#include "off/data/owner_buf_keys_profile.hpp"
 #include "off/data/typed_value_cursor.hpp"
 
 #include <algorithm>
@@ -894,6 +895,95 @@ int main() {
             });
         check(invoked == ComponentReaderInvocationResult::invoked && called,
               "component reader context preserves opaque input separately from the KEYS handle");
+    }
+    {
+        using off::data::OwnerAuxiliaryPropertyBlock;
+        using off::data::OwnerBufKeysProfileParser;
+        using off::data::KeysPropertyMaterializer;
+        using off::data::SceneLifetimeKeysChildMapping;
+
+        const auto write_word = [](std::span<std::byte> bytes, std::size_t offset,
+                                   std::uint32_t value) {
+            bytes[offset] = static_cast<std::byte>(value & 0xffU);
+            bytes[offset + 1U] = static_cast<std::byte>((value >> 8U) & 0xffU);
+            bytes[offset + 2U] = static_cast<std::byte>((value >> 16U) & 0xffU);
+            bytes[offset + 3U] = static_cast<std::byte>((value >> 24U) & 0xffU);
+        };
+        const auto supported_profile = [&] {
+            std::array<std::byte, 64> bytes{};
+            write_word(bytes, 4U, 0x80000040U);
+            write_word(bytes, 8U, 64U);
+            write_word(bytes, 12U, 1U);
+            write_word(bytes, 16U, 0x5359454bU);
+            write_word(bytes, 20U, 48U);
+            return bytes;
+        };
+
+        auto bytes = supported_profile();
+        const OwnerAuxiliaryPropertyBlock property{0x42U, 0x120U, bytes};
+        const auto keys = OwnerBufKeysProfileParser::parse(property);
+        check(keys.buf_auxiliary_offset == property.buf_auxiliary_offset &&
+                  keys.name == std::array<char, 4>{'K', 'E', 'Y', 'S'} &&
+                  keys.declared_extent == 48U && keys.bytes.data() == bytes.data() + 16U &&
+                  keys.bytes.size() == 48U,
+              "owner BUF KEYS profile exposes only the exact bounded child view");
+        const std::array children{keys};
+        const auto materialized = KeysPropertyMaterializer::materialize(
+            property, children,
+            [](const OwnerAuxiliaryPropertyBlock& requested_property,
+               const auto& requested_child) -> std::optional<SceneLifetimeKeysChildMapping> {
+                return SceneLifetimeKeysChildMapping{requested_property.owner,
+                                                      requested_property.buf_auxiliary_offset,
+                                                      requested_child.name,
+                                                      requested_child.declared_extent, 0x700U};
+            });
+        check(materialized && materialized->opaque_handle == 0x700U,
+              "owner BUF KEYS profile feeds the existing bounded descriptor materializer");
+
+        check_rejected([&] {
+            std::array<std::byte, 63> short_bytes{};
+            static_cast<void>(OwnerBufKeysProfileParser::parse({0x42U, 0x120U, short_bytes}));
+        }, "owner BUF KEYS profile rejects every outer boundary other than 64 bytes");
+        check_rejected([&] {
+            auto malformed = supported_profile();
+            write_word(malformed, 0U, 1U);
+            static_cast<void>(OwnerBufKeysProfileParser::parse({0x42U, 0x120U, malformed}));
+        }, "owner BUF KEYS profile rejects a nonzero first word");
+        check_rejected([&] {
+            auto malformed = supported_profile();
+            write_word(malformed, 4U, 64U);
+            static_cast<void>(OwnerBufKeysProfileParser::parse({0x42U, 0x120U, malformed}));
+        }, "owner BUF KEYS profile requires the recovered high-bit outer tag");
+        check_rejected([&] {
+            auto malformed = supported_profile();
+            write_word(malformed, 4U, 0x8000003fU);
+            static_cast<void>(OwnerBufKeysProfileParser::parse({0x42U, 0x120U, malformed}));
+        }, "owner BUF KEYS profile rejects a tagged extent with the wrong low thirty bits");
+        check_rejected([&] {
+            auto malformed = supported_profile();
+            write_word(malformed, 4U, 0xc0000040U);
+            static_cast<void>(OwnerBufKeysProfileParser::parse({0x42U, 0x120U, malformed}));
+        }, "owner BUF KEYS profile rejects an unobserved second tag bit");
+        check_rejected([&] {
+            auto malformed = supported_profile();
+            write_word(malformed, 8U, 63U);
+            static_cast<void>(OwnerBufKeysProfileParser::parse({0x42U, 0x120U, malformed}));
+        }, "owner BUF KEYS profile rejects the wrong second outer extent");
+        check_rejected([&] {
+            auto malformed = supported_profile();
+            write_word(malformed, 12U, 0U);
+            static_cast<void>(OwnerBufKeysProfileParser::parse({0x42U, 0x120U, malformed}));
+        }, "owner BUF KEYS profile rejects the wrong outer kind");
+        check_rejected([&] {
+            auto malformed = supported_profile();
+            write_word(malformed, 16U, 0x454b4559U);
+            static_cast<void>(OwnerBufKeysProfileParser::parse({0x42U, 0x120U, malformed}));
+        }, "owner BUF KEYS profile rejects a child other than little-endian KEYS");
+        check_rejected([&] {
+            auto malformed = supported_profile();
+            write_word(malformed, 20U, 47U);
+            static_cast<void>(OwnerBufKeysProfileParser::parse({0x42U, 0x120U, malformed}));
+        }, "owner BUF KEYS profile rejects a child extent that leaves trailing bytes");
     }
     {
         using off::data::KeysPropertyMaterializer;
