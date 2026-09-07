@@ -12,9 +12,18 @@ the current retained scene entries before queuing its copied target. The queue
 only records deferred removal and target requests. It never loads a scene,
 creates GPU resources, presents a frame, or accepts input.
 
-The later manager pump, archive selection, lifecycle handoff, and `FF-StartUp`
-menu construction are not implemented. The source of LoadScreen's initial
-counter and setup flag also remains a separate construction requirement.
+`SceneTransitionPump` is an explicit caller-driven consumer for this one
+verified route. It accepts exactly one retained `FF-Startup` target and requires
+caller-owned checked Scenes resolution plus archive preparation callbacks. A
+missing service or either failed check leaves the deferred queue and current
+scene state unchanged. After both checks succeed, it removes only entries marked
+for removal, clears the retained target, and makes a notification-only
+scene-loader handoff. The pump is nonreentrant; normal startup does not call it.
+
+It has no generic target handling, archive search/opening policy, actual scene
+load, rendering, presentation, input, or FF-StartUp menu construction. The
+source of LoadScreen's initial counter and setup flag remains a separate
+construction requirement.
 
 ## Startup boot-menu admission
 

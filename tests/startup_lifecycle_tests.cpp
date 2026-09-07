@@ -118,6 +118,100 @@ int main() {
             slash_queue.targets().front() == "Scenes\\FF-StartUp",
         "target requests retain a copied slash-normalized path");
 
+  off::runtime::SceneTransitionQueue pump_queue;
+  pump_queue.retain_scene_entry(31U);
+  pump_queue.retain_scene_entry(32U);
+  pump_queue.set_current_scene(31U);
+  pump_queue.request_clear();
+  check(pump_queue.request_target("FF-Startup"),
+        "pump test retains the supported target");
+  off::runtime::SceneTransitionPump pump;
+  std::vector<std::string> pump_events;
+  bool removals_precede_handoff = false;
+  const off::runtime::SceneTransitionPumpServices pump_services{
+      .checked_scenes_resolver = [&](std::string_view target) {
+        pump_events.emplace_back("resolve:" + std::string(target));
+        return target == "FF-Startup";
+      },
+      .archive_preparer = [&](std::string_view target) {
+        pump_events.emplace_back("prepare:" + std::string(target));
+        return target == "FF-Startup";
+      },
+      .scene_loader_handoff = [&](std::string_view target) {
+        removals_precede_handoff = pump_queue.entries().empty();
+        pump_events.emplace_back("handoff:" + std::string(target));
+      },
+  };
+  check(pump.consume(pump_queue, pump_services) ==
+                off::runtime::SceneTransitionPumpResult::handed_off &&
+            !pump_queue.pending() && pump_queue.entries().empty() &&
+            pump_queue.targets().empty() && !pump_queue.current_scene().has_value() &&
+            removals_precede_handoff &&
+            pump_events == std::vector<std::string>{"resolve:FF-Startup",
+                                                     "prepare:FF-Startup",
+                                                     "handoff:FF-Startup"},
+        "pump validates and prepares before retiring entries then handing off");
+
+  off::runtime::SceneTransitionQueue rejected_queue;
+  rejected_queue.retain_scene_entry(41U);
+  rejected_queue.set_current_scene(41U);
+  rejected_queue.request_clear();
+  check(rejected_queue.request_target("FF-Startup"),
+        "rejection test retains the supported target");
+  const off::runtime::SceneTransitionPumpServices rejected_services{
+      .checked_scenes_resolver = [](std::string_view) { return false; },
+      .archive_preparer = [](std::string_view) { return true; },
+      .scene_loader_handoff = [](std::string_view) {},
+  };
+  check(pump.consume(rejected_queue, rejected_services) ==
+                off::runtime::SceneTransitionPumpResult::rejected &&
+            rejected_queue.pending() && rejected_queue.entries().size() == 1U &&
+            rejected_queue.entries().front().removal_requested &&
+            rejected_queue.targets() == std::vector<std::string>{"FF-Startup"} &&
+            !rejected_queue.current_scene().has_value(),
+        "resolver rejection preserves the pending queue and current scene state");
+
+  off::runtime::SceneTransitionQueue prepare_rejected_queue;
+  prepare_rejected_queue.retain_scene_entry(42U);
+  prepare_rejected_queue.request_clear();
+  check(prepare_rejected_queue.request_target("FF-Startup"),
+        "preparer rejection test retains the supported target");
+  const off::runtime::SceneTransitionPumpServices prepare_rejected_services{
+      .checked_scenes_resolver = [](std::string_view) { return true; },
+      .archive_preparer = [](std::string_view) { return false; },
+      .scene_loader_handoff = [](std::string_view) { std::abort(); },
+  };
+  check(pump.consume(prepare_rejected_queue, prepare_rejected_services) ==
+                off::runtime::SceneTransitionPumpResult::rejected &&
+            prepare_rejected_queue.pending() &&
+            prepare_rejected_queue.entries().size() == 1U &&
+            prepare_rejected_queue.entries().front().removal_requested &&
+            prepare_rejected_queue.targets() ==
+                std::vector<std::string>{"FF-Startup"},
+        "archive preparation rejection preserves deferred removals and target");
+
+  off::runtime::SceneTransitionQueue reentrant_queue;
+  reentrant_queue.request_clear();
+  check(reentrant_queue.request_target("FF-Startup"),
+        "nonreentrant test retains the supported target");
+  bool recursive_call_rejected = false;
+  const off::runtime::SceneTransitionPumpServices reentrant_services{
+      .checked_scenes_resolver = [&](std::string_view) {
+        try {
+          static_cast<void>(pump.consume(reentrant_queue, {}));
+        } catch (const std::runtime_error&) {
+          recursive_call_rejected = true;
+        }
+        return false;
+      },
+      .archive_preparer = [](std::string_view) { return true; },
+      .scene_loader_handoff = [](std::string_view) {},
+  };
+  check(pump.consume(reentrant_queue, reentrant_services) ==
+                off::runtime::SceneTransitionPumpResult::rejected &&
+            recursive_call_rejected && !pump.active() && reentrant_queue.pending(),
+        "pump rejects recursive consumption and resets its active guard");
+
   off::runtime::StartupBootMenuAdmission boot_menu;
   const off::runtime::StartupBootMenuSource boot_source{91U, 101U, 102U};
   std::uint32_t resolve_calls{};
