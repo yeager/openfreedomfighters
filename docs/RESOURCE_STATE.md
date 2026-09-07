@@ -299,6 +299,12 @@ object token; it reuses an existing collection or creates one and appends the
 actual owner. This native storage does not claim verified original teardown.
 ROOT does not consume the directory Room notification counter.
 
+MatPosAnim's supported deferred records do not dispatch attachments, so they
+are not a source for its component reader. Its separate phase-one boundary and
+prepared owner-local `KEYS` registry are described in
+[MatPosAnim recovery](MATPOS_ANIMATION.md). They do not make animation data
+available or admit lifecycle execution.
+
 The owned-data probe verifies 84 batch resources plus ROOT, 69 canonical owners,
 66 queued readers, 59 components and 18 ordinary pending additions. Tests also
 cover nonzero high-bit identifiers, reused application collections, sparse

@@ -31,6 +31,11 @@ and global component passes. They are not called by normal startup. No concrete
 reader, renderer association, scene update, or rendering path follows from
 construction. See [live resource flags](RESOURCE_STATE.md) and the
 [component lifecycle](COMPONENT_LIFECYCLE.md).
+MatPosAnim is explicitly outside the current deferred-reader admission path:
+all 227 associated deferred records terminate before attachment dispatch. Its
+phase-one object stream and owner-local `KEYS` preparation are documented in
+[MatPosAnim recovery](MATPOS_ANIMATION.md); neither activates animation nor the
+intro.
 The conditional DefaultCam factory now constructs its real PreviewCamera and
 ordinary membership in that host. Its callback writes directly into the scene
 hierarchy after the complete global initializer. The post-load root state and
