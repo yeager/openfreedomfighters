@@ -52,6 +52,20 @@ It is not a generic archive parser or a reconstruction of the FF-StartUp GMS
 factory. It does not initialize lifecycle callbacks, render, present, expose a
 menu, or accept input.
 
+`StartupBootSceneConstruction` is the next disconnected construction boundary.
+It accepts a retained checked package and live scene lease, a caller-proven
+complete directory mapping for the canonical ordinary-window source, the exact
+`ZWINDOW_BootMenu` attachment with finite parameter `1`, a nonzero factory
+generation, and live registry callbacks. Only a canonical factory-produced
+window plus a live attached component produces its move-only
+`StartupBootControllerToken`. The token keeps the package and scene lifetimes;
+it cannot be copied into a global UI state or outlive the construction scope.
+
+Construction is deliberately not component-reader completion, initialization,
+input admission, focus, rendering, or scene selection. A missing registration,
+allocation, canonical owner, exact attachment, or live component fails closed.
+Normal startup does not call this boundary.
+
 ## Startup boot-menu admission
 
 `StartupBootMenuAdmission` is a fail-closed boundary for a future

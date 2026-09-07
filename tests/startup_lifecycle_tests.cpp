@@ -1,6 +1,7 @@
 #include "off/platform/startup_lifecycle.hpp"
 #include "off/runtime/startloader_load_screen.hpp"
 #include "off/runtime/startup_boot_menu_admission.hpp"
+#include "off/runtime/startup_boot_scene_construction.hpp"
 #include "off/runtime/startup_scene_loader.hpp"
 #include "off/runtime/startup_scene_package_source.hpp"
 
@@ -14,6 +15,7 @@
 #include <iostream>
 #include <span>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <zlib.h>
@@ -623,6 +625,73 @@ int main() {
             loader_reentrant_queue.pending(),
         "scene-loader rejects reentrant consumption without consuming the "
         "request");
+
+  static_assert(
+      !std::is_copy_constructible_v<off::runtime::StartupBootControllerToken>);
+  const auto boot_package =
+      std::make_shared<const off::runtime::StartupSceneLoadPackage>(package());
+  const auto boot_scene = off::runtime::StartupBootSceneLease::live(lease(81U));
+  const off::runtime::StartupBootSceneDirectoryProof boot_directory{
+      .complete_directory_mapping = true,
+      .canonical_ordinary_window_source = true,
+      .component_identifier = "ZWINDOW_BootMenu",
+      .component_parameter = 1.0F,
+  };
+  std::uint64_t attached_owner{};
+  float attached_parameter{};
+  const off::runtime::StartupBootSceneConstructionServices
+      boot_construction_services{
+          .registry_live = [] { return true; },
+          .allocate_ordinary_window = [] { return 81U; },
+          .canonical_live_window_owner =
+              [](std::uint64_t owner) { return owner == 81U; },
+          .attach_boot_menu_component =
+              [&](std::uint64_t owner, float parameter) {
+                attached_owner = owner;
+                attached_parameter = parameter;
+                return 82U;
+              },
+          .live_boot_menu_component =
+              [](std::uint64_t component) { return component == 82U; },
+      };
+  off::runtime::StartupBootSceneConstruction boot_construction;
+  auto boot_token = boot_construction.construct(
+      boot_package, boot_scene, boot_directory, 9U, boot_construction_services);
+  check(boot_token.valid() && boot_token.owner() == 81U &&
+            boot_token.component() == 82U &&
+            boot_token.factory_generation() == 9U && attached_owner == 81U &&
+            attached_parameter == 1.0F,
+        "boot construction retains only a checked factory-produced owner and "
+        "component");
+
+  rejected = false;
+  try {
+    auto invalid_boot_directory = boot_directory;
+    invalid_boot_directory.component_parameter = 0.0F;
+    static_cast<void>(boot_construction.construct(boot_package, boot_scene,
+                                                  invalid_boot_directory, 9U,
+                                                  boot_construction_services));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected, "boot construction rejects a non-exact component attachment "
+                  "before allocation");
+
+  rejected = false;
+  try {
+    auto missing_component_services = boot_construction_services;
+    missing_component_services.live_boot_menu_component = [](std::uint64_t) {
+      return false;
+    };
+    static_cast<void>(boot_construction.construct(boot_package, boot_scene,
+                                                  boot_directory, 9U,
+                                                  missing_component_services));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(
+      rejected,
+      "boot construction fails closed when the factory component is not live");
 
   off::runtime::StartupBootMenuAdmission boot_menu;
   const off::runtime::StartupBootMenuSource boot_source{91U, 101U, 102U};
