@@ -1,4 +1,5 @@
 #include "off/graphics/intro_controller_initialization.hpp"
+#include "off/graphics/intro_startup_activation.hpp"
 #include "off/graphics/renderer_frame.hpp"
 #include <iostream>
 #include <map>
@@ -254,6 +255,40 @@ int main() {
       named.run_named_camera_route={};
       rejects([&]{unavailable.run(named);});
       check(unavailable.failed(),"nonzero MainCamera requires separate named-camera service");
+    }
+    {
+      std::vector<std::string> log;
+      MovieControlFirstUpdate movie{17,91,2048};
+      IntroStartupActivation activation{
+        IntroStartupActivationBoundaries{
+          [&]{log.push_back("readers");},
+          [&]{log.push_back("tail");},
+          [&]{log.push_back("lifecycle");}}, movie};
+      IntroStartupActivationServices services{};
+      services.movie_control_phase_two={
+        []{return false;}, []{}, [](bool){}, []{},
+        [&]{log.push_back("clock");return 100;}, [&]{log.push_back("phase2");}};
+      activation.run(services);
+      check(log==std::vector<std::string>{"readers","tail","lifecycle","clock","phase2"} &&
+            activation.stage()==IntroStartupActivationStage::movie_control_phase_two_complete &&
+            activation.awaits_first_update() && movie.deadline()==2148 && !movie.activated(),
+            "startup activation preserves reader-tail-lifecycle-phase-two order without cut activation");
+      rejects([&]{activation.run(services);});
+    }
+    {
+      std::vector<std::string> log;
+      MovieControlFirstUpdate movie{17,91,1};
+      IntroStartupActivation activation{
+        IntroStartupActivationBoundaries{
+          [&]{log.push_back("readers");},
+          [&]{log.push_back("tail");throw std::runtime_error("parser unavailable");},
+          [&]{log.push_back("lifecycle");}}, movie};
+      IntroStartupActivationServices services{};
+      services.movie_control_phase_two={[]{return false;},[]{},[](bool){},[]{},[]{return 1;},[]{}};
+      rejects([&]{activation.run(services);});
+      check(log==std::vector<std::string>{"readers","tail"} && activation.failed() &&
+            !movie.deadline_assigned() && !movie.activated(),
+            "failed loader-tail boundary never advances lifecycle, deadline, cut, or frame state");
     }
     std::cout<<"Controller phase-two ordering, properties, deadline and presentation boundaries verified.\n";
     return 0;
