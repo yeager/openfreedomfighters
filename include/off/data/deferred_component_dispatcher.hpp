@@ -25,11 +25,12 @@ struct DeferredComponentDispatchResult final {
 
 class DeferredComponentDispatcher final {
 public:
-    // Scans generic compact values until a raw class-six delimiter or the
-    // 0xff terminator.  A delimiter advances exactly one byte and dispatches
-    // the next attachment reader.  The caller supplies readers in attachment
-    // order. As with the recovered compact advance helpers, the high tag bit
-    // does not change generic class handling.
+    // For each attachment, captures the current compact cursor, scans generic
+    // values until a raw class-six delimiter or the 0xff terminator, then
+    // consumes that delimiter before dispatching the captured cursor. The
+    // caller supplies readers in attachment order. As with the recovered
+    // compact advance helpers, the high tag bit does not change generic class
+    // handling.
     [[nodiscard]] static DeferredComponentDispatchResult dispatch(
         std::span<const std::byte> input,
         std::span<const DeferredComponentReader> attachment_readers) {

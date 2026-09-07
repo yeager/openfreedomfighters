@@ -33,11 +33,14 @@ private:
 };
 
 // Scans one already-bounded compact block through an externally-owned cursor.
-// Generic values advance that shared cursor.  A low-six-bit class-six value is
-// consumed as an attachment boundary and returns an independently mutable
-// snapshot.  The 0xff terminator ends scanning but deliberately remains at the
-// shared cursor.  This boundary does not interpret owner data, raw tails, or
-// any attachment grammar.
+// Each attachment snapshots the current shared cursor before the scanner moves
+// it through generic values to the next low-six-bit class-six delimiter.  The
+// delimiter is then consumed from the shared scanner and the independently
+// mutable snapshot is returned.  Thus a reader sees the input which preceded
+// its delimiter, while its own consumption cannot alter the scan that finds
+// the next attachment.  The 0xff terminator ends scanning but deliberately
+// remains at the shared cursor.  This boundary does not interpret owner data,
+// raw tails, or any attachment grammar.
 class BoundedComponentBlockCursor final {
 public:
     BoundedComponentBlockCursor(std::span<const std::byte>& shared_cursor, std::size_t block_extent)
@@ -49,6 +52,14 @@ public:
     }
 
     [[nodiscard]] bool next_attachment(DeferredComponentAttachmentSnapshot& snapshot) {
+        if (remaining_block_bytes_ == 0U) {
+            fail("deferred component block is truncated before its terminator");
+        }
+        if (std::to_integer<std::uint8_t>(shared_cursor_.front()) == terminal_tag) {
+            return false;
+        }
+
+        const auto attachment_start = block_remaining();
         while (remaining_block_bytes_ != 0U) {
             const auto tag = std::to_integer<std::uint8_t>(shared_cursor_.front());
             if (tag == terminal_tag) {
@@ -57,7 +68,7 @@ public:
             if ((tag & class_mask) == component_delimiter) {
                 shared_cursor_ = shared_cursor_.subspan(1U);
                 --remaining_block_bytes_;
-                snapshot = DeferredComponentAttachmentSnapshot(block_remaining());
+                snapshot = DeferredComponentAttachmentSnapshot(attachment_start);
                 return true;
             }
 

@@ -780,10 +780,11 @@ int main() {
         first.consume(3U);
         const auto found_second = cursor.next_attachment(second);
         const auto finished = !cursor.next_attachment(first);
-        check(found_first && found_second && finished && first.remaining().size() == 2U &&
-                  second.remaining().size() == 1U && cursor.remaining().size() == 1U &&
+        check(found_first && found_second && finished && first.remaining().size() == 8U &&
+                  second.remaining().size() == 5U &&
+                  second.remaining().front() == std::byte{0x04} && cursor.remaining().size() == 1U &&
                   shared.size() == 2U && shared.front() == std::byte{0xff},
-              "bounded component block cursor keeps attachment snapshots independent and leaves its terminator external");
+              "bounded component block cursor snapshots before each delimiter, isolates readers, and leaves its terminator external");
         check_rejected([&] {
             auto short_shared = std::span<const std::byte>(stream);
             BoundedComponentBlockCursor short_cursor(short_shared, 10U);
@@ -805,20 +806,46 @@ int main() {
             std::byte{0xff}, std::byte{0xa5},
         };
         std::array<std::size_t, 2> received{};
+        std::array<std::byte, 2> received_starts{};
         std::array<DeferredComponentReader, 2> readers{
             [&](std::span<const std::byte>& child) {
                 received[0] = child.size();
+                received_starts[0] = child.front();
                 child = child.subspan(3U);
             },
             [&](std::span<const std::byte>& child) {
                 received[1] = child.size();
+                received_starts[1] = child.front();
                 child = {};
             },
         };
         const auto result = DeferredComponentDispatcher::dispatch(stream, readers);
-        check(result.dispatched_components == 2U && received[0] == 11U && received[1] == 7U &&
+        check(result.dispatched_components == 2U && received[0] == 17U && received[1] == 11U &&
+                  received_starts[0] == std::byte{0x83} && received_starts[1] == std::byte{0x04} &&
                   result.continuation.size() == 2U && result.continuation.front() == std::byte{0xff},
-              "component dispatcher isolates child reader cursors and retains the terminator");
+              "component dispatcher captures the pre-delimiter cursor independently and retains the terminator");
+        {
+            const std::array terminal_only{std::byte{0xff}, std::byte{0xa5}};
+            const std::array<DeferredComponentReader, 0> no_readers{};
+            const auto terminal = DeferredComponentDispatcher::dispatch(terminal_only, no_readers);
+            check(terminal.dispatched_components == 0U && terminal.continuation.size() == 2U &&
+                      terminal.continuation.front() == std::byte{0xff},
+                  "component dispatcher recognizes a terminal before creating an attachment snapshot");
+        }
+        {
+            const std::array continued_stream{
+                std::byte{0xc3}, std::byte{0x11}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
+                std::byte{0x86}, std::byte{0xff},
+            };
+            std::size_t received_size = 0U;
+            const std::array<DeferredComponentReader, 1> continued_readers{
+                [&](std::span<const std::byte>& child) { received_size = child.size(); },
+            };
+            const auto continued = DeferredComponentDispatcher::dispatch(continued_stream, continued_readers);
+            check(received_size == 7U && continued.dispatched_components == 1U &&
+                      continued.continuation.size() == 1U && continued.continuation.front() == std::byte{0xff},
+                  "component dispatcher scans continuation-tagged values and high-bit class-six delimiters without moving reader snapshots");
+        }
         check_rejected([&] {
             const std::array bad{std::byte{0x06}, std::byte{0xff}};
             const std::array<DeferredComponentReader, 0> none{};
