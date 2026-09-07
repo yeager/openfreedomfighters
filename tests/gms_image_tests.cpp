@@ -1,4 +1,5 @@
 #include "off/data/gms_image.hpp"
+#include "off/data/typed_value_cursor.hpp"
 
 #include <algorithm>
 #include <array>
@@ -704,6 +705,39 @@ void intro_fade_picture_tests() {
 }  // namespace
 
 int main() {
+    {
+        using off::data::TypedValue;
+        using off::data::TypedValueCursor;
+        using off::data::TypedValueKind;
+        constexpr std::array values{
+            TypedValue{TypedValueKind::scalar, 0x80000000U, 2U},
+            TypedValue{TypedValueKind::integer, 0xffffffffU, 3U},
+            TypedValue{TypedValueKind::continuation, 0U, 3U},
+            TypedValue{TypedValueKind::opaque_reference, 0x80000005U, 3U},
+        };
+        TypedValueCursor cursor(values);
+        cursor.require_next_schema_class(2U);
+        check(cursor.peek() != nullptr && cursor.peek()->kind == TypedValueKind::scalar &&
+                  cursor.next_schema_class() == 2U &&
+                  cursor.remaining() == values.size(),
+              "typed cursor peeks without advancing its bounded token input");
+        check(std::bit_cast<std::uint32_t>(cursor.scalar()) == 0x80000000U &&
+                  cursor.integer() == -1,
+              "typed cursor preserves scalar bits and decodes signed integer values");
+        cursor.continuation();
+        check(cursor.opaque_reference() == 0x80000005U && cursor.empty(),
+              "typed cursor retains opaque references and explicit continuation markers");
+        cursor.finish();
+        check_rejected([&] { cursor.continuation(); },
+                       "typed cursor rejects reads beyond its supplied token boundary");
+        check_rejected([&] { cursor.require_next_schema_class(2U); },
+                       "typed cursor rejects an incompatible next schema class");
+        TypedValueCursor wrong_kind(values);
+        check_rejected([&] { static_cast<void>(wrong_kind.opaque_reference()); },
+                       "typed cursor rejects a mismatched token kind without advancing");
+        check(wrong_kind.remaining() == values.size(),
+              "typed cursor keeps position after a rejected token-kind read");
+    }
     intro_window_tests();
     intro_legal_picture_tests();
     intro_camera_tests();
