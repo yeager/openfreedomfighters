@@ -1,4 +1,5 @@
 #include "off/platform/startup_lifecycle.hpp"
+#include "off/graphics/startup_picture_pass_admission.hpp"
 #include "off/runtime/startloader_load_screen.hpp"
 #include "off/runtime/startup_active_window_root.hpp"
 #include "off/runtime/startup_boot_menu_admission.hpp"
@@ -924,6 +925,58 @@ int main() {
         lease(700U), hierarchy_snapshot, stale_root_services));
   } catch (const std::runtime_error&) { rejected = true; }
   check(rejected, "startup root rejects a changed hierarchy epoch");
+
+  static_assert(!std::is_copy_constructible_v<
+                off::graphics::StartupActivePassSnapshot>);
+  off::graphics::StartupActivePassSnapshotProvider active_pass_provider;
+  const off::graphics::StartupActivePassSnapshotServices active_pass_services{
+      .read_selected_pass =
+          []() -> std::optional<off::graphics::StartupCoordinatorPassSelection> {
+        return {{.scene_lease_identity = 700U, .root_identity = 103U,
+                 .camera_identity = 702U, .view_identity = 703U,
+                 .pass_context_identity = 701U, .coordinator_epoch = 81U,
+                 .camera_enabled = true, .normalized_viewport = {0, 0, 1, 1},
+                 .owner_projection_scalar = 1.0F, .external_y_basis_scale = 1.0F,
+                 .rectangle = {0, 0, 640, 480}}};
+      },
+      .scene_lease_live = [](std::uint64_t identity) { return identity == 700U; },
+      .factory_generation_live = [](std::uint64_t generation) {
+        return generation == 9U;
+      },
+      .hierarchy_epoch = [] { return 71U; },
+      .coordinator_epoch = [] { return 81U; },
+  };
+  const auto active_pass = active_pass_provider.capture(
+      lease(700U), hierarchy_snapshot, active_pass_services);
+  check(active_pass.valid() && active_pass.bound_to(9U, 71U, 81U) &&
+            active_pass.selection().view_identity == 703U,
+        "startup active pass keeps root, camera, view and context from one coordinator read");
+
+  rejected = false;
+  try {
+    auto stale_pass_services = active_pass_services;
+    stale_pass_services.coordinator_epoch = [] { return 82U; };
+    static_cast<void>(active_pass_provider.capture(
+        lease(700U), hierarchy_snapshot, stale_pass_services));
+  } catch (const std::runtime_error&) { rejected = true; }
+  check(rejected, "startup active pass rejects a changed coordinator epoch");
+
+  rejected = false;
+  try {
+    auto disabled_pass_services = active_pass_services;
+    disabled_pass_services.read_selected_pass =
+        []() -> std::optional<off::graphics::StartupCoordinatorPassSelection> {
+      return {{.scene_lease_identity = 700U, .root_identity = 103U,
+               .camera_identity = 702U, .view_identity = 703U,
+               .pass_context_identity = 701U, .coordinator_epoch = 81U,
+               .camera_enabled = false, .normalized_viewport = {0, 0, 1, 1},
+               .owner_projection_scalar = 1.0F, .external_y_basis_scale = 1.0F,
+               .rectangle = {0, 0, 640, 480}}};
+    };
+    static_cast<void>(active_pass_provider.capture(
+        lease(700U), hierarchy_snapshot, disabled_pass_services));
+  } catch (const std::runtime_error&) { rejected = true; }
+  check(rejected, "startup active pass rejects an unadmitted camera before picture submission");
 
   static_assert(
       !std::is_copy_constructible_v<off::runtime::StartupBootMenuReaderToken>);

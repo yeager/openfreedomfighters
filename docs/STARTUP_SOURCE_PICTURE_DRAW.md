@@ -33,3 +33,12 @@ must match the supplied live services. Only then does it delegate to
 
 This does not choose the first startup window or camera, derive the rectangle
 from the host output, create a renderer state, or make a visible-menu claim.
+
+`StartupActivePassSnapshotProvider` is the stricter coordinator handoff. One
+coordinator read supplies the selected root, admitted enabled camera/view,
+renderer-state rectangle, projection and Y-basis together. The provider checks
+that the root remains in the complete live hierarchy and binds the result to
+scene, factory, hierarchy and coordinator epochs. The renderer boundary can
+consume this move-only snapshot instead of mixing fields from separate reads.
+It is disconnected from normal startup until the original coordinator producer
+is recovered.
