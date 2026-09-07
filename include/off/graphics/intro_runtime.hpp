@@ -47,8 +47,9 @@ struct IntroSynthesizedCameraMetadata {
   std::uint32_t class_identifier;
 };
 enum class IntroResourceLoadStage {
-  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, authored_camera_ready, second_window_picture_ready, second_window_scope_ready, following_visual_scope_ready, room_animation_scope_ready, lens_flare_animation_scope_ready, failed
+  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, authored_camera_ready, second_window_picture_ready, second_window_scope_ready, following_visual_scope_ready, room_animation_scope_ready, lens_flare_animation_scope_ready, directory_construction_complete, failed
 };
+enum class IntroSoundLoadPolicy {prepared_compatibility,directory_construction};
 struct IntroConstructedCameraOwner {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
@@ -135,6 +136,45 @@ struct IntroConstructedPictureComponent {
   };
   std::optional<ParamAnimationStorage> param_animation;
   std::optional<ParticleEmitterStorage> particle_emitter;
+  struct ScrollTextureState {std::uint16_t start_event{},stop_event{};};
+  struct SoundExtendState {
+    std::array<float,6> scalars{};
+    std::array<std::uint32_t,4> integers{};
+    bool option{};
+    std::uint32_t category{},output_mode{2};
+    std::uint16_t start_event{};
+    std::optional<std::uint32_t> option_a,option_b;
+  };
+  struct SoundNotifyState {
+    IntroRuntimeHandle target{};
+    std::uint16_t event{};
+    std::optional<float> duration_snapshot;
+  };
+  struct SoundSegmentState {
+    std::uint32_t saved_playback{};
+    std::array<bool,5> controls{true,true,false,false,true};
+    std::array<std::uint32_t,6> times{};
+    float probability{1};
+    bool subtitles{};
+    std::string subtitle;
+    std::array<std::uint16_t,4> events{};
+    std::optional<std::vector<std::uint64_t>> additional_transient_references;
+  };
+  struct MovieControlState {
+    IntroRuntimeHandle leading_reference{};
+    std::uint32_t tracking_word{};
+    bool activated{},fixed_destination_override{},outer_option{};
+    char destination_prefix{};
+    std::array<std::uint16_t,7> events{};
+    // Exact cardinality awaits an independently specified field inventory.
+    std::optional<std::vector<std::uint32_t>> additional_timing_words;
+  };
+  std::optional<ScrollTextureState> scroll_texture;
+  std::optional<std::string> command_text;
+  std::optional<SoundExtendState> sound_extend;
+  std::optional<SoundNotifyState> sound_notify;
+  std::optional<SoundSegmentState> sound_segment;
+  std::optional<MovieControlState> movie_control;
 };
 struct IntroConstructedCharacterOwner {
   IntroConstructedPictureOwner visual;
@@ -148,6 +188,11 @@ struct IntroConstructedListOwner {
   std::uint32_t class_identifier{0x0800001aU},count{},component_mask{};
   bool backing_available{};
   std::vector<std::uint64_t> attachments;
+  struct AnimationStorage {
+    std::uint32_t capacity{32},growth{32},count{},element_control{1};
+    std::array<std::uint64_t,2> backing_references{};
+  };
+  std::unique_ptr<AnimationStorage> animation_storage;
 };
 struct IntroAuthoredGroupOwner {
   IntroRuntimeHandle owner;
@@ -180,12 +225,36 @@ struct IntroConstructedObjectOwner {
   std::optional<IntroRuntimeHandle> local_reference;
   std::optional<std::array<IntroRuntimeHandle,2>> self_links,associated_references;
   std::optional<std::array<float,2>> scalar_pair;
+  struct ParticleUsageState {
+    bool diagnostic_enabled{};
+    std::uint16_t activate_event{};
+    std::array<std::byte,2048> controls{};
+    std::uint32_t local_control{};
+    struct Pool {
+      std::array<std::uint32_t,64> available_slots;
+      std::uint32_t available_count{64};
+      // Payloads are unavailable until an actual particle producer.
+      std::array<std::optional<std::vector<std::byte>>,64> payloads;
+    };
+    std::unique_ptr<Pool> pool;
+    struct ConsoleDescriptor {
+      std::string key{"particle_usage"};
+      bool* target{};
+      runtime::LiveVariableLease registration;
+    };
+    std::unique_ptr<ConsoleDescriptor> descriptor;
+  };
+  std::unique_ptr<ParticleUsageState> particle_usage;
 };
 struct IntroSavedResourceFlags {
   IntroRuntimeResourceHandle resource;
   std::uint32_t flags;
 };
 struct IntroDeferredReaderWork {
+  IntroRuntimeResourceHandle resource;
+  std::uint32_t source_offset;
+};
+struct IntroSourceScriptWork {
   IntroRuntimeResourceHandle resource;
   std::uint32_t source_offset;
 };
@@ -205,6 +274,8 @@ struct IntroSceneResourceProperty {
   std::uint32_t type{16};
   IntroRuntimeResourceHandle resource;
   std::optional<std::uint64_t> object_token{};
+  std::optional<IntroRuntimeHandle> owner_handle{};
+  std::uint32_t setter_flags{};
 };
 struct IntroSourceResourceScope {
   std::uint32_t count_group{};
@@ -246,6 +317,7 @@ public:
   [[nodiscard]] std::uint64_t owner_binding() const noexcept { return owner_binding_; }
   [[nodiscard]] bool active() const noexcept { return active_; }
   [[nodiscard]] bool failed() const noexcept { return failed_; }
+  [[nodiscard]] bool has_record() const noexcept {return lease_.binding()!=0;}
 private:
   friend class IntroRuntime;
   const IntroPreparedSound* source_{};
@@ -307,7 +379,8 @@ class IntroRuntime final {
 public:
   IntroRuntime(IntroPreparedResources&& resources, runtime::ApplicationServices& application,
                runtime::SceneComponentSequence& component_sequence,
-               std::string selected_scene_filename="FF-Intro.gms");
+               std::string selected_scene_filename="FF-Intro.gms",
+               IntroSoundLoadPolicy sound_policy=IntroSoundLoadPolicy::prepared_compatibility);
   IntroRuntime(const IntroRuntime&) = delete;
   IntroRuntime& operator=(const IntroRuntime&) = delete;
   IntroRuntime(IntroRuntime&&) = delete;
@@ -341,6 +414,10 @@ public:
   void construct_following_visual_scope_without_engine_renderer();
   void construct_room_animation_scope_without_engine_renderer();
   void construct_lens_flare_animation_scope_without_engine_renderer();
+  void construct_remaining_directory_without_engine_renderer();
+  void set_restore_mode(bool value);
+  [[nodiscard]] bool restore_mode() const noexcept {return restore_mode_;}
+  [[nodiscard]] IntroSoundLoadPolicy sound_load_policy() const noexcept {return sound_load_policy_;}
   [[nodiscard]] const IntroConstructedRoomOwner* constructed_room_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroConstructedObjectOwner* constructed_object_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroOwnerAuxiliary* constructed_owner_auxiliary(std::size_t source) const noexcept;
@@ -348,6 +425,7 @@ public:
   [[nodiscard]] bool light_policy() const noexcept {return light_policy_;}
   void set_light_policy(bool value) noexcept {light_policy_=value;}
   void set_scene_object_property_native(std::string key,std::uint64_t token);
+  void set_scene_owner_property_native(std::string key,IntroRuntimeHandle owner,std::uint32_t flags);
   void assign_owner_property_data(std::size_t source,std::span<const std::byte> section);
   [[nodiscard]] const IntroConstructedPictureOwner* constructed_visual_owner(std::size_t source) const noexcept;
   [[nodiscard]] const IntroAuthoredGroupOwner* constructed_group_owner(std::size_t source) const noexcept;
@@ -377,6 +455,7 @@ public:
   [[nodiscard]] std::span<const IntroRuntimeResourceHandle> loaded_resource_handles() const noexcept {return loaded_resource_handles_;}
   [[nodiscard]] std::span<const std::optional<IntroRuntimeResourceHandle>> directory_resource_mapping() const noexcept {return directory_resource_mapping_;}
   [[nodiscard]] std::span<const IntroDeferredReaderWork> deferred_reader_work() const noexcept {return deferred_reader_work_;}
+  [[nodiscard]] std::span<const IntroSourceScriptWork> source_script_work() const noexcept {return source_script_work_;}
   [[nodiscard]] std::span<const IntroSourceResourceScope> source_resource_scopes() const noexcept {return source_resource_scopes_;}
   [[nodiscard]] std::optional<IntroRuntimeResourceHandle> allocated_source_resource(std::size_t source) const;
   [[nodiscard]] IntroResourceLoadStage resource_load_stage() const noexcept {return resource_load_stage_;}
@@ -505,6 +584,8 @@ public:
   [[nodiscard]] PictureViewTransition& view_transition() noexcept { return view_; }
 private:
   runtime::ApplicationServices& application_;
+  IntroSoundLoadPolicy sound_load_policy_;
+  bool restore_mode_{};
   std::uint64_t owner_base_{};
   IntroPreparedResources resources_;
   // Declared before components so their captures are destroyed before leases.
@@ -574,6 +655,7 @@ private:
   std::vector<IntroRuntimeResourceHandle> loaded_resource_handles_;
   std::vector<std::optional<IntroRuntimeResourceHandle>> directory_resource_mapping_;
   std::vector<IntroDeferredReaderWork> deferred_reader_work_;
+  std::vector<IntroSourceScriptWork> source_script_work_;
   std::optional<IntroRuntimeHandle> default_camera_;
   std::optional<IntroSynthesizedCameraMetadata> default_camera_metadata_;
   std::unique_ptr<FreshIntroCamera> default_camera_owner_;

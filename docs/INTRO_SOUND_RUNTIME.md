@@ -1,9 +1,12 @@
 # Retained intro sound state
 
-Normal startup creates source-backed sound owners in `IntroRuntime`. Each owns
-a lease on the application's canonical `SoundRecordRegistry`. Prepared SND/WHD
-data stays immutable; source loading, owner preparation, later component control
-and acknowledgement processing must share the mutable record.
+Normal startup constructs the two source-backed sound owners as part of the
+complete intro directory. Their records are allocated cold only after their
+construction rows in the normal, non-restore path; no source reader assigns
+audio data yet. Each owner uses a lease on the application's canonical
+`SoundRecordRegistry`. Prepared SND/WHD data stays immutable; source loading,
+owner preparation, later component control and acknowledgement processing must
+share the mutable record.
 
 This is a logical backend with no output device. It does not make the intro play.
 

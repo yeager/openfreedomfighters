@@ -15,6 +15,7 @@
 #include <string_view>
 #include <memory>
 #include <optional>
+#include <array>
 #include <vector>
 
 namespace off::runtime {
@@ -131,6 +132,24 @@ public:
     class_sequences_.swap(owners);
     component_class_sequences_.swap(components);
   }
+  void initialize_native_remaining_intro_scope_registration() {
+    constexpr std::uint32_t owner_classes[]{0x00800020U,0x08000049U,0x00200012U,0x002000e4U};
+    constexpr std::string_view attachment_classes[]{
+        "ZSTDOBJ_ScrollTexture","ZLIST_CutSequenceCommand","ZGEOM_MovieControl",
+        "ZSNDOBJ_SoundExtend","ZSNDOBJ_SoundNotify","ZSNDOBJ_SoundSegment","ZGEOM_ZSetZDefine"};
+    for(const auto identity:owner_classes)
+      if(has_class_registration(identity))
+        throw std::runtime_error("Native remaining intro owner class is already registered");
+    for(const auto name:attachment_classes)
+      if(has_component_class_registration(name))
+        throw std::runtime_error("Native remaining intro attachment class is already registered");
+    auto owners=class_sequences_;
+    auto components=component_class_sequences_;
+    for(const auto identity:owner_classes) owners.emplace(identity,0U);
+    for(const auto name:attachment_classes) components.emplace(name,0U);
+    class_sequences_.swap(owners);
+    component_class_sequences_.swap(components);
+  }
   // Native application token domain, distinct from scene/resource handles.
   // Collections have stable storage for this application's lifetime. No scene
   // teardown or original registry-removal behavior is inferred here.
@@ -153,6 +172,16 @@ public:
   void set_vert_anim_event(std::uint16_t event) noexcept {vert_anim_event_=event;}
   [[nodiscard]] std::optional<std::uint16_t> particle_emitter_event() const noexcept {return particle_emitter_event_;}
   void set_particle_emitter_event(std::uint16_t event) noexcept {particle_emitter_event_=event;}
+  [[nodiscard]] const std::array<std::uint16_t,3>& sound_owner_events() const noexcept {return sound_owner_events_;}
+  void set_sound_owner_events(std::array<std::uint16_t,3> events) noexcept {sound_owner_events_=events;}
+  // Normal cold intro retains the logical registry even when no output device
+  // exists. Tests and restore paths may explicitly model an absent backend.
+  [[nodiscard]] audio::SoundRecordRegistry* sound_record_backend() noexcept {return sound_record_backend_;}
+  [[nodiscard]] const audio::SoundRecordRegistry* sound_record_backend() const noexcept {return sound_record_backend_;}
+  void set_sound_record_backend_for_native_testing(audio::SoundRecordRegistry* backend) noexcept {sound_record_backend_=backend;}
+  [[nodiscard]] LiveVariableRegistry* optional_console() noexcept {return optional_console_;}
+  [[nodiscard]] const LiveVariableRegistry* optional_console() const noexcept {return optional_console_;}
+  void set_optional_console_for_native_testing(LiveVariableRegistry* console) noexcept {optional_console_=console;}
   [[nodiscard]] ApplicationHandleCollection* cut_sequence_lists() noexcept {return cut_sequence_lists_.get();}
   [[nodiscard]] const ApplicationHandleCollection* cut_sequence_lists() const noexcept {return cut_sequence_lists_.get();}
   void create_cut_sequence_list_collection() {
@@ -256,6 +285,9 @@ private:
   std::uint64_t next_collection_token_{1};
   std::optional<std::uint16_t> vert_anim_event_;
   std::optional<std::uint16_t> particle_emitter_event_;
+  std::array<std::uint16_t,3> sound_owner_events_{};
+  audio::SoundRecordRegistry* sound_record_backend_{&sound_records_};
+  LiveVariableRegistry* optional_console_{&live_variables_};
   std::unique_ptr<ApplicationHandleCollection> cut_sequence_lists_;
 };
 } // namespace off::runtime

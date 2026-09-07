@@ -31,8 +31,9 @@ std::optional<std::uint32_t> IntroRuntimePicture::runtime_resource_flags() const
 }
 
 IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::ApplicationServices& application,
-                           runtime::SceneComponentSequence& component_sequence,std::string selected_scene_filename)
-    : application_(application), resources_(std::move(resources)), components_(component_sequence),
+                           runtime::SceneComponentSequence& component_sequence,std::string selected_scene_filename,
+                           IntroSoundLoadPolicy sound_policy)
+    : application_(application), sound_load_policy_(sound_policy), resources_(std::move(resources)), components_(component_sequence),
       prepared_camera_(resources_.camera()),selected_scene_filename_(std::move(selected_scene_filename)) {
   if(selected_scene_filename_.empty() || selected_scene_filename_.find('\0')!=std::string::npos)
     throw std::runtime_error("Scene filename must be nonempty and NUL-free");
@@ -127,18 +128,26 @@ IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::Applicat
     picture->colors_->refresh_material(source->source.base_render_property);
     pictures_.push_back(std::move(picture));
   }
-  // Normal, non-restore source loading under the explicit native logical-backend
-  // policy. This allocates records but neither publishes owner bindings nor
-  // runs owner/component initialization, opens a device, or starts a channel.
+  // Prepared-only compatibility explicitly retains the existing standalone
+  // sound reader adapter. Directory construction keeps this source catalog
+  // separate: its concrete sound factories allocate records at their rows.
   sounds_.reserve(resources_.sounds().size());
   for (const auto& source : resources_.sounds()) {
     auto owner = std::make_unique<IntroRuntimeSound>();
     owner->source_ = &source;
     owner->handle_ = source_handle(source.directory_index);
-    owner->lease_ = application_.sound_records().create(owner->handle_.value);
-    application_.sound_records().apply_source(owner->lease_.get(),source.source);
+    if(sound_load_policy_==IntroSoundLoadPolicy::prepared_compatibility) {
+      owner->lease_ = application_.sound_records().create(owner->handle_.value);
+      application_.sound_records().apply_source(owner->lease_.get(),source.source);
+    }
     sounds_.push_back(std::move(owner));
   }
+}
+
+void IntroRuntime::set_restore_mode(bool value) {
+  if(resource_load_stage_!=IntroResourceLoadStage::prepared)
+    throw std::runtime_error("Restore mode must be supplied before source construction");
+  restore_mode_=value;
 }
 
 IntroRuntimeSound& IntroRuntime::sound_for_source(std::size_t source) {
@@ -636,7 +645,9 @@ void IntroRuntime::construct_non_group_row_without_engine_renderer(std::size_t r
       if(source.source_type!=0x00200046U && source.source_type!=0x0020002dU && source.source_type!=0x0020003aU &&
           source.source_type!=0x0800001aU && source.source_type!=0x00400003U && source.source_type!=0x00200002U &&
           source.source_type!=0x00800024U && source.source_type!=0x002000e5U && source.source_type!=0x0080000dU &&
-          source.source_type!=0x0020000bU && source.source_type!=0x00800023U && source.source_type!=0x04000022U)
+          source.source_type!=0x0020000bU && source.source_type!=0x00800023U && source.source_type!=0x04000022U &&
+          source.source_type!=0x00800020U && source.source_type!=0x08000049U && source.source_type!=0x00200012U &&
+          source.source_type!=0x002000e4U)
         throw std::runtime_error("Unsupported concrete non-group factory");
       const auto& root_state=resource_state(root_handle());
       if(!root_state || (root_state->flags&~0xffU)!=0x09000000U || root_state->context.value ||
@@ -684,10 +695,18 @@ void IntroRuntime::construct_non_group_row_without_engine_renderer(std::size_t r
             constructed_visual_owners_.try_emplace(row).first->second;
         visual.owner=owner;visual.resource=resource;visual.name=std::move(name);visual.class_identifier=source.source_type;
         mask=&visual.component_mask;attachments=&visual.attachments;
-      } else if(source.source_type==0x0800001aU) {
+      } else if(source.source_type==0x0800001aU || source.source_type==0x08000049U) {
         auto& list=constructed_list_owners_.try_emplace(row).first->second;
-        list.owner=owner;list.resource=resource;list.name=std::move(name);
+        list.owner=owner;list.resource=resource;list.name=std::move(name);list.class_identifier=source.source_type;
         mask=&list.component_mask;attachments=&list.attachments;
+        if(source.source_type==0x08000049U) {
+          resource_owners_[index]=owner;
+          const auto property=scene_resource_property("rWINOBJSPRITEHOLDER");
+          if(property && property->owner_handle && live_owner(property->owner_handle->value) && *property->owner_handle!=owner)
+            throw std::runtime_error("Sprite holder scene property already resolves to a different live owner");
+          set_scene_owner_property_native("rWINOBJSPRITEHOLDER",owner,4);
+          list.animation_storage=std::make_unique<IntroConstructedListOwner::AnimationStorage>();
+        }
       } else if(source.source_type==0x00400003U) {
         auto camera=std::make_unique<IntroLiveCameraOwner>();
         camera->metadata={owner,resource,std::move(name)};camera->context=root_handle();
@@ -695,18 +714,46 @@ void IntroRuntime::construct_non_group_row_without_engine_renderer(std::size_t r
       } else {
         auto& object=constructed_object_owners_.try_emplace(row).first->second;
         object.owner=owner;object.resource=resource;object.name=std::move(name);object.class_identifier=source.source_type;
-        if((source.source_type==0x00800024U || source.source_type==0x0080000dU || source.source_type==0x00800023U) && light_policy_) object.flags|=1;
+        if((source.source_type==0x00800024U || source.source_type==0x0080000dU || source.source_type==0x00800023U || source.source_type==0x00800020U) && light_policy_) object.flags|=1;
         if(source.source_type==0x0020000bU) object.byte_control=false;
         if(source.source_type==0x0080000dU) {
           object.local_control=0x3000U;
           object.self_links=std::array{owner,owner};
         }
-        if(source.source_type==0x00800024U || source.source_type==0x00800023U || source.source_type==0x04000022U) object.local_reference=IntroRuntimeHandle{};
+        if(source.source_type==0x00800024U || source.source_type==0x00800023U || source.source_type==0x04000022U || source.source_type==0x00800020U) object.local_reference=IntroRuntimeHandle{};
         if(source.source_type==0x04000022U) {
           object.scalar_pair=std::array{-1.0F,std::bit_cast<float>(0x7e967699U)};
           object.associated_references=std::array<IntroRuntimeHandle,2>{};
         }
         resource_owners_[index]=owner;
+        if(source.source_type==0x00200012U) {
+          if(sound_load_policy_!=IntroSoundLoadPolicy::directory_construction)
+            throw std::runtime_error("Directory sound construction requires the unbound sound catalog policy");
+          set_resource_flags_no_maintenance(resource,0,0x38003U,{resource_allocation_enabled_,false});
+          auto events=application_.sound_owner_events();
+          constexpr std::array<std::string_view,3> names{"DeleteSound","ActivateSound","DeactivateSound"};
+          for(std::size_t event=0;event<names.size();++event) {
+            events[event]=event_names_.declare(names[event]);
+            application_.set_sound_owner_events(events);
+          }
+          auto& sound=sound_for_source(row);
+          if(sound.has_record() || sound.owner_binding_ || sound.active_)
+            throw std::runtime_error("Directory sound factory requires fresh retained owner state");
+          if(auto* backend=application_.sound_record_backend();backend && !restore_mode_)
+            sound.lease_=backend->create(owner.value);
+        }
+        if(source.source_type==0x002000e4U) {
+          object.particle_usage=std::make_unique<IntroConstructedObjectOwner::ParticleUsageState>();
+          auto& usage=*object.particle_usage;
+          usage.activate_event=event_names_.declare("Activate");
+          usage.pool=std::make_unique<IntroConstructedObjectOwner::ParticleUsageState::Pool>();
+          for(std::size_t slot=0;slot<usage.pool->available_slots.size();++slot)
+            usage.pool->available_slots[slot]=static_cast<std::uint32_t>(slot);
+          usage.descriptor=std::make_unique<IntroConstructedObjectOwner::ParticleUsageState::ConsoleDescriptor>();
+          usage.descriptor->target=&usage.diagnostic_enabled;
+          if(auto* console=application_.optional_console())
+            usage.descriptor->registration=console->bind(usage.descriptor->key,usage.diagnostic_enabled);
+        }
         if(source.source_type==0x002000e5U) {
           const auto property=scene_resource_property("ParticleTemplates");
           auto* collection=property && property->object_token?application_.resolve_handle_collection(*property->object_token):nullptr;
@@ -774,8 +821,16 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
       const bool param=factory=="ZGEOM_ParamAnim";
       const bool emitter=factory=="ZGEOM_ParticleEmitter";
       const bool flare_lights=factory=="ZLIST_LensFlareLights";
+      const bool scroll=factory=="ZSTDOBJ_ScrollTexture";
+      const bool command=factory=="ZLIST_CutSequenceCommand";
+      const bool movie=factory=="ZGEOM_MovieControl";
+      const bool sound_extend=factory=="ZSNDOBJ_SoundExtend";
+      const bool sound_notify=factory=="ZSNDOBJ_SoundNotify";
+      const bool sound_segment=factory=="ZSNDOBJ_SoundSegment";
+      const bool define=factory=="ZGEOM_ZSetZDefine";
       if((!center && !black && !character && !logo && !external && !vert && !mat && !cut && !cut_list &&
-          !grain && !flare_control && !flare && !param && !emitter && !flare_lights) ||
+          !grain && !flare_control && !flare && !param && !emitter && !flare_lights && !scroll && !command &&
+          !movie && !sound_extend && !sound_notify && !sound_segment && !define) ||
           !application_.has_component_class_registration(factory))
         throw std::runtime_error("Actual attachment factory is unavailable");
       components_.construct(component_index,[&](runtime::ComponentRecord& record) {
@@ -783,10 +838,30 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
         state.status|=0x20U;
         auto& payload=constructed_picture_components_.try_emplace(component_index).first->second;
         payload.raw_attachment_argument=std::bit_cast<std::uint32_t>(source.attachments[slot].parameter);
-        payload.attachment_argument=external || vert || mat || cut || param || emitter?std::bit_cast<std::int32_t>(payload.raw_attachment_argument):center?1:0;
-        state.class_ordinal=static_cast<std::uint16_t>(center?280:black?307:character?332:logo?313:external?112:vert?85:mat?86:cut?96:cut_list?97:grain?308:flare_control?311:flare?310:param?80:emitter?145:312);
-        state.priority=vert || mat || param?100U:center || external || cut?1U:0U;
-        state.requested=center?1U:external?0x803U:mat?0x435U:cut?0x825U:cut_list?0x837U:grain || flare_lights?7U:flare?0x25U:param?0x15U:emitter?0x805U:0x35U;
+        payload.attachment_argument=external || vert || mat || cut || param || emitter || command || sound_segment?std::bit_cast<std::int32_t>(payload.raw_attachment_argument):center?1:0;
+        state.class_ordinal=static_cast<std::uint16_t>(center?280:black?307:character?332:logo?313:external?112:vert?85:mat?86:cut?96:cut_list?97:grain?308:flare_control?311:flare?310:param?80:emitter?145:flare_lights?312:scroll?160:command?106:movie?314:sound_extend?133:sound_notify?121:sound_segment?136:165);
+        state.priority=vert || mat || param?100U:center || external || cut || command || sound_segment?1U:0U;
+        state.requested=center?1U:external || command?0x803U:mat?0x435U:cut?0x825U:cut_list?0x837U:grain || flare_lights?7U:flare?0x25U:param?0x15U:emitter?0x805U:scroll?0x815U:movie?0x37U:sound_extend?0x13U:sound_notify?0x11U:sound_segment?0x17U:define?0x205U:0x35U;
+        if(scroll) {
+          auto& local=payload.scroll_texture.emplace();
+          local.start_event=event_names_.declare("MSG_StartAnimation");
+          local.stop_event=event_names_.declare("MSG_StopAnimation");
+        }
+        if(command) payload.command_text.emplace();
+        if(movie) {
+          auto& local=payload.movie_control.emplace();
+          constexpr std::array<std::string_view,7> names{
+              "msg_SoundReady","CutSequence_End","CutSequence_Start","Activate","AddSubtitle","Msg_SayDialog","StopMovieCut"};
+          for(std::size_t event=0;event<names.size();++event) local.events[event]=event_names_.declare(names[event]);
+        }
+        if(sound_extend) payload.sound_extend.emplace().start_event=event_names_.declare("MSG_ANIMSOUNDSTART");
+        if(sound_notify) payload.sound_notify.emplace();
+        if(sound_segment) {
+          auto& local=payload.sound_segment.emplace();
+          constexpr std::array<std::string_view,4> names{
+              "MSG_SOUNDSEGMENTSTART","MSG_SOUNDSEGMENTSTOP","MSG_WRITESUBTITLE","SubTitlesClear"};
+          for(std::size_t event=0;event<names.size();++event) local.events[event]=event_names_.declare(names[event]);
+        }
         if(flare_control) components_.construct_and_destroy_temporary_common();
         if(param) payload.param_animation.emplace();
         if(emitter) {
@@ -823,11 +898,15 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
         }
         payload.owner=owner;state.attached_owner=owner.value;
         attachments.push_back(component_handle(component_index));
-        if(!(resource_states_[index]->flags&0x400U)) {
+        const bool hidden=(resource_states_[index]->flags&0x400U)!=0;
+        if(state.requested && (!hidden || (state.requested&0x200U))) {
           mask|=state.requested;
           const auto admitted=state.requested&~state.admitted&0x158U;
-          state.requested|=admitted;state.admitted|=admitted;
-          if(admitted&0x10U) register_ordinary_component(component_index);
+          state.requested|=admitted;
+          if(!hidden) {
+            state.admitted|=admitted;
+            if(admitted&0x10U) register_ordinary_component(component_index);
+          }
         }
         return runtime::ConstructedComponent{state,
             [](auto&){throw std::runtime_error("Constructed attachment requires its source reader and live initialization services");},
@@ -858,6 +937,13 @@ void IntroRuntime::set_scene_object_property_native(std::string key,std::uint64_
     throw std::runtime_error("Scene object property requires a live application collection token");
   scene_resource_properties_.erase(key);
   scene_resource_properties_.emplace(std::move(key),IntroSceneResourceProperty{16,{},token});
+}
+void IntroRuntime::set_scene_owner_property_native(std::string key,IntroRuntimeHandle owner,std::uint32_t flags) {
+  if(resource_load_stage_==IntroResourceLoadStage::failed || key.empty() || key.find('\0')!=std::string::npos ||
+      !live_owner(owner.value))
+    throw std::runtime_error("Scene owner property requires a live canonical owner");
+  scene_resource_properties_.erase(key);
+  scene_resource_properties_.emplace(std::move(key),IntroSceneResourceProperty{16,{},std::nullopt,owner,flags});
 }
 IntroOwnerAuxiliary& IntroRuntime::ensure_owner_auxiliary(std::size_t source) {
   if(const auto camera=live_cameras_.find(source);camera!=live_cameras_.end()) {
@@ -1263,6 +1349,99 @@ void IntroRuntime::construct_lens_flare_animation_scope_without_engine_renderer(
       else construct_non_group_row_without_engine_renderer(row);
     }
     resource_load_stage_=IntroResourceLoadStage::lens_flare_animation_scope_ready;
+  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
+}
+
+void IntroRuntime::construct_remaining_directory_without_engine_renderer() {
+  if(resource_load_stage_!=IntroResourceLoadStage::lens_flare_animation_scope_ready || loaded_resource_handles_.size()!=200 ||
+      count_group_selector_!=17 || current_source_parent()!=source_handle(69) || resource_allocation_enabled_ ||
+      components_.construction_mode() || manager_row_edit_ || scene_resource_edit_ || !directory_position_controls_prepared_ ||
+      position_mode_.immediate || position_mode_.collection_enabled || position_updates_.failed() ||
+      sound_load_policy_!=IntroSoundLoadPolicy::directory_construction || !source_script_work_.empty())
+    throw std::runtime_error("Remaining directory construction requires completed lens flare scope and retained loader controls");
+  const auto& directory=resources_.sources().directory();
+  if(directory.size()!=470) throw std::runtime_error("Remaining directory construction requires the complete supported source population");
+  const auto between=[](std::size_t row,std::size_t first,std::size_t last){return row>=first && row<=last;};
+  constexpr std::array<std::size_t,11> groups{200,201,284,285,291,292,399,400,406,407,422};
+  constexpr std::array<std::size_t,12> pops{200,282,284,291,371,396,399,406,422,438,457,459};
+  constexpr std::array<std::size_t,10> lights{215,223,276,388,389,393,394,454,455,456};
+  for(std::size_t row=200;row<=469;++row) {
+    const auto& source=directory[row];
+    const bool group=std::ranges::find(groups,row)!=groups.end();
+    const bool light=std::ranges::find(lights,row)!=lights.end();
+    const bool camera=row==220 || row==374 || row==448 || row==461;
+    const bool list=row==282 || row==283 || row==397 || row==398 || between(row,457,460) || between(row,463,466);
+    const bool particle=between(row,286,290) || between(row,401,405);
+    const bool linked_light=row==277 || row==387 || row==396;
+    const bool sound_light=row==373 || row==380 || row==381;
+    const auto type=row==201?0x00100021U:group?0x00100001U:camera?0x00400003U:list?0x0800001aU:
+        particle?0x002000e5U:light?0x00800024U:linked_light?0x0080000dU:row==278?0x00800023U:
+        sound_light?0x00800020U:row==462?0x08000049U:row==467 || row==468?0x00200012U:row==469?0x002000e4U:0x00200002U;
+    const auto category=group?0U:light || linked_light || sound_light || row==278?2U:
+        camera || list || row==462 || row==467 || row==468?3U:1U;
+    const auto bank=row==215 || row==223?2U:0U;
+    const auto pop=std::ranges::find(pops,row)!=pops.end()?1U:0U;
+    const bool no_reader=between(row,202,214) || row==224 || row==241 || row==447;
+    const bool property=between(row,216,223) || between(row,225,240) || between(row,243,275) || between(row,278,281) ||
+        between(row,293,386) || between(row,388,395) || between(row,408,421) || between(row,423,446) || between(row,448,456);
+    const bool hidden=between(row,215,223) || between(row,225,240) || between(row,243,276) || between(row,278,281) ||
+        between(row,293,386) || between(row,388,392) || row==395 || between(row,408,421) || between(row,423,446) || between(row,448,455);
+    if(source.source_type!=type || !application_.has_class_registration(type) || source.enters_child_pool!=group ||
+        source.parent_steps!=pop || source.pool_class!=bank*8+category || source.source_variant!=bank || source.post_load_source_offset ||
+        ((source.object_flags&0x400U)!=0)!=hidden || (source.buf_auxiliary_offset!=0)!=property ||
+        (source.deferred_source_offset!=0)==no_reader ||
+        ((source.object_flags&0x44000U)!=0)!=(bank==2) ||
+        owner_components(source_handle(row)).size()!=source.attachments.size() ||
+        !std::ranges::all_of(source.position,[](float value){return std::isfinite(value);}) ||
+        !std::ranges::all_of(source.basis,[](float value){return std::isfinite(value);}))
+      throw std::runtime_error("Unsupported remaining directory source shape");
+    std::vector<std::pair<std::string_view,std::uint32_t>> expected;
+    const bool mat=between(row,216,222) || between(row,225,240) || between(row,243,275) || between(row,279,281) ||
+        between(row,293,372) || between(row,374,379) || between(row,382,386) || between(row,390,392) || row==395 ||
+        between(row,408,421) || between(row,423,446) || between(row,448,453);
+    if(mat) expected.emplace_back("ZGEOM_MatPosAnim",row==220 || row==374 || row==448?0x42c80000U:0x3f800000U);
+    if(row==215 || row==223 || row==278 || row==373 || row==380 || row==381 || row==388 || row==389 || row==454 || row==455)
+      expected.emplace_back("ZGEOM_ParamAnim",0x3f800000U);
+    if(row==219 || row==242 || row==371 || row==377 || row==440) expected.emplace_back("ZSTDOBJ_ScrollTexture",0);
+    if(row==222 || row==451) expected.emplace_back("ZSTDOBJ_VertAnim",0x3f800000U);
+    if(row==282 || row==397 || row==457 || row==459) expected.emplace_back("ZLIST_CutSequence",row==282 || row==459?0x3f800000U:0);
+    if(row==283 || row==398 || row==458 || row==460) expected.emplace_back("ZLIST_CutSequenceList",0);
+    if(row==386 || row==392 || row==395 || row==406 || row==443 || row==444) expected.emplace_back("ZGEOM_ParticleEmitter",0x3f800000U);
+    if(row==460) for(std::size_t command=0;command<5;++command) expected.emplace_back("ZLIST_CutSequenceCommand",0x3f800000U);
+    if(row==465) expected.emplace_back("ZGEOM_MovieControl",0);
+    if(row==466) for(std::size_t command=0;command<2;++command) expected.emplace_back("ZLIST_ExternCutSequenceCommand",0x3f800000U);
+    if(row==467 || row==468) {
+      expected.emplace_back("ZSNDOBJ_SoundExtend",0);
+      expected.emplace_back("ZSNDOBJ_SoundNotify",0);
+      expected.emplace_back("ZSNDOBJ_SoundSegment",0x3f800000U);
+      expected.emplace_back("ZGEOM_ZSetZDefine",0);
+    }
+    if(source.attachments.size()!=expected.size() || (expected.empty() && source.attachment_table_offset))
+      throw std::runtime_error("Unsupported remaining directory attachment count");
+    for(std::size_t slot=0;slot<expected.size();++slot) {
+      const auto factory=resources_.sources().attachment_identifier(row,slot);
+      if(factory!=expected[slot].first || !application_.has_component_class_registration(factory) ||
+          std::bit_cast<std::uint32_t>(source.attachments[slot].parameter)!=expected[slot].second)
+        throw std::runtime_error("Unsupported remaining directory attachment factory or raw argument");
+    }
+  }
+  try {
+    for(std::size_t row=200;row<=469;++row) {
+      const auto& source=directory[row];
+      advance_source_loading_progress_without_engine_renderer(row);
+      if(source.parent_steps) {
+        const auto parent=resource_parent(current_source_parent());
+        if(!parent.value) throw std::runtime_error("Directory scope pop exceeds ROOT");
+        current_source_parent_=resource_owner(parent);
+      }
+      if(std::ranges::find(source_resource_scopes_,source.pool_group,&IntroSourceResourceScope::count_group)==source_resource_scopes_.end()) {
+        if(source.pool_group!=count_group_selector_) throw std::runtime_error("Directory scope allocation selector mismatch");
+        allocate_source_scope(source.pool_group);
+      }
+      if(source.pool_class%8==0) construct_group_row_without_engine_renderer(row);
+      else construct_non_group_row_without_engine_renderer(row);
+    }
+    resource_load_stage_=IntroResourceLoadStage::directory_construction_complete;
   } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
 }
 

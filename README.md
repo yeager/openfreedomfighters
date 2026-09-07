@@ -39,16 +39,15 @@ executable code are included here.
   settings. Typed attachment loading, owner preparation, stop and the verified
   SoundExtend parameter operation are implemented. The complete
   [startup audio lifecycle](docs/INTRO_AUDIO_STARTUP_ORDER.md) is not connected.
-- Normal startup constructs the scene's ROOT and its RootGroup component,
-  including the shared construction clock and control-map registration.
-  It now constructs the first 200 authored objects, including three Windows,
-  seven cameras, Pictures, Characters, a nested Room and particle-template owners.
-  The loader allocates 214 resources plus ROOT and constructs 139 retained components. Window
-  console/property bindings and the scene event-name table are live.
-  The 166 queued readers, remaining object factories and initialization are still
-  pending. None of the cameras is registered for rendering yet.
-  Most authored attachments remain a catalog; their factories and the full
-  two-phase initialization path still need to be connected.
+- Normal startup constructs ROOT, RootGroup, and all 470 authored intro owners
+  from the supported scene directory. It allocates all 470 authored resources,
+  retains 383 constructed attachment instances, queues 420 deferred readers,
+  and preserves the authored hierarchy, event names, saved flags, and supported
+  sound-owner state. This is construction only: deferred readers, reference
+  translation, global/component lifecycle, camera registration, scene updates,
+  rendering, audio playback, menus, and gameplay remain unimplemented.
+  Window console/property bindings and the scene event-name table are live.
+  None of the cameras is registered for normal rendering yet.
   DefaultCam and its PreviewCamera now share an [ordinary update queue](docs/ORDINARY_COMPONENTS.md)
   with real admission and sorting. This path still requires the preceding loader
   state and is not called by normal startup yet.

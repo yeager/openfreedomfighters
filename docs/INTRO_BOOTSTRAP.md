@@ -16,21 +16,17 @@ factories, live resource flags and event-registry membership still need to be
 completed in that same host. Normal startup now executes the actual fresh
 [ROOT/RootGroup construction stage](RESOURCE_STATE.md), including its immediate
 initializer and retained console/input-map registrations.
-CPU preflight also executes first-row loading progress under an explicit native
-load-begin reset policy and allocates the first scope's 20 ownerless resources.
-It then constructs the first 200 source owners through the first Room and
-following lens-flare/animation scope. Seventeen allocated scopes contain 214
-resources, separate from ROOT. Each Window
+CPU preflight executes loading progress under an explicit native load-begin
+reset policy and constructs the complete reviewed directory: ROOT plus 470
+authored owners using 470 allocated authored resources. It retains 383
+constructed attachment instances and queues 420 deferred readers. Each Window
 retains its own console descriptor; the scene property points to the latest one.
 Seven cameras retain separate storage and ROOT contexts. None has renderer
-membership or source-reader effects yet. Picture, animation, particle-emitter and
-cut-sequence attachments bring the retained component count to 139 including
-RootGroup. A temporary LensFlareControl construction consumes an extra serial
-and phase step but is removed from the live list. The event table is
-prepared before ROOT; CharFader reuses Fade events, while LogoFade declares none.
-All 166 deferred readers remain queued; 34 constructed objects have no reader.
-No later owner or global initialization is executed. See
-[lens-flare and animation construction](RESOURCE_STATE.md#lens-flare-and-animation-scope).
+membership or source-reader effects yet. The event table is prepared before ROOT;
+CharFader reuses Fade events, while LogoFade declares none. Temporary component
+construction is removed from the live list while preserving its construction
+serial effects. No reader, reference translation, global initialization, or
+component lifecycle is executed. See [live resource flags](RESOURCE_STATE.md).
 The conditional DefaultCam factory now constructs its real PreviewCamera and
 ordinary membership in that host. Its callback writes directly into the scene
 hierarchy after the complete global initializer. The post-load root state and
@@ -101,13 +97,12 @@ cannot publish a completed row or be retried as successful initialization.
 Focused ASan/UBSan checks cover the host integration and supporting runtime code;
 this is not a sanitizer build of every dependency.
 
-A private probe using the owned archive checks each boundary from ROOT through
-the first six source rows: 24 allocated resources, six attached owners, real
-Window bindings, three constructed components and six unconsumed readers.
-It also checks the complete source event mapping and Fade's reused identities.
-It distinguishes the camera's ROOT context from its Window parent and checks
-every retained constructor parameter. No later owner or live Picture backing
-is present.
+A private probe using the owned archive checks the complete ROOT-through-469
+construction boundary: all 470 authored resources and owners, 420 unconsumed
+readers, 383 constructed attachments, saved flags, event mapping, hierarchy,
+and cold sound-owner state. It distinguishes camera ROOT contexts from Window
+parents and checks retained constructor parameters. It does not run readers,
+resolve references, activate components, or create live Picture backing.
 
 The event reverse-name table is heap-backed. Its earlier inline storage made
 the integration test exceed a 1 MiB stack and Windows CI crashed. The same

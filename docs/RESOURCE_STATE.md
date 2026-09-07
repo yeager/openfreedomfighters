@@ -1,5 +1,18 @@
 # Live resource flags
 
+## Current construction boundary
+
+The normal startup construction pass now covers ROOT and every reviewed authored
+directory row, 0 through 469. It publishes 470 authored resource slots and 470
+owners, retains 383 constructed attachment instances, and queues 420 deferred
+readers. The constructor does not consume a queued reader, resolve a source
+reference, execute global or component lifecycle, register a camera with a
+renderer, issue a draw, or start audio playback.
+
+The earlier sections in this document describe the ordered sub-scopes that led
+to this boundary. Their intermediate counts are historical checkpoints, not the
+current completion limit.
+
 `IntroRuntime` retains one optional complete resource flag word and a separate
 typed resource-context handle per canonical resource slot. Resources can exist
 without an associated owner. Unknown state stays unknown. Authored
@@ -319,12 +332,14 @@ LensFlareControl constructs and destroys a real temporary common component;
 its serial and clock contribution survive cleanup. The new scope therefore adds
 80 retained components but advances common construction 81 times.
 
-The owned-data probe and normal startup reach 200 owners, 214 batch resources
-plus ROOT, 166 queued readers, 139 retained components and 22 ordinary pending
-additions. Independent fixtures also check an existing optional lookup service,
-bank separation, source transforms, property ownership and saved-flags order.
-These are construction checks. The remaining 270 owners, deferred readers and
-loader tail still precede intro playback and gameplay.
+This 69–199 checkpoint is followed by the reviewed 200–469 construction pass.
+The owned-data probe and normal startup now reach the complete directory:
+470 authored owners and resources, 420 queued readers, and 383 constructed
+attachments. Independent fixtures also check an existing optional lookup
+service, bank separation, source transforms, property ownership and saved-flags
+order. These are construction checks only. Deferred reading, reference
+translation, the loader tail, lifecycle, rendering, and gameplay still precede
+intro playback.
 
 Tests use independently constructed states to check ancestor propagation,
 maintenance gates, picture views and subsequent DefaultCam hide inheritance.

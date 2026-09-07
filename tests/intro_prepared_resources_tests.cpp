@@ -173,7 +173,7 @@ struct Fixture {
     Bytes payload, names, prm, tex, snd;
     std::array<std::size_t, 10> block_offsets{};
     std::array<std::size_t, 10> attachment_offsets{};
-    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false,bool room_animation_scope=false,bool lens_flare_scope=false) : payload(1024), snd(16) {
+    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false,bool room_animation_scope=false,bool lens_flare_scope=false,bool remaining_scope=false) : payload(1024), snd(16) {
         if(language_group && !leading_group) throw std::runtime_error("language fixture requires leading group");
         if(camera_row && !language_group) throw std::runtime_error("camera row fixture requires language group");
         if(second_window && !camera_row) throw std::runtime_error("second Window fixture requires Camera row");
@@ -181,6 +181,7 @@ struct Fixture {
         if(following_visual_scope && !full_second_scope) throw std::runtime_error("following visual scope requires full second scope");
         if(room_animation_scope && !following_visual_scope) throw std::runtime_error("Room fixture requires preceding visual scope");
         if(lens_flare_scope && !room_animation_scope) throw std::runtime_error("Lens fixture requires preceding Room scope");
+        if(remaining_scope && !lens_flare_scope) throw std::runtime_error("remaining fixture requires the preceding clean scope");
         // Deliberately permuted directory roles; no retail source indices.
         set(payload, 0, 32); set(payload, 4, 128); set(payload, 12, 4); set(payload, 20, 176);
         set(payload, 32, include_sound?10:9); set(payload, 128, 1); set(payload, 132, 144);
@@ -410,8 +411,106 @@ struct Fixture {
                 }
                 while(payload.size()%4) payload.push_back(std::byte{0});
             }
+            std::size_t remaining_controller_source{};
+            std::size_t remaining_sound_source{};
+            std::size_t remaining_member_source{};
+            std::size_t remaining_first_cut_source{};
+            std::size_t remaining_cut_list_source{};
+            if(remaining_scope) {
+                Bytes member_source=member(bias);
+                remaining_member_source=payload.size();
+                payload.insert(payload.end(),member_source.begin(),member_source.end());
+                while(payload.size()%4) payload.push_back(std::byte{0});
+                Bytes first_cut_source=first_cut(bias);
+                set(first_cut_source,9,460U);
+                remaining_first_cut_source=payload.size();
+                payload.insert(payload.end(),first_cut_source.begin(),first_cut_source.end());
+                while(payload.size()%4) payload.push_back(std::byte{0});
+                const Bytes cut_list_source=list({461U});
+                remaining_cut_list_source=payload.size();
+                payload.insert(payload.end(),cut_list_source.begin(),cut_list_source.end());
+                while(payload.size()%4) payload.push_back(std::byte{0});
+                Bytes controller_source=controller(bias);
+                set(controller_source,11,464U);set(controller_source,16,465U);
+                remaining_controller_source=payload.size();
+                payload.insert(payload.end(),controller_source.begin(),controller_source.end());
+                while(payload.size()%4) payload.push_back(std::byte{0});
+                remaining_sound_source=payload.size();
+                payload.insert(payload.end(),blocks[9].begin(),blocks[9].end());
+                while(payload.size()%4) payload.push_back(std::byte{0});
+            }
+            const auto remaining_records=payload.size();
+            if(remaining_scope) {
+                payload.resize(payload.size()+270*48);
+                const auto property_row=[](std::size_t row) {
+                    return (row>=216&&row<=223)||(row>=225&&row<=240)||(row>=243&&row<=275)||
+                      (row>=278&&row<=281)||(row>=293&&row<=386)||(row>=388&&row<=395)||
+                      (row>=408&&row<=421)||(row>=423&&row<=446)||(row>=448&&row<=456);
+                };
+                const auto no_reader=[](std::size_t row) {
+                    return (row>=202&&row<=214)||row==224||row==241||row==447;
+                };
+                const auto hidden=[](std::size_t row) {
+                    return (row>=215&&row<=223)||(row>=225&&row<=240)||(row>=243&&row<=276)||
+                      (row>=278&&row<=281)||(row>=293&&row<=386)||(row>=388&&row<=392)||row==395||
+                      (row>=408&&row<=421)||(row>=423&&row<=446)||(row>=448&&row<=455);
+                };
+                const auto group=[](std::size_t row) {
+                    return row==200||row==284||row==285||row==291||row==292||row==399||row==400||row==406||row==407||row==422;
+                };
+                const auto attachment=[&](std::size_t row) {
+                    std::vector<std::pair<std::string_view,std::uint32_t>> out;
+                    const auto add=[&](std::string_view n,std::uint32_t a=0x3f800000U){out.emplace_back(n,a);};
+                    if(row==215||row==223||row==278||row==373||row==380||row==381||row==388||row==389||row==454||row==455) add("ZGEOM_ParamAnim");
+                    const bool mat=(row>=216&&row<=222)||(row>=225&&row<=240)||(row>=243&&row<=275)||(row>=279&&row<=281)||
+                      (row>=293&&row<=372)||(row>=374&&row<=379)||(row>=382&&row<=386)||(row>=390&&row<=392)||row==395||
+                      (row>=408&&row<=421)||(row>=423&&row<=446)||(row>=448&&row<=453);
+                    if(mat) add("ZGEOM_MatPosAnim",row==220||row==374||row==448?0x42c80000U:0x3f800000U);
+                    if(row==219||row==242||row==371||row==377||row==440) add("ZSTDOBJ_ScrollTexture",0);
+                    if(row==222||row==451) add("ZSTDOBJ_VertAnim");
+                    if(row==282||row==397||row==457||row==459) add("ZLIST_CutSequence",row==397||row==457?0:0x3f800000U);
+                    if(row==283||row==398||row==458||row==460) add("ZLIST_CutSequenceList",0);
+                    if(row==386||row==392||row==395||row==406||row==443||row==444) add("ZGEOM_ParticleEmitter");
+                    if(row==460) for(unsigned i=0;i<5;++i) add("ZLIST_CutSequenceCommand");
+                    if(row==465) add("ZGEOM_MovieControl",0);
+                    if(row==466) { add("ZLIST_ExternCutSequenceCommand"); add("ZLIST_ExternCutSequenceCommand"); }
+                    if(row==467||row==468) { add("ZSNDOBJ_SoundExtend",0);add("ZSNDOBJ_SoundNotify",0);add("ZSNDOBJ_SoundSegment");add("ZGEOM_ZSetZDefine",0); }
+                    return out;
+                };
+                for(std::size_t row=200;row<=469;++row) {
+                    const auto at=remaining_records+(row-200)*48;
+                    const bool room=row==201;
+                    const bool list=(row==282||row==283||row==397||row==398||(row>=457&&row<=460)||(row>=463&&row<=466));
+                    const bool particle=(row>=286&&row<=290)||(row>=401&&row<=405);
+                    const bool light24=row==215||row==223||row==276||(row>=388&&row<=389)||(row>=393&&row<=394)||(row>=454&&row<=456);
+                    const auto type=group(row)?0x00100001U:room?0x00100021U:list?0x0800001aU:particle?0x002000e5U:
+                      (row==220||row==374||row==448||row==461)?0x00400003U:(light24?0x00800024U:(row==277||row==387||row==396)?0x0080000dU:row==278?0x00800023U:
+                      (row==373||row==380||row==381)?0x00800020U:row==462?0x08000049U:(row==467||row==468)?0x00200012U:row==469?0x002000e4U:0x00200002U);
+                    set(payload,at,static_cast<std::uint32_t>(names.size()));text(names,"SyntheticRemaining"+std::to_string(row));
+                    set(payload,at+4,384);set(payload,at+8,420);set(payload,at+16,type);
+                    set(payload,at+24,(group(row)?0x03000000U:0x00200000U)|(hidden(row)?0x400U:0U));
+                    if(row==215||row==223) set(payload,at+24,0x00344480U);
+                    if(row==215||row==223) payload.at(at+45)=std::byte{2};
+                    if(row==459) set(payload,at+32,static_cast<std::uint32_t>(remaining_member_source));
+                    else if(row==460) set(payload,at+32,static_cast<std::uint32_t>(remaining_first_cut_source));
+                    else if(row==463||row==464) set(payload,at+32,static_cast<std::uint32_t>(remaining_cut_list_source));
+                    else if(row==465) set(payload,at+32,static_cast<std::uint32_t>(remaining_controller_source));
+                    else if(row==467||row==468) set(payload,at+32,static_cast<std::uint32_t>(remaining_sound_source));
+                    else if(!no_reader(row)) set(payload,at+32,static_cast<std::uint32_t>(deferred));
+                    if(property_row(row)) { const auto p=names.size();names.resize(p+64,std::byte{0x71});set(names,p,static_cast<std::uint32_t>(row));set(names,p+4,0x80000040U);set(payload,at+28,static_cast<std::uint32_t>(p)); }
+                    const auto components=attachment(row);
+                    if(!components.empty()) { const auto table=payload.size();word(payload,static_cast<std::uint32_t>(components.size()));payload.resize(payload.size()+components.size()*8);for(std::size_t i=0;i<components.size();++i){set(payload,table+4+i*8,static_cast<std::uint32_t>(payload.size()));set(payload,table+8+i*8,components[i].second);text(payload,components[i].first);}set(payload,at+20,static_cast<std::uint32_t>(table)); }
+                    if(group(row)) set(payload,at+36,row==201?0x40000460U:row==285||row==400?0x40000770U:row==291?0x40000620U:row==292?0x40000690U:row==406?0x400007e0U:row==407?0x40000850U:row==422?0x400008c0U:0U);
+                }
+                while(payload.size()%4) payload.push_back(std::byte{0});
+            }
             const auto directory=payload.size();
-            word(payload,static_cast<std::uint32_t>(node_count+1+(language_group?1:0)+(second_window?2:0)+(full_second_scope?34:0)+(following_visual_scope?6:0)+(room_animation_scope?21:0)+(lens_flare_scope?131:0)));
+            // The initial synthetic table reserves five directory slots that
+            // are not emitted once the nested full-scope layout is selected.
+            // Keep the declared count aligned with the entries actually
+            // written: rows 0 through 469, with no trailing placeholders.
+            const auto declared_nodes=node_count-(remaining_scope?5U:0U);
+            word(payload,static_cast<std::uint32_t>(declared_nodes+1+(language_group?1:0)+(second_window?2:0)+(full_second_scope?34:0)+(following_visual_scope?6:0)+(room_animation_scope?21:0)+(lens_flare_scope?131:0)+(remaining_scope?270:0)));
             word(payload,static_cast<std::uint32_t>(record/4));word(payload,0);
             const Bytes entries(payload.begin()+36,payload.begin()+static_cast<std::ptrdiff_t>(36+8*node_count));
             if(language_group) {
@@ -452,19 +551,32 @@ struct Fixture {
                         word(payload,(pops<<25U)|(enter?1U<<24U:0U)|static_cast<std::uint32_t>((lens_records+(row-69)*48)/4));
                         word(payload,static_cast<std::uint32_t>(0x5000+row)); // Independent identifiers, deliberately unlike retained check vectors.
                     }
-                    word(payload,(1U<<25U)|static_cast<std::uint32_t>((512+48*2)/4));word(payload,0);
+                    if(remaining_scope) for(std::size_t row=200;row<=469;++row) {
+                        const bool enter=row==200||row==201||row==284||row==285||row==291||row==292||row==399||row==400||row==406||row==407||row==422;
+                        const bool pop=row==200||row==282||row==284||row==291||row==371||row==396||row==399||row==406||row==422||row==438||row==457||row==459;
+                        word(payload,(pop?1U<<25U:0U)|(enter?1U<<24U:0U)|static_cast<std::uint32_t>((remaining_records+(row-200)*48)/4));word(payload,static_cast<std::uint32_t>(0x9000+row));
+                    }
+                    if(!remaining_scope) {
+                        word(payload,(1U<<25U)|static_cast<std::uint32_t>((512+48*2)/4));word(payload,0);
+                    }
                 } else payload.insert(payload.end(),entries.begin()+16,entries.begin()+24);
-                if(camera_row) {
+                if(camera_row && !(full_second_scope && remaining_scope)) {
                     payload.insert(payload.end(),entries.begin()+32,entries.begin()+64);
                     payload.insert(payload.end(),entries.begin()+72,entries.end());
-                } else payload.insert(payload.end(),entries.begin()+32,entries.end());
+                } else if(!camera_row) payload.insert(payload.end(),entries.begin()+32,entries.end());
             } else payload.insert(payload.end(),entries.begin(),entries.end());
             set(payload,0,static_cast<std::uint32_t>(directory));
-            const auto pool_count=lens_flare_scope?18U:room_animation_scope?10U:following_visual_scope?6U:second_window?5U:language_group?4U:3U;
+            const auto pool_count=remaining_scope?29U:lens_flare_scope?18U:room_animation_scope?10U:following_visual_scope?6U:second_window?5U:language_group?4U:3U;
             const auto pools=payload.size();word(payload,pool_count);
             payload.resize(payload.size()+pool_count*24*4);
             set(payload,pools+4,lens_flare_scope?6U:room_animation_scope?5U:following_visual_scope?4U:second_window?3U:2U); // ROOT's group/Window category.
+            // The continuation consumes three more ROOT category-zero slots:
+            // Group200 after its pop, then Groups284 and399 after their own
+            // returns. Rows459-469 add ROOT's one category-one and ten
+            // category-three direct children.
+            if(remaining_scope) { set(payload,pools+4,9); set(payload,pools+4+4,1); }
             if(full_second_scope) set(payload,pools+4+12,include_sound?6U:5U);
+            if(remaining_scope) set(payload,pools+4+12,10);
             set(payload,pools+4+2*24*4+4,language_group?1U:2U);
             set(payload,pools+4+2*24*4+12,second_window?1U:include_sound?7U:6U);
             if(language_group) {
@@ -489,6 +601,12 @@ struct Fixture {
                 count(13,1,25);count(14,1,7);count(15,0,1);count(16,1,12);count(16,9,2);
                 count(17,1,62);count(17,2,7);count(17,3,1);count(17,17,2);
             }
+            if(remaining_scope) {
+                const auto count=[&](std::size_t selector,std::size_t category,std::uint32_t n){set(payload,pools+4+selector*96+category*4,n);};
+                count(18,0,1);count(18,3,2);count(19,1,74);count(19,2,3);count(19,3,1);count(19,18,2);
+                count(20,0,2);count(20,2,1);count(20,3,2);count(21,1,5);count(22,0,1);count(22,1,16);count(22,2,8);count(22,3,1);count(23,1,78);
+                count(24,0,2);count(24,3,2);count(25,1,5);count(26,0,2);count(26,1,15);count(26,2,3);count(26,3,1);count(27,1,14);count(28,1,15);
+            }
         }
         prm.resize(16); word(prm, 1);
         for (float v : {3.F, 4.F, 9.F, 0.F, 1.F, 1.F, 0.F, 6.F, 8.F}) word(prm, std::bit_cast<std::uint32_t>(v));
@@ -501,7 +619,7 @@ struct Fixture {
         const auto end = tex.size(); tex.resize(end + 8192); set(tex, end, 16);
         const auto sequences = tex.size(); tex.resize(sequences + 8192);
         set(tex, 0, static_cast<std::uint32_t>(end)); set(tex, 4, static_cast<std::uint32_t>(sequences)); set(tex, 8, 3); set(tex, 12, 4);
-        if(include_sound) {
+        if(include_sound || remaining_scope) {
             text(snd,"Independent/Sound.asset"); snd.resize(144);
             set(snd,128,1); set(snd,132,16); set(snd,136,0x1234);
             set(snd,140,std::bit_cast<std::uint32_t>(12.375F));
@@ -603,21 +721,23 @@ int main() {
             app.cut_sequence_lists()==shared,"registration preserves unrelated application state and rejects duplicate reset");
     }
     for(const bool policy:{false,true}) {
-      Fixture complete(false,true,true,true,true,true,true,true,true,true);
+      Fixture complete(false,true,true,true,true,true,true,true,true,true,true);
       off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
           {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
       app.initialize_native_group_registration();app.initialize_native_window_language_registration();
       app.initialize_native_picture_registration();app.initialize_native_camera_registration();
       app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
       app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
+      app.initialize_native_remaining_intro_scope_registration();
       app.set_particle_emitter_event(123);app.set_particle_emitter_event(456);
       rejects([&]{app.initialize_native_lens_flare_animation_scope_registration();});
       check(app.particle_emitter_event()==456 && app.class_notification_sequence(0x0010002eU)==0 &&
             app.component_class_notification_sequence("ZWINDOW_LensFlareControl")==0,
             "duplicate new registration rejects atomically and preserves replaceable shared emitter slot");
       off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
-      off::graphics::IntroRuntime host(complete.build(),app,sequence);
-      check(host.resources().controller_index()==200 && host.resources().first_cut_index()==204,
+      off::graphics::IntroRuntime host(complete.build(),app,sequence,"FF-Intro.gms",
+          off::graphics::IntroSoundLoadPolicy::directory_construction);
+      check(host.resources().controller_index()==465 && host.resources().first_cut_index()==460,
             "complete synthetic scope moves selected controller and first-cut references beyond row199");
       host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
       host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
@@ -720,6 +840,84 @@ int main() {
             !host.directory_position_mode().collection_enabled && host.registered_cameras().entries().empty(),
             "category-two ancestry does not invent Rooms, spatial updates or renderer lifecycle");
       rejects([&]{host.construct_lens_flare_animation_scope_without_engine_renderer();});
+
+      // This is a wholly synthetic continuation: every source name, property
+      // blob, identifier and attachment table above is authored here rather
+      // than copied from a game installation.
+      const auto before_resources=host.loaded_resource_handles().size();
+      const auto before_components=host.components().construction_order().size();
+      const auto before_serial=sequence.next_identity();
+      const auto before_pending=host.ordinary_components()->pending().size();
+      host.construct_remaining_directory_without_engine_renderer();
+      std::size_t all_batches=0; for(const auto& scope:host.source_resource_scopes()) all_batches+=scope.resources.size();
+      check(host.resource_load_stage()==off::graphics::IntroResourceLoadStage::directory_construction_complete &&
+            host.loaded_resource_handles().size()==470 && host.directory_resource_mapping().size()==470 &&
+            host.deferred_reader_work().size()==420 && all_batches==470 && host.count_group_selector()==28 &&
+            host.current_source_parent()==host.root_handle(),
+            "synthetic rows200-469 close directory construction with 470 resources, 420 readers and no pending scope");
+      check(host.components().construction_order().size()==before_components+245 && sequence.next_identity()==before_serial+245 &&
+            host.ordinary_components()->pending().size()==before_pending+12,
+            "remaining attachment inventory advances exactly245 live serials and appends twelve ordinary pending entries");
+      check(host.saved_resource_flags().size()==5 && host.saved_resource_flags()[3].resource==host.resource_handle(host.source_handle(215)) &&
+            host.saved_resource_flags()[4].resource==host.resource_handle(host.source_handle(223)) &&
+            host.saved_resource_flags()[3].flags==0x0904c480U && host.saved_resource_flags()[4].flags==0x0904c480U &&
+            host.resource_state(host.source_handle(215))->flags==0x09008480U && host.resource_state(host.source_handle(223))->flags==0x09008480U,
+            "two synthetic bank-two saved flags append after established items without restoration");
+      const auto* room201=host.constructed_room_owner(201);
+      check(room201 && !room201->room_mode && !room201->enabled && room201->ordinary_members.size()==16 &&
+            host.root_owner_state()->rooms.size()==2 && host.root_owner_state()->rooms.back()==host.source_handle(201),
+            "Room201 retains root room membership and only its concrete ordinary member bucket");
+      for(const auto row:{215U,223U}) check(host.resources().sources().directory()[row].pool_class==18 &&
+            host.resources().sources().directory()[row].source_variant==2,
+            "saved sources select bank two/category two without a bank-one substitute");
+      std::size_t scope_properties=0,scope_attachments=0,reader_cursor=166;
+      for(std::size_t row=200;row<=469;++row) {
+        const auto& source=host.resources().sources().directory()[row];
+        const auto owner=host.source_handle(row);
+        check(host.directory_resource_mapping()[row]==host.resource_handle(owner) &&
+              host.resource_state(owner)->directory_auxiliary==0x9000U+row,
+              "each remaining source retains its synthetic auxiliary identity through attachment");
+        if(source.deferred_source_offset) {
+          check(host.deferred_reader_work()[reader_cursor].resource==host.resource_handle(owner) &&
+                host.deferred_reader_work()[reader_cursor].source_offset==source.deferred_source_offset,
+                "remaining deferred readers retain directory ordering while no-reader rows are skipped");
+          ++reader_cursor;
+        }
+        if(source.buf_auxiliary_offset) { ++scope_properties; const auto* aux=host.constructed_owner_auxiliary(row);
+          check(aux && aux->borrowed_property_data.data()==host.resources().source_names().data()+source.buf_auxiliary_offset && aux->borrowed_property_data.size()==64,
+                "property-bearing remaining owners retain their distinct synthetic auxiliary blob"); }
+        scope_attachments+=host.owner_components(owner).size();
+      }
+      check(reader_cursor==420 && scope_properties==210 && scope_attachments==245,"remaining source fixture preserves all210 property sections and245 ordered attachments");
+      const auto* owner462=host.constructed_list_owner(462);
+      const auto property462=host.scene_resource_property("rWINOBJSPRITEHOLDER");
+      const auto* owner469=host.constructed_object_owner(469);
+      check(owner462 && owner462->animation_storage && owner462->animation_storage->capacity==32 && owner462->animation_storage->growth==32 &&
+            !owner462->animation_storage->count && owner462->animation_storage->element_control==1 && property462 &&
+            property462->owner_handle==host.source_handle(462) && property462->setter_flags==4,
+            "owner462 retains an empty animation store and publishes its canonical scene owner handle");
+      check(owner469 && owner469->particle_usage && !owner469->particle_usage->diagnostic_enabled && owner469->particle_usage->pool &&
+            owner469->particle_usage->pool->available_count==64 && owner469->particle_usage->pool->available_slots.front()==0 &&
+            owner469->particle_usage->pool->available_slots.back()==63 && owner469->particle_usage->descriptor &&
+            owner469->particle_usage->descriptor->key=="particle_usage",
+            "owner469 keeps its disabled diagnostic control, ascending 64-slot pool and console descriptor");
+      const auto components467=host.owner_components(host.source_handle(467));
+      const auto components468=host.owner_components(host.source_handle(468));
+      check(components467.size()==4 && components468.size()==4 &&
+            host.components().at(components467[0]).source().factory_name=="ZSNDOBJ_SoundExtend" &&
+            host.components().at(components467[1]).source().factory_name=="ZSNDOBJ_SoundNotify" &&
+            host.components().at(components467[2]).source().factory_name=="ZSNDOBJ_SoundSegment" &&
+            host.components().at(components467[3]).source().factory_name=="ZGEOM_ZSetZDefine",
+            "both sound owners preserve the authored Extend/Notify/Segment/ZSetZDefine attachment order");
+      const auto* extend=host.constructed_attachment(components467[0]);
+      const auto* notify=host.constructed_attachment(components467[1]);
+      const auto* segment=host.constructed_attachment(components467[2]);
+      check(extend && extend->sound_extend && extend->sound_extend->output_mode==2 &&
+            notify && notify->sound_notify && !notify->sound_notify->target.value && !notify->sound_notify->duration_snapshot &&
+            segment && segment->sound_segment && segment->sound_segment->controls==std::array<bool,5>{true,true,false,false,true} &&
+            segment->sound_segment->probability==1 && segment->sound_segment->subtitle.empty(),
+            "sound attachments retain cold constructor-only state without reader playback or duration work");
+      rejects([&]{host.construct_remaining_directory_without_engine_renderer();});
     }
     for(const bool existing_shared_state:{false,true}) {
       Fixture room_fixture(false,true,true,true,true,true,true,true,true);

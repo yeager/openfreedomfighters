@@ -126,6 +126,7 @@ int main(int argc, char **argv) {
     application.initialize_native_visual_registration();
     application.initialize_native_room_animation_scope_registration();
     application.initialize_native_lens_flare_animation_scope_registration();
+    application.initialize_native_remaining_intro_scope_registration();
   }
   std::optional<off::graphics::SceneGpuPlan> scene;
   // Scene-manager identity lifetime, independent of source archive catalogs.
@@ -157,7 +158,8 @@ int main(int argc, char **argv) {
         // manufacturing lifecycle state. Keep ownership through the runtime.
         intro = std::make_unique<off::graphics::IntroRuntime>(
             off::graphics::load_intro_prepared_resources(
-                data_path / "Scenes" / "FF-Intro.ZIP"), application, component_sequence);
+                data_path / "Scenes" / "FF-Intro.ZIP"), application, component_sequence,
+            "FF-Intro.gms", off::graphics::IntroSoundLoadPolicy::directory_construction);
         // Execute the actual fresh root stage. Authored source construction and
         // its loader tail are still required before fallback/view admission.
         intro->construct_root();
@@ -174,6 +176,7 @@ int main(int argc, char **argv) {
         intro->construct_following_visual_scope_without_engine_renderer();
         intro->construct_room_animation_scope_without_engine_renderer();
         intro->construct_lens_flare_animation_scope_without_engine_renderer();
+        intro->construct_remaining_directory_without_engine_renderer();
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -225,7 +228,8 @@ int main(int argc, char **argv) {
   if (intro)
     std::cout << "Retained component catalog: " << intro->components().size()
               << " entries; " << intro->components().construction_order().size()
-              << " constructed. ROOT/RootGroup initialized; remaining authored factories and loader tail pending.\n";
+              << " constructed. The full authored construction directory is retained;"
+                 " readers, loader tail, activation and rendering remain pending.\n";
   if (intro && !intro->source_resource_scopes().empty()) {
     std::size_t allocated=0;
     for(const auto& scope:intro->source_resource_scopes()) allocated+=scope.resources.size();
