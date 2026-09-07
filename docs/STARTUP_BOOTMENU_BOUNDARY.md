@@ -97,3 +97,10 @@ helper. It contains no recovered scene-manager clear or request, archive,
 mission, or gameplay construction. The optional nested-owner route and the
 subscribers to the state updates remain untraced, so this is a fallback-path
 boundary rather than proof that all selection processing stops there.
+
+The optional nested-owner route is now resolved for this startup window. Its
+authored reference points directly to the same startup window root reached by
+the fallback lookup, so it bypasses the name lookup but converges on the same
+active-window state update. It likewise establishes no direct scene-manager
+request, archive, mission, or gameplay construction. Any later effect must be
+traced from the emitted state updates rather than inferred from this route.
