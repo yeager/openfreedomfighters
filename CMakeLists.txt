@@ -241,6 +241,9 @@ add_custom_target(off_startup_assets
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${CMAKE_CURRENT_SOURCE_DIR}/assets/branding/openfreedomfighters-splash.bmp"
             "$<TARGET_FILE_DIR:openfreedomfighters>/assets/openfreedomfighters-splash.bmp"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/Rajdhani-SemiBold.ttf"
+            "$<TARGET_FILE_DIR:openfreedomfighters>/assets/Rajdhani-SemiBold.ttf"
     VERBATIM
 )
 add_dependencies(openfreedomfighters off_startup_assets)
@@ -255,6 +258,7 @@ endif()
 
 install(TARGETS openfreedomfighters RUNTIME DESTINATION bin)
 install(FILES assets/branding/openfreedomfighters-splash.bmp
+              assets/fonts/Rajdhani-SemiBold.ttf
         DESTINATION bin/assets)
 
 if(BUILD_TESTING)
@@ -607,7 +611,7 @@ if(BUILD_TESTING)
 
     add_executable(off_startup_window_tests
         tests/startup_window_tests.cpp src/platform/sdl_startup.cpp)
-    target_link_libraries(off_startup_window_tests PRIVATE off_core ${OFF_SDL3_TARGET})
+    target_link_libraries(off_startup_window_tests PRIVATE off_core ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf)
     target_compile_definitions(off_startup_window_tests PRIVATE OFF_VERSION="${PROJECT_VERSION}")
     add_test(NAME off_startup_window_tests COMMAND off_startup_window_tests)
 

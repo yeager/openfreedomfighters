@@ -6,9 +6,9 @@
 #include "off/platform/startup_preparation.hpp"
 
 #include <SDL3/SDL.h>
+#include <SDL3_ttf/SDL_ttf.h>
 
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <exception>
 #include <future>
@@ -96,70 +96,66 @@ using Surface = std::unique_ptr<SDL_Surface, SurfaceDeleter>;
          "openfreedomfighters-splash.bmp";
 }
 
-[[nodiscard]] std::array<unsigned char, 7> splash_glyph(char character) {
-  if (character >= 'a' && character <= 'z')
-    character = static_cast<char>(character - 'a' + 'A');
-  switch (character) {
-  case 'A': return {14, 17, 17, 31, 17, 17, 17};
-  case 'D': return {30, 17, 17, 17, 17, 17, 30};
-  case 'E': return {31, 16, 16, 30, 16, 16, 31};
-  case 'I': return {31, 4, 4, 4, 4, 4, 31};
-  case 'L': return {16, 16, 16, 16, 16, 16, 31};
-  case 'N': return {17, 25, 21, 19, 17, 17, 17};
-  case 'R': return {30, 17, 17, 30, 20, 18, 17};
-  case 'V': return {17, 17, 17, 17, 17, 10, 4};
-  case 'Y': return {17, 17, 10, 4, 4, 4, 4};
-  case '0': return {14, 17, 19, 21, 25, 17, 14};
-  case '1': return {4, 12, 4, 4, 4, 4, 14};
-  case '2': return {14, 17, 1, 2, 4, 8, 31};
-  case '3': return {30, 1, 1, 14, 1, 1, 30};
-  case '4': return {2, 6, 10, 18, 31, 2, 2};
-  case '5': return {31, 16, 16, 30, 1, 1, 30};
-  case '6': return {14, 16, 16, 30, 17, 17, 14};
-  case '7': return {31, 1, 2, 4, 8, 8, 8};
-  case '8': return {14, 17, 17, 14, 17, 17, 14};
-  case '9': return {14, 17, 17, 15, 1, 1, 14};
-  case '.': return {0, 0, 0, 0, 0, 12, 12};
-  case ' ': return {0, 0, 0, 0, 0, 0, 0};
-  default: return {31, 17, 2, 4, 8, 0, 8};
-  }
+[[nodiscard]] std::filesystem::path splash_font_path() {
+  const char *base = SDL_GetBasePath();
+  if (base == nullptr || *base == '\0')
+    return {};
+  return std::filesystem::path{base} / "assets" / "Rajdhani-SemiBold.ttf";
 }
 
-void draw_splash_text(SDL_Surface *target, int left, int top,
-                      std::string_view text, int pixel_size,
-                      Uint32 color) {
-  for (const char character : text) {
-    const auto glyph = splash_glyph(character);
-    for (int row = 0; row < 7; ++row) {
-      for (int column = 0; column < 5; ++column) {
-        if ((glyph[static_cast<std::size_t>(row)] &
-             (1U << static_cast<unsigned>(4 - column))) == 0U)
-          continue;
-        const SDL_Rect pixel{left + column * pixel_size,
-                             top + row * pixel_size, pixel_size, pixel_size};
-        static_cast<void>(SDL_FillSurfaceRect(target, &pixel, color));
-      }
-    }
-    left += 6 * pixel_size;
+struct FontDeleter {
+  void operator()(TTF_Font *font) const noexcept {
+    if (font != nullptr)
+      TTF_CloseFont(font);
   }
+};
+
+[[nodiscard]] bool draw_splash_text(SDL_Surface *target, TTF_Font *font,
+                                    std::string_view text, int left,
+                                    int baseline, SDL_Color color) {
+  Surface rendered{TTF_RenderText_Blended(font, text.data(), text.size(), color)};
+  if (rendered == nullptr)
+    return false;
+  const SDL_Rect destination{left, baseline - rendered->h, rendered->w, rendered->h};
+  return SDL_BlitSurface(rendered.get(), nullptr, target, &destination);
 }
 
 void draw_splash_overlays(SDL_Surface *target) {
   const auto layout = startup_splash_overlay_layout(target->w, target->h);
-  const int scale = layout.pixel_size / 2;
-  const auto shadow = SDL_MapSurfaceRGB(target, 0, 0, 0);
-  const auto foreground = SDL_MapSurfaceRGB(target, 238, 238, 232);
-  draw_splash_text(target, layout.version_left + scale,
-                   layout.baseline + scale, layout.version, layout.pixel_size,
-                   shadow);
-  draw_splash_text(target, layout.version_left, layout.baseline, layout.version,
-                   layout.pixel_size,
-                   foreground);
-  draw_splash_text(target, layout.credit_left + scale,
-                   layout.baseline + scale, layout.credit, layout.pixel_size,
-                   shadow);
-  draw_splash_text(target, layout.credit_left, layout.baseline, layout.credit,
-                   layout.pixel_size, foreground);
+  if (!TTF_Init())
+    return;
+  const auto font_path_text = splash_font_path().u8string();
+  std::unique_ptr<TTF_Font, FontDeleter> font{
+      TTF_OpenFont(reinterpret_cast<const char *>(font_path_text.c_str()),
+                   static_cast<float>(std::max(18, target->h / 27)))};
+  if (font == nullptr) {
+    TTF_Quit();
+    return;
+  }
+  const SDL_Color shadow{0, 0, 0, 220};
+  const SDL_Color foreground{238, 238, 232, 255};
+  constexpr int shadow_offset = 2;
+  const int margin = std::max(18, target->h / 40);
+  int credit_width = 0;
+  if (!TTF_GetStringSize(font.get(), layout.credit.data(), layout.credit.size(),
+                         &credit_width, nullptr)) {
+    font.reset();
+    TTF_Quit();
+    return;
+  }
+  const int credit_left = target->w - margin - credit_width;
+  static_cast<void>(draw_splash_text(target, font.get(), layout.version,
+                                     margin + shadow_offset,
+                                     target->h - margin + shadow_offset, shadow));
+  static_cast<void>(draw_splash_text(target, font.get(), layout.version, margin,
+                                     target->h - margin, foreground));
+  static_cast<void>(draw_splash_text(target, font.get(), layout.credit,
+                                     credit_left + shadow_offset,
+                                     target->h - margin + shadow_offset, shadow));
+  static_cast<void>(draw_splash_text(target, font.get(), layout.credit,
+                                     credit_left, target->h - margin, foreground));
+  font.reset();
+  TTF_Quit();
 }
 
 [[nodiscard]] bool draw_splash(SDL_Window *window, SDL_Surface *image) {

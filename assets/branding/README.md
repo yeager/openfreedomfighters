@@ -15,6 +15,10 @@ the PNG with Pillow 11.3.0, converting it to RGB, and saving it as a Windows BMP
 The requested resolution was 3840×2160; the generator returned 1672×941.
 The files retain that native resolution without artificial upscaling.
 
+The version and project-credit overlays use the bundled Rajdhani SemiBold font.
+It is project-owned presentation text, not a game font or extracted asset; its
+SIL Open Font License notice is in `third_party/rajdhani/OFL.txt`.
+
 ## Generation prompt
 
 Use case: stylized-concept. Generate a high-resolution 3840x2160 16:9 launch
