@@ -177,13 +177,45 @@ void IntroRuntime::apply_supported_sound_owner_deferred_reader(
     throw std::runtime_error("Sound owner source reader cannot run twice or after preparation");
 
   // A scene can retain its parsed sound graph without an output registry. That
-  // path still consumes this reader boundary, but owns no canonical record to
-  // mutate and therefore cannot accidentally issue a playback operation.
-  if(!sound.has_record()) {
-    sound.source_applied_=true;
-    return;
-  }
-  application_.sound_records().apply_source(sound.record(),sound.source_->source);
+  // path still retains every component field below, but owns no canonical
+  // record to mutate and therefore cannot accidentally issue playback.
+  if(sound.has_record())
+    application_.sound_records().apply_source(sound.record(),sound.source_->source);
+
+  const auto attachments=owner_components(sound.handle());
+  constexpr std::array<std::string_view,4> factories{
+      "ZSNDOBJ_SoundExtend","ZSNDOBJ_SoundNotify","ZSNDOBJ_SoundSegment","ZGEOM_ZSetZDefine"};
+  if(attachments.size()!=factories.size())
+    throw std::runtime_error("Sound owner reader attachment count is unsupported");
+  for(std::size_t index=0;index<attachments.size();++index)
+    if(components_.at(attachments[index]).source().factory_name!=factories[index])
+      throw std::runtime_error("Sound owner reader attachment order is unsupported");
+
+  const auto& authored=sound.source_->attachments;
+  auto& extend=constructed_picture_components_.at(attachments[0]).sound_extend;
+  auto& notify=constructed_picture_components_.at(attachments[1]).sound_notify;
+  auto& segment=constructed_picture_components_.at(attachments[2]).sound_segment;
+  auto& define=constructed_picture_components_.at(attachments[3]).sound_define;
+  if(!extend || !notify || !segment || !define)
+    throw std::runtime_error("Sound owner reader components are not constructed");
+  extend->scalars=authored.extend.scalars;
+  extend->integers=authored.extend.integers;
+  extend->option=authored.extend.option;
+  extend->category=authored.extend.category;
+  extend->option_a=authored.extend.option_a;
+  extend->option_b=authored.extend.option_b;
+  extend->output_mode=authored.extend.authored_output_mode;
+  notify->raw_target_reference=authored.notify.target_reference;
+  notify->raw_event_reference=authored.notify.event_reference;
+  segment->controls[0]=authored.segment.enabled;
+  segment->times=authored.segment.times;
+  segment->probability=authored.segment.probability;
+  segment->subtitles=authored.segment.subtitles;
+  segment->subtitle=authored.segment.subtitle;
+  segment->raw_start_event_reference=authored.segment.start_event_reference;
+  segment->raw_stop_event_reference=authored.segment.stop_event_reference;
+  define->property_on_parent=authored.property_on_parent;
+  define->property_key=authored.property_key;
   sound.source_applied_=true;
 }
 
@@ -894,6 +926,7 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
               "MSG_SOUNDSEGMENTSTART","MSG_SOUNDSEGMENTSTOP","MSG_WRITESUBTITLE","SubTitlesClear"};
           for(std::size_t event=0;event<names.size();++event) local.events[event]=event_names_.declare(names[event]);
         }
+        if(define) payload.sound_define.emplace();
         if(flare_control) components_.construct_and_destroy_temporary_common();
         if(param) payload.param_animation.emplace();
         if(emitter) {

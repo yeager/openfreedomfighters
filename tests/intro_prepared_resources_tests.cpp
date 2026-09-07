@@ -1039,6 +1039,20 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
         check(applied_sound_readers==host.resources().sounds().size() &&
               std::ranges::all_of(host.sounds(),[](const auto& sound) { return sound->source_applied(); }),
               "sound owner readers consume both parsed source prefixes without preparing playback");
+        if(!host.resources().sounds().empty()) {
+          const auto& authored_sound=host.resources().sounds().front();
+          const auto attachments=host.owner_components(host.source_handle(authored_sound.directory_index));
+          check(attachments.size()==4,"sound owner retains four reader-backed components");
+          const auto* extend=attachments.size()==4?host.constructed_attachment(attachments[0]):nullptr;
+          const auto* notify=attachments.size()==4?host.constructed_attachment(attachments[1]):nullptr;
+          const auto* segment=attachments.size()==4?host.constructed_attachment(attachments[2]):nullptr;
+          const auto* define=attachments.size()==4?host.constructed_attachment(attachments[3]):nullptr;
+          check(extend && extend->sound_extend && extend->sound_extend->scalars==authored_sound.attachments.extend.scalars &&
+                notify && notify->sound_notify && notify->sound_notify->raw_target_reference==authored_sound.attachments.notify.target_reference &&
+                segment && segment->sound_segment && segment->sound_segment->times==authored_sound.attachments.segment.times &&
+                define && define->sound_define && define->sound_define->property_key==authored_sound.attachments.property_key,
+                "sound owner reader retains parsed attachment fields without resolving events or dispatching playback");
+        }
         const auto* controller=host.movie_controller_reader_state();
         check(controller && controller->owner==host.source_handle(host.resources().controller_index()) &&
               controller->resource==host.directory_resource_mapping()[host.resources().controller_index()] &&

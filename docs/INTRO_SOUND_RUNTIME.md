@@ -113,10 +113,12 @@ the complete lifecycle and output-channel services are admitted.
 
 The concrete owner-reader boundary is now retained for both sound owners. At
 the matching processed deferred record it applies the already parsed owner
-prefix to that owner's freshly allocated canonical record exactly once. A scene
-without a record backend consumes the boundary without mutating a record. This
-reader does not prepare a record, allocate a channel, register component events
-or enter either lifecycle phase.
+prefix to that owner's freshly allocated canonical record exactly once and
+copies each attached component's parser-validated fields into its cold runtime
+state. A scene without a record backend still retains those component fields but
+does not mutate a record. This reader does not resolve authored event or target
+references, prepare a record, allocate a channel, register component events or
+enter either lifecycle phase.
 
 Failures keep completed mutations. Where the original would destroy an owner,
 the current host reports unsupported disposal and prevents further sound-owner

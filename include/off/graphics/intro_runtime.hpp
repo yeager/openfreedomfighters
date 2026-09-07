@@ -171,17 +171,23 @@ struct IntroConstructedPictureComponent {
   struct SoundNotifyState {
     IntroRuntimeHandle target{};
     std::uint16_t event{};
+    std::uint32_t raw_target_reference{},raw_event_reference{};
     std::optional<float> duration_snapshot;
   };
   struct SoundSegmentState {
     std::uint32_t saved_playback{};
     std::array<bool,5> controls{true,true,false,false,true};
-    std::array<std::uint32_t,6> times{};
+    std::array<std::array<std::uint32_t,4>,4> times{};
     float probability{1};
     bool subtitles{};
     std::string subtitle;
     std::array<std::uint16_t,4> events{};
+    std::uint32_t raw_start_event_reference{},raw_stop_event_reference{};
     std::optional<std::vector<std::uint64_t>> additional_transient_references;
+  };
+  struct SoundDefineState {
+    bool property_on_parent{};
+    std::string property_key;
   };
   struct MovieControlState {
     IntroRuntimeHandle leading_reference{};
@@ -197,6 +203,7 @@ struct IntroConstructedPictureComponent {
   std::optional<SoundExtendState> sound_extend;
   std::optional<SoundNotifyState> sound_notify;
   std::optional<SoundSegmentState> sound_segment;
+  std::optional<SoundDefineState> sound_define;
   std::optional<MovieControlState> movie_control;
 };
 struct IntroConstructedCharacterOwner {
