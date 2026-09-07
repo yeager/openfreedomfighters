@@ -8,9 +8,12 @@ macOS, Linux and Steam Deck.
 **Not playable yet.** The build opens a window and loads startup data, but does
 not render the original intro or run the menus and gameplay.
 
-You need your own copy of the game. The supported data set is the Steam Windows
-release; other editions have not been validated. No original game files or
-executable code are included here.
+You need your own copy of the game. Buy *Freedom Fighters* from the
+[official Steam store page](https://store.steampowered.com/app/1347780/Freedom_Fighters/).
+The Steam purchase includes the game and the *Freedom Fighters Soundtrack*.
+The supported data set is the Steam Windows release; other editions have not
+been validated. No original game files, executable code, soundtrack files, or
+other retail assets are included here.
 
 ## Current state
 
@@ -21,8 +24,9 @@ executable code are included here.
 - Game files are fully checked against a SHA-256 manifest at every startup.
   A local, disposable deep-audit certificate avoids repeating the much slower
   archive parse after a successful hash pass; it never replaces hashing.
-  Soundtrack files are optional. Their MP3 and FLAC files can now be decoded safely, but cue
-  mapping and music playback are not implemented yet.
+  The Steam soundtrack's optional MP3 and FLAC files are detected separately:
+  they can be decoded safely when installed, but cue mapping and music playback
+  are not implemented yet. Their absence never blocks startup.
 - The first intro sequence's camera, pictures and textures load from game data.
   One retained runtime owns their hierarchy and mutable picture state; intro
   textures upload to the GPU. Indexed drawing works in explicit integration
