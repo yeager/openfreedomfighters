@@ -18,6 +18,10 @@ using off::cutscene::ActiveCutUpdateResult;
 using off::cutscene::ActiveCutUpdateServices;
 using off::cutscene::ActiveCutTrackingCollection;
 using off::cutscene::ActiveCutTrackingRegistration;
+using off::cutscene::ActiveCutPreludeInput;
+using off::cutscene::ActiveCutPreludeServices;
+using off::cutscene::ActiveCutTailInput;
+using off::cutscene::ActiveCutTailInputState;
 int failures = 0;
 void check(bool value) { if (!value) { ++failures; std::cerr << "FAIL: cut sequence coordinator\n"; } }
 template <class F> void rejects(F operation) { bool rejected = false; try { operation(); } catch (const std::runtime_error&) { rejected = true; } check(rejected); }
@@ -180,6 +184,78 @@ int main() {
     check(update.update(services) == ActiveCutUpdateResult::updated && resolves == 1);
     update.request_end();
     check(update.update(services) == ActiveCutUpdateResult::completed && resolves == 1);
+  }
+  {
+    // Prelude callbacks are useful only before admission.  Their owner event
+    // precedes the transient toggle, and frame reports inactive without
+    // demanding the unrelated active-update services.
+    ActiveCutUpdate update({}, 100.0F);
+    std::vector<std::string> trace;
+    const ActiveCutPreludeServices prelude_services{
+      .send_shared_owner_event = [&] { trace.push_back("owner"); },
+      .toggle_transient_state = [&] { trace.push_back("toggle"); },
+    };
+    check(update.frame({true, true}, prelude_services, {}, {}) == ActiveCutUpdateResult::inactive &&
+          trace == std::vector<std::string>({"owner", "toggle"}));
+    rejects([&] { update.run_prelude({true, false}, {}); });
+    check(trace == std::vector<std::string>({"owner", "toggle"}));
+  }
+  {
+    // An owner callback may admit the cut.  The remaining inactive-only
+    // prelude operation must not run after that admission.
+    ActiveCutUpdate update({}, 100.0F);
+    std::vector<std::string> trace;
+    ActiveCutPreludeServices prelude_services{
+      .send_shared_owner_event = [&] { trace.push_back("owner"); update.start(0U); },
+      .toggle_transient_state = [&] { trace.push_back("toggle"); },
+    };
+    ActiveCutUpdateServices services{
+      .sample_scene_clock = [] { return 0U; },
+      .resolve_member = [](std::uint64_t) { return std::optional<ActiveCutTrackingRegistration>{}; },
+      .start_member = [](std::uint64_t, std::size_t) {},
+      .end_primary_member = [](std::uint64_t, std::uint64_t, std::size_t, bool) {},
+      .resolve_retained_source = [](std::uint64_t) { return std::optional<std::uint64_t>{}; },
+      .end_secondary_member = [](std::uint64_t, std::uint64_t, std::size_t, bool) {},
+      .complete = [](std::uint64_t) {},
+    };
+    check(update.frame({true, true}, prelude_services, {}, services) == ActiveCutUpdateResult::updated &&
+          update.active() && trace == std::vector<std::string>({"owner"}));
+    check(update.frame({true, true}, prelude_services, {}, services) == ActiveCutUpdateResult::updated &&
+          trace == std::vector<std::string>({"owner"}));
+  }
+  {
+    // Bypass applies to the ordered release/press input predicates only.
+    // Both that route and natural end request cleanup for a later update.
+    ActiveCutUpdate update({}, 100.0F);
+    std::uint32_t sampled = 1U;
+    int completions = 0;
+    ActiveCutUpdateServices services{
+      .sample_scene_clock = [&] { return sampled; },
+      .resolve_member = [](std::uint64_t) { return std::optional<ActiveCutTrackingRegistration>{}; },
+      .start_member = [](std::uint64_t, std::size_t) {},
+      .end_primary_member = [](std::uint64_t, std::uint64_t, std::size_t, bool) {},
+      .resolve_retained_source = [](std::uint64_t) { return std::optional<std::uint64_t>{}; },
+      .end_secondary_member = [](std::uint64_t, std::uint64_t, std::size_t, bool) {},
+      .complete = [&](std::uint64_t) { ++completions; },
+    };
+    update.start(0U);
+    check(update.update({true, true, true}, services) == ActiveCutUpdateResult::updated &&
+          !update.pending_end() &&
+          update.tail_input_state() == ActiveCutTailInputState::awaiting_release);
+    check(update.update({false, true, false}, services) == ActiveCutUpdateResult::updated &&
+          !update.pending_end() &&
+          update.tail_input_state() == ActiveCutTailInputState::awaiting_press);
+    check(update.update({false, false, true}, services) == ActiveCutUpdateResult::updated &&
+          update.pending_end() && completions == 0);
+    check(update.update(services) == ActiveCutUpdateResult::completed && !update.active() &&
+          completions == 1 &&
+          update.tail_input_state() == ActiveCutTailInputState::awaiting_release);
+
+    update.start(0U);
+    sampled = 4097U;
+    check(update.update({true, false, false}, services) == ActiveCutUpdateResult::updated &&
+          update.pending_end() && completions == 1);
+    check(update.update(services) == ActiveCutUpdateResult::completed && completions == 2);
   }
   return failures == 0 ? 0 : 1;
 }

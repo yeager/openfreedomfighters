@@ -28,7 +28,33 @@ struct ActiveCutMember {
   bool end_operation_enabled{true};
 };
 
-enum class ActiveCutUpdateResult { updated, completed };
+// `inactive` is returned only by frame(), whose prelude deliberately remains
+// useful before a cut has been admitted.  update() itself still requires an
+// active cut.
+enum class ActiveCutUpdateResult { inactive, updated, completed };
+
+// These are sampled inputs, not a platform input binding.  The recovered
+// prelude predicates are intentionally kept explicit so this bounded model
+// cannot claim a keyboard, controller, debug-console, or scene binding.
+struct ActiveCutPreludeInput {
+  bool send_shared_owner_event{};
+  bool toggle_transient_state{};
+};
+
+struct ActiveCutPreludeServices {
+  std::function<void()> send_shared_owner_event;
+  std::function<void()> toggle_transient_state;
+};
+
+// The tail observes release before press.  A bypass skips only these two
+// predicates; it never disables the natural-end comparison.
+struct ActiveCutTailInput {
+  bool bypass_input_predicates{};
+  bool release_observed{};
+  bool press_observed{};
+};
+
+enum class ActiveCutTailInputState { awaiting_release, awaiting_press };
 
 enum class ActiveCutTrackingCollection { primary, secondary };
 
@@ -89,6 +115,7 @@ public:
     scene_clock_start_ = scene_clock_start;
     caller_ = caller;
     pending_end_ = false;
+    tail_input_state_ = ActiveCutTailInputState::awaiting_release;
     std::fill(started_.begin(), started_.end(), false);
     std::fill(ended_.begin(), ended_.end(), false);
     primary_tracking_.clear();
@@ -104,6 +131,44 @@ public:
   }
 
   [[nodiscard]] ActiveCutUpdateResult update(const ActiveCutUpdateServices& services) {
+    return update(ActiveCutTailInput{}, services);
+  }
+
+  // Runs the recovered prelude before active admission.  It is deliberately
+  // inert while a cut is active; callers can still sample and pass inputs, but
+  // no entry callback or transient mutation is delivered in that state.
+  void run_prelude(const ActiveCutPreludeInput& input,
+                   const ActiveCutPreludeServices& services) {
+    if (active_ || updating_) return;
+    if (input.send_shared_owner_event) {
+      if (!services.send_shared_owner_event) {
+        throw std::runtime_error("active cut prelude requires a shared owner event service");
+      }
+      services.send_shared_owner_event();
+    }
+    // The owner callback is allowed to admit a cut.  Do not mutate transient
+    // state after that admission: each prelude action is inactive-only.
+    if (!active_ && input.toggle_transient_state) {
+      if (!services.toggle_transient_state) {
+        throw std::runtime_error("active cut prelude requires a transient toggle service");
+      }
+      services.toggle_transient_state();
+    }
+  }
+
+  // This frame-shaped entry point makes the inactive prelude and active tail
+  // explicit without turning ActiveCutUpdate into an automatic player.
+  [[nodiscard]] ActiveCutUpdateResult frame(const ActiveCutPreludeInput& prelude,
+                                            const ActiveCutPreludeServices& prelude_services,
+                                            const ActiveCutTailInput& tail,
+                                            const ActiveCutUpdateServices& services) {
+    run_prelude(prelude, prelude_services);
+    if (!active_) return ActiveCutUpdateResult::inactive;
+    return update(tail, services);
+  }
+
+  [[nodiscard]] ActiveCutUpdateResult update(const ActiveCutTailInput& tail,
+                                             const ActiveCutUpdateServices& services) {
     if (!active_ || updating_ || !services.sample_scene_clock || !services.resolve_member ||
         !services.start_member || !services.end_primary_member || !services.resolve_retained_source ||
         !services.end_secondary_member || !services.complete) {
@@ -123,8 +188,10 @@ public:
       cleanup(services);
       return ActiveCutUpdateResult::completed;
     }
+    run_tail_input(tail);
     // A natural end is deliberately only a request in this update.  It is
     // observed by the next update, avoiding a second cleanup after the passes.
+    // Unlike the input predicates above, this comparison is never bypassed.
     if (position > natural_end_) pending_end_ = true;
     return ActiveCutUpdateResult::updated;
   }
@@ -132,6 +199,9 @@ public:
   [[nodiscard]] bool active() const noexcept { return active_; }
   [[nodiscard]] bool pending_end() const noexcept { return pending_end_; }
   [[nodiscard]] std::optional<std::uint64_t> caller() const noexcept { return caller_; }
+  [[nodiscard]] ActiveCutTailInputState tail_input_state() const noexcept {
+    return tail_input_state_;
+  }
 
 private:
   using Bound = float ActiveCutMember::*;
@@ -196,10 +266,25 @@ private:
     std::fill(started_.begin(), started_.end(), false);
     std::fill(ended_.begin(), ended_.end(), false);
     pending_end_ = false;
+    tail_input_state_ = ActiveCutTailInputState::awaiting_release;
     active_ = false;
     const auto completion_caller = caller_.value_or(0U);
     services.complete(completion_caller);
     caller_.reset();
+  }
+
+  void run_tail_input(const ActiveCutTailInput& input) {
+    if (input.bypass_input_predicates) return;
+    if (tail_input_state_ == ActiveCutTailInputState::awaiting_release &&
+        input.release_observed) {
+      tail_input_state_ = ActiveCutTailInputState::awaiting_press;
+    }
+    if (tail_input_state_ == ActiveCutTailInputState::awaiting_press &&
+        input.press_observed) {
+      // This is intentionally the same request-only route used by natural
+      // end.  Cleanup is left for the next update.
+      pending_end_ = true;
+    }
   }
 
   [[nodiscard]] std::uint64_t retain(const ActiveCutTrackingRegistration& registration, std::size_t index) {
@@ -300,6 +385,7 @@ private:
   bool active_{};
   bool pending_end_{};
   bool updating_{};
+  ActiveCutTailInputState tail_input_state_{ActiveCutTailInputState::awaiting_release};
 };
 
 } // namespace off::cutscene
