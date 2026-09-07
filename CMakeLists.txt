@@ -142,6 +142,7 @@ add_library(off_core
     src/simulation/fixed_step.cpp
     src/simulation/input.cpp
     src/simulation/world.cpp
+    src/simulation/world_command_capture.cpp
     src/ui/graphics_menu.cpp
     src/ui/graphics_menu_draw.cpp
     src/ui/graphics_menu_pointer.cpp

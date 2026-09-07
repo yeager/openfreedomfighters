@@ -1,5 +1,6 @@
 #include "off/crypto/sha256.hpp"
 #include "off/simulation/world.hpp"
+#include "off/simulation/world_command_capture.hpp"
 
 #include <cstdlib>
 #include <algorithm>
@@ -24,6 +25,33 @@ off::simulation::InputSnapshot input(std::uint64_t tick) {
 
 int main() {
   using namespace off::simulation;
+
+  {
+    SimulationWorld captured;
+    WorldCommandCapture capture;
+    capture.begin(captured, 3);
+    const auto spawn = captured.queue_spawn({{3, 2, 1}, 9});
+    const EntityId destroyed{7, 3};
+    captured.queue_destroy(destroyed);
+    const auto event = captured.queue_event(1, 77, destroyed, {}, -9);
+    const auto commands = capture.commands();
+    check(commands.size() == 3 && commands[0].issued_after_tick == 0 &&
+              commands[0].ordinal == 1 && commands[0].kind == WorldCommandKind::spawn &&
+              commands[0].accepted_identifier == spawn && commands[0].spawn.flags == 9 &&
+              commands[1].ordinal == 2 && commands[1].kind == WorldCommandKind::destroy &&
+              commands[1].destroy == destroyed && commands[2].ordinal == 3 &&
+              commands[2].kind == WorldCommandKind::event && commands[2].event.sequence == event,
+          "capture accepted cross-kind world commands in one tick-boundary order");
+    const auto before_full_capture = captured.state_hash();
+    bool capture_rejected = false;
+    try { static_cast<void>(captured.queue_spawn({})); } catch (const std::runtime_error &) { capture_rejected = true; }
+    check(capture_rejected && captured.state_hash() == before_full_capture && capture.commands().size() == 3,
+          "capture capacity rejects before an unrecorded world mutation");
+    captured.reset();
+    check(!capture.active() && capture.invalidated() && capture.commands().size() == 3 &&
+              captured.queue_spawn({}) == 1,
+          "world reset terminates capture without recording a discontinuity");
+  }
 
   SimulationWorld world;
   const auto first_request = world.queue_spawn({{1, 2, 3}, 7});

@@ -1,4 +1,5 @@
 #include "off/simulation/world.hpp"
+#include "off/simulation/world_command_capture.hpp"
 
 #include <algorithm>
 #include <array>
@@ -92,25 +93,30 @@ SimulationWorld::SimulationWorld(WorldLimits limits) : limits_(limits) {
 }
 
 std::uint64_t SimulationWorld::queue_spawn(SpawnState state) {
+  if(command_capture_) command_capture_->preflight();
   if (pending_spawns_.size() >= limits_.maximum_pending_spawns)
     throw std::length_error("simulation spawn queue capacity exceeded");
   if (next_sequence_ == std::numeric_limits<std::uint64_t>::max())
     throw std::overflow_error("simulation sequence exhausted");
   const auto request = next_sequence_++;
   pending_spawns_.push_back({request, state});
+  if(command_capture_) command_capture_->accepted_spawn(tick_,state,request);
   return request;
 }
 
 void SimulationWorld::queue_destroy(EntityId entity) {
+  if(command_capture_) command_capture_->preflight();
   if (pending_destroys_.size() >= limits_.maximum_pending_destroys)
     throw std::length_error("simulation destroy queue capacity exceeded");
   pending_destroys_.push_back(entity);
+  if(command_capture_) command_capture_->accepted_destroy(tick_,entity);
 }
 
 std::uint64_t SimulationWorld::queue_event(std::uint64_t tick,
                                            std::uint32_t type, EntityId source,
                                            EntityId target,
                                            std::int64_t value) {
+  if(command_capture_) command_capture_->preflight();
   if (tick <= tick_)
     throw std::invalid_argument("simulation event must target a future tick");
   if (pending_events_.size() >= limits_.maximum_pending_events)
@@ -119,6 +125,7 @@ std::uint64_t SimulationWorld::queue_event(std::uint64_t tick,
     throw std::overflow_error("simulation sequence exhausted");
   const auto sequence = next_sequence_++;
   pending_events_.push_back({tick, sequence, type, source, target, value});
+  if(command_capture_) command_capture_->accepted_event(tick_,pending_events_.back());
   return sequence;
 }
 
@@ -128,6 +135,7 @@ bool SimulationWorld::alive(EntityId entity) const noexcept {
 }
 
 void SimulationWorld::reset() noexcept {
+  invalidate_command_capture();
   tick_ = 0;
   next_sequence_ = 1;
   slots_.clear();
@@ -137,6 +145,13 @@ void SimulationWorld::reset() noexcept {
   pending_events_.clear();
   last_input_ = {};
 }
+
+void SimulationWorld::attach_command_capture(WorldCommandCapture& capture) {
+  if(command_capture_ || capture.world_ != nullptr) throw std::runtime_error("simulation world command capture is already attached");
+  command_capture_=&capture;
+}
+void SimulationWorld::detach_command_capture(WorldCommandCapture& capture) noexcept { if(command_capture_==&capture) command_capture_=nullptr; }
+void SimulationWorld::invalidate_command_capture() noexcept { if(command_capture_) { auto* capture=command_capture_; command_capture_=nullptr; capture->invalidate_from_world(); } }
 
 WorldStepResult SimulationWorld::step(const InputSnapshot &input) {
   if (input.tick != tick_ + 1)
@@ -316,7 +331,7 @@ void SimulationWorld::import_snapshot(std::span<const std::byte> bytes, Snapshot
   const auto destroys=read_count(limits.maximum_pending_destroys); staged.pending_destroys_.reserve(destroys);for(std::uint32_t i=0;i<destroys;++i)staged.pending_destroys_.push_back(read_snapshot_entity(reader));
   const auto events=read_count(limits.maximum_pending_events); staged.pending_events_.reserve(events);
   for(std::uint32_t i=0;i<events;++i){SimulationEvent event;event.tick=reader.integer<std::uint64_t>();event.sequence=reader.integer<std::uint64_t>();event.type=reader.integer<std::uint32_t>();event.source=read_snapshot_entity(reader);event.target=read_snapshot_entity(reader);event.value=reader.integer<std::int64_t>();if(event.tick<=staged.tick_ || event.sequence==0 || event.sequence>=staged.next_sequence_ || !used.insert(event.sequence).second)throw std::invalid_argument("simulation snapshot event is invalid");staged.pending_events_.push_back(event);}
-  if(!reader.exhausted())throw std::invalid_argument("simulation snapshot has trailing payload bytes"); staged.rebuild_live_entities(); *this=std::move(staged);
+  if(!reader.exhausted())throw std::invalid_argument("simulation snapshot has trailing payload bytes"); staged.rebuild_live_entities(); invalidate_command_capture(); *this=std::move(staged);
 }
 
 } // namespace off::simulation

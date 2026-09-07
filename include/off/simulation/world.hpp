@@ -11,6 +11,7 @@
 #include <vector>
 
 namespace off::simulation {
+class WorldCommandCapture;
 
 struct EntityId {
   std::uint32_t index{};
@@ -96,6 +97,10 @@ public:
                        SnapshotReadLimits limits = {});
 
 private:
+  friend class WorldCommandCapture;
+  void attach_command_capture(WorldCommandCapture& capture);
+  void detach_command_capture(WorldCommandCapture& capture) noexcept;
+  void invalidate_command_capture() noexcept;
   struct Slot {
     std::uint32_t generation{1};
     bool alive{};
@@ -118,6 +123,7 @@ private:
   std::vector<EntityId> pending_destroys_;
   std::vector<SimulationEvent> pending_events_;
   InputSnapshot last_input_{};
+  WorldCommandCapture* command_capture_{};
 };
 
 } // namespace off::simulation
