@@ -1425,6 +1425,10 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
               (host.components().at(sound_phase.owners[1].extend_component).state().status&4U),
               "the scoped sound phase admits exactly its eight completed typed component callbacks");
         rejects([&]{host.run_isolated_sound_family_phase_one();});
+        host.stop_sound_owner(468);
+        const auto stopped_admission=host.preflight_global_lifecycle();
+        check(stopped_admission.covered_components==4 && stopped_admission.covered_owners==1,
+              "stopped sound owners revoke their dependent component and owner lifecycle coverage");
         check_complete_outer_loader_tail(host);
       }
       rejects([&]{host.construct_remaining_directory_without_engine_renderer();});

@@ -989,12 +989,12 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
               component.state().attached_owner!=sound.handle().value || !sound.source_applied_ ||
               payload==constructed_picture_components_.end() || !payload->second.sound_extend || !sound.active_)
             throw std::runtime_error("SoundExtend phase one requires its prepared typed sound owner");
+          apply_sound_extension(row);
           if(!restore_mode_ && (component.state().admitted&0x10U)) {
             component.state().admitted&=~0x10U;
             if(ordinary_) ordinary_->notify_removal();
             payload->second.sound_extend->phase_one_ordinary_removed=true;
           }
-          apply_sound_extension(row);
           record_supported_component_admission(component_index);
         };
         if(sound_notify) phase_one=[this,row,component_index](runtime::ComponentRecord& callback_record) {
@@ -1819,8 +1819,29 @@ IntroLifecyclePreflightReport IntroRuntime::preflight_global_lifecycle() const {
   }
   IntroLifecycleAdmissionCoverageRegistry admissions{std::move(requirements)};
   for(const auto identity:supported_reader_admissions_) admissions.cover_reader(identity);
-  for(const auto identity:supported_component_admissions_) admissions.cover_component(identity);
-  for(const auto identity:supported_owner_admissions_) admissions.cover_owner(identity);
+  for(const auto identity:supported_component_admissions_) {
+    const auto found=std::ranges::find_if(components_.construction_order(),[&](const auto index) {
+      return component_handle(index)==identity.component;
+    });
+    if(found==components_.construction_order().end()) continue;
+    const auto& component=components_.at(*found);
+    const auto owner=IntroRuntimeHandle{component.state().attached_owner};
+    const auto sound=std::ranges::find_if(sounds_,[&](const auto& candidate) {
+      return candidate->handle()==owner;
+    });
+    if(component.removed() || !(component.state().status&4U) || sound==sounds_.end() ||
+        !(*sound)->active() || (*sound)->failed() || !(*sound)->owner_binding())
+      continue;
+    admissions.cover_component(identity);
+  }
+  for(const auto identity:supported_owner_admissions_) {
+    const auto sound=std::ranges::find_if(sounds_,[&](const auto& candidate) {
+      return candidate->handle().value==identity.owner;
+    });
+    if(sound==sounds_.end() || !(*sound)->active() || (*sound)->failed() || !(*sound)->owner_binding())
+      continue;
+    admissions.cover_owner(identity);
+  }
   const auto admitted=admissions.report();
   report.covered_readers=admitted.covered_readers;
   report.covered_components=admitted.covered_components;
