@@ -2344,6 +2344,18 @@ void IntroRuntime::apply_supported_window_deferred_reader(const IntroDeferredRea
       *selected_source>=directory_resource_mapping_.size() ||
       !directory_resource_mapping_[*selected_source])
     throw std::runtime_error("Supported Window reader has no mapped selected camera");
+  const auto resolve_optional_reference=[&](std::uint32_t reference)
+      ->std::optional<IntroRuntimeResourceHandle> {
+    if(reference==0U) return std::nullopt;
+    const auto target=sources.local_source_for_authored_reference(reference);
+    if(!target || *target>=directory_resource_mapping_.size() || !directory_resource_mapping_[*target])
+      throw std::runtime_error("Supported Window reader has an unresolved opaque source reference");
+    return *directory_resource_mapping_[*target];
+  };
+  // Resolve the complete pair before changing any live Window or camera state.
+  std::array<std::optional<IntroRuntimeResourceHandle>,2> opaque_reference_resources;
+  for(std::size_t index=0;index<decoded.opaque_references.size();++index)
+    opaque_reference_resources[index]=resolve_optional_reference(decoded.opaque_references[index]);
   const auto window_handle=source_handle(work.source_directory_index);
   const auto camera_handle=source_handle(*selected_source);
   auto& window=window_for_owner(window_handle);
@@ -2360,6 +2372,7 @@ void IntroRuntime::apply_supported_window_deferred_reader(const IntroDeferredRea
   // camera. The following mutations preserve the reviewed reader sequence.
   if(std::ranges::find(window.cameras,camera_handle)==window.cameras.end())
     window.cameras.push_back(camera_handle);
+  window.opaque_reference_resources=opaque_reference_resources;
   window.group.flags|=0x400U;
   selected_camera.begin_window_state_projection(decoded.options[0]!=0U,decoded.options[1]!=0U);
   window.pending_visibility=-1.0F;

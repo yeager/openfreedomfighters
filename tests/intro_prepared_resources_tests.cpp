@@ -1039,11 +1039,21 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               "ordinary reader bracket retains two external calls and forward owner-before-component boundaries without consuming work");
         const auto& window=host.window_for_owner(host.source_handle(host.resources().window_index()));
         const auto& camera=host.camera_for_owner(host.source_handle(host.resources().camera_index()));
+        const auto window_reference_resource=[&host](std::uint32_t reference)
+            ->std::optional<off::graphics::IntroRuntimeResourceHandle> {
+          if(reference==0U) return std::nullopt;
+          const auto source=host.resources().sources().local_source_for_authored_reference(reference);
+          if(!source) return std::nullopt;
+          return host.directory_resource_mapping()[*source];
+        };
         check(applied_window_readers==1 && (window.group.flags&0x400U)!=0U &&
               camera.associated_target()==host.source_handle(host.resources().window_index()).value &&
               camera.render_control()==0U && (camera.flags()&0x8000U)==0U && (camera.flags()&0x210000U)==0x210000U &&
               camera.enabled(),
               "explicit first-cut Window reader applies ordered owner and canonical camera state without registration");
+        check(window.opaque_reference_resources[0]==window_reference_resource(host.resources().window().opaque_references[0]) &&
+              window.opaque_reference_resources[1]==window_reference_resource(host.resources().window().opaque_references[1]),
+              "Window reader atomically retains both opaque references as source-directory resource mappings");
         check(applied_sound_readers==host.resources().sounds().size() &&
               std::ranges::all_of(host.sounds(),[](const auto& sound) { return sound->source_applied(); }),
               "sound owner readers consume both parsed source prefixes without preparing playback");

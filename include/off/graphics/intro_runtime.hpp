@@ -431,6 +431,10 @@ struct IntroOuterLoaderTailServices {
 struct IntroWindowOwner {
   IntroAuthoredGroupOwner group;
   IntroRuntimeHandle enclosing_window{},selected_camera{},cursor{},auxiliary{};
+  // The reviewed Window reader retains these authored 0x88 references as
+  // source-directory resource mappings. They are not interpreted as cursors,
+  // owner links, or activation work.
+  std::array<std::optional<IntroRuntimeResourceHandle>,2> opaque_reference_resources{};
   std::vector<IntroRuntimeHandle> cameras;
   float input_scalar{1.0F},pending_visibility{0.0F};
   std::uint32_t input_mode{1},tracking_timer{},local_counter{};
