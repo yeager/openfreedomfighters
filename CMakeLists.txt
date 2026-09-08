@@ -102,6 +102,7 @@ add_library(off_core
     src/graphics/startup_graphics_asset.cpp
     src/graphics/intro_prepared_resources.cpp
     src/graphics/intro_runtime.cpp
+    src/graphics/intro_lifecycle_admission.cpp
     src/graphics/intro_preview_builder.cpp
     src/graphics/intro_controller_initialization.cpp
     src/graphics/startup_graphics_prepared_plan.cpp
@@ -568,6 +569,12 @@ if(BUILD_TESTING)
             COMMAND off_intro_prepared_resources_tests
                     "${OFF_INTRO_PREPARED_RESOURCES_TEST_GROUP}")
     endforeach()
+
+    add_executable(off_intro_lifecycle_admission_tests
+        tests/intro_lifecycle_admission_tests.cpp)
+    target_link_libraries(off_intro_lifecycle_admission_tests PRIVATE off_core)
+    add_test(NAME off_intro_lifecycle_admission_tests
+        COMMAND off_intro_lifecycle_admission_tests)
 
     add_executable(off_picture_transform_tests tests/picture_transform_tests.cpp)
     target_link_libraries(off_picture_transform_tests PRIVATE off_core)
