@@ -539,6 +539,14 @@ limit; their NUL terminator must be inside the declared block. Integer tags
 accept only the two reviewed full-byte variants. A target reference and fallback
 name stay separate; the name-search scope remains unimplemented.
 
+The separately reviewed external-command owner has exactly two
+`ZLIST_ExternCutSequenceCommand` attachments. Its narrow reader preserves each
+common command and resolves its required external-list source reference through
+the live directory mapping. It first validates and resolves the complete pair,
+then publishes one immutable state record; a bad second command leaves no
+partial reader admission. This is not phase-two execution: it cannot schedule a
+command, modify a cut list, dispatch an event, or begin a cut.
+
 `authored_event_identifier` maps a nonzero authored event reference to its
 one-based identifier-table entry and returns owned raw string bytes. It does not
 strip source-reference marker bits. Zero returns absence and out-of-range values
