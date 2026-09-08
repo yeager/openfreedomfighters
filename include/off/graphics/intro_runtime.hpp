@@ -337,6 +337,24 @@ struct IntroMovieControllerReaderState {
   std::vector<std::optional<IntroRuntimeResourceHandle>> sequence_members;
   std::vector<std::optional<IntroRuntimeResourceHandle>> group_members;
 };
+// Immutable state published by the two reviewed first-cut list readers.  It
+// retains authored data and source-directory resource mappings only; it does
+// not construct a CutList, register events, or schedule commands.
+struct IntroFirstCutSequenceReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t component_index{};
+  data::GmsIntroCutSequenceSource authored;
+  std::array<std::optional<IntroRuntimeResourceHandle>,6> members;
+};
+struct IntroFirstCutListReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::array<std::size_t,6> component_indices{};
+  data::GmsIntroFirstCutSource authored;
+  IntroRuntimeResourceHandle sequence_resource;
+  std::array<IntroRuntimeResourceHandle,5> command_target_resources;
+};
 struct IntroSourceScriptWork {
   IntroRuntimeResourceHandle resource;
   std::uint32_t source_offset;
@@ -715,6 +733,12 @@ public:
   // not run component phases, enroll events, or activate the controller.
   void apply_supported_movie_control_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroMovieControllerReaderState* movie_controller_reader_state() const noexcept {return movie_controller_reader_state_?&*movie_controller_reader_state_:nullptr;}
+  // Complete only the two checked first-cut list reader boundaries. These
+  // publish immutable source/resource state and do not execute cutscene work.
+  void apply_supported_first_cut_sequence_deferred_reader(const IntroDeferredReaderWork& work);
+  void apply_supported_first_cut_list_deferred_reader(const IntroDeferredReaderWork& work);
+  [[nodiscard]] const IntroFirstCutSequenceReaderState* first_cut_sequence_reader_state() const noexcept {return first_cut_sequence_reader_state_?&*first_cut_sequence_reader_state_:nullptr;}
+  [[nodiscard]] const IntroFirstCutListReaderState* first_cut_list_reader_state() const noexcept {return first_cut_list_reader_state_?&*first_cut_list_reader_state_:nullptr;}
   // Caller still owes actual global lifecycle admission and external services.
   // Clock/audio resolve through the same application state retained by this scene.
   void run_controller_phase_two(const IntroControllerPhaseTwoServices& external);
@@ -825,6 +849,8 @@ private:
   std::vector<std::vector<std::size_t>> owner_components_;
   std::size_t controller_component_{};
   std::optional<IntroMovieControllerReaderState> movie_controller_reader_state_;
+  std::optional<IntroFirstCutSequenceReaderState> first_cut_sequence_reader_state_;
+  std::optional<IntroFirstCutListReaderState> first_cut_list_reader_state_;
   IntroControllerInitialization controller_initialization_;
   FreshIntroCamera prepared_camera_;
   std::map<std::size_t,std::unique_ptr<IntroLiveCameraOwner>> live_cameras_;

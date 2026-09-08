@@ -2705,6 +2705,102 @@ void IntroRuntime::apply_supported_movie_control_deferred_reader(const IntroDefe
   record_supported_reader_admission(work);
 }
 
+void IntroRuntime::apply_supported_first_cut_sequence_deferred_reader(
+    const IntroDeferredReaderWork& work) {
+  const auto source_index=resources_.member_index();
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !work.processed ||
+      work.source_directory_index!=source_index || first_cut_sequence_reader_state_)
+    throw std::runtime_error("First-cut sequence reader requires its unique live deferred owner work");
+  if(std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate) {
+       return std::addressof(candidate)==std::addressof(work);
+     })==deferred_reader_work_.end())
+    throw std::runtime_error("First-cut sequence reader requires bracket-owned work");
+  const auto& source=resources_.sources().directory().at(source_index);
+  if(source.source_type!=0x0800001aU || source.deferred_source_offset!=work.source_offset ||
+      directory_resource_mapping_.at(source_index)!=work.resource ||
+      !associated_resource_owner(work.resource) ||
+      *associated_resource_owner(work.resource)!=source_handle(source_index) ||
+      source.attachments.size()!=1U || source.attachments[0].parameter!=1.0F ||
+      resources_.sources().attachment_identifier(source_index,0)!="ZLIST_CutSequence")
+    throw std::runtime_error("First-cut sequence reader source shape is unsupported");
+  const auto attachments=owner_components(source_handle(source_index));
+  if(attachments.size()!=1U)
+    throw std::runtime_error("First-cut sequence reader attachment count is unsupported");
+  const auto component_index=attachments.front();
+  const auto& component=components_.at(component_index);
+  if(!component.constructed() || component.removed() ||
+      component.source().factory_name!="ZLIST_CutSequence" ||
+      component.state().attached_owner!=source_handle(source_index).value)
+    throw std::runtime_error("First-cut sequence reader component is unavailable");
+  const auto resolve_optional=[this](std::uint32_t reference) -> std::optional<IntroRuntimeResourceHandle> {
+    if(reference==0U) return std::nullopt;
+    const auto source=resources_.sources().local_source_for_authored_reference(reference);
+    if(!source || *source>=directory_resource_mapping_.size() || !directory_resource_mapping_[*source])
+      throw std::runtime_error("First-cut sequence reader has an unresolved source reference");
+    return *directory_resource_mapping_[*source];
+  };
+  const auto& authored=resources_.member();
+  IntroFirstCutSequenceReaderState state{
+      .owner=source_handle(source_index), .resource=work.resource,
+      .component_index=component_index, .authored=authored, .members={}};
+  for(std::size_t index=0;index<authored.references.size();++index)
+    state.members[index]=resolve_optional(authored.references[index]);
+  first_cut_sequence_reader_state_=std::move(state);
+  try { record_supported_reader_admission(work); }
+  catch(...) { first_cut_sequence_reader_state_.reset(); throw; }
+}
+
+void IntroRuntime::apply_supported_first_cut_list_deferred_reader(
+    const IntroDeferredReaderWork& work) {
+  const auto source_index=resources_.first_cut_index();
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !work.processed ||
+      work.source_directory_index!=source_index || first_cut_list_reader_state_)
+    throw std::runtime_error("First-cut list reader requires its unique live deferred owner work");
+  if(std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate) {
+       return std::addressof(candidate)==std::addressof(work);
+     })==deferred_reader_work_.end())
+    throw std::runtime_error("First-cut list reader requires bracket-owned work");
+  const auto& source=resources_.sources().directory().at(source_index);
+  constexpr std::array<std::string_view,6> factories{
+      "ZLIST_CutSequenceList", "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand",
+      "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand"};
+  if(source.source_type!=0x0800001aU || source.deferred_source_offset!=work.source_offset ||
+      directory_resource_mapping_.at(source_index)!=work.resource ||
+      !associated_resource_owner(work.resource) ||
+      *associated_resource_owner(work.resource)!=source_handle(source_index) ||
+      source.attachments.size()!=factories.size())
+    throw std::runtime_error("First-cut list reader source shape is unsupported");
+  const auto attachments=owner_components(source_handle(source_index));
+  if(attachments.size()!=factories.size())
+    throw std::runtime_error("First-cut list reader attachment count is unsupported");
+  for(std::size_t index=0;index<factories.size();++index) {
+    const auto expected_parameter=index==0?0.0F:1.0F;
+    const auto& component=components_.at(attachments[index]);
+    if(source.attachments[index].parameter!=expected_parameter ||
+        resources_.sources().attachment_identifier(source_index,index)!=factories[index] ||
+        !component.constructed() || component.removed() ||
+        component.source().factory_name!=factories[index] ||
+        component.state().attached_owner!=source_handle(source_index).value)
+      throw std::runtime_error("First-cut list reader attachment is unsupported");
+  }
+  const auto resolve_required=[this](std::uint32_t reference) -> IntroRuntimeResourceHandle {
+    const auto source=resources_.sources().local_source_for_authored_reference(reference);
+    if(!source || *source>=directory_resource_mapping_.size() || !directory_resource_mapping_[*source])
+      throw std::runtime_error("First-cut list reader has an unresolved mandatory source reference");
+    return *directory_resource_mapping_[*source];
+  };
+  const auto& authored=resources_.first_cut();
+  IntroFirstCutListReaderState state{
+      .owner=source_handle(source_index), .resource=work.resource,
+      .component_indices={attachments[0],attachments[1],attachments[2],attachments[3],attachments[4],attachments[5]},
+      .authored=authored, .sequence_resource=resolve_required(authored.sequence_reference), .command_target_resources={}};
+  for(std::size_t index=0;index<authored.commands.size();++index)
+    state.command_target_resources[index]=resolve_required(authored.commands[index].target_reference);
+  first_cut_list_reader_state_=std::move(state);
+  try { record_supported_reader_admission(work); }
+  catch(...) { first_cut_list_reader_state_.reset(); throw; }
+}
+
 IntroRuntimeHandle IntroRuntime::source_handle(std::size_t source) const {
   if (source >= resources_.sources().directory().size()) throw std::runtime_error("intro source index is out of range");
   return {owner_base_+static_cast<std::uint64_t>(source)+1};

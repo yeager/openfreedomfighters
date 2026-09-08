@@ -1006,6 +1006,10 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
             reader_events.push_back("owner");
             if(work.source_directory_index==host.resources().controller_index())
               host.apply_supported_movie_control_deferred_reader(work);
+            if(work.source_directory_index==host.resources().member_index())
+              host.apply_supported_first_cut_sequence_deferred_reader(work);
+            if(work.source_directory_index==host.resources().first_cut_index())
+              host.apply_supported_first_cut_list_deferred_reader(work);
             if(host.resources().sources().directory().at(work.source_directory_index).source_type==0x00200012U) {
               host.apply_supported_sound_owner_deferred_reader(work);
               ++applied_sound_readers;
@@ -1045,11 +1049,26 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               "sound owner readers consume both parsed source prefixes without preparing playback");
         const auto reader_admission=host.preflight_global_lifecycle();
         check(!reader_admission.ready() && reader_admission.expected_readers==420 &&
-              reader_admission.covered_readers==4 && reader_admission.expected_components==383 &&
+              reader_admission.covered_readers==6 && reader_admission.expected_components==383 &&
               reader_admission.covered_components==0 && reader_admission.expected_owners==471 &&
               reader_admission.covered_owners==0 &&
               reader_admission.failure==off::graphics::IntroLifecyclePreflightFailure::reader_coverage,
               "only completed typed reader boundaries contribute exact partial lifecycle coverage");
+        const auto* sequence_reader=host.first_cut_sequence_reader_state();
+        const auto* list_reader=host.first_cut_list_reader_state();
+        check(sequence_reader && sequence_reader->owner==host.source_handle(host.resources().member_index()) &&
+              sequence_reader->resource==host.directory_resource_mapping()[host.resources().member_index()] &&
+              sequence_reader->component_index==host.owner_components(sequence_reader->owner).front() &&
+              sequence_reader->authored.references==host.resources().member().references &&
+              sequence_reader->members[0]==host.directory_resource_mapping()[host.resources().camera_index()],
+              "first-cut sequence reader publishes immutable authored references without constructing a cut sequence");
+        check(list_reader && list_reader->owner==host.source_handle(host.resources().first_cut_index()) &&
+              list_reader->resource==host.directory_resource_mapping()[host.resources().first_cut_index()] &&
+              list_reader->component_indices.size()==6 &&
+              list_reader->authored.sequence_reference==host.resources().first_cut().sequence_reference &&
+              list_reader->sequence_resource==host.directory_resource_mapping()[host.resources().member_index()] &&
+              list_reader->command_target_resources[0]==host.directory_resource_mapping()[host.resources().sources().local_source_for_authored_reference(host.resources().first_cut().commands[0].target_reference).value()],
+              "first-cut list reader resolves required immutable source resources without registering commands or events");
         if(!host.resources().sounds().empty()) {
           const auto& authored_sound=host.resources().sounds().front();
           const auto attachments=host.owner_components(host.source_handle(authored_sound.directory_index));
@@ -1399,7 +1418,7 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
         host.prepare_sound_owner(468,sound_services);
         const auto owner_admission=host.preflight_global_lifecycle();
         check(!owner_admission.ready() && owner_admission.expected_readers==420 &&
-              owner_admission.covered_readers==4 && owner_admission.expected_components==383 &&
+              owner_admission.covered_readers==6 && owner_admission.expected_components==383 &&
               owner_admission.covered_components==0 && owner_admission.expected_owners==471 &&
               owner_admission.covered_owners==2 &&
               owner_admission.failure==off::graphics::IntroLifecyclePreflightFailure::reader_coverage,
