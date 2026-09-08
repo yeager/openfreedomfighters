@@ -15,7 +15,7 @@ or save-state results.
 | Widescreen and ultrawide | Corrected projection | Native | Native |
 | Presentation frame rate | Reference-compatible option | Unlocked where safe | Unlocked where safe |
 | Texture filtering | Reference path | Anisotropic and stable mip selection | Same, with replacement maps |
-| Anti-aliasing | Reference-compatible | Temporal or high-quality spatial AA | Same, plus optional DLSS 4.5 on supported RTX hardware |
+| Anti-aliasing | Reference-compatible | Temporal or high-quality spatial AA | Same, plus optional DLSS 4.5 on supported RTX hardware; future FSR support remains separately capability-gated |
 | Lighting and shadows | Reproduced original model | Higher-resolution dynamic path | Optional authored relighting |
 | Color output | SDR reference transform | SDR/HDR tone mapping | SDR/HDR tone mapping |
 | Effects | Reference particles and blending | Improved particles, water, glass, smoke, and explosions | Optional authored effects |
@@ -83,6 +83,13 @@ Capability checks choose between DLSS 4.5, the portable temporal path, or native
 rendering at runtime. Original mode does not enable DLSS by default. macOS and
 non-RTX devices use the equivalent portable controls and never lose a quality or
 resolution option merely because DLSS is unavailable.
+
+AMD GPUs use the same native-resolution and portable temporal paths as every
+other supported adapter. FSR is not currently an engine feature or a substitute
+label for that path. A future optional FSR adapter may use AMD's official SDK
+only after its supported APIs, platforms, redistribution terms, motion-vector
+and exposure requirements, and image-quality behavior are verified. Its absence
+must never remove native, temporal, resolution, or quality controls.
 
 A future DLSS 5 backend is not a current deliverable. It may replace or supplement
 4.5 only after NVIDIA publishes official documentation, an SDK, platform support,

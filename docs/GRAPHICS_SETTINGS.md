@@ -95,8 +95,9 @@ The complete overlay is organized into these sections:
 - **Resolution:** native, fixed-scale, or dynamic rendering; scale bounds and
   target presentation rate. UI and subtitles render at output resolution.
 - **Anti-aliasing and upscaling:** reference, FXAA, TAA, DLAA, portable temporal
-  upscaling, and Modern+ DLSS 4.5 Super Resolution with quality and sharpening.
-  Unsupported combinations are disabled or resolved with a visible reason.
+  upscaling, and Modern+ DLSS 4.5 Super Resolution with quality and sharpening;
+  a future FSR row appears only after a real AMD adapter exists. Unsupported
+  combinations are disabled or resolved with a visible reason.
 - **Textures:** retail or independently licensed Modern+ source, bilinear,
   trilinear, anisotropy, and mip bias.
 - **Shadows:** reference/off/modern mode, quality, map resolution, cascades,
@@ -150,6 +151,8 @@ the recovery paths.
 |---|---|---|---|
 | F10 overlay and portable settings | Required | Required | Required |
 | Native and portable temporal paths | Required | Required | Required |
+| AMD GPU support | Native and portable temporal paths | Native and portable temporal paths | Native and portable temporal paths where the active backend supports the adapter |
+| FSR Super Resolution | Not currently exposed; future optional official AMD adapter | Not currently exposed; future support requires an officially supported native stack | Not currently exposed |
 | Modern+ replacement assets | Portable asset contract | Portable asset contract | Portable asset contract |
 | DLSS 4.5 Super Resolution | Planned for supported NVIDIA RTX, D3D12, driver, and licensed runtime combinations | Exposed only if an official NVIDIA SDK explicitly supports the active native stack | Not expected; portable temporal fallback remains available |
 | DLSS 5 | Not a current setting or deliverable | Not a current setting or deliverable | Not a current setting or deliverable |
@@ -159,6 +162,10 @@ label a shader, post-process filter, portable upscaler, or unavailable future SD
 as DLSS. If DLSS 4.5 cannot load, the retained request may resolve to portable
 temporal upscaling or native rendering with a visible reason.
 This fallback must not remove resolution controls or prevent Modern+ from running.
+
+FSR must likewise name an actual loaded AMD runtime and version. Until an
+adapter is implemented and validated, the overlay must describe the active AMD
+path as native or portable temporal upscaling, never as FSR.
 
 Graphics settings cannot affect fixed simulation time, input timestamps, RNG,
 AI visibility, collision, damage, mission state, save/replay state, or authoritative

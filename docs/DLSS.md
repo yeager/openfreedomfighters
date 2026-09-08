@@ -28,7 +28,8 @@ contains:
 - an output-resolution destination that is complete before UI composition.
 
 The interface is implemented by native-resolution, portable temporal, and DLSS
-adapters. Simulation, input sampling, audio, saves, and replay state never depend
+adapters. A future FSR adapter may use the same contract only after its official
+SDK and platform requirements are validated. Simulation, input sampling, audio, saves, and replay state never depend
 on the selected adapter or on generated presentation frames.
 
 ## Platform and packaging policy
@@ -58,10 +59,13 @@ target is available or redistributable.
 4. Integrate DLSS 4.5 Super Resolution behind the same contract, beginning with
    the first-class Windows x64/D3D12 target and then each additional native target
    explicitly supported by NVIDIA's SDK.
-5. Compare disocclusion, foliage, particles, HUD edges, thin geometry, camera cuts,
+5. Evaluate an optional FSR adapter independently against AMD's official supported
+   APIs and redistribution terms; do not expose or label it before the adapter,
+   required frame inputs, and quality validation exist.
+6. Compare disocclusion, foliage, particles, HUD edges, thin geometry, camera cuts,
    and ultrawide output against native and portable paths.
-6. Add latency instrumentation and only then evaluate Frame Generation.
-7. Re-evaluate later DLSS generations without changing the public renderer
+7. Add latency instrumentation and only then evaluate Frame Generation.
+8. Re-evaluate later DLSS generations without changing the public renderer
    contract or removing fallbacks.
 
 ## Acceptance gates
