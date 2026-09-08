@@ -103,6 +103,49 @@ void ComponentLifecycle::set_optional_lookup_removal(std::function<void(std::uin
   check_idle();
   optional_lookup_removal_=std::move(removal);
 }
+void ComponentLifecycle::run_scoped_phase_one(std::span<const std::size_t> indices) {
+  check_idle();
+  if(completed_) throw std::runtime_error("Scoped phase one is unavailable after lifecycle completion");
+  if(indices.empty()) throw std::runtime_error("Scoped phase one requires at least one component");
+
+  // Validate the complete requested boundary before exposing any concrete
+  // callback.  In particular, a duplicate must not turn a later validation
+  // error into a partial callback prefix.
+  std::vector<bool> selected(records_.size(),false);
+  for(const auto index:indices) {
+    if(index>=records_.size()) throw std::runtime_error("Scoped phase one component index is out of range");
+    if(selected[index]) throw std::runtime_error("Scoped phase one repeats a component");
+    selected[index]=true;
+    const auto& record=at(index);
+    if(!record.constructed_ || !record.identity_ || record.removed_)
+      throw std::runtime_error("Scoped phase one requires a constructed live component: " + describe(record));
+    const auto& instance=*record.instance_;
+    if(!(instance.state.requested&1U))
+      throw std::runtime_error("Scoped phase one requires a phase-one request: " + describe(record));
+    if(instance.state.status&(1U|4U))
+      throw std::runtime_error("Scoped phase one requires an unretired, uncompleted component: " + describe(record));
+    if(!instance.phase_one)
+      throw std::runtime_error("Unsupported component " + describe(record) + " phase one");
+  }
+
+  busy_=true;
+  sequence_.busy_=true;
+  try {
+    for(const auto index:indices) {
+      auto& record=at(index);
+      const auto callback=record.instance_->phase_one;
+      callback(record);
+      record.state().status|=4U;
+    }
+    busy_=false;
+    sequence_.busy_=false;
+  } catch(...) {
+    failed_=true;
+    busy_=false;
+    sequence_.busy_=false;
+    throw;
+  }
+}
 void ComponentLifecycle::construct_and_destroy_temporary_common() {
   if(failed_ || !busy_ || !sequence_.busy_ || !constructing_ || temporary_active_)
     throw std::runtime_error("Temporary common construction requires its active concrete factory");

@@ -181,6 +181,43 @@ int main() {
     }
     {
       Fixture f;
+      const auto first=f.add(1,1);
+      const auto second=f.add(2,1);
+      const std::array<std::size_t,2> requested{second,first};
+      f.lifecycle.run_scoped_phase_one(requested);
+      check(f.log==std::vector<std::string>{"one:2","one:1"} &&
+                f.lifecycle.at(first).state().status==0x24 &&
+                f.lifecycle.at(second).state().status==0x24 &&
+                !f.lifecycle.phases_completed() && f.sequence.live_count()==2,
+            "scoped phase one preserves supplied order and only commits successful callback bits");
+      rejects([&]{f.lifecycle.run_scoped_phase_one(requested);});
+      check(!f.lifecycle.failed(),"completed scoped members reject before a new callback prefix");
+    }
+    {
+      Fixture f;
+      const auto valid=f.add(1,1);
+      const auto no_request=f.add(2,0);
+      const std::array<std::size_t,2> mixed{valid,no_request};
+      rejects([&]{f.lifecycle.run_scoped_phase_one(mixed);});
+      rejects([&]{f.lifecycle.run_scoped_phase_one({});});
+      const std::array<std::size_t,2> duplicate{valid,valid};
+      rejects([&]{f.lifecycle.run_scoped_phase_one(duplicate);});
+      check(f.log.empty() && f.lifecycle.at(valid).state().status==0x20 && !f.lifecycle.failed(),
+            "scoped phase one preflights empty, duplicate and ineligible selections without effects");
+      const auto throwing=f.lifecycle.append(source(3)); f.flags[3]=0;
+      f.lifecycle.construct(throwing,[](auto&) {
+        auto value=instance(3,1);
+        value.phase_one=[](auto&){throw std::runtime_error("scoped callback failed");};
+        return value;
+      });
+      const std::array<std::size_t,1> failing{throwing};
+      rejects([&]{f.lifecycle.run_scoped_phase_one(failing);});
+      check(f.lifecycle.failed() && f.lifecycle.at(throwing).state().status==0x20 &&
+                !f.lifecycle.phases_completed(),
+            "throwing scoped callback fails the lifecycle without a completion bit or global completion");
+    }
+    {
+      Fixture f;
       const auto hidden = f.add(1);
       const auto bypass = f.add(2, 0x203);
       f.add(3, 0);

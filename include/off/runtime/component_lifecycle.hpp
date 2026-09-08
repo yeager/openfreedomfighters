@@ -150,6 +150,13 @@ public:
   // Optional retained scene lookup service. Absence is explicit; installing a
   // service does not populate a guessed lookup table or reset the scene.
   void set_optional_lookup_removal(std::function<void(std::uint32_t)> removal);
+  // Executes only concrete phase-one callbacks for an explicitly selected,
+  // already-live subset.  This is deliberately not a substitute for either
+  // global lifecycle entry point: it has no owner lookup, progress, post hook,
+  // retirement, phase-two work, or completion side effects.  Each selected
+  // record must request phase one and must not already be retired or phase-one
+  // complete.  The supplied order is the callback order.
+  void run_scoped_phase_one(std::span<const std::size_t> indices);
   void run_global_phases(const ComponentLifecycleServices& services);
   // Complete checked outer ordering around the retained reverse component
   // passes.  `additional_resources` is loader order, not a component list and
