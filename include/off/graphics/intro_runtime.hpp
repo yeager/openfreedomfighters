@@ -324,9 +324,10 @@ struct FirstCutLegalPictureActivationResult {
   std::size_t source{},center_component{};
   bool activation_prefix_complete{};
 };
-// Published by the concrete MovieControl owner reader only.  Mandatory list
-// references are resolved in the live source-directory domain; all other
-// controller fields deliberately stay raw until their consumers are recovered.
+// Published by the concrete MovieControl owner reader only.  Source references
+// with an established directory mapping are retained alongside their authored
+// values.  This is immutable reader state, not CutSequence construction or
+// controller execution.
 struct IntroMovieControllerReaderState {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
@@ -334,6 +335,9 @@ struct IntroMovieControllerReaderState {
   data::GmsIntroMovieControllerSource authored;
   IntroRuntimeResourceHandle sequence_list_resource;
   IntroRuntimeResourceHandle group_list_resource;
+  std::optional<IntroRuntimeResourceHandle> additional_resource;
+  std::optional<IntroRuntimeResourceHandle> first_optional_resource;
+  std::optional<IntroRuntimeResourceHandle> second_optional_resource;
   std::vector<std::optional<IntroRuntimeResourceHandle>> sequence_members;
   std::vector<std::optional<IntroRuntimeResourceHandle>> group_members;
 };

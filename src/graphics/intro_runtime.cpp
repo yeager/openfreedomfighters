@@ -2684,6 +2684,11 @@ void IntroRuntime::apply_supported_movie_control_deferred_reader(const IntroDefe
       throw std::runtime_error("MovieControl reader has an unresolved mandatory source reference");
     return *directory_resource_mapping_[*source];
   };
+  const auto resolve_optional=[&resolve](std::uint32_t reference)
+      -> std::optional<IntroRuntimeResourceHandle> {
+    if(reference==0U) return std::nullopt;
+    return resolve(reference);
+  };
   const auto translate=[&resolve](std::span<const std::uint32_t> references) {
     std::vector<std::optional<IntroRuntimeResourceHandle>> result;
     result.reserve(references.size());
@@ -2699,10 +2704,16 @@ void IntroRuntime::apply_supported_movie_control_deferred_reader(const IntroDefe
       .component_index=controller_component_, .authored=authored,
       .sequence_list_resource=resolve(authored.sequence_reference),
       .group_list_resource=resolve(authored.group_reference),
+      .additional_resource=resolve_optional(authored.additional_reference),
+      .first_optional_resource=authored.first_optional_reference
+          ?resolve_optional(*authored.first_optional_reference):std::nullopt,
+      .second_optional_resource=authored.second_optional_reference
+          ?resolve_optional(*authored.second_optional_reference):std::nullopt,
       .sequence_members=translate(resources_.cut_references()),
       .group_members=translate(resources_.group_references())};
   movie_controller_reader_state_=std::move(state);
-  record_supported_reader_admission(work);
+  try { record_supported_reader_admission(work); }
+  catch(...) { movie_controller_reader_state_.reset(); throw; }
 }
 
 void IntroRuntime::apply_supported_first_cut_sequence_deferred_reader(

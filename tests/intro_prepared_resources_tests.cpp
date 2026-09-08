@@ -1084,11 +1084,23 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                 "sound owner reader retains parsed attachment fields without resolving events or dispatching playback");
         }
         const auto* controller=host.movie_controller_reader_state();
+        const auto controller_reference_resource=[&host](std::uint32_t reference)
+            ->std::optional<off::graphics::IntroRuntimeResourceHandle> {
+          if(reference==0U) return std::nullopt;
+          const auto source=host.resources().sources().local_source_for_authored_reference(reference);
+          if(!source) return std::nullopt;
+          return host.directory_resource_mapping()[*source];
+        };
         check(controller && controller->owner==host.source_handle(host.resources().controller_index()) &&
               controller->resource==host.directory_resource_mapping()[host.resources().controller_index()] &&
               controller->component_index==host.controller_component_index() &&
               controller->authored.sequence_reference==host.resources().controller().sequence_reference &&
               controller->authored.destination==host.resources().controller().destination &&
+              controller->additional_resource==controller_reference_resource(controller->authored.additional_reference) &&
+              controller->first_optional_resource==(controller->authored.first_optional_reference
+                  ?controller_reference_resource(*controller->authored.first_optional_reference):std::nullopt) &&
+              controller->second_optional_resource==(controller->authored.second_optional_reference
+                  ?controller_reference_resource(*controller->authored.second_optional_reference):std::nullopt) &&
               controller->sequence_members.size()==host.resources().cut_references().size() &&
               controller->group_members.size()==host.resources().group_references().size(),
               "MovieControl owner reader retains real authored data and only proven list-resource mappings");
