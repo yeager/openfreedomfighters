@@ -1759,6 +1759,7 @@ IntroLifecyclePreflightReport IntroRuntime::preflight_global_lifecycle() const {
   }
   IntroLifecycleAdmissionCoverageRegistry admissions{std::move(requirements)};
   for(const auto identity:supported_reader_admissions_) admissions.cover_reader(identity);
+  for(const auto identity:supported_owner_admissions_) admissions.cover_owner(identity);
   const auto admitted=admissions.report();
   report.covered_readers=admitted.covered_readers;
   report.covered_components=admitted.covered_components;
@@ -1782,6 +1783,21 @@ void IntroRuntime::record_supported_reader_admission(const IntroDeferredReaderWo
   if(std::ranges::find(supported_reader_admissions_,identity)!=supported_reader_admissions_.end())
     throw std::runtime_error("Supported reader admission cannot be recorded twice");
   supported_reader_admissions_.push_back(identity);
+}
+
+void IntroRuntime::record_supported_owner_admission(std::size_t source, IntroRuntimeHandle owner) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      owner!=source_handle(source) || !sound_for_source(source).source_applied_)
+    return;
+  const auto resource=directory_resource_mapping_.at(source);
+  if(!resource || !std::ranges::any_of(supported_reader_admissions_,[&](const auto& reader) {
+       return reader.source_directory_index==source && reader.resource==resource->value;
+     }))
+    return;
+  const IntroOwnerAdmissionIdentity identity{owner.value};
+  if(std::ranges::find(supported_owner_admissions_,identity)!=supported_owner_admissions_.end())
+    throw std::runtime_error("Supported owner admission cannot be recorded twice");
+  supported_owner_admissions_.push_back(identity);
 }
 
 FirstCutLegalPictureActivationResult IntroRuntime::activate_first_cut_legal_picture(
@@ -2324,6 +2340,7 @@ void IntroRuntime::prepare_sound_owner(std::size_t source,
     record.direction = spatial.direction;
     if (services.owner_enable_requested()) services.enable_owner(owner.handle_);
     owner.active_ = true;
+    record_supported_owner_admission(source,owner.handle_);
   } catch (...) {
     // Preserve completed mutations for diagnosis, but prohibit further owner
     // callbacks. Whole-host destruction releases leases after component captures.

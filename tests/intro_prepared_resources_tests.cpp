@@ -1397,6 +1397,13 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
             [] { return false; },[](auto) { throw std::runtime_error("unexpected sound owner enable"); }};
         host.prepare_sound_owner(467,sound_services);
         host.prepare_sound_owner(468,sound_services);
+        const auto owner_admission=host.preflight_global_lifecycle();
+        check(!owner_admission.ready() && owner_admission.expected_readers==420 &&
+              owner_admission.covered_readers==4 && owner_admission.expected_components==383 &&
+              owner_admission.covered_components==0 && owner_admission.expected_owners==471 &&
+              owner_admission.covered_owners==2 &&
+              owner_admission.failure==off::graphics::IntroLifecyclePreflightFailure::reader_coverage,
+              "completed typed sound pre-hooks contribute only their exact owner lifecycle coverage");
         const auto ordinary_removals=host.ordinary_components()->removal_count();
         const auto& sound_phase=host.run_isolated_sound_family_phase_one();
         check(sound_phase.owners[0].source==468 && sound_phase.owners[1].source==467 &&

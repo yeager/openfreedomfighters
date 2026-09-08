@@ -851,7 +851,11 @@ private:
   // Written only after a reviewed typed reader commits its owned state. These
   // identities are preflight evidence, never synthesized lifecycle callbacks.
   std::vector<IntroReaderAdmissionIdentity> supported_reader_admissions_;
+  // Written only after the reviewed sound-owner pre-hook completes. This is
+  // evidence for that one owner boundary, not a substitute for traversal.
+  std::vector<IntroOwnerAdmissionIdentity> supported_owner_admissions_;
   void record_supported_reader_admission(const IntroDeferredReaderWork& work);
+  void record_supported_owner_admission(std::size_t source, IntroRuntimeHandle owner);
   void allocate_source_scope(std::uint32_t count_group);
   std::map<std::size_t,std::unique_ptr<IntroWindowOwner>> window_owners_;
   IntroWindowOwner* window_owner_{}; // Non-owning first-cut convenience, never latest Window.
