@@ -129,6 +129,14 @@ struct GmsIntroCutSequenceSource {
     std::uint32_t authored_option{0};
 };
 
+// Restricted source form for the reviewed pair of externally hosted cut
+// commands. The external references remain authored source values; resolving
+// them into runtime resources belongs to the owning reader boundary.
+struct GmsIntroExternalCutCommandsSource {
+    std::array<GmsIntroCutCommandSource, 2> commands{};
+    std::array<std::uint32_t, 2> external_list_references{};
+};
+
 struct GmsDirectoryEntry {
     std::uint32_t packed_record_reference{0};
     std::uint32_t auxiliary_value{0};
@@ -245,6 +253,8 @@ public:
     // Values remain authored data, not runtime events, clock units or defaults.
     [[nodiscard]] GmsIntroFirstCutSource intro_first_cut_source(std::size_t index) const;
     [[nodiscard]] GmsIntroCutSequenceSource intro_cut_sequence_source(std::size_t index) const;
+    [[nodiscard]] GmsIntroExternalCutCommandsSource
+    intro_external_cut_commands_source(std::size_t index) const;
     // Zero has no join. Nonzero references are one-based, without bit masking.
     [[nodiscard]] std::optional<std::string> authored_event_identifier(std::uint32_t raw) const;
 

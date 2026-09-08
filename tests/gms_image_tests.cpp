@@ -320,6 +320,40 @@ std::vector<std::byte> cut_fixture(bool first, std::string_view name = "") {
     return bytes;
 }
 
+std::vector<std::byte> external_cut_commands_fixture() {
+    auto bytes = intro_controller_fixture();
+    bytes.resize(4105U);
+    set_u32(bytes, 0, 4096U); set_u32(bytes, 4, 4105U);
+    set_u32(bytes, 9U + 336U + 32U, 1200U);
+    set_u32(bytes, 521U, 2U);
+    std::size_t text = 700U;
+    for (std::size_t index = 0; index < 2U; ++index) {
+        constexpr std::string_view identity = "ZLIST_ExternCutSequenceCommand";
+        set_u32(bytes, 525U + index * 8U, static_cast<std::uint32_t>(text));
+        set_f32(bytes, 529U + index * 8U, 1.0F);
+        for (const auto c : identity) bytes[9U + text++] = static_cast<std::byte>(c);
+        bytes[9U + text++] = std::byte{0};
+    }
+    std::vector<std::byte> block(4U);
+    const auto scalar = [&](std::uint8_t tag, std::uint32_t value) {
+        block.push_back(static_cast<std::byte>(tag)); append_u32(block, value);
+    };
+    scalar(0x09U, 4U); block.push_back(std::byte{0x06});
+    for (std::size_t index = 0; index < 2U; ++index) {
+        scalar(0x83U, static_cast<std::uint32_t>(17U + index));
+        scalar(0x8aU, static_cast<std::uint32_t>(0x80000020U + index));
+        scalar(0x88U, index == 0U ? 0U : 0x80000004U);
+        scalar(0x83U, static_cast<std::uint32_t>(70U + index));
+        block.push_back(std::byte{0x04}); block.push_back(std::byte{0});
+        scalar(0x88U, static_cast<std::uint32_t>(0x80000040U + index));
+        block.push_back(std::byte{0x06});
+    }
+    block.push_back(std::byte{0xff});
+    set_u32(block, 0, static_cast<std::uint32_t>(block.size()));
+    std::copy(block.begin(), block.end(), bytes.begin() + 1209U);
+    return bytes;
+}
+
 void intro_window_tests() {
     const auto fixture = [] {
         auto bytes = intro_controller_fixture();
@@ -454,6 +488,33 @@ void cut_tests() {
         check_rejected([&] { if (first) static_cast<void>(image.intro_first_cut_source(99));
                             else static_cast<void>(image.intro_cut_sequence_source(99)); }, "cut bounds checked");
     }
+    const auto external = parse(external_cut_commands_fixture())
+                              .intro_external_cut_commands_source(1U);
+    check(external.commands[0].timeline_position == 17U &&
+              external.commands[0].event_reference == 0x80000020U &&
+              external.commands[0].target_reference == 0U &&
+              external.commands[0].event_argument == 70U &&
+              external.commands[0].target_name.empty() &&
+              external.external_list_references[0] == 0x80000040U &&
+              external.commands[1].timeline_position == 18U &&
+              external.commands[1].target_reference == 0x80000004U &&
+              external.external_list_references[1] == 0x80000041U,
+          "external cut command pair preserves ordered common fields and source references");
+    const auto reject_external = [&](auto mutate) {
+        auto bytes = external_cut_commands_fixture(); mutate(bytes);
+        check_rejected([&] { static_cast<void>(parse(bytes).intro_external_cut_commands_source(1U)); },
+                       "external cut command malformed grammar rejects");
+    };
+    for (const auto offset : {1213U, 1218U, 1219U, 1224U, 1229U, 1234U,
+                              1239U, 1241U, 1246U, 1247U, 1252U, 1257U,
+                              1262U, 1267U, 1269U, 1274U, 1275U})
+        reject_external([&](auto &bytes) { bytes[offset] ^= std::byte{0x40}; });
+    reject_external([](auto &bytes) { set_u32(bytes, 1209U, 0U); });
+    reject_external([](auto &bytes) { set_u32(bytes, 1209U, 0x01000031U); });
+    reject_external([](auto &bytes) { set_f32(bytes, 529U, 0.0F); });
+    check_rejected([&] { static_cast<void>(parse(external_cut_commands_fixture())
+                                               .intro_external_cut_commands_source(3U)); },
+                   "external cut command source index checked");
     auto identifiers = packed_fixture();
     identifiers[9U + 72U] = std::byte{0xff};
     set_u32(identifiers, 9U + 68U, 72U);

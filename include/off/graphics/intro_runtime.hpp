@@ -359,6 +359,15 @@ struct IntroFirstCutListReaderState {
   IntroRuntimeResourceHandle sequence_resource;
   std::array<IntroRuntimeResourceHandle,5> command_target_resources;
 };
+// Immutable state for the one reviewed external-command pair. It cannot run a
+// command, enroll events, or mutate a CutSequenceList.
+struct IntroExternalCutCommandsReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::array<std::size_t,2> component_indices{};
+  std::array<data::GmsIntroCutCommandSource,2> commands{};
+  std::array<IntroRuntimeResourceHandle,2> external_list_resources{};
+};
 struct IntroSourceScriptWork {
   IntroRuntimeResourceHandle resource;
   std::uint32_t source_offset;
@@ -747,6 +756,8 @@ public:
   void apply_supported_first_cut_list_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroFirstCutSequenceReaderState* first_cut_sequence_reader_state() const noexcept {return first_cut_sequence_reader_state_?&*first_cut_sequence_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutListReaderState* first_cut_list_reader_state() const noexcept {return first_cut_list_reader_state_?&*first_cut_list_reader_state_:nullptr;}
+  void apply_supported_external_cut_commands_deferred_reader(const IntroDeferredReaderWork& work);
+  [[nodiscard]] const IntroExternalCutCommandsReaderState* external_cut_commands_reader_state() const noexcept {return external_cut_commands_reader_state_?&*external_cut_commands_reader_state_:nullptr;}
   // Caller still owes actual global lifecycle admission and external services.
   // Clock/audio resolve through the same application state retained by this scene.
   void run_controller_phase_two(const IntroControllerPhaseTwoServices& external);
@@ -859,6 +870,7 @@ private:
   std::optional<IntroMovieControllerReaderState> movie_controller_reader_state_;
   std::optional<IntroFirstCutSequenceReaderState> first_cut_sequence_reader_state_;
   std::optional<IntroFirstCutListReaderState> first_cut_list_reader_state_;
+  std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;
   IntroControllerInitialization controller_initialization_;
   FreshIntroCamera prepared_camera_;
   std::map<std::size_t,std::unique_ptr<IntroLiveCameraOwner>> live_cameras_;

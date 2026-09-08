@@ -2825,6 +2825,57 @@ void IntroRuntime::apply_supported_first_cut_list_deferred_reader(
   catch(...) { first_cut_list_reader_state_.reset(); throw; }
 }
 
+void IntroRuntime::apply_supported_external_cut_commands_deferred_reader(
+    const IntroDeferredReaderWork& work) {
+  constexpr std::array<std::string_view,2> factories{
+      "ZLIST_ExternCutSequenceCommand", "ZLIST_ExternCutSequenceCommand"};
+  constexpr std::size_t reviewed_source_index = 466U;
+  if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete ||
+      !work.processed || external_cut_commands_reader_state_ ||
+      work.source_directory_index != reviewed_source_index ||
+      reviewed_source_index >= resources_.sources().directory().size() ||
+      std::ranges::find_if(deferred_reader_work_, [&](const auto &candidate) {
+        return std::addressof(candidate) == std::addressof(work);
+      }) == deferred_reader_work_.end())
+    throw std::runtime_error("External cut command reader requires its unique live deferred owner work");
+  const auto &source = resources_.sources().directory().at(reviewed_source_index);
+  if (source.source_type != 0x0800001aU ||
+      source.deferred_source_offset != work.source_offset ||
+      directory_resource_mapping_.at(reviewed_source_index) != work.resource ||
+      !associated_resource_owner(work.resource) ||
+      *associated_resource_owner(work.resource) != source_handle(reviewed_source_index) ||
+      source.attachments.size() != factories.size())
+    throw std::runtime_error("External cut command reader source shape is unsupported");
+  const auto attachments = owner_components(source_handle(reviewed_source_index));
+  if (attachments.size() != factories.size())
+    throw std::runtime_error("External cut command reader attachment count is unsupported");
+  for (std::size_t index = 0; index < factories.size(); ++index) {
+    const auto &component = components_.at(attachments[index]);
+    if (source.attachments[index].parameter != 1.0F ||
+        resources_.sources().attachment_identifier(reviewed_source_index, index) != factories[index] ||
+        !component.constructed() || component.removed() ||
+        component.source().factory_name != factories[index] ||
+        component.state().attached_owner != source_handle(reviewed_source_index).value)
+      throw std::runtime_error("External cut command reader attachment is unsupported");
+  }
+  const auto authored = resources_.sources().intro_external_cut_commands_source(reviewed_source_index);
+  IntroExternalCutCommandsReaderState state{
+      .owner = source_handle(reviewed_source_index), .resource = work.resource,
+      .component_indices = {attachments[0], attachments[1]}, .commands = authored.commands,
+      .external_list_resources = {}};
+  for (std::size_t index = 0; index < authored.external_list_references.size(); ++index) {
+    const auto target = resources_.sources().local_source_for_authored_reference(
+        authored.external_list_references[index]);
+    if (!target || *target >= directory_resource_mapping_.size() ||
+        !directory_resource_mapping_[*target])
+      throw std::runtime_error("External cut command reader has an unresolved external list reference");
+    state.external_list_resources[index] = *directory_resource_mapping_[*target];
+  }
+  external_cut_commands_reader_state_ = std::move(state);
+  try { record_supported_reader_admission(work); }
+  catch (...) { external_cut_commands_reader_state_.reset(); throw; }
+}
+
 IntroRuntimeHandle IntroRuntime::source_handle(std::size_t source) const {
   if (source >= resources_.sources().directory().size()) throw std::runtime_error("intro source index is out of range");
   return {owner_base_+static_cast<std::uint64_t>(source)+1};

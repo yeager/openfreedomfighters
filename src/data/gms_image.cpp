@@ -857,6 +857,31 @@ GmsIntroCutSequenceSource GmsImage::intro_cut_sequence_source(std::size_t index)
     return result;
 }
 
+GmsIntroExternalCutCommandsSource
+GmsImage::intro_external_cut_commands_source(std::size_t index) const {
+    if (index >= directory_.size()) IntroComponentReader::fail();
+    constexpr std::array<std::string_view, 2> identities{
+        "ZLIST_ExternCutSequenceCommand", "ZLIST_ExternCutSequenceCommand"};
+    IntroComponentReader reader(resource_.payload(), directory_[index], identities);
+    // This fixed header is validated but deliberately left without an inferred
+    // semantic name. It is not a generic component-count rule.
+    if (reader.scalar(0x09U) != 4U) IntroComponentReader::fail();
+    reader.tag(0x06U);
+    GmsIntroExternalCutCommandsSource result;
+    for (std::size_t index = 0; index < result.commands.size(); ++index) {
+        auto &command = result.commands[index];
+        command.timeline_position = reader.scalar(0x83U);
+        command.event_reference = reader.scalar(0x8aU);
+        command.target_reference = reader.scalar(0x88U);
+        command.event_argument = reader.scalar(0x83U);
+        command.target_name = reader.string();
+        result.external_list_references[index] = reader.scalar(0x88U);
+        reader.tag(0x06U);
+    }
+    reader.finish();
+    return result;
+}
+
 std::optional<std::string> GmsImage::authored_event_identifier(std::uint32_t raw) const {
     if (raw == 0U) return std::nullopt;
     if (raw > identifier_count_) throw std::runtime_error("GMS authored event identifier is out of range");
