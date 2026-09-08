@@ -7,7 +7,8 @@ namespace off::platform {
 StartupPreparationResult
 prepare_startup_cpu(const std::function<data::InstallVerification()> &verify,
                     const std::function<void()> &prepare_assets,
-                    const std::atomic_bool &cancelled) {
+                    const std::atomic_bool &cancelled,
+                    StartupPreparationStageObserver observe_stage) {
   StartupPreparationResult result;
   const auto stop = [&] {
     if (!cancelled.load())
@@ -19,6 +20,8 @@ prepare_startup_cpu(const std::function<data::InstallVerification()> &verify,
   if (stop())
     return result;
   try {
+    if (observe_stage)
+      observe_stage(StartupPreparationStage::verifying_game_data);
     result.verification = verify();
   } catch (const std::exception &error) {
     result.verification.error = data::InstallError::io_error;
@@ -36,6 +39,8 @@ prepare_startup_cpu(const std::function<data::InstallVerification()> &verify,
     return result;
   }
   try {
+    if (observe_stage)
+      observe_stage(StartupPreparationStage::preparing_assets);
     prepare_assets();
   } catch (const std::exception &error) {
     result.message =

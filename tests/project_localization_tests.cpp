@@ -30,6 +30,12 @@ int main() {
   check(catalog.format_seconds(MessageId::reverting_in_seconds, 12, "sv",
                                "en") == "Återställer om 12 sekunder",
         "UTF-8 catalog text survives formatted output");
+  check(catalog.resolve(MessageId::verifying_game_data, "sv-SE", "en-US") ==
+            "Verifierar speldata...",
+        "startup verification status follows the selected locale");
+  check(catalog.resolve(MessageId::preparing_startup, "zh-CN", "en-US") ==
+            "正在准备启动...",
+        "startup preparation status resolves as UTF-8");
   constexpr std::array<std::string_view, locale_count> locale_tags{{
       "en-US", "sv-SE", "da-DK", "nb-NO", "fi-FI", "de-DE", "fr-FR",
       "es-ES", "it-IT", "pt-BR", "pl-PL", "cs-CZ", "hu-HU", "ro-RO",

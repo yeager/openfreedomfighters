@@ -40,6 +40,8 @@ enum class MessageId : std::size_t {
   game_data_verification_failed,
   relaunch_with_data_path,
   technical_details,
+  verifying_game_data,
+  preparing_startup,
   original,
   modern,
   modern_plus,
@@ -131,8 +133,9 @@ struct CatalogBuildResult {
   std::optional<CatalogError> error;
 };
 
-// An independently authored catalog for the current F10 menu. It is not a
-// declaration that either locale has complete game coverage.
+// An independently authored catalog for OpenFreedomFighters UI, including the
+// F10 menu and startup status. It is not a declaration that either locale has
+// complete game coverage.
 [[nodiscard]] const ProjectCatalog &f10_catalog();
 
 } // namespace off::ui::l10n

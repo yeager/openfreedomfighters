@@ -4,6 +4,7 @@
 #include "off/platform/startup_data_error_presentation.hpp"
 #include "off/platform/startup_lifecycle.hpp"
 #include "off/platform/startup_preparation.hpp"
+#include "off/ui/project_localization.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
@@ -177,12 +178,29 @@ void draw_splash_overlays(SDL_Surface *target) {
          SDL_UpdateWindowSurface(window);
 }
 
-void draw_loading_surface(SDL_Window *window) {
-  if (SDL_Surface *target = SDL_GetWindowSurface(window); target != nullptr) {
-    static_cast<void>(SDL_FillSurfaceRect(
-        target, nullptr, SDL_MapSurfaceRGB(target, 10, 13, 18)));
-    static_cast<void>(SDL_UpdateWindowSurface(window));
+void draw_loading_surface(SDL_Window *window, std::string_view status) {
+  SDL_Surface *target = SDL_GetWindowSurface(window);
+  if (target == nullptr)
+    return;
+  static_cast<void>(SDL_FillSurfaceRect(
+      target, nullptr, SDL_MapSurfaceRGB(target, 10, 13, 18)));
+  if (TTF_Init()) {
+    const auto font_path_text = splash_font_path().u8string();
+    std::unique_ptr<TTF_Font, FontDeleter> font{
+        TTF_OpenFont(reinterpret_cast<const char *>(font_path_text.c_str()),
+                     static_cast<float>(std::max(20, target->h / 25)))};
+    if (font != nullptr) {
+      int text_width{};
+      if (TTF_GetStringSize(font.get(), status.data(), status.size(),
+                            &text_width, nullptr)) {
+        static_cast<void>(draw_splash_text(
+            target, font.get(), status, (target->w - text_width) / 2,
+            target->h / 2, SDL_Color{238, 238, 232, 255}));
+      }
+    }
+    TTF_Quit();
   }
+  static_cast<void>(SDL_UpdateWindowSurface(window));
 }
 
 [[nodiscard]] StartupPreflightResult
@@ -220,13 +238,27 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
   StartupLifecycle lifecycle;
   lifecycle.presented(StartupClock::now());
   std::atomic_bool cancelled{false};
+  std::atomic<StartupPreparationStage> preparation_stage{
+      StartupPreparationStage::verifying_game_data};
+  const auto loading_status = [&] {
+    const auto id = preparation_stage.load() ==
+                            StartupPreparationStage::preparing_assets
+                        ? ui::l10n::MessageId::preparing_startup
+                        : ui::l10n::MessageId::verifying_game_data;
+    return ui::l10n::f10_catalog()
+        .resolve(id, explicit_locale, platform_locale)
+        .value_or("Preparing startup...");
+  };
   std::future<StartupPreparationResult> verification_future;
   try {
     verification_future = std::async(std::launch::async, [&] {
       return prepare_startup_cpu([&] { return data::verify_install(
           data_path, [&] { return cancelled.load(); },
           {.deep_audit_cache_root = application_deep_audit_cache_root()}); },
-                                 prepare_assets, cancelled);
+                                 prepare_assets, cancelled,
+                                 [&](StartupPreparationStage stage) {
+                                   preparation_stage.store(stage);
+                                 });
     });
   } catch (...) {
     return {.outcome = StartupPreflightOutcome::platform_error,
@@ -248,14 +280,14 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
         if (lifecycle.phase() == StartupPhase::splash)
           static_cast<void>(draw_splash(window.get(), image.get()));
         else
-          draw_loading_surface(window.get());
+          draw_loading_surface(window.get(), loading_status());
       }
     }
     const bool ready = verification_future.wait_for(std::chrono::seconds{0}) ==
                        std::future_status::ready;
     const auto phase = lifecycle.tick(StartupClock::now(), ready);
     if (phase == StartupPhase::loading && !loading_surface_presented) {
-      draw_loading_surface(window.get());
+      draw_loading_surface(window.get(), loading_status());
       loading_surface_presented = true;
     }
     if (phase != StartupPhase::ready && phase != StartupPhase::cancelled)

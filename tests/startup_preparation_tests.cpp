@@ -3,6 +3,7 @@
 #include <future>
 #include <iostream>
 #include <stdexcept>
+#include <vector>
 
 namespace {
 int failures{};
@@ -24,21 +25,31 @@ int main() {
     return off::data::InstallVerification{.message = "unit verification"};
   };
   const auto prepare = [&] { ++prepare_calls; };
-  auto result = prepare_startup_cpu(verify, prepare, cancelled);
+  std::vector<StartupPreparationStage> stages;
+  auto result = prepare_startup_cpu(
+      verify, prepare, cancelled,
+      [&](StartupPreparationStage stage) { stages.push_back(stage); });
   check(result.outcome == StartupPreparationOutcome::ready &&
             verify_calls == 1 && prepare_calls == 1 &&
             result.message == "unit verification",
         "successful verification precedes asset preparation");
+  check(stages == std::vector{StartupPreparationStage::verifying_game_data,
+                              StartupPreparationStage::preparing_assets},
+        "successful work reports the verifier then preparation boundary");
+  stages.clear();
   result = prepare_startup_cpu(
       [] {
         return off::data::InstallVerification{
             .error = off::data::InstallError::missing_root,
             .message = "test missing root"};
       },
-      prepare, cancelled);
+      prepare, cancelled,
+      [&](StartupPreparationStage stage) { stages.push_back(stage); });
   check(result.outcome == StartupPreparationOutcome::verification_error &&
             prepare_calls == 1 && result.message == "test missing root",
         "verification failure never starts asset preparation");
+  check(stages == std::vector{StartupPreparationStage::verifying_game_data},
+        "failed verification never reports asset preparation");
   result = prepare_startup_cpu(
       []() -> off::data::InstallVerification {
         throw std::runtime_error("test verify failure");

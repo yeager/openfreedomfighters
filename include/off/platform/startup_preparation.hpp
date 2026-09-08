@@ -14,6 +14,17 @@ enum class StartupPreparationOutcome {
   preparation_error,
   cancelled
 };
+
+// These are truthful coarse-grained stages, not an invented progress meter.
+// The verifier and asset parser intentionally remain responsible for their own
+// work; observers only learn which boundary is currently active.
+enum class StartupPreparationStage {
+  verifying_game_data,
+  preparing_assets,
+};
+using StartupPreparationStageObserver =
+    std::function<void(StartupPreparationStage)>;
+
 struct StartupPreparationResult {
   StartupPreparationOutcome outcome{
       StartupPreparationOutcome::preparation_error};
@@ -28,6 +39,7 @@ struct StartupPreparationResult {
 [[nodiscard]] StartupPreparationResult
 prepare_startup_cpu(const std::function<data::InstallVerification()> &verify,
                     const std::function<void()> &prepare_assets,
-                    const std::atomic_bool &cancelled);
+                    const std::atomic_bool &cancelled,
+                    StartupPreparationStageObserver observe_stage = {});
 
 } // namespace off::platform
