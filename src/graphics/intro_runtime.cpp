@@ -974,8 +974,68 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
             if(admitted&0x10U) register_ordinary_component(component_index);
           }
         }
-        return runtime::ConstructedComponent{state,
-            [](auto&){throw std::runtime_error("Constructed attachment requires its source reader and live initialization services");},
+        runtime::ComponentCallback phase_one=[](auto&){
+          throw std::runtime_error("Constructed attachment requires its source reader and live initialization services");
+        };
+        // The two authored sound owners are the only independently recovered
+        // first-phase family.  These callbacks deliberately stay attached to
+        // their concrete factory/source pair; every other component continues
+        // to fail closed above.
+        if(sound_extend) phase_one=[this,row,component_index](runtime::ComponentRecord& callback_record) {
+          auto& component=components_.at(component_index);
+          auto& sound=sound_for_source(row);
+          const auto payload=constructed_picture_components_.find(component_index);
+          if(&callback_record!=&component || component.source().factory_name!="ZSNDOBJ_SoundExtend" ||
+              component.state().attached_owner!=sound.handle().value || !sound.source_applied_ ||
+              payload==constructed_picture_components_.end() || !payload->second.sound_extend || !sound.active_)
+            throw std::runtime_error("SoundExtend phase one requires its prepared typed sound owner");
+          if(!restore_mode_ && (component.state().admitted&0x10U)) {
+            component.state().admitted&=~0x10U;
+            if(ordinary_) ordinary_->notify_removal();
+            payload->second.sound_extend->phase_one_ordinary_removed=true;
+          }
+          apply_sound_extension(row);
+          record_supported_component_admission(component_index);
+        };
+        if(sound_notify) phase_one=[this,row,component_index](runtime::ComponentRecord& callback_record) {
+          auto& component=components_.at(component_index);
+          auto& sound=sound_for_source(row);
+          const auto payload=constructed_picture_components_.find(component_index);
+          if(&callback_record!=&component || component.source().factory_name!="ZSNDOBJ_SoundNotify" ||
+              component.state().attached_owner!=sound.handle().value || !sound.source_applied_ ||
+              payload==constructed_picture_components_.end() || !payload->second.sound_notify || !sound.active_ ||
+              !std::isfinite(sound.record().duration))
+            throw std::runtime_error("SoundNotify phase one requires its prepared typed sound owner");
+          payload->second.sound_notify->duration_snapshot=sound.record().duration;
+          record_supported_component_admission(component_index);
+        };
+        if(sound_segment) phase_one=[this,row,component_index](runtime::ComponentRecord& callback_record) {
+          auto& component=components_.at(component_index);
+          auto& sound=sound_for_source(row);
+          const auto payload=constructed_picture_components_.find(component_index);
+          if(&callback_record!=&component || component.source().factory_name!="ZSNDOBJ_SoundSegment" ||
+              component.state().attached_owner!=sound.handle().value || !sound.source_applied_ ||
+              payload==constructed_picture_components_.end() || !payload->second.sound_segment || !sound.active_ ||
+              !std::isfinite(sound.record().duration))
+            throw std::runtime_error("SoundSegment phase one requires its prepared typed sound owner");
+          // Segment has no independently recovered mutation in this pass; the
+          // scoped lifecycle commits its completed status after this concrete
+          // typed-owner and parsed-payload validation.
+          record_supported_component_admission(component_index);
+        };
+        if(define) phase_one=[this,row,component_index](runtime::ComponentRecord& callback_record) {
+          auto& component=components_.at(component_index);
+          auto& sound=sound_for_source(row);
+          const auto payload=constructed_picture_components_.find(component_index);
+          if(&callback_record!=&component || component.source().factory_name!="ZGEOM_ZSetZDefine" ||
+              component.state().attached_owner!=sound.handle().value || !sound.source_applied_ ||
+              payload==constructed_picture_components_.end() || !payload->second.sound_define || !sound.active_ ||
+              payload->second.sound_define->property_on_parent || payload->second.sound_define->property_key.empty())
+            throw std::runtime_error("ZSetZDefine phase one requires its prepared typed sound owner");
+          set_scene_owner_property_native(payload->second.sound_define->property_key,sound.handle(),2U);
+          record_supported_component_admission(component_index);
+        };
+        return runtime::ConstructedComponent{state,std::move(phase_one),
             [](auto&){throw std::runtime_error("Constructed attachment requires its live second-phase services");}};
       });
       const auto notification=application_.register_component_class_instance(components_.at(component_index).source().factory_name);
@@ -1759,6 +1819,7 @@ IntroLifecyclePreflightReport IntroRuntime::preflight_global_lifecycle() const {
   }
   IntroLifecycleAdmissionCoverageRegistry admissions{std::move(requirements)};
   for(const auto identity:supported_reader_admissions_) admissions.cover_reader(identity);
+  for(const auto identity:supported_component_admissions_) admissions.cover_component(identity);
   for(const auto identity:supported_owner_admissions_) admissions.cover_owner(identity);
   const auto admitted=admissions.report();
   report.covered_readers=admitted.covered_readers;
@@ -1798,6 +1859,19 @@ void IntroRuntime::record_supported_owner_admission(std::size_t source, IntroRun
   if(std::ranges::find(supported_owner_admissions_,identity)!=supported_owner_admissions_.end())
     throw std::runtime_error("Supported owner admission cannot be recorded twice");
   supported_owner_admissions_.push_back(identity);
+}
+
+void IntroRuntime::record_supported_component_admission(std::size_t component_index) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete)
+    throw std::runtime_error("Supported component admission requires complete directory construction");
+  const auto& component=components_.at(component_index);
+  if(!component.constructed() || component.removed() || component.source().synthesized ||
+      !component.source().directory_index)
+    throw std::runtime_error("Supported component admission requires a live authored component");
+  const IntroComponentAdmissionIdentity identity{component_handle(component_index)};
+  if(std::ranges::find(supported_component_admissions_,identity)!=supported_component_admissions_.end())
+    throw std::runtime_error("Supported component admission cannot be recorded twice");
+  supported_component_admissions_.push_back(identity);
 }
 
 FirstCutLegalPictureActivationResult IntroRuntime::activate_first_cut_legal_picture(
@@ -2389,6 +2463,7 @@ const IntroSoundFamilyPhaseOneResult& IntroRuntime::run_isolated_sound_family_ph
     IntroSoundFamilyPhaseOneResult result;
     constexpr std::array<std::string_view,4> factories{
         "ZSNDOBJ_SoundExtend","ZSNDOBJ_SoundNotify","ZSNDOBJ_SoundSegment","ZGEOM_ZSetZDefine"};
+    std::array<std::size_t,8> callback_order{};
     for(std::size_t reverse=0;reverse<sounds_.size();++reverse) {
       auto& sound=*sounds_.at(sounds_.size()-1U-reverse);
       const auto source=sound.source_index();
@@ -2413,19 +2488,22 @@ const IntroSoundFamilyPhaseOneResult& IntroRuntime::run_isolated_sound_family_ph
       auto& output=result.owners[reverse];
       output={source,attachment_indices[0],attachment_indices[1],attachment_indices[2],attachment_indices[3],
               sound.record().duration,restore_mode_,false,define->property_key};
-      // Real first-phase order: define, segment, notify, extend. Retire and
-      // phase-status mutation remain unavailable until the whole global pass.
-      set_scene_owner_property_native(define->property_key,sound.handle(),2U);
-      notify->duration_snapshot=sound.record().duration;
-      if(!restore_mode_) {
-        auto& state=components_.at(attachment_indices[0]).state();
-        if(state.admitted&0x10U) {
-          state.admitted&=~0x10U;
-          if(ordinary_) ordinary_->notify_removal();
-          output.extend_ordinary_removed=true;
-        }
-      }
-      apply_sound_extension(source);
+      // Real first-phase order: define, segment, notify, extend.  The scoped
+      // runtime preflights all eight typed callbacks before the first one
+      // runs; it provides no owner lookup, retirement or global completion.
+      const auto start=reverse*4U;
+      callback_order[start]=attachment_indices[3];
+      callback_order[start+1U]=attachment_indices[2];
+      callback_order[start+2U]=attachment_indices[1];
+      callback_order[start+3U]=attachment_indices[0];
+    }
+    components_.run_scoped_phase_one(callback_order);
+    for(std::size_t reverse=0;reverse<sounds_.size();++reverse) {
+      auto& output=result.owners[reverse];
+      const auto payload=constructed_picture_components_.find(output.extend_component);
+      if(payload==constructed_picture_components_.end() || !payload->second.sound_extend)
+        throw std::runtime_error("SoundExtend phase one lost its typed payload");
+      output.extend_ordinary_removed=payload->second.sound_extend->phase_one_ordinary_removed;
     }
     isolated_sound_family_phase_one_=std::move(result);
     return *isolated_sound_family_phase_one_;

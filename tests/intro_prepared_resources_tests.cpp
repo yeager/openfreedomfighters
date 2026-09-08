@@ -1413,6 +1413,17 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
               host.ordinary_components()->removal_count()==ordinary_removals+2U &&
               !host.components().phases_completed(),
               "isolated sound phase one preserves reverse owner order, live duration snapshots and no global completion");
+        const auto component_admission=host.preflight_global_lifecycle();
+        check(component_admission.covered_components==8 &&
+              (host.components().at(sound_phase.owners[0].define_component).state().status&4U) &&
+              (host.components().at(sound_phase.owners[0].segment_component).state().status&4U) &&
+              (host.components().at(sound_phase.owners[0].notify_component).state().status&4U) &&
+              (host.components().at(sound_phase.owners[0].extend_component).state().status&4U) &&
+              (host.components().at(sound_phase.owners[1].define_component).state().status&4U) &&
+              (host.components().at(sound_phase.owners[1].segment_component).state().status&4U) &&
+              (host.components().at(sound_phase.owners[1].notify_component).state().status&4U) &&
+              (host.components().at(sound_phase.owners[1].extend_component).state().status&4U),
+              "the scoped sound phase admits exactly its eight completed typed component callbacks");
         rejects([&]{host.run_isolated_sound_family_phase_one();});
         check_complete_outer_loader_tail(host);
       }

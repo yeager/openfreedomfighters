@@ -170,6 +170,7 @@ struct IntroConstructedPictureComponent {
     std::uint32_t category{},output_mode{2};
     std::uint16_t start_event{};
     std::optional<std::uint32_t> option_a,option_b;
+    bool phase_one_ordinary_removed{};
   };
   struct SoundNotifyState {
     IntroRuntimeHandle target{};
@@ -854,8 +855,12 @@ private:
   // Written only after the reviewed sound-owner pre-hook completes. This is
   // evidence for that one owner boundary, not a substitute for traversal.
   std::vector<IntroOwnerAdmissionIdentity> supported_owner_admissions_;
+  // Written only by the four reviewed sound-family phase-one callbacks after
+  // each callback has completed its concrete live-state work.
+  std::vector<IntroComponentAdmissionIdentity> supported_component_admissions_;
   void record_supported_reader_admission(const IntroDeferredReaderWork& work);
   void record_supported_owner_admission(std::size_t source, IntroRuntimeHandle owner);
+  void record_supported_component_admission(std::size_t component);
   void allocate_source_scope(std::uint32_t count_group);
   std::map<std::size_t,std::unique_ptr<IntroWindowOwner>> window_owners_;
   IntroWindowOwner* window_owner_{}; // Non-owning first-cut convenience, never latest Window.
