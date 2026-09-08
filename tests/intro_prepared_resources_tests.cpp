@@ -1043,6 +1043,13 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
         check(applied_sound_readers==host.resources().sounds().size() &&
               std::ranges::all_of(host.sounds(),[](const auto& sound) { return sound->source_applied(); }),
               "sound owner readers consume both parsed source prefixes without preparing playback");
+        const auto reader_admission=host.preflight_global_lifecycle();
+        check(!reader_admission.ready() && reader_admission.expected_readers==420 &&
+              reader_admission.covered_readers==4 && reader_admission.expected_components==383 &&
+              reader_admission.covered_components==0 && reader_admission.expected_owners==471 &&
+              reader_admission.covered_owners==0 &&
+              reader_admission.failure==off::graphics::IntroLifecyclePreflightFailure::reader_coverage,
+              "only completed typed reader boundaries contribute exact partial lifecycle coverage");
         if(!host.resources().sounds().empty()) {
           const auto& authored_sound=host.resources().sounds().front();
           const auto attachments=host.owner_components(host.source_handle(authored_sound.directory_index));

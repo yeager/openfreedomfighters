@@ -217,6 +217,7 @@ void IntroRuntime::apply_supported_sound_owner_deferred_reader(
   define->property_on_parent=authored.property_on_parent;
   define->property_key=authored.property_key;
   sound.source_applied_=true;
+  record_supported_reader_admission(work);
 }
 
 void IntroRuntime::construct_root() {
@@ -1717,11 +1718,26 @@ IntroLifecyclePreflightReport IntroRuntime::preflight_global_lifecycle() const {
     report.failure=IntroLifecyclePreflightFailure::stage;
     return report;
   }
-  report.expected_readers=deferred_reader_work_.size();
-  report.expected_owners=1U+loaded_resource_handles_.size();
+  IntroLifecycleAdmissionRequirements requirements;
+  requirements.readers.reserve(deferred_reader_work_.size());
+  for(const auto& work:deferred_reader_work_)
+    requirements.readers.push_back({work.resource.value,work.source_offset,work.source_directory_index});
+  requirements.owners.reserve(1U+loaded_resource_handles_.size());
+  requirements.owners.push_back({root_handle().value});
+  for(const auto resource:loaded_resource_handles_) {
+    const auto owner=associated_resource_owner(resource);
+    if(!owner) {
+      report.failure=IntroLifecyclePreflightFailure::live_mapping;
+      return report;
+    }
+    requirements.owners.push_back({owner->value});
+  }
+  report.expected_readers=requirements.readers.size();
+  report.expected_owners=requirements.owners.size();
   for(const auto component_index:components_.construction_order()) {
     const auto& component=components_.at(component_index);
     if(component.source().synthesized) continue;
+    requirements.components.push_back({component_handle(component_index)});
     ++report.expected_components;
     if(!component.constructed() || component.removed()) {
       report.failure=IntroLifecyclePreflightFailure::component_coverage;
@@ -1741,13 +1757,31 @@ IntroLifecyclePreflightReport IntroRuntime::preflight_global_lifecycle() const {
       return report;
     }
   }
-  // Concrete typed registration is deliberately absent until every reader,
-  // owner hook and callback family has been recovered. Placeholder closures do
-  // not increment any coverage field.
-  report.failure=report.expected_readers?IntroLifecyclePreflightFailure::reader_coverage:
-      report.expected_components?IntroLifecyclePreflightFailure::component_coverage:
-      IntroLifecyclePreflightFailure::owner_coverage;
+  IntroLifecycleAdmissionCoverageRegistry admissions{std::move(requirements)};
+  for(const auto identity:supported_reader_admissions_) admissions.cover_reader(identity);
+  const auto admitted=admissions.report();
+  report.covered_readers=admitted.covered_readers;
+  report.covered_components=admitted.covered_components;
+  report.covered_owners=admitted.covered_owners;
+  switch(admitted.failure) {
+    case IntroLifecycleAdmissionFailure::none: report.failure=IntroLifecyclePreflightFailure::none; break;
+    case IntroLifecycleAdmissionFailure::reader_coverage: report.failure=IntroLifecyclePreflightFailure::reader_coverage; break;
+    case IntroLifecycleAdmissionFailure::component_coverage: report.failure=IntroLifecyclePreflightFailure::component_coverage; break;
+    case IntroLifecycleAdmissionFailure::owner_coverage: report.failure=IntroLifecyclePreflightFailure::owner_coverage; break;
+  }
   return report;
+}
+
+void IntroRuntime::record_supported_reader_admission(const IntroDeferredReaderWork& work) {
+  if(work.source_directory_index>=directory_resource_mapping_.size() ||
+      directory_resource_mapping_.at(work.source_directory_index)!=work.resource ||
+      !associated_resource_owner(work.resource) ||
+      *associated_resource_owner(work.resource)!=source_handle(work.source_directory_index))
+    throw std::runtime_error("Supported reader admission requires a live matching owner");
+  const IntroReaderAdmissionIdentity identity{work.resource.value,work.source_offset,work.source_directory_index};
+  if(std::ranges::find(supported_reader_admissions_,identity)!=supported_reader_admissions_.end())
+    throw std::runtime_error("Supported reader admission cannot be recorded twice");
+  supported_reader_admissions_.push_back(identity);
 }
 
 FirstCutLegalPictureActivationResult IntroRuntime::activate_first_cut_legal_picture(
@@ -2221,6 +2255,7 @@ void IntroRuntime::apply_supported_window_deferred_reader(const IntroDeferredRea
   selected_camera.complete_window_state_projection(window_handle.value);
   window.group.flags|=0x400U;
   projected_=true;
+  record_supported_reader_admission(work);
 }
 
 FreshIntroCamera& IntroRuntime::camera() {
@@ -2551,6 +2586,7 @@ void IntroRuntime::apply_supported_movie_control_deferred_reader(const IntroDefe
       .sequence_members=translate(resources_.cut_references()),
       .group_members=translate(resources_.group_references())};
   movie_controller_reader_state_=std::move(state);
+  record_supported_reader_admission(work);
 }
 
 IntroRuntimeHandle IntroRuntime::source_handle(std::size_t source) const {

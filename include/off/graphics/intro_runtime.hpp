@@ -6,6 +6,7 @@
 #include "off/data/scene_lifetime_keys_registry.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_controller_initialization.hpp"
+#include "off/graphics/intro_lifecycle_admission.hpp"
 #include "off/runtime/application_services.hpp"
 #include "off/runtime/component_lifecycle.hpp"
 #include "off/runtime/scene_event_names.hpp"
@@ -847,6 +848,10 @@ private:
   std::vector<std::optional<std::uint32_t>> source_event_name_mapping_;
   bool source_event_names_prepared_{};
   std::optional<float> loading_progress_;
+  // Written only after a reviewed typed reader commits its owned state. These
+  // identities are preflight evidence, never synthesized lifecycle callbacks.
+  std::vector<IntroReaderAdmissionIdentity> supported_reader_admissions_;
+  void record_supported_reader_admission(const IntroDeferredReaderWork& work);
   void allocate_source_scope(std::uint32_t count_group);
   std::map<std::size_t,std::unique_ptr<IntroWindowOwner>> window_owners_;
   IntroWindowOwner* window_owner_{}; // Non-owning first-cut convenience, never latest Window.
