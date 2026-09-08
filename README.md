@@ -2,6 +2,8 @@
 
 [![Build](https://github.com/yeager/openfreedomfighters/actions/workflows/build.yml/badge.svg)](https://github.com/yeager/openfreedomfighters/actions/workflows/build.yml)
 
+![OpenFreedomFighters startup splash](assets/branding/openfreedomfighters-splash.png)
+
 A clean-room native reimplementation of *Freedom Fighters*, targeting Windows,
 macOS, Linux and Steam Deck.
 
