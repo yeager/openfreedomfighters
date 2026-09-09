@@ -64,11 +64,14 @@ that scene is replaced.
 
 `StartupScenePackageSource::prepare_checked` is the narrow source-backed
 preparation helper for that callback. It accepts only `FF-Startup` and an
-already chosen archive path, then opens the archive, requires exactly one named
-GMS and SUP member, CRC-reads both, decodes/parses GMS, and parses the nonempty
-SUP dependency list. Its three aliasing leases retain the archive, raw source
-bytes, and parsed forms for the later factory call. It is not an archive search
-policy, does not select companion resources, and does not construct a scene.
+already chosen archive path, then requires the exact twelve-member
+`FF-StartUp` package family: `ZGF`, `SUP`, `BUF`, `GMS`, `TEX`, `SND`, `LOC`,
+`OCT`, `SGP`, `RMC`, `RMI`, and `PRM`. It CRC-reads every member, decodes/parses
+ZGF and GMS, parses the nonempty SUP dependency list, and validates the GMS
+references against its paired BUF. The remaining named resource bytes are kept
+opaque under a package lease for a later factory. It is not an archive search
+policy, does not interpret those companion formats, and does not construct a
+scene.
 
 Any missing service, incomplete package, failed factory result, or exception
 leaves the deferred request and previously committed scene unchanged. There is

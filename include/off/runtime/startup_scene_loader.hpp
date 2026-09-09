@@ -20,27 +20,32 @@ public:
   [[nodiscard]] static StartupSceneLoadPackage complete(
       std::string_view target, std::shared_ptr<const void> archive_lease,
       std::shared_ptr<const void> source_lease,
-      std::shared_ptr<const void> support_lease) {
+      std::shared_ptr<const void> support_lease,
+      std::shared_ptr<const void> resource_family_lease) {
     if (target != "FF-Startup" || !archive_lease || !source_lease ||
-        !support_lease) {
+        !support_lease || !resource_family_lease) {
       throw std::runtime_error("Startup scene package is incomplete");
     }
     return StartupSceneLoadPackage(std::move(archive_lease),
                                    std::move(source_lease),
-                                   std::move(support_lease));
+                                   std::move(support_lease),
+                                   std::move(resource_family_lease));
   }
 
 private:
   explicit StartupSceneLoadPackage(std::shared_ptr<const void> archive_lease,
                                    std::shared_ptr<const void> source_lease,
-                                   std::shared_ptr<const void> support_lease)
+                                   std::shared_ptr<const void> support_lease,
+                                   std::shared_ptr<const void> resource_family_lease)
       : archive_lease_(std::move(archive_lease)),
         source_lease_(std::move(source_lease)),
-        support_lease_(std::move(support_lease)) {}
+        support_lease_(std::move(support_lease)),
+        resource_family_lease_(std::move(resource_family_lease)) {}
 
   std::shared_ptr<const void> archive_lease_;
   std::shared_ptr<const void> source_lease_;
   std::shared_ptr<const void> support_lease_;
+  std::shared_ptr<const void> resource_family_lease_;
 };
 
 // A factory must explicitly produce this nonzero opaque token. It cannot turn a

@@ -160,6 +160,30 @@ std::vector<std::byte> package_zgf_fixture() {
   return result;
 }
 
+std::vector<std::byte> package_buf_fixture() {
+  // The paired GMS fixture has an auxiliary block at offset 16. Its declared
+  // extent is 12 bytes; all names remain bounded by the zeroed allocation.
+  std::vector<std::byte> bytes(512U, std::byte{0});
+  set_u32(bytes, 20U, 12U);
+  return bytes;
+}
+
+std::vector<std::pair<std::string, std::vector<std::byte>>>
+startup_package_members() {
+  return {{"SCENES/FF-StartUp.ZGF", package_zgf_fixture()},
+          {"SCENES/FF-StartUp.SUP", package_support_fixture()},
+          {"SCENES/FF-StartUp.BUF", package_buf_fixture()},
+          {"SCENES/FF-StartUp.GMS", package_gms_fixture()},
+          {"SCENES/FF-StartUp.TEX", {std::byte{1}}},
+          {"SCENES/FF-StartUp.SND", {std::byte{2}}},
+          {"SCENES/FF-StartUp.LOC", {std::byte{3}}},
+          {"SCENES/FF-StartUp.OCT", {std::byte{4}}},
+          {"SCENES/FF-StartUp.SGP", {std::byte{5}}},
+          {"SCENES/FF-StartUp.RMC", {std::byte{6}}},
+          {"SCENES/FF-StartUp.RMI", {std::byte{7}}},
+          {"SCENES/FF-StartUp.PRM", {std::byte{8}}}};
+}
+
 // Project-authored GMS grammar fixture for the checked StartLoader handoff.
 // It is not derived from or representative of retail source bytes.
 std::vector<std::byte> startloader_route_gms_fixture() {
@@ -307,9 +331,7 @@ int main() {
       std::filesystem::current_path() / "off-startup-scene-package-fixture.zip";
   std::error_code package_error;
   std::filesystem::remove(package_fixture, package_error);
-  write_package_zip(package_fixture,
-                    {{"SCENES/FF-StartUp.GMS", package_gms_fixture()},
-                     {"SCENES/FF-StartUp.SUP", package_support_fixture()}});
+  write_package_zip(package_fixture, startup_package_members());
   bool rejected_package = false;
   try {
     static_cast<void>(off::runtime::StartupScenePackageSource::prepare_checked(
@@ -351,10 +373,10 @@ int main() {
             source_package_state.current_scene()->identity() == 9U,
         "package source supplies a durable package compatible with the loader "
         "transaction");
-  write_package_zip(package_fixture,
-                    {{"SCENES/FF-StartUp.GMS", package_gms_fixture()},
-                     {"SCENES/duplicate.GMS", package_gms_fixture()},
-                     {"SCENES/FF-StartUp.SUP", package_support_fixture()}});
+  auto duplicate_startup_members = startup_package_members();
+  duplicate_startup_members.emplace_back("SCENES/duplicate.GMS",
+                                         package_gms_fixture());
+  write_package_zip(package_fixture, duplicate_startup_members);
   rejected_package = false;
   try {
     static_cast<void>(off::runtime::StartupScenePackageSource::prepare_checked(
@@ -364,7 +386,32 @@ int main() {
   }
   check(rejected_package,
         "package source rejects a duplicate selected GMS family");
+  auto bad_buf_members = startup_package_members();
+  for (auto &[name, contents] : bad_buf_members) {
+    if (name == "SCENES/FF-StartUp.BUF") {
+      contents = std::vector<std::byte>(8U, std::byte{0});
+      break;
+    }
+  }
+  write_package_zip(package_fixture, bad_buf_members);
+  rejected_package = false;
+  try {
+    static_cast<void>(off::runtime::StartupScenePackageSource::prepare_checked(
+        "FF-Startup", package_fixture));
+  } catch (const std::runtime_error &) {
+    rejected_package = true;
+  }
+  check(rejected_package,
+        "package source rejects a BUF that cannot satisfy paired GMS references");
   std::filesystem::remove(package_fixture, package_error);
+  if (const auto *retail_data_root = std::getenv("OFF_STARTUP_PACKAGE_DATA_ROOT");
+      retail_data_root != nullptr && *retail_data_root != '\0') {
+    const auto retail_startup_package =
+        off::runtime::StartupScenePackageSource::prepare_checked(
+            "FF-Startup",
+            std::filesystem::path(retail_data_root) / "Scenes" / "FF-StartUp.ZIP");
+    static_cast<void>(retail_startup_package);
+  }
 
   const auto startloader_route_root =
       std::filesystem::current_path() / "off-startloader-prepared-route-data";
@@ -376,9 +423,7 @@ int main() {
                                       startloader_route_error);
   check(!startloader_route_error,
         "create checked StartLoader route package fixture directory");
-  write_package_zip(startloader_route_package,
-                    {{"SCENES/FF-StartUp.GMS", package_gms_fixture()},
-                     {"SCENES/FF-StartUp.SUP", package_support_fixture()}});
+  write_package_zip(startloader_route_package, startup_package_members());
   const auto parsed_startloader = off::data::GmsImage::parse(
       off::data::PackedResource::parse(startloader_route_gms_fixture()));
   bool rejected_route = false;
@@ -725,7 +770,8 @@ int main() {
               -> std::optional<off::runtime::StartupSceneLoadPackage> {
             pump_events.emplace_back("prepare:" + std::string(target));
             return off::runtime::StartupSceneLoadPackage::complete(
-                target, pump_lease(31U), pump_lease(32U), pump_lease(33U));
+                target, pump_lease(31U), pump_lease(32U), pump_lease(33U),
+                pump_lease(35U));
           },
           .construct_live_scene =
               [&](const off::runtime::StartupSceneLoadPackage &)
@@ -861,12 +907,12 @@ int main() {
   };
   const auto package = [&] {
     return off::runtime::StartupSceneLoadPackage::complete(
-        "FF-Startup", lease(100U), lease(101U), lease(102U));
+        "FF-Startup", lease(100U), lease(101U), lease(102U), lease(103U));
   };
   rejected = false;
   try {
     static_cast<void>(off::runtime::StartupSceneLoadPackage::complete(
-        "FF-Startup", lease(100U), {}, lease(102U)));
+        "FF-Startup", lease(100U), {}, lease(102U), lease(103U)));
   } catch (const std::runtime_error &) {
     rejected = true;
   }
