@@ -53,6 +53,13 @@ retains that owner's closed hierarchy subtree for the existing construction
 boundary. It does not allocate a window, make a scene live, resolve BootMenu
 event identities, choose an active root, or render a menu.
 
+`StartupBootSceneFactory` is a disconnected join between those two checked
+inputs and the existing live-construction boundary. It accepts only a package
+with typed factory inputs and a BootMenu directory source derived from that
+same retained GMS object, then delegates allocation to caller-supplied live
+services. It neither supplies those services nor starts a transition, scene
+lifecycle, input path, or renderer.
+
 ## Checked FF-StartUp loading transaction
 
 `StartupSceneLoader` is a disconnected, fail-closed replacement transaction for

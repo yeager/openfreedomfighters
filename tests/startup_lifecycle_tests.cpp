@@ -10,6 +10,7 @@
 #include "off/runtime/startup_boot_menu_admission.hpp"
 #include "off/runtime/startup_boot_scene_construction.hpp"
 #include "off/runtime/startup_boot_scene_directory_source.hpp"
+#include "off/runtime/startup_boot_scene_factory.hpp"
 #include "off/runtime/startup_scene_loader.hpp"
 #include "off/runtime/startup_scene_package_source.hpp"
 #include "off/runtime/startup_window_hierarchy_snapshot.hpp"
@@ -1199,6 +1200,71 @@ int main() {
           .live_boot_menu_component =
               [](std::uint64_t component) { return component == 82U; },
       };
+  const auto boot_factory_fixture =
+      std::filesystem::current_path() / "off-startup-boot-factory-fixture.zip";
+  std::error_code boot_factory_error;
+  std::filesystem::remove(boot_factory_fixture, boot_factory_error);
+  auto boot_factory_members = startup_package_members();
+  for (auto &[name, contents] : boot_factory_members) {
+    if (name == "SCENES/FF-StartUp.GMS") {
+      contents = boot_directory_gms_fixture();
+      break;
+    }
+  }
+  write_package_zip(boot_factory_fixture, boot_factory_members);
+  const auto source_backed_boot_package =
+      std::make_shared<const off::runtime::StartupSceneLoadPackage>(
+          off::runtime::StartupScenePackageSource::prepare_checked(
+              "FF-Startup", boot_factory_fixture));
+  const auto &source_backed_boot_inputs =
+      *source_backed_boot_package->factory_inputs();
+  const auto source_backed_boot_directory =
+      off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
+          source_backed_boot_inputs.gms());
+  off::runtime::StartupBootSceneFactory boot_factory;
+  auto factory_boot_token = boot_factory.construct(
+      source_backed_boot_package, source_backed_boot_directory, boot_scene,
+      10U, boot_construction_services);
+  check(factory_boot_token.valid() &&
+            factory_boot_token.factory_generation() == 10U,
+        "boot factory delegates only a source-backed package with matching "
+        "checked GMS evidence");
+
+  rejected = false;
+  try {
+    static_cast<void>(boot_factory.construct(boot_package, boot_directory_source,
+                                             boot_scene, 10U,
+                                             boot_construction_services));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected, "boot factory rejects generic package leases before factory "
+                  "construction");
+
+  const auto mismatch_boot_factory_fixture =
+      std::filesystem::current_path() / "off-startup-boot-factory-mismatch.zip";
+  std::error_code mismatch_boot_factory_error;
+  std::filesystem::remove(mismatch_boot_factory_fixture,
+                          mismatch_boot_factory_error);
+  write_package_zip(mismatch_boot_factory_fixture, startup_package_members());
+  const auto mismatch_boot_package =
+      std::make_shared<const off::runtime::StartupSceneLoadPackage>(
+          off::runtime::StartupScenePackageSource::prepare_checked(
+              "FF-Startup", mismatch_boot_factory_fixture));
+  rejected = false;
+  try {
+    static_cast<void>(boot_factory.construct(
+        mismatch_boot_package, source_backed_boot_directory, boot_scene, 10U,
+        boot_construction_services));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected, "boot factory rejects a checked package whose GMS does not "
+                  "match its BootMenu source evidence");
+  std::filesystem::remove(boot_factory_fixture, boot_factory_error);
+  std::filesystem::remove(mismatch_boot_factory_fixture,
+                          mismatch_boot_factory_error);
+
   off::runtime::StartupBootSceneConstruction boot_construction;
   auto boot_token = boot_construction.construct(
       boot_package, boot_scene, boot_directory, 9U, boot_construction_services);

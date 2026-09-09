@@ -10,6 +10,7 @@
 #include <optional>
 #include <span>
 #include <stdexcept>
+#include <memory>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -99,6 +100,7 @@ public:
     retain(retain, root);
 
     return StartupBootSceneDirectorySource(
+        std::addressof(gms),
         {.complete_directory_mapping = true,
          .canonical_ordinary_window_source = true,
          .component_identifier = boot_menu_identifier,
@@ -118,13 +120,20 @@ public:
     return {true, root_directory_index_, nodes_};
   }
 
+  // The directory source is a derived view of one checked GMS image. A scene
+  // factory may use it only with that exact retained parser object, never a
+  // structurally similar source from another package.
+  [[nodiscard]] bool matches_checked_gms(const data::GmsImage &gms) const {
+    return source_image_ == std::addressof(gms);
+  }
+
 private:
   StartupBootSceneDirectorySource(
-      StartupBootSceneDirectoryProof proof, std::size_t boot_owner,
+      const data::GmsImage *source_image, StartupBootSceneDirectoryProof proof, std::size_t boot_owner,
       std::size_t root, std::vector<std::optional<std::size_t>> parents,
       std::vector<std::vector<std::size_t>> children,
       std::vector<bool> retained)
-      : proof_(proof), boot_owner_directory_index_(boot_owner),
+      : source_image_(source_image), proof_(proof), boot_owner_directory_index_(boot_owner),
         root_directory_index_(root), children_(std::move(children)),
         nodes_() {
     nodes_.reserve(parents.size());
@@ -135,6 +144,7 @@ private:
     }
   }
 
+  const data::GmsImage *source_image_{};
   StartupBootSceneDirectoryProof proof_;
   std::size_t boot_owner_directory_index_{};
   std::size_t root_directory_index_{};
