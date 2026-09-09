@@ -9,6 +9,23 @@ OpenFreedomFighters currently treats the digitally re-released Steam executable 
 - The game executable still imports `Direct3DCreate8`, `DirectInput8Create`, DirectSound/EAX, and the original-style Win32 window/input surface. The DirectX 10-compatible GPU requirement on Steam is therefore a host compatibility requirement, not evidence of a Direct3D 10 renderer.
 - The digital executable was rebuilt: its PE timestamp is `2021-01-28 15:54:51 UTC`, its embedded build path identifies a Visual Studio 2015 Win32/Steam GameRelease configuration, and it imports the Steam lifecycle API. The installation also has a separate modern launcher and supports Steam Cloud.
 
+## Private launcher behavior observation
+
+A private Windows observation on 2026-09-09 established a launcher boundary
+distinct from the game window. A Steam-initiated launch first opened a small
+standalone launcher. Opening its settings control created a modal child window
+and disabled the launcher parent; no setting was changed. With Steam already
+running, directly invoking the launcher did not leave a targetable window in
+this environment, whereas directly invoking the main game program produced a
+persistent native game window.
+
+This is a measured result from one environment, not a universal launch
+contract. It establishes only the launcher-to-game distinction. It does not
+establish launcher labels, setting semantics or values, game timing, visual
+sequence, audio, input behavior, or renderer behavior. OFF's project-owned
+splash and F10 overlay remain separate flows and must not be presented as
+replicas of the retail launcher.
+
 ## Working conclusion
 
 The strongest evidence supports original 2003 game content and behavior packaged with a later Windows/Steam executable, launcher, save-path integration, and compatibility build. This is an inference from the official description plus local binary/resource evidence; it is not a byte-for-byte comparison.
