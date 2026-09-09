@@ -15,6 +15,7 @@
 #include <future>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace off::platform {
 
@@ -218,7 +219,11 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
   // Capture the platform preference once for this launch. The explicit value
   // remains a testing/user override; the startup UI must not infer a locale
   // from the game-data directory or terminal environment.
-  const auto platform_locale = preferred_system_locale();
+  const auto platform_locale_storage = preferred_system_locales();
+  std::vector<std::string_view> platform_locales;
+  platform_locales.reserve(platform_locale_storage.size());
+  for (const auto &locale : platform_locale_storage)
+    platform_locales.push_back(locale);
 
   Window window{
       SDL_CreateWindow("OpenFreedomFighters", startup_width, startup_height,
@@ -249,7 +254,7 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
                         ? ui::l10n::MessageId::preparing_startup
                         : ui::l10n::MessageId::verifying_game_data;
     return ui::l10n::f10_catalog()
-        .resolve(id, explicit_locale, platform_locale)
+        .resolve(id, explicit_locale, platform_locales)
         .value_or("Preparing startup...");
   };
   std::future<StartupPreparationResult> verification_future;
@@ -318,7 +323,7 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
     result.outcome = StartupPreflightOutcome::data_error;
     const auto presentation = make_startup_data_error_presentation(
         preparation.verification, ui::l10n::f10_catalog(), explicit_locale,
-        platform_locale);
+        platform_locales);
     result.message = presentation.dialog_text();
     // A late verification result may arrive after the loading surface replaced
     // the timed splash. Restore the artwork behind the error dialog.

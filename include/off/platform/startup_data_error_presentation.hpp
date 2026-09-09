@@ -3,8 +3,10 @@
 #include "off/data/install.hpp"
 #include "off/ui/project_localization.hpp"
 
+#include <array>
 #include <string>
 #include <string_view>
+#include <span>
 
 namespace off::platform {
 
@@ -25,6 +27,12 @@ struct StartupDataErrorPresentation {
     return result;
   }
 };
+
+[[nodiscard]] inline StartupDataErrorPresentation
+make_startup_data_error_presentation(
+    const data::InstallVerification &verification,
+    const ui::l10n::ProjectCatalog &catalog, std::string_view explicit_locale,
+    std::span<const std::string_view> platform_locales);
 
 [[nodiscard]] inline ui::l10n::MessageId
 startup_data_error_message_id(data::InstallError error) noexcept {
@@ -53,8 +61,18 @@ make_startup_data_error_presentation(
     const data::InstallVerification &verification,
     const ui::l10n::ProjectCatalog &catalog, std::string_view explicit_locale,
     std::string_view platform_locale) {
+  const std::array<std::string_view, 1> platform_locales{{platform_locale}};
+  return make_startup_data_error_presentation(
+      verification, catalog, explicit_locale, std::span{platform_locales});
+}
+
+[[nodiscard]] inline StartupDataErrorPresentation
+make_startup_data_error_presentation(
+    const data::InstallVerification &verification,
+    const ui::l10n::ProjectCatalog &catalog, std::string_view explicit_locale,
+    std::span<const std::string_view> platform_locales) {
   const auto text = [&](ui::l10n::MessageId id) {
-    const auto resolved = catalog.resolve(id, explicit_locale, platform_locale);
+    const auto resolved = catalog.resolve(id, explicit_locale, platform_locales);
     return std::string{resolved.value_or("OpenFreedomFighters")};
   };
   return {.title = text(ui::l10n::MessageId::game_data_required),

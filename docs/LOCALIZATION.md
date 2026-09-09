@@ -6,9 +6,10 @@ The project has a deliberately small localization foundation for its own F10
 graphics-overlay vocabulary. It has complete, independently authored UTF-8
 catalog entries for the 20 target locales below, keyed by stable semantic IDs.
 Its resolver accepts an explicit locale first, then an ordered platform
-preference list, and English last. The live F10 draw path currently reads the
-system's first preferred locale through SDL. `--locale TAG` is an explicit
-override (for example, `--locale sv-SE`).
+preference list, and English last. Startup loading status and data-error
+presentation pass SDL's complete preference list to that resolver. The live
+F10 draw path currently reads the system's first preferred locale through SDL.
+`--locale TAG` is an explicit override (for example, `--locale sv-SE`).
 It does not read a retail LOC format or ship retail text. This is not localized
 Original presentation, game-wide l10n, or a claim of complete game coverage.
 
