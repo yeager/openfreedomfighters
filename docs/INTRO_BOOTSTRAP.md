@@ -701,6 +701,14 @@ Whole-image caller triage found no ordinary renderer-frame-to-Present call. The
 only concrete renderer callers are the phase-two wrapper and device
 initialization, both of which present cleared buffers rather than the first cut.
 
+`SdlFirstCutPictureFrameBridge` is an intentionally disconnected native
+boundary for that later join. It accepts only an already admitted,
+nonempty `FirstCutPictureFrame`, forwards its existing draw records to an
+already caller-owned `SdlIntroRenderer` command buffer, and invalidates its
+binding if the source frame is assembled again. It neither begins a pass nor
+submits or presents it, selects a scene, advances time, or manufactures any
+lifecycle admission. Normal startup does not bind this bridge.
+
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
 copied controller payloads. Runtime acceptance additionally requires an actual

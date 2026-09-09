@@ -5,6 +5,8 @@ namespace off::platform {
 FirstCutPictureFrameResult FirstCutPictureFrame::assemble(
     const FirstCutPictureFrameInput &input) {
   submissions_.clear();
+  ready_for_render_ = false;
+  ++assembly_generation_;
   if (input.view_admission != graphics::FirstCutViewAdmissionResult::view_admitted)
     return FirstCutPictureFrameResult::view_not_admitted;
   if (!input.positive_time_member_activated)
@@ -18,6 +20,7 @@ FirstCutPictureFrameResult FirstCutPictureFrame::assemble(
   submissions_.reserve(input.pictures.size());
   for (const auto &picture : input.pictures)
     submissions_.push_back(IntroPictureSubmission::assemble(picture));
+  ready_for_render_ = true;
   return FirstCutPictureFrameResult::assembled;
 }
 

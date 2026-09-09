@@ -3,6 +3,7 @@
 #include "off/graphics/first_cut_view_admission_gate.hpp"
 #include "off/platform/intro_picture_submission.hpp"
 
+#include <cstdint>
 #include <optional>
 
 namespace off::platform {
@@ -29,9 +30,20 @@ public:
   [[nodiscard]] std::span<const IntroPictureSubmission> submissions() const noexcept {
     return submissions_;
   }
+  // True only after this instance accepted every explicit lifecycle gate and
+  // assembled at least one submitted picture.  An unsuccessful later attempt
+  // clears this state with its submissions.
+  [[nodiscard]] bool ready_for_render() const noexcept { return ready_for_render_; }
+  // Changes on every assembly attempt, including a rejected one.  Consumers
+  // retaining submission spans can use this to reject stale frame contents.
+  [[nodiscard]] std::uint64_t assembly_generation() const noexcept {
+    return assembly_generation_;
+  }
 
 private:
   std::vector<IntroPictureSubmission> submissions_;
+  bool ready_for_render_{};
+  std::uint64_t assembly_generation_{};
 };
 
 } // namespace off::platform
