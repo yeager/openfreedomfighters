@@ -137,6 +137,14 @@ struct GmsIntroExternalCutCommandsSource {
     std::array<std::uint32_t, 2> external_list_references{};
 };
 
+// The one reviewed StartLoader component route. This keeps the authored
+// directory identity and target text; it is neither a live component nor a
+// scene-manager request.
+struct GmsStartLoaderLoadScreenSource {
+    std::size_t directory_index{};
+    std::string target;
+};
+
 struct GmsDirectoryEntry {
     std::uint32_t packed_record_reference{0};
     std::uint32_t auxiliary_value{0};
@@ -255,6 +263,10 @@ public:
     [[nodiscard]] GmsIntroCutSequenceSource intro_cut_sequence_source(std::size_t index) const;
     [[nodiscard]] GmsIntroExternalCutCommandsSource
     intro_external_cut_commands_source(std::size_t index) const;
+    // Exact retail StartLoader LoadScreen grammar only. It does not update a
+    // LoadScreen component or request/construct the target scene.
+    [[nodiscard]] GmsStartLoaderLoadScreenSource
+    startloader_load_screen_source() const;
     // Zero has no join. Nonzero references are one-based, without bit masking.
     [[nodiscard]] std::optional<std::string> authored_event_identifier(std::uint32_t raw) const;
 

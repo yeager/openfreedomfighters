@@ -32,7 +32,7 @@ These rules protect the native runtime from malformed user-supplied data. They d
 
 ## Verification
 
-Synthetic fixtures cover stored and deflated payloads, the Glacier footer, case and slash normalization, traversal rejection, CRC corruption, directory-to-archive overlay precedence, mount removal, bounded streaming reads, and end-of-file rejection. The native installation verifier opens the supported retail global stream bank through a streaming view. It also opens `StartLoader.ZIP`, reads its `ZGF` member through the archive parser, verifies its CRC, and checks the corpus-proven file-size invariant.
+Synthetic fixtures cover stored and deflated payloads, the Glacier footer, case and slash normalization, traversal rejection, CRC corruption, directory-to-archive overlay precedence, mount removal, bounded streaming reads, and end-of-file rejection. The native installation verifier opens the supported retail global stream bank through a streaming view. It also opens `StartLoader.ZIP`, reads its `ZGF` member through the archive parser, and validates the authored `StartLoader.GMS` LoadScreen route through a bounded typed parser. The parser retains only the source-directory identity and target text; it does not create a component, enqueue a transition, or construct a scene.
 
 Private executable evidence reports that an older archive entry is invalidated when the same virtual file appears in a newer archive. The public VFS expresses only that interoperability behavior; it does not reproduce the original implementation.
 

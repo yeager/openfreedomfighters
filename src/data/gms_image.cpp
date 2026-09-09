@@ -897,6 +897,75 @@ std::optional<std::string> GmsImage::authored_event_identifier(std::uint32_t raw
     return result;
 }
 
+GmsStartLoaderLoadScreenSource GmsImage::startloader_load_screen_source() const {
+    constexpr std::uint32_t load_screen_owner_type = 0x0010002eU;
+    constexpr std::string_view load_screen_identifier = "ZWINGROUP_LoadScreen";
+    std::optional<std::size_t> candidate;
+    for (std::size_t index = 0; index < directory_.size(); ++index) {
+        const auto& entry = directory_[index];
+        if (entry.source_type != load_screen_owner_type || entry.class_data_value != 0U ||
+            entry.attachments.size() != 1U ||
+            attachment_identifier(index, 0U) != load_screen_identifier ||
+            !std::isfinite(entry.attachments[0].parameter) ||
+            entry.attachments[0].parameter != 0.0F) {
+            continue;
+        }
+        if (candidate) {
+            throw std::runtime_error("GMS StartLoader has duplicate LoadScreen owners");
+        }
+        candidate = index;
+    }
+    if (!candidate) {
+        throw std::runtime_error("GMS StartLoader has no supported LoadScreen owner");
+    }
+
+    if (directory_.at(*candidate).deferred_source_offset == 0U) {
+        throw std::runtime_error("GMS StartLoader LoadScreen has no deferred source");
+    }
+    const auto block = deferred_source_block(*candidate);
+    const ByteReader reader(block);
+    std::size_t cursor = sizeof(std::uint32_t);
+    const auto tag = [&]() -> std::uint8_t {
+        if (cursor >= block.size()) throw std::runtime_error("GMS StartLoader LoadScreen source is truncated");
+        return std::to_integer<std::uint8_t>(block[cursor]);
+    };
+    const auto integer = [&]() -> std::uint32_t {
+        if (tag() != integer_tag_type || sizeof(std::uint32_t) > block.size() - cursor - 1U)
+            throw std::runtime_error("GMS StartLoader LoadScreen integer tag is invalid");
+        const auto value = reader.u32(cursor + 1U);
+        cursor += 1U + sizeof(std::uint32_t);
+        return value;
+    };
+    const auto scalar = [&]() -> float {
+        if (tag() != 2U || sizeof(std::uint32_t) > block.size() - cursor - 1U)
+            throw std::runtime_error("GMS StartLoader LoadScreen scalar tag is invalid");
+        const auto value = std::bit_cast<float>(reader.u32(cursor + 1U));
+        if (!std::isfinite(value)) throw std::runtime_error("GMS StartLoader LoadScreen scalar is non-finite");
+        cursor += 1U + sizeof(std::uint32_t);
+        return value;
+    };
+    const auto structure = [&]() {
+        if (tag() != structural_tag_type) throw std::runtime_error("GMS StartLoader LoadScreen structure tag is invalid");
+        ++cursor;
+    };
+    if (integer() != 0U || scalar() != 1.0F || integer() != 1U || integer() != 1U || integer() != 0U)
+        throw std::runtime_error("GMS StartLoader LoadScreen inherited state is unsupported");
+    structure();
+    structure();
+    if (tag() != 0x84U) throw std::runtime_error("GMS StartLoader LoadScreen target tag is invalid");
+    ++cursor;
+    const auto target_begin = cursor;
+    while (cursor < block.size() && block[cursor] != std::byte{0}) ++cursor;
+    if (cursor == block.size() || cursor == target_begin)
+        throw std::runtime_error("GMS StartLoader LoadScreen target is unterminated");
+    const std::string target{reinterpret_cast<const char*>(block.data() + target_begin), cursor - target_begin};
+    ++cursor;
+    structure();
+    if (cursor >= block.size() || block[cursor++] != std::byte{terminal_tag} || cursor != block.size())
+        throw std::runtime_error("GMS StartLoader LoadScreen source has trailing data");
+    return {.directory_index = *candidate, .target = target};
+}
+
 std::string_view GmsImage::attachment_identifier(
     std::size_t directory_index, std::size_t attachment_index) const {
     if (directory_index >= directory_.size() ||

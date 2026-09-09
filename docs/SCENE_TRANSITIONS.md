@@ -1,6 +1,10 @@
 # Scene transition requests
 
 `StartLoaderLoadScreenSource` is a narrow handoff from a caller-owned parser.
+The installation verifier now confirms the supported `StartLoader.GMS` has one
+bounded LoadScreen source and preserves its authored target. This remains a
+discovery boundary: normal startup does not yet instantiate `LoadScreenTransition`
+or enqueue the target.
 It accepts only the supported LoadScreen attachment identity, a finite zero
 attachment parameter, an exactly consumed source wrapper, and the supported
 target. It does not parse GMS or open an archive.

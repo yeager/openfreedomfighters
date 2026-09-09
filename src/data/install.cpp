@@ -709,7 +709,9 @@ InstallVerification verify_install(const std::filesystem::path &root,
     const auto startup_archive =
         ZipArchive::open(root / "Scenes/StartLoader.ZIP");
     const auto *scene_graph = startup_archive.find("SCENES/StartLoader.ZGF");
-    if (startup_archive.entries().size() != 12 || scene_graph == nullptr) {
+    const auto *scene_source = startup_archive.find("SCENES/StartLoader.GMS");
+    if (startup_archive.entries().size() != 12 || scene_graph == nullptr ||
+        scene_source == nullptr) {
       return failure(
           InstallError::incomplete_game_data, root,
           "startup archive does not match the supported resource layout");
@@ -717,6 +719,10 @@ InstallVerification verify_install(const std::filesystem::path &root,
     member_context = scene_graph->name;
     const auto payload = startup_archive.read(*scene_graph);
     static_cast<void>(ZgfBundle::parse(PackedResource::parse(payload)));
+    member_context = scene_source->name;
+    const auto source_payload = startup_archive.read(*scene_source);
+    static_cast<void>(GmsImage::parse(PackedResource::parse(source_payload))
+                          .startloader_load_screen_source());
     }
   } catch (const std::exception &exception) {
     const auto context = archive_context.empty()
