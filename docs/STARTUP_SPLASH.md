@@ -21,12 +21,13 @@ visible until the first tick at or after that deadline. If CPU startup work is
 still running then, the image is replaced by a dark loading surface; it is not
 kept beyond its specified duration during loading.
 
-The splash adds two project-authored, high-contrast bitmap overlays after the
+The splash adds two project-authored, high-contrast text overlays after the
 artwork is scaled: the CMake `PROJECT_VERSION` as `v<version>` at the lower
 left, and `Daniel Nylander` at the lower right. The executable and its focused
 startup-window test each receive `OFF_VERSION` from that CMake release value;
-there is no independently hard-coded runtime version string. The tiny glyph
-rasterizer needs no system or retail font during preflight.
+there is no independently hard-coded runtime version string. The bundled,
+project-licensed Rajdhani font is opened and closed before SDL_ttf is shut down;
+no system or retail font is used during preflight.
 
 Installation verification runs on a worker while the SDL main thread pumps
 events. Only successful verification allows that worker to prepare the decoded

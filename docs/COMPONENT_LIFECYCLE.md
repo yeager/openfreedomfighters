@@ -23,10 +23,10 @@ the authored callbacks still require their real reader and runtime services.
 `IntroRuntime::preflight_global_lifecycle()` derives its inventory from the
 loaded scene and remains read-only. The complete supported fixture has 420
 deferred reader identities, 383 authored attachment identities and 471 owner
-identities including ROOT. It reports zero concrete coverage today: the
-constructed placeholder closures deliberately fail closed and do not count as
-implementations. Normal startup remains outside the reader bracket and global
-lifecycle until typed coverage exists for every identity.
+identities including ROOT. Normal startup now enters the ordinary reader bracket
+and reports ten reader identities covered by reviewed typed readers. It still
+reports no component or owner coverage, and fails closed at reader coverage for
+the remaining 410 identities. Global lifecycle admission is not attempted.
 
 ## Construction and ownership
 

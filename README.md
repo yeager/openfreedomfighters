@@ -60,11 +60,13 @@ for a portable installation.
   from the supported scene directory. It allocates all 470 authored resources,
   retains 383 constructed attachment instances, queues 420 deferred readers,
   and preserves the authored hierarchy, event names, saved flags, and supported
-  sound-owner state. Checked loader APIs now model the deferred-reader bracket,
-  approved reference translation, loader tail, and global component-pass
-  ordering. Normal startup does not invoke those APIs yet. Concrete readers,
-  renderer associations, scene updates, rendering, audio playback, menus, and
-  gameplay remain unimplemented.
+  sound-owner state. Normal startup runs the ordinary deferred-reader bracket
+  and admits ten reviewed, source-backed reader records: MovieControl, the
+  first-cut sequence and list, both sound owners, the first-cut Window, one
+  external-command pair, and the verified FadeToBlack picture targets. The
+  other 410 records remain intentionally unconsumed. Loader-tail processing,
+  global lifecycle admission, renderer associations, scene updates, rendering,
+  audio playback, menus, and gameplay remain unimplemented.
   Window console/property bindings and the scene event-name table are live.
   None of the cameras is registered for normal rendering yet.
   DefaultCam and its PreviewCamera now share an [ordinary update queue](docs/ORDINARY_COMPONENTS.md)

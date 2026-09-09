@@ -27,9 +27,10 @@ CharFader reuses Fade events, while LogoFade declares none. Temporary component
 construction is removed from the live list while preserving its construction
 serial effects. The host also exposes checked, explicit boundaries for the
 post-construction reader bracket, approved reference translation, loader tail,
-and global component passes. They are not called by normal startup. No concrete
-reader, renderer association, scene update, or rendering path follows from
-construction. See [live resource flags](RESOURCE_STATE.md) and the
+and global component passes. Normal startup now runs the ordinary reader bracket
+and admits ten reviewed reader records without executing a command or activating
+a component. The remaining 410 records, loader tail, renderer association,
+scene update, and rendering path remain unavailable. See [live resource flags](RESOURCE_STATE.md) and the
 [component lifecycle](COMPONENT_LIFECYCLE.md).
 MatPosAnim is explicitly outside the current deferred-reader admission path:
 all 227 associated deferred records terminate before attachment dispatch. Its
@@ -116,11 +117,12 @@ Focused ASan/UBSan checks cover the host integration and supporting runtime code
 this is not a sanitizer build of every dependency.
 
 A private probe using the owned archive checks the complete ROOT-through-469
-construction boundary: all 470 authored resources and owners, 420 unconsumed
-readers, 383 constructed attachments, saved flags, event mapping, hierarchy,
-and cold sound-owner state. It distinguishes camera ROOT contexts from Window
-parents and checks retained constructor parameters. It does not run readers,
-resolve references, activate components, or create live Picture backing.
+construction boundary: all 470 authored resources and owners, 420 queued
+reader records, 383 constructed attachments, saved flags, event mapping,
+hierarchy, and cold sound-owner state. The normal cold path additionally runs
+the bracket and resolves ten reviewed reader records. It does not activate
+components, construct a cut sequence, dispatch events, or create live Picture
+backing.
 
 The event reverse-name table is heap-backed. Its earlier inline storage made
 the integration test exceed a 1 MiB stack and Windows CI crashed. The same
