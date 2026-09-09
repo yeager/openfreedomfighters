@@ -1,4 +1,6 @@
 #include "off/graphics/startup_picture_pass_admission.hpp"
+#include "off/data/packed_resource.hpp"
+#include "off/data/zip_archive.hpp"
 #include "off/platform/startup_lifecycle.hpp"
 #include "off/runtime/movie_cut_loader_package_source.hpp"
 #include "off/runtime/movie_cut_main_package_source.hpp"
@@ -1032,6 +1034,48 @@ int main() {
             boot_source_scope.nodes.size() == 2U,
         "boot directory source derives only the checked window attachment and "
         "complete retained GMS hierarchy");
+  if (const auto *retail_data_root =
+          std::getenv("OFF_STARTUP_BOOT_DATA_ROOT");
+      retail_data_root != nullptr && *retail_data_root != '\0') {
+    const auto startup_archive = off::data::ZipArchive::open(
+        std::filesystem::path(retail_data_root) / "Scenes" / "FF-StartUp.ZIP");
+    const auto *startup_gms_entry =
+        startup_archive.find("SCENES/FF-StartUp.GMS");
+    check(startup_gms_entry != nullptr,
+          "retail startup archive contains its canonical GMS source");
+    const auto retail_boot_directory_image = off::data::GmsImage::parse(
+        off::data::PackedResource::parse(startup_archive.read(*startup_gms_entry)));
+    const auto retail_boot_directory_source =
+        off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
+            retail_boot_directory_image);
+    const auto retail_boot_scope =
+        retail_boot_directory_source.hierarchy_scope();
+    const auto &retail_boot_proof = retail_boot_directory_source.proof();
+    const auto contains_retail_boot_owner = std::any_of(
+        retail_boot_scope.nodes.begin(), retail_boot_scope.nodes.end(),
+        [&](const off::runtime::StartupWindowHierarchySourceNode &node) {
+          return node.directory_index ==
+                 retail_boot_directory_source.boot_owner_directory_index();
+        });
+    const auto contains_retail_boot_root = std::any_of(
+        retail_boot_scope.nodes.begin(), retail_boot_scope.nodes.end(),
+        [&](const off::runtime::StartupWindowHierarchySourceNode &node) {
+          return node.directory_index == retail_boot_scope.root_directory_index;
+        });
+    check(retail_boot_proof.complete_directory_mapping &&
+              retail_boot_proof.canonical_ordinary_window_source &&
+              retail_boot_proof.component_identifier == "ZWINDOW_BootMenu" &&
+              retail_boot_proof.component_parameter == 1.0F &&
+              retail_boot_directory_source.boot_owner_directory_index() <
+                  retail_boot_directory_image.directory().size() &&
+              retail_boot_scope.complete_directory_mapping &&
+              !retail_boot_scope.nodes.empty() &&
+              retail_boot_scope.root_directory_index <
+                  retail_boot_directory_image.directory().size() &&
+              contains_retail_boot_owner && contains_retail_boot_root,
+          "retail startup BootMenu source retains only a valid proof and "
+          "hierarchy scope");
+  }
   rejected = false;
   try {
     auto malformed_boot_directory = boot_directory_gms_fixture();
