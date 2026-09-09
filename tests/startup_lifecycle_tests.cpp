@@ -11,6 +11,7 @@
 #include "off/runtime/startup_boot_scene_construction.hpp"
 #include "off/runtime/startup_boot_scene_directory_source.hpp"
 #include "off/runtime/startup_boot_scene_factory.hpp"
+#include "off/runtime/startup_boot_scene_probe_host.hpp"
 #include "off/runtime/startup_scene_loader.hpp"
 #include "off/runtime/startup_scene_package_source.hpp"
 #include "off/runtime/startup_window_hierarchy_snapshot.hpp"
@@ -433,6 +434,21 @@ int main() {
               !retail_factory_inputs->gms().directory().empty() &&
               !retail_factory_inputs->buf().empty(),
           "retail startup package exposes nonempty checked typed factory inputs");
+    const auto retail_boot_directory =
+        off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
+            retail_factory_inputs->gms());
+    const auto retail_probe =
+        off::runtime::SyntheticStartupBootSceneProbeHost::observe(
+            std::make_shared<const off::runtime::StartupSceneLoadPackage>(
+                retail_startup_package),
+            retail_boot_directory,
+            {.synthetic_factory_generation = 9001U,
+             .synthetic_owner_identity = 9002U,
+             .synthetic_component_identity = 9003U});
+    check(retail_probe.trace().size() == 5U &&
+              retail_probe.source_boot_owner_directory_ordinal() ==
+                  retail_boot_directory.boot_owner_directory_index(),
+          "retail startup package supports a non-live synthetic BootMenu probe");
   }
 
   const auto startloader_route_root =
@@ -1229,6 +1245,38 @@ int main() {
             factory_boot_token.factory_generation() == 10U,
         "boot factory delegates only a source-backed package with matching "
         "checked GMS evidence");
+
+  const auto probe_result =
+      off::runtime::SyntheticStartupBootSceneProbeHost::observe(
+          source_backed_boot_package, source_backed_boot_directory,
+          {.synthetic_factory_generation = 701U,
+           .synthetic_owner_identity = 702U,
+           .synthetic_component_identity = 703U});
+  check(probe_result.source_boot_owner_directory_ordinal() ==
+            source_backed_boot_directory.boot_owner_directory_index() &&
+            probe_result.synthetic_ids().synthetic_owner_identity == 702U &&
+            probe_result.trace().size() == 5U &&
+            probe_result.trace()[0].call ==
+                off::runtime::SyntheticStartupBootSceneProbeCall::registry_live &&
+            probe_result.trace()[1].call ==
+                off::runtime::SyntheticStartupBootSceneProbeCall::allocate_ordinary_window &&
+            probe_result.trace()[4].call ==
+                off::runtime::SyntheticStartupBootSceneProbeCall::live_boot_menu_component &&
+            probe_result.trace()[2].source_boot_owner_directory_ordinal ==
+                source_backed_boot_directory.boot_owner_directory_index(),
+        "synthetic probe records source ordinal and explicitly synthetic "
+        "construction calls without producing a startup scene");
+  rejected = false;
+  try {
+    static_cast<void>(off::runtime::SyntheticStartupBootSceneProbeHost::observe(
+        source_backed_boot_package, source_backed_boot_directory,
+        {.synthetic_factory_generation = 0U,
+         .synthetic_owner_identity = 702U,
+         .synthetic_component_identity = 703U}));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected, "synthetic probe requires explicit nonzero synthetic IDs");
 
   rejected = false;
   try {
