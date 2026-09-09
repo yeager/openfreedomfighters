@@ -244,7 +244,15 @@ std::optional<std::string_view>
 ProjectCatalog::format_seconds(MessageId id, unsigned seconds,
                                std::string_view explicit_locale,
                                std::string_view platform_locale) const {
-  const auto pattern = resolve(id, explicit_locale, platform_locale);
+  const std::array<std::string_view, 1> platform_locales{{platform_locale}};
+  return format_seconds(id, seconds, explicit_locale, platform_locales);
+}
+
+std::optional<std::string_view>
+ProjectCatalog::format_seconds(
+    MessageId id, unsigned seconds, std::string_view explicit_locale,
+    std::span<const std::string_view> platform_locales) const {
+  const auto pattern = resolve(id, explicit_locale, platform_locales);
   if (!pattern || id != MessageId::reverting_in_seconds)
     return std::nullopt;
   const auto marker = pattern->find("{seconds}");

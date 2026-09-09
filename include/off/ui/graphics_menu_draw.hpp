@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -125,6 +126,11 @@ struct DiagnosticAsciiAtlas {
     GraphicsClock::time_point now, float ui_scale = 1.0F,
     std::string_view explicit_locale = {},
     std::string_view platform_locale = {});
+[[nodiscard]] GraphicsMenuDrawList build_graphics_menu_draw_list(
+    const GraphicsMenuSession &menu, UiExtent physical_target,
+    GraphicsClock::time_point now, float ui_scale,
+    std::string_view explicit_locale,
+    std::span<const std::string_view> platform_locales);
 [[nodiscard]] UiControl hit_test(const GraphicsMenuDrawList &list, float x,
                                  float y) noexcept;
 [[nodiscard]] bool

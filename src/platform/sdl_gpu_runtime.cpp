@@ -1110,9 +1110,13 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
     return failure("SDL gamepad initialization failed");
   const GamepadSession gamepad_session;
-  // Always read the host language. The catalog uses it whenever the caller
-  // has not deliberately supplied an explicit preference.
-  const std::string platform_locale = preferred_system_locale();
+  // Preserve the host's language preference order unless an explicit locale
+  // override was supplied.
+  const auto platform_locale_storage = preferred_system_locales();
+  std::vector<std::string_view> platform_locales;
+  platform_locales.reserve(platform_locale_storage.size());
+  for (const auto &locale : platform_locale_storage)
+    platform_locales.push_back(locale);
   // SDL's software window surface and a 3D swapchain cannot coexist. Release
   // the splash surface on its creator thread before claiming this SAME window.
   if (SDL_WindowHasSurface(window) && !SDL_DestroyWindowSurface(window))
@@ -1418,7 +1422,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     }
     const auto draw_list = ui::build_graphics_menu_draw_list(
         menu, {swapchain_width, swapchain_height}, ui::GraphicsClock::now(),
-        1.0F, explicit_locale, platform_locale);
+        1.0F, explicit_locale, platform_locales);
     const auto overlay_batch =
         draw_list.status == ui::UiBuildStatus::ok
             ? build_overlay_batch(draw_list, overlay.font)
