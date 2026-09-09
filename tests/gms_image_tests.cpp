@@ -354,6 +354,70 @@ std::vector<std::byte> external_cut_commands_fixture() {
     return bytes;
 }
 
+// Project-authored grammar fixture for the narrow StartLoader discovery path.
+// It contains one ZWINGROUP/LoadScreen owner, not retail source data.
+std::vector<std::byte> startloader_load_screen_fixture() {
+    constexpr std::size_t envelope_size = 9U;
+    std::vector<std::byte> payload(432U);
+    set_u32(payload, 0U, 32U); set_u32(payload, 4U, 96U);
+    set_u32(payload, 12U, 4U); set_u32(payload, 20U, 128U);
+    set_u32(payload, 32U, 1U); set_u32(payload, 36U, 12U);
+    set_u32(payload, 96U, 0U);
+    set_u32(payload, 48U + 4U, 324U); set_u32(payload, 48U + 8U, 360U);
+    set_u32(payload, 48U + 16U, 0x0010002eU); set_u32(payload, 48U + 20U, 372U);
+    set_u32(payload, 48U + 32U, 384U);
+    set_u32(payload, 128U, 2U); set_u32(payload, 132U, 1U);
+    for (const auto offset : {324U, 340U, 356U}) set_f32(payload, offset, 0.0F);
+    set_f32(payload, 324U, 1.0F); set_f32(payload, 340U, 1.0F); set_f32(payload, 356U, 1.0F);
+    set_u32(payload, 372U, 1U); set_u32(payload, 376U, 100U); set_f32(payload, 380U, 0.0F);
+    constexpr std::string_view identifier = "ZWINGROUP_LoadScreen";
+    for (std::size_t index = 0; index < identifier.size(); ++index)
+        payload[100U + index] = static_cast<std::byte>(identifier[index]);
+    payload[100U + identifier.size()] = std::byte{0};
+    std::vector<std::byte> block(4U);
+    const auto scalar = [&](std::uint8_t tag, std::uint32_t value) {
+        block.push_back(static_cast<std::byte>(tag)); append_u32(block, value);
+    };
+    scalar(3U, 0U); scalar(2U, std::bit_cast<std::uint32_t>(1.0F));
+    scalar(3U, 1U); scalar(3U, 1U); scalar(3U, 0U);
+    block.push_back(std::byte{6}); block.push_back(std::byte{6});
+    block.push_back(std::byte{0x84});
+    constexpr std::string_view target = "FF-Startup";
+    for (const auto character : target) block.push_back(static_cast<std::byte>(character));
+    block.push_back(std::byte{0}); block.push_back(std::byte{6}); block.push_back(std::byte{0xff});
+    set_u32(block, 0U, static_cast<std::uint32_t>(block.size()));
+    std::copy(block.begin(), block.end(), payload.begin() + 384);
+    std::vector<std::byte> bytes;
+    append_u32(bytes, static_cast<std::uint32_t>(payload.size()));
+    append_u32(bytes, static_cast<std::uint32_t>(payload.size() + envelope_size));
+    bytes.push_back(std::byte{1});
+    bytes.insert(bytes.end(), payload.begin(), payload.end());
+    return bytes;
+}
+
+void startloader_load_screen_tests() {
+    const auto parse = [](auto bytes) {
+        return off::data::GmsImage::parse(off::data::PackedResource::parse(std::move(bytes)));
+    };
+    const auto source = parse(startloader_load_screen_fixture()).startloader_load_screen_source();
+    check(source.directory_index == 0U && source.target == "FF-Startup",
+          "StartLoader discovery retains the unique authored target");
+    check_rejected(
+        [&] {
+            auto bytes = startloader_load_screen_fixture();
+            bytes[9U + 384U + 5U] = std::byte{4};
+            static_cast<void>(parse(std::move(bytes)).startloader_load_screen_source());
+        },
+        "StartLoader discovery rejects altered deferred grammar");
+    check_rejected(
+        [&] {
+            auto bytes = startloader_load_screen_fixture();
+            set_f32(bytes, 9U + 380U, 1.0F);
+            static_cast<void>(parse(std::move(bytes)).startloader_load_screen_source());
+        },
+        "StartLoader discovery rejects a nonzero attachment parameter");
+}
+
 void intro_window_tests() {
     const auto fixture = [] {
         auto bytes = intro_controller_fixture();
@@ -1642,6 +1706,7 @@ int main() {
               "typed cursor keeps position after a rejected token-kind read");
     }
     intro_window_tests();
+    startloader_load_screen_tests();
     intro_legal_picture_tests();
     intro_camera_tests();
     intro_fade_picture_tests();
