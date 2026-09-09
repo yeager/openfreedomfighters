@@ -70,6 +70,7 @@ add_library(off_core
     src/audio/intro_audio_stream.cpp
     src/audio/soundtrack_catalog.cpp
     src/audio/soundtrack_decode.cpp
+    src/audio/soundtrack_playback.cpp
     src/audio/soundtrack_stream.cpp
     src/runtime/application_clock.cpp
     src/runtime/component_lifecycle.cpp
@@ -416,6 +417,9 @@ if(BUILD_TESTING)
     add_executable(off_soundtrack_stream_tests tests/soundtrack_stream_tests.cpp)
     target_link_libraries(off_soundtrack_stream_tests PRIVATE off_core)
     add_test(NAME off_soundtrack_stream_tests COMMAND off_soundtrack_stream_tests)
+    add_executable(off_soundtrack_playback_tests tests/soundtrack_playback_tests.cpp)
+    target_link_libraries(off_soundtrack_playback_tests PRIVATE off_core)
+    add_test(NAME off_soundtrack_playback_tests COMMAND off_soundtrack_playback_tests)
 
     add_executable(off_scene_support_tests tests/scene_support_tests.cpp)
     target_link_libraries(off_scene_support_tests PRIVATE off_core)

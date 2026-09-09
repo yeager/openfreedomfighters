@@ -60,7 +60,9 @@ tracks must never disable original music or create a startup requirement.
 and reports optional failures. The candidate catalog groups album editions by
 their filename ordinal, preferring FLAC and retaining MP3 as a fallback; an
 album ordinal is not a game-cue mapping. A bounded sequential file stream can
-read local FLAC and MP3 PCM in caller-provided chunks. A bounded standalone decoder accepts local
+read local FLAC and MP3 PCM in caller-provided chunks. A separate bounded
+one-track transport can submit those chunks to an audio device, but is not
+connected to a game-cue resolver. A bounded standalone decoder accepts local
 FLAC and MP3 files and produces 16-bit PCM after validating file size, channels,
 sample rate, decoded length and complete input read. It is not connected to a
 cue resolver or audio lifecycle. There is still no verified cue mapping,
