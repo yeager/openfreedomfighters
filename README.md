@@ -75,6 +75,9 @@ for a portable installation.
   DefaultCam and its PreviewCamera now share an [ordinary update queue](docs/ORDINARY_COMPONENTS.md)
   with real admission and sorting. This path still requires the preceding loader
   state and is not called by normal startup yet.
+- The missing bridge is now specified as a [normal startup scene host](docs/NORMAL_STARTUP_SCENE_HOST.md):
+  it must admit lifecycle, the first cut, camera/view, drawing and audio in one
+  ordinary-frame order. It is not implemented yet.
 - F10 opens a working graphics-settings panel. Its current appearance is
   diagnostic; matching the game's menu design is still on the roadmap.
 - A separate geometry preview is available with `--diagnostic-scene`. It is not

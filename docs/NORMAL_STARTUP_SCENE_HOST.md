@@ -1,0 +1,55 @@
+# Normal startup scene-host boundary
+
+Normal startup currently constructs and retains the supported intro directory,
+but it does not make that scene current. This document defines the next native
+host boundary. It prevents a shortcut that creates an audio device or a draw
+call during loading and then incorrectly reports an active intro.
+
+## Required ordering
+
+The host owns one `IntroRuntime` for the lifetime of the admitted scene. It
+must not run before source-directory construction has completed. It performs
+the following stages exactly once, with real services at every boundary:
+
+1. Run `IntroStartupActivation`: the post-construction reader bracket, outer
+   loader tail, global lifecycle, then MovieControl phase two.
+2. On a later ordinary frame, run the reviewed MovieControl event-16 update.
+   It must be strictly past the phase-two deadline.
+3. Route the selected first-cut camera and pass the live camera/view evidence
+   through `FirstCutViewAdmissionGate`.
+4. Only after a view is admitted, prepare a source-backed first-cut picture
+   frame and submit it to `SdlIntroRenderer`.
+5. In the same admitted ordinary-frame stage, perform the two sound receives,
+   ordinary component update, position/bounds update, optional renderer
+   traversal, and prepared-record sound processing in the documented order.
+   The latter may create `make_sdl_intro_audio_playback` lazily, submit only
+   admitted source commands, pump it, stop ordered channels, and deliver only
+   its actual notifications.
+
+Any absent callback, listener, selected camera, renderer backend, sound device,
+or source record is a failed admission. It must not synthesize a draw, a scene
+event, a start acknowledgement, or a replacement camera.
+
+## Ownership
+
+`IntroRuntime`, the admitted camera/view state, the audio playback service and
+the scene host have the same scene lifetime. The startup window and SDL GPU
+runtime may present their work, but neither owns scene activation. Destruction
+stops channels before releasing readers and destroys the host before global SDL
+shutdown.
+
+## Verification plan
+
+- A source-free recording host proves the stages above cannot be reordered and
+  that a failed prerequisite emits no draw or notification.
+- A generated PCM/fixture-resource integration test proves the first eligible
+  frame reaches view admission before picture submission and sound processing.
+- A GPU integration test proves the frame before the deadline is clear and the
+  first admitted frame is source-backed.
+- Private Steam observation may measure timing and transition behavior. It
+  supplies no assets, strings, screenshots, executables, or derived material
+  to this repository.
+
+This host is intentionally not implemented by merely constructing the SDL audio
+adapter. Audio requires the same lifecycle and ordinary-frame admission that
+establishes the first-cut renderer view.
