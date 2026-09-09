@@ -98,6 +98,7 @@ add_library(off_core
     src/data/zgf_bundle.cpp
     src/data/zip_archive.cpp
     src/graphics/texture_decode.cpp
+    src/graphics/normal_intro_scene_host.cpp
     src/graphics/render_assets.cpp
     src/graphics/render_preview.cpp
     src/graphics/scene_render.cpp
@@ -420,6 +421,9 @@ if(BUILD_TESTING)
     add_executable(off_soundtrack_playback_tests tests/soundtrack_playback_tests.cpp)
     target_link_libraries(off_soundtrack_playback_tests PRIVATE off_core)
     add_test(NAME off_soundtrack_playback_tests COMMAND off_soundtrack_playback_tests)
+    add_executable(off_normal_intro_scene_host_tests tests/normal_intro_scene_host_tests.cpp)
+    target_link_libraries(off_normal_intro_scene_host_tests PRIVATE off_core off_sdl_intro_renderer)
+    add_test(NAME off_normal_intro_scene_host_tests COMMAND off_normal_intro_scene_host_tests)
 
     add_executable(off_scene_support_tests tests/scene_support_tests.cpp)
     target_link_libraries(off_scene_support_tests PRIVATE off_core)

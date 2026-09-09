@@ -1,8 +1,9 @@
 # Normal startup scene-host boundary
 
 Normal startup currently constructs and retains the supported intro directory,
-but it does not make that scene current. This document defines the next native
-host boundary. It prevents a shortcut that creates an audio device or a draw
+but it does not make that scene current. `NormalIntroSceneHost` now implements
+the strict ordering state machine described here, but is not yet wired to normal
+startup or SDL. It prevents a shortcut that creates an audio device or a draw
 call during loading and then incorrectly reports an active intro.
 
 ## Required ordering
