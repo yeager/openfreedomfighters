@@ -5,6 +5,7 @@
 #include "off/runtime/startup_boot_menu_admission.hpp"
 #include "off/runtime/startup_boot_scene_construction.hpp"
 #include "off/runtime/movie_cut_loader_package_source.hpp"
+#include "off/runtime/movie_cut_main_package_source.hpp"
 #include "off/runtime/startup_scene_loader.hpp"
 #include "off/runtime/startup_scene_package_source.hpp"
 #include "off/runtime/startup_window_hierarchy_snapshot.hpp"
@@ -127,6 +128,18 @@ std::vector<std::byte> package_support_fixture() {
   append_u32(result, size - 16U);
   append_text(result, dependency);
   result.push_back(std::byte{0});
+  return result;
+}
+
+std::vector<std::byte> package_zgf_fixture() {
+  std::vector<std::byte> decoded;
+  append_u32(decoded, 0x5a474654U);
+  append_u32(decoded, 8U);
+  std::vector<std::byte> result;
+  append_u32(result, static_cast<std::uint32_t>(decoded.size()));
+  append_u32(result, static_cast<std::uint32_t>(decoded.size() + 9U));
+  result.push_back(std::byte{1});
+  result.insert(result.end(), decoded.begin(), decoded.end());
   return result;
 }
 
@@ -272,6 +285,96 @@ int main() {
       std::filesystem::current_path() / "off-movie-cut-loader-fixture.zip";
   std::error_code movie_cut_error;
   std::filesystem::remove(movie_cut_fixture, movie_cut_error);
+
+  const auto movie_cut_root =
+      std::filesystem::current_path() / "off-movie-cut-main-data";
+  std::filesystem::remove_all(movie_cut_root, movie_cut_error);
+  constexpr std::string_view main_cut_identifier = "SyntheticCut";
+  constexpr std::string_view main_package_identifier = "SyntheticCut_MAIN";
+  const auto movie_cut_main_dir = movie_cut_root / "Scenes" / "Cutscenes" /
+                                  "MovieCuts" /
+                                  std::string(main_cut_identifier);
+  std::filesystem::create_directories(movie_cut_main_dir, movie_cut_error);
+  check(!movie_cut_error, "create MovieCut main package fixture directory");
+  const auto movie_cut_main_archive =
+      movie_cut_main_dir / (std::string(main_package_identifier) + ".ZIP");
+  const auto main_member = [](std::string_view extension) {
+    return "SCENES/Cutscenes/MovieCuts/SyntheticCut/SyntheticCut_MAIN" +
+           std::string(extension);
+  };
+  std::vector<std::pair<std::string, std::vector<std::byte>>> main_members{
+      {main_member(".ZGF"), package_zgf_fixture()},
+      {main_member(".SUP"), package_support_fixture()},
+      {main_member(".BUF"), {std::byte{1}}},
+      {main_member(".GMS"), package_gms_fixture()},
+      {main_member(".TEX"), {std::byte{2}}},
+      {main_member(".SND"), {std::byte{3}}},
+      {main_member(".LOC"), {std::byte{4}}},
+      {main_member(".OCT"), {std::byte{5}}},
+      {main_member(".SGP"), {std::byte{6}}},
+      {main_member(".RMC"), {std::byte{7}}},
+      {main_member(".RMI"), {std::byte{8}}},
+      {main_member(".PRM"), {std::byte{9}}}};
+  write_package_zip(movie_cut_main_archive, main_members);
+  const auto main_package =
+      off::runtime::MovieCutMainPackageSource::prepare_checked(
+          movie_cut_root, main_cut_identifier, main_package_identifier);
+  check(main_package.cut_identifier() == main_cut_identifier &&
+            main_package.package_identifier() == main_package_identifier,
+        "MovieCut main package retains caller-selected identifiers");
+
+  main_members.emplace_back(main_member(".ANM"), std::vector<std::byte>{std::byte{10}});
+  write_package_zip(movie_cut_main_archive, main_members);
+  static_cast<void>(off::runtime::MovieCutMainPackageSource::prepare_checked(
+      movie_cut_root, main_cut_identifier, main_package_identifier));
+
+  bool rejected_main_package = false;
+  try {
+    static_cast<void>(off::runtime::MovieCutMainPackageSource::prepare_checked(
+        movie_cut_root, "SyntheticCut/escape", main_package_identifier));
+  } catch (const std::runtime_error &) {
+    rejected_main_package = true;
+  }
+  check(rejected_main_package,
+        "MovieCut main package rejects path-like cut identifiers");
+
+  main_members.pop_back();
+  main_members.pop_back();
+  write_package_zip(movie_cut_main_archive, main_members);
+  rejected_main_package = false;
+  try {
+    static_cast<void>(off::runtime::MovieCutMainPackageSource::prepare_checked(
+        movie_cut_root, main_cut_identifier, main_package_identifier));
+  } catch (const std::runtime_error &) {
+    rejected_main_package = true;
+  }
+  check(rejected_main_package,
+        "MovieCut main package rejects a missing required core member");
+
+  main_members.emplace_back(main_member(".PRM"), std::vector<std::byte>{std::byte{9}});
+  main_members.emplace_back("SCENES/Cutscenes/MovieCuts/SyntheticCut/extra.bin",
+                            std::vector<std::byte>{std::byte{10}});
+  write_package_zip(movie_cut_main_archive, main_members);
+  rejected_main_package = false;
+  try {
+    static_cast<void>(off::runtime::MovieCutMainPackageSource::prepare_checked(
+        movie_cut_root, main_cut_identifier, main_package_identifier));
+  } catch (const std::runtime_error &) {
+    rejected_main_package = true;
+  }
+  check(rejected_main_package,
+        "MovieCut main package rejects non-canonical archive members");
+  std::filesystem::remove_all(movie_cut_root, movie_cut_error);
+  if (const auto *retail_data_root =
+          std::getenv("OFF_MOVIECUT_MAIN_DATA_ROOT");
+      retail_data_root != nullptr && *retail_data_root != '\0') {
+    const auto retail_main_package =
+        off::runtime::MovieCutMainPackageSource::prepare_checked(
+            retail_data_root, "FF_MC01", "FF_MC01_MAIN");
+    check(retail_main_package.cut_identifier() == "FF_MC01" &&
+              retail_main_package.package_identifier() == "FF_MC01_MAIN",
+          "MovieCut main package accepts the caller-selected retail source");
+  }
   constexpr std::string_view movie_cut_identifier = "SyntheticCut";
   constexpr std::string_view movie_cut_prefix =
       "SCENES/Cutscenes/MovieCuts/SyntheticCut/Loader";

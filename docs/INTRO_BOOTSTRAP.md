@@ -729,6 +729,15 @@ rendering. In particular, similarly named retail packages must not be treated
 as a proven playback sequence until their routing fields and runtime callers
 have been independently recovered.
 
+`MovieCutMainPackageSource` applies the same caller-selected, read-only model
+to the observed `FF_MC*_MAIN.ZIP` archive shape. It accepts only the canonical
+`<cut>/<cut>_MAIN.ZIP` path below the owned data root, rejects symlinks and
+non-canonical members, requires the twelve observed core resources, and permits
+one additional animation resource. Its typed ZGF, GMS, and support readers and
+opaque leases for the remaining resources establish data ownership only. It is
+not applicable to `-InList` archives and neither supplies a cut route nor
+starts a scene, audio stream, transition, or renderer.
+
 ## Windows observation: opening sequence
 
 On 2026-09-09, a private Windows retail run was captured over RDP. The images
