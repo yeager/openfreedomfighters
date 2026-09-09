@@ -298,6 +298,7 @@ Deck hardware, and macOS with no compatibility-critical divergence.
 - [ ] Modern graphics feature set, presets, accessibility, and performance budgets.
 - [ ] Optional Modern+ replacement-asset contract and curated HD content pipeline.
 - [ ] Optional Modern+ DLSS 4.5 backend with portable temporal and native fallbacks.
+- [ ] Optional Modern+ Intel XeSS-SR backend with portable temporal and native fallbacks.
 - [ ] Evaluate later DLSS generations only from published NVIDIA SDKs and documentation.
 - [ ] Translation completeness and overflow automation.
 

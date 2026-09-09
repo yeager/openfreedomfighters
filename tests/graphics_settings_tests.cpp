@@ -131,6 +131,19 @@ int main() {
                 off::settings::FallbackReason::mailbox_unavailable,
         "preserve Modern+ intent while resolving portable advanced fallbacks");
 
+  advanced.modern_plus = true;
+  advanced.upscaler = off::settings::Upscaler::xess;
+  const auto xess_fallback =
+      off::settings::resolve_graphics_settings(advanced, portable);
+  check(xess_fallback.effective.has_value() &&
+            xess_fallback.effective->upscaler ==
+                off::settings::Upscaler::temporal &&
+            xess_fallback.effective->fallbacks.size() == 3 &&
+            xess_fallback.effective->fallbacks[1].reason ==
+                off::settings::FallbackReason::xess_upscaler_unavailable,
+        "fall back from unavailable XeSS to portable temporal upscaling");
+
+  advanced.upscaler = off::settings::Upscaler::dlss;
   advanced.profile = off::Mode::original;
   const auto original_advanced =
       off::settings::resolve_graphics_settings(advanced, capabilities);

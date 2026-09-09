@@ -155,6 +155,7 @@ the recovery paths.
 | FSR Super Resolution | Not currently exposed; future optional official AMD adapter | Not currently exposed; future support requires an officially supported native stack | Not currently exposed |
 | Modern+ replacement assets | Portable asset contract | Portable asset contract | Portable asset contract |
 | DLSS 4.5 Super Resolution | Planned for supported NVIDIA RTX, D3D12, driver, and licensed runtime combinations | Exposed only if an official NVIDIA SDK explicitly supports the active native stack | Not expected; portable temporal fallback remains available |
+| Intel XeSS-SR | Planned for a verified D3D12 or Vulkan native backend, supported adapter, driver, and licensed SDK runtime | Planned only after the renderer owns the required native resources and temporal inputs | Not currently exposed; portable temporal fallback remains available |
 | DLSS 5 | Not a current setting or deliverable | Not a current setting or deliverable | Not a current setting or deliverable |
 
 DLSS labels must name the API version actually loaded. The overlay must never
@@ -166,6 +167,10 @@ This fallback must not remove resolution controls or prevent Modern+ from runnin
 FSR must likewise name an actual loaded AMD runtime and version. Until an
 adapter is implemented and validated, the overlay must describe the active AMD
 path as native or portable temporal upscaling, never as FSR.
+
+XeSS follows the same rule. The F10 menu may retain a XeSS-SR request, but it
+must resolve it to portable temporal or native rendering with a visible reason
+until an Intel SDK adapter is actually active.
 
 Graphics settings cannot affect fixed simulation time, input timestamps, RNG,
 AI visibility, collision, damage, mission state, save/replay state, or authoritative

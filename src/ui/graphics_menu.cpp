@@ -163,7 +163,7 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
   }
   case GraphicsMenuRow::upscaler: {
     auto value = static_cast<unsigned>(draft_.upscaler);
-    value = forward ? (value + 1U) % 3U : (value + 2U) % 3U;
+    value = forward ? (value + 1U) % 4U : (value + 3U) % 4U;
     draft_.upscaler = static_cast<settings::Upscaler>(value);
     break;
   }

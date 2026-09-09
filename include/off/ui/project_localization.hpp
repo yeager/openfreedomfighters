@@ -53,6 +53,7 @@ enum class MessageId : std::size_t {
   native,
   temporal,
   dlss,
+  xess,
   reference,
   high,
   ultra,

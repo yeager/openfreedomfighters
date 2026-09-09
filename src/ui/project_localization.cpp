@@ -152,27 +152,27 @@ constexpr std::array<std::array<std::string_view, 29>, locale_count> localized_p
 
 // Profile names remain product names. All remaining F10 labels are authored
 // per locale too, including the display-mode value that the draw path shows.
-constexpr std::array<std::array<std::string_view, 14>, locale_count> localized_labels{{
-    {{"Original", "Modern", "Modern+", "Windowed", "Borderless desktop", "VSync", "Mailbox", "Immediate", "Native", "Temporal", "DLSS", "Reference", "High", "Ultra"}},
-    {{"Original", "Modern", "Modern+", "Fönster", "Kantlöst skrivbord", "VSync", "Mailbox", "Omedelbar", "Inbyggd", "Temporal", "DLSS", "Referens", "Hög", "Ultra"}},
-    {{"Original", "Modern", "Modern+", "Vindue", "Kantløst skrivebord", "VSync", "Postkasse", "Straks", "Indbygget", "Tidsbaseret", "DLSS", "Reference", "Høj", "Ultra"}},
-    {{"Original", "Modern", "Modern+", "Vindu", "Kantløst skrivebord", "VSync", "Postkasse", "Umiddelbar", "Innebygd", "Tidsbasert", "DLSS", "Referanse", "Høy", "Ultra"}},
-    {{"Original", "Modern", "Modern+", "Ikkuna", "Reunaton työpöytä", "VSync", "Postilaatikko", "Välitön", "Natiivi", "Ajallinen", "DLSS", "Viite", "Korkea", "Ultra"}},
-    {{"Original", "Modern", "Modern+", "Fenster", "Rahmenloser Desktop", "VSync", "Mailbox", "Sofort", "Nativ", "Temporal", "DLSS", "Referenz", "Hoch", "Ultra"}},
-    {{"Original", "Modern", "Modern+", "Fenêtré", "Bureau sans bordure", "VSync", "Boîte aux lettres", "Immédiat", "Natif", "Temporel", "DLSS", "Référence", "Élevé", "Ultra"}},
-    {{"Original", "Modern", "Modern+", "Ventana", "Escritorio sin bordes", "VSync", "Buzón", "Inmediato", "Nativo", "Temporal", "DLSS", "Referencia", "Alto", "Ultra"}},
-    {{"Original", "Modern", "Modern+", "Finestra", "Desktop senza bordi", "VSync", "Cassetta postale", "Immediato", "Nativo", "Temporale", "DLSS", "Riferimento", "Alto", "Ultra"}},
-    {{"Original", "Modern", "Modern+", "Janela", "Área de trabalho sem bordas", "VSync", "Caixa de correio", "Imediato", "Nativo", "Temporal", "DLSS", "Referência", "Alto", "Ultra"}},
-    {{"Oryginalny", "Nowoczesny", "Nowoczesny+", "Okno", "Pulpit bez obramowania", "VSync", "Skrzynka", "Natychmiast", "Natywny", "Czasowy", "DLSS", "Referencyjny", "Wysokie", "Ultra"}},
-    {{"Původní", "Moderní", "Moderní+", "Okno", "Plocha bez okrajů", "VSync", "Poštovní schránka", "Ihned", "Nativní", "Dočasný", "DLSS", "Referenční", "Vysoké", "Ultra"}},
-    {{"Eredeti", "Modern", "Modern+", "Ablakos", "Keret nélküli asztal", "VSync", "Postafiók", "Azonnali", "Natív", "Időbeli", "DLSS", "Referencia", "Magas", "Ultra"}},
-    {{"Original", "Modern", "Modern+", "Fereastră", "Desktop fără margini", "VSync", "Cutie poștală", "Imediat", "Nativ", "Temporal", "DLSS", "Referință", "Ridicat", "Ultra"}},
-    {{"Özgün", "Modern", "Modern+", "Pencereli", "Kenarlıksız masaüstü", "VSync", "Posta kutusu", "Anında", "Yerel", "Zamansal", "DLSS", "Başvuru", "Yüksek", "Ultra"}},
-    {{"Оригинал", "Современный", "Современный+", "В окне", "Полноэкранный без рамки", "VSync", "Почтовый ящик", "Сразу", "Нативный", "Временной", "DLSS", "Эталон", "Высокое", "Ультра"}},
-    {{"Оригінал", "Сучасний", "Сучасний+", "У вікні", "Безрамковий робочий стіл", "VSync", "Поштова скринька", "Негайно", "Нативний", "Часовий", "DLSS", "Еталон", "Високий", "Ультра"}},
-    {{"オリジナル", "モダン", "モダン+", "ウィンドウ", "ボーダーレスデスクトップ", "VSync", "メールボックス", "即時", "ネイティブ", "時間的", "DLSS", "基準", "高", "ウルトラ"}},
-    {{"오리지널", "모던", "모던+", "창", "테두리 없는 데스크톱", "VSync", "메일박스", "즉시", "네이티브", "시간적", "DLSS", "참조", "높음", "울트라"}},
-    {{"原版", "现代", "现代+", "窗口", "无边框桌面", "VSync", "邮箱", "立即", "原生", "时序", "DLSS", "参考", "高", "极高"}},
+constexpr std::array<std::array<std::string_view, 15>, locale_count> localized_labels{{
+    {{"Original", "Modern", "Modern+", "Windowed", "Borderless desktop", "VSync", "Mailbox", "Immediate", "Native", "Temporal", "DLSS", "XeSS", "Reference", "High", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Fönster", "Kantlöst skrivbord", "VSync", "Mailbox", "Omedelbar", "Inbyggd", "Temporal", "DLSS", "XeSS", "Referens", "Hög", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Vindue", "Kantløst skrivebord", "VSync", "Postkasse", "Straks", "Indbygget", "Tidsbaseret", "DLSS", "XeSS", "Reference", "Høj", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Vindu", "Kantløst skrivebord", "VSync", "Postkasse", "Umiddelbar", "Innebygd", "Tidsbasert", "DLSS", "XeSS", "Referanse", "Høy", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Ikkuna", "Reunaton työpöytä", "VSync", "Postilaatikko", "Välitön", "Natiivi", "Ajallinen", "DLSS", "XeSS", "Viite", "Korkea", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Fenster", "Rahmenloser Desktop", "VSync", "Mailbox", "Sofort", "Nativ", "Temporal", "DLSS", "XeSS", "Referenz", "Hoch", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Fenêtré", "Bureau sans bordure", "VSync", "Boîte aux lettres", "Immédiat", "Natif", "Temporel", "DLSS", "XeSS", "Référence", "Élevé", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Ventana", "Escritorio sin bordes", "VSync", "Buzón", "Inmediato", "Nativo", "Temporal", "DLSS", "XeSS", "Referencia", "Alto", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Finestra", "Desktop senza bordi", "VSync", "Cassetta postale", "Immediato", "Nativo", "Temporale", "DLSS", "XeSS", "Riferimento", "Alto", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Janela", "Área de trabalho sem bordas", "VSync", "Caixa de correio", "Imediato", "Nativo", "Temporal", "DLSS", "XeSS", "Referência", "Alto", "Ultra"}},
+    {{"Oryginalny", "Nowoczesny", "Nowoczesny+", "Okno", "Pulpit bez obramowania", "VSync", "Skrzynka", "Natychmiast", "Natywny", "Czasowy", "DLSS", "XeSS", "Referencyjny", "Wysokie", "Ultra"}},
+    {{"Původní", "Moderní", "Moderní+", "Okno", "Plocha bez okrajů", "VSync", "Poštovní schránka", "Ihned", "Nativní", "Dočasný", "DLSS", "XeSS", "Referenční", "Vysoké", "Ultra"}},
+    {{"Eredeti", "Modern", "Modern+", "Ablakos", "Keret nélküli asztal", "VSync", "Postafiók", "Azonnali", "Natív", "Időbeli", "DLSS", "XeSS", "Referencia", "Magas", "Ultra"}},
+    {{"Original", "Modern", "Modern+", "Fereastră", "Desktop fără margini", "VSync", "Cutie poștală", "Imediat", "Nativ", "Temporal", "DLSS", "XeSS", "Referință", "Ridicat", "Ultra"}},
+    {{"Özgün", "Modern", "Modern+", "Pencereli", "Kenarlıksız masaüstü", "VSync", "Posta kutusu", "Anında", "Yerel", "Zamansal", "DLSS", "XeSS", "Başvuru", "Yüksek", "Ultra"}},
+    {{"Оригинал", "Современный", "Современный+", "В окне", "Полноэкранный без рамки", "VSync", "Почтовый ящик", "Сразу", "Нативный", "Временной", "DLSS", "XeSS", "Эталон", "Высокое", "Ультра"}},
+    {{"Оригінал", "Сучасний", "Сучасний+", "У вікні", "Безрамковий робочий стіл", "VSync", "Поштова скринька", "Негайно", "Нативний", "Часовий", "DLSS", "XeSS", "Еталон", "Високий", "Ультра"}},
+    {{"オリジナル", "モダン", "モダン+", "ウィンドウ", "ボーダーレスデスクトップ", "VSync", "メールボックス", "即時", "ネイティブ", "時間的", "DLSS", "XeSS", "基準", "高", "ウルトラ"}},
+    {{"오리지널", "모던", "모던+", "창", "테두리 없는 데스크톱", "VSync", "메일박스", "즉시", "네이티브", "시간적", "DLSS", "XeSS", "참조", "높음", "울트라"}},
+    {{"原版", "现代", "现代+", "窗口", "无边框桌面", "VSync", "邮箱", "立即", "原生", "时序", "DLSS", "XeSS", "参考", "高", "极高"}},
 }};
 
 constexpr std::array<CatalogEntry, message_id_count * locale_count>

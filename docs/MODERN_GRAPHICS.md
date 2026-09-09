@@ -68,7 +68,7 @@ Original reference, GPU captures for pass and resource correctness, and frametim
 budgets rather than average FPS alone. Windows, Linux, macOS, and Steam Deck must
 render the same material semantics even when their native graphics backends differ.
 
-## Temporal upscaling and DLSS
+## Temporal upscaling, DLSS, and XeSS
 
 Modern always retains a portable native-resolution and temporal anti-aliasing
 path. The renderer-facing temporal interface owns color, depth, motion vectors,
@@ -83,6 +83,13 @@ Capability checks choose between DLSS 4.5, the portable temporal path, or native
 rendering at runtime. Original mode does not enable DLSS by default. macOS and
 non-RTX devices use the equivalent portable controls and never lose a quality or
 resolution option merely because DLSS is unavailable.
+
+Intel XeSS-SR is the corresponding optional Intel super-resolution backend. Its
+F10 selection is retained as intent and resolves to portable temporal or native
+rendering until the active renderer can supply the native D3D12 or Vulkan command
+objects and temporal inputs required by Intel's SDK. It is not currently loaded
+or labeled as active. The [XeSS plan](XESS.md) records the supported API and
+packaging boundary.
 
 AMD GPUs use the same native-resolution and portable temporal paths as every
 other supported adapter. FSR is not currently an engine feature or a substitute

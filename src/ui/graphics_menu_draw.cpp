@@ -70,6 +70,8 @@ std::string upscaler_name(settings::Upscaler value,
                      platform_locales);
   case settings::Upscaler::dlss:
     return localized(l10n::MessageId::dlss, explicit_locale, platform_locales);
+  case settings::Upscaler::xess:
+    return localized(l10n::MessageId::xess, explicit_locale, platform_locales);
   }
   return {};
 }
