@@ -66,3 +66,33 @@ phase two, then root/additional-owner post-hooks. The synthesized ROOT is
 separate from authored source 1, which reaches its owner pre-hook through the
 additional-resource list. These are ordering constraints, not permission to
 run the pass before every required reader and live service exists.
+
+## First-cut component-reader boundary
+
+The ordinary reader bracket already calls its boundaries in the recovered order:
+prepare references, owner reader, then component reader. The first-cut owner
+readers retain source/resource joins only. They do not parse attachment payloads
+or imply component admission.
+
+Known source facts are deliberately narrow:
+
+- the sequence owner has one `ZLIST_CutSequence` attachment;
+- the first-cut owner has `ZLIST_CutSequenceList`, followed by five
+  `ZLIST_CutSequenceCommand` attachments in authored construction order;
+- the generic deferred-reader session can preserve a bounded raw source block
+  and dispatch an explicit component suffix/extent; and
+- generic lifecycle callbacks for these components still fail closed.
+
+The missing contract is the owner-base reader's exact component suffix and
+extent, followed by each component's payload grammar, reader mutation,
+registration point, and failure/cleanup behavior. Attachment identities, a
+block header, or GMS directory boundaries are not evidence for that suffix.
+Consequently the normal component-reader callback remains empty. It must not
+record component admission, schedule an event, activate a cut, construct a
+player, start audio, or submit a frame.
+
+The next static-analysis pass recovers that owner-base boundary, then adds a
+bounded session adapter for the one reviewed first-cut shape. Its tests must
+reject wrong work identity, attachment count/order, and malformed bounds; prove
+that component reading cannot precede its owner reader; and prove that it has
+no lifecycle, event, renderer, or audio effects.
