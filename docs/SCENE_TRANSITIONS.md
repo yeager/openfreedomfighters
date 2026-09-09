@@ -112,6 +112,16 @@ input admission, focus, rendering, or scene selection. A missing registration,
 allocation, canonical owner, exact attachment, or live component fails closed.
 Normal startup does not call this boundary.
 
+Private static review further establishes that `CBootMenu` obtains component
+storage through the shared live object-allocation service, rejects a failed
+allocation, runs common window/component construction, and then installs its
+concrete method table. The table has distinct reader and one-time initializer
+entries; they must not be merged. The backing pool, allocation size, ownership
+destruction route, and reproducible allocator identity have not been
+recovered. Portable code must therefore keep allocation as an opaque
+caller-provided live service rather than derive identities from source order,
+pointers, or an assumed allocation sequence.
+
 ## Startup hierarchy construction snapshot
 
 `StartupWindowHierarchyFactory` is a separate, disconnected construction-link
@@ -149,6 +159,15 @@ opaque registry result before the common reader; initialization runs the common
 window step, resolves a second opaque result, routes the retained object, and
 only then sets its completion latch. Both lookup keys and results are runtime
 registry identities, not serialized action IDs.
+
+The reviewed reader consumes no reached BootMenu-local serialized scalar,
+string, reference, or platform-key value: it resolves and stores its first
+opaque 16-bit registry identity, then invokes the common reader. The separate
+initializer runs common initialization, resolves its second opaque identity,
+routes the retained object/window with that result, and only then latches
+completion. Equality of the two identities is not established. The field at
+the concrete component's `+0x180` offset is a name/key field after concrete
+construction, not a secondary method table.
 
 It does not deliver actions, parse a scene, bind keyboard/mouse/controller
 input, create a widget, decide focus or selection, request another scene, or
