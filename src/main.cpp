@@ -326,6 +326,10 @@ int main(int argc, char **argv) {
                  intro->apply_supported_first_cut_sequence_deferred_reader(work);
                if (work.source_directory_index == intro->resources().first_cut_index())
                  intro->apply_supported_first_cut_list_deferred_reader(work);
+               const auto legal_source = intro->resources().sources().local_source_for_authored_reference(
+                   intro->resources().member().references[1]);
+               if (legal_source && *legal_source == work.source_directory_index)
+                 intro->apply_supported_first_cut_legal_picture_deferred_reader(work);
                if (intro->resources().sources().directory().at(work.source_directory_index).source_type ==
                    0x00200012U)
                  intro->apply_supported_sound_owner_deferred_reader(work);

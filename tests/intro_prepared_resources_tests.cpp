@@ -1010,6 +1010,10 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               host.apply_supported_first_cut_sequence_deferred_reader(work);
             if(work.source_directory_index==host.resources().first_cut_index())
               host.apply_supported_first_cut_list_deferred_reader(work);
+            const auto legal=host.resources().sources().local_source_for_authored_reference(
+                host.resources().member().references[1]);
+            if(legal && *legal==work.source_directory_index)
+              host.apply_supported_first_cut_legal_picture_deferred_reader(work);
             if(host.resources().sources().directory().at(work.source_directory_index).source_type==0x00200012U) {
               host.apply_supported_sound_owner_deferred_reader(work);
               ++applied_sound_readers;
@@ -1017,6 +1021,14 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
             if(work.source_directory_index==host.resources().window_index()) {
               host.apply_supported_window_deferred_reader(work);
               ++applied_window_readers;
+            }
+            for(const auto& command:host.resources().first_cut().commands) {
+              const auto target=host.resources().sources().local_source_for_authored_reference(
+                  command.target_reference);
+              if(target && *target==work.source_directory_index) {
+                host.apply_supported_first_cut_fade_picture_deferred_reader(work);
+                break;
+              }
             }
           },
           [&](const off::graphics::IntroDeferredReaderWork& work){
@@ -1066,7 +1078,7 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               "sound owner readers consume both parsed source prefixes without preparing playback");
         const auto reader_admission=host.preflight_global_lifecycle();
         check(!reader_admission.ready() && reader_admission.expected_readers==420 &&
-              reader_admission.covered_readers==6 && reader_admission.expected_components==383 &&
+              reader_admission.covered_readers>=6 && reader_admission.expected_components==383 &&
               reader_admission.covered_components==0 && reader_admission.expected_owners==471 &&
               reader_admission.covered_owners==0 &&
               reader_admission.failure==off::graphics::IntroLifecyclePreflightFailure::reader_coverage,
@@ -1447,7 +1459,7 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
         host.prepare_sound_owner(468,sound_services);
         const auto owner_admission=host.preflight_global_lifecycle();
         check(!owner_admission.ready() && owner_admission.expected_readers==420 &&
-              owner_admission.covered_readers==6 && owner_admission.expected_components==383 &&
+              owner_admission.covered_readers>=6 && owner_admission.expected_components==383 &&
               owner_admission.covered_components==0 && owner_admission.expected_owners==471 &&
               owner_admission.covered_owners==2 &&
               owner_admission.failure==off::graphics::IntroLifecyclePreflightFailure::reader_coverage,

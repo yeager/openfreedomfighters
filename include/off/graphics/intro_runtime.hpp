@@ -310,7 +310,8 @@ struct IntroLifecyclePreflightReport {
 };
 enum class IntroDeferredReaderFamily : std::uint8_t {
   unclassified, sound_owner, window_owner, movie_controller,
-  first_cut_sequence, first_cut_list, external_cut_commands, first_cut_fade_picture,
+  first_cut_sequence, first_cut_list, first_cut_legal_picture,
+  external_cut_commands, first_cut_fade_picture,
 };
 enum class IntroDeferredReaderImplementationState : std::uint8_t {
   unimplemented, implemented_not_applied, applied,
@@ -388,6 +389,13 @@ struct IntroExternalCutCommandsReaderState {
   std::array<IntroRuntimeResourceHandle,2> external_list_resources{};
 };
 struct IntroFadePictureReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t component_index{};
+  data::GmsWindowPictureSource authored;
+  std::uint32_t picture_asset_reference{};
+};
+struct IntroLegalPictureReaderState {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
   std::size_t component_index{};
@@ -790,6 +798,8 @@ public:
   [[nodiscard]] const IntroExternalCutCommandsReaderState* external_cut_commands_reader_state() const noexcept {return external_cut_commands_reader_state_?&*external_cut_commands_reader_state_:nullptr;}
   void apply_supported_first_cut_fade_picture_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroFadePictureReaderState>& fade_picture_reader_states() const noexcept {return fade_picture_reader_states_;}
+  void apply_supported_first_cut_legal_picture_deferred_reader(const IntroDeferredReaderWork& work);
+  [[nodiscard]] const IntroLegalPictureReaderState* legal_picture_reader_state() const noexcept {return legal_picture_reader_state_?&*legal_picture_reader_state_:nullptr;}
   // Caller still owes actual global lifecycle admission and external services.
   // Clock/audio resolve through the same application state retained by this scene.
   void run_controller_phase_two(const IntroControllerPhaseTwoServices& external);
@@ -904,6 +914,7 @@ private:
   std::optional<IntroFirstCutListReaderState> first_cut_list_reader_state_;
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;
   std::map<std::size_t,IntroFadePictureReaderState> fade_picture_reader_states_;
+  std::optional<IntroLegalPictureReaderState> legal_picture_reader_state_;
   IntroControllerInitialization controller_initialization_;
   FreshIntroCamera prepared_camera_;
   std::map<std::size_t,std::unique_ptr<IntroLiveCameraOwner>> live_cameras_;

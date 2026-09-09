@@ -1870,6 +1870,10 @@ IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() c
       return IntroDeferredReaderFamily::first_cut_list;
     if(work.source_directory_index==resources_.window_index())
       return IntroDeferredReaderFamily::window_owner;
+    const auto legal=resources_.sources().local_source_for_authored_reference(
+        resources_.member().references[1]);
+    if(legal && *legal==work.source_directory_index)
+      return IntroDeferredReaderFamily::first_cut_legal_picture;
     if(work.source_directory_index==466U)
       return IntroDeferredReaderFamily::external_cut_commands;
     if(work.source_directory_index<directory.size() &&
@@ -2976,6 +2980,49 @@ void IntroRuntime::apply_supported_first_cut_fade_picture_deferred_reader(
   if (!inserted) throw std::runtime_error("Fade picture reader cannot run twice");
   try { record_supported_reader_admission(work); }
   catch (...) { fade_picture_reader_states_.erase(entry); throw; }
+}
+
+void IntroRuntime::apply_supported_first_cut_legal_picture_deferred_reader(
+    const IntroDeferredReaderWork& work) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      !work.processed || legal_picture_reader_state_ ||
+      work.source_directory_index>=resources_.sources().directory().size() ||
+      std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate) {
+        return std::addressof(candidate)==std::addressof(work);
+      })==deferred_reader_work_.end())
+    throw std::runtime_error("Legal picture reader requires unconsumed live deferred work");
+  const auto& sources=resources_.sources();
+  const auto legal=sources.local_source_for_authored_reference(resources_.member().references[1]);
+  if(!legal || *legal!=work.source_directory_index)
+    throw std::runtime_error("Legal picture reader requires the first-cut legal source");
+  const auto& source=sources.directory().at(*legal);
+  const auto attachments=owner_components(source_handle(*legal));
+  if(source.source_type!=0x00200046U || source.deferred_source_offset!=work.source_offset ||
+      directory_resource_mapping_.at(*legal)!=work.resource ||
+      !associated_resource_owner(work.resource) ||
+      *associated_resource_owner(work.resource)!=source_handle(*legal) ||
+      source.attachments.size()!=1U || attachments.size()!=1U ||
+      std::bit_cast<std::uint32_t>(source.attachments[0].parameter)!=
+          std::bit_cast<std::uint32_t>(1.0F) ||
+      sources.attachment_identifier(*legal,0)!="ZGEOM_Center")
+    throw std::runtime_error("Legal picture reader source shape is unsupported");
+  const auto& component=components_.at(attachments[0]);
+  if(!component.constructed() || component.removed() ||
+      component.source().factory_name!="ZGEOM_Center" ||
+      component.state().attached_owner!=source_handle(*legal).value)
+    throw std::runtime_error("Legal picture reader component is unavailable");
+  const auto authored=sources.intro_legal_picture_source(*legal);
+  const auto picture=std::ranges::find_if(resources_.pictures(),[&](const auto& candidate) {
+    return candidate.directory_index==*legal &&
+        candidate.source.picture_asset_reference==authored.picture_asset_reference;
+  });
+  if(picture==resources_.pictures().end())
+    throw std::runtime_error("Legal picture reader has no retained prepared picture");
+  static_cast<void>(picture_for_source(*legal));
+  legal_picture_reader_state_={source_handle(*legal),work.resource,attachments[0],authored,
+                               authored.picture_asset_reference};
+  try { record_supported_reader_admission(work); }
+  catch(...) { legal_picture_reader_state_.reset(); throw; }
 }
 
 IntroRuntimeHandle IntroRuntime::source_handle(std::size_t source) const {
