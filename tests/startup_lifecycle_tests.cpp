@@ -1,11 +1,12 @@
-#include "off/platform/startup_lifecycle.hpp"
 #include "off/graphics/startup_picture_pass_admission.hpp"
+#include "off/platform/startup_lifecycle.hpp"
+#include "off/runtime/movie_cut_loader_package_source.hpp"
+#include "off/runtime/movie_cut_main_package_source.hpp"
 #include "off/runtime/startloader_load_screen.hpp"
+#include "off/runtime/startloader_prepared_route.hpp"
 #include "off/runtime/startup_active_window_root.hpp"
 #include "off/runtime/startup_boot_menu_admission.hpp"
 #include "off/runtime/startup_boot_scene_construction.hpp"
-#include "off/runtime/movie_cut_loader_package_source.hpp"
-#include "off/runtime/movie_cut_main_package_source.hpp"
 #include "off/runtime/startup_scene_loader.hpp"
 #include "off/runtime/startup_scene_package_source.hpp"
 #include "off/runtime/startup_window_hierarchy_snapshot.hpp"
@@ -141,6 +142,74 @@ std::vector<std::byte> package_zgf_fixture() {
   result.push_back(std::byte{1});
   result.insert(result.end(), decoded.begin(), decoded.end());
   return result;
+}
+
+// Project-authored GMS grammar fixture for the checked StartLoader handoff.
+// It is not derived from or representative of retail source bytes.
+std::vector<std::byte> startloader_route_gms_fixture() {
+  constexpr std::size_t envelope_size = 9U;
+  std::vector<std::byte> payload(432U);
+  const auto write = [&](std::size_t offset, std::uint32_t value) {
+    for (unsigned shift = 0; shift < 32; shift += 8U) {
+      payload[offset + shift / 8U] =
+          static_cast<std::byte>((value >> shift) & 0xffU);
+    }
+  };
+  const auto write_float = [&](std::size_t offset, float value) {
+    write(offset, std::bit_cast<std::uint32_t>(value));
+  };
+  write(0U, 32U);
+  write(4U, 96U);
+  write(12U, 4U);
+  write(20U, 128U);
+  write(32U, 1U);
+  write(36U, 12U);
+  write(96U, 0U);
+  write(52U, 324U);
+  write(56U, 360U);
+  write(64U, 0x0010002eU);
+  write(68U, 372U);
+  write(80U, 384U);
+  write(128U, 2U);
+  write(132U, 1U);
+  write_float(324U, 1.0F);
+  write_float(340U, 1.0F);
+  write_float(356U, 1.0F);
+  write(372U, 1U);
+  write(376U, 100U);
+  write_float(380U, 0.0F);
+  constexpr std::string_view identifier = "ZWINGROUP_LoadScreen";
+  std::copy(identifier.begin(), identifier.end(),
+            reinterpret_cast<char *>(payload.data() + 100U));
+
+  std::vector<std::byte> block(4U);
+  const auto scalar = [&](std::uint8_t tag, std::uint32_t value) {
+    block.push_back(static_cast<std::byte>(tag));
+    append_u32(block, value);
+  };
+  scalar(3U, 0U);
+  scalar(2U, std::bit_cast<std::uint32_t>(1.0F));
+  scalar(3U, 1U);
+  scalar(3U, 1U);
+  scalar(3U, 0U);
+  block.push_back(std::byte{6});
+  block.push_back(std::byte{6});
+  block.push_back(std::byte{0x84});
+  constexpr std::string_view target = "FF-Startup";
+  for (const char character : target)
+    block.push_back(static_cast<std::byte>(character));
+  block.push_back(std::byte{0});
+  block.push_back(std::byte{6});
+  block.push_back(std::byte{0xff});
+  set_u32(block, 0U, static_cast<std::uint32_t>(block.size()));
+  std::copy(block.begin(), block.end(), payload.begin() + 384U);
+
+  std::vector<std::byte> bytes;
+  append_u32(bytes, static_cast<std::uint32_t>(payload.size()));
+  append_u32(bytes, static_cast<std::uint32_t>(payload.size() + envelope_size));
+  bytes.push_back(std::byte{1});
+  bytes.insert(bytes.end(), payload.begin(), payload.end());
+  return bytes;
 }
 
 void write_package_zip(
@@ -281,6 +350,81 @@ int main() {
         "package source rejects a duplicate selected GMS family");
   std::filesystem::remove(package_fixture, package_error);
 
+  const auto startloader_route_root =
+      std::filesystem::current_path() / "off-startloader-prepared-route-data";
+  std::error_code startloader_route_error;
+  std::filesystem::remove_all(startloader_route_root, startloader_route_error);
+  const auto startloader_route_package =
+      startloader_route_root / "Scenes" / "FF-StartUp.ZIP";
+  std::filesystem::create_directories(startloader_route_package.parent_path(),
+                                      startloader_route_error);
+  check(!startloader_route_error,
+        "create checked StartLoader route package fixture directory");
+  write_package_zip(startloader_route_package,
+                    {{"SCENES/FF-StartUp.GMS", package_gms_fixture()},
+                     {"SCENES/FF-StartUp.SUP", package_support_fixture()}});
+  const auto parsed_startloader = off::data::GmsImage::parse(
+      off::data::PackedResource::parse(startloader_route_gms_fixture()));
+  bool rejected_route = false;
+  try {
+    static_cast<void>(off::runtime::StartLoaderPreparedRoute::from_checked_gms(
+        parsed_startloader, startloader_route_package,
+        {.initial_update_count = 1U, .one_time_setup_pending = true}));
+  } catch (const std::runtime_error &) {
+    rejected_route = true;
+  }
+  check(rejected_route,
+        "StartLoader prepared route rejects an unreviewed initial counter");
+  rejected_route = false;
+  try {
+    static_cast<void>(off::runtime::StartLoaderPreparedRoute::from_checked_gms(
+        parsed_startloader, startloader_route_root / "Scenes" / "other.zip",
+        {.initial_update_count = 0U, .one_time_setup_pending = true}));
+  } catch (const std::runtime_error &) {
+    rejected_route = true;
+  }
+  check(rejected_route,
+        "StartLoader prepared route requires the canonical package name");
+  auto prepared_route =
+      off::runtime::StartLoaderPreparedRoute::from_checked_gms(
+          parsed_startloader, startloader_route_package,
+          {.initial_update_count = 0U, .one_time_setup_pending = true});
+  bool route_setup_missing = false;
+  try {
+    static_cast<void>(prepared_route.ordinary_update({}));
+  } catch (const std::runtime_error &) {
+    route_setup_missing = true;
+  }
+  check(
+      route_setup_missing && prepared_route.update_count() == 0U &&
+          prepared_route.one_time_setup_pending() &&
+          !prepared_route.has_prepared_package(),
+      "StartLoader prepared route preserves its state without explicit setup");
+  std::uint32_t route_setup_calls{};
+  const auto route_setup = [&] { ++route_setup_calls; };
+  check(prepared_route.ordinary_update(route_setup) ==
+                off::runtime::StartLoaderPreparedRouteResult::awaiting_target &&
+            prepared_route.ordinary_update(route_setup) ==
+                off::runtime::StartLoaderPreparedRouteResult::awaiting_target &&
+            prepared_route.update_count() == 2U && route_setup_calls == 1U &&
+            !prepared_route.has_prepared_package(),
+        "StartLoader prepared route retains no package before three updates");
+  check(
+      prepared_route.ordinary_update(route_setup) ==
+              off::runtime::StartLoaderPreparedRouteResult::package_prepared &&
+          prepared_route.update_count() == 3U && route_setup_calls == 1U &&
+          prepared_route.has_prepared_package() &&
+          prepared_route.prepared_package().has_value(),
+      "parsed StartLoader source prepares the canonical package on update "
+      "three");
+  check(
+      prepared_route.ordinary_update(route_setup) ==
+              off::runtime::StartLoaderPreparedRouteResult::package_prepared &&
+          prepared_route.update_count() == 3U,
+      "prepared route stops before live-scene construction or later "
+      "transitions");
+  std::filesystem::remove_all(startloader_route_root, startloader_route_error);
+
   const auto movie_cut_fixture =
       std::filesystem::current_path() / "off-movie-cut-loader-fixture.zip";
   std::error_code movie_cut_error;
@@ -323,7 +467,8 @@ int main() {
             main_package.package_identifier() == main_package_identifier,
         "MovieCut main package retains caller-selected identifiers");
 
-  main_members.emplace_back(main_member(".ANM"), std::vector<std::byte>{std::byte{10}});
+  main_members.emplace_back(main_member(".ANM"),
+                            std::vector<std::byte>{std::byte{10}});
   write_package_zip(movie_cut_main_archive, main_members);
   static_cast<void>(off::runtime::MovieCutMainPackageSource::prepare_checked(
       movie_cut_root, main_cut_identifier, main_package_identifier));
@@ -351,7 +496,8 @@ int main() {
   check(rejected_main_package,
         "MovieCut main package rejects a missing required core member");
 
-  main_members.emplace_back(main_member(".PRM"), std::vector<std::byte>{std::byte{9}});
+  main_members.emplace_back(main_member(".PRM"),
+                            std::vector<std::byte>{std::byte{9}});
   main_members.emplace_back("SCENES/Cutscenes/MovieCuts/SyntheticCut/extra.bin",
                             std::vector<std::byte>{std::byte{10}});
   write_package_zip(movie_cut_main_archive, main_members);
@@ -365,8 +511,7 @@ int main() {
   check(rejected_main_package,
         "MovieCut main package rejects non-canonical archive members");
   std::filesystem::remove_all(movie_cut_root, movie_cut_error);
-  if (const auto *retail_data_root =
-          std::getenv("OFF_MOVIECUT_MAIN_DATA_ROOT");
+  if (const auto *retail_data_root = std::getenv("OFF_MOVIECUT_MAIN_DATA_ROOT");
       retail_data_root != nullptr && *retail_data_root != '\0') {
     const auto retail_main_package =
         off::runtime::MovieCutMainPackageSource::prepare_checked(
@@ -378,11 +523,10 @@ int main() {
   constexpr std::string_view movie_cut_identifier = "SyntheticCut";
   constexpr std::string_view movie_cut_prefix =
       "SCENES/Cutscenes/MovieCuts/SyntheticCut/Loader";
-  write_package_zip(movie_cut_fixture,
-                    {{std::string(movie_cut_prefix) + ".GMS",
-                      package_gms_fixture()},
-                     {std::string(movie_cut_prefix) + ".SUP",
-                      package_support_fixture()}});
+  write_package_zip(
+      movie_cut_fixture,
+      {{std::string(movie_cut_prefix) + ".GMS", package_gms_fixture()},
+       {std::string(movie_cut_prefix) + ".SUP", package_support_fixture()}});
   const auto movie_cut_package =
       off::runtime::MovieCutLoaderPackageSource::prepare_checked(
           movie_cut_identifier, movie_cut_fixture);
@@ -400,9 +544,8 @@ int main() {
   check(rejected_movie_cut,
         "MovieCut loader package rejects path-like identifiers");
 
-  write_package_zip(movie_cut_fixture,
-                    {{std::string(movie_cut_prefix) + ".GMS",
-                      package_gms_fixture()}});
+  write_package_zip(movie_cut_fixture, {{std::string(movie_cut_prefix) + ".GMS",
+                                         package_gms_fixture()}});
   rejected_movie_cut = false;
   try {
     static_cast<void>(
@@ -414,13 +557,11 @@ int main() {
   check(rejected_movie_cut,
         "MovieCut loader package rejects a missing support member");
 
-  write_package_zip(movie_cut_fixture,
-                    {{std::string(movie_cut_prefix) + ".GMS",
-                      package_gms_fixture()},
-                     {std::string(movie_cut_prefix) + ".GMS",
-                      package_gms_fixture()},
-                     {std::string(movie_cut_prefix) + ".SUP",
-                      package_support_fixture()}});
+  write_package_zip(
+      movie_cut_fixture,
+      {{std::string(movie_cut_prefix) + ".GMS", package_gms_fixture()},
+       {std::string(movie_cut_prefix) + ".GMS", package_gms_fixture()},
+       {std::string(movie_cut_prefix) + ".SUP", package_support_fixture()}});
   rejected_movie_cut = false;
   try {
     static_cast<void>(
@@ -491,14 +632,16 @@ int main() {
   }
   check(rejected, "LoadScreen source rejects a non-supported target");
 
-  const auto source = off::runtime::StartLoaderLoadScreenSource::from_parsed_source(
-      {.directory_index = 7U, .target = "FF-Startup"});
+  const auto source =
+      off::runtime::StartLoaderLoadScreenSource::from_parsed_source(
+          {.directory_index = 7U, .target = "FF-Startup"});
   check(source.target() == "FF-Startup",
         "typed StartLoader source retains its checked authored target");
   rejected = false;
   try {
-    static_cast<void>(off::runtime::StartLoaderLoadScreenSource::from_parsed_source(
-        {.directory_index = 7U, .target = "OtherScene"}));
+    static_cast<void>(
+        off::runtime::StartLoaderLoadScreenSource::from_parsed_source(
+            {.directory_index = 7U, .target = "OtherScene"}));
   } catch (const std::runtime_error &) {
     rejected = true;
   }
@@ -562,38 +705,39 @@ int main() {
   };
   const off::runtime::SceneTransitionPumpServices pump_services{
       .startup_loader = {
-          .prepare_complete_checked_package =
-              [&](std::string_view target)
+          .prepare_complete_checked_package = [&](std::string_view target)
               -> std::optional<off::runtime::StartupSceneLoadPackage> {
             pump_events.emplace_back("prepare:" + std::string(target));
             return off::runtime::StartupSceneLoadPackage::complete(
                 target, pump_lease(31U), pump_lease(32U), pump_lease(33U));
           },
           .construct_live_scene =
-              [&](const off::runtime::StartupSceneLoadPackage&)
+              [&](const off::runtime::StartupSceneLoadPackage &)
               -> std::optional<off::runtime::StartupLiveScene> {
             // Regression: the old notification pump had already consumed this
             // request before invoking its handoff. Construction must instead
             // observe the still-owned pending request and marked removals.
-            check(pump_queue.pending() && pump_queue.entries().size() == 2U &&
-                      pump_queue.targets() ==
-                          std::vector<std::string>{"FF-Startup"},
-                  "manager pump retains request until the live candidate exists");
+            check(
+                pump_queue.pending() && pump_queue.entries().size() == 2U &&
+                    pump_queue.targets() ==
+                        std::vector<std::string>{"FF-Startup"},
+                "manager pump retains request until the live candidate exists");
             pump_events.emplace_back("factory");
             return off::runtime::StartupLiveScene::from_factory(
                 34U, pump_lease(34U));
           },
       },
   };
-  check(pump.consume(pump_queue, pump_state, pump_services) ==
-                off::runtime::SceneTransitionPumpResult::committed &&
-            !pump_queue.pending() && pump_queue.entries().empty() &&
-            pump_queue.targets().empty() &&
-            !pump_queue.current_scene().has_value() &&
-            pump_state.current_scene()->identity() == 34U &&
-            pump_events == std::vector<std::string>{"prepare:FF-Startup",
-                                                    "factory"},
-        "manager pump keeps its request through construction then commits once");
+  check(
+      pump.consume(pump_queue, pump_state, pump_services) ==
+              off::runtime::SceneTransitionPumpResult::committed &&
+          !pump_queue.pending() && pump_queue.entries().empty() &&
+          pump_queue.targets().empty() &&
+          !pump_queue.current_scene().has_value() &&
+          pump_state.current_scene()->identity() == 34U &&
+          pump_events ==
+              std::vector<std::string>{"prepare:FF-Startup", "factory"},
+      "manager pump keeps its request through construction then commits once");
 
   off::runtime::SceneTransitionQueue rejected_queue;
   rejected_queue.retain_scene_entry(41U);
@@ -607,21 +751,22 @@ int main() {
               -> std::optional<off::runtime::StartupSceneLoadPackage> {
             return std::nullopt;
           },
-          .construct_live_scene = [](const off::runtime::StartupSceneLoadPackage&)
+          .construct_live_scene =
+              [](const off::runtime::StartupSceneLoadPackage &)
               -> std::optional<off::runtime::StartupLiveScene> {
             return std::nullopt;
           },
       },
   };
-  check(
-      pump.consume(rejected_queue, pump_state, rejected_services) ==
-              off::runtime::SceneTransitionPumpResult::rejected &&
-          rejected_queue.pending() && rejected_queue.entries().size() == 1U &&
-          rejected_queue.entries().front().removal_requested &&
-          rejected_queue.targets() == std::vector<std::string>{"FF-Startup"} &&
-          !rejected_queue.current_scene().has_value() &&
-          pump_state.current_scene()->identity() == 34U,
-      "manager-pump rejection preserves its pending request and prior scene");
+  check(pump.consume(rejected_queue, pump_state, rejected_services) ==
+                off::runtime::SceneTransitionPumpResult::rejected &&
+            rejected_queue.pending() && rejected_queue.entries().size() == 1U &&
+            rejected_queue.entries().front().removal_requested &&
+            rejected_queue.targets() ==
+                std::vector<std::string>{"FF-Startup"} &&
+            !rejected_queue.current_scene().has_value() &&
+            pump_state.current_scene()->identity() == 34U,
+        "manager-pump rejection preserves its pending request and prior scene");
 
   off::runtime::SceneTransitionQueue multiple_targets_queue;
   multiple_targets_queue.request_clear();
@@ -650,12 +795,12 @@ int main() {
                throw std::runtime_error("package failed");
              },
              .construct_live_scene =
-                 [](const off::runtime::StartupSceneLoadPackage&)
+                 [](const off::runtime::StartupSceneLoadPackage &)
                  -> std::optional<off::runtime::StartupLiveScene> {
                return std::nullopt;
              },
          }}));
-  } catch (const std::runtime_error&) {
+  } catch (const std::runtime_error &) {
     pump_threw = true;
   }
   check(pump_threw && !pump.active() && throwing_queue.pending() &&
@@ -672,8 +817,8 @@ int main() {
   bool recursive_call_rejected = false;
   const off::runtime::SceneTransitionPumpServices reentrant_services{
       .startup_loader = {
-          .prepare_complete_checked_package =
-          [&](std::string_view) -> std::optional<off::runtime::StartupSceneLoadPackage> {
+          .prepare_complete_checked_package = [&](std::string_view)
+              -> std::optional<off::runtime::StartupSceneLoadPackage> {
             try {
               static_cast<void>(pump.consume(reentrant_queue, pump_state, {}));
             } catch (const std::runtime_error &) {
@@ -681,7 +826,8 @@ int main() {
             }
             return std::nullopt;
           },
-          .construct_live_scene = [](const off::runtime::StartupSceneLoadPackage&)
+          .construct_live_scene =
+              [](const off::runtime::StartupSceneLoadPackage &)
               -> std::optional<off::runtime::StartupLiveScene> {
             return std::nullopt;
           },
@@ -928,29 +1074,34 @@ int main() {
       hierarchy_source{{
           {10U, std::nullopt, hierarchy_root_children},
           {11U, 10U, hierarchy_first_container_children},
-          {12U, 10U, {}}, {13U, 10U, {}}, {14U, 10U, {}}, {15U, 11U, {}},
+          {12U, 10U, {}},
+          {13U, 10U, {}},
+          {14U, 10U, {}},
+          {15U, 11U, {}},
       }};
   const off::runtime::StartupWindowHierarchySourceScope hierarchy_scope{
       true, 10U, hierarchy_source};
   std::unordered_map<std::size_t, off::runtime::StartupFactoryProvenWindowNode>
       live_hierarchy{{
-          {10U, {100U, 10U, std::nullopt,
-                 off::runtime::StartupWindowNodeFamily::container, 103U,
-                 std::nullopt}},
-          {11U, {101U, 11U, 100U,
-                 off::runtime::StartupWindowNodeFamily::container, 105U, 102U}},
-          {12U, {102U, 12U, 100U,
-                 off::runtime::StartupWindowNodeFamily::leaf, std::nullopt,
-                 104U}},
-          {13U, {103U, 13U, 100U,
-                 off::runtime::StartupWindowNodeFamily::container, std::nullopt,
-                 101U}},
-          {14U, {104U, 14U, 100U,
-                 off::runtime::StartupWindowNodeFamily::leaf, std::nullopt,
-                 std::nullopt}},
-          {15U, {105U, 15U, 101U,
-                 off::runtime::StartupWindowNodeFamily::leaf, std::nullopt,
-                 std::nullopt}},
+          {10U,
+           {100U, 10U, std::nullopt,
+            off::runtime::StartupWindowNodeFamily::container, 103U,
+            std::nullopt}},
+          {11U,
+           {101U, 11U, 100U, off::runtime::StartupWindowNodeFamily::container,
+            105U, 102U}},
+          {12U,
+           {102U, 12U, 100U, off::runtime::StartupWindowNodeFamily::leaf,
+            std::nullopt, 104U}},
+          {13U,
+           {103U, 13U, 100U, off::runtime::StartupWindowNodeFamily::container,
+            std::nullopt, 101U}},
+          {14U,
+           {104U, 14U, 100U, off::runtime::StartupWindowNodeFamily::leaf,
+            std::nullopt, std::nullopt}},
+          {15U,
+           {105U, 15U, 101U, off::runtime::StartupWindowNodeFamily::leaf,
+            std::nullopt, std::nullopt}},
       }};
   std::uint32_t guard_begins{};
   std::uint32_t guard_ends{};
@@ -961,20 +1112,21 @@ int main() {
         ++guard_begins;
         return 91U;
       },
-      .end_read_guard = [&](std::uint64_t guard) {
-        ++guard_ends;
-        observed_guard = guard;
-      },
+      .end_read_guard =
+          [&](std::uint64_t guard) {
+            ++guard_ends;
+            observed_guard = guard;
+          },
       .hierarchy_epoch = [&] { return hierarchy_epoch; },
-      .factory_generation_live = [](std::uint64_t generation) {
-        return generation == 9U;
-      },
+      .factory_generation_live =
+          [](std::uint64_t generation) { return generation == 9U; },
       .read_factory_proven_node = [&](std::size_t source)
           -> std::optional<off::runtime::StartupFactoryProvenWindowNode> {
         const auto found = live_hierarchy.find(source);
         return found == live_hierarchy.end()
                    ? std::nullopt
-                   : std::optional<off::runtime::StartupFactoryProvenWindowNode>{
+                   : std::optional<
+                         off::runtime::StartupFactoryProvenWindowNode>{
                          found->second};
       },
   };
@@ -983,29 +1135,30 @@ int main() {
   off::runtime::StartupWindowHierarchyFactory hierarchy_factory;
   auto hierarchy_snapshot = hierarchy_factory.capture(
       hierarchy_lease, 9U, hierarchy_scope, hierarchy_services);
-  check(hierarchy_snapshot.valid() && hierarchy_snapshot.bound_to(9U, 71U) &&
-            hierarchy_snapshot.root_identity() == 100U &&
-            hierarchy_snapshot.construction_preorder() ==
-                std::vector<std::uint64_t>{100U, 103U, 101U, 105U, 102U, 104U} &&
-            guard_begins == 1U && guard_ends == 1U && observed_guard == 91U,
-        "factory-proven startup hierarchy snapshots reverse containers, retain "
-        "leaves and preorder links");
+  check(
+      hierarchy_snapshot.valid() && hierarchy_snapshot.bound_to(9U, 71U) &&
+          hierarchy_snapshot.root_identity() == 100U &&
+          hierarchy_snapshot.construction_preorder() ==
+              std::vector<std::uint64_t>{100U, 103U, 101U, 105U, 102U, 104U} &&
+          guard_begins == 1U && guard_ends == 1U && observed_guard == 91U,
+      "factory-proven startup hierarchy snapshots reverse containers, retain "
+      "leaves and preorder links");
 
   rejected = false;
   try {
     auto source_only_services = hierarchy_services;
-    source_only_services.read_factory_proven_node =
-        [](std::size_t)
+    source_only_services.read_factory_proven_node = [](std::size_t)
         -> std::optional<off::runtime::StartupFactoryProvenWindowNode> {
       return std::nullopt;
     };
-    static_cast<void>(hierarchy_factory.capture(hierarchy_lease, 9U,
-                                                hierarchy_scope, source_only_services));
+    static_cast<void>(hierarchy_factory.capture(
+        hierarchy_lease, 9U, hierarchy_scope, source_only_services));
   } catch (const std::runtime_error &) {
     rejected = true;
   }
-  check(rejected,
-        "startup hierarchy rejects source-only nodes without factory provenance");
+  check(
+      rejected,
+      "startup hierarchy rejects source-only nodes without factory provenance");
 
   rejected = false;
   try {
@@ -1020,21 +1173,23 @@ int main() {
                  : std::optional<off::runtime::StartupFactoryProvenWindowNode>{
                        found->second};
     };
-    static_cast<void>(hierarchy_factory.capture(hierarchy_lease, 9U,
-                                                hierarchy_scope, cycle_services));
+    static_cast<void>(hierarchy_factory.capture(
+        hierarchy_lease, 9U, hierarchy_scope, cycle_services));
   } catch (const std::runtime_error &) {
     rejected = true;
   }
-  check(rejected,
-        "startup hierarchy rejects a cyclic or policy-invalid live sibling chain");
+  check(rejected, "startup hierarchy rejects a cyclic or policy-invalid live "
+                  "sibling chain");
 
   rejected = false;
   try {
     const std::array<off::runtime::StartupWindowHierarchySourceNode, 5>
         partial_source{{
             {10U, std::nullopt, hierarchy_root_children},
-            {11U, 10U, hierarchy_first_container_children}, {12U, 10U, {}},
-            {13U, 10U, {}}, {14U, 10U, {}},
+            {11U, 10U, hierarchy_first_container_children},
+            {12U, 10U, {}},
+            {13U, 10U, {}},
+            {14U, 10U, {}},
         }};
     static_cast<void>(hierarchy_factory.capture(
         hierarchy_lease, 9U, {true, 10U, partial_source}, hierarchy_services));
@@ -1055,21 +1210,23 @@ int main() {
   } catch (const std::runtime_error &) {
     rejected = true;
   }
-  check(rejected,
-        "startup hierarchy invalidates a snapshot when the guarded epoch changes");
+  check(rejected, "startup hierarchy invalidates a snapshot when the guarded "
+                  "epoch changes");
 
   static_assert(!std::is_copy_constructible_v<
                 off::runtime::StartupActiveWindowRootToken>);
   off::runtime::StartupActiveWindowRootProvider active_root_provider;
   const off::runtime::StartupActiveWindowRootServices active_root_services{
-      .selected_root = []() -> std::optional<off::runtime::StartupManagerSelectedRoot> {
-        return {{.scene_lease_identity = 700U, .root_identity = 103U,
+      .selected_root =
+          []() -> std::optional<off::runtime::StartupManagerSelectedRoot> {
+        return {{.scene_lease_identity = 700U,
+                 .root_identity = 103U,
                  .pass_context_identity = 701U}};
       },
-      .scene_lease_live = [](std::uint64_t identity) { return identity == 700U; },
-      .factory_generation_live = [](std::uint64_t generation) {
-        return generation == 9U;
-      },
+      .scene_lease_live =
+          [](std::uint64_t identity) { return identity == 700U; },
+      .factory_generation_live =
+          [](std::uint64_t generation) { return generation == 9U; },
       .hierarchy_epoch = [] { return 71U; },
   };
   const auto active_root = active_root_provider.admit(
@@ -1083,14 +1240,17 @@ int main() {
     auto outside_root_services = active_root_services;
     outside_root_services.selected_root =
         []() -> std::optional<off::runtime::StartupManagerSelectedRoot> {
-      return {{.scene_lease_identity = 700U, .root_identity = 999U,
+      return {{.scene_lease_identity = 700U,
+               .root_identity = 999U,
                .pass_context_identity = 701U}};
     };
     static_cast<void>(active_root_provider.admit(
         lease(700U), hierarchy_snapshot, outside_root_services));
-  } catch (const std::runtime_error&) { rejected = true; }
-  check(rejected,
-        "startup root rejects a directory or subtree stand-in outside live hierarchy");
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected, "startup root rejects a directory or subtree stand-in "
+                  "outside live hierarchy");
 
   rejected = false;
   try {
@@ -1098,26 +1258,33 @@ int main() {
     stale_root_services.hierarchy_epoch = [] { return 72U; };
     static_cast<void>(active_root_provider.admit(
         lease(700U), hierarchy_snapshot, stale_root_services));
-  } catch (const std::runtime_error&) { rejected = true; }
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
   check(rejected, "startup root rejects a changed hierarchy epoch");
 
-  static_assert(!std::is_copy_constructible_v<
-                off::graphics::StartupActivePassSnapshot>);
+  static_assert(
+      !std::is_copy_constructible_v<off::graphics::StartupActivePassSnapshot>);
   off::graphics::StartupActivePassSnapshotProvider active_pass_provider;
   const off::graphics::StartupActivePassSnapshotServices active_pass_services{
-      .read_selected_pass =
-          []() -> std::optional<off::graphics::StartupCoordinatorPassSelection> {
-        return {{.scene_lease_identity = 700U, .root_identity = 103U,
-                 .camera_identity = 702U, .view_identity = 703U,
-                 .pass_context_identity = 701U, .coordinator_epoch = 81U,
-                 .camera_enabled = true, .normalized_viewport = {0, 0, 1, 1},
-                 .owner_projection_scalar = 1.0F, .external_y_basis_scale = 1.0F,
+      .read_selected_pass = []()
+          -> std::optional<off::graphics::StartupCoordinatorPassSelection> {
+        return {{.scene_lease_identity = 700U,
+                 .root_identity = 103U,
+                 .camera_identity = 702U,
+                 .view_identity = 703U,
+                 .pass_context_identity = 701U,
+                 .coordinator_epoch = 81U,
+                 .camera_enabled = true,
+                 .normalized_viewport = {0, 0, 1, 1},
+                 .owner_projection_scalar = 1.0F,
+                 .external_y_basis_scale = 1.0F,
                  .rectangle = {0, 0, 640, 480}}};
       },
-      .scene_lease_live = [](std::uint64_t identity) { return identity == 700U; },
-      .factory_generation_live = [](std::uint64_t generation) {
-        return generation == 9U;
-      },
+      .scene_lease_live =
+          [](std::uint64_t identity) { return identity == 700U; },
+      .factory_generation_live =
+          [](std::uint64_t generation) { return generation == 9U; },
       .hierarchy_epoch = [] { return 71U; },
       .coordinator_epoch = [] { return 81U; },
   };
@@ -1125,7 +1292,8 @@ int main() {
       lease(700U), hierarchy_snapshot, active_pass_services);
   check(active_pass.valid() && active_pass.bound_to(9U, 71U, 81U) &&
             active_pass.selection().view_identity == 703U,
-        "startup active pass keeps root, camera, view and context from one coordinator read");
+        "startup active pass keeps root, camera, view and context from one "
+        "coordinator read");
 
   rejected = false;
   try {
@@ -1133,7 +1301,9 @@ int main() {
     stale_pass_services.coordinator_epoch = [] { return 82U; };
     static_cast<void>(active_pass_provider.capture(
         lease(700U), hierarchy_snapshot, stale_pass_services));
-  } catch (const std::runtime_error&) { rejected = true; }
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
   check(rejected, "startup active pass rejects a changed coordinator epoch");
 
   rejected = false;
@@ -1141,17 +1311,25 @@ int main() {
     auto disabled_pass_services = active_pass_services;
     disabled_pass_services.read_selected_pass =
         []() -> std::optional<off::graphics::StartupCoordinatorPassSelection> {
-      return {{.scene_lease_identity = 700U, .root_identity = 103U,
-               .camera_identity = 702U, .view_identity = 703U,
-               .pass_context_identity = 701U, .coordinator_epoch = 81U,
-               .camera_enabled = false, .normalized_viewport = {0, 0, 1, 1},
-               .owner_projection_scalar = 1.0F, .external_y_basis_scale = 1.0F,
+      return {{.scene_lease_identity = 700U,
+               .root_identity = 103U,
+               .camera_identity = 702U,
+               .view_identity = 703U,
+               .pass_context_identity = 701U,
+               .coordinator_epoch = 81U,
+               .camera_enabled = false,
+               .normalized_viewport = {0, 0, 1, 1},
+               .owner_projection_scalar = 1.0F,
+               .external_y_basis_scale = 1.0F,
                .rectangle = {0, 0, 640, 480}}};
     };
     static_cast<void>(active_pass_provider.capture(
         lease(700U), hierarchy_snapshot, disabled_pass_services));
-  } catch (const std::runtime_error&) { rejected = true; }
-  check(rejected, "startup active pass rejects an unadmitted camera before picture submission");
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected, "startup active pass rejects an unadmitted camera before "
+                  "picture submission");
 
   static_assert(
       !std::is_copy_constructible_v<off::runtime::StartupBootMenuReaderToken>);
@@ -1169,16 +1347,18 @@ int main() {
       .live_window_owner = [](std::uint64_t owner) { return owner == 81U; },
       .live_boot_menu_component =
           [](std::uint64_t component) { return component == 82U; },
-      .common_component_reader = [&](std::uint64_t owner, std::uint64_t component) {
-        lifecycle_order.push_back("common-reader");
-        return owner == 81U && component == 82U;
-      },
+      .common_component_reader =
+          [&](std::uint64_t owner, std::uint64_t component) {
+            lifecycle_order.push_back("common-reader");
+            return owner == 81U && component == 82U;
+          },
   };
   auto reader_token =
       boot_menu.read_component(std::move(boot_token), 101U, reader_services);
   check(boot_menu.reader_complete() && !boot_menu.initialized() &&
-            !boot_menu.failed() && reader_token.valid() && resolve_calls == 1U &&
-            boot_menu.reader_id() == 31U && lifecycle_order.size() == 1U &&
+            !boot_menu.failed() && reader_token.valid() &&
+            resolve_calls == 1U && boot_menu.reader_id() == 31U &&
+            lifecycle_order.size() == 1U &&
             lifecycle_order[0] == "common-reader",
         "boot-menu reader resolves only its first opaque identity before the "
         "common reader");
@@ -1227,8 +1407,9 @@ int main() {
         "lookup, and retained routing in order");
 
   off::runtime::StartupBootMenuAdmission missing_registry;
-  auto missing_token = boot_construction.construct(
-      boot_package, boot_scene, boot_directory, 10U, boot_construction_services);
+  auto missing_token =
+      boot_construction.construct(boot_package, boot_scene, boot_directory, 10U,
+                                  boot_construction_services);
   auto unavailable_registry_services = reader_services;
   unavailable_registry_services.event_registry_live = [] { return false; };
   rejected = false;
@@ -1240,15 +1421,17 @@ int main() {
   }
   check(rejected && missing_registry.failed() &&
             !missing_registry.reader_complete() &&
-            !missing_registry.initialized() && missing_registry.reader_id() == 0U,
+            !missing_registry.initialized() &&
+            missing_registry.reader_id() == 0U,
         "boot-menu reader fails closed without exposing an identity when the "
         "registry is absent");
 
   off::runtime::StartupBootMenuAdmission routing_failure;
-  auto routing_token = boot_construction.construct(
-      boot_package, boot_scene, boot_directory, 11U, boot_construction_services);
-  auto routing_reader = routing_failure.read_component(
-      std::move(routing_token), 101U, reader_services);
+  auto routing_token =
+      boot_construction.construct(boot_package, boot_scene, boot_directory, 11U,
+                                  boot_construction_services);
+  auto routing_reader = routing_failure.read_component(std::move(routing_token),
+                                                       101U, reader_services);
   auto failed_routing_services = initialization_services;
   failed_routing_services.route_retained_object =
       [](std::uint64_t, std::uint64_t, std::uint16_t) { return false; };
@@ -1259,8 +1442,10 @@ int main() {
   } catch (const std::runtime_error &) {
     rejected = true;
   }
-  check(rejected && routing_failure.failed() && !routing_failure.initialized() &&
-            routing_failure.reader_id() == 0U && routing_failure.routing_id() == 0U,
+  check(rejected && routing_failure.failed() &&
+            !routing_failure.initialized() &&
+            routing_failure.reader_id() == 0U &&
+            routing_failure.routing_id() == 0U,
         "boot-menu initialization does not expose partial state when retained "
         "routing fails");
 

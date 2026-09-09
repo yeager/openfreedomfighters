@@ -36,6 +36,16 @@ rendering, presentation, input, or FF-StartUp menu construction. The source of
 LoadScreen's initial counter and setup flag remains a separate construction
 requirement.
 
+`StartLoaderPreparedRoute` is a separate, production-independent handoff for
+testing the proven path without admitting it to normal startup. It receives a
+caller-owned checked `GmsImage`, derives its source only through the bounded
+StartLoader parser, requires the explicit reviewed initial state (counter zero
+with setup pending), and permits only a caller-selected canonical
+`FF-StartUp.ZIP` path. Its ordinary updates perform the retained LoadScreen
+request: setup once, then package preparation on update three. It returns a
+checked `StartupSceneLoadPackage` and stops there. It has no scene factory,
+manager-state mutation, lifecycle, renderer, input, or presentation path.
+
 ## Checked FF-StartUp loading transaction
 
 `StartupSceneLoader` is a disconnected, fail-closed replacement transaction for
