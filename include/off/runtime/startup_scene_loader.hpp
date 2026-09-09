@@ -1,17 +1,54 @@
 #pragma once
 
+#include "off/data/gms_image.hpp"
+#include "off/data/zgf_bundle.hpp"
 #include "off/runtime/startloader_load_screen.hpp"
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace off::runtime {
+
+class StartupScenePackageSource;
+
+// Immutable, source-checked input for a future FF-StartUp scene factory. It
+// exposes only the parsed ZGF/GMS forms and the already GMS-validated BUF
+// bytes. The typed shared leases make every borrowed view valid for the
+// lifetime of this value; it carries no construction, lifecycle or rendering
+// policy.
+class StartupSceneFactoryInputs final {
+public:
+  [[nodiscard]] const data::ZgfBundle &zgf() const noexcept { return *zgf_; }
+  [[nodiscard]] const data::GmsImage &gms() const noexcept { return *gms_; }
+  [[nodiscard]] std::span<const std::byte> buf() const noexcept {
+    return *buf_;
+  }
+
+private:
+  friend class StartupScenePackageSource;
+
+  StartupSceneFactoryInputs(std::shared_ptr<const data::ZgfBundle> zgf,
+                            std::shared_ptr<const data::GmsImage> gms,
+                            std::shared_ptr<const std::vector<std::byte>> buf)
+      : zgf_(std::move(zgf)), gms_(std::move(gms)), buf_(std::move(buf)) {
+    if (!zgf_ || !gms_ || !buf_) {
+      throw std::runtime_error("Startup scene factory inputs are incomplete");
+    }
+  }
+
+  std::shared_ptr<const data::ZgfBundle> zgf_;
+  std::shared_ptr<const data::GmsImage> gms_;
+  std::shared_ptr<const std::vector<std::byte>> buf_;
+};
 
 // Opaque, caller-owned leases retain the checked archive, GMS source and SUP
 // input through a construction attempt. This is deliberately not a parser.
@@ -29,23 +66,50 @@ public:
     return StartupSceneLoadPackage(std::move(archive_lease),
                                    std::move(source_lease),
                                    std::move(support_lease),
-                                   std::move(resource_family_lease));
+                                   std::move(resource_family_lease), std::nullopt);
+  }
+
+  // The source-backed preparation path can attach typed data after parsing
+  // ZGF/GMS and validating BUF. The generic `complete` API intentionally
+  // remains available for transaction tests and non-source-backed callers.
+  [[nodiscard]] static StartupSceneLoadPackage complete_checked_source(
+      std::string_view target, std::shared_ptr<const void> archive_lease,
+      std::shared_ptr<const void> source_lease,
+      std::shared_ptr<const void> support_lease,
+      std::shared_ptr<const void> resource_family_lease,
+      StartupSceneFactoryInputs factory_inputs) {
+    if (target != "FF-Startup" || !archive_lease || !source_lease ||
+        !support_lease || !resource_family_lease) {
+      throw std::runtime_error("Startup scene package is incomplete");
+    }
+    return StartupSceneLoadPackage(
+        std::move(archive_lease), std::move(source_lease),
+        std::move(support_lease), std::move(resource_family_lease),
+        std::move(factory_inputs));
+  }
+
+  [[nodiscard]] const std::optional<StartupSceneFactoryInputs> &
+  factory_inputs() const noexcept {
+    return factory_inputs_;
   }
 
 private:
   explicit StartupSceneLoadPackage(std::shared_ptr<const void> archive_lease,
                                    std::shared_ptr<const void> source_lease,
                                    std::shared_ptr<const void> support_lease,
-                                   std::shared_ptr<const void> resource_family_lease)
+                                   std::shared_ptr<const void> resource_family_lease,
+                                   std::optional<StartupSceneFactoryInputs> factory_inputs)
       : archive_lease_(std::move(archive_lease)),
         source_lease_(std::move(source_lease)),
         support_lease_(std::move(support_lease)),
-        resource_family_lease_(std::move(resource_family_lease)) {}
+        resource_family_lease_(std::move(resource_family_lease)),
+        factory_inputs_(std::move(factory_inputs)) {}
 
   std::shared_ptr<const void> archive_lease_;
   std::shared_ptr<const void> source_lease_;
   std::shared_ptr<const void> support_lease_;
   std::shared_ptr<const void> resource_family_lease_;
+  std::optional<StartupSceneFactoryInputs> factory_inputs_;
 };
 
 // A factory must explicitly produce this nonzero opaque token. It cannot turn a

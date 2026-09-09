@@ -104,12 +104,19 @@ public:
       }
     }
 
-    return StartupSceneLoadPackage::complete(
+    return StartupSceneLoadPackage::complete_checked_source(
         target,
         std::shared_ptr<const void>(owner, std::addressof(owner->archive)),
         std::shared_ptr<const void>(owner, std::addressof(owner->gms)),
         std::shared_ptr<const void>(owner, std::addressof(owner->support)),
-        std::shared_ptr<const void>(owner, std::addressof(owner->raw_sources)));
+        std::shared_ptr<const void>(owner, std::addressof(owner->raw_sources)),
+        StartupSceneFactoryInputs(
+            std::shared_ptr<const data::ZgfBundle>(owner,
+                                                    std::addressof(owner->zgf)),
+            std::shared_ptr<const data::GmsImage>(owner,
+                                                   std::addressof(owner->gms)),
+            std::shared_ptr<const std::vector<std::byte>>(
+                owner, std::addressof(owner->buf_source))));
   }
 };
 

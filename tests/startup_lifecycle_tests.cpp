@@ -344,6 +344,22 @@ int main() {
   auto source_package =
       off::runtime::StartupScenePackageSource::prepare_checked("FF-Startup",
                                                                package_fixture);
+  check(source_package.factory_inputs().has_value() &&
+            source_package.factory_inputs()->zgf().decoded_size() > 0U &&
+            !source_package.factory_inputs()->gms().directory().empty() &&
+            source_package.factory_inputs()->buf().size() == 512U,
+        "source package exposes only its checked typed ZGF/GMS/BUF factory inputs");
+  std::optional<off::runtime::StartupSceneFactoryInputs> retained_factory_inputs;
+  {
+    auto lifetime_package =
+        off::runtime::StartupScenePackageSource::prepare_checked("FF-Startup",
+                                                                 package_fixture);
+    retained_factory_inputs = lifetime_package.factory_inputs();
+  }
+  check(retained_factory_inputs.has_value() &&
+            retained_factory_inputs->buf().size() == 512U &&
+            !retained_factory_inputs->gms().directory().empty(),
+        "typed factory inputs retain checked BUF and parsed GMS after package release");
   const auto source_package_once =
       std::make_shared<std::optional<off::runtime::StartupSceneLoadPackage>>(
           std::move(source_package));
@@ -410,7 +426,12 @@ int main() {
         off::runtime::StartupScenePackageSource::prepare_checked(
             "FF-Startup",
             std::filesystem::path(retail_data_root) / "Scenes" / "FF-StartUp.ZIP");
-    static_cast<void>(retail_startup_package);
+    const auto &retail_factory_inputs = retail_startup_package.factory_inputs();
+    check(retail_factory_inputs.has_value() &&
+              !retail_factory_inputs->zgf().entries().empty() &&
+              !retail_factory_inputs->gms().directory().empty() &&
+              !retail_factory_inputs->buf().empty(),
+          "retail startup package exposes nonempty checked typed factory inputs");
   }
 
   const auto startloader_route_root =
@@ -909,6 +930,8 @@ int main() {
     return off::runtime::StartupSceneLoadPackage::complete(
         "FF-Startup", lease(100U), lease(101U), lease(102U), lease(103U));
   };
+  check(!package().factory_inputs().has_value(),
+        "generic complete package API does not claim source-checked factory inputs");
   rejected = false;
   try {
     static_cast<void>(off::runtime::StartupSceneLoadPackage::complete(

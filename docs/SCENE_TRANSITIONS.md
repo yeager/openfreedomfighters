@@ -73,6 +73,14 @@ opaque under a package lease for a later factory. It is not an archive search
 policy, does not interpret those companion formats, and does not construct a
 scene.
 
+After that validation, the source-backed package also offers an immutable
+`StartupSceneFactoryInputs` value for a future factory: parsed ZGF, parsed GMS,
+and the paired BUF bytes. Its typed leases retain all three inputs after the
+package object itself is released. The generic `StartupSceneLoadPackage::complete`
+test API does not manufacture that value. The input is data only: it neither
+chooses an owner nor invokes a reader, factory, lifecycle callback, renderer,
+or menu.
+
 Any missing service, incomplete package, failed factory result, or exception
 leaves the deferred request and previously committed scene unchanged. There is
 no automatic retry. The manager-owned pump invokes this transaction and, only
