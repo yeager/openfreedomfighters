@@ -1,5 +1,7 @@
 #pragma once
 
+#include "off/data/gms_image.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -19,6 +21,17 @@ class StartupSceneLoader;
 // deliberately not a GMS reader and does not make a scene target loadable.
 class StartLoaderLoadScreenSource final {
 public:
+  // `GmsImage::startloader_load_screen_source()` has already established the
+  // one supported owner/attachment grammar. This handoff still only retains a
+  // target string; it does not enqueue or construct a scene.
+  [[nodiscard]] static StartLoaderLoadScreenSource from_parsed_source(
+      const data::GmsStartLoaderLoadScreenSource& source) {
+    if (source.target != "FF-Startup") {
+      throw std::runtime_error("unsupported StartLoader LoadScreen source");
+    }
+    return StartLoaderLoadScreenSource(source.target);
+  }
+
   [[nodiscard]] static StartLoaderLoadScreenSource from_parsed_attachment(
       std::string_view attachment_identifier, float attachment_parameter,
       std::string_view target, bool exact_source_wrapper_consumed) {

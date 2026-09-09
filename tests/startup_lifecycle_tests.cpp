@@ -325,9 +325,18 @@ int main() {
   }
   check(rejected, "LoadScreen source rejects a non-supported target");
 
-  const auto source =
-      off::runtime::StartLoaderLoadScreenSource::from_parsed_attachment(
-          "ZWINGROUP_LoadScreen", 0.0F, "FF-Startup", true);
+  const auto source = off::runtime::StartLoaderLoadScreenSource::from_parsed_source(
+      {.directory_index = 7U, .target = "FF-Startup"});
+  check(source.target() == "FF-Startup",
+        "typed StartLoader source retains its checked authored target");
+  rejected = false;
+  try {
+    static_cast<void>(off::runtime::StartLoaderLoadScreenSource::from_parsed_source(
+        {.directory_index = 7U, .target = "OtherScene"}));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected, "typed StartLoader source rejects a non-supported target");
   off::runtime::SceneTransitionQueue transitions;
   transitions.retain_scene_entry(11U);
   transitions.retain_scene_entry(12U);
