@@ -704,6 +704,28 @@ initialization, both of which present cleared buffers rather than the first cut.
 Each decoder requires public malformed-input tests and private verification on
 the owned installation. Public fixtures must be independently authored, not
 copied controller payloads. Runtime acceptance additionally requires an actual
-intro-to-menu transition; parser success does not satisfy it. Original Windows
-capture is currently unavailable, so camera and final pixel fidelity remain
-unverified even as static research and native implementation proceed.
+intro-to-menu transition; parser success does not satisfy it.
+
+## Windows observation: opening sequence
+
+On 2026-09-09, a private Windows retail run was captured over RDP. The images
+remain outside this repository. They establish this sampled order:
+
+1. Four lower-left chronology cards over dark teal underwater imagery.
+2. Three lower-left credit cards for IO Interactive and the composer.
+3. A Statue of Liberty/title shot with lens flare.
+4. A separate, heavily letterboxed game-menu presentation.
+5. A letterboxed taxi cinematic with dialogue subtitles.
+6. Full-height playable tutorial presentation with HUD and a movement prompt.
+
+The chronology and credit cards use bold white sans-serif text with a generous
+lower-left inset. Their capture timestamps prove order only; they do not prove
+cue durations, audio starts, input-skip behavior, video/frame formats, or exact
+camera interpolation. The RDP title bar and black desktop margins are capture
+artifacts and are not native game viewport measurements.
+
+This observation removes the earlier uncertainty about the broad opening
+sequence and confirms that the menu, cinematic, and gameplay use distinct
+presentation states. It is not enough to activate the native cutscene path:
+the remaining work must recover the scene/cut loader ordering, timing, audio,
+and rendering boundaries from the owned data and further controlled captures.
