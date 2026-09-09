@@ -706,6 +706,21 @@ the owned installation. Public fixtures must be independently authored, not
 copied controller payloads. Runtime acceptance additionally requires an actual
 intro-to-menu transition; parser success does not satisfy it.
 
+## MovieCuts loader-package preparation boundary
+
+`MovieCutLoaderPackageSource` is a deliberately narrow, read-only boundary for
+one caller-selected `Scenes/Cutscenes/MovieCuts/<identifier>/Loader.ZIP`
+archive. It validates the identifier as a single safe path component, requires
+one matching `Loader.GMS` and `Loader.SUP` member, and retains parsed views of
+both while keeping the archive alive. It is useful for controlled inspection
+and for later, evidence-backed loader work.
+
+Preparation does not select a MovieCuts package, infer a next cut, load a main
+archive, initialize a scene, start audio, advance a transition, or submit any
+rendering. In particular, similarly named retail packages must not be treated
+as a proven playback sequence until their routing fields and runtime callers
+have been independently recovered.
+
 ## Windows observation: opening sequence
 
 On 2026-09-09, a private Windows retail run was captured over RDP. The images

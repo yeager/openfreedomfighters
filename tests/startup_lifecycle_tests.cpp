@@ -4,6 +4,7 @@
 #include "off/runtime/startup_active_window_root.hpp"
 #include "off/runtime/startup_boot_menu_admission.hpp"
 #include "off/runtime/startup_boot_scene_construction.hpp"
+#include "off/runtime/movie_cut_loader_package_source.hpp"
 #include "off/runtime/startup_scene_loader.hpp"
 #include "off/runtime/startup_scene_package_source.hpp"
 #include "off/runtime/startup_window_hierarchy_snapshot.hpp"
@@ -266,6 +267,68 @@ int main() {
   check(rejected_package,
         "package source rejects a duplicate selected GMS family");
   std::filesystem::remove(package_fixture, package_error);
+
+  const auto movie_cut_fixture =
+      std::filesystem::current_path() / "off-movie-cut-loader-fixture.zip";
+  std::error_code movie_cut_error;
+  std::filesystem::remove(movie_cut_fixture, movie_cut_error);
+  constexpr std::string_view movie_cut_identifier = "SyntheticCut";
+  constexpr std::string_view movie_cut_prefix =
+      "SCENES/Cutscenes/MovieCuts/SyntheticCut/Loader";
+  write_package_zip(movie_cut_fixture,
+                    {{std::string(movie_cut_prefix) + ".GMS",
+                      package_gms_fixture()},
+                     {std::string(movie_cut_prefix) + ".SUP",
+                      package_support_fixture()}});
+  const auto movie_cut_package =
+      off::runtime::MovieCutLoaderPackageSource::prepare_checked(
+          movie_cut_identifier, movie_cut_fixture);
+  check(movie_cut_package.cut_identifier() == movie_cut_identifier,
+        "MovieCut loader package retains its caller-selected identifier");
+
+  bool rejected_movie_cut = false;
+  try {
+    static_cast<void>(
+        off::runtime::MovieCutLoaderPackageSource::prepare_checked(
+            "SyntheticCut/escape", movie_cut_fixture));
+  } catch (const std::runtime_error &) {
+    rejected_movie_cut = true;
+  }
+  check(rejected_movie_cut,
+        "MovieCut loader package rejects path-like identifiers");
+
+  write_package_zip(movie_cut_fixture,
+                    {{std::string(movie_cut_prefix) + ".GMS",
+                      package_gms_fixture()}});
+  rejected_movie_cut = false;
+  try {
+    static_cast<void>(
+        off::runtime::MovieCutLoaderPackageSource::prepare_checked(
+            movie_cut_identifier, movie_cut_fixture));
+  } catch (const std::runtime_error &) {
+    rejected_movie_cut = true;
+  }
+  check(rejected_movie_cut,
+        "MovieCut loader package rejects a missing support member");
+
+  write_package_zip(movie_cut_fixture,
+                    {{std::string(movie_cut_prefix) + ".GMS",
+                      package_gms_fixture()},
+                     {std::string(movie_cut_prefix) + ".GMS",
+                      package_gms_fixture()},
+                     {std::string(movie_cut_prefix) + ".SUP",
+                      package_support_fixture()}});
+  rejected_movie_cut = false;
+  try {
+    static_cast<void>(
+        off::runtime::MovieCutLoaderPackageSource::prepare_checked(
+            movie_cut_identifier, movie_cut_fixture));
+  } catch (const std::runtime_error &) {
+    rejected_movie_cut = true;
+  }
+  check(rejected_movie_cut,
+        "MovieCut loader package rejects duplicate required members");
+  std::filesystem::remove(movie_cut_fixture, movie_cut_error);
 
   off::platform::StartupLifecycle ready_early;
   check(ready_early.tick(origin + 20s, true) ==
