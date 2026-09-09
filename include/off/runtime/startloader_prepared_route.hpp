@@ -2,6 +2,7 @@
 
 #include "off/data/gms_image.hpp"
 #include "off/runtime/startloader_load_screen.hpp"
+#include "off/runtime/startup_boot_scene_directory_source.hpp"
 #include "off/runtime/startup_scene_package_source.hpp"
 
 #include <cstdint>
@@ -84,6 +85,20 @@ public:
   [[nodiscard]] const std::optional<StartupSceneLoadPackage> &
   prepared_package() const noexcept {
     return prepared_package_;
+  }
+
+  // Source-only continuation of the checked StartLoader handoff. This remains
+  // unavailable until the canonical package has been prepared and returns no
+  // factory, scene lease, runtime identity, or construction token.
+  [[nodiscard]] StartupBootSceneDirectorySource
+  prepared_boot_directory_source() const {
+    if (!prepared_package_.has_value() ||
+        !prepared_package_->factory_inputs().has_value()) {
+      throw std::runtime_error(
+          "StartLoader prepared route has no checked startup factory inputs");
+    }
+    return StartupBootSceneDirectorySource::from_checked_gms(
+        prepared_package_->factory_inputs()->gms());
   }
 
 private:

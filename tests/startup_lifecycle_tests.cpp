@@ -464,7 +464,14 @@ int main() {
                                       startloader_route_error);
   check(!startloader_route_error,
         "create checked StartLoader route package fixture directory");
-  write_package_zip(startloader_route_package, startup_package_members());
+  auto startloader_route_members = startup_package_members();
+  for (auto &[name, contents] : startloader_route_members) {
+    if (name == "SCENES/FF-StartUp.GMS") {
+      contents = boot_directory_gms_fixture();
+      break;
+    }
+  }
+  write_package_zip(startloader_route_package, startloader_route_members);
   const auto parsed_startloader = off::data::GmsImage::parse(
       off::data::PackedResource::parse(startloader_route_gms_fixture()));
   bool rejected_route = false;
@@ -491,6 +498,15 @@ int main() {
       off::runtime::StartLoaderPreparedRoute::from_checked_gms(
           parsed_startloader, startloader_route_package,
           {.initial_update_count = 0U, .one_time_setup_pending = true});
+  bool boot_source_before_preparation_rejected = false;
+  try {
+    static_cast<void>(prepared_route.prepared_boot_directory_source());
+  } catch (const std::runtime_error &) {
+    boot_source_before_preparation_rejected = true;
+  }
+  check(boot_source_before_preparation_rejected,
+        "StartLoader prepared route exposes no BootMenu source before package "
+        "preparation");
   bool route_setup_missing = false;
   try {
     static_cast<void>(prepared_route.ordinary_update({}));
@@ -519,6 +535,18 @@ int main() {
           prepared_route.prepared_package().has_value(),
       "parsed StartLoader source prepares the canonical package on update "
       "three");
+  const auto prepared_boot_directory =
+      prepared_route.prepared_boot_directory_source();
+  check(prepared_boot_directory.proof().complete_directory_mapping &&
+            prepared_boot_directory.proof().canonical_ordinary_window_source &&
+            prepared_boot_directory.proof().component_identifier ==
+                "ZWINDOW_BootMenu" &&
+            prepared_boot_directory.proof().component_parameter == 1.0F &&
+            prepared_route.prepared_package()->factory_inputs().has_value() &&
+            prepared_boot_directory.matches_checked_gms(
+                prepared_route.prepared_package()->factory_inputs()->gms()),
+        "prepared StartLoader route derives BootMenu evidence from its exact "
+        "checked startup GMS");
   check(
       prepared_route.ordinary_update(route_setup) ==
               off::runtime::StartLoaderPreparedRouteResult::package_prepared &&

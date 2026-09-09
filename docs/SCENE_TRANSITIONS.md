@@ -43,8 +43,11 @@ StartLoader parser, requires the explicit reviewed initial state (counter zero
 with setup pending), and permits only a caller-selected canonical
 `FF-StartUp.ZIP` path. Its ordinary updates perform the retained LoadScreen
 request: setup once, then package preparation on update three. It returns a
-checked `StartupSceneLoadPackage` and stops there. It has no scene factory,
-manager-state mutation, lifecycle, renderer, input, or presentation path.
+checked `StartupSceneLoadPackage`. After preparation it can derive a
+`StartupBootSceneDirectorySource` only from that package's exact typed GMS
+input, preserving the checked chain from StartLoader to the BootMenu source.
+This remains source evidence, not a scene factory, manager-state mutation,
+lifecycle, renderer, input, or presentation path.
 
 `StartupBootSceneDirectorySource` is the corresponding source-only boundary
 inside the prepared `FF-StartUp.GMS`. It accepts one exact ordinary-window
