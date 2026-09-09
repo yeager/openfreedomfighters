@@ -37,3 +37,32 @@ usable in isolation; it still cannot be called through normal startup.
 
 The existing Window and MovieControl reader boundaries are deliberately narrow
 examples of step 1. Neither is an independent startup path.
+
+## Static-analysis priority
+
+The next recovery pass follows the deferred-reader dispatcher from its queue
+loop through the owner base reader and forward attachment-component dispatch.
+It records only reader inputs, owner mutations, component registration, event
+or lifecycle effects, failure behavior, and ordering. It does not publish
+disassembly, addresses, retail strings, or binary-derived artifacts.
+
+The first reader families are the direct first-cut dependencies:
+
+1. `ZWINPIC_FadeToBlack` and `ZGEOM_Center`;
+2. `ZLIST_CutSequence`, `ZLIST_CutSequenceList`, and
+   `ZLIST_CutSequenceCommand`;
+3. `ZSNDOBJ_SoundExtend`, `ZSNDOBJ_SoundNotify`, and
+   `ZSNDOBJ_SoundSegment`.
+
+This ordering removes the earliest fail-closed admission gate. Reversing it to
+work on MovieControl phase two or event 16 first would not make normal startup
+valid: the current runtime has 420 queued readers but only ten source-backed
+reader boundaries, so it has no complete owner/component population for the
+global passes.
+
+For the supported global initializer, the recovered structure is root pre-hook,
+append-ordered additional-owner pre-hooks, reverse phase one, a fresh reverse
+phase two, then root/additional-owner post-hooks. The synthesized ROOT is
+separate from authored source 1, which reaches its owner pre-hook through the
+additional-resource list. These are ordering constraints, not permission to
+run the pass before every required reader and live service exists.
