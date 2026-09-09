@@ -21,6 +21,11 @@ int main() {
         "explicit supported locale wins");
   check(catalog.resolve(MessageId::apply, "xx-XX", "sv-SE") == "Tillämpa",
         "platform locale follows unavailable explicit locale");
+  constexpr std::array<std::string_view, 2> ordered_platform_locales{{"xx-XX", "sv-SE"}};
+  check(catalog.resolve(MessageId::apply, "", ordered_platform_locales) == "Tillämpa",
+        "supported secondary system locale follows unsupported primary locale");
+  check(catalog.resolve(MessageId::apply, "de-DE", ordered_platform_locales) == "Anwenden",
+        "explicit locale remains ahead of all system preferences");
   check(catalog.resolve(MessageId::apply, "xx-XX", "zz-ZZ") == "Apply",
         "English is the deterministic final fallback");
   check(catalog.resolve(MessageId::revert, "SV", "en") == "Återställ",

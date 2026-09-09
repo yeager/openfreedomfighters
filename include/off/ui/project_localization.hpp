@@ -117,6 +117,12 @@ public:
   [[nodiscard]] std::optional<std::string_view>
   resolve(MessageId id, std::string_view explicit_locale,
           std::string_view platform_locale) const noexcept;
+  // The ordered platform preference list is consulted only after an explicit
+  // override. This permits a supported secondary system language to win over
+  // English when the primary preference has no project catalog.
+  [[nodiscard]] std::optional<std::string_view>
+  resolve(MessageId id, std::string_view explicit_locale,
+          std::span<const std::string_view> platform_locales) const noexcept;
   [[nodiscard]] std::optional<std::string_view>
   format_seconds(MessageId id, unsigned seconds,
                  std::string_view explicit_locale,

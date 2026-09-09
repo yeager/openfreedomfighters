@@ -116,12 +116,14 @@ std::optional<Locale> locale_from_tag(std::string_view tag) noexcept {
   return std::nullopt;
 }
 
-std::optional<Locale> select_locale(std::string_view explicit_locale,
-                                    std::string_view platform_locale) noexcept {
+std::optional<Locale> select_locale(
+    std::string_view explicit_locale,
+    std::span<const std::string_view> platform_locales) noexcept {
   if (const auto locale = locale_from_tag(explicit_locale))
     return locale;
-  if (const auto locale = locale_from_tag(platform_locale))
-    return locale;
+  for (const auto locale_tag : platform_locales)
+    if (const auto locale = locale_from_tag(locale_tag))
+      return locale;
   return Locale::english;
 }
 
@@ -224,10 +226,17 @@ ProjectCatalog::build(std::span<const CatalogEntry> entries) {
 std::optional<std::string_view>
 ProjectCatalog::resolve(MessageId id, std::string_view explicit_locale,
                         std::string_view platform_locale) const noexcept {
+  const std::array<std::string_view, 1> platform_locales{{platform_locale}};
+  return resolve(id, explicit_locale, platform_locales);
+}
+
+std::optional<std::string_view>
+ProjectCatalog::resolve(MessageId id, std::string_view explicit_locale,
+                        std::span<const std::string_view> platform_locales) const noexcept {
   const auto index = static_cast<std::size_t>(id);
   if (index >= message_id_count)
     return std::nullopt;
-  const auto locale = *select_locale(explicit_locale, platform_locale);
+  const auto locale = *select_locale(explicit_locale, platform_locales);
   return messages_[static_cast<std::size_t>(locale)][index];
 }
 
