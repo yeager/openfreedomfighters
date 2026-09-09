@@ -525,6 +525,10 @@ int main() {
             prepared_route.ordinary_update(route_setup) ==
                 off::runtime::StartLoaderPreparedRouteResult::awaiting_target &&
             prepared_route.update_count() == 2U && route_setup_calls == 1U &&
+            prepared_route.source_directory_index() ==
+                std::optional<std::size_t>{
+                    parsed_startloader.startloader_load_screen_source()
+                        .directory_index} &&
             !prepared_route.has_prepared_package(),
         "StartLoader prepared route retains no package before three updates");
   check(
@@ -765,8 +769,10 @@ int main() {
   const auto source =
       off::runtime::StartLoaderLoadScreenSource::from_parsed_source(
           {.directory_index = 7U, .target = "FF-Startup"});
-  check(source.target() == "FF-Startup",
-        "typed StartLoader source retains its checked authored target");
+  check(source.target() == "FF-Startup" &&
+            source.parsed_directory_index() == std::optional<std::size_t>{7U},
+        "typed StartLoader source retains its checked authored target and "
+        "directory provenance");
   rejected = false;
   try {
     static_cast<void>(
@@ -790,6 +796,20 @@ int main() {
   check(setup_missing && load_screen.one_time_setup_pending() &&
             load_screen.update_count() == 0U,
         "a missing setup service preserves LoadScreen state");
+  bool setup_threw = false;
+  try {
+    static_cast<void>(load_screen.ordinary_update(
+        transitions, [] { throw std::runtime_error("setup failed"); }));
+  } catch (const std::runtime_error &) {
+    setup_threw = true;
+  }
+  check(setup_threw && load_screen.one_time_setup_pending() &&
+            load_screen.update_count() == 0U &&
+            transitions.entries().size() == 2U &&
+            transitions.current_scene() == std::optional<std::uint64_t>{11U} &&
+            transitions.targets().empty() && !transitions.pending() &&
+            transitions.clear_requests() == 0U,
+        "a throwing LoadScreen setup preserves transition and queue state");
   std::uint32_t setup_calls{};
   const auto setup = [&] { ++setup_calls; };
   check(
@@ -802,7 +822,9 @@ int main() {
             !transitions.current_scene().has_value() &&
             transitions.targets().size() == 1U &&
             transitions.targets().front() == "FF-Startup" &&
-            load_screen.retained_target().empty(),
+            load_screen.retained_target().empty() &&
+            load_screen.source_directory_index() ==
+                std::optional<std::size_t>{7U},
         "third LoadScreen update clears then queues its retained target");
   check(transitions.entries().size() == 2U &&
             transitions.entries()[0].removal_requested &&

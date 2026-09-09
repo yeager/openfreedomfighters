@@ -7,7 +7,9 @@ discovery boundary: normal startup does not yet instantiate `LoadScreenTransitio
 or enqueue the target.
 It accepts only the supported LoadScreen attachment identity, a finite zero
 attachment parameter, an exactly consumed source wrapper, and the supported
-target. It does not parse GMS or open an archive.
+target. When admitted from the typed GMS parser it also retains the source
+directory ordinal through the deferred transition for provenance; this is not
+a runtime identity. It does not parse GMS or open an archive.
 
 `LoadScreenTransition` models the component's ordinary-update boundary. An
 explicit one-time setup service runs first; then an unsigned retained counter
@@ -15,6 +17,8 @@ advances. At a count of three or more it asks `SceneTransitionQueue` to clear
 the current retained scene entries before queuing its copied target. The queue
 only records deferred removal and target requests. It never loads a scene,
 creates GPU resources, presents a frame, or accepts input.
+A missing or throwing setup service leaves the counter, setup flag, and queue
+unchanged.
 
 `SceneTransitionPump` is the one explicit manager-owned consumer for this
 verified route. It accepts exactly one retained `FF-Startup` target and delegates

@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -29,7 +30,7 @@ public:
     if (source.target != "FF-Startup") {
       throw std::runtime_error("unsupported StartLoader LoadScreen source");
     }
-    return StartLoaderLoadScreenSource(source.target);
+    return StartLoaderLoadScreenSource(source.target, source.directory_index);
   }
 
   [[nodiscard]] static StartLoaderLoadScreenSource from_parsed_attachment(
@@ -40,16 +41,25 @@ public:
         !exact_source_wrapper_consumed || target != "FF-Startup") {
       throw std::runtime_error("unsupported StartLoader LoadScreen source");
     }
-    return StartLoaderLoadScreenSource(std::string(target));
+    return StartLoaderLoadScreenSource(std::string(target), std::nullopt);
   }
 
   [[nodiscard]] std::string_view target() const noexcept { return target_; }
+  // Present only when the source came from the typed GMS parser. It is source
+  // provenance, not a runtime object identity or factory handle.
+  [[nodiscard]] const std::optional<std::size_t> &
+  parsed_directory_index() const noexcept {
+    return parsed_directory_index_;
+  }
 
 private:
-  explicit StartLoaderLoadScreenSource(std::string target)
-      : target_(std::move(target)) {}
+  explicit StartLoaderLoadScreenSource(
+      std::string target, std::optional<std::size_t> parsed_directory_index)
+      : target_(std::move(target)),
+        parsed_directory_index_(parsed_directory_index) {}
 
   std::string target_;
+  std::optional<std::size_t> parsed_directory_index_;
 };
 
 struct DeferredSceneEntry {
@@ -143,7 +153,8 @@ public:
                                 std::uint32_t initial_update_count = 0U,
                                 bool one_time_setup_pending = true)
       : target_(source.target()), update_count_(initial_update_count),
-        one_time_setup_pending_(one_time_setup_pending) {}
+        one_time_setup_pending_(one_time_setup_pending),
+        source_directory_index_(source.parsed_directory_index()) {}
 
   // Returns true only when this call retained a nonempty target request.
   [[nodiscard]] bool ordinary_update(
@@ -171,11 +182,16 @@ public:
     return one_time_setup_pending_;
   }
   [[nodiscard]] std::string_view retained_target() const noexcept { return target_; }
+  [[nodiscard]] const std::optional<std::size_t> &
+  source_directory_index() const noexcept {
+    return source_directory_index_;
+  }
 
 private:
   std::string target_;
   std::uint32_t update_count_{};
   bool one_time_setup_pending_{};
+  std::optional<std::size_t> source_directory_index_;
 };
 
 }  // namespace off::runtime

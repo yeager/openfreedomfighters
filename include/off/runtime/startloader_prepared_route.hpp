@@ -79,6 +79,10 @@ public:
   [[nodiscard]] bool one_time_setup_pending() const noexcept {
     return transition_.one_time_setup_pending();
   }
+  [[nodiscard]] const std::optional<std::size_t> &
+  source_directory_index() const noexcept {
+    return transition_.source_directory_index();
+  }
   [[nodiscard]] bool has_prepared_package() const noexcept {
     return prepared_package_.has_value();
   }
