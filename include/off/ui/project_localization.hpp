@@ -127,10 +127,6 @@ public:
   format_seconds(MessageId id, unsigned seconds,
                  std::string_view explicit_locale,
                  std::string_view platform_locale) const;
-  [[nodiscard]] std::optional<std::string_view>
-  format_seconds(MessageId id, unsigned seconds,
-                 std::string_view explicit_locale,
-                 std::span<const std::string_view> platform_locales) const;
 
 private:
   friend struct CatalogBuildResult;
