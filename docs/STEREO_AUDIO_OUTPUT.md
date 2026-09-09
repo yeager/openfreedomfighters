@@ -80,6 +80,10 @@ Production refuses dummy/disk drivers. No adapter method emits a playback ACK.
 The real-device test uses generated PCM and requires the output queue to drain.
 Unavailable devices return a test skip; an opened device that stalls fails.
 Dummy-driver rejection is a separate synthetic test, not playback evidence.
+An unbound SDL conversion-stream test also generates a 44.1 kHz 1 kHz tone and
+verifies that the 10 kHz logical-rate composition with a 4.41 ratio preserves
+both its approximate one-second duration and its 1 kHz zero-crossing count.
+This proves the adapter's rate composition without making an audibility claim.
 
 On the current development host, SDL 3.4.2 opens and resumes real playback
 drivers but input consumption stalls. Minimal direct SDL probes reproduce the

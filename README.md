@@ -51,9 +51,10 @@ for a portable installation.
   and can be decoded incrementally on a worker. A
   [channel service](docs/STEREO_STREAM_PLAYBACK.md) now handles bounded refill,
   start/stop and pending notifications. Its SDL stereo-output adapter accepts
-  the complete reviewed 100--100,000 Hz control range without pitch clamping.
-  Normal startup does not use it yet; continuous output on a physical device
-  remains unverified.
+  the complete reviewed 100--100,000 Hz control range without pitch clamping;
+  an unbound SDL test verifies its duration and pitch composition. Normal
+  startup does not use it yet; continuous output on a physical device remains
+  unverified.
 - Their mutable sound records now share an application-owned backend with volume
   settings. Typed attachment loading, owner preparation, stop and the verified
   SoundExtend parameter operation are implemented. The complete
