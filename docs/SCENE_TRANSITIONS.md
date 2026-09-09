@@ -46,6 +46,13 @@ request: setup once, then package preparation on update three. It returns a
 checked `StartupSceneLoadPackage` and stops there. It has no scene factory,
 manager-state mutation, lifecycle, renderer, input, or presentation path.
 
+`StartupBootSceneDirectorySource` is the corresponding source-only boundary
+inside the prepared `FF-StartUp.GMS`. It accepts one exact ordinary-window
+owner with the reviewed `ZWINDOW_BootMenu` attachment and parameter, and
+retains that owner's closed hierarchy subtree for the existing construction
+boundary. It does not allocate a window, make a scene live, resolve BootMenu
+event identities, choose an active root, or render a menu.
+
 ## Checked FF-StartUp loading transaction
 
 `StartupSceneLoader` is a disconnected, fail-closed replacement transaction for

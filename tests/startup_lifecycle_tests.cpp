@@ -7,6 +7,7 @@
 #include "off/runtime/startup_active_window_root.hpp"
 #include "off/runtime/startup_boot_menu_admission.hpp"
 #include "off/runtime/startup_boot_scene_construction.hpp"
+#include "off/runtime/startup_boot_scene_directory_source.hpp"
 #include "off/runtime/startup_scene_loader.hpp"
 #include "off/runtime/startup_scene_package_source.hpp"
 #include "off/runtime/startup_window_hierarchy_snapshot.hpp"
@@ -115,6 +116,19 @@ std::vector<std::byte> package_gms_fixture() {
   result.push_back(std::byte{1});
   result.insert(result.end(), payload.begin(), payload.end());
   return result;
+}
+
+std::vector<std::byte> boot_directory_gms_fixture() {
+  auto bytes = package_gms_fixture();
+  constexpr std::size_t payload = 9U;
+  set_u32(bytes, payload + 96U, 0x00100031U);
+  set_u32(bytes, payload + 436U, 460U);
+  set_u32(bytes, payload + 440U, std::bit_cast<std::uint32_t>(1.0F));
+  constexpr char identifier[] = "ZWINDOW_BootMenu";
+  std::copy_n(reinterpret_cast<const std::byte *>(identifier),
+              sizeof(identifier), bytes.begin() +
+                                      static_cast<std::ptrdiff_t>(payload + 460U));
+  return bytes;
 }
 
 std::vector<std::byte> package_support_fixture() {
@@ -1001,6 +1015,51 @@ int main() {
 
   static_assert(
       !std::is_copy_constructible_v<off::runtime::StartupBootControllerToken>);
+  const auto boot_directory_image = off::data::GmsImage::parse(
+      off::data::PackedResource::parse(boot_directory_gms_fixture()));
+  const auto boot_directory_source =
+      off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
+          boot_directory_image);
+  const auto boot_source_scope = boot_directory_source.hierarchy_scope();
+  check(boot_directory_source.proof().complete_directory_mapping &&
+            boot_directory_source.proof().canonical_ordinary_window_source &&
+            boot_directory_source.proof().component_identifier ==
+                "ZWINDOW_BootMenu" &&
+            boot_directory_source.proof().component_parameter == 1.0F &&
+            boot_directory_source.boot_owner_directory_index() == 0U &&
+            boot_source_scope.complete_directory_mapping &&
+            boot_source_scope.root_directory_index == 0U &&
+            boot_source_scope.nodes.size() == 2U,
+        "boot directory source derives only the checked window attachment and "
+        "complete retained GMS hierarchy");
+  rejected = false;
+  try {
+    auto malformed_boot_directory = boot_directory_gms_fixture();
+    set_u32(malformed_boot_directory, 9U + 440U,
+            std::bit_cast<std::uint32_t>(0.0F));
+    static_cast<void>(
+        off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
+            off::data::GmsImage::parse(off::data::PackedResource::parse(
+                std::move(malformed_boot_directory)))));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected,
+        "boot directory source rejects a non-exact BootMenu parameter");
+  rejected = false;
+  try {
+    auto malformed_boot_directory = boot_directory_gms_fixture();
+    set_u32(malformed_boot_directory, 9U + 96U, 0x0010002eU);
+    static_cast<void>(
+        off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
+            off::data::GmsImage::parse(off::data::PackedResource::parse(
+                std::move(malformed_boot_directory)))));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected,
+        "boot directory source rejects a BootMenu attachment on a non-window "
+        "source");
   const auto boot_package =
       std::make_shared<const off::runtime::StartupSceneLoadPackage>(package());
   const auto boot_scene = off::runtime::StartupBootSceneLease::live(lease(81U));
