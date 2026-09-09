@@ -2876,6 +2876,53 @@ void IntroRuntime::apply_supported_external_cut_commands_deferred_reader(
   catch (...) { external_cut_commands_reader_state_.reset(); throw; }
 }
 
+void IntroRuntime::apply_supported_first_cut_fade_picture_deferred_reader(
+    const IntroDeferredReaderWork& work) {
+  if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete ||
+      !work.processed || work.source_directory_index >= resources_.sources().directory().size() ||
+      std::ranges::find_if(deferred_reader_work_, [&](const auto &candidate) {
+        return std::addressof(candidate) == std::addressof(work);
+      }) == deferred_reader_work_.end())
+    throw std::runtime_error("Fade picture reader requires live deferred owner work");
+  const auto& sources = resources_.sources();
+  bool first_cut_target = false;
+  for (const auto& command : resources_.first_cut().commands) {
+    const auto source = sources.local_source_for_authored_reference(command.target_reference);
+    if (source && *source == work.source_directory_index) first_cut_target = true;
+  }
+  if (!first_cut_target || fade_picture_reader_states_.contains(work.source_directory_index))
+    throw std::runtime_error("Fade picture reader requires an unconsumed first-cut target");
+  const auto& source = sources.directory().at(work.source_directory_index);
+  const auto attachments = owner_components(source_handle(work.source_directory_index));
+  if (source.source_type != 0x00200046U || source.deferred_source_offset != work.source_offset ||
+      directory_resource_mapping_.at(work.source_directory_index) != work.resource ||
+      !associated_resource_owner(work.resource) ||
+      *associated_resource_owner(work.resource) != source_handle(work.source_directory_index) ||
+      source.attachments.size() != 1U || attachments.size() != 1U ||
+      source.attachments[0].parameter != 0.0F ||
+      sources.attachment_identifier(work.source_directory_index, 0) != "ZWINPIC_FadeToBlack")
+    throw std::runtime_error("Fade picture reader source shape is unsupported");
+  const auto& component = components_.at(attachments[0]);
+  if (!component.constructed() || component.removed() ||
+      component.source().factory_name != "ZWINPIC_FadeToBlack" ||
+      component.state().attached_owner != source_handle(work.source_directory_index).value)
+    throw std::runtime_error("Fade picture reader component is unavailable");
+  const auto authored = sources.intro_fade_picture_source(work.source_directory_index);
+  const auto picture = std::ranges::find_if(resources_.pictures(), [&](const auto& candidate) {
+    return candidate.directory_index == work.source_directory_index &&
+           candidate.source.picture_asset_reference == authored.picture_asset_reference;
+  });
+  if (picture == resources_.pictures().end())
+    throw std::runtime_error("Fade picture reader has no retained prepared picture");
+  static_cast<void>(picture_for_source(work.source_directory_index));
+  const auto [entry, inserted] = fade_picture_reader_states_.emplace(work.source_directory_index,
+      IntroFadePictureReaderState{source_handle(work.source_directory_index), work.resource,
+          attachments[0], authored, authored.picture_asset_reference});
+  if (!inserted) throw std::runtime_error("Fade picture reader cannot run twice");
+  try { record_supported_reader_admission(work); }
+  catch (...) { fade_picture_reader_states_.erase(entry); throw; }
+}
+
 IntroRuntimeHandle IntroRuntime::source_handle(std::size_t source) const {
   if (source >= resources_.sources().directory().size()) throw std::runtime_error("intro source index is out of range");
   return {owner_base_+static_cast<std::uint64_t>(source)+1};
