@@ -7,10 +7,14 @@ BootMenu construction call sequence and returns a trace.
 
 Every generated runtime value is explicitly named `synthetic_*`. The trace
 also records the BootMenu owner's GMS directory ordinal, but that ordinal is
-source evidence, not a runtime or allocator identity. The instrument is useful
-for designing capture comparisons against the original executable: a future
-observation can establish whether a real allocator or registry follows the
-same call order and which values are externally visible.
+source evidence, not a runtime or allocator identity. The result includes a
+content-free hierarchy summary: retained-node count, owner depth, owner direct
+child count, maximum depth, and a deterministic topology digest. The digest
+uses traversal-local ordinals only; it contains no directory indexes,
+identifiers, source types, strings, archive bytes, or payload hashes. The
+instrument is useful for designing capture comparisons against the original
+executable: a future observation can establish whether a real allocator or
+registry follows the same call order and hierarchy shape.
 
 The probe has no startup-loader integration and returns no controller token,
 scene, registry, allocator, input target, renderer state, or transition. It
@@ -29,7 +33,8 @@ Pass `--data PATH` when the installation is not in the default location:
 ```
 
 The command prints only a structural trace: the checked GMS BootMenu owner
-directory ordinal, the call count, and each call's ordinal. It never prints
-synthetic IDs, archive contents, strings from game data, or an allocator
-identity. Runtime flags such as `--mode`, `--locale`, `--frame-limit`,
+directory ordinal, the content-free hierarchy summary, the call count, and
+each call's ordinal. It never prints synthetic IDs, archive contents, strings
+from game data, source types, payload hashes, or an allocator identity.
+Runtime flags such as `--mode`, `--locale`, `--frame-limit`,
 `--screenshot`, and `--diagnostic-scene` are rejected for this diagnostic.

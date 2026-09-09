@@ -447,8 +447,11 @@ int main() {
              .synthetic_component_identity = 9003U});
     check(retail_probe.trace().size() == 5U &&
               retail_probe.source_boot_owner_directory_ordinal() ==
-                  retail_boot_directory.boot_owner_directory_index(),
-          "retail startup package supports a non-live synthetic BootMenu probe");
+                  retail_boot_directory.boot_owner_directory_index() &&
+              retail_probe.hierarchy_summary().retained_node_count > 0U &&
+              retail_probe.hierarchy_summary().topology_digest != 0U,
+          "retail startup package supports a non-live synthetic BootMenu probe "
+          "with a content-free hierarchy summary");
   }
 
   const auto startloader_route_root =
@@ -1252,9 +1255,22 @@ int main() {
           {.synthetic_factory_generation = 701U,
            .synthetic_owner_identity = 702U,
            .synthetic_component_identity = 703U});
+  const auto repeated_probe_result =
+      off::runtime::SyntheticStartupBootSceneProbeHost::observe(
+          source_backed_boot_package, source_backed_boot_directory,
+          {.synthetic_factory_generation = 704U,
+           .synthetic_owner_identity = 705U,
+           .synthetic_component_identity = 706U});
   check(probe_result.source_boot_owner_directory_ordinal() ==
             source_backed_boot_directory.boot_owner_directory_index() &&
             probe_result.synthetic_ids().synthetic_owner_identity == 702U &&
+            probe_result.hierarchy_summary().retained_node_count == 2U &&
+            probe_result.hierarchy_summary().boot_owner_depth == 0U &&
+            probe_result.hierarchy_summary().boot_owner_direct_child_count == 1U &&
+            probe_result.hierarchy_summary().maximum_depth == 1U &&
+            probe_result.hierarchy_summary().topology_digest != 0U &&
+            probe_result.hierarchy_summary().topology_digest ==
+                repeated_probe_result.hierarchy_summary().topology_digest &&
             probe_result.trace().size() == 5U &&
             probe_result.trace()[0].call ==
                 off::runtime::SyntheticStartupBootSceneProbeCall::registry_live &&
@@ -1264,8 +1280,9 @@ int main() {
                 off::runtime::SyntheticStartupBootSceneProbeCall::live_boot_menu_component &&
             probe_result.trace()[2].source_boot_owner_directory_ordinal ==
                 source_backed_boot_directory.boot_owner_directory_index(),
-        "synthetic probe records source ordinal and explicitly synthetic "
-        "construction calls without producing a startup scene");
+        "synthetic probe records a deterministic content-free hierarchy "
+        "summary, source ordinal, and explicitly synthetic construction calls "
+        "without producing a startup scene");
   rejected = false;
   try {
     static_cast<void>(off::runtime::SyntheticStartupBootSceneProbeHost::observe(

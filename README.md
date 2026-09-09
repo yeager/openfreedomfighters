@@ -161,7 +161,8 @@ F10 toggles settings. Close the window to exit. For development:
   gameplay, original camera behavior, or a faithful level renderer.
 - `--probe-startup-boot` runs an opt-in, no-window structural diagnostic for
   the checked `FF-StartUp` BootMenu source. It prints only call order and GMS
-  directory ordinals; it creates no scene or runtime service. See
+  directory ordinals plus a content-free hierarchy fingerprint; it creates no
+  scene or runtime service. See
   [STARTUP_BOOT_SCENE_PROBE.md](docs/STARTUP_BOOT_SCENE_PROBE.md).
 - `--screenshot /path/outside/repo/frame.bmp` saves a GPU readback. The file must
   not already exist. With a frame limit it captures the last frame; otherwise

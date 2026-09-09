@@ -60,6 +60,16 @@ void write_startup_boot_probe_trace(
   output << "Startup BootMenu probe (synthetic diagnostic; no scene created)\n"
          << "source-boot-owner-directory-ordinal="
          << result.source_boot_owner_directory_ordinal() << '\n'
+         << "source-hierarchy-retained-node-count="
+         << result.hierarchy_summary().retained_node_count << '\n'
+         << "source-boot-owner-depth="
+         << result.hierarchy_summary().boot_owner_depth << '\n'
+         << "source-boot-owner-direct-child-count="
+         << result.hierarchy_summary().boot_owner_direct_child_count << '\n'
+         << "source-hierarchy-maximum-depth="
+         << result.hierarchy_summary().maximum_depth << '\n'
+         << "source-hierarchy-topology-digest="
+         << result.hierarchy_summary().topology_digest << '\n'
          << "trace-call-count=" << result.trace().size() << '\n';
   for (std::size_t index = 0; index < result.trace().size(); ++index) {
     const auto &entry = result.trace()[index];
