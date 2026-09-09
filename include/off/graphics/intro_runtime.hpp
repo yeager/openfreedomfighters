@@ -308,6 +308,25 @@ struct IntroLifecyclePreflightReport {
   IntroLifecyclePreflightFailure failure{IntroLifecyclePreflightFailure::unsupported};
   [[nodiscard]] bool ready() const noexcept { return failure==IntroLifecyclePreflightFailure::none; }
 };
+enum class IntroDeferredReaderFamily : std::uint8_t {
+  unclassified, sound_owner, window_owner, movie_controller,
+  first_cut_sequence, first_cut_list, external_cut_commands, first_cut_fade_picture,
+};
+enum class IntroDeferredReaderImplementationState : std::uint8_t {
+  unimplemented, implemented_not_applied, applied,
+};
+struct IntroDeferredReaderCoverageEntry {
+  std::uint32_t source_type{};
+  IntroDeferredReaderFamily family{IntroDeferredReaderFamily::unclassified};
+  IntroDeferredReaderImplementationState state{
+      IntroDeferredReaderImplementationState::unimplemented};
+  std::size_t count{};
+};
+struct IntroDeferredReaderCoverageInventory {
+  IntroReaderBracketStage stage{IntroReaderBracketStage::not_started};
+  std::size_t total_discovered{}, total_supported{}, total_applied{};
+  std::vector<IntroDeferredReaderCoverageEntry> entries;
+};
 // Live values are owned by the real lifecycle caller. This adapter must never
 // derive them from archived source flags or prepared picture positions.
 struct FirstCutLegalPictureActivationPrerequisites {
@@ -702,6 +721,10 @@ public:
   // concrete coverage is intentionally incomplete, so ordinary startup must
   // remain outside this boundary until typed registrations are installed.
   [[nodiscard]] IntroLifecyclePreflightReport preflight_global_lifecycle() const;
+  // Aggregate-only recovery inventory. It exposes neither source identities nor
+  // payloads, and classifies a family only through an existing reviewed reader
+  // predicate; equal source types are not treated as interchangeable.
+  [[nodiscard]] IntroDeferredReaderCoverageInventory reader_coverage_inventory() const;
   // Explicit first-cut activation bridge. It is disconnected from normal
   // startup and does not create a view, submit a draw or dispatch cut events.
   [[nodiscard]] FirstCutLegalPictureActivationResult activate_first_cut_legal_picture(

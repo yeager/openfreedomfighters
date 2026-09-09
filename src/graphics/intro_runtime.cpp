@@ -1855,6 +1855,61 @@ IntroLifecyclePreflightReport IntroRuntime::preflight_global_lifecycle() const {
   return report;
 }
 
+IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() const {
+  IntroDeferredReaderCoverageInventory result{.stage=reader_bracket_stage_,
+                                              .entries={}};
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete)
+    return result;
+  const auto& directory=resources_.sources().directory();
+  const auto family_for=[&](const IntroDeferredReaderWork& work) {
+    if(work.source_directory_index==resources_.controller_index())
+      return IntroDeferredReaderFamily::movie_controller;
+    if(work.source_directory_index==resources_.member_index())
+      return IntroDeferredReaderFamily::first_cut_sequence;
+    if(work.source_directory_index==resources_.first_cut_index())
+      return IntroDeferredReaderFamily::first_cut_list;
+    if(work.source_directory_index==resources_.window_index())
+      return IntroDeferredReaderFamily::window_owner;
+    if(work.source_directory_index==466U)
+      return IntroDeferredReaderFamily::external_cut_commands;
+    if(work.source_directory_index<directory.size() &&
+       directory[work.source_directory_index].source_type==0x00200012U)
+      return IntroDeferredReaderFamily::sound_owner;
+    for(const auto& command:resources_.first_cut().commands) {
+      const auto target=resources_.sources().local_source_for_authored_reference(command.target_reference);
+      if(target && *target==work.source_directory_index)
+        return IntroDeferredReaderFamily::first_cut_fade_picture;
+    }
+    return IntroDeferredReaderFamily::unclassified;
+  };
+  for(const auto& work:deferred_reader_work_) {
+    if(work.source_directory_index>=directory.size()) continue;
+    const auto family=family_for(work);
+    const IntroReaderAdmissionIdentity identity{work.resource.value,work.source_offset,
+                                                 work.source_directory_index};
+    const bool applied=std::ranges::find(supported_reader_admissions_,identity)!=
+                       supported_reader_admissions_.end();
+    const auto state=applied ? IntroDeferredReaderImplementationState::applied :
+        family==IntroDeferredReaderFamily::unclassified ?
+          IntroDeferredReaderImplementationState::unimplemented :
+          IntroDeferredReaderImplementationState::implemented_not_applied;
+    ++result.total_discovered;
+    if(family!=IntroDeferredReaderFamily::unclassified) ++result.total_supported;
+    if(applied) ++result.total_applied;
+    const auto found=std::ranges::find_if(result.entries,[&](const auto& entry) {
+      return entry.source_type==directory[work.source_directory_index].source_type &&
+          entry.family==family && entry.state==state;
+    });
+    if(found==result.entries.end())
+      result.entries.push_back({directory[work.source_directory_index].source_type,family,state,1U});
+    else ++found->count;
+  }
+  std::ranges::sort(result.entries,{},[](const auto& entry) {
+    return std::tuple{entry.source_type,entry.family,entry.state};
+  });
+  return result;
+}
+
 void IntroRuntime::record_supported_reader_admission(const IntroDeferredReaderWork& work) {
   if(work.source_directory_index>=directory_resource_mapping_.size() ||
       directory_resource_mapping_.at(work.source_directory_index)!=work.resource ||

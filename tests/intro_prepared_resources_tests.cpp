@@ -1030,6 +1030,7 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
           },
           [&]{reader_events.push_back("end");}};
       host.run_postconstruction_reader_bracket(0x9aU,reader_services);
+        const auto coverage=host.reader_coverage_inventory();
         check(host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete &&
               host.reader_bracket_retained_saved_value()==0x9aU && reader_events.size()==4+420*3 &&
               prepared_reader_count==420 && translated_reference_list_count==2 &&
@@ -1037,6 +1038,12 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               reader_events[3]=="prepare" && reader_events[4]=="owner" && reader_events[5]=="component" &&
               reader_events.back()=="end" && host.deferred_reader_work().size()==420,
               "ordinary reader bracket retains two external calls and forward owner-before-component boundaries without consuming work");
+        check(coverage.stage==off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete &&
+                  coverage.total_discovered==420 &&
+                  coverage.total_supported>=coverage.total_applied &&
+                  coverage.total_applied==host.preflight_global_lifecycle().covered_readers &&
+                  !coverage.entries.empty(),
+              "reader coverage inventory aggregates only reviewed applied boundaries");
         const auto& window=host.window_for_owner(host.source_handle(host.resources().window_index()));
         const auto& camera=host.camera_for_owner(host.source_handle(host.resources().camera_index()));
         const auto window_reference_resource=[&host](std::uint32_t reference)
