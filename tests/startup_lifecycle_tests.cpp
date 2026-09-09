@@ -1687,5 +1687,169 @@ int main() {
         "boot-menu initialization does not expose partial state when retained "
         "routing fails");
 
+  // These focused checks model the independently recovered call boundaries:
+  // first identity storage precedes the common reader; common initialization
+  // precedes the second resolve; and the success latch follows retained routing.
+  const auto new_boot_token = [&] {
+    return boot_construction.construct(boot_package, boot_scene, boot_directory,
+                                       20U, boot_construction_services);
+  };
+
+  off::runtime::StartupBootMenuAdmission store_before_common;
+  bool reader_id_stored_before_common{};
+  auto store_reader_services = reader_services;
+  store_reader_services.resolve_identity =
+      [](std::uint64_t key) -> std::optional<std::uint16_t> {
+    return key == 201U ? std::optional<std::uint16_t>{41U} : std::nullopt;
+  };
+  store_reader_services.common_component_reader =
+      [&](std::uint64_t, std::uint64_t) {
+        reader_id_stored_before_common = store_before_common.reader_id() == 41U;
+        return true;
+      };
+  auto store_reader_token = store_before_common.read_component(
+      new_boot_token(), 201U, store_reader_services);
+  check(store_reader_token.valid() && reader_id_stored_before_common,
+        "boot-menu reader stores its first identity before the common reader");
+
+  off::runtime::StartupBootMenuAdmission equality_allowed;
+  auto equality_reader_services = reader_services;
+  equality_reader_services.resolve_identity =
+      [](std::uint64_t key) -> std::optional<std::uint16_t> {
+    return key == 202U ? std::optional<std::uint16_t>{52U} : std::nullopt;
+  };
+  auto equality_reader_token = equality_allowed.read_component(
+      new_boot_token(), 202U, equality_reader_services);
+  auto equality_initialization_services = initialization_services;
+  equality_initialization_services.resolve_identity =
+      [](std::uint64_t key) -> std::optional<std::uint16_t> {
+    return key == 203U ? std::optional<std::uint16_t>{52U} : std::nullopt;
+  };
+  equality_initialization_services.route_retained_object =
+      [](std::uint64_t, std::uint64_t, std::uint16_t route) {
+        return route == 52U;
+      };
+  equality_allowed.initialize_component(std::move(equality_reader_token), 203U,
+                                        equality_initialization_services);
+  check(equality_allowed.initialized() && equality_allowed.reader_id() == 52U &&
+            equality_allowed.routing_id() == 52U,
+        "boot-menu permits equal opaque reader and routing identities");
+
+  off::runtime::StartupBootMenuAdmission latch_after_route;
+  auto latch_reader_services = reader_services;
+  latch_reader_services.resolve_identity =
+      [](std::uint64_t key) -> std::optional<std::uint16_t> {
+    return key == 204U ? std::optional<std::uint16_t>{61U} : std::nullopt;
+  };
+  auto latch_reader_token = latch_after_route.read_component(
+      new_boot_token(), 204U, latch_reader_services);
+  bool unlatch_seen_during_route{};
+  auto latch_initialization_services = initialization_services;
+  latch_initialization_services.resolve_identity =
+      [](std::uint64_t key) -> std::optional<std::uint16_t> {
+    return key == 205U ? std::optional<std::uint16_t>{62U} : std::nullopt;
+  };
+  latch_initialization_services.route_retained_object =
+      [&](std::uint64_t, std::uint64_t, std::uint16_t route) {
+        unlatch_seen_during_route = route == 62U && !latch_after_route.initialized() &&
+                                    latch_after_route.routing_id() == 0U;
+        return true;
+      };
+  latch_after_route.initialize_component(std::move(latch_reader_token), 205U,
+                                         latch_initialization_services);
+  check(unlatch_seen_during_route && latch_after_route.initialized() &&
+            latch_after_route.routing_id() == 62U,
+        "boot-menu success latch is set only after retained routing succeeds");
+
+  off::runtime::StartupBootMenuAdmission reader_failure_order;
+  std::vector<std::string> reader_failure_order_calls;
+  auto failed_first_reader_services = reader_services;
+  failed_first_reader_services.resolve_identity =
+      [&](std::uint64_t) -> std::optional<std::uint16_t> {
+    reader_failure_order_calls.push_back("first-resolve");
+    return std::nullopt;
+  };
+  failed_first_reader_services.common_component_reader =
+      [&](std::uint64_t, std::uint64_t) {
+        reader_failure_order_calls.push_back("common-reader");
+        return true;
+      };
+  rejected = false;
+  try {
+    static_cast<void>(reader_failure_order.read_component(
+        new_boot_token(), 206U, failed_first_reader_services));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected && reader_failure_order.failed() &&
+            reader_failure_order_calls == std::vector<std::string>{"first-resolve"},
+        "boot-menu reader does not enter its common reader after first resolve failure");
+
+  off::runtime::StartupBootMenuAdmission common_initialization_failure;
+  auto common_failure_reader = common_initialization_failure.read_component(
+      new_boot_token(), 101U, reader_services);
+  std::vector<std::string> common_initialization_failure_calls;
+  auto failed_common_initialization_services = initialization_services;
+  failed_common_initialization_services.common_window_initialization =
+      [&](std::uint64_t, std::uint64_t) {
+        common_initialization_failure_calls.push_back("common-initialization");
+        return false;
+      };
+  failed_common_initialization_services.resolve_identity =
+      [&](std::uint64_t) -> std::optional<std::uint16_t> {
+    common_initialization_failure_calls.push_back("second-resolve");
+    return std::optional<std::uint16_t>{71U};
+  };
+  failed_common_initialization_services.route_retained_object =
+      [&](std::uint64_t, std::uint64_t, std::uint16_t) {
+        common_initialization_failure_calls.push_back("retained-route");
+        return true;
+      };
+  rejected = false;
+  try {
+    common_initialization_failure.initialize_component(
+        std::move(common_failure_reader), 207U,
+        failed_common_initialization_services);
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected && common_initialization_failure.failed() &&
+            common_initialization_failure_calls ==
+                std::vector<std::string>{"common-initialization"},
+        "boot-menu initialization stops before second resolve when common initialization fails");
+
+  off::runtime::StartupBootMenuAdmission second_resolve_failure;
+  auto second_resolve_reader = second_resolve_failure.read_component(
+      new_boot_token(), 101U, reader_services);
+  std::vector<std::string> second_resolve_failure_calls;
+  auto failed_second_resolve_services = initialization_services;
+  failed_second_resolve_services.common_window_initialization =
+      [&](std::uint64_t, std::uint64_t) {
+        second_resolve_failure_calls.push_back("common-initialization");
+        return true;
+      };
+  failed_second_resolve_services.resolve_identity =
+      [&](std::uint64_t) -> std::optional<std::uint16_t> {
+    second_resolve_failure_calls.push_back("second-resolve");
+    return std::nullopt;
+  };
+  failed_second_resolve_services.route_retained_object =
+      [&](std::uint64_t, std::uint64_t, std::uint16_t) {
+        second_resolve_failure_calls.push_back("retained-route");
+        return true;
+      };
+  rejected = false;
+  try {
+    second_resolve_failure.initialize_component(
+        std::move(second_resolve_reader), 208U, failed_second_resolve_services);
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected && second_resolve_failure.failed() &&
+            second_resolve_failure_calls == std::vector<std::string>{
+                                                 "common-initialization",
+                                                 "second-resolve"},
+        "boot-menu initialization does not route after second resolve failure");
+
   std::cout << "startup lifecycle tests passed\n";
 }
