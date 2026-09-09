@@ -158,8 +158,7 @@ void release_overlay(SDL_GPUDevice *device, GpuOverlay &overlay) {
   overlay = {};
 }
 
-void release_startup_images(SDL_GPUDevice *device,
-                            GpuStartupImages &startup) {
+void release_startup_images(SDL_GPUDevice *device, GpuStartupImages &startup) {
   for (const auto &image : startup.images)
     if (image.texture != nullptr)
       SDL_ReleaseGPUTexture(device, image.texture);
@@ -810,10 +809,10 @@ upload_overlay_retail_textures(SDL_GPUDevice *device,
   return uploaded;
 }
 
-template<class Images>
-[[nodiscard]] bool upload_picture_images(
-    SDL_GPUDevice *device, const Images &images, std::size_t byte_budget,
-    GpuStartupImages &result) {
+template <class Images>
+[[nodiscard]] bool
+upload_picture_images(SDL_GPUDevice *device, const Images &images,
+                      std::size_t byte_budget, GpuStartupImages &result) {
   if (images.empty())
     return false;
 
@@ -842,8 +841,7 @@ template<class Images>
     if (width == 0 || height == 0 || byte_count == 0 ||
         byte_count > std::numeric_limits<Uint32>::max() ||
         byte_count > byte_budget ||
-        aggregate_bytes > byte_budget -
-                              static_cast<std::size_t>(byte_count) ||
+        aggregate_bytes > byte_budget - static_cast<std::size_t>(byte_count) ||
         image.mip_zero.pixels.size() != byte_count) {
       release_transfers();
       return false;
@@ -866,8 +864,8 @@ template<class Images>
     }
     result.images.push_back(
         {image.catalog_image_index, image.texture_id, texture});
-    auto *transfer = make_upload_transfer(
-        device, image.mip_zero.pixels.data(), static_cast<Uint32>(byte_count));
+    auto *transfer = make_upload_transfer(device, image.mip_zero.pixels.data(),
+                                          static_cast<Uint32>(byte_count));
     if (transfer == nullptr) {
       release_transfers();
       return false;
@@ -1087,15 +1085,16 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     const graphics::StartupGraphicsAsset &startup_graphics,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,
-                    graphics::IntroRuntime *intro,
-                    std::size_t frame_limit, bool show_graphics_menu,
+                    graphics::IntroRuntime *intro, std::size_t frame_limit,
+                    bool show_graphics_menu,
                     const std::filesystem::path &screenshot_path,
                     std::string_view explicit_locale) {
   if (ui_fonts.fonts.empty())
     return failure("retail UI font set is empty");
   if ((scene != nullptr) == (intro != nullptr))
     return {.success = false,
-            .message = "Select exactly one retained intro host or diagnostic scene"};
+            .message =
+                "Select exactly one retained intro host or diagnostic scene"};
   try {
     if (scene)
       graphics::validate_scene_gpu_plan(*scene);
@@ -1112,7 +1111,11 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   const GamepadSession gamepad_session;
   // Always read the host language. The catalog uses it whenever the caller
   // has not deliberately supplied an explicit preference.
-  const std::string platform_locale = preferred_system_locale();
+  const auto platform_locale_storage = preferred_system_locales();
+  std::vector<std::string_view> platform_locales;
+  platform_locales.reserve(platform_locale_storage.size());
+  for (const auto &locale : platform_locale_storage)
+    platform_locales.push_back(locale);
   // SDL's software window surface and a 3D swapchain cannot coexist. Release
   // the splash surface on its creator thread before claiming this SAME window.
   if (SDL_WindowHasSurface(window) && !SDL_DestroyWindowSurface(window))
@@ -1158,9 +1161,11 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     return result;
   }
   GpuStartupImages gpu_startup;
-  if (startup_graphics.images().size() != graphics::startup_graphics_image_count ||
+  if (startup_graphics.images().size() !=
+          graphics::startup_graphics_image_count ||
       !upload_picture_images(device, startup_graphics.images(),
-          graphics::startup_graphics_decoded_byte_budget, gpu_startup)) {
+                             graphics::startup_graphics_decoded_byte_budget,
+                             gpu_startup)) {
     const auto result = failure("startup graphics image GPU upload failed");
     release_startup_images(device, gpu_startup);
     release_overlay(device, overlay);
@@ -1176,9 +1181,12 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   std::unique_ptr<SdlIntroRenderer> gpu_intro;
   try {
     if (intro)
-      gpu_intro = std::make_unique<SdlIntroRenderer>(device, intro->resources().images());
-  } catch (const std::exception& error) {
-    const RuntimeResult result{false, std::string("intro renderer initialization failed: ") + error.what()};
+      gpu_intro = std::make_unique<SdlIntroRenderer>(
+          device, intro->resources().images());
+  } catch (const std::exception &error) {
+    const RuntimeResult result{
+        false,
+        std::string("intro renderer initialization failed: ") + error.what()};
     release_startup_images(device, gpu_startup);
     release_overlay(device, overlay);
     release_scene(device, gpu);
@@ -1198,14 +1206,15 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   const auto initial_resolution =
       settings::resolve_graphics_settings(initial, capabilities);
   const auto initial_setup = settings::initialize_graphics_settings(
-      initial_resolution, [&](const settings::EffectiveGraphicsSettings &value) {
+      initial_resolution,
+      [&](const settings::EffectiveGraphicsSettings &value) {
         return apply_graphics(device, window, value);
       });
   if (initial_setup != settings::InitialGraphicsSetup::ready) {
-    const auto result = failure(initial_setup ==
-                                        settings::InitialGraphicsSetup::apply_failed
-                                    ? "initial graphics configuration failed"
-                                    : "initial graphics configuration is invalid");
+    const auto result =
+        failure(initial_setup == settings::InitialGraphicsSetup::apply_failed
+                    ? "initial graphics configuration failed"
+                    : "initial graphics configuration is invalid");
     gpu_intro.reset();
     release_startup_images(device, gpu_startup);
     release_overlay(device, overlay);
@@ -1280,18 +1289,20 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
           const auto point = ui::map_graphics_menu_pointer_to_pixels(
               event.button.x, event.button.y,
               {static_cast<std::uint32_t>(logical_width),
-               static_cast<std::uint32_t>(logical_height)}, pixels);
+               static_cast<std::uint32_t>(logical_height)},
+              pixels);
           if (point) {
             effect = ui::dispatch_graphics_menu_pointer(
-                menu, pixels, (*point)[0], (*point)[1], ui::GraphicsClock::now());
+                menu, pixels, (*point)[0], (*point)[1],
+                ui::GraphicsClock::now());
             pointer_dispatched = true;
           }
         }
       }
       if (!expired && translated_key) {
         const auto key = *translated_key;
-        if (menu.phase() == ui::GraphicsMenuPhase::confirming &&
-            pressed && !repeated &&
+        if (menu.phase() == ui::GraphicsMenuPhase::confirming && pressed &&
+            !repeated &&
             (key == ui::GraphicsMenuKey::enter ||
              key == ui::GraphicsMenuKey::space)) {
           effect = menu.confirm();
@@ -1418,7 +1429,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     }
     const auto draw_list = ui::build_graphics_menu_draw_list(
         menu, {swapchain_width, swapchain_height}, ui::GraphicsClock::now(),
-        1.0F, explicit_locale, platform_locale);
+        1.0F, explicit_locale, platform_locales);
     const auto overlay_batch =
         draw_list.status == ui::UiBuildStatus::ok
             ? build_overlay_batch(draw_list, overlay.font)
@@ -1459,8 +1470,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
           .stencil_load_op = SDL_GPU_LOADOP_DONT_CARE,
           .stencil_store_op = SDL_GPU_STOREOP_DONT_CARE,
           .cycle = true};
-      SDL_GPURenderPass *pass =
-          SDL_BeginGPURenderPass(command, &target, 1, scene ? &depth_target : nullptr);
+      SDL_GPURenderPass *pass = SDL_BeginGPURenderPass(
+          command, &target, 1, scene ? &depth_target : nullptr);
       if (pass == nullptr) {
         result = failure("SDL GPU render-pass creation failed");
         SDL_SubmitGPUCommandBuffer(command);
@@ -1700,7 +1711,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   SDL_WaitForGPUIdle(device);
   if (result.success && intro)
     result.message += " (" + std::to_string(gpu_intro->image_count()) +
-        " source-backed intro images uploaded; automatic intro playback pending)";
+                      " source-backed intro images uploaded; automatic intro "
+                      "playback pending)";
   gpu_intro.reset();
   release_overlay(device, overlay);
   release_startup_images(device, gpu_startup);

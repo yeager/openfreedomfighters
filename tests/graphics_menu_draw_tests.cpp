@@ -92,6 +92,19 @@ int main() {
             !has_text(platform_swedish, "Back") && has_text(reference, "Apply"),
         "unsupported explicit locale falls through to platform then English "
         "default");
+  constexpr std::array<std::string_view, 2> ordered_platform_locales{
+      {"xx-XX", "sv-SE"}};
+  const auto ordered_platform_swedish = off::ui::build_graphics_menu_draw_list(
+      menu, {640, 480}, now, 1.0F, "", ordered_platform_locales);
+  check(has_text(ordered_platform_swedish, "GRAFIKINSTÄLLNINGAR") &&
+            has_text(ordered_platform_swedish, "Tillämpa"),
+        "F10 uses a supported secondary system locale when the primary is "
+        "unsupported");
+  const auto explicit_german = off::ui::build_graphics_menu_draw_list(
+      menu, {640, 480}, now, 1.0F, "de-DE", ordered_platform_locales);
+  check(has_text(explicit_german, "GRAFIKEINSTELLUNGEN") &&
+            !has_text(explicit_german, "GRAFIKINSTÄLLNINGAR"),
+        "an explicit F10 locale override wins over system preferences");
   check(reference.rectangles.back().layer == off::ui::UiLayer::focus &&
             near(reference.rectangles.back().bounds.x, 44.0F) &&
             near(reference.rectangles.back().bounds.y, 183.0F) &&
@@ -145,6 +158,9 @@ int main() {
   static_cast<void>(menu.acknowledge_apply(true, now));
   const auto confirmation = off::ui::build_graphics_menu_draw_list(
       menu, {1280, 720}, now + std::chrono::milliseconds{1});
+  const auto localized_confirmation = off::ui::build_graphics_menu_draw_list(
+      menu, {1280, 720}, now + std::chrono::milliseconds{1}, 1.0F, "",
+      ordered_platform_locales);
   check(confirmation.hit_targets.size() == 2 &&
             has_text(confirmation, "Reverting in 15 seconds") &&
             off::ui::hit_test(confirmation,
@@ -152,6 +168,8 @@ int main() {
                               confirmation.hit_targets[0].bounds.y + 1) ==
                 off::ui::UiControl::keep,
         "confirmation replaces editable controls with Keep/Revert");
+  check(has_text(localized_confirmation, "Återställer om 15 sekunder"),
+        "confirmation countdown uses the ordered system locale list");
   const auto expired = off::ui::build_graphics_menu_draw_list(
       menu, {1280, 720}, now + std::chrono::seconds{15});
   check(has_text(expired, "Reverting in 0 seconds") &&
