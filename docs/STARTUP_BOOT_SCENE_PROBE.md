@@ -16,3 +16,20 @@ The probe has no startup-loader integration and returns no controller token,
 scene, registry, allocator, input target, renderer state, or transition. It
 must not be included by normal startup code. It cannot establish allocator
 pool size, object lifetime, destruction behavior, or real object identities.
+
+## Command-line diagnostic
+
+`openfreedomfighters --probe-startup-boot` runs the instrument against a
+hash-verified owned installation. It is opt-in and does not initialize SDL,
+open a window, start normal loading, construct a scene, or write game data.
+Pass `--data PATH` when the installation is not in the default location:
+
+```sh
+./build/openfreedomfighters --probe-startup-boot --data /path/to/FreedomFighters
+```
+
+The command prints only a structural trace: the checked GMS BootMenu owner
+directory ordinal, the call count, and each call's ordinal. It never prints
+synthetic IDs, archive contents, strings from game data, or an allocator
+identity. Runtime flags such as `--mode`, `--locale`, `--frame-limit`,
+`--screenshot`, and `--diagnostic-scene` are rejected for this diagnostic.

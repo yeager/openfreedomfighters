@@ -6,6 +6,9 @@
 #include "off/mode.hpp"
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/platform/sdl_startup.hpp"
+#include "off/runtime/startup_boot_scene_directory_source.hpp"
+#include "off/runtime/startup_boot_scene_probe_host.hpp"
+#include "off/runtime/startup_scene_package_source.hpp"
 #include "off/ui/retail_ui_fonts.hpp"
 #include "off/ui/retail_ui_textures.hpp"
 
@@ -27,7 +30,44 @@ void usage(std::ostream &output) {
   output << "Usage: openfreedomfighters [--data PATH] [--mode original|modern] "
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] "
-            "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]]\n";
+            "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] "
+            "[--probe-startup-boot]\n";
+}
+
+[[nodiscard]] std::string_view startup_boot_probe_call_name(
+    off::runtime::SyntheticStartupBootSceneProbeCall call) noexcept {
+  using Call = off::runtime::SyntheticStartupBootSceneProbeCall;
+  switch (call) {
+  case Call::registry_live:
+    return "registry-live";
+  case Call::allocate_ordinary_window:
+    return "allocate-ordinary-window";
+  case Call::canonical_live_window_owner:
+    return "canonical-live-window-owner";
+  case Call::attach_boot_menu_component:
+    return "attach-boot-menu-component";
+  case Call::live_boot_menu_component:
+    return "live-boot-menu-component";
+  }
+  return "unknown";
+}
+
+void write_startup_boot_probe_trace(
+    std::ostream &output,
+    const off::runtime::SyntheticStartupBootSceneProbeResult &result) {
+  // Do not emit synthetic IDs or any game-data payload. The output is limited
+  // to stable diagnostic structure that can be compared with future captures.
+  output << "Startup BootMenu probe (synthetic diagnostic; no scene created)\n"
+         << "source-boot-owner-directory-ordinal="
+         << result.source_boot_owner_directory_ordinal() << '\n'
+         << "trace-call-count=" << result.trace().size() << '\n';
+  for (std::size_t index = 0; index < result.trace().size(); ++index) {
+    const auto &entry = result.trace()[index];
+    output << "trace[" << index << "]="
+           << startup_boot_probe_call_name(entry.call)
+           << " source-owner-ordinal="
+           << entry.source_boot_owner_directory_ordinal << '\n';
+  }
 }
 
 [[nodiscard]] std::filesystem::path default_game_data_path() {
@@ -55,6 +95,8 @@ int main(int argc, char **argv) {
   std::size_t frame_limit = 0;
   bool show_graphics_menu = false;
   bool diagnostic_scene = false;
+  bool probe_startup_boot = false;
+  bool mode_specified = false;
   std::optional<std::filesystem::path> diagnostic_scene_archive;
   std::filesystem::path screenshot_path;
   std::string locale;
@@ -63,6 +105,7 @@ int main(int argc, char **argv) {
     if (argument == "--data" && index + 1 < argc) {
       data_path = argv[++index];
     } else if (argument == "--mode" && index + 1 < argc) {
+      mode_specified = true;
       const auto parsed = off::parse_mode(argv[++index]);
       if (!parsed) {
         std::cerr << "Unknown mode. Expected original or modern.\n";
@@ -86,6 +129,8 @@ int main(int argc, char **argv) {
       diagnostic_scene = true;
       if (index + 1 < argc && std::string_view{argv[index + 1]}.front() != '-')
         diagnostic_scene_archive = argv[++index];
+    } else if (argument == "--probe-startup-boot") {
+      probe_startup_boot = true;
     } else if (argument == "--screenshot" && index + 1 < argc) {
       screenshot_path = argv[++index];
     } else if (argument == "--locale" && index + 1 < argc) {
@@ -108,7 +153,7 @@ int main(int argc, char **argv) {
   }
   if (data_path.empty())
     data_path = default_game_data_path();
-  if (data_path.empty() && verify_only) {
+  if (data_path.empty() && (verify_only || probe_startup_boot)) {
     std::cerr
         << "A legally purchased Freedom Fighters installation is required; "
            "pass --data PATH or set OPENFREEDOMFIGHTERS_DATA.\n";
@@ -121,6 +166,14 @@ int main(int argc, char **argv) {
   }
   if (verify_only && !screenshot_path.empty()) {
     std::cerr << "A screenshot cannot be captured in verify-only mode.\n";
+    return 2;
+  }
+  if (probe_startup_boot &&
+      (verify_only || diagnostic_scene || frame_limit != 0U ||
+       show_graphics_menu || !screenshot_path.empty() || !locale.empty() ||
+       mode_specified)) {
+    std::cerr << "--probe-startup-boot cannot be combined with runtime options.\n";
+    usage(std::cerr);
     return 2;
   }
   if (!screenshot_path.empty()) {
@@ -138,6 +191,36 @@ int main(int argc, char **argv) {
     if (!std::filesystem::is_directory(parent)) {
       std::cerr << "Screenshot output directory does not exist.\n";
       return 2;
+    }
+  }
+
+  if (probe_startup_boot) {
+    const auto verification = off::data::verify_install(
+        data_path, {}, {.deep_audit_cache_root =
+                            off::platform::application_deep_audit_cache_root()});
+    if (!verification) {
+      std::cerr << "Game-data verification failed: " << verification.message
+                << '\n';
+      return 3;
+    }
+    try {
+      auto package = std::make_shared<const off::runtime::StartupSceneLoadPackage>(
+          off::runtime::StartupScenePackageSource::prepare_checked(
+              "FF-Startup", data_path / "Scenes" / "FF-StartUp.ZIP"));
+      const auto &inputs = *package->factory_inputs();
+      const auto directory =
+          off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
+              inputs.gms());
+      const auto result = off::runtime::SyntheticStartupBootSceneProbeHost::observe(
+          std::move(package), directory,
+          {.synthetic_factory_generation = 1U,
+           .synthetic_owner_identity = 1U,
+           .synthetic_component_identity = 1U});
+      write_startup_boot_probe_trace(std::cout, result);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << "Startup BootMenu probe failed: " << error.what() << '\n';
+      return 3;
     }
   }
 
