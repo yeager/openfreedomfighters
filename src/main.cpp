@@ -214,6 +214,44 @@ int main(int argc, char **argv) {
         intro->construct_room_animation_scope_without_engine_renderer();
         intro->construct_lens_flare_animation_scope_without_engine_renderer();
         intro->construct_remaining_directory_without_engine_renderer();
+        // The reviewed cold-load reader bracket establishes source-backed
+        // first-cut ownership and reference translation.  It deliberately
+        // does not admit a global lifecycle, schedule an event, activate a
+        // cut, or claim that the engine renderer has consumed these records.
+        intro->run_postconstruction_reader_bracket(
+            0U,
+            {.external_loader_service = [](std::uint64_t) {},
+             .source_script_work = [](const off::graphics::IntroSourceScriptWork &) {},
+             .pre_reader_service = [] {},
+             .prepare_deferred_reader =
+                 [](const off::graphics::IntroDeferredReaderWork &) {},
+             .owner_reader_boundary = [&intro](
+                                          const off::graphics::IntroDeferredReaderWork &work) {
+               if (work.source_directory_index == intro->resources().controller_index())
+                 intro->apply_supported_movie_control_deferred_reader(work);
+               if (work.source_directory_index == intro->resources().member_index())
+                 intro->apply_supported_first_cut_sequence_deferred_reader(work);
+               if (work.source_directory_index == intro->resources().first_cut_index())
+                 intro->apply_supported_first_cut_list_deferred_reader(work);
+               if (intro->resources().sources().directory().at(work.source_directory_index).source_type ==
+                   0x00200012U)
+                 intro->apply_supported_sound_owner_deferred_reader(work);
+               if (work.source_directory_index == intro->resources().window_index())
+                 intro->apply_supported_window_deferred_reader(work);
+               if (work.source_directory_index == 466U)
+                 intro->apply_supported_external_cut_commands_deferred_reader(work);
+               for (const auto &command : intro->resources().first_cut().commands) {
+                 const auto target = intro->resources().sources().local_source_for_authored_reference(
+                     command.target_reference);
+                 if (target && *target == work.source_directory_index) {
+                   intro->apply_supported_first_cut_fade_picture_deferred_reader(work);
+                   break;
+                 }
+               }
+             },
+             .component_reader_boundary =
+                 [](const off::graphics::IntroDeferredReaderWork &) {},
+             .end_reader_service = [] {}});
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -277,13 +315,20 @@ int main(int argc, char **argv) {
     std::cout << "Retained component catalog: " << intro->components().size()
               << " entries; " << intro->components().construction_order().size()
               << " constructed. The full authored construction directory is retained;"
-                 " readers, loader tail, activation and rendering remain pending.\n";
+                 " loader tail, activation and rendering remain pending.\n";
   if (intro && !intro->source_resource_scopes().empty()) {
     std::size_t allocated=0;
     for(const auto& scope:intro->source_resource_scopes()) allocated+=scope.resources.size();
     std::cout << "Source loading: " << intro->source_resource_scopes().size() << " scopes, " << allocated
               << " resources allocated; " << intro->loaded_resource_handles().size()
-              << " authored owners constructed and attached; deferred readers pending.\n";
+              << " authored owners constructed and attached.\n";
+  }
+  if (intro) {
+    const auto reader_preflight = intro->preflight_global_lifecycle();
+    std::cout << "Deferred readers: " << reader_preflight.covered_readers
+              << " source-backed readers admitted of "
+              << reader_preflight.expected_readers
+              << "; remaining lifecycle and playback work is pending.\n";
   }
   if (intro)
     std::cout << "Source-bound intro sound definitions: " << intro->resources().sounds().size()

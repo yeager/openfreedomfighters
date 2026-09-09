@@ -186,17 +186,20 @@ void draw_loading_surface(SDL_Window *window, std::string_view status) {
       target, nullptr, SDL_MapSurfaceRGB(target, 10, 13, 18)));
   if (TTF_Init()) {
     const auto font_path_text = splash_font_path().u8string();
-    std::unique_ptr<TTF_Font, FontDeleter> font{
-        TTF_OpenFont(reinterpret_cast<const char *>(font_path_text.c_str()),
-                     static_cast<float>(std::max(20, target->h / 25)))};
+    TTF_Font *font = TTF_OpenFont(
+        reinterpret_cast<const char *>(font_path_text.c_str()),
+        static_cast<float>(std::max(20, target->h / 25)));
     if (font != nullptr) {
       int text_width{};
-      if (TTF_GetStringSize(font.get(), status.data(), status.size(),
+      if (TTF_GetStringSize(font, status.data(), status.size(),
                             &text_width, nullptr)) {
         static_cast<void>(draw_splash_text(
-            target, font.get(), status, (target->w - text_width) / 2,
+            target, font, status, (target->w - text_width) / 2,
             target->h / 2, SDL_Color{238, 238, 232, 255}));
       }
+      // SDL_ttf owns the backing FreeType library. Close the font while that
+      // library is still alive, before TTF_Quit().
+      TTF_CloseFont(font);
     }
     TTF_Quit();
   }
