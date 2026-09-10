@@ -3178,6 +3178,7 @@ void IntroRuntime::prepare_supported_first_cut_player() {
       .list_component_index=list.component_indices[0], .sequence_component_index=sequence.component_index,
       .legal_picture_component_index=legal_picture.component_index,
       .legal_picture_asset_reference=legal_picture.picture_asset_reference,
+      .tail_member_resources={sequence.members[2],sequence.members[3],sequence.members[4],sequence.members[5]},
       .leading_controls={settings[0],settings[1],settings[2]},
       .raw_scalar=settings[3],
       .trailing_controls={settings[4],settings[5],settings[6]},
@@ -3229,6 +3230,8 @@ cutscene::FirstCutPlayerDescriptor IntroRuntime::first_cut_player_descriptor() c
       player.legal_picture_resource!=legal_picture.resource ||
       player.legal_picture_component_index!=legal_picture.component_index ||
       player.legal_picture_asset_reference!=legal_picture.picture_asset_reference ||
+      player.tail_member_resources!=std::array<std::optional<IntroRuntimeResourceHandle>,4>{
+          sequence.members[2],sequence.members[3],sequence.members[4],sequence.members[5]} ||
       legal_picture.owner!=source_handle(*legal_picture_source) ||
       legal_picture.resource!=directory_resource_mapping_.at(*legal_picture_source).value_or(IntroRuntimeResourceHandle{}) ||
       sequence.members[1]!=std::optional<IntroRuntimeResourceHandle>{legal_picture.resource} ||

@@ -436,6 +436,7 @@ struct IntroFirstCutPlayerPreparedState {
   IntroRuntimeResourceHandle list_resource, sequence_resource, camera_resource, legal_picture_resource;
   std::size_t list_component_index{}, sequence_component_index{}, legal_picture_component_index{};
   std::uint32_t legal_picture_asset_reference{};
+  std::array<std::optional<IntroRuntimeResourceHandle>,4> tail_member_resources;
   std::array<std::uint32_t,3> leading_controls{};
   std::uint32_t raw_scalar{};
   std::array<std::uint32_t,3> trailing_controls{};
