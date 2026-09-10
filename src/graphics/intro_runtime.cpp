@@ -3082,6 +3082,12 @@ void IntroRuntime::prepare_supported_first_cut_player() {
       !camera_source || *camera_source!=camera_index ||
       sequence.members[0]!=std::optional<IntroRuntimeResourceHandle>{camera.resource})
     throw std::runtime_error("First-cut player sequence camera does not match its reader state");
+  const auto window_index=resources_.window_index();
+  const auto selected_camera=resources_.sources().local_source_for_authored_reference(
+      resources_.window().selected_camera_reference);
+  if(resources_.sources().hierarchy().at(camera_index).parent_directory_index!=window_index ||
+      !selected_camera || *selected_camera!=camera_index)
+    throw std::runtime_error("First-cut player camera does not match its authored Window chain");
   const bool reviewed_component_form=resources_.sources().deferred_source_block(
       resources_.first_cut_index()).size()==171U;
   if(reviewed_component_form && !first_cut_component_reader_state_)
@@ -3177,6 +3183,11 @@ cutscene::FirstCutPlayerDescriptor IntroRuntime::first_cut_player_descriptor() c
       !camera_source || *camera_source!=resources_.camera_index() ||
       sequence.members[0]!=std::optional<IntroRuntimeResourceHandle>{camera.resource})
     throw std::runtime_error("First-cut player descriptor camera state no longer matches its sequence");
+  const auto selected_camera=resources_.sources().local_source_for_authored_reference(
+      resources_.window().selected_camera_reference);
+  if(resources_.sources().hierarchy().at(resources_.camera_index()).parent_directory_index!=resources_.window_index() ||
+      !selected_camera || *selected_camera!=resources_.camera_index())
+    throw std::runtime_error("First-cut player descriptor camera no longer matches its authored Window chain");
   if (player.list_component_index != list.component_indices[0] ||
       player.sequence_component_index != sequence.component_index ||
       player.list_resource != list.resource || player.sequence_resource != sequence.resource)
