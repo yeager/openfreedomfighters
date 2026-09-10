@@ -110,6 +110,7 @@ IntroPreparedResources build_intro_prepared_resources(
 
   IntroPreparedResources result(std::move(sources));
   const auto &gms = result.sources_;
+  result.outer_loader_sources_=gms.outer_loader_sources();
   result.names_.assign(names.begin(), names.end());
   if(!sound_definitions.empty())
     result.sound_bank_.emplace(data::SoundDefinitionBank::parse(sound_definitions,1024U*1024U));

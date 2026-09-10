@@ -76,6 +76,11 @@ public:
   [[nodiscard]] const data::GmsImage &sources() const noexcept {
     return sources_;
   }
+  // Independently owned, parser-validated outer-loader inputs.  These are
+  // source data only: callers still must provide concrete tail services.
+  [[nodiscard]] const data::GmsOuterLoaderSources& outer_loader_sources() const noexcept {
+    return outer_loader_sources_;
+  }
   [[nodiscard]] std::span<const std::byte> source_names() const noexcept {
     return names_;
   }
@@ -137,6 +142,7 @@ private:
                                  const data::TextureCatalog &, std::size_t, std::span<const std::byte>);
   friend IntroPreparedResources load_intro_prepared_resources(const std::filesystem::path&);
   data::GmsImage sources_;
+  data::GmsOuterLoaderSources outer_loader_sources_;
   std::vector<std::byte> names_;
   std::size_t controller_index_{}, first_cut_index_{}, member_index_{},
       camera_index_{}, window_index_{};

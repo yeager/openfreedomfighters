@@ -12,7 +12,10 @@ or SDL. It prevents a shortcut that creates an audio device or a draw call
 during loading and then incorrectly reports an active intro.
 
 Normal startup currently stops after the reader bracket. It does not call the
-session's loader-tail transition until those production services exist.
+session's loader-tail transition until those production services exist. The
+prepared scene now retains parser-validated, owned outer-loader source sections
+(named/global, renderer payload, associations, and sizing rows) for that later
+handoff; retaining them neither invokes a service nor advances the tail.
 
 ## Required ordering
 
