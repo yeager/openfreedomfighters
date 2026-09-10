@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <exception>
 #include <future>
 #include <memory>
@@ -51,10 +52,23 @@ startup_splash_overlay_layout(int width, int height) noexcept {
 
 std::filesystem::path application_deep_audit_cache_root() noexcept {
   char* raw_path = SDL_GetPrefPath("OpenFreedomFighters", "OpenFreedomFighters");
-  if (raw_path == nullptr || *raw_path == '\0')
-    return {};
-  std::unique_ptr<char, decltype(&SDL_free)> path{raw_path, SDL_free};
-  return std::filesystem::path{path.get()} / "cache" / "deep-audit";
+  if (raw_path != nullptr && *raw_path != '\0') {
+    std::unique_ptr<char, decltype(&SDL_free)> path{raw_path, SDL_free};
+    return std::filesystem::path{path.get()} / "cache" / "deep-audit";
+  }
+  // Headless integrity checks do not initialize SDL's video subsystem. Keep a
+  // cache root in the native per-user cache location when SDL cannot provide
+  // one, so a successful deep audit is reusable by --verify-only and probes.
+#if defined(_WIN32)
+  if (const auto* local_app_data=std::getenv("LOCALAPPDATA"); local_app_data && *local_app_data)
+    return std::filesystem::path{local_app_data} / "OpenFreedomFighters" / "deep-audit";
+#else
+  if (const auto* xdg_cache=std::getenv("XDG_CACHE_HOME"); xdg_cache && *xdg_cache)
+    return std::filesystem::path{xdg_cache} / "openfreedomfighters" / "deep-audit";
+  if (const auto* home=std::getenv("HOME"); home && *home)
+    return std::filesystem::path{home} / ".cache" / "openfreedomfighters" / "deep-audit";
+#endif
+  return {};
 }
 
 namespace {
