@@ -9,6 +9,7 @@
 #include "off/graphics/scene_gpu_plan.hpp"
 #include "off/graphics/scene_render.hpp"
 #include "off/graphics/startup_graphics_asset.hpp"
+#include "off/graphics/startup_graphics_expanded_plan.hpp"
 #include "off/mode.hpp"
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/platform/sdl_startup.hpp"
@@ -493,6 +494,8 @@ int main(int argc, char **argv) {
   }};
   std::optional<off::graphics::SceneRenderAsset> startup_ui_scene_resources;
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
+  std::optional<off::graphics::StartupGraphicsExpandedPlan>
+      startup_graphics_cpu_plan;
   std::unique_ptr<off::graphics::NormalIntroSceneSession> intro_session;
   std::optional<off::cutscene::FirstCutPlayerSession> first_cut_session;
   off::graphics::IntroRuntime *intro{};
@@ -577,6 +580,9 @@ int main(int argc, char **argv) {
           }
           startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
               data_path / "Scenes" / "FF-StartUp.ZIP"));
+          startup_graphics_cpu_plan.emplace(
+              off::graphics::expand_startup_graphics_plan_with_composed_transforms(
+                  *startup_graphics, 0x01U));
           ui_fonts = off::ui::load_retail_ui_fonts(data_path / "Scenes" /
                                                    "FF-StartUp.ZIP");
         },
@@ -636,6 +642,10 @@ int main(int argc, char **argv) {
   if (!diagnostic_scene)
     std::cout << "Authored startup resources loaded; world rendering pending. "
                  "This is not gameplay or a faithful rendered startup menu.\n";
+  if (startup_graphics_cpu_plan)
+    std::cout << "Startup menu CPU plan: "
+              << startup_graphics_cpu_plan->submissions().size()
+              << " source-backed picture submissions; GPU submission pending.\n";
   if (intro)
     std::cout << "Source-backed intro runtime retained: "
               << intro->pictures().size() << " picture definitions, "
