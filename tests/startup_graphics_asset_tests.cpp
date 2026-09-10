@@ -4,6 +4,7 @@
 #include "off/graphics/picture_material_state.hpp"
 #include "off/graphics/picture_submission_cache.hpp"
 #include "off/graphics/startup_graphics_expanded_plan.hpp"
+#include "off/graphics/startup_graphics_diagnostic_plan.hpp"
 #include "off/graphics/startup_graphics_transform_chain.hpp"
 #include "off/graphics/startup_source_picture_draw_admission.hpp"
 #include "off/graphics/startup_picture_pass_admission.hpp"
@@ -649,6 +650,23 @@ int main(int argc, char **argv) {
   check(owned_expanded.submissions()[5].texture_resource_prm_offset == 96 &&
             owned_expanded.submissions()[5].authored_texture_resource_record[31] == std::byte{95},
         "expanded initial resource provenance outlives all input owners");
+
+  {
+    auto bytes = texture_catalog();
+    const auto local_catalog = off::data::TextureCatalog::parse(bytes);
+    const auto local_asset =
+        off::graphics::build_startup_graphics_asset(composition(), local_catalog);
+    const auto diagnostic = off::graphics::make_startup_graphics_diagnostic_plan(
+        local_asset, off::graphics::expand_startup_graphics_plan_with_composed_transforms(
+                         local_asset, 0x01U));
+    check(diagnostic.source_only_diagnostic && diagnostic.textures.size() == 6 &&
+              diagnostic.meshes.size() == 77 && diagnostic.instances.size() == 77 &&
+              diagnostic.draws.size() == 77 &&
+              diagnostic.draws.front().depth_policy ==
+                  off::graphics::SceneDepthPolicy::test_only &&
+              diagnostic.draws.front().blend_enabled,
+          "build a source-only startup graphics GPU diagnostic with ordered blended quads");
+  }
 
   const auto mismatched_asset = off::graphics::build_startup_graphics_asset(
       composition(20), catalog);
