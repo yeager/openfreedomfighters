@@ -484,6 +484,11 @@ external-fade list or inject commands after closure. This remains initialization
 work only; scheduling, clock conversion, presentation and rendering are still
 separate recovery tasks.
 
+`IntroRuntime::first_cut_player_session()` creates this session only from the
+same prepared, source-validated reader state. The returned session is cold and
+has no borrowed runtime lifetime, so projecting it cannot itself admit global
+lifecycle work or begin the intro.
+
 ## Restricted controller reader
 
 `GmsImage::intro_movie_controller_source` decodes only the reviewed supported

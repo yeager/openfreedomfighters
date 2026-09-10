@@ -840,6 +840,9 @@ public:
   // Projects the two source-validated first-cut reader states into the
   // dedicated lifecycle boundary. It does not run either phase.
   [[nodiscard]] cutscene::FirstCutPlayerInitialization first_cut_player_initialization() const;
+  // Projects the same source-validated state into the composed lifecycle
+  // session. It remains cold and does not admit global lifecycle work.
+  [[nodiscard]] cutscene::FirstCutPlayerSession first_cut_player_session() const;
   void apply_supported_external_cut_commands_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroExternalCutCommandsReaderState* external_cut_commands_reader_state() const noexcept {return external_cut_commands_reader_state_?&*external_cut_commands_reader_state_:nullptr;}
   void apply_supported_first_cut_fade_picture_deferred_reader(const IntroDeferredReaderWork& work);
