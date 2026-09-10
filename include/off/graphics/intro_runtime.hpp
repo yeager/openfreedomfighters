@@ -466,6 +466,17 @@ struct IntroLegalPictureReaderState {
   data::GmsWindowPictureSource authored;
   std::uint32_t picture_asset_reference{};
 };
+// A cold receipt for the completed Center component boundary. It establishes
+// provenance only; position/cache work remains part of later activation.
+struct IntroLegalPictureComponentReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t source_directory_index{};
+  std::uint32_t source_offset{};
+  std::size_t component_index{};
+  data::GmsWindowPictureSource authored;
+  std::uint32_t picture_asset_reference{};
+};
 struct IntroSourceScriptWork {
   IntroRuntimeResourceHandle resource;
   std::uint32_t source_offset;
@@ -897,7 +908,9 @@ public:
   [[nodiscard]] const std::map<std::size_t,IntroFadePictureReaderState>& fade_picture_reader_states() const noexcept {return fade_picture_reader_states_;}
   [[nodiscard]] const std::map<std::size_t,IntroFadePictureComponentReaderState>& fade_picture_component_reader_states() const noexcept {return fade_picture_component_reader_states_;}
   void apply_supported_first_cut_legal_picture_deferred_reader(const IntroDeferredReaderWork& work);
+  void apply_supported_first_cut_legal_picture_component_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroLegalPictureReaderState* legal_picture_reader_state() const noexcept {return legal_picture_reader_state_?&*legal_picture_reader_state_:nullptr;}
+  [[nodiscard]] const IntroLegalPictureComponentReaderState* legal_picture_component_reader_state() const noexcept {return legal_picture_component_reader_state_?&*legal_picture_component_reader_state_:nullptr;}
   // Caller still owes actual global lifecycle admission and external services.
   // Clock/audio resolve through the same application state retained by this scene.
   void run_controller_phase_two(const IntroControllerPhaseTwoServices& external);
@@ -1019,6 +1032,7 @@ private:
   std::map<std::size_t,IntroFadePictureReaderState> fade_picture_reader_states_;
   std::map<std::size_t,IntroFadePictureComponentReaderState> fade_picture_component_reader_states_;
   std::optional<IntroLegalPictureReaderState> legal_picture_reader_state_;
+  std::optional<IntroLegalPictureComponentReaderState> legal_picture_component_reader_state_;
   IntroControllerInitialization controller_initialization_;
   FreshIntroCamera prepared_camera_;
   std::map<std::size_t,std::unique_ptr<IntroLiveCameraOwner>> live_cameras_;

@@ -78,6 +78,9 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                  runtime_->apply_supported_first_cut_component_reader(work);
                if (runtime_->fade_picture_reader_states().contains(work.source_directory_index))
                  runtime_->apply_supported_first_cut_fade_picture_component_reader(work);
+               if (runtime_->legal_picture_reader_state() &&
+                   runtime_->legal_picture_reader_state()->owner==runtime_->source_handle(work.source_directory_index))
+                 runtime_->apply_supported_first_cut_legal_picture_component_reader(work);
              },
          .end_reader_service = [] {}});
     stage_ = NormalIntroSceneSessionStage::reader_bracket_complete;

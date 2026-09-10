@@ -3313,6 +3313,28 @@ void IntroRuntime::apply_supported_first_cut_legal_picture_deferred_reader(
   catch(...) { legal_picture_reader_state_.reset(); throw; }
 }
 
+void IntroRuntime::apply_supported_first_cut_legal_picture_component_reader(
+    const IntroDeferredReaderWork& work) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !work.processed ||
+      work.source_directory_index>=resources_.sources().directory().size() ||
+      std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate) {
+        return std::addressof(candidate)==std::addressof(work);
+      })==deferred_reader_work_.end())
+    throw std::runtime_error("Legal picture component reader requires live deferred work");
+  if(!legal_picture_reader_state_ || legal_picture_component_reader_state_)
+    throw std::runtime_error("Legal picture component reader requires an unconsumed owner reader state");
+  const auto& state=*legal_picture_reader_state_;
+  if(state.resource!=work.resource || state.owner!=source_handle(work.source_directory_index) ||
+      resources_.sources().directory().at(work.source_directory_index).deferred_source_offset!=work.source_offset)
+    throw std::runtime_error("Legal picture component reader source identity is unsupported");
+  const auto& component=components_.at(state.component_index);
+  if(!component.constructed() || component.removed() || component.source().factory_name!="ZGEOM_Center" ||
+      component.state().attached_owner!=state.owner.value)
+    throw std::runtime_error("Legal picture component reader has no live Center component");
+  legal_picture_component_reader_state_={state.owner,state.resource,work.source_directory_index,
+      work.source_offset,state.component_index,state.authored,state.picture_asset_reference};
+}
+
 IntroRuntimeHandle IntroRuntime::source_handle(std::size_t source) const {
   if (source >= resources_.sources().directory().size()) throw std::runtime_error("intro source index is out of range");
   return {owner_base_+static_cast<std::uint64_t>(source)+1};

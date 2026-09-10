@@ -1061,6 +1061,9 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               host.apply_supported_first_cut_component_reader(work);
             if(host.fade_picture_reader_states().contains(work.source_directory_index))
               host.apply_supported_first_cut_fade_picture_component_reader(work);
+            if(host.legal_picture_reader_state() &&
+                host.legal_picture_reader_state()->owner==host.source_handle(work.source_directory_index))
+              host.apply_supported_first_cut_legal_picture_component_reader(work);
             if(work.source_directory_index==host.resources().window_index()) {
               const auto& window=host.window_for_owner(host.source_handle(work.source_directory_index));
               check(host.window_camera_projection_applied() && window.cameras==std::vector{host.source_handle(host.resources().camera_index())} &&
@@ -1155,6 +1158,15 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                 legal_reader->picture_asset_reference==authored_legal.picture_asset_reference,
                 "legal-picture reader retains the resolved Center source and full picture key without activation");
           rejects([&]{host.apply_supported_first_cut_legal_picture_deferred_reader(*legal_work);});
+          const auto* legal_component_reader=host.legal_picture_component_reader_state();
+          check(legal_component_reader && legal_component_reader->owner==legal_reader->owner &&
+                legal_component_reader->resource==legal_reader->resource &&
+                legal_component_reader->source_directory_index==*legal_source &&
+                legal_component_reader->source_offset==legal_work->source_offset &&
+                legal_component_reader->component_index==legal_reader->component_index &&
+                legal_component_reader->picture_asset_reference==legal_reader->picture_asset_reference,
+                "Center component boundary retains only the completed legal-picture provenance");
+          rejects([&]{host.apply_supported_first_cut_legal_picture_component_reader(*legal_work);});
         }
         host.prepare_supported_first_cut_player();
         const auto* player=host.first_cut_player_prepared_state();
