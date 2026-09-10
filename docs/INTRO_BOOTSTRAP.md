@@ -469,9 +469,11 @@ its events, creates separate zeroed started/completed arrays, writes the queue
 property, and optionally creates the action map. Its phase two again visits the
 commands in reverse source order, retains the active-camera-list reference,
 queries each member synchronously for a finite end value, and resolves the
-cut-sequence-object reference. Command-container insertion remains separate.
-Both stages remain
-explicit caller-driven services and fail closed; they do not start playback.
+cut-sequence-object reference. Before that final reference, nonnegative command
+records enter the recovered cached strict-comparison insertion path and are
+registered in its resulting order. This is deliberately not represented as a
+generic or stable sort. Both stages remain explicit caller-driven services and
+fail closed; they do not start playback.
 
 ## Restricted controller reader
 

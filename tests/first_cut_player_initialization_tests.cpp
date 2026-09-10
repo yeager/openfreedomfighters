@@ -43,11 +43,13 @@ int main() {
       .resolve_member = [&](std::size_t index) -> std::optional<std::uint64_t> { check(index == 0U, "resolve sole member"); trace.push_back("member"); return 55U; },
       .request_member_info = [&](std::uint64_t member) -> std::optional<off::cutscene::FirstCutMemberInfo> { check(member == 55U, "direct info target"); trace.push_back("info"); return {{175.0F}}; },
       .member_name = [](std::uint64_t) { return std::string_view{"Cut01"}; },
-      .resolve_scene_object = [&](std::uint64_t value) -> std::optional<std::uint64_t> { check(value == 99U, "resolve cut object source"); trace.push_back("object"); return 100U; }});
+      .resolve_scene_object = [&](std::uint64_t value) -> std::optional<std::uint64_t> { check(value == 99U, "resolve cut object source"); trace.push_back("object"); return 100U; },
+      .register_ordered_command = [&](const auto& command) { trace.push_back("command:" + std::to_string(command.timeline_position)); }});
   check(player.phase_two_complete() && player.derived_end() == 175.0F && player.active_camera_list() == 88U &&
             player.cut_sequence_object() == 100U &&
-            trace == std::vector<std::string>{"one:14", "one:13", "one:12", "one:11", "one:10", "read", "events", "count", "queue", "map", "two:14", "two:13", "two:12", "two:11", "two:10", "rActiveCameraList", "member", "info", "rCutSequenceObject", "object"},
-        "phase two retains properties and direct member information without playback or command insertion");
+            player.ordered_commands().size() == 5U &&
+            trace == std::vector<std::string>{"one:14", "one:13", "one:12", "one:11", "one:10", "read", "events", "count", "queue", "map", "two:14", "two:13", "two:12", "two:11", "two:10", "rActiveCameraList", "member", "info", "command:1", "command:2", "command:3", "command:4", "command:5", "rCutSequenceObject", "object"},
+        "phase two retains properties, inserts commands, and does not start playback");
   auto failing = make_player();
   rejects([&] { failing.run_phase_one({
       .invoke_command = [](auto, const auto&) { throw std::runtime_error("injected"); },
