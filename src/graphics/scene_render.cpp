@@ -7,6 +7,7 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -26,6 +27,8 @@ constexpr std::size_t maximum_scene_archives = 4096;
 constexpr std::size_t maximum_scene_directory_entries = 1024;
 constexpr std::array required_scene_extensions{".prm", ".tex", ".gms", ".rmc",
                                                ".rmi"};
+constexpr std::uint32_t zgroup_source_type = 0x00100001U;
+constexpr std::uint32_t zroom_source_type = 0x00100021U;
 
 void add_bounded(std::size_t &total, std::size_t value, std::size_t limit,
                  const char *message) {
@@ -114,7 +117,58 @@ build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
                          .entries = rmi.entries()},
   };
   return build_scene_render_asset(primitives.entries(), textures.images(),
-                                  objects.directory(), maps);
+                                  objects.directory(), objects.hierarchy(), maps);
+}
+
+[[nodiscard]] std::vector<SceneGeometryResolution> expand_container_resolution(
+    const SceneGeometryResolution &root,
+    std::span<const data::PrimitiveEntry> primitives,
+    std::span<const data::GmsDirectoryEntry> sources,
+    std::span<const data::GmsHierarchyNode> hierarchy) {
+  if (root.status != SceneGeometryStatus::source_without_primitive ||
+      !root.source_directory_index.has_value() || hierarchy.empty())
+    return {};
+  const auto root_index = *root.source_directory_index;
+  if (root_index >= sources.size() || root_index >= hierarchy.size())
+    throw std::runtime_error("scene container hierarchy is inconsistent");
+  const auto type = sources[root_index].source_type;
+  if ((type != zgroup_source_type && type != zroom_source_type) ||
+      sources[root_index].class_data_value != 0U)
+    return {};
+  std::unordered_map<std::uint32_t, std::size_t> primitive_by_reference;
+  for (std::size_t index = 0; index < primitives.size(); ++index) {
+    if (!primitive_by_reference.emplace(primitives[index].packed_index, index).second)
+      throw std::runtime_error("scene geometry reference resolves to duplicate PRM indexes");
+  }
+  std::vector<SceneGeometryResolution> result;
+  std::function<void(std::size_t)> visit = [&](std::size_t index) {
+    if (index >= hierarchy.size() || index >= sources.size() ||
+        hierarchy[index].directory_index != index)
+      throw std::runtime_error("scene container hierarchy is inconsistent");
+    const auto &source = sources[index];
+    if (source.primitive_reference.has_value()) {
+      auto child = root;
+      child.source_directory_index = index;
+      child.source_local_slot_index = source.local_slot_index;
+      child.primitive_reference = source.primitive_reference;
+      const auto found = primitive_by_reference.find(*source.primitive_reference);
+      if (found == primitive_by_reference.end()) {
+        child.status = SceneGeometryStatus::missing_primitive;
+        child.primitive_entry_index.reset();
+      } else {
+        child.primitive_entry_index = found->second;
+        child.status = primitives[found->second].flagged_reference
+                           ? SceneGeometryStatus::unresolved_primitive_alias
+                           : SceneGeometryStatus::local_primitive;
+      }
+      result.push_back(std::move(child));
+    }
+    for (const auto child : hierarchy[index].children_in_directory_order)
+      visit(child);
+  };
+  for (const auto child : hierarchy[root_index].children_in_directory_order)
+    visit(child);
+  return result;
 }
 
 } // namespace
@@ -270,6 +324,15 @@ SceneRenderAsset build_scene_render_asset(
     std::span<const data::TextureImage> textures,
     std::span<const data::GmsDirectoryEntry> object_sources,
     std::span<const SceneRenderMapView> maps) {
+  return build_scene_render_asset(primitives, textures, object_sources, {}, maps);
+}
+
+SceneRenderAsset build_scene_render_asset(
+    std::span<const data::PrimitiveEntry> primitives,
+    std::span<const data::TextureImage> textures,
+    std::span<const data::GmsDirectoryEntry> object_sources,
+    std::span<const data::GmsHierarchyNode> hierarchy,
+    std::span<const SceneRenderMapView> maps) {
   if (maps.size() > maximum_map_layers) {
     throw std::runtime_error("scene render asset has too many map layers");
   }
@@ -294,7 +357,14 @@ SceneRenderAsset build_scene_render_asset(
     const auto &map = maps[map_layer_index];
     const auto resolutions = resolve_scene_geometry_references(
         primitives, object_sources, map.entries);
+    std::vector<SceneGeometryResolution> expanded;
     for (const auto &geometry : resolutions) {
+      expanded.push_back(geometry);
+      auto descendants = expand_container_resolution(geometry, primitives, object_sources, hierarchy);
+      expanded.insert(expanded.end(), std::make_move_iterator(descendants.begin()),
+                      std::make_move_iterator(descendants.end()));
+    }
+    for (const auto &geometry : expanded) {
       if (result.resolutions.size() == maximum_scene_instances) {
         throw std::runtime_error("scene render asset exceeds instance budget");
       }

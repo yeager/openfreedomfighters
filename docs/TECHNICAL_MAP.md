@@ -39,7 +39,7 @@ Representative scene archives consistently expose a family of resource types:
 | `SGP` | scene/game parameters | determine semantics |
 | `RMC`/`RMI` | validated quantized octrees, bounds, and fixed object descriptors | exact runtime distinction and binding to scene objects |
 | `PRM` | indexed render primitives with decoded primary vertices and grouped topology | materials and auxiliary/skinning streams |
-| `ANM` | animation data (42 observed) | clips, tracks, time units, skeleton binding |
+| `ANM` | validated `MNA` envelope (42 observed) | clips, tracks, time units, skeleton binding |
 
 This table is provisional. Every claim graduates only after corpus-wide validation and a synthetic parser test.
 

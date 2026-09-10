@@ -15,8 +15,9 @@ map views. It:
   required primary reference before its present optional secondary reference;
 - retains a resolution record for every handle, including unresolved and
   non-primitive outcomes;
-- creates an instance only for a handle that resolves to a direct local ordinary
-  PRM;
+- creates an instance for a direct local ordinary PRM, or for an ordinary PRM
+  below a map-resolved `ZGROUP` or `ZROOM` container in the authored GMS
+  hierarchy;
 - deduplicates mesh storage by PRM catalog entry and texture storage by TEX
   catalog entry while never deduplicating instances;
 - preserves RMC/RMI kind, layer, descriptor, role, handle, GMS source identity,
@@ -31,6 +32,11 @@ yet establish the matrix
 layout consumed by rendering, hierarchy or attachment propagation, world-space
 composition, or final draw-matrix provenance. The asset therefore continues to
 retain source and map transforms separately.
+
+Container expansion is preorder in retained authored child order. It keeps the
+root map reference and descendant source identity, but uses only the
+descendant's existing GMS diagnostic transform. It does not compose container,
+map, or child transforms.
 
 The asset includes line lists, untextured meshes, and transparent geometry. The
 diagnostic single-mesh preview's selection rules do not apply to scene assets.
@@ -164,9 +170,11 @@ Runtime output must call this view a `source-only diagnostic scene`. Success
 messages may report materialized instance, mesh, texture, and draw-command counts,
 but must not call the result a loaded level, recovered scene, Original rendering,
 or faithful world placement. Missing, external, and non-primitive sources remain
-reported resolution outcomes rather than placeholder draws. A zero-instance plan
-is a valid diagnostic result and must not silently fall back to the older
-single-mesh preview.
+reported resolution outcomes rather than placeholder draws. Only the two
+evidence-backed container types may expose direct-primitive descendants; other
+non-primitive sources are not expanded. A zero-instance plan is a valid
+diagnostic result and must not silently fall back to the older single-mesh
+preview.
 
 This integration does not establish camera matrices, map/GMS transform
 composition, material semantics, lighting, transparent ordering fidelity, or

@@ -93,6 +93,16 @@ summarize_scene_render_resolutions(const SceneRenderAsset &asset) noexcept;
     std::span<const data::GmsDirectoryEntry> object_sources,
     std::span<const SceneRenderMapView> maps);
 
+// The hierarchy overload expands only map-resolved ZGROUP/ZROOM containers
+// into already proven direct-primitive descendants. It remains a source-only
+// diagnostic: no container, map or child transforms are composed.
+[[nodiscard]] SceneRenderAsset build_scene_render_asset(
+    std::span<const data::PrimitiveEntry> primitives,
+    std::span<const data::TextureImage> textures,
+    std::span<const data::GmsDirectoryEntry> object_sources,
+    std::span<const data::GmsHierarchyNode> hierarchy,
+    std::span<const SceneRenderMapView> maps);
+
 [[nodiscard]] SceneRenderAsset
 load_scene_render_asset(const std::filesystem::path &archive_path);
 

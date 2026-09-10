@@ -80,6 +80,7 @@ add_library(off_core
     src/runtime/ordinary_components.cpp
     src/crypto/sha256.cpp
     src/data/archive_vfs.cpp
+    src/data/animation_image.cpp
     src/data/audio_bank_header.cpp
     src/data/sound_definition_bank.cpp
     src/data/gms_image.cpp
@@ -428,6 +429,10 @@ if(BUILD_TESTING)
     add_executable(off_scene_support_tests tests/scene_support_tests.cpp)
     target_link_libraries(off_scene_support_tests PRIVATE off_core)
     add_test(NAME off_scene_support_tests COMMAND off_scene_support_tests)
+
+    add_executable(off_animation_image_tests tests/animation_image_tests.cpp)
+    target_link_libraries(off_animation_image_tests PRIVATE off_core)
+    add_test(NAME off_animation_image_tests COMMAND off_animation_image_tests)
 
     add_executable(off_texture_catalog_tests tests/texture_catalog_tests.cpp)
     target_link_libraries(off_texture_catalog_tests PRIVATE off_core)
