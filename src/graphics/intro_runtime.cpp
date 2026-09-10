@@ -3056,10 +3056,12 @@ void IntroRuntime::prepare_supported_first_cut_player() {
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
       !first_cut_sequence_reader_state_ || !first_cut_list_reader_state_ ||
       !first_cut_sequence_component_reader_state_ ||
+      !first_cut_camera_reader_state_ ||
       first_cut_player_prepared_state_)
     throw std::runtime_error("First-cut player requires all unconsumed reader states");
   const auto& sequence=*first_cut_sequence_reader_state_;
   const auto& list=*first_cut_list_reader_state_;
+  const auto& camera=*first_cut_camera_reader_state_;
   const auto& sequence_receipt=*first_cut_sequence_component_reader_state_;
   const auto& sequence_source=resources_.sources().directory().at(resources_.member_index());
   if(sequence_receipt.owner!=sequence.owner || sequence_receipt.resource!=sequence.resource ||
@@ -3072,6 +3074,14 @@ void IntroRuntime::prepare_supported_first_cut_player() {
       sequence_receipt.authored.authored_option!=sequence.authored.authored_option ||
       sequence_receipt.members!=sequence.members)
     throw std::runtime_error("First-cut player sequence component reader state does not match its owner reader");
+  const auto camera_index=resources_.camera_index();
+  const auto camera_source=resources_.sources().local_source_for_authored_reference(
+      sequence.authored.references[0]);
+  if(camera.owner!=source_handle(camera_index) ||
+      camera.resource!=directory_resource_mapping_.at(camera_index).value_or(IntroRuntimeResourceHandle{}) ||
+      !camera_source || *camera_source!=camera_index ||
+      sequence.members[0]!=std::optional<IntroRuntimeResourceHandle>{camera.resource})
+    throw std::runtime_error("First-cut player sequence camera does not match its reader state");
   const bool reviewed_component_form=resources_.sources().deferred_source_block(
       resources_.first_cut_index()).size()==171U;
   if(reviewed_component_form && !first_cut_component_reader_state_)
@@ -3127,8 +3137,8 @@ void IntroRuntime::prepare_supported_first_cut_player() {
       !std::isfinite(sequence.authored.values[0]) || !std::isfinite(sequence.authored.values[1]))
     throw std::runtime_error("First-cut player source float is not finite");
   IntroFirstCutPlayerPreparedState state{
-      .list_owner=list.owner, .sequence_owner=sequence.owner,
-      .list_resource=list.resource, .sequence_resource=sequence.resource,
+      .list_owner=list.owner, .sequence_owner=sequence.owner, .camera_owner=camera.owner,
+      .list_resource=list.resource, .sequence_resource=sequence.resource, .camera_resource=camera.resource,
       .list_component_index=list.component_indices[0], .sequence_component_index=sequence.component_index,
       .leading_controls={settings[0],settings[1],settings[2]},
       .raw_scalar=settings[3],
@@ -3141,11 +3151,13 @@ void IntroRuntime::prepare_supported_first_cut_player() {
 
 cutscene::FirstCutPlayerDescriptor IntroRuntime::first_cut_player_descriptor() const {
   if (!first_cut_player_prepared_state_ || !first_cut_sequence_reader_state_ ||
-      !first_cut_list_reader_state_ || !first_cut_sequence_component_reader_state_)
+      !first_cut_list_reader_state_ || !first_cut_sequence_component_reader_state_ ||
+      !first_cut_camera_reader_state_)
     throw std::runtime_error("First-cut player descriptor requires prepared reader state");
   const auto& player = *first_cut_player_prepared_state_;
   const auto& list = *first_cut_list_reader_state_;
   const auto& sequence = *first_cut_sequence_reader_state_;
+  const auto& camera=*first_cut_camera_reader_state_;
   const auto& sequence_component=*first_cut_sequence_component_reader_state_;
   if(sequence_component.owner!=sequence.owner || sequence_component.resource!=sequence.resource ||
       sequence_component.component_index!=sequence.component_index ||
@@ -3157,6 +3169,14 @@ cutscene::FirstCutPlayerDescriptor IntroRuntime::first_cut_player_descriptor() c
       sequence_component.authored.authored_option!=sequence.authored.authored_option ||
       sequence_component.members!=sequence.members)
     throw std::runtime_error("First-cut player descriptor sequence component state no longer matches its owner reader");
+  const auto camera_source=resources_.sources().local_source_for_authored_reference(
+      sequence.authored.references[0]);
+  if(player.camera_owner!=camera.owner || player.camera_resource!=camera.resource ||
+      camera.owner!=source_handle(resources_.camera_index()) ||
+      camera.resource!=directory_resource_mapping_.at(resources_.camera_index()).value_or(IntroRuntimeResourceHandle{}) ||
+      !camera_source || *camera_source!=resources_.camera_index() ||
+      sequence.members[0]!=std::optional<IntroRuntimeResourceHandle>{camera.resource})
+    throw std::runtime_error("First-cut player descriptor camera state no longer matches its sequence");
   if (player.list_component_index != list.component_indices[0] ||
       player.sequence_component_index != sequence.component_index ||
       player.list_resource != list.resource || player.sequence_resource != sequence.resource)

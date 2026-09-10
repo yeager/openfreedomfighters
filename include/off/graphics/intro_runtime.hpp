@@ -432,8 +432,8 @@ struct IntroFirstCutCameraReaderState {
 // Materialized source state for the one reviewed first-cut player. It is not a
 // scheduler, event registration, camera route, or renderer admission.
 struct IntroFirstCutPlayerPreparedState {
-  IntroRuntimeHandle list_owner, sequence_owner;
-  IntroRuntimeResourceHandle list_resource, sequence_resource;
+  IntroRuntimeHandle list_owner, sequence_owner, camera_owner;
+  IntroRuntimeResourceHandle list_resource, sequence_resource, camera_resource;
   std::size_t list_component_index{}, sequence_component_index{};
   std::array<std::uint32_t,3> leading_controls{};
   std::uint32_t raw_scalar{};

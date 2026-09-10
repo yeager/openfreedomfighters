@@ -1018,6 +1018,8 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               host.apply_supported_first_cut_sequence_deferred_reader(work);
             if(work.source_directory_index==host.resources().first_cut_index())
               host.apply_supported_first_cut_list_deferred_reader(work);
+            if(work.source_directory_index==host.resources().camera_index())
+              host.apply_supported_first_cut_camera_deferred_reader(work);
             if(work.source_directory_index==466U) {
               bool supported_external_payload{};
               try {
