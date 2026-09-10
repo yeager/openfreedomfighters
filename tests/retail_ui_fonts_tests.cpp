@@ -75,6 +75,26 @@ std::vector<std::byte> valid_sfnt(std::uint32_t signature = 0x00010000U) {
   return bytes;
 }
 
+std::vector<std::byte> cmap12_sfnt(std::uint32_t first, std::uint32_t last) {
+  auto bytes = valid_sfnt();
+  bytes[12] = std::byte{'c'}; bytes[13] = std::byte{'m'};
+  bytes[14] = std::byte{'a'}; bytes[15] = std::byte{'p'};
+  bytes[24] = std::byte{0}; bytes[25] = std::byte{0};
+  bytes[26] = std::byte{0}; bytes[27] = std::byte{40};
+  bytes.resize(68);
+  bytes[28] = std::byte{0}; bytes[29] = std::byte{0}; bytes[30] = std::byte{0}; bytes[31] = std::byte{1};
+  bytes[32] = std::byte{0}; bytes[33] = std::byte{3}; bytes[34] = std::byte{0}; bytes[35] = std::byte{10};
+  bytes[36] = std::byte{0}; bytes[37] = std::byte{0}; bytes[38] = std::byte{0}; bytes[39] = std::byte{12};
+  bytes[40] = std::byte{0}; bytes[41] = std::byte{12};
+  bytes[44] = std::byte{0}; bytes[45] = std::byte{0}; bytes[46] = std::byte{0}; bytes[47] = std::byte{28};
+  bytes[52] = std::byte{0}; bytes[53] = std::byte{0}; bytes[54] = std::byte{0}; bytes[55] = std::byte{1};
+  for (int shift = 24, index = 56; shift >= 0; shift -= 8, ++index) bytes[index] = static_cast<std::byte>((first >> shift) & 0xffU);
+  for (int shift = 24, index = 60; shift >= 0; shift -= 8, ++index) bytes[index] = static_cast<std::byte>((last >> shift) & 0xffU);
+  bytes[64] = std::byte{0}; bytes[65] = std::byte{0}; bytes[66] = std::byte{0}; bytes[67] = std::byte{1};
+  bytes[0] = std::byte{0}; bytes[1] = std::byte{1}; bytes[2] = std::byte{0}; bytes[3] = std::byte{0};
+  return bytes;
+}
+
 void append_zgf_entry(std::vector<std::byte> &bytes, std::string_view name,
                       std::span<const std::byte> payload) {
   const auto start = bytes.size();
@@ -219,6 +239,16 @@ int main() {
         "discover only exact case-insensitive font extensions in the ZGF");
   check(loaded.fonts[0].sfnt == first && loaded.fonts[1].sfnt == second,
         "return exact owned in-memory font bytes in bundle order");
+  const off::ui::RetailUiFontSet coverage{{{cmap12_sfnt(0x20U, 0x7eU)},
+                                            {cmap12_sfnt(0x0400U, 0x04ffU)}}};
+  check(off::ui::select_font_for_utf8(coverage, "Apply") == 0U,
+        "font admission selects a single ASCII-capable font");
+  check(off::ui::select_font_for_utf8(coverage, "Применить") == 1U,
+        "font admission selects a single Cyrillic-capable font");
+  check(!off::ui::select_font_for_utf8(coverage, "Apply Применить"),
+        "font admission rejects text no single font can cover");
+  check(!off::ui::select_font_for_utf8(coverage, std::string_view{"\xc3\x28", 2}),
+        "font admission rejects malformed UTF-8");
 
   std::filesystem::remove(valid_archive, error);
   check(loaded.fonts[0].sfnt == first,
