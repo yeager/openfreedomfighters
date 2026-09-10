@@ -2071,8 +2071,7 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
   if((named_requires_reader && (!services.relocate_named_global_references || !services.read_named_global_payload)) ||
       (renderer_requires_parser && (!services.parse_renderer_resource_payload ||
           !services.release_renderer_construction_reference)) ||
-      (associations_require_services && (!services.resolve_marked_resource_reference ||
-          !services.associate_live_resources)) ||
+      (associations_require_services && !services.associate_live_resources) ||
       !services.release_loader_source_lease || !services.camera_zero_present ||
       !services.outer_scene_operation || !services.between_saved_scene_operation ||
       !services.intermediate_scene_finalization || !services.spatial_admission ||
@@ -2089,25 +2088,15 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
   };
   try {
     if(const auto& named=services.named_global_payload) {
-      const auto terminator=std::find(named->bytes.begin(),named->bytes.end(),std::byte{});
-      if(terminator==named->bytes.end())
-        throw std::runtime_error("Named/global payload has no NUL-delimited label");
-      std::string label;
-      label.reserve(static_cast<std::size_t>(terminator-named->bytes.begin()));
-      for(auto cursor=named->bytes.begin();cursor!=terminator;++cursor)
-        label.push_back(static_cast<char>(std::to_integer<unsigned char>(*cursor)));
-      auto block_begin=terminator;
-      ++block_begin;
-      if(static_cast<std::size_t>(named->bytes.end()-block_begin)<4U)
-        throw std::runtime_error("Named/global payload has no complete tagged-block header after its label");
+      const auto envelope=parse_intro_named_global_section_envelope(named->bytes);
       IntroNamedGlobalPreparedReader prepared{
-          .owned_block={block_begin,named->bytes.end()}};
+          .owned_block={envelope.tagged_block.begin(),envelope.tagged_block.end()}};
       services.relocate_named_global_references(prepared);
       // The retail traversal restores its tagged-reader cursor before scene
       // dispatch. Preserve that observable handoff even when the native
       // relocation service used a cursor while walking its owned copy.
       prepared.reset_to_base();
-      services.read_named_global_payload(label,prepared);
+      services.read_named_global_payload(envelope.label,prepared);
     }
 
     if(const auto& renderer=services.renderer_resource_payload) {
@@ -2119,14 +2108,20 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
       services.release_renderer_construction_reference(parsed);
     }
 
-    constexpr std::uint32_t reference_domain_marker=0x80000000U;
+    constexpr std::uint32_t reference_domain_marker=0x40000000U;
+    constexpr std::uint32_t association_reference_bias=0x70U;
     for(const auto& association:services.resource_associations) {
       // Both lookups are independent and deliberately happen even if the
       // first one misses; a miss merely suppresses the association callback.
-      const auto first=services.resolve_marked_resource_reference(
-          association.first_reference|reference_domain_marker);
-      const auto second=services.resolve_marked_resource_reference(
-          association.second_reference|reference_domain_marker);
+      if(association.first_reference>
+              std::numeric_limits<std::uint32_t>::max()-association_reference_bias ||
+          association.second_reference>
+              std::numeric_limits<std::uint32_t>::max()-association_reference_bias)
+        throw std::runtime_error("Resource association reference overflows its runtime bias");
+      const auto first=resolve_marked_source_resource_reference(
+          (association.first_reference+association_reference_bias)|reference_domain_marker);
+      const auto second=resolve_marked_source_resource_reference(
+          (association.second_reference+association_reference_bias)|reference_domain_marker);
       if(first && second) services.associate_live_resources(*first,*second);
     }
 
@@ -2176,6 +2171,17 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
     }
     throw;
   }
+}
+
+std::optional<IntroRuntimeResourceHandle>
+IntroRuntime::resolve_marked_source_resource_reference(
+    std::uint32_t reference) const {
+  const auto source=resources_.sources().local_source_for_handle(reference);
+  if(!source || *source>=directory_resource_mapping_.size()) return std::nullopt;
+  const auto resource=directory_resource_mapping_[*source];
+  if(!resource || !associated_resource_owner(*resource) ||
+      !resource_state_for_handle(*resource)) return std::nullopt;
+  return resource;
 }
 
 void IntroRuntime::construct_room_animation_scope_without_engine_renderer() {

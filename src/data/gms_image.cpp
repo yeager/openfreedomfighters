@@ -610,7 +610,17 @@ GmsOuterLoaderSources GmsImage::outer_loader_sources() const {
         if (terminator == bytes.end() ||
             static_cast<std::size_t>(bytes.end() - terminator) < 5U)
             throw std::runtime_error("GMS named/global source has no framed payload");
-        result.named_global.emplace(bytes.begin(), bytes.end());
+        const auto block_offset =
+            static_cast<std::size_t>(terminator - bytes.begin()) + 1U;
+        const ByteReader reader(bytes);
+        const auto block_size = static_cast<std::size_t>(
+            reader.u32(block_offset) & 0x00ffffffU);
+        if (block_size < sizeof(std::uint32_t) ||
+            block_size > bytes.size() - block_offset)
+            throw std::runtime_error("GMS named/global tagged block is truncated");
+        result.named_global.emplace(
+            bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(
+                                      block_offset + block_size));
     }
 
     if (header_words_[6] != 0U) {

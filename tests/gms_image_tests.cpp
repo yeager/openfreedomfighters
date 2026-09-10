@@ -11,6 +11,7 @@
 #include "off/data/owner_buf_keys_profile.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
 #include "off/data/typed_value_cursor.hpp"
+#include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/runtime/owner_component_provider_binding.hpp"
 
 #include <algorithm>
@@ -2290,17 +2291,26 @@ int main() {
         constexpr char label[] = "Global";
         std::copy_n(reinterpret_cast<const std::byte*>(label), sizeof(label),
                     bytes.begin() + envelope + 452U);
-        bytes[envelope + 459U] = std::byte{0x31};
+        bytes[envelope + 459U] = std::byte{8};
+        bytes[envelope + 463U] = std::byte{0x31};
         set_u32(bytes, envelope + 480U, 2U);
         for (std::size_t index = 0; index < 24U; ++index)
             bytes[envelope + 484U + index] = static_cast<std::byte>(index + 1U);
         const auto outer_image = off::data::GmsImage::parse(
             off::data::PackedResource::parse(bytes));
         const auto sources = outer_image.outer_loader_sources();
-        check(sources.named_global && sources.named_global->size() == 28U &&
+        check(sources.named_global && sources.named_global->size() == 15U &&
                   (*sources.named_global)[0] == std::byte{'G'} &&
-                  (*sources.named_global)[7] == std::byte{0x31},
-              "retain the bounded source-owned named/global section");
+                  (*sources.named_global)[7] == std::byte{8} &&
+                  (*sources.named_global)[11] == std::byte{0x31},
+              "retain the exact declared source-owned named/global block");
+        const auto envelope_value =
+            off::graphics::parse_intro_named_global_section_envelope(
+                *sources.named_global);
+        check(envelope_value.label == "Global" &&
+                  envelope_value.tagged_block.size() == 8U &&
+                  envelope_value.tagged_block[4] == std::byte{0x31},
+              "pass extracted named/global bytes through the tagged envelope boundary");
         check(sources.allocation_sizing_rows.size() == 2U &&
                   sources.allocation_sizing_rows[0][0] == 0x04030201U &&
                   sources.allocation_sizing_rows[1][2] == 0x18171615U,
@@ -2341,6 +2351,24 @@ int main() {
                   sources.resource_associations[1] ==
                       std::array<std::uint32_t, 2>{17U, 18U},
               "decode ordered renderer-resource association pairs");
+        check_rejected(
+            [bytes] {
+                auto malformed = bytes;
+                set_u32(malformed, 9U + 132U, 100U);
+                const auto image = off::data::GmsImage::parse(
+                    off::data::PackedResource::parse(malformed));
+                static_cast<void>(image.outer_loader_sources());
+            },
+            "reject a renderer-resource payload overlapping the directory");
+        check_rejected(
+            [bytes] {
+                auto malformed = bytes;
+                set_u32(malformed, 9U + 144U, 3U);
+                const auto image = off::data::GmsImage::parse(
+                    off::data::PackedResource::parse(malformed));
+                static_cast<void>(image.outer_loader_sources());
+            },
+            "reject a resource-association count with a mismatched extent");
     }
     check_rejected(
         [] {

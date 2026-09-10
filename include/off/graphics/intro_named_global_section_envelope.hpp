@@ -33,6 +33,31 @@ struct IntroNamedGlobalPreparedReader {
 };
 
 inline IntroNamedGlobalSectionEnvelope parse_intro_named_global_section_envelope(
+    std::span<const std::byte> section) {
+  std::size_t label_end=0;
+  while(label_end<section.size() && section[label_end]!=std::byte{0}) ++label_end;
+  if(label_end==section.size())
+    throw std::runtime_error("Named/global section label is not NUL-terminated within its bounds");
+
+  const auto after_label=label_end+1U;
+  constexpr std::size_t tagged_block_header_size=4U;
+  if(section.size()-after_label<tagged_block_header_size)
+    throw std::runtime_error("Named/global section lacks a complete tagged-block header");
+  std::uint32_t header{};
+  for(std::size_t byte=0;byte<tagged_block_header_size;++byte)
+    header|=static_cast<std::uint32_t>(std::to_integer<unsigned char>(
+        section[after_label+byte])) << (byte*8U);
+  const auto block_size=static_cast<std::size_t>(header&0x00ffffffU);
+  if(block_size<tagged_block_header_size || block_size>section.size()-after_label)
+    throw std::runtime_error("Named/global tagged block exceeds its section");
+
+  const auto label_data=reinterpret_cast<const char*>(section.data());
+  return {
+      .label=std::string_view(label_data,label_end),
+      .tagged_block=section.subspan(after_label,block_size)};
+}
+
+inline IntroNamedGlobalSectionEnvelope parse_intro_named_global_section_envelope(
     std::span<const std::byte> decoded_gms_image, std::uint32_t section_offset,
     std::uint32_t next_section_offset) {
   if(section_offset==0 || next_section_offset==0)
@@ -42,22 +67,8 @@ inline IntroNamedGlobalSectionEnvelope parse_intro_named_global_section_envelope
   const auto end=static_cast<std::size_t>(next_section_offset);
   if(begin>=end || end>decoded_gms_image.size())
     throw std::runtime_error("Named/global section bounds are outside the decoded GMS image");
-
-  std::size_t label_end=begin;
-  while(label_end<end && decoded_gms_image[label_end]!=std::byte{0}) ++label_end;
-  if(label_end==end)
-    throw std::runtime_error("Named/global section label is not NUL-terminated within its bounds");
-
-  const auto after_label=label_end+1U;
-  constexpr std::size_t tagged_block_header_size=4U;
-  if(end-after_label<tagged_block_header_size)
-    throw std::runtime_error("Named/global section lacks a complete tagged-block header");
-
-  const auto label_data=reinterpret_cast<const char*>(decoded_gms_image.data()+
-                                                       static_cast<std::ptrdiff_t>(begin));
-  return {
-      .label=std::string_view(label_data,label_end-begin),
-      .tagged_block=decoded_gms_image.subspan(after_label,end-after_label)};
+  return parse_intro_named_global_section_envelope(
+      decoded_gms_image.subspan(begin,end-begin));
 }
 
 }  // namespace off::graphics

@@ -448,6 +448,8 @@ struct IntroRendererResourceContainer {
   bool operator==(const IntroRendererResourceContainer&) const = default;
 };
 struct IntroResourceAssociationRecord {
+  // Raw pair values. The ordinary loader adds 0x70 and then applies the GMS
+  // 0x40000000 reference-domain marker independently before each lookup.
   std::uint32_t first_reference{},second_reference{};
 };
 struct IntroAuxiliaryArraySources {
@@ -468,7 +470,6 @@ struct IntroOuterLoaderTailServices {
   std::function<IntroRendererResourceContainer(std::span<const std::byte>)> parse_renderer_resource_payload;
   std::function<void(IntroRendererResourceContainer)> release_renderer_construction_reference;
   std::vector<IntroResourceAssociationRecord> resource_associations;
-  std::function<std::optional<IntroRuntimeResourceHandle>(std::uint32_t)> resolve_marked_resource_reference;
   std::function<void(IntroRuntimeResourceHandle,IntroRuntimeResourceHandle)> associate_live_resources;
   IntroAuxiliaryArraySources auxiliary_arrays;
   std::function<void()> release_loader_source_lease;
@@ -672,6 +673,8 @@ public:
   [[nodiscard]] std::optional<IntroRendererResourceContainer> renderer_resource_container() const noexcept {
     return renderer_resource_container_;
   }
+  [[nodiscard]] std::optional<IntroRuntimeResourceHandle>
+  resolve_marked_source_resource_reference(std::uint32_t reference) const;
   [[nodiscard]] std::span<const std::array<std::byte,12>> first_auxiliary_array() const noexcept {
     return first_auxiliary_array_;
   }

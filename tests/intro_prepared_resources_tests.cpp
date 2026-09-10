@@ -737,8 +737,8 @@ static OFF_NOINLINE void test_named_global_envelopes() {
       image[7]=std::byte{'G'}; image[8]=std::byte{'l'}; image[9]=std::byte{'o'};
       image[10]=std::byte{'b'}; image[11]=std::byte{'a'}; image[12]=std::byte{'l'};
       image[13]=std::byte{0};
-      image[14]=std::byte{0x31}; image[15]=std::byte{0x32};
-      image[16]=std::byte{0x33}; image[17]=std::byte{0x34};
+      image[14]=std::byte{10}; image[15]=std::byte{0};
+      image[16]=std::byte{0}; image[17]=std::byte{0};
       image[18]=std::byte{0x88}; image[19]=std::byte{0x12}; image[20]=std::byte{0x34};
       image[21]=std::byte{0x56}; image[22]=std::byte{0x78}; image[23]=std::byte{0xff};
       image[24]=std::byte{0x99};
@@ -747,10 +747,9 @@ static OFF_NOINLINE void test_named_global_envelopes() {
       check(envelope.label=="Global" &&
                 envelope.label.data()==reinterpret_cast<const char*>(image.data()+section_offset),
             "named/global envelope exposes the bounded label");
-      check(envelope.tagged_block.size()==11 && envelope.tagged_block[0]==std::byte{0x31} &&
-                envelope.tagged_block[4]==std::byte{0x88} && envelope.tagged_block[9]==std::byte{0xff} &&
-                envelope.tagged_block[10]==std::byte{0x99},
-            "named/global envelope preserves the complete header-bearing tagged block");
+      check(envelope.tagged_block.size()==10 && envelope.tagged_block[0]==std::byte{10} &&
+                envelope.tagged_block[4]==std::byte{0x88} && envelope.tagged_block[9]==std::byte{0xff},
+            "named/global envelope preserves exactly the declared header-bearing tagged block");
       rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(image,0,next_section_offset); });
       rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(image,section_offset,0); });
       rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(image,next_section_offset,section_offset); });
@@ -762,6 +761,10 @@ static OFF_NOINLINE void test_named_global_envelopes() {
       Bytes short_block(12,std::byte{0x6d});
       short_block[7]=std::byte{'X'}; short_block[8]=std::byte{0};
       rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(short_block,7,12); });
+      Bytes oversized=image;
+      set(oversized,14,12U);
+      rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(
+          oversized,section_offset,next_section_offset); });
     }
 }
 
@@ -1209,35 +1212,34 @@ struct CompleteOuterLoaderTailObservation final {
     off::graphics::IntroRuntime& host;
         std::vector<std::string> tail_events;
         std::vector<off::graphics::IntroRuntimeResourceHandle> spatial,flag_4000;
-        const std::array<std::byte,11> named_payload{std::byte{'G'},std::byte{'l'},std::byte{'o'},
-            std::byte{'b'},std::byte{'a'},std::byte{'l'},std::byte{},std::byte{0x31},std::byte{0x32},
-            std::byte{0x33},std::byte{0x34}};
+        const std::array<std::byte,15> named_payload{std::byte{'G'},std::byte{'l'},std::byte{'o'},
+            std::byte{'b'},std::byte{'a'},std::byte{'l'},std::byte{},std::byte{8},std::byte{},
+            std::byte{},std::byte{},std::byte{0x31},std::byte{0x32},std::byte{0x33},std::byte{0x34}};
         const std::array<std::byte,3> renderer_payload{std::byte{1},std::byte{2},std::byte{3}};
     [[nodiscard]] off::graphics::IntroOuterLoaderTailServices services() {
+        const auto association_raw=[this](std::size_t source) {
+          const auto offset=host.resources().sources().directory()[source].local_slot_index*112U;
+          check(offset>=0x70U,"association fixture requires a bias-addressable pool slot");
+          return static_cast<std::uint32_t>(offset-0x70U);
+        };
         return {
             .named_global_payload=off::graphics::IntroNamedGlobalPayload{named_payload},
             .relocate_named_global_references=[this](off::graphics::IntroNamedGlobalPreparedReader& reader) {
-              check(reader.complete_block().size()==4 && reader.complete_block()[0]==std::byte{0x31},
+              check(reader.complete_block().size()==8 && reader.complete_block()[4]==std::byte{0x31},
                   "named relocation receives a complete owned tagged block including its header");
-              reader.mutable_block()[1]=std::byte{0x77}; reader.cursor=reader.complete_block().size();
+              reader.mutable_block()[5]=std::byte{0x77}; reader.cursor=reader.complete_block().size();
               tail_events.push_back("relocate");},
             .read_named_global_payload=[this](std::string_view subject,off::graphics::IntroNamedGlobalPreparedReader& reader) {
-              check(subject=="Global" && reader.cursor==0 && reader.complete_block().size()==4 &&
-                        reader.complete_block()[0]==std::byte{0x31} && reader.complete_block()[1]==std::byte{0x77},
+              check(subject=="Global" && reader.cursor==0 && reader.complete_block().size()==8 &&
+                        reader.complete_block()[4]==std::byte{0x31} && reader.complete_block()[5]==std::byte{0x77},
                     "named reader receives the original label plus reset, relocated complete block");
-              check(named_payload[8]==std::byte{0x32},"named relocation never mutates the source payload");
+              check(named_payload[12]==std::byte{0x32},"named relocation never mutates the source payload");
               tail_events.push_back("named-reader");},
             .renderer_resource_payload=off::graphics::IntroRendererResourcePayload{renderer_payload},
             .parse_renderer_resource_payload=[this](std::span<const std::byte> payload) {
               check(payload.size()==renderer_payload.size() && std::equal(payload.begin(),payload.end(),renderer_payload.begin()),"renderer parser receives the complete encoded payload");tail_events.push_back("renderer-parse");return off::graphics::IntroRendererResourceContainer{42};},
             .release_renderer_construction_reference=[this](auto container) {check(container.identity==42,"release only the parsed renderer construction reference");tail_events.push_back("renderer-release");},
-            .resource_associations={{7,9},{17,18}},
-            .resolve_marked_resource_reference=[this](std::uint32_t reference) -> std::optional<off::graphics::IntroRuntimeResourceHandle> {
-              tail_events.push_back("resolve:"+std::to_string(reference));
-              if(reference==0x80000007U) return host.directory_resource_mapping()[6];
-              if(reference==0x80000009U) return host.directory_resource_mapping()[8];
-              return std::nullopt;
-            },
+            .resource_associations={{association_raw(6),association_raw(8)}},
             .associate_live_resources=[this](auto first,auto second) {check(first==host.directory_resource_mapping()[6] && second==host.directory_resource_mapping()[8],"association receives both independently resolved live resources");tail_events.push_back("associate");},
             .auxiliary_arrays={},
             .release_loader_source_lease=[this]{tail_events.push_back("release");},
@@ -1270,7 +1272,7 @@ static OFF_NOINLINE void check_complete_outer_loader_tail(
               "tail retains parsed renderer ownership and preserves absent auxiliary arrays as zero-count");
         check(observation.spatial.size()==host.saved_resource_flags().size(),"first saved pass visits every saved entry");
         std::vector<std::string> expected_tail{"relocate","named-reader","renderer-parse","renderer-release",
-            "resolve:2147483655","resolve:2147483657","associate","resolve:2147483665","resolve:2147483666","release","camera-query",
+            "associate","release","camera-query",
             "transform","scene","scene","scene"};
         for(const auto& saved:host.saved_resource_flags()) expected_tail.push_back("spatial");
         expected_tail.push_back("between");expected_tail.push_back("finalize");

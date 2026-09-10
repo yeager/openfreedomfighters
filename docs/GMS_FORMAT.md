@@ -8,7 +8,9 @@ The decoded image begins with a fixed 32-byte header. Header word 0 is the byte 
 
 Header word 2 is an optional named/global outer-loader section. When present,
 it is bounded by header word 4 and contains a NUL-terminated
-label followed by at least one complete four-byte tagged-block header. Header
+label followed by one tagged block. The low 24 bits of its little-endian header
+declare the complete block size including the four-byte header; padding up to
+the section boundary is not passed to the reader. Header
 word 4 points to a counted pre-allocation sizing table of three-word rows. Its
 first word is a scene lookup key, its second contributes allocation capacity,
 and its third participates in a scene-policy-dependent byte-budget subtraction;
@@ -26,7 +28,11 @@ two-word resource-association records and ends at the object-source directory.
 The two references remain unmarked and unresolved source values. In the owned
 intro the renderer payload is 58,692 bytes and the association table has one
 record. `GmsImage` copies the bounded payload and decodes the ordered pairs; it
-does not parse renderer records, resolve resources, or perform associations.
+does not parse renderer records or perform associations. The ordinary runtime
+adds `0x70`, applies the GMS `0x40000000` handle-domain marker, resolves each
+side independently through the source pool and live directory mapping, and
+invokes the still-required concrete relationship service only when both live
+resources resolve.
 
 The object-source directory begins with a 32-bit entry count followed by eight-byte entries:
 
