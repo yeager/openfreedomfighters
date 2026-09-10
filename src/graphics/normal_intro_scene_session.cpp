@@ -93,6 +93,21 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
     throw;
   }
 }
+
+void NormalIntroSceneSession::prepare_supported_first_cut_player() {
+  if (stage_ != NormalIntroSceneSessionStage::reader_bracket_complete ||
+      first_cut_player_)
+    throw std::runtime_error(
+        "normal intro scene first-cut preparation is unavailable");
+  try {
+    runtime_->prepare_supported_first_cut_player();
+    first_cut_player_.emplace(runtime_->first_cut_player_session());
+  } catch (...) {
+    stage_ = NormalIntroSceneSessionStage::failed;
+    throw;
+  }
+}
+
 void NormalIntroSceneSession::complete_outer_loader_tail(
     const IntroOuterLoaderTailServices &services) {
   if (stage_ != NormalIntroSceneSessionStage::reader_bracket_complete)
