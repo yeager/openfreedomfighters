@@ -56,6 +56,8 @@ The measured FLAC files are stereo 16-bit/44.1 kHz; the MP3 files are stereo
 44.1 kHz and 22.05 kHz. FLAC avoids lossy codec degradation, but album edits,
 mastering, loop boundaries and in-game cues still need comparison. File format
 alone does not establish that an album track is a drop-in replacement.
+The complete 36-file optional reference set decodes successfully with the
+native FLAC and MP3 decoders; this verifies decodability, not cue equivalence.
 
 Playback policy: use a verified, decodable soundtrack version only when its cue
 mapping and required timing/loop behavior are known. Prefer FLAC, then a usable
