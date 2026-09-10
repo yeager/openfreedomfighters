@@ -1116,6 +1116,20 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               list_reader->sequence_resource==host.directory_resource_mapping()[host.resources().member_index()] &&
               list_reader->command_target_resources[0]==host.directory_resource_mapping()[host.resources().sources().local_source_for_authored_reference(host.resources().first_cut().commands[0].target_reference).value()],
               "first-cut list reader resolves required immutable source resources without registering commands or events");
+        host.prepare_supported_first_cut_player();
+        const auto* player=host.first_cut_player_prepared_state();
+        check(player && player->list_owner==list_reader->owner && player->sequence_owner==sequence_reader->owner &&
+              player->list_resource==list_reader->resource && player->sequence_resource==sequence_reader->resource &&
+              player->list_component_index==list_reader->component_indices[0] &&
+              player->sequence_component_index==sequence_reader->component_index &&
+              player->leading_controls==std::array<std::uint32_t,3>{list_reader->authored.settings_words[0],list_reader->authored.settings_words[1],list_reader->authored.settings_words[2]} &&
+              player->raw_scalar==list_reader->authored.settings_words[3] &&
+              player->trailing_controls==std::array<std::uint32_t,3>{list_reader->authored.settings_words[4],list_reader->authored.settings_words[5],list_reader->authored.settings_words[6]} &&
+              player->list_value==list_reader->authored.final_value && player->sequence_values==sequence_reader->authored.values &&
+              player->raw_enabled_option==sequence_reader->authored.authored_option &&
+              !player->started[0] && !player->completed[0],
+              "first-cut player preparation materializes checked reader state with a cold member and no playback");
+        rejects([&]{host.prepare_supported_first_cut_player();});
         if(!host.resources().sounds().empty()) {
           const auto& authored_sound=host.resources().sounds().front();
           const auto attachments=host.owner_components(host.source_handle(authored_sound.directory_index));

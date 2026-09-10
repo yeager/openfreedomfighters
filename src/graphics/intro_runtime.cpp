@@ -2915,6 +2915,43 @@ void IntroRuntime::apply_supported_first_cut_list_deferred_reader(
   catch(...) { first_cut_list_reader_state_.reset(); throw; }
 }
 
+void IntroRuntime::prepare_supported_first_cut_player() {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      !first_cut_sequence_reader_state_ || !first_cut_list_reader_state_ ||
+      first_cut_player_prepared_state_)
+    throw std::runtime_error("First-cut player requires both unconsumed reader states");
+  const auto& sequence=*first_cut_sequence_reader_state_;
+  const auto& list=*first_cut_list_reader_state_;
+  if(list.sequence_resource!=sequence.resource ||
+      list.component_indices[0]>=components_.size() ||
+      sequence.component_index>=components_.size())
+    throw std::runtime_error("First-cut player reader states do not share a live sequence");
+  const auto& list_component=components_.at(list.component_indices[0]);
+  const auto& sequence_component=components_.at(sequence.component_index);
+  if(!list_component.constructed() || list_component.removed() ||
+      list_component.source().factory_name!="ZLIST_CutSequenceList" ||
+      list_component.state().attached_owner!=list.owner.value ||
+      !sequence_component.constructed() || sequence_component.removed() ||
+      sequence_component.source().factory_name!="ZLIST_CutSequence" ||
+      sequence_component.state().attached_owner!=sequence.owner.value)
+    throw std::runtime_error("First-cut player has no live list or sequence component");
+  const auto& settings=list.authored.settings_words;
+  if(!std::isfinite(list.authored.final_value) ||
+      !std::isfinite(sequence.authored.values[0]) || !std::isfinite(sequence.authored.values[1]))
+    throw std::runtime_error("First-cut player source float is not finite");
+  IntroFirstCutPlayerPreparedState state{
+      .list_owner=list.owner, .sequence_owner=sequence.owner,
+      .list_resource=list.resource, .sequence_resource=sequence.resource,
+      .list_component_index=list.component_indices[0], .sequence_component_index=sequence.component_index,
+      .leading_controls={settings[0],settings[1],settings[2]},
+      .raw_scalar=settings[3],
+      .trailing_controls={settings[4],settings[5],settings[6]},
+      .list_value=list.authored.final_value, .sequence_values=sequence.authored.values,
+      .raw_enabled_option=sequence.authored.authored_option,
+      .started={},.completed={}};
+  first_cut_player_prepared_state_=std::move(state);
+}
+
 void IntroRuntime::apply_supported_external_cut_commands_deferred_reader(
     const IntroDeferredReaderWork& work) {
   constexpr std::array<std::string_view,2> factories{

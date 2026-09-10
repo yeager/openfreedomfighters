@@ -391,6 +391,20 @@ struct IntroFirstCutListReaderState {
   IntroRuntimeResourceHandle sequence_resource;
   std::array<IntroRuntimeResourceHandle,5> command_target_resources;
 };
+// Materialized source state for the one reviewed first-cut player. It is not a
+// scheduler, event registration, camera route, or renderer admission.
+struct IntroFirstCutPlayerPreparedState {
+  IntroRuntimeHandle list_owner, sequence_owner;
+  IntroRuntimeResourceHandle list_resource, sequence_resource;
+  std::size_t list_component_index{}, sequence_component_index{};
+  std::array<std::uint32_t,3> leading_controls{};
+  std::uint32_t raw_scalar{};
+  std::array<std::uint32_t,3> trailing_controls{};
+  float list_value{};
+  std::array<float,2> sequence_values{};
+  std::uint32_t raw_enabled_option{};
+  std::array<bool,1> started{}, completed{};
+};
 // Immutable state for the one reviewed external-command pair. It cannot run a
 // command, enroll events, or mutate a CutSequenceList.
 struct IntroExternalCutCommandsReaderState {
@@ -816,6 +830,12 @@ public:
   void apply_supported_first_cut_list_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroFirstCutSequenceReaderState* first_cut_sequence_reader_state() const noexcept {return first_cut_sequence_reader_state_?&*first_cut_sequence_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutListReaderState* first_cut_list_reader_state() const noexcept {return first_cut_list_reader_state_?&*first_cut_list_reader_state_:nullptr;}
+  // Atomically materialize the source-backed first-cut player state after both
+  // reviewed readers. Playback services remain intentionally absent.
+  void prepare_supported_first_cut_player();
+  [[nodiscard]] const IntroFirstCutPlayerPreparedState* first_cut_player_prepared_state() const noexcept {
+    return first_cut_player_prepared_state_?&*first_cut_player_prepared_state_:nullptr;
+  }
   void apply_supported_external_cut_commands_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroExternalCutCommandsReaderState* external_cut_commands_reader_state() const noexcept {return external_cut_commands_reader_state_?&*external_cut_commands_reader_state_:nullptr;}
   void apply_supported_first_cut_fade_picture_deferred_reader(const IntroDeferredReaderWork& work);
@@ -935,6 +955,7 @@ private:
   std::optional<IntroMovieControllerComponentReaderState> movie_controller_component_reader_state_;
   std::optional<IntroFirstCutSequenceReaderState> first_cut_sequence_reader_state_;
   std::optional<IntroFirstCutListReaderState> first_cut_list_reader_state_;
+  std::optional<IntroFirstCutPlayerPreparedState> first_cut_player_prepared_state_;
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;
   std::map<std::size_t,IntroFadePictureReaderState> fade_picture_reader_states_;
   std::optional<IntroLegalPictureReaderState> legal_picture_reader_state_;
