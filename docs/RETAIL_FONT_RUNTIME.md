@@ -39,9 +39,10 @@ The first integration renders the English F10 diagnostic labels with a
 verified retail font. It deterministically selects the first valid embedded
 font in bundle order as a provisional role assignment; recovered font-role
 semantics must replace that selection before retail-accurate UI acceptance.
-The font layer can now split mixed-script UTF-8 into contiguous coverage runs,
-but the GPU overlay still uses its single-font route until run measurement and
-layout are integrated.
+The font layer splits mixed-script UTF-8 into contiguous coverage runs, and the
+GPU overlay rasterizes those runs in byte-order LTR with inherited color, layer
+and clip. A failed run invalidates the complete overlay batch. This is not bidi,
+shaping, cross-font kerning, ligatures, wrapping, or retail font-role recovery.
 It does **not** yet prove locale-wide glyph coverage,
 font fallback, bidirectional layout, or complex-script shaping. Those remain
 acceptance requirements for the 20-language localization phase. In

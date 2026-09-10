@@ -414,44 +414,31 @@ build_overlay_batch(const ui::GraphicsMenuDrawList &list,
                 solid_u, solid_v);
   Uint32 cursor_x = 1, cursor_y = 1, shelf_height = 0;
   for (const auto &command : list.texts) {
-    const auto selected = ui::select_font_for_utf8(sources, command.text);
-    if (!selected || *selected >= fonts.size() || fonts[*selected].font == nullptr ||
-        !TTF_SetFontSize(fonts[*selected].font, 24.0F * list.ui_scale)) {
+    const auto runs = ui::select_font_runs_for_utf8(sources, command.text);
+    if (!runs) {
       batch.valid = false;
       continue;
     }
     const auto layer = static_cast<std::size_t>(command.layer);
-    SDL_Surface *rendered = TTF_RenderText_Blended(
-        fonts[*selected].font, command.text.data(), command.text.size(), {255, 255, 255, 255});
-    SDL_Surface *surface =
-        rendered == nullptr
-            ? nullptr
-            : SDL_ConvertSurface(rendered, SDL_PIXELFORMAT_RGBA32);
-    if (rendered != nullptr)
-      SDL_DestroySurface(rendered);
-    if (surface == nullptr) {
-      batch.valid = false;
-      continue;
-    }
-    if (surface->w <= 0 || surface->h <= 0) {
-      SDL_DestroySurface(surface);
-      continue;
-    }
-    if (surface->w >= static_cast<int>(overlay_atlas_width) ||
-        surface->h >= static_cast<int>(overlay_atlas_height)) {
-      batch.valid = false;
-      SDL_DestroySurface(surface);
-      continue;
-    }
-    const Uint32 width = static_cast<Uint32>(surface->w);
-    const Uint32 height = static_cast<Uint32>(surface->h);
-    if (cursor_x + width + 1U > overlay_atlas_width) {
-      cursor_x = 1;
-      cursor_y += shelf_height + 1U;
-      shelf_height = 0;
-    }
-    if (cursor_y + height + 1U <= overlay_atlas_height &&
-        width + 2U <= overlay_atlas_width) {
+    float run_x = command.x;
+    for(const auto& run:*runs) {
+      if(run.font_index>=fonts.size() || fonts[run.font_index].font==nullptr ||
+          !TTF_SetFontSize(fonts[run.font_index].font,24.0F*list.ui_scale)) {
+        batch.valid=false;
+        break;
+      }
+      SDL_Surface* rendered=TTF_RenderText_Blended(fonts[run.font_index].font,
+          command.text.data()+run.byte_offset,run.byte_length,{255,255,255,255});
+      SDL_Surface* surface=rendered==nullptr?nullptr:SDL_ConvertSurface(rendered,SDL_PIXELFORMAT_RGBA32);
+      if(rendered!=nullptr) SDL_DestroySurface(rendered);
+      if(surface==nullptr) {batch.valid=false;break;}
+      if(surface->w<=0 || surface->h<=0) {SDL_DestroySurface(surface);continue;}
+      if(surface->w>=static_cast<int>(overlay_atlas_width) || surface->h>=static_cast<int>(overlay_atlas_height)) {
+        batch.valid=false;SDL_DestroySurface(surface);break;
+      }
+      const Uint32 width=static_cast<Uint32>(surface->w),height=static_cast<Uint32>(surface->h);
+      if(cursor_x+width+1U>overlay_atlas_width) {cursor_x=1;cursor_y+=shelf_height+1U;shelf_height=0;}
+      if(cursor_y+height+1U<=overlay_atlas_height && width+2U<=overlay_atlas_width) {
       const auto *source = static_cast<const std::uint8_t *>(surface->pixels);
       for (Uint32 y = 0; y < height; ++y) {
         auto *destination =
@@ -472,7 +459,7 @@ build_overlay_batch(const ui::GraphicsMenuDrawList &list,
           static_cast<float>(cursor_y + height) / overlay_atlas_height;
       ClippedVertices piece{.clip = command.clip};
       add_clipped_ui_quad(piece.vertices,
-                          {command.x, command.y, static_cast<float>(width),
+                          {run_x, command.y, static_cast<float>(width),
                            static_cast<float>(height)},
                           command.clip, command.color, list.target, u0, v0, u1,
                           v1);
@@ -483,7 +470,10 @@ build_overlay_batch(const ui::GraphicsMenuDrawList &list,
     } else {
       batch.valid = false;
     }
+      run_x+=static_cast<float>(width);
     SDL_DestroySurface(surface);
+      if(!batch.valid) break;
+    }
   }
   const auto append = [&](const std::vector<PreviewVertex> &vertices,
                           std::optional<ui::RetailUiTextureRole> role,
