@@ -2282,6 +2282,41 @@ int main() {
         [](auto& bytes) { set_u32(bytes, 9 + 12, 3); },
         "reject an unsupported GMS format value"
     );
+    {
+        auto bytes = packed_fixture();
+        constexpr std::size_t envelope = 9U;
+        set_u32(bytes, envelope + 8U, 452U);
+        set_u32(bytes, envelope + 16U, 480U);
+        constexpr char label[] = "Global";
+        std::copy_n(reinterpret_cast<const std::byte*>(label), sizeof(label),
+                    bytes.begin() + envelope + 452U);
+        bytes[envelope + 459U] = std::byte{0x31};
+        set_u32(bytes, envelope + 480U, 2U);
+        for (std::size_t index = 0; index < 24U; ++index)
+            bytes[envelope + 484U + index] = static_cast<std::byte>(index + 1U);
+        const auto outer_image = off::data::GmsImage::parse(
+            off::data::PackedResource::parse(bytes));
+        const auto sources = outer_image.outer_loader_sources();
+        check(sources.named_global && sources.named_global->size() == 28U &&
+                  (*sources.named_global)[0] == std::byte{'G'} &&
+                  (*sources.named_global)[7] == std::byte{0x31},
+              "retain the bounded source-owned named/global section");
+        check(sources.first_auxiliary_rows.size() == 2U &&
+                  sources.first_auxiliary_rows[0][0] == std::byte{1} &&
+                  sources.first_auxiliary_rows[1][11] == std::byte{24},
+              "copy the source-owned outer-loader twelve-byte rows");
+    }
+    check_rejected(
+        [] {
+            auto bytes = packed_fixture();
+            set_u32(bytes, 9U + 16U, 504U);
+            set_u32(bytes, 9U + 504U, 1U);
+            const auto value = off::data::GmsImage::parse(
+                off::data::PackedResource::parse(bytes));
+            static_cast<void>(value.outer_loader_sources());
+        },
+        "reject a truncated outer-loader twelve-byte table"
+    );
 
     return failures == 0 ? 0 : 1;
 }

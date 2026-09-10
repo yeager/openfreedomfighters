@@ -69,9 +69,10 @@ for a portable installation.
   external-command pair, and the verified FadeToBlack picture targets. The
   other 410 records remain intentionally unconsumed. A scene-owned session now
   retains this runtime and owns the exactly-once reader bracket instead of
-  leaving its callback wiring in `main`. Loader-tail processing,
-  global lifecycle admission, renderer associations, scene updates, rendering,
-  audio playback, menus, and gameplay remain unimplemented.
+  leaving its callback wiring in `main`. The checked loader-tail transition is
+  implemented, but its concrete source services and normal-startup call remain
+  missing. Global lifecycle admission, renderer associations, scene updates,
+  rendering, audio playback, menus, and gameplay remain unimplemented.
   Window console/property bindings and the scene event-name table are live.
   None of the cameras is registered for normal rendering yet.
   DefaultCam and its PreviewCamera now share an [ordinary update queue](docs/ORDINARY_COMPONENTS.md)

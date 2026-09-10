@@ -6,6 +6,18 @@ Every scene archive contains one packed `GMS` resource. After outer-envelope dec
 
 The decoded image begins with a fixed 32-byte header. Header word 0 is the byte offset of an object-source directory, header word 1 is the byte offset of an identifier table, and header word 3 has the observed format value 4. Both table offsets are four-byte aligned.
 
+Header word 2 is an optional named/global outer-loader section. When present,
+it is bounded by the next header-referenced region and contains a NUL-terminated
+label followed by at least one complete four-byte tagged-block header. Header
+word 4 points to a counted table of twelve-byte outer-loader rows; a zero word
+means that source is absent in synthetic/minimal images. `GmsImage` now retains
+the first section as borrowed source bytes and copies the rows without assigning
+field semantics. Across the 90 owned scene images, word 2 is present in 40 and
+word 4 is aligned and in range in all 90. In 89 images its row count consumes
+the terminal region exactly; the remaining empty table shares its offset with
+the following directory. These are source boundaries, not proof that the
+named reader or row consumer has run.
+
 The object-source directory begins with a 32-bit entry count followed by eight-byte entries:
 
 | Entry offset | Size | Meaning |

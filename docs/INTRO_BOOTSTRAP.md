@@ -29,8 +29,9 @@ serial effects. The host also exposes checked, explicit boundaries for the
 post-construction reader bracket, approved reference translation, loader tail,
 and global component passes. Normal startup now runs the ordinary reader bracket
 and admits ten reviewed reader records without executing a command or activating
-a component. The remaining 410 records, loader tail, renderer association,
-scene update, and rendering path remain unavailable. See [live resource flags](RESOURCE_STATE.md) and the
+a component. The remaining 410 records and the concrete production services
+needed to invoke the checked loader-tail transition are unavailable, as are
+renderer association, scene update, and rendering. See [live resource flags](RESOURCE_STATE.md) and the
 [component lifecycle](COMPONENT_LIFECYCLE.md).
 MatPosAnim is explicitly outside the current deferred-reader admission path:
 all 227 associated deferred records terminate before attachment dispatch. Its

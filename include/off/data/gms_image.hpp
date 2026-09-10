@@ -190,6 +190,14 @@ struct GmsHierarchyNode {
     std::vector<std::size_t> children_in_directory_order;
 };
 
+// Source-owned outer-loader inputs. The named/global bytes remain framed and
+// unrelocated; the twelve-byte rows remain semantically opaque until their
+// consumer contract is recovered.
+struct GmsOuterLoaderSources {
+    std::optional<std::span<const std::byte>> named_global;
+    std::vector<std::array<std::byte, 12>> first_auxiliary_rows;
+};
+
 class GmsImage final {
 public:
     [[nodiscard]] static GmsImage parse(PackedResource resource);
@@ -285,6 +293,7 @@ public:
     [[nodiscard]] std::size_t decoded_size() const noexcept {
         return resource_.payload().size();
     }
+    [[nodiscard]] GmsOuterLoaderSources outer_loader_sources() const;
 
 private:
     PackedResource resource_;
@@ -292,6 +301,7 @@ private:
     std::vector<GmsPoolGroup> pool_groups_;
     std::vector<GmsHierarchyNode> hierarchy_;
     std::vector<std::size_t> local_slot_to_directory_;
+    std::array<std::uint32_t, 8> header_words_{};
     std::size_t identifier_count_{0};
 };
 

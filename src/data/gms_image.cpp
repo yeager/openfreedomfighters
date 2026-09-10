@@ -299,6 +299,9 @@ GmsImage GmsImage::parse(PackedResource resource) {
         throw std::runtime_error("GMS image is missing its fixed header");
     }
     const ByteReader reader(payload);
+    for (std::size_t index = 0; index < result.header_words_.size(); ++index) {
+        result.header_words_[index] = reader.u32(index * sizeof(std::uint32_t));
+    }
     const auto directory_offset = static_cast<std::size_t>(reader.u32(0));
     const auto identifier_table_offset = static_cast<std::size_t>(reader.u32(4));
     const auto pool_table_offset = static_cast<std::size_t>(reader.u32(20));
@@ -307,6 +310,12 @@ GmsImage GmsImage::parse(PackedResource resource) {
         directory_offset > payload.size() - sizeof(std::uint32_t) ||
         identifier_table_offset > payload.size() - sizeof(std::uint32_t) ||
         pool_table_offset > payload.size() - sizeof(std::uint32_t) ||
+        (result.header_words_[2] != 0U &&
+         ((result.header_words_[2] & 3U) != 0U ||
+          result.header_words_[2] >= payload.size())) ||
+        (result.header_words_[4] != 0U &&
+         ((result.header_words_[4] & 3U) != 0U ||
+          result.header_words_[4] > payload.size() - sizeof(std::uint32_t))) ||
         reader.u32(12) != 4U) {
         throw std::runtime_error("invalid GMS image header");
     }
@@ -581,6 +590,52 @@ GmsImage GmsImage::parse(PackedResource resource) {
                       payload.end(), std::byte{0}) == payload.end()) {
             throw std::runtime_error("GMS identifier is not NUL-terminated");
         }
+    }
+    return result;
+}
+
+GmsOuterLoaderSources GmsImage::outer_loader_sources() const {
+    const auto payload = resource_.payload();
+    const auto next_boundary = [&](std::size_t offset) {
+        auto boundary = payload.size();
+        for (std::size_t index = 0; index < header_words_.size(); ++index) {
+            if (index == 3U)
+                continue;
+            const auto candidate = static_cast<std::size_t>(header_words_[index]);
+            if (candidate > offset && candidate < boundary)
+                boundary = candidate;
+        }
+        return boundary;
+    };
+
+    GmsOuterLoaderSources result;
+    if (header_words_[2] != 0U) {
+        const auto offset = static_cast<std::size_t>(header_words_[2]);
+        const auto end = next_boundary(offset);
+        if (end <= offset || end - offset < 5U)
+            throw std::runtime_error("GMS named/global source is truncated");
+        const auto bytes = payload.subspan(offset, end - offset);
+        const auto terminator = std::find(bytes.begin(), bytes.end(), std::byte{});
+        if (terminator == bytes.end() ||
+            static_cast<std::size_t>(bytes.end() - terminator) < 5U)
+            throw std::runtime_error("GMS named/global source has no framed payload");
+        result.named_global = bytes;
+    }
+
+    if (header_words_[4] == 0U)
+        return result;
+    const auto rows_offset = static_cast<std::size_t>(header_words_[4]);
+    const auto rows_end = next_boundary(rows_offset);
+    const auto row_count = static_cast<std::size_t>(ByteReader(payload).u32(rows_offset));
+    if (row_count > (rows_end - rows_offset - sizeof(std::uint32_t)) / 12U)
+        throw std::runtime_error("GMS outer-loader twelve-byte table is truncated");
+    result.first_auxiliary_rows.reserve(row_count);
+    auto cursor = rows_offset + sizeof(std::uint32_t);
+    for (std::size_t row = 0; row < row_count; ++row, cursor += 12U) {
+        std::array<std::byte, 12> value{};
+        std::copy_n(payload.begin() + static_cast<std::ptrdiff_t>(cursor),
+                    value.size(), value.begin());
+        result.first_auxiliary_rows.push_back(value);
     }
     return result;
 }

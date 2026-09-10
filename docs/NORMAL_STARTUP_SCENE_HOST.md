@@ -21,8 +21,9 @@ host borrows it through checked session boundaries. It must not run before
 source-directory construction has completed. It performs
 the following stages exactly once, with real services at every boundary:
 
-1. Run `IntroStartupActivation`: the post-construction reader bracket, outer
-   loader tail, global lifecycle, then MovieControl phase two.
+1. The session runs the post-construction reader bracket and outer loader tail.
+   The host then continues the activation boundary at global lifecycle and
+   MovieControl phase two; it must not replay either loader stage.
 2. On a later ordinary frame, run the reviewed MovieControl event-16 update.
    It must be strictly past the phase-two deadline.
 3. Route the selected first-cut camera and pass the live camera/view evidence
