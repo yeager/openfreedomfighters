@@ -448,6 +448,17 @@ struct IntroFadePictureReaderState {
   data::GmsWindowPictureSource authored;
   std::uint32_t picture_asset_reference{};
 };
+// A cold component-boundary receipt for a first-cut FadeToBlack owner.  The
+// authored picture stream is owner data; this does not infer fade semantics.
+struct IntroFadePictureComponentReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t source_directory_index{};
+  std::uint32_t source_offset{};
+  std::size_t component_index{};
+  data::GmsWindowPictureSource authored;
+  std::uint32_t picture_asset_reference{};
+};
 struct IntroLegalPictureReaderState {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
@@ -882,7 +893,9 @@ public:
   void apply_supported_external_cut_commands_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroExternalCutCommandsReaderState* external_cut_commands_reader_state() const noexcept {return external_cut_commands_reader_state_?&*external_cut_commands_reader_state_:nullptr;}
   void apply_supported_first_cut_fade_picture_deferred_reader(const IntroDeferredReaderWork& work);
+  void apply_supported_first_cut_fade_picture_component_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroFadePictureReaderState>& fade_picture_reader_states() const noexcept {return fade_picture_reader_states_;}
+  [[nodiscard]] const std::map<std::size_t,IntroFadePictureComponentReaderState>& fade_picture_component_reader_states() const noexcept {return fade_picture_component_reader_states_;}
   void apply_supported_first_cut_legal_picture_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroLegalPictureReaderState* legal_picture_reader_state() const noexcept {return legal_picture_reader_state_?&*legal_picture_reader_state_:nullptr;}
   // Caller still owes actual global lifecycle admission and external services.
@@ -1004,6 +1017,7 @@ private:
   std::optional<IntroFirstCutPlayerPreparedState> first_cut_player_prepared_state_;
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;
   std::map<std::size_t,IntroFadePictureReaderState> fade_picture_reader_states_;
+  std::map<std::size_t,IntroFadePictureComponentReaderState> fade_picture_component_reader_states_;
   std::optional<IntroLegalPictureReaderState> legal_picture_reader_state_;
   IntroControllerInitialization controller_initialization_;
   FreshIntroCamera prepared_camera_;

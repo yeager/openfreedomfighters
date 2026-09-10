@@ -1059,6 +1059,8 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
             if(work.source_directory_index==host.resources().first_cut_index() &&
                 host.resources().sources().deferred_source_block(work.source_directory_index).size()==171U)
               host.apply_supported_first_cut_component_reader(work);
+            if(host.fade_picture_reader_states().contains(work.source_directory_index))
+              host.apply_supported_first_cut_fade_picture_component_reader(work);
             if(work.source_directory_index==host.resources().window_index()) {
               const auto& window=host.window_for_owner(host.source_handle(work.source_directory_index));
               check(host.window_camera_projection_applied() && window.cameras==std::vector{host.source_handle(host.resources().camera_index())} &&
@@ -1102,6 +1104,14 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
         check(applied_sound_readers==host.resources().sounds().size() &&
               std::ranges::all_of(host.sounds(),[](const auto& sound) { return sound->source_applied(); }),
               "sound owner readers consume both parsed source prefixes without preparing playback");
+        check(host.fade_picture_component_reader_states().size()==host.fade_picture_reader_states().size() &&
+              std::ranges::all_of(host.fade_picture_reader_states(),[&](const auto& entry) {
+                const auto found=host.fade_picture_component_reader_states().find(entry.first);
+                return found!=host.fade_picture_component_reader_states().end() &&
+                    found->second.owner==entry.second.owner && found->second.resource==entry.second.resource &&
+                    found->second.component_index==entry.second.component_index &&
+                    found->second.picture_asset_reference==entry.second.picture_asset_reference;
+              }),"FadeToBlack component boundaries retain only their completed owner provenance");
         const auto reader_admission=host.preflight_global_lifecycle();
         check(!reader_admission.ready() && reader_admission.expected_readers==420 &&
               reader_admission.covered_readers>=6 && reader_admission.expected_components==383 &&

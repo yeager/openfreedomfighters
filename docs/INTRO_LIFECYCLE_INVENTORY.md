@@ -10,7 +10,7 @@ callback, owner state, and required services.
 | `ZGROUP_RootGroup` | Initializer and phase-one seam | None | Ordinary input and phase-two behavior |
 | `ZGEOM_MovieControl` | None | Callback ordering | Full global admission, live services, event 16 and cut dependencies |
 | `ZGEOM_Center` | Legal-picture reader state and position/cache seam | None | Global admission, position service and event delivery |
-| `ZWINPIC_FadeToBlack` | Fade and dimension seams | None | Reader, material/color path and event delivery |
+| `ZWINPIC_FadeToBlack` | Owner/component provenance and fade/dimension seams | None | Material/color path and event delivery |
 | `ZGEOM_MatPosAnim` | KEYS preparation seam | None | Existing-state provider, events and special-owner behavior |
 | `ZLIST_CutSequence`, `ZLIST_CutSequenceList`, `ZLIST_CutSequenceCommand` | Timeline/source sub-boundaries | None | Player registration, dispatch and completion timing |
 | `ZSNDOBJ_SoundExtend`, `ZSNDOBJ_SoundNotify`, `ZSNDOBJ_SoundSegment`, `ZGEOM_ZSetZDefine` | Typed data and owner-side sub-boundaries | None | Output/channel admission and readiness producer |

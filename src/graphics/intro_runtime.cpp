@@ -3242,6 +3242,34 @@ void IntroRuntime::apply_supported_first_cut_fade_picture_deferred_reader(
   catch (...) { fade_picture_reader_states_.erase(entry); throw; }
 }
 
+void IntroRuntime::apply_supported_first_cut_fade_picture_component_reader(
+    const IntroDeferredReaderWork& work) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !work.processed ||
+      work.source_directory_index>=resources_.sources().directory().size() ||
+      std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate) {
+        return std::addressof(candidate)==std::addressof(work);
+      })==deferred_reader_work_.end())
+    throw std::runtime_error("Fade picture component reader requires live deferred work");
+  const auto owner=fade_picture_reader_states_.find(work.source_directory_index);
+  if(owner==fade_picture_reader_states_.end() ||
+      fade_picture_component_reader_states_.contains(work.source_directory_index))
+    throw std::runtime_error("Fade picture component reader requires an unconsumed owner reader state");
+  const auto& state=owner->second;
+  if(state.resource!=work.resource || state.owner!=source_handle(work.source_directory_index) ||
+      resources_.sources().directory().at(work.source_directory_index).deferred_source_offset!=work.source_offset)
+    throw std::runtime_error("Fade picture component reader source identity is unsupported");
+  const auto& component=components_.at(state.component_index);
+  if(!component.constructed() || component.removed() ||
+      component.source().factory_name!="ZWINPIC_FadeToBlack" ||
+      component.state().attached_owner!=state.owner.value)
+    throw std::runtime_error("Fade picture component reader has no live FadeToBlack component");
+  const auto [entry,inserted]=fade_picture_component_reader_states_.emplace(
+      work.source_directory_index,IntroFadePictureComponentReaderState{
+        state.owner,state.resource,work.source_directory_index,work.source_offset,
+        state.component_index,state.authored,state.picture_asset_reference});
+  if(!inserted) throw std::runtime_error("Fade picture component reader cannot run twice");
+}
+
 void IntroRuntime::apply_supported_first_cut_legal_picture_deferred_reader(
     const IntroDeferredReaderWork& work) {
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
