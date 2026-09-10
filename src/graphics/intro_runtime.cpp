@@ -3093,6 +3093,12 @@ void IntroRuntime::apply_supported_following_visual_owner_deferred_reader(
       visual==constructed_visual_owners_.end() || visual->second.owner!=source_handle(work.source_directory_index) ||
       visual->second.resource!=work.resource || !visual->second.attachments.empty())
     throw std::runtime_error("Following visual owner receipt source shape is unsupported");
+  // A receipt still establishes a real bounded source boundary. Do not infer
+  // field semantics or lifecycle behavior from these bytes: that requires a
+  // separately recovered reader contract.
+  const auto block=resources_.sources().deferred_source_block(work.source_directory_index);
+  if(block.size()<=sizeof(std::uint32_t))
+    throw std::runtime_error("Following visual owner receipt has no bounded reader body");
   following_visual_owner_reader_receipts_.emplace(work.source_directory_index,
       IntroFollowingVisualOwnerReaderReceipt{source_handle(work.source_directory_index),work.resource,
           work.source_directory_index,work.source_offset});
