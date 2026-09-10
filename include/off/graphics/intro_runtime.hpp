@@ -944,6 +944,7 @@ public:
   [[nodiscard]] PictureOrderedCoordinator& ordered_coordinator() noexcept { return ordered_; }
   [[nodiscard]] PictureViewTransition& view_transition() noexcept { return view_; }
 private:
+  [[nodiscard]] cutscene::FirstCutPlayerDescriptor first_cut_player_descriptor() const;
   runtime::ApplicationServices& application_;
   IntroSoundLoadPolicy sound_load_policy_;
   bool restore_mode_{};
