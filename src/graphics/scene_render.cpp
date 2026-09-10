@@ -129,8 +129,7 @@ build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
       build_scene_render_asset(primitives.entries(), textures.images(),
                                objects.directory(), objects.hierarchy(), maps);
   if (animation)
-    result.animation =
-        data::AnimationImage::parse(archive.read(*animation)).header();
+    result.animation = data::AnimationImage::parse(archive.read(*animation));
   validate_scene_render_asset(result);
   return result;
 }
@@ -217,10 +216,14 @@ summarize_scene_render_resolutions(const SceneRenderAsset &asset) noexcept {
 }
 
 void validate_scene_render_asset(const SceneRenderAsset &asset) {
-  if (asset.animation && (asset.animation->byte_size < 20U ||
-                          asset.animation->reference_table_count < 1U ||
-                          asset.animation->reference_table_count > 6U ||
-                          asset.animation->format_value != 10U)) {
+  if (asset.animation &&
+      (asset.animation->header().byte_size < 20U ||
+       asset.animation->header().reference_table_count < 1U ||
+       asset.animation->header().reference_table_count > 6U ||
+       asset.animation->header().format_value != 10U ||
+       asset.animation->reference_tables().size() !=
+           asset.animation->header().reference_table_count ||
+       asset.animation->descriptors().empty())) {
     throw std::invalid_argument("scene render animation metadata is invalid");
   }
   if (asset.resolutions.size() > maximum_scene_instances ||

@@ -39,9 +39,11 @@ Representative scene archives consistently expose a family of resource types:
 | `SGP` | scene/game parameters | determine semantics |
 | `RMC`/`RMI` | validated quantized octrees, bounds, and fixed object descriptors | exact runtime distinction and binding to scene objects |
 | `PRM` | indexed render primitives with decoded primary vertices and grouped topology | materials and auxiliary/skinning streams |
-| `ANM` | validated `MNA` envelope and reference-table directory (42 observed) | referenced record schemas, clips, tracks, time units, skeleton binding |
+| `ANM` | validated `MNA` envelope, reference-table directory, and descriptor block (42 observed) | referenced stream schemas, clips, tracks, time units, skeleton binding |
 
-This table is provisional. Every claim graduates only after corpus-wide validation and a synthetic parser test. The `ANM` directory has graduated under that rule; its referenced payload records have not.
+This table is provisional. Every claim graduates only after corpus-wide validation and a synthetic parser test. The `ANM` directory and opaque descriptor block have graduated under that rule; referenced stream semantics have not.
+
+Scene render assets retain the complete parsed `ANM` metadata for their lifetime. This preserves table identities, neutral reference words, and opaque descriptors for a future evidence-backed object-pose binding instead of discarding them after archive validation.
 
 Aggregate sizes, header invariants, and the first three-scene comparison are recorded in [FORMAT_CENSUS.md](FORMAT_CENSUS.md).
 

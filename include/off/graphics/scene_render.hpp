@@ -68,7 +68,7 @@ struct SceneRenderInstance {
 };
 
 struct SceneRenderAsset {
-  std::optional<data::AnimationImageHeader> animation;
+  std::optional<data::AnimationImage> animation;
   std::vector<SceneRenderTexture> textures;
   std::vector<SceneRenderMesh> meshes;
   std::vector<SceneRenderInstance> instances;

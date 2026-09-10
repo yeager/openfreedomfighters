@@ -149,8 +149,7 @@ int main() {
   check(valid_scene_asset_accepted,
         "accept an independently validated owning scene asset");
   auto invalid_animation_asset = scene_asset;
-  invalid_animation_asset.animation = {
-      .byte_size = 24U, .reference_table_count = 0U, .format_value = 10U};
+  invalid_animation_asset.animation = off::data::AnimationImage{};
   bool invalid_animation_rejected = false;
   try {
     off::graphics::validate_scene_render_asset(invalid_animation_asset);

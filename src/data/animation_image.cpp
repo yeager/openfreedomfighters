@@ -18,6 +18,8 @@ constexpr std::uint32_t supported_format_value = 10U;
 constexpr std::size_t header_size = 20U;
 constexpr std::size_t maximum_animation_size = 16U * 1024U * 1024U;
 constexpr std::uint32_t maximum_table_entries = 65'536U;
+constexpr std::uint32_t minimum_descriptor_count = 3U;
+constexpr std::uint32_t maximum_descriptor_count = 24U;
 
 } // namespace
 
@@ -62,15 +64,15 @@ AnimationImage AnimationImage::parse(std::span<const std::byte> bytes) {
       throw std::runtime_error("animation reference table is malformed");
     const auto table_end = cursor + length;
     AnimationReferenceTable table;
-    table.offsets.reserve(count);
-    std::unordered_set<std::uint32_t> unique_offsets;
-    unique_offsets.reserve(count);
+    table.reference_words.reserve(count);
+    std::unordered_set<std::uint32_t> unique_references;
+    unique_references.reserve(count);
     for (std::uint32_t index = 0; index < count; ++index) {
       const auto value = reader.u32(cursor + 20U + index * 4U);
       if ((value & 3U) != 0U || value < table_end || value >= bytes.size() ||
-          !unique_offsets.insert(value).second)
-        throw std::runtime_error("animation reference offset is invalid");
-      table.offsets.push_back(value);
+          !unique_references.insert(value).second)
+        throw std::runtime_error("animation reference word is invalid");
+      table.reference_words.push_back(value);
     }
     const auto name_start = cursor + 20U + static_cast<std::size_t>(count) * 4U;
     const auto marker_offset = table_end - 4U;
@@ -102,6 +104,26 @@ AnimationImage AnimationImage::parse(std::span<const std::byte> bytes) {
       throw std::runtime_error("animation reference table marker is invalid");
     result.reference_tables_.push_back(std::move(table));
     cursor = table_end;
+  }
+  if (cursor > bytes.size() || 8U > bytes.size() - cursor)
+    throw std::runtime_error("animation descriptor block is truncated");
+  const auto descriptor_length = static_cast<std::size_t>(reader.u32(cursor));
+  if (descriptor_length < 8U || descriptor_length > bytes.size() - cursor ||
+      (descriptor_length - 8U) % 12U != 0U || reader.u32(cursor + 4U) != 0U)
+    throw std::runtime_error("animation descriptor block is malformed");
+  const auto descriptor_count = (descriptor_length - 8U) / 12U;
+  if (descriptor_count < minimum_descriptor_count ||
+      descriptor_count > maximum_descriptor_count)
+    throw std::runtime_error("animation descriptor count is unsupported");
+  result.descriptors_.reserve(descriptor_count);
+  for (std::size_t index = 0; index < descriptor_count; ++index) {
+    const auto offset = cursor + 8U + index * 12U;
+    const auto tag = reader.u32(offset + 8U);
+    if ((tag == 7U) != (index + 1U == descriptor_count))
+      throw std::runtime_error("animation descriptor terminator is invalid");
+    result.descriptors_.push_back({.opaque_word_0 = reader.u32(offset),
+                                   .opaque_word_1 = reader.u32(offset + 4U),
+                                   .tag = tag});
   }
   return result;
 }

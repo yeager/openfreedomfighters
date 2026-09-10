@@ -31,7 +31,7 @@ void set_u32(std::vector<std::byte> &bytes, std::size_t offset,
 }
 
 std::vector<std::byte> fixture() {
-  std::vector<std::byte> bytes(60U, std::byte{0});
+  std::vector<std::byte> bytes(232U, std::byte{0});
   set_u32(bytes, 0, 0x00414e4dU);
   set_u32(bytes, 4, 0x80000000U | static_cast<std::uint32_t>(bytes.size()));
   set_u32(bytes, 8, static_cast<std::uint32_t>(bytes.size()));
@@ -42,11 +42,19 @@ std::vector<std::byte> fixture() {
   set_u32(bytes, 28, 1U);
   set_u32(bytes, 32, 1U);
   set_u32(bytes, 36, 12U);
-  set_u32(bytes, 40, 56U);
+  set_u32(bytes, 40, 100U);
   const char name[] = "A.anm";
   for (std::size_t index = 0; index < sizeof(name) - 1U; ++index)
     bytes[44U + index] = static_cast<std::byte>(name[index]);
   set_u32(bytes, 52, 14U);
+  set_u32(bytes, 56, 44U);
+  set_u32(bytes, 64, 2U);
+  set_u32(bytes, 72, 0U);
+  set_u32(bytes, 76, 4U);
+  set_u32(bytes, 80, 1U);
+  set_u32(bytes, 84, 1U);
+  set_u32(bytes, 88, 6U);
+  set_u32(bytes, 96, 7U);
   return bytes;
 }
 
@@ -72,9 +80,14 @@ int main(int argc, char **argv) {
         "retain animation reference-table count and format value");
   check(image.reference_tables().size() == 1U &&
             image.reference_tables()[0].name == "A.anm" &&
-            image.reference_tables()[0].offsets ==
-                std::vector<std::uint32_t>{56U},
+            image.reference_tables()[0].reference_words ==
+                std::vector<std::uint32_t>{100U},
         "decode the animation reference table directory");
+  check(image.descriptors().size() == 3U &&
+            image.descriptors()[0].opaque_word_0 == 2U &&
+            image.descriptors()[1].tag == 1U &&
+            image.descriptors()[2].tag == 7U,
+        "decode the animation descriptor block");
   check_rejected([](auto &value) { set_u32(value, 0, 0); },
                  "reject wrong animation signature");
   check_rejected([](auto &value) { set_u32(value, 4, 60U); },
@@ -87,8 +100,8 @@ int main(int argc, char **argv) {
                  "reject too many animation reference tables");
   check_rejected([](auto &value) { set_u32(value, 16, 11U); },
                  "reject unsupported animation format value");
-  check_rejected([](auto &value) { set_u32(value, 40, 58U); },
-                 "reject a misaligned animation reference offset");
+  check_rejected([](auto &value) { set_u32(value, 40, 102U); },
+                 "reject a misaligned animation reference word");
   check_rejected([](auto &value) { set_u32(value, 20, 0x80000028U); },
                  "reject excess animation reference table padding");
   check_rejected([](auto &value) { set_u32(value, 24, 32U); },
@@ -97,6 +110,14 @@ int main(int argc, char **argv) {
                  "reject an invalid animation reference table name offset");
   check_rejected([](auto &value) { set_u32(value, 52, 10U); },
                  "reject a non-final marker on the final table");
+  check_rejected([](auto &value) { set_u32(value, 60, 1U); },
+                 "reject a nonzero animation descriptor reserved word");
+  check_rejected([](auto &value) { set_u32(value, 56, 45U); },
+                 "reject a misaligned animation descriptor block length");
+  check_rejected([](auto &value) { set_u32(value, 72, 7U); },
+                 "reject an early animation descriptor terminator");
+  check_rejected([](auto &value) { set_u32(value, 96, 5U); },
+                 "reject a missing animation descriptor terminator");
   auto truncated = fixture();
   truncated.resize(19U);
   try {

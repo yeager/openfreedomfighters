@@ -19,7 +19,13 @@ struct AnimationImageHeader {
 
 struct AnimationReferenceTable {
   std::string name;
-  std::vector<std::uint32_t> offsets;
+  std::vector<std::uint32_t> reference_words;
+};
+
+struct AnimationDescriptor {
+  std::uint32_t opaque_word_0{};
+  std::uint32_t opaque_word_1{};
+  std::uint32_t tag{};
 };
 
 class AnimationImage final {
@@ -33,10 +39,15 @@ public:
   reference_tables() const noexcept {
     return reference_tables_;
   }
+  [[nodiscard]] std::span<const AnimationDescriptor>
+  descriptors() const noexcept {
+    return descriptors_;
+  }
 
 private:
   AnimationImageHeader header_{};
   std::vector<AnimationReferenceTable> reference_tables_;
+  std::vector<AnimationDescriptor> descriptors_;
 };
 
 } // namespace off::data
