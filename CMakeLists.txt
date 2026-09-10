@@ -255,7 +255,7 @@ else()
 endif()
 target_link_libraries(
     openfreedomfighters PRIVATE
-    off_core off_sdl_picture_clear off_sdl_picture_stage_shader off_sdl_intro_renderer off_sdl_intro_presentation ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
+    off_core off_sdl_audio_output off_sdl_picture_clear off_sdl_picture_stage_shader off_sdl_intro_renderer off_sdl_intro_presentation ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
 )
 target_compile_definitions(openfreedomfighters PRIVATE OFF_VERSION="${PROJECT_VERSION}")
 target_include_directories(
