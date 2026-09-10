@@ -921,6 +921,11 @@ static OFF_NOINLINE void check_complete_runtime_post_directory(
       }
       check(keys_registry && keys_registry->size()==mat_pos_owners && mat_pos_owners>0,
             "scene KEYS registry atomically retains every supported owner-local property");
+      const auto mat_pos_dispatch=host.matpos_deferred_dispatch_inventory();
+      check(mat_pos_dispatch.associated_records==mat_pos_dispatch.terminal_before_first_attachment_delimiter+
+                mat_pos_dispatch.attachment_delimiter_precedes_terminal &&
+                mat_pos_dispatch.associated_records>0,
+            "MatPos deferred audit retains only aggregate terminal-versus-delimiter observations");
       rejects([&]{host.prepare_scene_lifetime_keys_registry();});
       host.prepare_scene_lifetime_keys_backing();
       const auto* keys_backing=host.scene_lifetime_keys_backing();

@@ -104,3 +104,10 @@ establish original ordering or readiness.
 No current path renders, updates, or plays the original intro. The prepared
 registry and its tests are data-integrity boundaries, not evidence of visible
 cutscene playback.
+
+`IntroRuntime::matpos_deferred_dispatch_inventory()` is a separate, aggregate
+source-format audit. It counts only deferred blocks owned by exactly one
+`ZGEOM_MatPosAnim` attachment and classifies whether the compact block reaches
+its terminal before any attachment delimiter. It has no owner identities,
+offsets, payloads, callbacks, reader-queue access, or lifecycle-admission
+effect. A malformed block or ambiguous duplicate attachment fails closed.

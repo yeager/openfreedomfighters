@@ -330,6 +330,14 @@ struct IntroDeferredReaderCoverageInventory {
   std::size_t total_discovered{}, total_supported{}, total_applied{};
   std::vector<IntroDeferredReaderCoverageEntry> entries;
 };
+// Immutable source-format observation only. These counters neither admit a
+// deferred reader nor describe an executable attachment sequence.
+struct IntroMatPosDeferredDispatchInventory {
+  std::size_t associated_records{};
+  std::size_t terminal_before_first_attachment_delimiter{};
+  std::size_t attachment_delimiter_precedes_terminal{};
+  std::size_t attachment_delimiters{};
+};
 // Live values are owned by the real lifecycle caller. This adapter must never
 // derive them from archived source flags or prepared picture positions.
 struct FirstCutLegalPictureActivationPrerequisites {
@@ -766,6 +774,9 @@ public:
   // payloads, and classifies a family only through an existing reviewed reader
   // predicate; equal source types are not treated as interchangeable.
   [[nodiscard]] IntroDeferredReaderCoverageInventory reader_coverage_inventory() const;
+  // Read-only structural audit of authored MatPosAnim deferred blocks. It is
+  // deliberately separate from deferred_reader_work_ and lifecycle admission.
+  [[nodiscard]] IntroMatPosDeferredDispatchInventory matpos_deferred_dispatch_inventory() const;
   // Explicit first-cut activation bridge. It is disconnected from normal
   // startup and does not create a view, submit a draw or dispatch cut events.
   [[nodiscard]] FirstCutLegalPictureActivationResult activate_first_cut_legal_picture(

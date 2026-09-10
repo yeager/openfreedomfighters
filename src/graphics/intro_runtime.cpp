@@ -1,4 +1,5 @@
 #include "off/graphics/intro_runtime.hpp"
+#include "off/data/deferred_attachment_dispatch_shape.hpp"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -1911,6 +1912,33 @@ IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() c
   std::ranges::sort(result.entries,{},[](const auto& entry) {
     return std::tuple{entry.source_type,entry.family,entry.state};
   });
+  return result;
+}
+
+IntroMatPosDeferredDispatchInventory IntroRuntime::matpos_deferred_dispatch_inventory() const {
+  IntroMatPosDeferredDispatchInventory result;
+  const auto& sources=resources_.sources();
+  const auto& directory=sources.directory();
+  for(std::size_t row=0;row<directory.size();++row) {
+    const auto& source=directory[row];
+    bool has_mat_pos_anim=false;
+    for(std::size_t slot=0;slot<source.attachments.size();++slot) {
+      if(sources.attachment_identifier(row,slot)!="ZGEOM_MatPosAnim") continue;
+      if(has_mat_pos_anim)
+        throw std::runtime_error("MatPos deferred dispatch audit rejects multiple MatPosAnim attachments for one owner");
+      has_mat_pos_anim=true;
+    }
+    if(!has_mat_pos_anim || source.deferred_source_offset==0U) continue;
+    const auto block=sources.deferred_source_block(row);
+    const auto observation=data::DeferredAttachmentDispatchClassifier::observe(
+        block.subspan(sizeof(std::uint32_t)));
+    ++result.associated_records;
+    result.attachment_delimiters+=observation.delimiter_count;
+    if(observation.shape==data::DeferredAttachmentDispatchShape::terminal_before_first_attachment_delimiter)
+      ++result.terminal_before_first_attachment_delimiter;
+    else
+      ++result.attachment_delimiter_precedes_terminal;
+  }
   return result;
 }
 
