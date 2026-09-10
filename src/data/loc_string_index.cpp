@@ -9,7 +9,10 @@ namespace {
 constexpr std::size_t maximum_candidate_count = 1'000'000;
 [[nodiscard]] bool printable(std::byte value) noexcept {
   const auto byte = static_cast<unsigned char>(value);
-  return byte >= 0x20U && byte <= 0x7eU;
+  // LOC encoding has not yet been recovered. Retain every non-control octet
+  // as raw data so an eventual legacy-code-page or UTF-8 decoder receives the
+  // exact source span rather than an ASCII-filtered approximation.
+  return byte >= 0x20U && byte != 0x7fU;
 }
 }  // namespace
 
