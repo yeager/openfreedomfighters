@@ -217,8 +217,9 @@ provisional until the original font-role semantics are recovered. The implemente
 window mode, size,
 presentation mode, and Original/Modern profile apply transactionally through
 SDL, including the Keep/Revert timeout. Mouse clicks now share that dispatcher;
-persistence,
-font fallback, complex-script shaping, and recovered retail styling remain open.
+persistence, bidirectional and complex-script shaping, and recovered retail
+styling remain open. Mixed-script LTR labels use per-scalar retail-font fallback
+runs aligned to a shared baseline; this is not a substitute for shaping.
 
 Stage 4 has recovered the authored coordinate space, title and two-column
 anchors, row rhythm, and shared action anchor. A fail-closed startup extractor
@@ -226,7 +227,11 @@ now identifies eight neutral row owners and binds each to one persistent
 one-group background plus two five-group chrome instances co-gated by the same
 visibility-state mask. This does not establish GPU draw scheduling. It
 preserves complete inclusive root-to-instance construction and local-transform
-chains without composing them.
+chains without composing them. A private GPU screenshot against a verified
+owned install confirms the current Swedish F10 layout and retail-font path, but
+also confirms that these recovered startup picture instances are uploaded only:
+they are not yet submitted by the overlay draw list. No screenshot or retail
+pixels are retained in this repository.
 The current focus rectangle remains explicitly project-authored diagnostic UI;
 the two chrome siblings are not focused/normal alternatives. Retail draw order,
 GPU transform composition, motion, sound cues, and action behavior mapping are
