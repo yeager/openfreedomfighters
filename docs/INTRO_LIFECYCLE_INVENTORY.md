@@ -38,6 +38,27 @@ usable in isolation; it still cannot be called through normal startup.
 The existing Window and MovieControl reader boundaries are deliberately narrow
 examples of step 1. Neither is an independent startup path.
 
+## Visible first-frame gate
+
+The currently prepared first-cut data cannot be made visible by connecting an
+SDL renderer directly. The required order is fixed by the admitted boundaries:
+
+1. Complete the full reader, component, and owner coverage required by global
+   lifecycle preflight.
+2. Run the real global passes and the later MovieControl event boundary.
+3. Establish the requested camera, live view, and positive-time first-cut
+   activation.
+4. Recover the renderer-record association and ordered traversal for the live
+   legal picture.
+5. Assemble and submit an admitted picture frame from an ordinary outer frame
+   caller.
+
+The current supported runtime has only ten admitted reader identities out of
+420. This is the first hard gate. Camera/view, picture-frame, audio, and SDL
+bridge code remains intentionally downstream of it; joining any of those
+pieces earlier would create a synthetic visible result rather than native scene
+admission.
+
 ## Static-analysis priority
 
 The next recovery pass follows the deferred-reader dispatcher from its queue
