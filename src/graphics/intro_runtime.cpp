@@ -3055,10 +3055,23 @@ void IntroRuntime::apply_supported_first_cut_camera_deferred_reader(
 void IntroRuntime::prepare_supported_first_cut_player() {
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
       !first_cut_sequence_reader_state_ || !first_cut_list_reader_state_ ||
+      !first_cut_sequence_component_reader_state_ ||
       first_cut_player_prepared_state_)
     throw std::runtime_error("First-cut player requires all unconsumed reader states");
   const auto& sequence=*first_cut_sequence_reader_state_;
   const auto& list=*first_cut_list_reader_state_;
+  const auto& sequence_receipt=*first_cut_sequence_component_reader_state_;
+  const auto& sequence_source=resources_.sources().directory().at(resources_.member_index());
+  if(sequence_receipt.owner!=sequence.owner || sequence_receipt.resource!=sequence.resource ||
+      sequence_receipt.source_directory_index!=resources_.member_index() ||
+      sequence_receipt.source_offset!=sequence_source.deferred_source_offset ||
+      sequence_receipt.component_index!=sequence.component_index ||
+      sequence_receipt.authored.references!=sequence.authored.references ||
+      std::bit_cast<std::uint32_t>(sequence_receipt.authored.values[0])!=std::bit_cast<std::uint32_t>(sequence.authored.values[0]) ||
+      std::bit_cast<std::uint32_t>(sequence_receipt.authored.values[1])!=std::bit_cast<std::uint32_t>(sequence.authored.values[1]) ||
+      sequence_receipt.authored.authored_option!=sequence.authored.authored_option ||
+      sequence_receipt.members!=sequence.members)
+    throw std::runtime_error("First-cut player sequence component reader state does not match its owner reader");
   const bool reviewed_component_form=resources_.sources().deferred_source_block(
       resources_.first_cut_index()).size()==171U;
   if(reviewed_component_form && !first_cut_component_reader_state_)
@@ -3128,11 +3141,22 @@ void IntroRuntime::prepare_supported_first_cut_player() {
 
 cutscene::FirstCutPlayerDescriptor IntroRuntime::first_cut_player_descriptor() const {
   if (!first_cut_player_prepared_state_ || !first_cut_sequence_reader_state_ ||
-      !first_cut_list_reader_state_)
+      !first_cut_list_reader_state_ || !first_cut_sequence_component_reader_state_)
     throw std::runtime_error("First-cut player descriptor requires prepared reader state");
   const auto& player = *first_cut_player_prepared_state_;
   const auto& list = *first_cut_list_reader_state_;
   const auto& sequence = *first_cut_sequence_reader_state_;
+  const auto& sequence_component=*first_cut_sequence_component_reader_state_;
+  if(sequence_component.owner!=sequence.owner || sequence_component.resource!=sequence.resource ||
+      sequence_component.component_index!=sequence.component_index ||
+      sequence_component.source_directory_index!=resources_.member_index() ||
+      sequence_component.source_offset!=resources_.sources().directory().at(resources_.member_index()).deferred_source_offset ||
+      sequence_component.authored.references!=sequence.authored.references ||
+      std::bit_cast<std::uint32_t>(sequence_component.authored.values[0])!=std::bit_cast<std::uint32_t>(sequence.authored.values[0]) ||
+      std::bit_cast<std::uint32_t>(sequence_component.authored.values[1])!=std::bit_cast<std::uint32_t>(sequence.authored.values[1]) ||
+      sequence_component.authored.authored_option!=sequence.authored.authored_option ||
+      sequence_component.members!=sequence.members)
+    throw std::runtime_error("First-cut player descriptor sequence component state no longer matches its owner reader");
   if (player.list_component_index != list.component_indices[0] ||
       player.sequence_component_index != sequence.component_index ||
       player.list_resource != list.resource || player.sequence_resource != sequence.resource)
