@@ -1124,6 +1124,28 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               list_reader->sequence_resource==host.directory_resource_mapping()[host.resources().member_index()] &&
               list_reader->command_target_resources[0]==host.directory_resource_mapping()[host.resources().sources().local_source_for_authored_reference(host.resources().first_cut().commands[0].target_reference).value()],
               "first-cut list reader resolves required immutable source resources without registering commands or events");
+        const auto legal_source=host.resources().sources().local_source_for_authored_reference(
+            host.resources().member().references[1]);
+        const auto* legal_reader=host.legal_picture_reader_state();
+        const auto legal_work=legal_source?std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
+          return work.source_directory_index==*legal_source;
+        }):host.deferred_reader_work().end();
+        if(legal_source && legal_work!=host.deferred_reader_work().end()) {
+          const auto& authored_legal=host.resources().sources().intro_legal_picture_source(*legal_source);
+          const auto legal_components=host.owner_components(host.source_handle(*legal_source));
+          check(legal_reader && legal_components.size()==1U &&
+                legal_reader->owner==host.source_handle(*legal_source) &&
+                legal_reader->resource==host.directory_resource_mapping()[*legal_source] &&
+                legal_reader->component_index==legal_components.front() &&
+                legal_reader->authored.authored_state_exponent==authored_legal.authored_state_exponent &&
+                legal_reader->authored.base_render_property==authored_legal.base_render_property &&
+                legal_reader->authored.authored_alpha==authored_legal.authored_alpha &&
+                legal_reader->authored.alignment_enum==authored_legal.alignment_enum &&
+                legal_reader->authored.extension_control==authored_legal.extension_control &&
+                legal_reader->picture_asset_reference==authored_legal.picture_asset_reference,
+                "legal-picture reader retains the resolved Center source and full picture key without activation");
+          rejects([&]{host.apply_supported_first_cut_legal_picture_deferred_reader(*legal_work);});
+        }
         host.prepare_supported_first_cut_player();
         const auto* player=host.first_cut_player_prepared_state();
         check(player && player->list_owner==list_reader->owner && player->sequence_owner==sequence_reader->owner &&
