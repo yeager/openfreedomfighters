@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/data/deferred_component_dispatcher.hpp"
+#include "off/data/deferred_reader_session.hpp"
 #include "off/data/first_cut_command_component_reader.hpp"
 #include "off/data/first_cut_list_component_reader.hpp"
 
@@ -17,6 +18,11 @@ namespace off::data {
 struct FirstCutComponentPayloadSession final {
   FirstCutListComponentRecord list;
   std::array<FirstCutCommandComponentRecord,5> commands;
+
+  [[nodiscard]] static FirstCutComponentPayloadSession read(
+      const DeferredOwnerReaderResult& owner_reader_result) {
+    return read(owner_reader_result.component_suffix,owner_reader_result.component_extent);
+  }
 
   [[nodiscard]] static FirstCutComponentPayloadSession read(
       std::span<const std::byte> component_suffix,std::size_t component_extent) {

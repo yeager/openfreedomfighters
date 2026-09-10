@@ -1117,7 +1117,8 @@ int main() {
             stream.push_back(std::byte{0x04}); stream.push_back(std::byte{0}); stream.push_back(std::byte{0x06});
         }
         stream.push_back(std::byte{0xff});
-        const auto parsed=FirstCutComponentPayloadSession::read(stream,stream.size());
+        const off::data::DeferredOwnerReaderResult owner_result{stream,stream.size()};
+        const auto parsed=FirstCutComponentPayloadSession::read(owner_result);
         check(stream.size()==157U && parsed.list.controls.front()==1U &&
                   std::bit_cast<std::uint32_t>(parsed.list.final_value)==0x80000000U &&
                   parsed.commands.front().timeline_position==10U && parsed.commands.back().event_argument==44U &&

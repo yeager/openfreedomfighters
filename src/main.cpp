@@ -149,7 +149,7 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
       suffix.component_extent!=157U)
     throw std::runtime_error("first-cut cold probe found an unbounded component suffix");
   const auto parsed_components=off::data::FirstCutComponentPayloadSession::read(
-      suffix.component_suffix,suffix.component_extent);
+      suffix);
   const auto& first_cut_source_data=intro.resources().first_cut();
   if(parsed_components.list.controls!=first_cut_source_data.settings_words ||
       std::bit_cast<std::uint32_t>(parsed_components.list.final_value)!=
