@@ -5,37 +5,35 @@
 
 namespace off::graphics {
 class IntroRuntime;
+struct IntroOuterLoaderTailServices;
 
-class NormalIntroSceneReaderBoundary {
-public:
-  virtual ~NormalIntroSceneReaderBoundary() = default;
-  virtual void
-  complete_postconstruction_reader_bracket(std::uint64_t saved) = 0;
-  [[nodiscard]] virtual IntroRuntime *runtime() noexcept = 0;
-};
-
-// This stage records only the reviewed reader bracket. It is not scene
-// activation, cut admission, rendering, or playback evidence.
+// These stages cover loader work only. They are not scene activation, cut
+// admission, rendering, or playback evidence.
 enum class NormalIntroSceneSessionStage : std::uint8_t {
   postconstructed,
   reader_bracket_complete,
+  outer_loader_tail_complete,
   failed,
 };
 
 class NormalIntroSceneSession final {
 public:
-  explicit NormalIntroSceneSession(
-      std::unique_ptr<NormalIntroSceneReaderBoundary> boundary);
+  explicit NormalIntroSceneSession(std::unique_ptr<IntroRuntime> runtime);
+  ~NormalIntroSceneSession();
   NormalIntroSceneSession(const NormalIntroSceneSession &) = delete;
   NormalIntroSceneSession &operator=(const NormalIntroSceneSession &) = delete;
   void complete_postconstruction_reader_bracket(std::uint64_t saved);
+  void complete_outer_loader_tail(const IntroOuterLoaderTailServices &services);
   [[nodiscard]] NormalIntroSceneSessionStage stage() const noexcept {
     return stage_;
   }
-  [[nodiscard]] IntroRuntime &runtime() const;
+  [[nodiscard]] IntroRuntime &runtime() noexcept { return *runtime_; }
+  [[nodiscard]] const IntroRuntime &runtime() const noexcept {
+    return *runtime_;
+  }
 
 private:
-  std::unique_ptr<NormalIntroSceneReaderBoundary> boundary_;
+  std::unique_ptr<IntroRuntime> runtime_;
   NormalIntroSceneSessionStage stage_{
       NormalIntroSceneSessionStage::postconstructed};
 };

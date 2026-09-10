@@ -2,11 +2,17 @@
 
 Normal startup constructs and retains the supported intro directory, but it
 does not make that scene current. `NormalIntroSceneSession` owns the retained
-runtime and its exactly-once postconstruction reader bracket; callback routing
+runtime, its exactly-once postconstruction reader bracket, and the following
+outer loader-tail transition. The tail still requires every concrete service
+from its caller; the session supplies no placeholder parser, association,
+camera, scene operation, or saved-resource callback. Reader callback routing
 no longer lives in `main`. `NormalIntroSceneHost` implements the later strict
 ordering state machine described here, but is not yet connected to that session
 or SDL. It prevents a shortcut that creates an audio device or a draw call
 during loading and then incorrectly reports an active intro.
+
+Normal startup currently stops after the reader bracket. It does not call the
+session's loader-tail transition until those production services exist.
 
 ## Required ordering
 

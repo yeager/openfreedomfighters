@@ -584,7 +584,7 @@ load_diagnostic_scene_render_asset(const std::filesystem::path &install_root) {
 SceneRenderAsset load_owned_diagnostic_scene_render_asset(
     const std::filesystem::path &install_root,
     const std::filesystem::path &relative_archive_path) {
-  if (relative_archive_path.empty() || relative_archive_path.is_absolute() ||
+  if (relative_archive_path.empty() || relative_archive_path.has_root_path() ||
       lowercase(relative_archive_path.extension().string()) != ".zip")
     throw std::runtime_error("diagnostic scene archive path is invalid");
   for (const auto &component : relative_archive_path) {
