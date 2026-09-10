@@ -2301,10 +2301,46 @@ int main() {
                   (*sources.named_global)[0] == std::byte{'G'} &&
                   (*sources.named_global)[7] == std::byte{0x31},
               "retain the bounded source-owned named/global section");
-        check(sources.first_auxiliary_rows.size() == 2U &&
-                  sources.first_auxiliary_rows[0][0] == std::byte{1} &&
-                  sources.first_auxiliary_rows[1][11] == std::byte{24},
-              "copy the source-owned outer-loader twelve-byte rows");
+        check(sources.allocation_sizing_rows.size() == 2U &&
+                  sources.allocation_sizing_rows[0][0] == 0x04030201U &&
+                  sources.allocation_sizing_rows[1][2] == 0x18171615U,
+              "decode the source-owned allocation-sizing rows");
+    }
+    {
+        std::vector<std::byte> payload(176);
+        set_u32(payload, 0U, 164U);
+        set_u32(payload, 4U, 168U);
+        set_u32(payload, 12U, 4U);
+        set_u32(payload, 16U, 172U);
+        set_u32(payload, 20U, 32U);
+        set_u32(payload, 24U, 132U);
+        set_u32(payload, 32U, 1U);
+        set_u32(payload, 132U, 8U);
+        for (std::size_t index = 0; index < 8U; ++index)
+            payload[136U + index] = static_cast<std::byte>(0xa0U + index);
+        set_u32(payload, 144U, 2U);
+        set_u32(payload, 148U, 7U);
+        set_u32(payload, 152U, 9U);
+        set_u32(payload, 156U, 17U);
+        set_u32(payload, 160U, 18U);
+        std::vector<std::byte> bytes;
+        append_u32(bytes, static_cast<std::uint32_t>(payload.size()));
+        append_u32(bytes, static_cast<std::uint32_t>(payload.size() + 9U));
+        bytes.push_back(std::byte{1});
+        bytes.insert(bytes.end(), payload.begin(), payload.end());
+        const auto value = off::data::GmsImage::parse(
+            off::data::PackedResource::parse(bytes));
+        const auto sources = value.outer_loader_sources();
+        check(sources.renderer_resource && sources.renderer_resource->size() == 8U &&
+                  (*sources.renderer_resource)[0] == std::byte{0xa0} &&
+                  (*sources.renderer_resource)[7] == std::byte{0xa7},
+              "retain exactly the framed renderer-resource payload");
+        check(sources.resource_associations.size() == 2U &&
+                  sources.resource_associations[0] ==
+                      std::array<std::uint32_t, 2>{7U, 9U} &&
+                  sources.resource_associations[1] ==
+                      std::array<std::uint32_t, 2>{17U, 18U},
+              "decode ordered renderer-resource association pairs");
     }
     check_rejected(
         [] {
@@ -2315,7 +2351,7 @@ int main() {
                 off::data::PackedResource::parse(bytes));
             static_cast<void>(value.outer_loader_sources());
         },
-        "reject a truncated outer-loader twelve-byte table"
+        "reject a truncated allocation-sizing table"
     );
 
     return failures == 0 ? 0 : 1;

@@ -237,6 +237,10 @@ InstallVerification verify_install(const std::filesystem::path &root,
     std::size_t gms_directory_entry_count = 0;
     std::size_t gms_identifier_count = 0;
     std::size_t gms_pool_group_count = 0;
+    std::size_t gms_named_global_count = 0;
+    std::size_t gms_renderer_payload_bytes = 0;
+    std::size_t gms_resource_association_count = 0;
+    std::size_t gms_allocation_sizing_row_count = 0;
     std::size_t buf_resource_count = 0;
     std::size_t gms_attachment_table_count = 0;
     std::size_t gms_attachment_count = 0;
@@ -381,6 +385,15 @@ InstallVerification verify_install(const std::filesystem::path &root,
             }
             gms_identifier_count += gms_image->identifier_count();
             gms_pool_group_count += gms_image->pool_groups().size();
+            const auto outer_sources = gms_image->outer_loader_sources();
+            gms_named_global_count += outer_sources.named_global ? 1U : 0U;
+            gms_renderer_payload_bytes += outer_sources.renderer_resource
+                                              ? outer_sources.renderer_resource->size()
+                                              : 0U;
+            gms_resource_association_count +=
+                outer_sources.resource_associations.size();
+            gms_allocation_sizing_row_count +=
+                outer_sources.allocation_sizing_rows.size();
             ++gms_files_in_archive;
             ++gms_resource_count;
           }
@@ -651,6 +664,10 @@ InstallVerification verify_install(const std::filesystem::path &root,
         gms_payload_bytes != 33'436'872 ||
         gms_directory_entry_count != 179'838 ||
         gms_identifier_count != 154'941 || gms_pool_group_count != 29'450 ||
+        gms_named_global_count != 40 ||
+        gms_renderer_payload_bytes != 6'341'932 ||
+        gms_resource_association_count != 590 ||
+        gms_allocation_sizing_row_count != 2'227 ||
         buf_resource_count != 88 || gms_attachment_table_count != 34'218 ||
         gms_attachment_count != 39'885 || gms_buf_auxiliary_count != 5'765 ||
         texture_catalog_count != scene_archive_count ||
