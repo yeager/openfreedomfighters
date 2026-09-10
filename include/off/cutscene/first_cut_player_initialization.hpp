@@ -40,6 +40,14 @@ struct FirstCutPlayerPhaseTwoServices {
   std::function<void(std::size_t, const data::GmsIntroCutCommandSource&)> register_ordered_command;
   std::function<void(std::size_t)> close_ordered_command_receiver;
 };
+struct FirstCutPlayerSessionPhaseTwoServices {
+  std::function<void(std::size_t, const data::GmsIntroCutCommandSource&)> invoke_command;
+  std::function<std::optional<std::uint64_t>(std::string_view)> read_scene_reference;
+  std::function<std::optional<std::uint64_t>(std::size_t)> resolve_member;
+  std::function<std::optional<FirstCutMemberInfo>(std::uint64_t)> request_member_info;
+  std::function<std::string_view(std::uint64_t)> member_name;
+  std::function<std::optional<std::uint64_t>(std::uint64_t)> resolve_scene_object;
+};
 
 // Concrete ordered-command receiver for the reviewed first-cut list. It is
 // intentionally separate from the source-65 external-fade list model.
@@ -90,6 +98,21 @@ private:
   float derived_end_{};
   std::optional<std::uint64_t> active_camera_list_, cut_sequence_object_;
   bool source_read_marker_{true}, events_registered_{}, phase_one_complete_{}, phase_two_complete_{}, running_{}, failed_{};
+};
+
+// Owns one reviewed first-cut initialization and its exact list receiver.
+// This composes lifecycle phases only; it does not schedule, play, or render.
+class FirstCutPlayerSession final {
+public:
+  explicit FirstCutPlayerSession(FirstCutPlayerDescriptor descriptor);
+  void run_phase_one(const FirstCutPlayerPhaseOneServices& services);
+  void run_phase_two(const FirstCutPlayerSessionPhaseTwoServices& services);
+  [[nodiscard]] const FirstCutPlayerInitialization& initialization() const noexcept { return initialization_; }
+  [[nodiscard]] const FirstCutPlayerListReceiver& receiver() const noexcept { return receiver_; }
+
+private:
+  FirstCutPlayerInitialization initialization_;
+  FirstCutPlayerListReceiver receiver_;
 };
 
 } // namespace off::cutscene

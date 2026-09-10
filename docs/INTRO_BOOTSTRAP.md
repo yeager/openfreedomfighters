@@ -477,6 +477,13 @@ opens only after phase one and closes only after successful phase two. It is
 deliberately not represented as a generic or stable sort. Both stages remain
 explicit caller-driven services and fail closed; they do not start playback.
 
+`FirstCutPlayerSession` composes those phases with the private first-cut
+receiver. It opens command admission only after phase one and supplies the
+receiver callbacks itself during phase two, so a caller cannot substitute the
+external-fade list or inject commands after closure. This remains initialization
+work only; scheduling, clock conversion, presentation and rendering are still
+separate recovery tasks.
+
 ## Restricted controller reader
 
 `GmsImage::intro_movie_controller_source` decodes only the reviewed supported

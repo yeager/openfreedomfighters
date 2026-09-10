@@ -92,4 +92,25 @@ void FirstCutPlayerInitialization::run_phase_two(const FirstCutPlayerPhaseTwoSer
     phase_two_complete_ = true; running_ = false;
   } catch (...) { running_ = false; failed_ = true; throw; }
 }
+FirstCutPlayerSession::FirstCutPlayerSession(FirstCutPlayerDescriptor descriptor)
+    : initialization_(std::move(descriptor)), receiver_(initialization_.list_component()) {}
+void FirstCutPlayerSession::run_phase_one(const FirstCutPlayerPhaseOneServices& services) {
+  initialization_.run_phase_one(services);
+  receiver_.open_after_phase_one(initialization_.list_component());
+}
+void FirstCutPlayerSession::run_phase_two(const FirstCutPlayerSessionPhaseTwoServices& services) {
+  initialization_.run_phase_two({
+      .invoke_command = services.invoke_command,
+      .read_scene_reference = services.read_scene_reference,
+      .resolve_member = services.resolve_member,
+      .request_member_info = services.request_member_info,
+      .member_name = services.member_name,
+      .resolve_scene_object = services.resolve_scene_object,
+      .register_ordered_command = [this](std::size_t component, const data::GmsIntroCutCommandSource& command) {
+        receiver_.register_ordered_command(component, command);
+      },
+      .close_ordered_command_receiver = [this](std::size_t component) {
+        receiver_.close_after_phase_two(component);
+      }});
+}
 } // namespace off::cutscene

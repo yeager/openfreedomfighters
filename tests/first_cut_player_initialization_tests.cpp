@@ -65,6 +65,32 @@ int main() {
   rejects([&] { receiver.register_ordered_command(42U, negative); }, "receiver rejects signed-negative commands");
   receiver.close_after_phase_two(42U);
   rejects([&] { receiver.register_ordered_command(42U, early); }, "receiver closes after phase two");
+  off::data::GmsIntroFirstCutSource session_list;
+  session_list.commands[0].timeline_position = 4U;
+  session_list.commands[1].timeline_position = 1U;
+  session_list.commands[2].timeline_position = 1U;
+  session_list.commands[3].timeline_position = 0x80000000U;
+  session_list.commands[4].timeline_position = 0x80000000U;
+  session_list.final_value = 1.0F;
+  off::data::GmsIntroCutSequenceSource session_sequence; session_sequence.values = {0.0F, 1.0F};
+  off::cutscene::FirstCutPlayerSession session({42U, {10U, 11U, 12U, 13U, 14U}, session_list, session_sequence});
+  session.run_phase_one({.invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},
+                         .register_list_events=[] {}, .member_count=[] { return 0U; },
+                         .write_queue_property=[](auto) {}});
+  check(session.receiver().open() && !session.receiver().closed(), "session opens its private receiver after phase one");
+  session.run_phase_two({
+      .invoke_command=[](auto,const auto&) {},
+      .read_scene_reference=[](std::string_view) -> std::optional<std::uint64_t> { return std::nullopt; },
+      .resolve_member=[](std::size_t) -> std::optional<std::uint64_t> { return std::nullopt; },
+      .request_member_info=[](std::uint64_t) -> std::optional<off::cutscene::FirstCutMemberInfo> { return std::nullopt; },
+      .member_name=[](std::uint64_t) { return std::string_view{}; },
+      .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> { return std::nullopt; }});
+  check(session.initialization().phase_two_complete() && session.receiver().closed() &&
+            session.receiver().commands().size() == 3U &&
+            session.receiver().commands()[0].timeline_position == 1U &&
+            session.receiver().commands()[1].timeline_position == 1U &&
+            session.receiver().commands()[2].timeline_position == 4U,
+        "session alone binds first-cut command admission and never starts playback");
   auto failing = make_player();
   rejects([&] { failing.run_phase_one({
       .invoke_command = [](auto, const auto&) { throw std::runtime_error("injected"); },
