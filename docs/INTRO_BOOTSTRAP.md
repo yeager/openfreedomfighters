@@ -49,9 +49,10 @@ The owned-data probe currently finds 420 queued readers: 12 applied, five
 recognized-but-not-admitted following-visual owners, and 403 unclassified.
 Of the unclassified work, 70 records have no attachments and 333 have
 attachments; 302 of those attachment-bearing blocks expose a delimiter before
-their terminal marker, while 31 are outside the narrow classifier. This does
-not authorize a generic attachment dispatcher. The next candidate must be an
-exact, attachment-free owner form with a separately recovered payload and
+their terminal marker, while 31 are outside the narrow classifier. The 302
+recognized shapes contain 429 delimiter events, with at most four in one block.
+This does not authorize a generic attachment dispatcher. The next candidate must
+be an exact, attachment-free owner form with a separately recovered payload and
 failure contract.
 
 The five reviewed following-visual owners now retain only a completed

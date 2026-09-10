@@ -1928,6 +1928,9 @@ IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() c
           const auto block=resources_.sources().deferred_source_block(work.source_directory_index);
           const auto observation=data::DeferredAttachmentDispatchClassifier::observe(
               block.subspan(sizeof(std::uint32_t)));
+          result.unclassified_attachment_delimiters+=observation.delimiter_count;
+          result.unclassified_max_attachment_delimiters=std::max(
+              result.unclassified_max_attachment_delimiters,observation.delimiter_count);
           if(observation.shape==data::DeferredAttachmentDispatchShape::terminal_before_first_attachment_delimiter)
             ++result.unclassified_terminal_before_attachment;
           else ++result.unclassified_attachment_before_terminal;

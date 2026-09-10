@@ -335,6 +335,10 @@ struct IntroDeferredReaderCoverageInventory {
   std::size_t unclassified_without_attachments{}, unclassified_with_attachments{};
   std::size_t unclassified_terminal_before_attachment{},
       unclassified_attachment_before_terminal{}, unclassified_unknown_dispatch_shape{};
+  // Counts only delimiters found by the generic bounded scanner. They identify
+  // dispatch research volume, not attachment types, payloads, or execution.
+  std::size_t unclassified_attachment_delimiters{},
+      unclassified_max_attachment_delimiters{};
   std::vector<IntroDeferredReaderCoverageEntry> entries;
 };
 // Immutable source-format observation only. These counters neither admit a

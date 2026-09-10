@@ -141,7 +141,9 @@ void write_reader_coverage_probe(std::ostream& output,
          << "reader-unclassified-with-attachments=" << coverage.unclassified_with_attachments << '\n'
          << "reader-unclassified-terminal-before-attachment=" << coverage.unclassified_terminal_before_attachment << '\n'
          << "reader-unclassified-attachment-before-terminal=" << coverage.unclassified_attachment_before_terminal << '\n'
-         << "reader-unclassified-unknown-dispatch-shape=" << coverage.unclassified_unknown_dispatch_shape << '\n';
+         << "reader-unclassified-unknown-dispatch-shape=" << coverage.unclassified_unknown_dispatch_shape << '\n'
+         << "reader-unclassified-attachment-delimiters=" << coverage.unclassified_attachment_delimiters << '\n'
+         << "reader-unclassified-max-attachment-delimiters=" << coverage.unclassified_max_attachment_delimiters << '\n';
   for(std::size_t family=0;family<family_count;++family) {
     for(std::size_t state=0;state<state_count;++state) {
       if(counts[family][state]==0U) continue;

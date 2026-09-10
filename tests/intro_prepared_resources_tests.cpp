@@ -1097,6 +1097,8 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                   coverage.unclassified_terminal_before_attachment+
                       coverage.unclassified_attachment_before_terminal+
                       coverage.unclassified_unknown_dispatch_shape &&
+                  coverage.unclassified_max_attachment_delimiters<=
+                      coverage.unclassified_attachment_delimiters &&
                   coverage.unclassified_without_attachments+
                       coverage.unclassified_with_attachments<=coverage.total_discovered,
               "unclassified reader coverage keeps attachment dispatch observations aggregate and bounded");
