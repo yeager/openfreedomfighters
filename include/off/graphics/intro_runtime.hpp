@@ -429,6 +429,15 @@ struct IntroFirstCutCameraReaderState {
   IntroRuntimeResourceHandle resource;
   data::GmsIntroCameraSource authored;
 };
+// Opaque provenance for a remaining first-cut sequence member.  It records a
+// resolved directory/resource/owner join without inferring that member's role.
+struct IntroFirstCutTailMemberProvenance {
+  std::uint32_t authored_reference{};
+  std::size_t source_directory_index{};
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  bool operator==(const IntroFirstCutTailMemberProvenance&) const = default;
+};
 // Materialized source state for the one reviewed first-cut player. It is not a
 // scheduler, event registration, camera route, or renderer admission.
 struct IntroFirstCutPlayerPreparedState {
@@ -436,7 +445,7 @@ struct IntroFirstCutPlayerPreparedState {
   IntroRuntimeResourceHandle list_resource, sequence_resource, camera_resource, legal_picture_resource;
   std::size_t list_component_index{}, sequence_component_index{}, legal_picture_component_index{};
   std::uint32_t legal_picture_asset_reference{};
-  std::array<std::optional<IntroRuntimeResourceHandle>,4> tail_member_resources;
+  std::array<std::optional<IntroFirstCutTailMemberProvenance>,4> tail_members;
   std::array<std::uint32_t,3> leading_controls{};
   std::uint32_t raw_scalar{};
   std::array<std::uint32_t,3> trailing_controls{};

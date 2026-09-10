@@ -3116,6 +3116,23 @@ void IntroRuntime::prepare_supported_first_cut_player() {
       legal_component.source().factory_name!="ZGEOM_Center" ||
       legal_component.state().attached_owner!=legal_picture.owner.value)
     throw std::runtime_error("First-cut player has no live legal picture component");
+  std::array<std::optional<IntroFirstCutTailMemberProvenance>,4> tail_members{};
+  for(std::size_t slot=2U;slot<sequence.authored.references.size();++slot) {
+    const auto reference=sequence.authored.references[slot];
+    if(reference==0U) {
+      if(sequence.members[slot])
+        throw std::runtime_error("First-cut player null tail reference has a resolved resource");
+      continue;
+    }
+    const auto source=resources_.sources().local_source_for_authored_reference(reference);
+    if(!source || *source>=directory_resource_mapping_.size() || !directory_resource_mapping_[*source] ||
+        !associated_resource_owner(*directory_resource_mapping_[*source]) ||
+        *associated_resource_owner(*directory_resource_mapping_[*source])!=source_handle(*source) ||
+        sequence.members[slot]!=directory_resource_mapping_[*source])
+      throw std::runtime_error("First-cut player tail member has no live source provenance");
+    tail_members[slot-2U]=IntroFirstCutTailMemberProvenance{
+        reference,*source,source_handle(*source),*directory_resource_mapping_[*source]};
+  }
   const bool reviewed_component_form=resources_.sources().deferred_source_block(
       resources_.first_cut_index()).size()==171U;
   if(reviewed_component_form && !first_cut_component_reader_state_)
@@ -3178,7 +3195,7 @@ void IntroRuntime::prepare_supported_first_cut_player() {
       .list_component_index=list.component_indices[0], .sequence_component_index=sequence.component_index,
       .legal_picture_component_index=legal_picture.component_index,
       .legal_picture_asset_reference=legal_picture.picture_asset_reference,
-      .tail_member_resources={sequence.members[2],sequence.members[3],sequence.members[4],sequence.members[5]},
+      .tail_members=tail_members,
       .leading_controls={settings[0],settings[1],settings[2]},
       .raw_scalar=settings[3],
       .trailing_controls={settings[4],settings[5],settings[6]},
@@ -3230,8 +3247,6 @@ cutscene::FirstCutPlayerDescriptor IntroRuntime::first_cut_player_descriptor() c
       player.legal_picture_resource!=legal_picture.resource ||
       player.legal_picture_component_index!=legal_picture.component_index ||
       player.legal_picture_asset_reference!=legal_picture.picture_asset_reference ||
-      player.tail_member_resources!=std::array<std::optional<IntroRuntimeResourceHandle>,4>{
-          sequence.members[2],sequence.members[3],sequence.members[4],sequence.members[5]} ||
       legal_picture.owner!=source_handle(*legal_picture_source) ||
       legal_picture.resource!=directory_resource_mapping_.at(*legal_picture_source).value_or(IntroRuntimeResourceHandle{}) ||
       sequence.members[1]!=std::optional<IntroRuntimeResourceHandle>{legal_picture.resource} ||
@@ -3253,6 +3268,24 @@ cutscene::FirstCutPlayerDescriptor IntroRuntime::first_cut_player_descriptor() c
       legal_component.source().factory_name!="ZGEOM_Center" ||
       legal_component.state().attached_owner!=legal_picture.owner.value)
     throw std::runtime_error("First-cut player descriptor has no live legal picture component");
+  for(std::size_t slot=2U;slot<sequence.authored.references.size();++slot) {
+    const auto& retained=player.tail_members[slot-2U];
+    const auto reference=sequence.authored.references[slot];
+    if(reference==0U) {
+      if(retained || sequence.members[slot])
+        throw std::runtime_error("First-cut player descriptor null tail reference changed");
+      continue;
+    }
+    const auto source=resources_.sources().local_source_for_authored_reference(reference);
+    if(!source || !retained || retained->authored_reference!=reference ||
+        retained->source_directory_index!=*source || retained->owner!=source_handle(*source) ||
+        *source>=directory_resource_mapping_.size() || !directory_resource_mapping_[*source] ||
+        retained->resource!=*directory_resource_mapping_[*source] ||
+        !associated_resource_owner(retained->resource) ||
+        *associated_resource_owner(retained->resource)!=retained->owner ||
+        sequence.members[slot]!=std::optional<IntroRuntimeResourceHandle>{retained->resource})
+      throw std::runtime_error("First-cut player descriptor tail member provenance changed");
+  }
   if (player.list_component_index != list.component_indices[0] ||
       player.sequence_component_index != sequence.component_index ||
       player.list_resource != list.resource || player.sequence_resource != sequence.resource)

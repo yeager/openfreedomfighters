@@ -1197,8 +1197,10 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               player->sequence_component_index==sequence_reader->component_index &&
               player->legal_picture_component_index==legal_component_reader->component_index &&
               player->legal_picture_asset_reference==legal_component_reader->picture_asset_reference &&
-              player->tail_member_resources==std::array<std::optional<off::graphics::IntroRuntimeResourceHandle>,4>{
-                  sequence_reader->members[2],sequence_reader->members[3],sequence_reader->members[4],sequence_reader->members[5]} &&
+              std::ranges::all_of(player->tail_members,[&](const auto& member) {
+                return !member || (member->owner==host.source_handle(member->source_directory_index) &&
+                    member->resource==host.directory_resource_mapping()[member->source_directory_index]);
+              }) &&
               player->leading_controls==std::array<std::uint32_t,3>{list_reader->authored.settings_words[0],list_reader->authored.settings_words[1],list_reader->authored.settings_words[2]} &&
               player->raw_scalar==list_reader->authored.settings_words[3] &&
               player->trailing_controls==std::array<std::uint32_t,3>{list_reader->authored.settings_words[4],list_reader->authored.settings_words[5],list_reader->authored.settings_words[6]} &&

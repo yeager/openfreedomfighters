@@ -457,8 +457,8 @@ specified. This is evidence of an execution path, not a native playback contract
 The reviewed first-cut readers can now be atomically materialized into a cold
 player state after their owners and components are live. This retains the
 authored raw list controls, unnormalized scalar, list value, sequence-value
-pair, raw enabled option, zeroed member-progress pair, opaque mappings for the
-remaining four authored members, and checked provenance for the authored camera
+pair, raw enabled option, zeroed member-progress pair, opaque source/resource/
+owner provenance for the remaining four authored members, and checked provenance for the authored camera
 and legal-picture Center component. It rejects
 non-finite source fields, stale components, a broken Window-to-camera join, a
 broken sequence-to-legal-picture join, and any disagreement with the
