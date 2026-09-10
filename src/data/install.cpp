@@ -19,6 +19,7 @@
 #include "off/data/zip_archive.hpp"
 #include "off/graphics/render_assets.hpp"
 #include "off/graphics/render_preview.hpp"
+#include "off/graphics/intro_renderer_relocation_prefix.hpp"
 #include "off/graphics/texture_decode.hpp"
 
 #include <algorithm>
@@ -124,7 +125,7 @@ InstallVerification verify_install(const std::filesystem::path &root,
           file.status != ManifestFileStatus::missing)
         optional_file_warnings.push_back(file.path + ": " + file.detail);
     }
-    std::string audit_identity_input{"openfreedomfighters-deep-audit-v1\n"};
+    std::string audit_identity_input{"openfreedomfighters-deep-audit-v2\n"};
     audit_identity_input += supported_executable_sha256;
     for (const auto& file : supported_install_manifest()) {
       if (file.role != ManifestFileRole::required_game)
@@ -241,6 +242,8 @@ InstallVerification verify_install(const std::filesystem::path &root,
     std::size_t gms_renderer_payload_bytes = 0;
     std::size_t gms_resource_association_count = 0;
     std::size_t gms_allocation_sizing_row_count = 0;
+    std::size_t gms_renderer_relocation_group_count = 0;
+    std::size_t gms_renderer_tagged_reference_count = 0;
     std::size_t buf_resource_count = 0;
     std::size_t gms_attachment_table_count = 0;
     std::size_t gms_attachment_count = 0;
@@ -394,6 +397,14 @@ InstallVerification verify_install(const std::filesystem::path &root,
                 outer_sources.resource_associations.size();
             gms_allocation_sizing_row_count +=
                 outer_sources.allocation_sizing_rows.size();
+            if (outer_sources.renderer_resource) {
+              const auto prefix =
+                  graphics::parse_intro_renderer_relocation_prefix(
+                      *outer_sources.renderer_resource);
+              gms_renderer_relocation_group_count += prefix.groups.size();
+              for (const auto &group : prefix.groups)
+                gms_renderer_tagged_reference_count += group.references.size();
+            }
             ++gms_files_in_archive;
             ++gms_resource_count;
           }
@@ -668,6 +679,8 @@ InstallVerification verify_install(const std::filesystem::path &root,
         gms_renderer_payload_bytes != 6'341'932 ||
         gms_resource_association_count != 590 ||
         gms_allocation_sizing_row_count != 2'227 ||
+        gms_renderer_relocation_group_count != 79'577 ||
+        gms_renderer_tagged_reference_count != 198'234 ||
         buf_resource_count != 88 || gms_attachment_table_count != 34'218 ||
         gms_attachment_count != 39'885 || gms_buf_auxiliary_count != 5'765 ||
         texture_catalog_count != scene_archive_count ||

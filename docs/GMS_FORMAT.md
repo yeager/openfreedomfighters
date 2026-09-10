@@ -34,6 +34,16 @@ side independently through the source pool and live directory mapping, and
 invokes the still-required concrete relationship service only when both live
 resources resolve.
 
+The renderer payload begins with a four-word header. Header word 0 is the
+exclusive end of a relocation prefix in 32-bit words. Starting at word 4, that
+prefix contains groups made of a relation-chain head followed by one or more
+tagged references; bit 0 terminates each group and bits 2–0 are preserved as
+the reference tag. All 79,577 group heads are zero in the 90-file supported
+corpus, so the portable parser rejects nonzero heads until their serialized
+provenance is recovered. It validates 198,234 references and requires exact
+prefix consumption. For `FF-Intro`, the prefix is 433 words with 157 groups
+and 272 references; the remaining 56,960 renderer bytes stay opaque.
+
 The object-source directory begins with a 32-bit entry count followed by eight-byte entries:
 
 | Entry offset | Size | Meaning |
