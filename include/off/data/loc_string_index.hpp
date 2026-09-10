@@ -14,6 +14,9 @@ namespace off::data {
 struct LocStringCandidate final {
   std::size_t offset{};
   std::string_view bytes{};
+  // Lexical observation only. True means every byte is ASCII alphanumeric or
+  // underscore. It is not a claim that the field is a localization key.
+  bool ascii_identifier_like{};
 };
 
 class LocStringIndex final {

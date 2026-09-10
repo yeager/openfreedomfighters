@@ -14,6 +14,17 @@ constexpr std::size_t maximum_candidate_count = 1'000'000;
   // exact source span rather than an ASCII-filtered approximation.
   return byte >= 0x20U && byte != 0x7fU;
 }
+[[nodiscard]] bool ascii_identifier_like(std::span<const std::byte> bytes) noexcept {
+  if (bytes.empty()) return false;
+  for (const auto value : bytes) {
+    const auto byte = static_cast<unsigned char>(value);
+    const bool alpha = (byte >= 'A' && byte <= 'Z') ||
+                       (byte >= 'a' && byte <= 'z');
+    const bool digit = byte >= '0' && byte <= '9';
+    if (!alpha && !digit && byte != '_') return false;
+  }
+  return true;
+}
 }  // namespace
 
 LocStringIndex LocStringIndex::scan(std::span<const std::byte> bytes) {
@@ -28,7 +39,8 @@ LocStringIndex LocStringIndex::scan(std::span<const std::byte> bytes) {
     if (result.candidates_.size() == maximum_candidate_count)
       throw std::runtime_error("LOC candidate count exceeds the safety limit");
     const auto* text = reinterpret_cast<const char*>(bytes.data() + start);
-    result.candidates_.push_back({start, std::string_view(text, cursor - start)});
+    result.candidates_.push_back({start, std::string_view(text, cursor - start),
+                                  ascii_identifier_like(bytes.subspan(start, cursor - start))});
     ++cursor;
   }
   return result;
