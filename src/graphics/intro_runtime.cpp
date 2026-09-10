@@ -3060,6 +3060,31 @@ void IntroRuntime::prepare_supported_first_cut_player() {
       sequence_component.source().factory_name!="ZLIST_CutSequence" ||
       sequence_component.state().attached_owner!=sequence.owner.value)
     throw std::runtime_error("First-cut player has no live list or sequence component");
+  constexpr std::array<std::string_view,5> command_factories{
+      "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand",
+      "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand"};
+  for(std::size_t index=0;index<command_factories.size();++index) {
+    const auto component_index=list.component_indices[index+1U];
+    if(component_index>=components_.size())
+      throw std::runtime_error("First-cut player command component is out of range");
+    const auto& component=components_.at(component_index);
+    if(!component.constructed() || component.removed() ||
+        component.source().factory_name!=command_factories[index] ||
+        component.state().attached_owner!=list.owner.value)
+      throw std::runtime_error("First-cut player has no live command component");
+  }
+  if(first_cut_component_reader_state_) {
+    const auto& parsed=first_cut_component_reader_state_->payloads.commands;
+    for(std::size_t index=0;index<parsed.size();++index) {
+      const auto& payload=parsed[index];
+      const auto& command=list.authored.commands[index];
+      if(payload.timeline_position!=command.timeline_position ||
+          payload.event_reference!=command.event_reference ||
+          payload.target_reference!=command.target_reference ||
+          payload.event_argument!=command.event_argument || payload.target_name!=command.target_name)
+        throw std::runtime_error("First-cut player component payload does not match its owner reader");
+    }
+  }
   const auto& settings=list.authored.settings_words;
   if(!std::isfinite(list.authored.final_value) ||
       !std::isfinite(sequence.authored.values[0]) || !std::isfinite(sequence.authored.values[1]))
@@ -3088,6 +3113,20 @@ cutscene::FirstCutPlayerDescriptor IntroRuntime::first_cut_player_descriptor() c
       player.sequence_component_index != sequence.component_index ||
       player.list_resource != list.resource || player.sequence_resource != sequence.resource)
     throw std::runtime_error("First-cut player prepared state no longer matches its readers");
+  const bool reviewed_component_form=resources_.sources().deferred_source_block(
+      resources_.first_cut_index()).size()==171U;
+  if(reviewed_component_form && !first_cut_component_reader_state_)
+    throw std::runtime_error("First-cut player descriptor requires reviewed component reader state");
+  if(player.leading_controls!=std::array<std::uint32_t,3>{list.authored.settings_words[0],
+         list.authored.settings_words[1],list.authored.settings_words[2]} ||
+      player.raw_scalar!=list.authored.settings_words[3] ||
+      player.trailing_controls!=std::array<std::uint32_t,3>{list.authored.settings_words[4],
+         list.authored.settings_words[5],list.authored.settings_words[6]} ||
+      std::bit_cast<std::uint32_t>(player.list_value)!=std::bit_cast<std::uint32_t>(list.authored.final_value) ||
+      std::bit_cast<std::uint32_t>(player.sequence_values[0])!=std::bit_cast<std::uint32_t>(sequence.authored.values[0]) ||
+      std::bit_cast<std::uint32_t>(player.sequence_values[1])!=std::bit_cast<std::uint32_t>(sequence.authored.values[1]) ||
+      player.raw_enabled_option!=sequence.authored.authored_option)
+    throw std::runtime_error("First-cut player prepared values no longer match reader state");
   return {
       .list_component = player.list_component_index,
       .command_components = {list.component_indices[1], list.component_indices[2],
