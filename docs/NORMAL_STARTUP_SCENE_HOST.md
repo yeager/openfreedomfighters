@@ -1,15 +1,18 @@
 # Normal startup scene-host boundary
 
-Normal startup currently constructs and retains the supported intro directory,
-but it does not make that scene current. `NormalIntroSceneHost` now implements
-the strict ordering state machine described here, but is not yet wired to normal
-startup or SDL. It prevents a shortcut that creates an audio device or a draw
-call during loading and then incorrectly reports an active intro.
+Normal startup constructs and retains the supported intro directory, but it
+does not make that scene current. `NormalIntroSceneSession` owns the retained
+runtime and its exactly-once postconstruction reader bracket; callback routing
+no longer lives in `main`. `NormalIntroSceneHost` implements the later strict
+ordering state machine described here, but is not yet connected to that session
+or SDL. It prevents a shortcut that creates an audio device or a draw call
+during loading and then incorrectly reports an active intro.
 
 ## Required ordering
 
-The host owns one `IntroRuntime` for the lifetime of the admitted scene. It
-must not run before source-directory construction has completed. It performs
+The session owns one `IntroRuntime` for the lifetime of the admitted scene; the
+host borrows it through checked session boundaries. It must not run before
+source-directory construction has completed. It performs
 the following stages exactly once, with real services at every boundary:
 
 1. Run `IntroStartupActivation`: the post-construction reader bracket, outer

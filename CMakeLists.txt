@@ -99,7 +99,6 @@ add_library(off_core
     src/data/zgf_bundle.cpp
     src/data/zip_archive.cpp
     src/graphics/texture_decode.cpp
-    src/graphics/normal_intro_scene_host.cpp
     src/graphics/render_assets.cpp
     src/graphics/render_preview.cpp
     src/graphics/scene_render.cpp
@@ -107,6 +106,7 @@ add_library(off_core
     src/graphics/startup_graphics_asset.cpp
     src/graphics/intro_prepared_resources.cpp
     src/graphics/intro_runtime.cpp
+    src/graphics/normal_intro_scene_session.cpp
     src/graphics/intro_lifecycle_admission.cpp
     src/graphics/intro_preview_builder.cpp
     src/graphics/intro_controller_initialization.cpp
@@ -225,7 +225,11 @@ if(MSVC)
 else()
     target_compile_options(off_sdl_picture_stage_shader PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
 endif()
-add_library(off_sdl_intro_renderer STATIC src/platform/sdl_intro_renderer.cpp src/platform/intro_picture_submission.cpp src/platform/first_cut_picture_frame.cpp)
+add_library(off_sdl_intro_renderer STATIC
+    src/platform/sdl_intro_renderer.cpp
+    src/platform/intro_picture_submission.cpp
+    src/platform/first_cut_picture_frame.cpp
+    src/graphics/normal_intro_scene_host.cpp)
 add_library(off_sdl_intro_presentation STATIC src/platform/sdl_intro_presentation.cpp)
 target_link_libraries(off_sdl_intro_presentation PUBLIC off_sdl_picture_clear)
 if(MSVC)
@@ -425,6 +429,9 @@ if(BUILD_TESTING)
     add_executable(off_normal_intro_scene_host_tests tests/normal_intro_scene_host_tests.cpp)
     target_link_libraries(off_normal_intro_scene_host_tests PRIVATE off_core off_sdl_intro_renderer)
     add_test(NAME off_normal_intro_scene_host_tests COMMAND off_normal_intro_scene_host_tests)
+    add_executable(off_normal_intro_scene_session_tests tests/normal_intro_scene_session_tests.cpp)
+    target_link_libraries(off_normal_intro_scene_session_tests PRIVATE off_core)
+    add_test(NAME off_normal_intro_scene_session_tests COMMAND off_normal_intro_scene_session_tests)
 
     add_executable(off_scene_support_tests tests/scene_support_tests.cpp)
     target_link_libraries(off_scene_support_tests PRIVATE off_core)

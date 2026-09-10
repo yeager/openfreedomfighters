@@ -1,6 +1,7 @@
 #include "off/data/install.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
 #include "off/graphics/intro_runtime.hpp"
+#include "off/graphics/normal_intro_scene_session.hpp"
 #include "off/graphics/scene_gpu_plan.hpp"
 #include "off/graphics/scene_render.hpp"
 #include "off/graphics/startup_graphics_asset.hpp"
@@ -74,8 +75,8 @@ void write_startup_boot_probe_trace(
          << "trace-call-count=" << result.trace().size() << '\n';
   for (std::size_t index = 0; index < result.trace().size(); ++index) {
     const auto &entry = result.trace()[index];
-    output << "trace[" << index << "]="
-           << startup_boot_probe_call_name(entry.call)
+    output << "trace[" << index
+           << "]=" << startup_boot_probe_call_name(entry.call)
            << " source-owner-ordinal="
            << entry.source_boot_owner_directory_ordinal << '\n';
   }
@@ -183,7 +184,8 @@ int main(int argc, char **argv) {
       (verify_only || diagnostic_scene || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() ||
        mode_specified)) {
-    std::cerr << "--probe-startup-boot cannot be combined with runtime options.\n";
+    std::cerr
+        << "--probe-startup-boot cannot be combined with runtime options.\n";
     usage(std::cerr);
     return 2;
   }
@@ -207,26 +209,29 @@ int main(int argc, char **argv) {
 
   if (probe_startup_boot) {
     const auto verification = off::data::verify_install(
-        data_path, {}, {.deep_audit_cache_root =
-                            off::platform::application_deep_audit_cache_root()});
+        data_path, {},
+        {.deep_audit_cache_root =
+             off::platform::application_deep_audit_cache_root()});
     if (!verification) {
       std::cerr << "Game-data verification failed: " << verification.message
                 << '\n';
       return 3;
     }
     try {
-      auto package = std::make_shared<const off::runtime::StartupSceneLoadPackage>(
-          off::runtime::StartupScenePackageSource::prepare_checked(
-              "FF-Startup", data_path / "Scenes" / "FF-StartUp.ZIP"));
+      auto package =
+          std::make_shared<const off::runtime::StartupSceneLoadPackage>(
+              off::runtime::StartupScenePackageSource::prepare_checked(
+                  "FF-Startup", data_path / "Scenes" / "FF-StartUp.ZIP"));
       const auto &inputs = *package->factory_inputs();
       const auto directory =
           off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
               inputs.gms());
-      const auto result = off::runtime::SyntheticStartupBootSceneProbeHost::observe(
-          std::move(package), directory,
-          {.synthetic_factory_generation = 1U,
-           .synthetic_owner_identity = 1U,
-           .synthetic_component_identity = 1U});
+      const auto result =
+          off::runtime::SyntheticStartupBootSceneProbeHost::observe(
+              std::move(package), directory,
+              {.synthetic_factory_generation = 1U,
+               .synthetic_owner_identity = 1U,
+               .synthetic_component_identity = 1U});
       write_startup_boot_probe_trace(std::cout, result);
       return 0;
     } catch (const std::exception &error) {
@@ -243,7 +248,7 @@ int main(int argc, char **argv) {
       off::runtime::make_monotonic_clock_samples());
   // Native registration of the currently implemented concrete factory;
   // not the original complete class-list/base-class preparation.
-  if(!verify_only && !diagnostic_scene) {
+  if (!verify_only && !diagnostic_scene) {
     application.initialize_native_group_registration();
     application.initialize_native_window_language_registration();
     application.initialize_native_picture_registration();
@@ -258,115 +263,99 @@ int main(int argc, char **argv) {
   std::optional<off::graphics::SceneRenderResolutionSummary> scene_summary;
   // Scene-manager identity lifetime, independent of source archive catalogs.
   off::runtime::SceneComponentSequence component_sequence{[&application] {
-    const auto time=application.component_dispatch_time();
-    if(!time) throw std::runtime_error("Live application component dispatch time has not been produced");
+    const auto time = application.component_dispatch_time();
+    if (!time)
+      throw std::runtime_error(
+          "Live application component dispatch time has not been produced");
     return *time;
   }};
   std::optional<off::graphics::SceneRenderAsset> startup_ui_scene_resources;
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
-  std::unique_ptr<off::graphics::IntroRuntime> intro;
-  std::optional<off::graphics::IntroPreviewSnapshot> intro_legal_picture_preflight;
+  std::unique_ptr<off::graphics::NormalIntroSceneSession> intro_session;
+  off::graphics::IntroRuntime *intro{};
+  std::optional<off::graphics::IntroPreviewSnapshot>
+      intro_legal_picture_preflight;
   off::ui::RetailUiFontSet ui_fonts;
   off::ui::RetailUiTextureSet ui_textures;
   off::platform::StartupWindow startup_window;
   if (!verify_only) {
-    auto preflight = off::platform::run_sdl_startup_preflight(data_path, [&] {
-      if (diagnostic_scene) {
-        const auto asset = diagnostic_scene_archive
-                               ? off::graphics::load_owned_diagnostic_scene_render_asset(
-                                     data_path, *diagnostic_scene_archive)
-                               : off::graphics::load_diagnostic_scene_render_asset(data_path);
-        scene_summary.emplace(off::graphics::summarize_scene_render_resolutions(asset));
-        scene.emplace(off::graphics::prepare_scene_gpu_plan(asset));
-      } else {
-        // Supported normal (non-restore) cold-load boundary, before resources.
-        // Native monotonic samples are an explicit CRT portability policy.
-        application.reset_clock();
-        // Retain exact UI-archive resources, not an original first-scene
-        // selection or a guessed camera/world draw plan.
-        startup_ui_scene_resources.emplace(
-            off::graphics::load_startup_scene_render_asset(data_path));
-        // Prepare authored first-cut resources without admitting a scene or
-        // manufacturing lifecycle state. Keep ownership through the runtime.
-        intro = std::make_unique<off::graphics::IntroRuntime>(
-            off::graphics::load_intro_prepared_resources(
-                data_path / "Scenes" / "FF-Intro.ZIP"), application, component_sequence,
-            "FF-Intro.gms", off::graphics::IntroSoundLoadPolicy::directory_construction);
-        // Execute the actual fresh root stage. Authored source construction and
-        // its loader tail are still required before fallback/view admission.
-        intro->construct_root();
-        // The engine GPU runtime is created below, after CPU preflight. The
-        // startup splash is a separate renderer. Reset load progress once under
-        // the native staging policy, then construct the reviewed directory prefix.
-        intro->begin_source_loading_without_engine_renderer();
-        intro->construct_first_authored_group();
-        intro->construct_window_language_groups_without_engine_renderer();
-        intro->construct_picture_component_prefix_without_engine_renderer();
-        intro->construct_authored_camera_without_engine_renderer();
-        intro->construct_second_window_picture_without_engine_renderer();
-        intro->construct_second_window_scope_without_engine_renderer();
-        intro->construct_following_visual_scope_without_engine_renderer();
-        intro->construct_room_animation_scope_without_engine_renderer();
-        intro->construct_lens_flare_animation_scope_without_engine_renderer();
-        intro->construct_remaining_directory_without_engine_renderer();
-        // The reviewed cold-load reader bracket establishes source-backed
-        // first-cut ownership and reference translation.  It deliberately
-        // does not admit a global lifecycle, schedule an event, activate a
-        // cut, or claim that the engine renderer has consumed these records.
-        intro->run_postconstruction_reader_bracket(
-            0U,
-            {.external_loader_service = [](std::uint64_t) {},
-             .source_script_work = [](const off::graphics::IntroSourceScriptWork &) {},
-             .pre_reader_service = [] {},
-             .prepare_deferred_reader =
-                 [](const off::graphics::IntroDeferredReaderWork &) {},
-             .owner_reader_boundary = [&intro](
-                                          const off::graphics::IntroDeferredReaderWork &work) {
-               if (work.source_directory_index == intro->resources().controller_index())
-                 intro->apply_supported_movie_control_deferred_reader(work);
-               if (work.source_directory_index == intro->resources().member_index())
-                 intro->apply_supported_first_cut_sequence_deferred_reader(work);
-               if (work.source_directory_index == intro->resources().first_cut_index())
-                 intro->apply_supported_first_cut_list_deferred_reader(work);
-               const auto legal_source = intro->resources().sources().local_source_for_authored_reference(
-                   intro->resources().member().references[1]);
-               if (legal_source && *legal_source == work.source_directory_index)
-                 intro->apply_supported_first_cut_legal_picture_deferred_reader(work);
-               if (intro->resources().sources().directory().at(work.source_directory_index).source_type ==
-                   0x00200012U)
-                 intro->apply_supported_sound_owner_deferred_reader(work);
-               if (work.source_directory_index == intro->resources().window_index())
-                 intro->apply_supported_window_deferred_reader(work);
-               if (work.source_directory_index == 466U)
-                 intro->apply_supported_external_cut_commands_deferred_reader(work);
-               for (const auto &command : intro->resources().first_cut().commands) {
-                 const auto target = intro->resources().sources().local_source_for_authored_reference(
-                     command.target_reference);
-                 if (target && *target == work.source_directory_index) {
-                   intro->apply_supported_first_cut_fade_picture_deferred_reader(work);
-                   break;
-                 }
-               }
-             },
-             .component_reader_boundary =
-                 [&intro](const off::graphics::IntroDeferredReaderWork &work) {
-                   if (work.source_directory_index == intro->resources().controller_index())
-                     intro->apply_supported_movie_control_component_reader(work);
-                 },
-             .end_reader_service = [] {}});
-        const auto legal_source =
-            intro->resources().sources().local_source_for_authored_reference(
-                intro->resources().member().references[1]);
-        if (!legal_source)
-          throw std::runtime_error("first-cut legal picture source is unavailable");
-        intro_legal_picture_preflight.emplace(off::graphics::build_intro_preview(
-            *intro, *legal_source, {.width = 1280U, .height = 720U}));
-      }
-      startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
-          data_path / "Scenes" / "FF-StartUp.ZIP"));
-      ui_fonts = off::ui::load_retail_ui_fonts(
-          data_path / "Scenes" / "FF-StartUp.ZIP");
-    }, locale);
+    auto preflight = off::platform::run_sdl_startup_preflight(
+        data_path,
+        [&] {
+          if (diagnostic_scene) {
+            const auto asset =
+                diagnostic_scene_archive
+                    ? off::graphics::load_owned_diagnostic_scene_render_asset(
+                          data_path, *diagnostic_scene_archive)
+                    : off::graphics::load_diagnostic_scene_render_asset(
+                          data_path);
+            scene_summary.emplace(
+                off::graphics::summarize_scene_render_resolutions(asset));
+            scene.emplace(off::graphics::prepare_scene_gpu_plan(asset));
+          } else {
+            // Supported normal (non-restore) cold-load boundary, before
+            // resources. Native monotonic samples are an explicit CRT
+            // portability policy.
+            application.reset_clock();
+            // Retain exact UI-archive resources, not an original first-scene
+            // selection or a guessed camera/world draw plan.
+            startup_ui_scene_resources.emplace(
+                off::graphics::load_startup_scene_render_asset(data_path));
+            // Prepare authored first-cut resources without admitting a scene or
+            // manufacturing lifecycle state. Keep ownership through the
+            // runtime.
+            auto intro_runtime = std::make_unique<off::graphics::IntroRuntime>(
+                off::graphics::load_intro_prepared_resources(
+                    data_path / "Scenes" / "FF-Intro.ZIP"),
+                application, component_sequence, "FF-Intro.gms",
+                off::graphics::IntroSoundLoadPolicy::directory_construction);
+            intro = intro_runtime.get();
+            // Execute the actual fresh root stage. Authored source construction
+            // and its loader tail are still required before fallback/view
+            // admission.
+            intro->construct_root();
+            // The engine GPU runtime is created below, after CPU preflight. The
+            // startup splash is a separate renderer. Reset load progress once
+            // under the native staging policy, then construct the reviewed
+            // directory prefix.
+            intro->begin_source_loading_without_engine_renderer();
+            intro->construct_first_authored_group();
+            intro->construct_window_language_groups_without_engine_renderer();
+            intro->construct_picture_component_prefix_without_engine_renderer();
+            intro->construct_authored_camera_without_engine_renderer();
+            intro->construct_second_window_picture_without_engine_renderer();
+            intro->construct_second_window_scope_without_engine_renderer();
+            intro->construct_following_visual_scope_without_engine_renderer();
+            intro->construct_room_animation_scope_without_engine_renderer();
+            intro
+                ->construct_lens_flare_animation_scope_without_engine_renderer();
+            intro->construct_remaining_directory_without_engine_renderer();
+            // The reviewed cold-load reader bracket establishes source-backed
+            // first-cut ownership and reference translation.  It deliberately
+            // does not admit a global lifecycle, schedule an event, activate a
+            // cut, or claim that the engine renderer has consumed these
+            // records.
+            intro_session = off::graphics::make_normal_intro_scene_session(
+                std::move(intro_runtime));
+            intro_session->complete_postconstruction_reader_bracket(0U);
+            const auto legal_source =
+                intro->resources()
+                    .sources()
+                    .local_source_for_authored_reference(
+                        intro->resources().member().references[1]);
+            if (!legal_source)
+              throw std::runtime_error(
+                  "first-cut legal picture source is unavailable");
+            intro_legal_picture_preflight.emplace(
+                off::graphics::build_intro_preview(
+                    *intro, *legal_source, {.width = 1280U, .height = 720U}));
+          }
+          startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
+              data_path / "Scenes" / "FF-StartUp.ZIP"));
+          ui_fonts = off::ui::load_retail_ui_fonts(data_path / "Scenes" /
+                                                   "FF-StartUp.ZIP");
+        },
+        locale);
     if (preflight.outcome ==
         off::platform::StartupPreflightOutcome::quit_requested)
       return 0;
@@ -385,8 +374,9 @@ int main(int argc, char **argv) {
     startup_window = std::move(preflight.window);
   } else {
     verification = off::data::verify_install(
-        data_path, {}, {.deep_audit_cache_root =
-                            off::platform::application_deep_audit_cache_root()});
+        data_path, {},
+        {.deep_audit_cache_root =
+             off::platform::application_deep_audit_cache_root()});
   }
 
   if (!*verification) {
@@ -396,9 +386,10 @@ int main(int argc, char **argv) {
   }
   std::cout << verification->message << '\n'
             << "Mode: " << off::mode_name(mode) << '\n';
-  for (const auto& warning : verification->optional_file_warnings)
+  for (const auto &warning : verification->optional_file_warnings)
     std::cerr << "Optional file skipped: " << warning << '\n';
-  std::cout << "Optional soundtrack: " << verification->soundtrack_candidates.size()
+  std::cout << "Optional soundtrack: "
+            << verification->soundtrack_candidates.size()
             << " hash-verified files; decoder and bounded transport ready; "
                "game-cue mapping not implemented.\n";
   if (verify_only) {
@@ -406,12 +397,12 @@ int main(int argc, char **argv) {
   }
   if (scene_summary) {
     const auto &summary = *scene_summary;
-    std::cout << "Diagnostic scene geometry: "
-              << summary.local_primitive << " local, "
-              << summary.no_local_source << " no-local-source, "
-              << summary.source_without_primitive << " source-without-primitive, "
-              << summary.missing_primitive << " missing-primitive, "
-              << summary.unresolved_primitive_alias << " unresolved-alias.\n";
+    std::cout << "Diagnostic scene geometry: " << summary.local_primitive
+              << " local, " << summary.no_local_source << " no-local-source, "
+              << summary.source_without_primitive
+              << " source-without-primitive, " << summary.missing_primitive
+              << " missing-primitive, " << summary.unresolved_primitive_alias
+              << " unresolved-alias.\n";
     if (summary.local_primitive == 0U) {
       std::cout << "Diagnostic scene has no direct-local geometry to draw; "
                    "indirect source resolution is pending.\n";
@@ -428,18 +419,22 @@ int main(int argc, char **argv) {
   if (intro_legal_picture_preflight)
     std::cout << "First-cut legal picture preflight: "
               << intro_legal_picture_preflight->draw.draw_plan.groups().size()
-              << " draw groups, " << intro_legal_picture_preflight->images.size()
+              << " draw groups, "
+              << intro_legal_picture_preflight->images.size()
               << " referenced images; not admitted for display.\n";
   if (intro)
-    std::cout << "Retained component catalog: " << intro->components().size()
-              << " entries; " << intro->components().construction_order().size()
-              << " constructed. The full authored construction directory is retained;"
-                 " loader tail, activation and rendering remain pending.\n";
+    std::cout
+        << "Retained component catalog: " << intro->components().size()
+        << " entries; " << intro->components().construction_order().size()
+        << " constructed. The full authored construction directory is retained;"
+           " loader tail, activation and rendering remain pending.\n";
   if (intro && !intro->source_resource_scopes().empty()) {
-    std::size_t allocated=0;
-    for(const auto& scope:intro->source_resource_scopes()) allocated+=scope.resources.size();
-    std::cout << "Source loading: " << intro->source_resource_scopes().size() << " scopes, " << allocated
-              << " resources allocated; " << intro->loaded_resource_handles().size()
+    std::size_t allocated = 0;
+    for (const auto &scope : intro->source_resource_scopes())
+      allocated += scope.resources.size();
+    std::cout << "Source loading: " << intro->source_resource_scopes().size()
+              << " scopes, " << allocated << " resources allocated; "
+              << intro->loaded_resource_handles().size()
               << " authored owners constructed and attached.\n";
   }
   if (intro) {
@@ -450,15 +445,18 @@ int main(int argc, char **argv) {
               << "; remaining lifecycle and playback work is pending.\n";
   }
   if (intro)
-    std::cout << "Source-bound intro sound definitions: " << intro->resources().sounds().size()
-              << "; retained authored metadata, no playback or readiness event.\n";
+    std::cout
+        << "Source-bound intro sound definitions: "
+        << intro->resources().sounds().size()
+        << "; retained authored metadata, no playback or readiness event.\n";
   if (intro)
     std::cout << "Canonical intro sound records: " << intro->sounds().size()
-              << "; logical backend retained, owner preparation and playback not activated.\n";
+              << "; logical backend retained, owner preparation and playback "
+                 "not activated.\n";
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       startup_window, mode, scene ? &*scene : nullptr, *startup_graphics,
-      ui_fonts, ui_textures, intro.get(),
-      frame_limit, show_graphics_menu, screenshot_path, locale);
+      ui_fonts, ui_textures, intro, frame_limit, show_graphics_menu,
+      screenshot_path, locale);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';
     return 4;
