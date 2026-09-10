@@ -7,6 +7,7 @@
 #include "off/data/deferred_reader_session.hpp"
 #include "off/data/first_cut_owner_reader.hpp"
 #include "off/data/first_cut_list_component_reader.hpp"
+#include "off/data/first_cut_command_component_reader.hpp"
 #include "off/data/keys_descriptor_range.hpp"
 #include "off/data/keys_backing_evaluator.hpp"
 #include "off/data/matpos_pose_evaluator.hpp"
@@ -1096,6 +1097,31 @@ int main() {
             const std::array<DeferredComponentReader, 0> none{};
             static_cast<void>(DeferredComponentDispatcher::dispatch(bad, none));
         }, "component dispatcher rejects truncated generic values");
+    }
+    {
+        using off::data::FirstCutCommandComponentReader;
+        std::vector<std::byte> payload;
+        const auto scalar=[&](std::uint8_t tag,std::uint32_t value) {
+            payload.push_back(static_cast<std::byte>(tag));
+            append_u32(payload,value);
+        };
+        scalar(0x83U,9U); scalar(0x8aU,10U); scalar(0x88U,11U); scalar(0x03U,12U);
+        payload.push_back(std::byte{0x04}); payload.push_back(std::byte{'o'}); payload.push_back(std::byte{'k'});
+        payload.push_back(std::byte{0});
+        const auto record=FirstCutCommandComponentReader::read(payload);
+        check(record.timeline_position==9U && record.event_reference==10U && record.target_reference==11U &&
+                  record.event_argument==12U && record.target_name=="ok",
+              "first-cut command component reader retains one bounded command record");
+        check_rejected([&] {
+            auto malformed=payload;
+            malformed[0]=std::byte{0x04};
+            static_cast<void>(FirstCutCommandComponentReader::read(malformed));
+        }, "first-cut command component reader rejects an unsupported integer tag");
+        check_rejected([&] {
+            auto malformed=payload;
+            malformed.pop_back();
+            static_cast<void>(FirstCutCommandComponentReader::read(malformed));
+        }, "first-cut command component reader rejects an unterminated name");
     }
     {
         using off::data::FirstCutListComponentReader;

@@ -2,6 +2,7 @@
 #include "off/data/bounded_component_block_cursor.hpp"
 #include "off/data/first_cut_owner_reader.hpp"
 #include "off/data/first_cut_list_component_reader.hpp"
+#include "off/data/first_cut_command_component_reader.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
 #include "off/graphics/intro_runtime.hpp"
 #include "off/graphics/normal_intro_scene_session.hpp"
@@ -158,6 +159,18 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
       std::bit_cast<std::uint32_t>(list_record.final_value)!=
           std::bit_cast<std::uint32_t>(first_cut_source_data.final_value))
     throw std::runtime_error("first-cut cold probe found a component-parser disagreement");
+  off::data::DeferredComponentAttachmentSnapshot first_command_component;
+  if(!component_blocks.next_attachment(first_command_component))
+    throw std::runtime_error("first-cut cold probe found no first command payload");
+  const auto command_record=off::data::FirstCutCommandComponentReader::read(
+      first_command_component.payload());
+  const auto& first_command=first_cut_source_data.commands.front();
+  if(command_record.timeline_position!=first_command.timeline_position ||
+      command_record.event_reference!=first_command.event_reference ||
+      command_record.target_reference!=first_command.target_reference ||
+      command_record.event_argument!=first_command.event_argument ||
+      command_record.target_name!=first_command.target_name)
+    throw std::runtime_error("first-cut cold probe found a command-parser disagreement");
   const off::data::DeferredReaderWorkIdentity identity{
       first_cut_work->resource.value,first_cut_work->source_offset,first_cut_work->source_directory_index};
   off::data::DeferredReaderSession owner_session(identity,block);
@@ -185,6 +198,7 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
             << "reader-states=2\n"
             << "owner-envelope=verified\n"
             << "first-component-payload=verified\n"
+            << "first-command-component-payload=verified\n"
             << "phase-one=not-run\n"
             << "phase-two=not-run\n"
             << "renderer=not-admitted\n"
