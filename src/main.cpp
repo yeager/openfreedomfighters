@@ -33,7 +33,7 @@ void usage(std::ostream &output) {
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] "
             "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] "
-            "[--probe-startup-boot]\n";
+            "[--probe-startup-boot] [--probe-first-cut-cold]\n";
 }
 
 [[nodiscard]] std::string_view startup_boot_probe_call_name(
@@ -82,6 +82,58 @@ void write_startup_boot_probe_trace(
   }
 }
 
+int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
+  off::runtime::ApplicationServices application(
+      off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+      off::runtime::make_monotonic_clock_samples());
+  application.initialize_native_group_registration();
+  application.initialize_native_window_language_registration();
+  application.initialize_native_picture_registration();
+  application.initialize_native_camera_registration();
+  application.initialize_native_second_window_scope_registration();
+  application.initialize_native_visual_registration();
+  application.initialize_native_room_animation_scope_registration();
+  application.initialize_native_lens_flare_animation_scope_registration();
+  application.initialize_native_remaining_intro_scope_registration();
+  off::runtime::SceneComponentSequence components{[&application] {
+    const auto time=application.component_dispatch_time();
+    if(!time) throw std::runtime_error("first-cut cold probe has no component dispatch time");
+    return *time;
+  }};
+  auto runtime=std::make_unique<off::graphics::IntroRuntime>(
+      off::graphics::load_intro_prepared_resources(data_path / "Scenes" / "FF-Intro.ZIP"),
+      application,components,"FF-Intro.gms",
+      off::graphics::IntroSoundLoadPolicy::directory_construction);
+  runtime->construct_root();
+  runtime->begin_source_loading_without_engine_renderer();
+  runtime->construct_first_authored_group();
+  runtime->construct_window_language_groups_without_engine_renderer();
+  runtime->construct_picture_component_prefix_without_engine_renderer();
+  runtime->construct_authored_camera_without_engine_renderer();
+  runtime->construct_second_window_picture_without_engine_renderer();
+  runtime->construct_second_window_scope_without_engine_renderer();
+  runtime->construct_following_visual_scope_without_engine_renderer();
+  runtime->construct_room_animation_scope_without_engine_renderer();
+  runtime->construct_lens_flare_animation_scope_without_engine_renderer();
+  runtime->construct_remaining_directory_without_engine_renderer();
+  auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+  session->complete_postconstruction_reader_bracket(0U);
+  auto& intro=session->runtime();
+  intro.prepare_supported_first_cut_player();
+  const auto first_cut=intro.first_cut_player_session();
+  if(first_cut.initialization().phase_one_complete() ||
+      first_cut.initialization().phase_two_complete() || first_cut.receiver().open() ||
+      first_cut.receiver().closed())
+    throw std::runtime_error("first-cut cold probe observed an unexpected lifecycle transition");
+  std::cout << "First-cut cold probe verified\n"
+            << "reader-states=2\n"
+            << "phase-one=not-run\n"
+            << "phase-two=not-run\n"
+            << "renderer=not-admitted\n"
+            << "audio=not-started\n";
+  return 0;
+}
+
 [[nodiscard]] std::filesystem::path default_game_data_path() {
   // An explicit environment value is useful for portable installs and test
   // systems. It never overrides --data.
@@ -108,6 +160,7 @@ int main(int argc, char **argv) {
   bool show_graphics_menu = false;
   bool diagnostic_scene = false;
   bool probe_startup_boot = false;
+  bool probe_first_cut_cold = false;
   bool mode_specified = false;
   std::optional<std::filesystem::path> diagnostic_scene_archive;
   std::filesystem::path screenshot_path;
@@ -143,6 +196,8 @@ int main(int argc, char **argv) {
         diagnostic_scene_archive = argv[++index];
     } else if (argument == "--probe-startup-boot") {
       probe_startup_boot = true;
+    } else if (argument == "--probe-first-cut-cold") {
+      probe_first_cut_cold = true;
     } else if (argument == "--screenshot" && index + 1 < argc) {
       screenshot_path = argv[++index];
     } else if (argument == "--locale" && index + 1 < argc) {
@@ -165,7 +220,7 @@ int main(int argc, char **argv) {
   }
   if (data_path.empty())
     data_path = default_game_data_path();
-  if (data_path.empty() && (verify_only || probe_startup_boot)) {
+  if (data_path.empty() && (verify_only || probe_startup_boot || probe_first_cut_cold)) {
     std::cerr
         << "A legally purchased Freedom Fighters installation is required; "
            "pass --data PATH or set OPENFREEDOMFIGHTERS_DATA.\n";
@@ -186,6 +241,13 @@ int main(int argc, char **argv) {
        mode_specified)) {
     std::cerr
         << "--probe-startup-boot cannot be combined with runtime options.\n";
+    usage(std::cerr);
+    return 2;
+  }
+  if (probe_first_cut_cold &&
+      (verify_only || probe_startup_boot || diagnostic_scene || frame_limit != 0U ||
+       show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified)) {
+    std::cerr << "--probe-first-cut-cold cannot be combined with runtime options.\n";
     usage(std::cerr);
     return 2;
   }
@@ -236,6 +298,20 @@ int main(int argc, char **argv) {
       return 0;
     } catch (const std::exception &error) {
       std::cerr << "Startup BootMenu probe failed: " << error.what() << '\n';
+      return 3;
+    }
+  }
+
+  if (probe_first_cut_cold) {
+    const auto verification=off::data::verify_install(
+        data_path,{}, {.deep_audit_cache_root=off::platform::application_deep_audit_cache_root()});
+    if(!verification) {
+      std::cerr << "Game-data verification failed: " << verification.message << '\n';
+      return 3;
+    }
+    try { return run_first_cut_cold_probe(data_path); }
+    catch(const std::exception& error) {
+      std::cerr << "First-cut cold probe failed: " << error.what() << '\n';
       return 3;
     }
   }

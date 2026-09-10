@@ -774,6 +774,20 @@ opaque leases for the remaining resources establish data ownership only. It is
 not applicable to `-InList` archives and neither supplies a cut route nor
 starts a scene, audio stream, transition, or renderer.
 
+## First-cut cold probe
+
+`openfreedomfighters --probe-first-cut-cold --data <owned-data-root>` is an
+opt-in integration probe for the supported Steam installation. It verifies the
+install, constructs the checked intro directory, runs the existing
+postconstruction reader bracket, and creates the first-cut session. It then
+requires that both first-cut lifecycle phases and the ordered-command receiver
+are still cold. The fixed report contains no game-data identities or payloads.
+
+The probe creates no SDL window and does not admit a renderer, start audio,
+schedule an event, execute a lifecycle phase, or play a cutscene. It is not a
+playability test and is deliberately outside public CI because it needs the
+user-owned installation.
+
 ## Windows observation: opening sequence
 
 On 2026-09-09, a private Windows retail run was captured over RDP. The images
