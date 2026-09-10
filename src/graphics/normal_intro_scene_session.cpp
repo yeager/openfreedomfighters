@@ -37,6 +37,8 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                  runtime_->apply_supported_first_cut_list_deferred_reader(work);
                if (work.source_directory_index == r.camera_index())
                  runtime_->apply_supported_first_cut_camera_deferred_reader(work);
+               if (work.source_directory_index >= 43U && work.source_directory_index <= 47U)
+                 runtime_->apply_supported_following_visual_owner_deferred_reader(work);
                const auto legal =
                    r.sources().local_source_for_authored_reference(
                        r.member().references[1]);

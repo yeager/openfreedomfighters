@@ -102,6 +102,7 @@ void write_startup_boot_probe_trace(
   case Family::external_cut_commands: return "external-cut-commands";
   case Family::first_cut_fade_picture: return "first-cut-fade-picture";
   case Family::first_cut_camera: return "first-cut-camera";
+  case Family::following_visual_owner: return "following-visual-owner";
   }
   return "unknown";
 }
@@ -119,7 +120,7 @@ void write_startup_boot_probe_trace(
 
 void write_reader_coverage_probe(std::ostream& output,
     const off::graphics::IntroDeferredReaderCoverageInventory& coverage) {
-  constexpr std::size_t family_count=10U;
+  constexpr std::size_t family_count=11U;
   constexpr std::size_t state_count=3U;
   std::array<std::array<std::size_t,state_count>,family_count> counts{};
   for(const auto& entry:coverage.entries) {

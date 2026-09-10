@@ -52,6 +52,11 @@ before their terminal marker, while 31 are outside the narrow classifier. This
 does not authorize a generic attachment dispatcher. The next candidate must be
 an exact, attachment-free owner form with a separately recovered payload and
 failure contract.
+
+The five reviewed following-visual owners now retain only a completed
+owner/resource/offset receipt. Their payload is deliberately not parsed and
+they do not count as lifecycle reader admissions; this separates safe boundary
+provenance from unproven reader behavior.
 MatPosAnim is explicitly outside the current deferred-reader admission path:
 all 227 associated deferred records terminate before attachment dispatch. Its
 owner-local `KEYS` preparation and its separate persistence/restore object

@@ -1888,6 +1888,8 @@ IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() c
       return IntroDeferredReaderFamily::first_cut_list;
     if(work.source_directory_index==resources_.camera_index())
       return IntroDeferredReaderFamily::first_cut_camera;
+    if(work.source_directory_index>=43U && work.source_directory_index<=47U)
+      return IntroDeferredReaderFamily::following_visual_owner;
     if(work.source_directory_index==resources_.window_index())
       return IntroDeferredReaderFamily::window_owner;
     const auto legal=resources_.sources().local_source_for_authored_reference(
@@ -3067,6 +3069,33 @@ void IntroRuntime::apply_supported_first_cut_camera_deferred_reader(
                                   .authored=authored};
   try { record_supported_reader_admission(work); }
   catch(...) { first_cut_camera_reader_state_.reset(); throw; }
+}
+
+void IntroRuntime::apply_supported_following_visual_owner_deferred_reader(
+    const IntroDeferredReaderWork& work) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !work.processed ||
+      work.source_directory_index<43U || work.source_directory_index>47U ||
+      following_visual_owner_reader_receipts_.contains(work.source_directory_index) ||
+      std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate) {
+        return std::addressof(candidate)==std::addressof(work);
+      })==deferred_reader_work_.end())
+    throw std::runtime_error("Following visual owner receipt requires unique live deferred work");
+  const auto& source=resources_.sources().directory().at(work.source_directory_index);
+  const auto visual=constructed_visual_owners_.find(work.source_directory_index);
+  if(source.source_type!=0x0020003aU || source.source_variant || source.parent_steps ||
+      source.enters_child_pool || source.pool_group!=5U || source.pool_class!=1U ||
+      source.attachment_table_offset || !source.attachments.empty() ||
+      !owner_components(source_handle(work.source_directory_index)).empty() ||
+      source.deferred_source_offset!=work.source_offset ||
+      directory_resource_mapping_.at(work.source_directory_index)!=work.resource ||
+      !associated_resource_owner(work.resource) ||
+      *associated_resource_owner(work.resource)!=source_handle(work.source_directory_index) ||
+      visual==constructed_visual_owners_.end() || visual->second.owner!=source_handle(work.source_directory_index) ||
+      visual->second.resource!=work.resource || !visual->second.attachments.empty())
+    throw std::runtime_error("Following visual owner receipt source shape is unsupported");
+  following_visual_owner_reader_receipts_.emplace(work.source_directory_index,
+      IntroFollowingVisualOwnerReaderReceipt{source_handle(work.source_directory_index),work.resource,
+          work.source_directory_index,work.source_offset});
 }
 
 void IntroRuntime::prepare_supported_first_cut_player() {

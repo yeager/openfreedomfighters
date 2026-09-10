@@ -1020,6 +1020,8 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               host.apply_supported_first_cut_list_deferred_reader(work);
             if(work.source_directory_index==host.resources().camera_index())
               host.apply_supported_first_cut_camera_deferred_reader(work);
+            if(work.source_directory_index>=43U && work.source_directory_index<=47U)
+              host.apply_supported_following_visual_owner_deferred_reader(work);
             if(work.source_directory_index==466U) {
               bool supported_external_payload{};
               try {
@@ -1098,6 +1100,15 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                   coverage.unclassified_without_attachments+
                       coverage.unclassified_with_attachments<=coverage.total_discovered,
               "unclassified reader coverage keeps attachment dispatch observations aggregate and bounded");
+        check(host.following_visual_owner_reader_receipts().size()==5U &&
+                  std::ranges::all_of(host.following_visual_owner_reader_receipts(),[&](const auto& entry) {
+                    const auto& [source,receipt]=entry;
+                    return source>=43U && source<=47U && receipt.source_directory_index==source &&
+                        receipt.owner==host.source_handle(source) &&
+                        receipt.resource==host.directory_resource_mapping()[source] &&
+                        receipt.source_offset==host.resources().sources().directory()[source].deferred_source_offset;
+                  }),
+              "following visual owner receipts retain only exact attachment-free reader provenance");
         const auto& window=host.window_for_owner(host.source_handle(host.resources().window_index()));
         const auto& camera=host.camera_for_owner(host.source_handle(host.resources().camera_index()));
         const auto window_reference_resource=[&host](std::uint32_t reference)
