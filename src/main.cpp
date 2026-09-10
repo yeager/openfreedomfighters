@@ -261,11 +261,11 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
   if(owner_session.state()!=off::data::DeferredReaderSessionState::deactivated ||
       !owner_session.owner_block().empty())
     throw std::runtime_error("first-cut cold probe did not release the owner-reader boundary");
-  intro.prepare_supported_first_cut_player();
-  const auto first_cut=intro.first_cut_player_session();
-  if(first_cut.initialization().phase_one_complete() ||
-      first_cut.initialization().phase_two_complete() || first_cut.receiver().open() ||
-      first_cut.receiver().closed())
+  session->prepare_supported_first_cut_player();
+  const auto* first_cut=session->first_cut_player();
+  if(!first_cut || first_cut->initialization().phase_one_complete() ||
+      first_cut->initialization().phase_two_complete() || first_cut->receiver().open() ||
+      first_cut->receiver().closed())
     throw std::runtime_error("first-cut cold probe observed an unexpected lifecycle transition");
   std::cout << "First-cut cold probe verified\n"
             << "reader-states=2\n"
