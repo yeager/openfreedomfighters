@@ -6,6 +6,7 @@
 #include "off/data/deferred_component_dispatcher.hpp"
 #include "off/data/deferred_reader_session.hpp"
 #include "off/data/first_cut_owner_reader.hpp"
+#include "off/data/first_cut_list_component_reader.hpp"
 #include "off/data/keys_descriptor_range.hpp"
 #include "off/data/keys_backing_evaluator.hpp"
 #include "off/data/matpos_pose_evaluator.hpp"
@@ -979,6 +980,7 @@ int main() {
         const auto found_second = cursor.next_attachment(second);
         const auto finished = !cursor.next_attachment(first);
         check(found_first && found_second && finished && first.remaining().size() == 8U &&
+                  first.payload().size()==5U && second.payload().size()==3U &&
                   second.remaining().size() == 5U &&
                   second.remaining().front() == std::byte{0x04} && cursor.remaining().size() == 1U &&
                   shared.size() == 2U && shared.front() == std::byte{0xff},
@@ -1094,6 +1096,32 @@ int main() {
             const std::array<DeferredComponentReader, 0> none{};
             static_cast<void>(DeferredComponentDispatcher::dispatch(bad, none));
         }, "component dispatcher rejects truncated generic values");
+    }
+    {
+        using off::data::FirstCutListComponentReader;
+        std::vector<std::byte> payload;
+        const auto scalar=[&](std::uint8_t tag,std::uint32_t value) {
+            payload.push_back(static_cast<std::byte>(tag));
+            append_u32(payload,value);
+        };
+        constexpr std::array<std::uint8_t,7> tags{0x83U,0x83U,0x03U,0x08U,0x03U,0x83U,0x03U};
+        for(std::size_t index=0;index<tags.size();++index)
+            scalar(tags[index],static_cast<std::uint32_t>(index+1U));
+        scalar(0x02U,0x80000000U);
+        const auto record=FirstCutListComponentReader::read(payload);
+        check(record.controls==std::array<std::uint32_t,7>{1U,2U,3U,4U,5U,6U,7U} &&
+                  std::bit_cast<std::uint32_t>(record.final_value)==0x80000000U,
+              "first-cut list component reader retains its fixed controls and signed-zero scalar");
+        check_rejected([&] {
+            auto malformed=payload;
+            malformed[10]=std::byte{0x04};
+            static_cast<void>(FirstCutListComponentReader::read(malformed));
+        }, "first-cut list component reader rejects a wrong control tag");
+        check_rejected([&] {
+            auto malformed=payload;
+            malformed.push_back(std::byte{0});
+            static_cast<void>(FirstCutListComponentReader::read(malformed));
+        }, "first-cut list component reader rejects trailing bytes");
     }
     {
         using off::data::FirstCutOwnerReader;

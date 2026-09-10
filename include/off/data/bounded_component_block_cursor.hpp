@@ -17,6 +17,9 @@ public:
     DeferredComponentAttachmentSnapshot() = default;
 
     [[nodiscard]] std::span<const std::byte> remaining() const { return remaining_; }
+    // Exact bytes belonging to this attachment, excluding its delimiter and
+    // every later attachment. Concrete readers must prefer this bounded view.
+    [[nodiscard]] std::span<const std::byte> payload() const { return payload_; }
 
     void consume(std::size_t count) {
         if (count > remaining_.size()) {
@@ -27,9 +30,12 @@ public:
 
 private:
     friend class BoundedComponentBlockCursor;
-    explicit DeferredComponentAttachmentSnapshot(std::span<const std::byte> input) : remaining_(input) {}
+    explicit DeferredComponentAttachmentSnapshot(std::span<const std::byte> input,
+                                                 std::span<const std::byte> payload)
+        : remaining_(input), payload_(payload) {}
 
     std::span<const std::byte> remaining_;
+    std::span<const std::byte> payload_;
 };
 
 // Scans one already-bounded compact block through an externally-owned cursor.
@@ -66,9 +72,11 @@ public:
                 return false;
             }
             if ((tag & class_mask) == component_delimiter) {
+                const auto payload_size=attachment_start.size()-remaining_block_bytes_;
                 shared_cursor_ = shared_cursor_.subspan(1U);
                 --remaining_block_bytes_;
-                snapshot = DeferredComponentAttachmentSnapshot(attachment_start);
+                snapshot = DeferredComponentAttachmentSnapshot(
+                    attachment_start,attachment_start.first(payload_size));
                 return true;
             }
 
