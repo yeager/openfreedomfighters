@@ -1010,6 +1010,19 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               host.apply_supported_first_cut_sequence_deferred_reader(work);
             if(work.source_directory_index==host.resources().first_cut_index())
               host.apply_supported_first_cut_list_deferred_reader(work);
+            if(work.source_directory_index==466U) {
+              bool supported_external_payload{};
+              try {
+                static_cast<void>(host.resources().sources().intro_external_cut_commands_source(466U));
+                supported_external_payload=true;
+              } catch(const std::runtime_error&) {
+                // This aggregate fixture also exercises deliberately incomplete
+                // source variants. Their external-command payload is not a
+                // valid input for the restricted reader.
+              }
+              if(supported_external_payload)
+                host.apply_supported_external_cut_commands_deferred_reader(work);
+            }
             const auto legal=host.resources().sources().local_source_for_authored_reference(
                 host.resources().member().references[1]);
             if(legal && *legal==work.source_directory_index)
@@ -1141,6 +1154,28 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               controller_component->component_index==controller->component_index &&
               controller_component->events==host.constructed_attachment(controller->component_index)->movie_control->events,
               "MovieControl component reader follows its owner reader without lifecycle admission");
+        const auto* external_commands=host.external_cut_commands_reader_state();
+        const auto external_resource=[&host](std::uint32_t reference)
+            ->std::optional<off::graphics::IntroRuntimeResourceHandle> {
+          const auto source=host.resources().sources().local_source_for_authored_reference(reference);
+          if(!source) return std::nullopt;
+          return host.directory_resource_mapping()[*source];
+        };
+        if(external_commands) check(external_commands->owner==host.source_handle(466U) &&
+              external_commands->resource==host.directory_resource_mapping()[466U] &&
+              external_commands->commands[0].target_reference==host.resources().sources().intro_external_cut_commands_source(466U).commands[0].target_reference &&
+              external_commands->commands[1].target_reference==host.resources().sources().intro_external_cut_commands_source(466U).commands[1].target_reference &&
+              external_commands->external_list_resources[0]==
+                  external_resource(host.resources().sources().intro_external_cut_commands_source(466U).external_list_references[0]) &&
+              external_commands->external_list_resources[1]==
+                  external_resource(host.resources().sources().intro_external_cut_commands_source(466U).external_list_references[1]),
+              "external cut command reader retains the checked source pair and live resource mappings only");
+        const auto external_work=std::ranges::find_if(host.deferred_reader_work(),[](const auto& work) {
+          return work.source_directory_index==466U;
+        });
+        check(external_work!=host.deferred_reader_work().end(),"external cut command pair retains deferred reader identity");
+        if(external_commands && external_work!=host.deferred_reader_work().end())
+          rejects([&]{host.apply_supported_external_cut_commands_deferred_reader(*external_work);});
         const auto controller_work=std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
           return work.source_directory_index==host.resources().controller_index();
         });
