@@ -271,6 +271,14 @@ int main(int argc, char **argv) {
   check(affine.basis == std::array<float, 9>{2, 0, 0, 0, 3, 0, 0, 0, 1} &&
             affine.translation == std::array<float, 3>{27, 46, 0},
         "compose root-to-picture transforms in parent-first affine order");
+  bool empty_chain_rejected = false;
+  try {
+    static_cast<void>(off::graphics::compose_startup_graphics_transform_chain({}));
+  } catch (const std::runtime_error &) {
+    empty_chain_rejected = true;
+  }
+  check(empty_chain_rejected,
+        "reject a picture transform without a bounded source chain");
   auto catalog_bytes = texture_catalog();
   const auto catalog = off::data::TextureCatalog::parse(catalog_bytes);
   auto asset =
