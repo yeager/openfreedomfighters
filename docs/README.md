@@ -60,6 +60,7 @@
 - [Packed ZGF/GMS resource envelope](PACKED_RESOURCE_FORMAT.md)
 - [ZGF resource-bundle format](ZGF_FORMAT.md)
 - [GMS object-source image and runtime handles](GMS_FORMAT.md)
+- [LOC localization boundary](LOC_FORMAT.md)
 - [RMC/RMI spatial-map format](RENDER_MAP_FORMAT.md)
 - [Scene-transform evidence boundary](TRANSFORM_BOUNDARY.md)
 - [Camera and projection evidence boundary](CAMERA_EVIDENCE.md)
