@@ -12,6 +12,12 @@ cache miss and reruns the structural audit. The splash stays responsive while
 verification runs; a cold audit can take longer than its three-second minimum
 display time.
 
+The application first uses SDL's per-user preference location. Headless tools
+fall back to the platform cache location: `%LOCALAPPDATA%` on Windows,
+`~/Library/Caches` on macOS, and an absolute `$XDG_CACHE_HOME` or `~/.cache` on
+Linux and Steam Deck. A relative or unavailable environment value disables the
+fallback rather than creating cache files beside the game or current directory.
+
 ## Reference snapshot
 
 The reference was measured from the locally owned Steam installation on
