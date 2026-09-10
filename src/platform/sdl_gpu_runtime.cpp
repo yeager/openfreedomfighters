@@ -4,6 +4,7 @@
 #include "off/platform/sdl_menu_gamepad.hpp"
 #include "off/ui/graphics_menu_draw.hpp"
 #include "off/ui/graphics_menu_pointer.hpp"
+#include "off/ui/font_run_layout.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
@@ -420,8 +421,11 @@ build_overlay_batch(const ui::GraphicsMenuDrawList &list,
       continue;
     }
     const auto layer = static_cast<std::size_t>(command.layer);
-    float run_x = command.x;
-    for(const auto& run:*runs) {
+    std::vector<SDL_Surface *> run_surfaces;
+    std::vector<ui::FontRunRasterMetrics> metrics;
+    run_surfaces.reserve(runs->size());
+    metrics.reserve(runs->size());
+    for (const auto &run : *runs) {
       if(run.font_index>=fonts.size() || fonts[run.font_index].font==nullptr ||
           !TTF_SetFontSize(fonts[run.font_index].font,24.0F*list.ui_scale)) {
         batch.valid=false;
@@ -432,10 +436,23 @@ build_overlay_batch(const ui::GraphicsMenuDrawList &list,
       SDL_Surface* surface=rendered==nullptr?nullptr:SDL_ConvertSurface(rendered,SDL_PIXELFORMAT_RGBA32);
       if(rendered!=nullptr) SDL_DestroySurface(rendered);
       if(surface==nullptr) {batch.valid=false;break;}
-      if(surface->w<=0 || surface->h<=0) {SDL_DestroySurface(surface);continue;}
+      const int ascent = TTF_GetFontAscent(fonts[run.font_index].font);
+      if(surface->w<=0 || surface->h<=0 || ascent < 0) {
+        batch.valid=false;SDL_DestroySurface(surface);break;
+      }
       if(surface->w>=static_cast<int>(overlay_atlas_width) || surface->h>=static_cast<int>(overlay_atlas_height)) {
         batch.valid=false;SDL_DestroySurface(surface);break;
       }
+      metrics.push_back({surface->w, surface->h, ascent});
+      run_surfaces.push_back(surface);
+    }
+    const auto placements = batch.valid
+        ? ui::layout_ltr_font_runs(command.x, command.y, metrics)
+        : std::nullopt;
+    if (!placements || placements->size() != run_surfaces.size())
+      batch.valid = false;
+    for (std::size_t index = 0; batch.valid && index < run_surfaces.size(); ++index) {
+      SDL_Surface *surface = run_surfaces[index];
       const Uint32 width=static_cast<Uint32>(surface->w),height=static_cast<Uint32>(surface->h);
       if(cursor_x+width+1U>overlay_atlas_width) {cursor_x=1;cursor_y+=shelf_height+1U;shelf_height=0;}
       if(cursor_y+height+1U<=overlay_atlas_height && width+2U<=overlay_atlas_width) {
@@ -459,8 +476,8 @@ build_overlay_batch(const ui::GraphicsMenuDrawList &list,
           static_cast<float>(cursor_y + height) / overlay_atlas_height;
       ClippedVertices piece{.clip = command.clip};
       add_clipped_ui_quad(piece.vertices,
-                          {run_x, command.y, static_cast<float>(width),
-                           static_cast<float>(height)},
+                          {(*placements)[index].x, (*placements)[index].y,
+                           (*placements)[index].width, (*placements)[index].height},
                           command.clip, command.color, list.target, u0, v0, u1,
                           v1);
       if (!piece.vertices.empty())
@@ -470,10 +487,9 @@ build_overlay_batch(const ui::GraphicsMenuDrawList &list,
     } else {
       batch.valid = false;
     }
-      run_x+=static_cast<float>(width);
-    SDL_DestroySurface(surface);
-      if(!batch.valid) break;
     }
+    for (SDL_Surface *surface : run_surfaces)
+      SDL_DestroySurface(surface);
   }
   const auto append = [&](const std::vector<PreviewVertex> &vertices,
                           std::optional<ui::RetailUiTextureRole> role,

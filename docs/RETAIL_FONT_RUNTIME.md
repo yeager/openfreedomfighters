@@ -41,7 +41,9 @@ font in bundle order as a provisional role assignment; recovered font-role
 semantics must replace that selection before retail-accurate UI acceptance.
 The font layer splits mixed-script UTF-8 into contiguous coverage runs, and the
 GPU overlay rasterizes those runs in byte-order LTR with inherited color, layer
-and clip. A failed run invalidates the complete overlay batch. This is not bidi,
+and clip. Their renderer-reported ascents are aligned to one shared baseline;
+the requested text Y coordinate remains the top edge of the tallest run. A
+failed run invalidates the complete overlay batch. This is not bidi,
 shaping, cross-font kerning, ligatures, wrapping, or retail font-role recovery.
 It does **not** yet prove locale-wide glyph coverage,
 font fallback, bidirectional layout, or complex-script shaping. Those remain

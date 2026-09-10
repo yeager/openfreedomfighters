@@ -1,6 +1,8 @@
 #include "off/ui/retail_ui_fonts.hpp"
+#include "off/ui/font_run_layout.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -252,6 +254,14 @@ int main() {
         "font fallback splits mixed-script UTF-8 into contiguous covering font runs");
   check(!off::ui::select_font_runs_for_utf8(coverage, std::string_view{"\xc3\x28",2}),
         "font fallback rejects malformed UTF-8 before selecting any run");
+  const std::array<off::ui::FontRunRasterMetrics, 2> layout_metrics{{{20, 22, 16}, {30, 28, 21}}};
+  const auto placements = off::ui::layout_ltr_font_runs(
+      12.0F, 40.0F, layout_metrics);
+  check(placements && *placements == std::vector<off::ui::FontRunPlacement>{{12.0F, 45.0F, 20.0F, 22.0F}, {32.0F, 40.0F, 30.0F, 28.0F}},
+        "fallback runs advance in byte order while sharing the tallest baseline");
+  const std::array<off::ui::FontRunRasterMetrics, 1> invalid_metrics{{{0, 10, 8}}};
+  check(!off::ui::layout_ltr_font_runs(0.0F, 0.0F, invalid_metrics),
+        "font-run layout rejects non-renderable raster metrics");
   check(!off::ui::select_font_for_utf8(coverage, std::string_view{"\xc3\x28", 2}),
         "font admission rejects malformed UTF-8");
 

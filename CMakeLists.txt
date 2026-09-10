@@ -157,6 +157,7 @@ add_library(off_core
     src/ui/graphics_menu.cpp
     src/ui/graphics_menu_draw.cpp
     src/ui/graphics_menu_pointer.cpp
+    src/ui/font_run_layout.cpp
     src/ui/project_localization.cpp
     src/ui/retail_ui_fonts.cpp
     src/ui/retail_ui_textures.cpp
