@@ -83,16 +83,20 @@ Known source facts are deliberately narrow:
   and dispatch an explicit component suffix/extent; and
 - generic lifecycle callbacks for these components still fail closed.
 
-The missing contract is the owner-base reader's exact component suffix and
-extent, followed by each component's payload grammar, reader mutation,
-registration point, and failure/cleanup behavior. Attachment identities, a
-block header, or GMS directory boundaries are not evidence for that suffix.
-Consequently the normal component-reader callback remains empty. It must not
-record component admission, schedule an event, activate a cut, construct a
-player, start audio, or submit a frame.
+The reviewed first-cut list owner-base envelope now proves one exact component
+suffix and extent. `FirstCutOwnerReader` accepts only its fixed complete owner
+block, validates the base envelope, and exposes the bounded six-component tail
+through a one-shot `DeferredReaderSession`. It is not connected to normal
+startup: its exact fixed source shape must first be represented by a runtime
+fixture without weakening the fixture's malformed-input variants. It does not
+dispatch the tail. Each component's payload grammar, reader mutation,
+registration point, and failure/cleanup behavior remains missing. Consequently
+the normal component-reader callback remains empty. It must not record
+component admission, schedule an event, activate a cut, construct a player,
+start audio, or submit a frame.
 
-The next static-analysis pass recovers that owner-base boundary, then adds a
-bounded session adapter for the one reviewed first-cut shape. Its tests must
+The next static-analysis pass recovers the six component-reader contracts and
+their owner side effects. Its tests must
 reject wrong work identity, attachment count/order, and malformed bounds; prove
 that component reading cannot precede its owner reader; and prove that it has
 no lifecycle, event, renderer, or audio effects.

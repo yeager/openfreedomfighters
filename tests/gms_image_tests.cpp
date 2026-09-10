@@ -5,6 +5,7 @@
 #include "off/data/component_reader_context.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
 #include "off/data/deferred_reader_session.hpp"
+#include "off/data/first_cut_owner_reader.hpp"
 #include "off/data/keys_descriptor_range.hpp"
 #include "off/data/keys_backing_evaluator.hpp"
 #include "off/data/matpos_pose_evaluator.hpp"
@@ -1093,6 +1094,33 @@ int main() {
             const std::array<DeferredComponentReader, 0> none{};
             static_cast<void>(DeferredComponentDispatcher::dispatch(bad, none));
         }, "component dispatcher rejects truncated generic values");
+    }
+    {
+        using off::data::FirstCutOwnerReader;
+        using off::data::DeferredOwnerReaderResult;
+        std::array<std::byte,171> block{};
+        block[0]=std::byte{0xab};
+        block[4]=std::byte{0x89};
+        block[5]=std::byte{0x08};
+        block[13]=std::byte{0x06};
+        // Six attachment delimiters, followed by the reviewed terminal.
+        for(std::size_t index=0;index<6U;++index)
+          block[14U+index*2U]=std::byte{0x06};
+        block[170]=std::byte{0xff};
+        const auto result=FirstCutOwnerReader::read(block);
+        check(result.component_suffix.data()==block.data()+14U &&
+                  result.component_suffix.size()==157U && result.component_extent==157U,
+              "first-cut owner reader exposes only its reviewed bounded component suffix");
+        check_rejected([&] {
+            auto malformed=block;
+            malformed[13]=std::byte{0x07};
+            static_cast<void>(FirstCutOwnerReader::read(malformed));
+        }, "first-cut owner reader rejects a malformed owner-base delimiter");
+        check_rejected([&] {
+            auto malformed=block;
+            malformed[170]=std::byte{0x00};
+            static_cast<void>(FirstCutOwnerReader::read(malformed));
+        }, "first-cut owner reader rejects a missing terminal");
     }
     {
         using off::data::DeferredComponentReader;
