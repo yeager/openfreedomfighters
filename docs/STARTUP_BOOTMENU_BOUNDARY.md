@@ -14,6 +14,12 @@ is a separate anchor. This corroborates the source-package split already used
 by the native loader; it does not establish an order between the two packages,
 make either scene current, or prove a playable transition.
 
+The owned-install probe records a 1,105-node retained startup subtree. Its
+BootMenu owner is at depth 1, has one direct child, and the subtree's maximum
+depth is 7. These are aggregate structural observations for the supported
+digital build, not allocator identities, serialized indexes, or rendering
+coordinates.
+
 `read_component()` first verifies the live owner/component and registry,
 resolves and retains one opaque registry identity, then invokes the common
 window-component reader. It produces a move-only reader-complete token.
