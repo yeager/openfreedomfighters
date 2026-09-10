@@ -127,6 +127,8 @@ int main(int argc, char **argv) {
   }
   if (argc == 2) {
     std::size_t parsed_files = 0;
+    std::size_t parsed_tables = 0;
+    std::size_t parsed_descriptors = 0;
     for (const auto &item :
          std::filesystem::recursive_directory_iterator(argv[1])) {
       if (!item.is_regular_file())
@@ -146,14 +148,20 @@ int main(int argc, char **argv) {
             [](unsigned char value) { return std::tolower(value); });
         if (member_extension != ".anm")
           continue;
-        static_cast<void>(
-            off::data::AnimationImage::parse(archive.read(entry)));
+        const auto parsed =
+            off::data::AnimationImage::parse(archive.read(entry));
         ++parsed_files;
+        parsed_tables += parsed.reference_tables().size();
+        parsed_descriptors += parsed.descriptors().size();
       }
     }
-    check(parsed_files != 0U, "parse animation files in the supplied corpus");
+    check(parsed_files == 42U && parsed_tables == 112U &&
+              parsed_descriptors == 457U,
+          "parse the complete supported animation corpus");
     if (failures == 0)
-      std::cout << "Validated " << parsed_files << " ANM files\n";
+      std::cout << "Validated " << parsed_files << " ANM files, "
+                << parsed_tables << " reference tables, and "
+                << parsed_descriptors << " descriptors\n";
   }
   return failures == 0 ? 0 : 1;
 }
