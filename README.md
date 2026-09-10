@@ -158,6 +158,10 @@ OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
 # Check your installation without opening a window.
 ./build/openfreedomfighters --verify-only
 
+# Inspect the checked, non-playing first-cut reader boundary. This opens no
+# window and never starts audio, schedules an event, or renders a cutscene.
+./build/openfreedomfighters --probe-first-cut-cold
+
 # Start the current native prototype.
 ./build/openfreedomfighters --mode original
 ```
@@ -180,6 +184,10 @@ F10 toggles settings. Close the window to exit. For development:
   directory ordinals plus a content-free hierarchy fingerprint; it creates no
   scene or runtime service. See
   [STARTUP_BOOT_SCENE_PROBE.md](docs/STARTUP_BOOT_SCENE_PROBE.md).
+- `--probe-first-cut-cold` runs the equivalent no-window integration check for
+  the reviewed first-cut reader bracket. It prints aggregate coverage only and
+  deliberately leaves cutscene lifecycle, scheduling, audio and rendering
+  cold. See [INTRO_BOOTSTRAP.md](docs/INTRO_BOOTSTRAP.md#first-cut-cold-probe).
 - `--screenshot /path/outside/repo/frame.bmp` saves a GPU readback. The file must
   not already exist. With a frame limit it captures the last frame; otherwise
   it captures the first.
