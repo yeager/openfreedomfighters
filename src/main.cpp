@@ -19,6 +19,7 @@
 #include "off/ui/retail_ui_textures.hpp"
 
 #include <charconv>
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdlib>
@@ -87,6 +88,65 @@ void write_startup_boot_probe_trace(
   }
 }
 
+[[nodiscard]] std::string_view reader_family_label(
+    off::graphics::IntroDeferredReaderFamily family) noexcept {
+  using Family=off::graphics::IntroDeferredReaderFamily;
+  switch(family) {
+  case Family::unclassified: return "unclassified";
+  case Family::sound_owner: return "sound-owner";
+  case Family::window_owner: return "window-owner";
+  case Family::movie_controller: return "movie-controller";
+  case Family::first_cut_sequence: return "first-cut-sequence";
+  case Family::first_cut_list: return "first-cut-list";
+  case Family::first_cut_legal_picture: return "first-cut-legal-picture";
+  case Family::external_cut_commands: return "external-cut-commands";
+  case Family::first_cut_fade_picture: return "first-cut-fade-picture";
+  case Family::first_cut_camera: return "first-cut-camera";
+  }
+  return "unknown";
+}
+
+[[nodiscard]] std::string_view reader_state_label(
+    off::graphics::IntroDeferredReaderImplementationState state) noexcept {
+  using State=off::graphics::IntroDeferredReaderImplementationState;
+  switch(state) {
+  case State::unimplemented: return "unimplemented";
+  case State::implemented_not_applied: return "recognized-not-admitted";
+  case State::applied: return "applied";
+  }
+  return "unknown";
+}
+
+void write_reader_coverage_probe(std::ostream& output,
+    const off::graphics::IntroDeferredReaderCoverageInventory& coverage) {
+  constexpr std::size_t family_count=10U;
+  constexpr std::size_t state_count=3U;
+  std::array<std::array<std::size_t,state_count>,family_count> counts{};
+  for(const auto& entry:coverage.entries) {
+    const auto family=static_cast<std::size_t>(entry.family);
+    const auto state=static_cast<std::size_t>(entry.state);
+    if(family>=family_count || state>=state_count)
+      throw std::runtime_error("reader coverage probe has an unknown enum value");
+    counts[family][state]+=entry.count;
+  }
+  if(coverage.total_applied>coverage.total_discovered)
+    throw std::runtime_error("reader coverage probe has inconsistent totals");
+  output << "reader-coverage-discovered=" << coverage.total_discovered << '\n'
+         << "reader-coverage-recognized=" << coverage.total_supported << '\n'
+         << "reader-coverage-applied=" << coverage.total_applied << '\n'
+         << "reader-coverage-unapplied=" << coverage.total_discovered-coverage.total_applied << '\n';
+  for(std::size_t family=0;family<family_count;++family) {
+    for(std::size_t state=0;state<state_count;++state) {
+      if(counts[family][state]==0U) continue;
+      output << "reader-family=" << reader_family_label(
+                    static_cast<off::graphics::IntroDeferredReaderFamily>(family))
+             << " state=" << reader_state_label(
+                    static_cast<off::graphics::IntroDeferredReaderImplementationState>(state))
+             << " count=" << counts[family][state] << '\n';
+    }
+  }
+}
+
 int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
   off::runtime::ApplicationServices application(
       off::runtime::ClockExecutionPolicy::no_recording_or_replay,
@@ -124,6 +184,10 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
   auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
   session->complete_postconstruction_reader_bracket(0U);
   auto& intro=session->runtime();
+  const auto reader_coverage=intro.reader_coverage_inventory();
+  if(reader_coverage.stage!=off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete ||
+      reader_coverage.total_discovered!=intro.deferred_reader_work().size())
+    throw std::runtime_error("first-cut cold probe found incomplete reader coverage");
   const auto first_cut_source=intro.resources().first_cut_index();
   const auto* first_cut_work=static_cast<const off::graphics::IntroDeferredReaderWork*>(nullptr);
   for(const auto& work:intro.deferred_reader_work()) {
@@ -200,6 +264,9 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
             << "owner-envelope=verified\n"
             << "first-component-payload=verified\n"
             << "command-component-payloads=5-verified\n"
+            ;
+  write_reader_coverage_probe(std::cout,reader_coverage);
+  std::cout
             << "phase-one=not-run\n"
             << "phase-two=not-run\n"
             << "renderer=not-admitted\n"

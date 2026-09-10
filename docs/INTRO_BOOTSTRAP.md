@@ -33,6 +33,13 @@ a component. The remaining 409 records and the concrete production services
 needed to invoke the checked loader-tail transition are unavailable, as are
 renderer association, scene update, and rendering. See [live resource flags](RESOURCE_STATE.md) and the
 [component lifecycle](COMPONENT_LIFECYCLE.md).
+
+`--probe-first-cut-cold` also emits a privacy-safe reader-coverage summary from
+the owned installation. It reports only aggregate family and admission-state
+counts; it never prints source names, offsets, references, handles, types, or
+payloads. `recognized-not-admitted` means a family is identified by a narrow
+reader route but has not contributed a lifecycle reader admission; it is not a
+claim that every instance of that family is implemented.
 MatPosAnim is explicitly outside the current deferred-reader admission path:
 all 227 associated deferred records terminate before attachment dispatch. Its
 owner-local `KEYS` preparation and its separate persistence/restore object
