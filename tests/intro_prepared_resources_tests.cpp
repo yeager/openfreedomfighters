@@ -1162,6 +1162,7 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
         const auto legal_work=legal_source?std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
           return work.source_directory_index==*legal_source;
         }):host.deferred_reader_work().end();
+        const auto* legal_component_reader=host.legal_picture_component_reader_state();
         if(legal_source && legal_work!=host.deferred_reader_work().end()) {
           const auto& authored_legal=host.resources().sources().intro_legal_picture_source(*legal_source);
           const auto legal_components=host.owner_components(host.source_handle(*legal_source));
@@ -1177,7 +1178,6 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                 legal_reader->picture_asset_reference==authored_legal.picture_asset_reference,
                 "legal-picture reader retains the resolved Center source and full picture key without activation");
           rejects([&]{host.apply_supported_first_cut_legal_picture_deferred_reader(*legal_work);});
-          const auto* legal_component_reader=host.legal_picture_component_reader_state();
           check(legal_component_reader && legal_component_reader->owner==legal_reader->owner &&
                 legal_component_reader->resource==legal_reader->resource &&
                 legal_component_reader->source_directory_index==*legal_source &&
@@ -1190,9 +1190,13 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
         host.prepare_supported_first_cut_player();
         const auto* player=host.first_cut_player_prepared_state();
         check(player && player->list_owner==list_reader->owner && player->sequence_owner==sequence_reader->owner &&
+              player->legal_picture_owner==legal_reader->owner &&
               player->list_resource==list_reader->resource && player->sequence_resource==sequence_reader->resource &&
+              player->legal_picture_resource==legal_reader->resource &&
               player->list_component_index==list_reader->component_indices[0] &&
               player->sequence_component_index==sequence_reader->component_index &&
+              player->legal_picture_component_index==legal_component_reader->component_index &&
+              player->legal_picture_asset_reference==legal_component_reader->picture_asset_reference &&
               player->leading_controls==std::array<std::uint32_t,3>{list_reader->authored.settings_words[0],list_reader->authored.settings_words[1],list_reader->authored.settings_words[2]} &&
               player->raw_scalar==list_reader->authored.settings_words[3] &&
               player->trailing_controls==std::array<std::uint32_t,3>{list_reader->authored.settings_words[4],list_reader->authored.settings_words[5],list_reader->authored.settings_words[6]} &&

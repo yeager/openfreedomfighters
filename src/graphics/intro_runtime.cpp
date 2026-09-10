@@ -3057,11 +3057,14 @@ void IntroRuntime::prepare_supported_first_cut_player() {
       !first_cut_sequence_reader_state_ || !first_cut_list_reader_state_ ||
       !first_cut_sequence_component_reader_state_ ||
       !first_cut_camera_reader_state_ ||
+      !legal_picture_reader_state_ || !legal_picture_component_reader_state_ ||
       first_cut_player_prepared_state_)
     throw std::runtime_error("First-cut player requires all unconsumed reader states");
   const auto& sequence=*first_cut_sequence_reader_state_;
   const auto& list=*first_cut_list_reader_state_;
   const auto& camera=*first_cut_camera_reader_state_;
+  const auto& legal_picture=*legal_picture_reader_state_;
+  const auto& legal_picture_component=*legal_picture_component_reader_state_;
   const auto& sequence_receipt=*first_cut_sequence_component_reader_state_;
   const auto& sequence_source=resources_.sources().directory().at(resources_.member_index());
   if(sequence_receipt.owner!=sequence.owner || sequence_receipt.resource!=sequence.resource ||
@@ -3088,6 +3091,31 @@ void IntroRuntime::prepare_supported_first_cut_player() {
   if(resources_.sources().hierarchy().at(camera_index).parent_directory_index!=window_index ||
       !selected_camera || *selected_camera!=camera_index)
     throw std::runtime_error("First-cut player camera does not match its authored Window chain");
+  const auto legal_picture_source=resources_.sources().local_source_for_authored_reference(
+      sequence.authored.references[1]);
+  if(!legal_picture_source ||
+      legal_picture.owner!=source_handle(*legal_picture_source) ||
+      legal_picture.resource!=directory_resource_mapping_.at(*legal_picture_source).value_or(IntroRuntimeResourceHandle{}) ||
+      sequence.members[1]!=std::optional<IntroRuntimeResourceHandle>{legal_picture.resource} ||
+      legal_picture_component.owner!=legal_picture.owner ||
+      legal_picture_component.resource!=legal_picture.resource ||
+      legal_picture_component.source_directory_index!=*legal_picture_source ||
+      legal_picture_component.source_offset!=resources_.sources().directory().at(*legal_picture_source).deferred_source_offset ||
+      legal_picture_component.component_index!=legal_picture.component_index ||
+      legal_picture_component.authored.authored_state_exponent!=legal_picture.authored.authored_state_exponent ||
+      legal_picture_component.authored.base_render_property!=legal_picture.authored.base_render_property ||
+      legal_picture_component.authored.authored_alpha!=legal_picture.authored.authored_alpha ||
+      legal_picture_component.authored.alignment_enum!=legal_picture.authored.alignment_enum ||
+      legal_picture_component.authored.extension_control!=legal_picture.authored.extension_control ||
+      legal_picture_component.picture_asset_reference!=legal_picture.picture_asset_reference)
+    throw std::runtime_error("First-cut player legal picture does not match its reader state");
+  if(legal_picture.component_index>=components_.size())
+    throw std::runtime_error("First-cut player legal picture component is out of range");
+  const auto& legal_component=components_.at(legal_picture.component_index);
+  if(!legal_component.constructed() || legal_component.removed() ||
+      legal_component.source().factory_name!="ZGEOM_Center" ||
+      legal_component.state().attached_owner!=legal_picture.owner.value)
+    throw std::runtime_error("First-cut player has no live legal picture component");
   const bool reviewed_component_form=resources_.sources().deferred_source_block(
       resources_.first_cut_index()).size()==171U;
   if(reviewed_component_form && !first_cut_component_reader_state_)
@@ -3144,8 +3172,12 @@ void IntroRuntime::prepare_supported_first_cut_player() {
     throw std::runtime_error("First-cut player source float is not finite");
   IntroFirstCutPlayerPreparedState state{
       .list_owner=list.owner, .sequence_owner=sequence.owner, .camera_owner=camera.owner,
+      .legal_picture_owner=legal_picture.owner,
       .list_resource=list.resource, .sequence_resource=sequence.resource, .camera_resource=camera.resource,
+      .legal_picture_resource=legal_picture.resource,
       .list_component_index=list.component_indices[0], .sequence_component_index=sequence.component_index,
+      .legal_picture_component_index=legal_picture.component_index,
+      .legal_picture_asset_reference=legal_picture.picture_asset_reference,
       .leading_controls={settings[0],settings[1],settings[2]},
       .raw_scalar=settings[3],
       .trailing_controls={settings[4],settings[5],settings[6]},
@@ -3158,12 +3190,15 @@ void IntroRuntime::prepare_supported_first_cut_player() {
 cutscene::FirstCutPlayerDescriptor IntroRuntime::first_cut_player_descriptor() const {
   if (!first_cut_player_prepared_state_ || !first_cut_sequence_reader_state_ ||
       !first_cut_list_reader_state_ || !first_cut_sequence_component_reader_state_ ||
-      !first_cut_camera_reader_state_)
+      !first_cut_camera_reader_state_ || !legal_picture_reader_state_ ||
+      !legal_picture_component_reader_state_)
     throw std::runtime_error("First-cut player descriptor requires prepared reader state");
   const auto& player = *first_cut_player_prepared_state_;
   const auto& list = *first_cut_list_reader_state_;
   const auto& sequence = *first_cut_sequence_reader_state_;
   const auto& camera=*first_cut_camera_reader_state_;
+  const auto& legal_picture=*legal_picture_reader_state_;
+  const auto& legal_picture_component=*legal_picture_component_reader_state_;
   const auto& sequence_component=*first_cut_sequence_component_reader_state_;
   if(sequence_component.owner!=sequence.owner || sequence_component.resource!=sequence.resource ||
       sequence_component.component_index!=sequence.component_index ||
@@ -3188,6 +3223,33 @@ cutscene::FirstCutPlayerDescriptor IntroRuntime::first_cut_player_descriptor() c
   if(resources_.sources().hierarchy().at(resources_.camera_index()).parent_directory_index!=resources_.window_index() ||
       !selected_camera || *selected_camera!=resources_.camera_index())
     throw std::runtime_error("First-cut player descriptor camera no longer matches its authored Window chain");
+  const auto legal_picture_source=resources_.sources().local_source_for_authored_reference(
+      sequence.authored.references[1]);
+  if(!legal_picture_source || player.legal_picture_owner!=legal_picture.owner ||
+      player.legal_picture_resource!=legal_picture.resource ||
+      player.legal_picture_component_index!=legal_picture.component_index ||
+      player.legal_picture_asset_reference!=legal_picture.picture_asset_reference ||
+      legal_picture.owner!=source_handle(*legal_picture_source) ||
+      legal_picture.resource!=directory_resource_mapping_.at(*legal_picture_source).value_or(IntroRuntimeResourceHandle{}) ||
+      sequence.members[1]!=std::optional<IntroRuntimeResourceHandle>{legal_picture.resource} ||
+      legal_picture_component.owner!=legal_picture.owner ||
+      legal_picture_component.resource!=legal_picture.resource ||
+      legal_picture_component.source_directory_index!=*legal_picture_source ||
+      legal_picture_component.source_offset!=resources_.sources().directory().at(*legal_picture_source).deferred_source_offset ||
+      legal_picture_component.component_index!=legal_picture.component_index ||
+      legal_picture_component.authored.authored_state_exponent!=legal_picture.authored.authored_state_exponent ||
+      legal_picture_component.authored.base_render_property!=legal_picture.authored.base_render_property ||
+      legal_picture_component.authored.authored_alpha!=legal_picture.authored.authored_alpha ||
+      legal_picture_component.authored.alignment_enum!=legal_picture.authored.alignment_enum ||
+      legal_picture_component.authored.extension_control!=legal_picture.authored.extension_control ||
+      legal_picture_component.picture_asset_reference!=legal_picture.picture_asset_reference ||
+      legal_picture.component_index>=components_.size())
+    throw std::runtime_error("First-cut player descriptor legal picture state no longer matches its sequence");
+  const auto& legal_component=components_.at(legal_picture.component_index);
+  if(!legal_component.constructed() || legal_component.removed() ||
+      legal_component.source().factory_name!="ZGEOM_Center" ||
+      legal_component.state().attached_owner!=legal_picture.owner.value)
+    throw std::runtime_error("First-cut player descriptor has no live legal picture component");
   if (player.list_component_index != list.component_indices[0] ||
       player.sequence_component_index != sequence.component_index ||
       player.list_resource != list.resource || player.sequence_resource != sequence.resource)

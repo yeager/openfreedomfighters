@@ -454,14 +454,16 @@ caller reference. Natural timeline update can invoke cleanup, but its end-value
 derivation, units, clock conversion and command dependencies are not yet fully
 specified. This is evidence of an execution path, not a native playback contract.
 
-The two reviewed first-cut readers can now be atomically materialized into a
-cold player state after their owners and components are live. This retains the
+The reviewed first-cut readers can now be atomically materialized into a cold
+player state after their owners and components are live. This retains the
 authored raw list controls, unnormalized scalar, list value, sequence-value
-pair, raw enabled option and one zeroed member-progress pair. It rejects
-non-finite source fields, stale command components, and any disagreement with
-the independently parsed six-payload reader state. It never registers events, samples a clock, routes
-a camera, executes a command or submits a draw. Natural playback and completion
-remain separate recovery work.
+pair, raw enabled option, zeroed member-progress pair, and checked provenance
+for the authored camera and legal-picture Center component. It rejects
+non-finite source fields, stale components, a broken Window-to-camera join, a
+broken sequence-to-legal-picture join, and any disagreement with the
+independently parsed six-payload reader state. It never registers events,
+samples a clock, routes a camera, activates a picture, executes a command or
+submits a draw. Natural playback and completion remain separate recovery work.
 
 `FirstCutPlayerInitialization` is the separate lifecycle boundary for that
 player; it is not the source-65 external-fade `CutSequenceList`. Its phase one
