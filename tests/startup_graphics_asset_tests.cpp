@@ -4,6 +4,7 @@
 #include "off/graphics/picture_material_state.hpp"
 #include "off/graphics/picture_submission_cache.hpp"
 #include "off/graphics/startup_graphics_expanded_plan.hpp"
+#include "off/graphics/startup_graphics_transform_chain.hpp"
 #include "off/graphics/startup_source_picture_draw_admission.hpp"
 #include "off/graphics/startup_picture_pass_admission.hpp"
 
@@ -262,6 +263,14 @@ bool load_rejects(const std::filesystem::path &path, std::string_view text) {
 } // namespace
 
 int main(int argc, char **argv) {
+  const std::array<off::data::StartupGraphicsLocalTransform, 2> affine_chain{{
+      {1, {2, 0, 0, 0, 3, 0, 0, 0, 1}, {5, 7, 0}},
+      {2, {1, 0, 0, 0, 1, 0, 0, 0, 1}, {11, 13, 0}}}};
+  const auto affine =
+      off::graphics::compose_startup_graphics_transform_chain(affine_chain);
+  check(affine.basis == std::array<float, 9>{2, 0, 0, 0, 3, 0, 0, 0, 1} &&
+            affine.translation == std::array<float, 3>{27, 46, 0},
+        "compose root-to-picture transforms in parent-first affine order");
   auto catalog_bytes = texture_catalog();
   const auto catalog = off::data::TextureCatalog::parse(catalog_bytes);
   auto asset =
