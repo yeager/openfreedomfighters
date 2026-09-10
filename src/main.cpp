@@ -1,4 +1,5 @@
 #include "off/data/install.hpp"
+#include "off/graphics/intro_preview_builder.hpp"
 #include "off/graphics/intro_runtime.hpp"
 #include "off/graphics/scene_gpu_plan.hpp"
 #include "off/graphics/scene_render.hpp"
@@ -264,6 +265,7 @@ int main(int argc, char **argv) {
   std::optional<off::graphics::SceneRenderAsset> startup_ui_scene_resources;
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
   std::unique_ptr<off::graphics::IntroRuntime> intro;
+  std::optional<off::graphics::IntroPreviewSnapshot> intro_legal_picture_preflight;
   off::ui::RetailUiFontSet ui_fonts;
   off::ui::RetailUiTextureSet ui_textures;
   off::platform::StartupWindow startup_window;
@@ -352,6 +354,13 @@ int main(int argc, char **argv) {
                      intro->apply_supported_movie_control_component_reader(work);
                  },
              .end_reader_service = [] {}});
+        const auto legal_source =
+            intro->resources().sources().local_source_for_authored_reference(
+                intro->resources().member().references[1]);
+        if (!legal_source)
+          throw std::runtime_error("first-cut legal picture source is unavailable");
+        intro_legal_picture_preflight.emplace(off::graphics::build_intro_preview(
+            *intro, *legal_source, {.width = 1280U, .height = 720U}));
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
           data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -416,6 +425,11 @@ int main(int argc, char **argv) {
               << intro->pictures().size() << " picture definitions, "
               << intro->resources().images().size()
               << " images; automatic scene activation remains pending.\n";
+  if (intro_legal_picture_preflight)
+    std::cout << "First-cut legal picture preflight: "
+              << intro_legal_picture_preflight->draw.draw_plan.groups().size()
+              << " draw groups, " << intro_legal_picture_preflight->images.size()
+              << " referenced images; not admitted for display.\n";
   if (intro)
     std::cout << "Retained component catalog: " << intro->components().size()
               << " entries; " << intro->components().construction_order().size()
