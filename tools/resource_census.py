@@ -23,10 +23,13 @@ def _words(prefix: bytes) -> list[int]:
 
 def _known_invariants(extension: str, size: int, prefix: bytes) -> dict[str, bool]:
     words = _words(prefix)
-    if extension == ".anm" and len(words) >= 3:
+    if extension == ".anm" and len(words) >= 5:
         return {
             "magic_is_MNA_nul": words[0] == 0x00414E4D,
+            "word_1_is_flagged_file_size": words[1] == (size | 0x80000000),
             "word_2_is_file_size": words[2] == size,
+            "directory_word_is_10_through_15_and_format_is_10":
+                10 <= words[3] <= 15 and words[4] == 10,
         }
     if extension == ".gms" and len(words) >= 2:
         return {"word_1_is_file_size": words[1] == size}

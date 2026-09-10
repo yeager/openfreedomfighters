@@ -150,7 +150,7 @@ int main() {
         "accept an independently validated owning scene asset");
   auto invalid_animation_asset = scene_asset;
   invalid_animation_asset.animation = {
-      .byte_size = 24U, .major_version = 11U, .minor_version = 10U};
+      .byte_size = 24U, .reference_table_count = 0U, .format_value = 10U};
   bool invalid_animation_rejected = false;
   try {
     off::graphics::validate_scene_render_asset(invalid_animation_asset);
@@ -194,11 +194,11 @@ int main() {
   const std::array container_sources{container, contained_primitive};
   const std::array container_hierarchy{
       off::data::GmsHierarchyNode{.directory_index = 0,
-                                   .parent_directory_index = std::nullopt,
-                                   .children_in_directory_order = {1}},
+                                  .parent_directory_index = std::nullopt,
+                                  .children_in_directory_order = {1}},
       off::data::GmsHierarchyNode{.directory_index = 1,
-                                   .parent_directory_index = 0,
-                                   .children_in_directory_order = {}},
+                                  .parent_directory_index = 0,
+                                  .children_in_directory_order = {}},
   };
   auto container_map = map_entry;
   container_map.object.primary_geometry_reference = 0x40000000U;
@@ -207,7 +207,8 @@ int main() {
       .kind = off::graphics::SceneRenderMapKind::rmc,
       .entries = std::span{&container_map, 1}}};
   const auto expanded_container_asset = off::graphics::build_scene_render_asset(
-      primitives, textures, container_sources, container_hierarchy, container_maps);
+      primitives, textures, container_sources, container_hierarchy,
+      container_maps);
   check(expanded_container_asset.resolutions.size() == 2 &&
             expanded_container_asset.resolutions[0].geometry.status ==
                 off::graphics::SceneGeometryStatus::source_without_primitive &&
@@ -217,7 +218,8 @@ int main() {
                 contained_primitive.position &&
             expanded_container_asset.instances[0].geometry_reference ==
                 container_map.object.primary_geometry_reference,
-        "expand a mapped ZROOM through authored hierarchy without composing transforms");
+        "expand a mapped ZROOM through authored hierarchy without composing "
+        "transforms");
   auto invalid_scene_primitives = scene_primitives;
   invalid_scene_primitives[1].batches[0].indices[1] = 2;
   bool invalid_scene_index_rejected = false;

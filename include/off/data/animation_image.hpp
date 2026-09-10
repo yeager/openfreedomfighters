@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <string>
+#include <vector>
 
 namespace off::data {
 
@@ -11,8 +13,13 @@ namespace off::data {
 // supported installation; tracks and bindings remain unrecovered.
 struct AnimationImageHeader {
   std::size_t byte_size{};
-  std::uint32_t major_version{};
-  std::uint32_t minor_version{};
+  std::uint32_t reference_table_count{};
+  std::uint32_t format_value{};
+};
+
+struct AnimationReferenceTable {
+  std::string name;
+  std::vector<std::uint32_t> offsets;
 };
 
 class AnimationImage final {
@@ -22,9 +29,14 @@ public:
   [[nodiscard]] const AnimationImageHeader &header() const noexcept {
     return header_;
   }
+  [[nodiscard]] std::span<const AnimationReferenceTable>
+  reference_tables() const noexcept {
+    return reference_tables_;
+  }
 
 private:
   AnimationImageHeader header_{};
+  std::vector<AnimationReferenceTable> reference_tables_;
 };
 
 } // namespace off::data

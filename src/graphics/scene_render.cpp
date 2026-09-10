@@ -96,8 +96,7 @@ build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
   const data::ZipEntry *animation{};
   for (const auto &entry : archive.entries()) {
     const auto dot = entry.name.find_last_of('.');
-    if (dot == std::string::npos ||
-        lowercase(entry.name.substr(dot)) != ".anm")
+    if (dot == std::string::npos || lowercase(entry.name.substr(dot)) != ".anm")
       continue;
     if (animation)
       throw std::runtime_error("scene archive has invalid animation resource");
@@ -126,9 +125,9 @@ build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
       SceneRenderMapView{.kind = SceneRenderMapKind::rmi,
                          .entries = rmi.entries()},
   };
-  auto result = build_scene_render_asset(
-      primitives.entries(), textures.images(), objects.directory(),
-      objects.hierarchy(), maps);
+  auto result =
+      build_scene_render_asset(primitives.entries(), textures.images(),
+                               objects.directory(), objects.hierarchy(), maps);
   if (animation)
     result.animation =
         data::AnimationImage::parse(archive.read(*animation)).header();
@@ -136,11 +135,11 @@ build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
   return result;
 }
 
-[[nodiscard]] std::vector<SceneGeometryResolution> expand_container_resolution(
-    const SceneGeometryResolution &root,
-    std::span<const data::PrimitiveEntry> primitives,
-    std::span<const data::GmsDirectoryEntry> sources,
-    std::span<const data::GmsHierarchyNode> hierarchy) {
+[[nodiscard]] std::vector<SceneGeometryResolution>
+expand_container_resolution(const SceneGeometryResolution &root,
+                            std::span<const data::PrimitiveEntry> primitives,
+                            std::span<const data::GmsDirectoryEntry> sources,
+                            std::span<const data::GmsHierarchyNode> hierarchy) {
   if (root.status != SceneGeometryStatus::source_without_primitive ||
       !root.source_directory_index.has_value() || hierarchy.empty())
     return {};
@@ -153,8 +152,10 @@ build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
     return {};
   std::unordered_map<std::uint32_t, std::size_t> primitive_by_reference;
   for (std::size_t index = 0; index < primitives.size(); ++index) {
-    if (!primitive_by_reference.emplace(primitives[index].packed_index, index).second)
-      throw std::runtime_error("scene geometry reference resolves to duplicate PRM indexes");
+    if (!primitive_by_reference.emplace(primitives[index].packed_index, index)
+             .second)
+      throw std::runtime_error(
+          "scene geometry reference resolves to duplicate PRM indexes");
   }
   std::vector<SceneGeometryResolution> result;
   std::function<void(std::size_t)> visit = [&](std::size_t index) {
@@ -167,7 +168,8 @@ build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
       child.source_directory_index = index;
       child.source_local_slot_index = source.local_slot_index;
       child.primitive_reference = source.primitive_reference;
-      const auto found = primitive_by_reference.find(*source.primitive_reference);
+      const auto found =
+          primitive_by_reference.find(*source.primitive_reference);
       if (found == primitive_by_reference.end()) {
         child.status = SceneGeometryStatus::missing_primitive;
         child.primitive_entry_index.reset();
@@ -215,10 +217,10 @@ summarize_scene_render_resolutions(const SceneRenderAsset &asset) noexcept {
 }
 
 void validate_scene_render_asset(const SceneRenderAsset &asset) {
-  if (asset.animation &&
-      (asset.animation->byte_size < 20U ||
-       asset.animation->major_version != 12U ||
-       asset.animation->minor_version != 10U)) {
+  if (asset.animation && (asset.animation->byte_size < 20U ||
+                          asset.animation->reference_table_count < 1U ||
+                          asset.animation->reference_table_count > 6U ||
+                          asset.animation->format_value != 10U)) {
     throw std::invalid_argument("scene render animation metadata is invalid");
   }
   if (asset.resolutions.size() > maximum_scene_instances ||
@@ -346,7 +348,8 @@ SceneRenderAsset build_scene_render_asset(
     std::span<const data::TextureImage> textures,
     std::span<const data::GmsDirectoryEntry> object_sources,
     std::span<const SceneRenderMapView> maps) {
-  return build_scene_render_asset(primitives, textures, object_sources, {}, maps);
+  return build_scene_render_asset(primitives, textures, object_sources, {},
+                                  maps);
 }
 
 SceneRenderAsset build_scene_render_asset(
@@ -382,8 +385,10 @@ SceneRenderAsset build_scene_render_asset(
     std::vector<SceneGeometryResolution> expanded;
     for (const auto &geometry : resolutions) {
       expanded.push_back(geometry);
-      auto descendants = expand_container_resolution(geometry, primitives, object_sources, hierarchy);
-      expanded.insert(expanded.end(), std::make_move_iterator(descendants.begin()),
+      auto descendants = expand_container_resolution(geometry, primitives,
+                                                     object_sources, hierarchy);
+      expanded.insert(expanded.end(),
+                      std::make_move_iterator(descendants.begin()),
                       std::make_move_iterator(descendants.end()));
     }
     for (const auto &geometry : expanded) {

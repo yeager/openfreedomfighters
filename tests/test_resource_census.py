@@ -23,7 +23,8 @@ class ResourceCensusTests(unittest.TestCase):
             with zipfile.ZipFile(root / "one.ZIP", "w") as archive:
                 archive.writestr(
                     "SCENES/ONE.ANM",
-                    struct.pack("<III", 0x00414E4D, 1, 16) + b"a" * 4,
+                    struct.pack("<IIIII", 0x00414E4D, 0x80000018, 24, 12, 10)
+                    + b"a" * 4,
                 )
                 archive.writestr("SCENES/ONE.PRM", b"PRM!" + b"b" * 4)
                 archive.writestr(
@@ -42,7 +43,8 @@ class ResourceCensusTests(unittest.TestCase):
             with zipfile.ZipFile(root / "two.ZIP", "w") as archive:
                 archive.writestr(
                     "SCENES/TWO.ANM",
-                    struct.pack("<III", 0x00414E4D, 2, 24) + b"c" * 12,
+                    struct.pack("<IIIII", 0x00414E4D, 0x80000020, 32, 12, 10)
+                    + b"c" * 12,
                 )
             result = MODULE.census(root)
 
@@ -51,15 +53,17 @@ class ResourceCensusTests(unittest.TestCase):
         animation = result["formats"][".anm"]
         self.assertEqual(animation["count"], 2)
         self.assertEqual(animation["common_prefix_hex"], "4d4e4100")
-        self.assertEqual(animation["size"], {"min": 16, "median": 20, "max": 24})
-        self.assertEqual(
-            animation["known_invariants"]["magic_is_MNA_nul"],
-            {"passed": 2, "failed": 0},
-        )
-        self.assertEqual(
-            animation["known_invariants"]["word_2_is_file_size"],
-            {"passed": 2, "failed": 0},
-        )
+        self.assertEqual(animation["size"], {"min": 24, "median": 28, "max": 32})
+        for invariant in (
+            "magic_is_MNA_nul",
+            "word_1_is_flagged_file_size",
+            "word_2_is_file_size",
+            "directory_word_is_10_through_15_and_format_is_10",
+        ):
+            self.assertEqual(
+                animation["known_invariants"][invariant],
+                {"passed": 2, "failed": 0},
+            )
         support = result["formats"][".sup"]
         for invariant in (
             "word_0_is_zero",

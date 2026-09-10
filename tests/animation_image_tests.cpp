@@ -1,7 +1,11 @@
 #include "off/data/animation_image.hpp"
+#include "off/data/zip_archive.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <iostream>
 #include <span>
 #include <stdexcept>
@@ -27,11 +31,22 @@ void set_u32(std::vector<std::byte> &bytes, std::size_t offset,
 }
 
 std::vector<std::byte> fixture() {
-  std::vector<std::byte> bytes(24U, std::byte{0});
+  std::vector<std::byte> bytes(60U, std::byte{0});
   set_u32(bytes, 0, 0x00414e4dU);
+  set_u32(bytes, 4, 0x80000000U | static_cast<std::uint32_t>(bytes.size()));
   set_u32(bytes, 8, static_cast<std::uint32_t>(bytes.size()));
-  set_u32(bytes, 12, 12U);
+  set_u32(bytes, 12, 10U);
   set_u32(bytes, 16, 10U);
+  set_u32(bytes, 20, 0x80000024U);
+  set_u32(bytes, 24, 28U);
+  set_u32(bytes, 28, 1U);
+  set_u32(bytes, 32, 1U);
+  set_u32(bytes, 36, 12U);
+  set_u32(bytes, 40, 56U);
+  const char name[] = "A.anm";
+  for (std::size_t index = 0; index < sizeof(name) - 1U; ++index)
+    bytes[44U + index] = static_cast<std::byte>(name[index]);
+  set_u32(bytes, 52, 14U);
   return bytes;
 }
 
@@ -48,26 +63,76 @@ void check_rejected(Mutation mutate, const char *message) {
 
 } // namespace
 
-int main() {
+int main(int argc, char **argv) {
   const auto bytes = fixture();
   const auto image = off::data::AnimationImage::parse(bytes);
   check(image.header().byte_size == bytes.size(), "retain animation byte size");
-  check(image.header().major_version == 12U && image.header().minor_version == 10U,
-        "retain supported animation version");
+  check(image.header().reference_table_count == 1U &&
+            image.header().format_value == 10U,
+        "retain animation reference-table count and format value");
+  check(image.reference_tables().size() == 1U &&
+            image.reference_tables()[0].name == "A.anm" &&
+            image.reference_tables()[0].offsets ==
+                std::vector<std::uint32_t>{56U},
+        "decode the animation reference table directory");
   check_rejected([](auto &value) { set_u32(value, 0, 0); },
                  "reject wrong animation signature");
-  check_rejected([](auto &value) { set_u32(value, 8, 20U); },
+  check_rejected([](auto &value) { set_u32(value, 4, 60U); },
+                 "reject unflagged animation root size");
+  check_rejected([](auto &value) { set_u32(value, 8, 56U); },
                  "reject declared-size mismatch");
-  check_rejected([](auto &value) { set_u32(value, 12, 11U); },
-                 "reject unsupported animation major version");
+  check_rejected([](auto &value) { set_u32(value, 12, 9U); },
+                 "reject zero animation reference tables");
+  check_rejected([](auto &value) { set_u32(value, 12, 16U); },
+                 "reject too many animation reference tables");
   check_rejected([](auto &value) { set_u32(value, 16, 11U); },
-                 "reject unsupported animation minor version");
+                 "reject unsupported animation format value");
+  check_rejected([](auto &value) { set_u32(value, 40, 58U); },
+                 "reject a misaligned animation reference offset");
+  check_rejected([](auto &value) { set_u32(value, 20, 0x80000028U); },
+                 "reject excess animation reference table padding");
+  check_rejected([](auto &value) { set_u32(value, 24, 32U); },
+                 "reject an invalid animation reference table base length");
+  check_rejected([](auto &value) { set_u32(value, 36, 16U); },
+                 "reject an invalid animation reference table name offset");
+  check_rejected([](auto &value) { set_u32(value, 52, 10U); },
+                 "reject a non-final marker on the final table");
   auto truncated = fixture();
   truncated.resize(19U);
   try {
     static_cast<void>(off::data::AnimationImage::parse(truncated));
     check(false, "reject truncated animation header");
   } catch (const std::runtime_error &) {
+  }
+  if (argc == 2) {
+    std::size_t parsed_files = 0;
+    for (const auto &item :
+         std::filesystem::recursive_directory_iterator(argv[1])) {
+      if (!item.is_regular_file())
+        continue;
+      auto archive_extension = item.path().extension().string();
+      std::ranges::transform(
+          archive_extension, archive_extension.begin(),
+          [](unsigned char value) { return std::tolower(value); });
+      if (archive_extension != ".zip")
+        continue;
+      const auto archive = off::data::ZipArchive::open(item.path());
+      for (const auto &entry : archive.entries()) {
+        auto member_extension =
+            std::filesystem::path(entry.name).extension().string();
+        std::ranges::transform(
+            member_extension, member_extension.begin(),
+            [](unsigned char value) { return std::tolower(value); });
+        if (member_extension != ".anm")
+          continue;
+        static_cast<void>(
+            off::data::AnimationImage::parse(archive.read(entry)));
+        ++parsed_files;
+      }
+    }
+    check(parsed_files != 0U, "parse animation files in the supplied corpus");
+    if (failures == 0)
+      std::cout << "Validated " << parsed_files << " ANM files\n";
   }
   return failures == 0 ? 0 : 1;
 }
