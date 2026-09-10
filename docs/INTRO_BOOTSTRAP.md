@@ -28,8 +28,8 @@ construction is removed from the live list while preserving its construction
 serial effects. The host also exposes checked, explicit boundaries for the
 post-construction reader bracket, approved reference translation, loader tail,
 and global component passes. Normal startup now runs the ordinary reader bracket
-and admits eleven reviewed reader records without executing a command or activating
-a component. The remaining 409 records and the concrete production services
+and admits twelve reviewed reader records without executing a command or activating
+a component. The remaining 408 records and the concrete production services
 needed to invoke the checked loader-tail transition are unavailable, as are
 renderer association, scene update, and rendering. See [live resource flags](RESOURCE_STATE.md) and the
 [component lifecycle](COMPONENT_LIFECYCLE.md).
@@ -44,6 +44,14 @@ For still-unclassified work it additionally records attachment presence and the
 validated terminal-versus-attachment-delimiter shape, retaining an explicit
 unknown bucket for formats outside that narrow classifier. These are aggregate
 investigation counts, not a claim that a deferred attachment reader exists.
+
+The owned-data probe currently finds 420 queued readers: 12 applied, 408
+unclassified. Of the unclassified work, 75 records have no attachments and 333
+have attachments; 302 of those attachment-bearing blocks expose a delimiter
+before their terminal marker, while 31 are outside the narrow classifier. This
+does not authorize a generic attachment dispatcher. The next candidate must be
+an exact, attachment-free owner form with a separately recovered payload and
+failure contract.
 MatPosAnim is explicitly outside the current deferred-reader admission path:
 all 227 associated deferred records terminate before attachment dispatch. Its
 owner-local `KEYS` preparation and its separate persistence/restore object
