@@ -8,6 +8,7 @@
 #include "off/data/first_cut_owner_reader.hpp"
 #include "off/data/first_cut_list_component_reader.hpp"
 #include "off/data/first_cut_command_component_reader.hpp"
+#include "off/data/first_cut_component_payload_session.hpp"
 #include "off/data/keys_descriptor_range.hpp"
 #include "off/data/keys_backing_evaluator.hpp"
 #include "off/data/matpos_pose_evaluator.hpp"
@@ -1097,6 +1098,36 @@ int main() {
             const std::array<DeferredComponentReader, 0> none{};
             static_cast<void>(DeferredComponentDispatcher::dispatch(bad, none));
         }, "component dispatcher rejects truncated generic values");
+    }
+    {
+        using off::data::FirstCutComponentPayloadSession;
+        std::vector<std::byte> stream;
+        const auto scalar=[&](std::uint8_t tag,std::uint32_t value) {
+            stream.push_back(static_cast<std::byte>(tag));
+            append_u32(stream,value);
+        };
+        constexpr std::array<std::uint8_t,7> list_tags{0x83U,0x83U,0x03U,0x08U,0x03U,0x83U,0x03U};
+        for(std::size_t index=0;index<list_tags.size();++index)
+            scalar(list_tags[index],static_cast<std::uint32_t>(index+1U));
+        scalar(0x02U,0x80000000U); stream.push_back(std::byte{0x06});
+        for(std::uint32_t index=0;index<5U;++index) {
+            scalar(index%2U==0U?0x03U:0x83U,10U+index);
+            scalar(0x8aU,20U+index); scalar(0x88U,30U+index);
+            scalar(index%2U==0U?0x83U:0x03U,40U+index);
+            stream.push_back(std::byte{0x04}); stream.push_back(std::byte{0}); stream.push_back(std::byte{0x06});
+        }
+        stream.push_back(std::byte{0xff});
+        const auto parsed=FirstCutComponentPayloadSession::read(stream,stream.size());
+        check(stream.size()==157U && parsed.list.controls.front()==1U &&
+                  std::bit_cast<std::uint32_t>(parsed.list.final_value)==0x80000000U &&
+                  parsed.commands.front().timeline_position==10U && parsed.commands.back().event_argument==44U &&
+                  parsed.commands.front().target_name.empty(),
+              "first-cut component payload session reads exactly one list and five ordered commands");
+        check_rejected([&] {
+            auto malformed=stream;
+            malformed.push_back(std::byte{0});
+            static_cast<void>(FirstCutComponentPayloadSession::read(malformed,malformed.size()));
+        }, "first-cut component payload session rejects a suffix beyond its reviewed extent");
     }
     {
         using off::data::FirstCutCommandComponentReader;

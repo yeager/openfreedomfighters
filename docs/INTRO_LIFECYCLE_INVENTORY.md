@@ -99,8 +99,11 @@ start audio, or submit a frame.
 payload, distinct from its compatibility `remaining()` view. The generic
 dispatcher uses only this exact payload, so one reader cannot consume later
 attachments or the owner terminator. The first ordered payload has a reviewed,
-read-only parser for its fixed seven controls and one finite scalar. It is
-cross-checked in the owned-data cold probe but is not dispatched by startup.
+read-only parser for its fixed seven controls and one finite scalar. The five
+following command payloads have equivalent bounded parsers. A separate atomic
+read-only session validates the exact six-payload sequence and terminal, then
+retains only parsed values. It is cross-checked in the owned-data cold probe
+but is not dispatched by startup.
 
 The next static-analysis pass recovers the six component-reader contracts and
 their owner side effects. Its tests must

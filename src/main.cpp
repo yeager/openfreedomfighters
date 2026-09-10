@@ -1,5 +1,5 @@
 #include "off/data/install.hpp"
-#include "off/data/bounded_component_block_cursor.hpp"
+#include "off/data/first_cut_component_payload_session.hpp"
 #include "off/data/first_cut_owner_reader.hpp"
 #include "off/data/first_cut_list_component_reader.hpp"
 #include "off/data/first_cut_command_component_reader.hpp"
@@ -148,23 +148,15 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
   if(suffix.component_suffix.data()!=block.data()+14U || suffix.component_suffix.size()!=157U ||
       suffix.component_extent!=157U)
     throw std::runtime_error("first-cut cold probe found an unbounded component suffix");
-  auto component_cursor=suffix.component_suffix;
-  off::data::BoundedComponentBlockCursor component_blocks(component_cursor,suffix.component_extent);
-  off::data::DeferredComponentAttachmentSnapshot first_component;
-  if(!component_blocks.next_attachment(first_component))
-    throw std::runtime_error("first-cut cold probe found no first component payload");
-  const auto list_record=off::data::FirstCutListComponentReader::read(first_component.payload());
+  const auto parsed_components=off::data::FirstCutComponentPayloadSession::read(
+      suffix.component_suffix,suffix.component_extent);
   const auto& first_cut_source_data=intro.resources().first_cut();
-  if(list_record.controls!=first_cut_source_data.settings_words ||
-      std::bit_cast<std::uint32_t>(list_record.final_value)!=
+  if(parsed_components.list.controls!=first_cut_source_data.settings_words ||
+      std::bit_cast<std::uint32_t>(parsed_components.list.final_value)!=
           std::bit_cast<std::uint32_t>(first_cut_source_data.final_value))
     throw std::runtime_error("first-cut cold probe found a component-parser disagreement");
   for(std::size_t index=0;index<first_cut_source_data.commands.size();++index) {
-    off::data::DeferredComponentAttachmentSnapshot command_component;
-    if(!component_blocks.next_attachment(command_component))
-      throw std::runtime_error("first-cut cold probe found a missing command payload");
-    const auto command_record=off::data::FirstCutCommandComponentReader::read(
-        command_component.payload());
+    const auto& command_record=parsed_components.commands[index];
     const auto& command=first_cut_source_data.commands[index];
     if(command_record.timeline_position!=command.timeline_position ||
         command_record.event_reference!=command.event_reference ||
@@ -173,12 +165,6 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
         command_record.target_name!=command.target_name)
       throw std::runtime_error("first-cut cold probe found a command-parser disagreement");
   }
-  off::data::DeferredComponentAttachmentSnapshot unexpected_component;
-  if(component_blocks.next_attachment(unexpected_component))
-    throw std::runtime_error("first-cut cold probe found an unexpected component payload");
-  if(component_blocks.remaining().size()!=1U || component_blocks.remaining().front()!=std::byte{0xff} ||
-      component_cursor.size()!=1U || component_cursor.front()!=std::byte{0xff})
-    throw std::runtime_error("first-cut cold probe lost its component terminator");
   const off::data::DeferredReaderWorkIdentity identity{
       first_cut_work->resource.value,first_cut_work->source_offset,first_cut_work->source_directory_index};
   off::data::DeferredReaderSession owner_session(identity,block);
