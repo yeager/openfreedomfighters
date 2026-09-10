@@ -782,9 +782,10 @@ install, constructs the checked intro directory, runs the existing
 postconstruction reader bracket, and creates the first-cut session. It then
 requires that both first-cut lifecycle phases and the ordered-command receiver
 are still cold. It also validates the owner envelope and the bounded first
-component payload plus the first following command payload against independently
-strict GMS readers. The fixed report contains no game-data identities or
-payloads.
+component payload plus the five following command payloads against independently
+strict GMS readers. It verifies all five command payloads in authored order
+and retains the enclosing terminal. The fixed report contains no game-data
+identities or payloads.
 
 The probe creates no SDL window and does not admit a renderer, start audio,
 schedule an event, execute a lifecycle phase, or play a cutscene. It is not a
