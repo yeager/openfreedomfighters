@@ -45,6 +45,15 @@ Confirmed structural invariants (32-bit words are zero-indexed):
 
 The rules above were then promoted to validators and checked against the full corpus. `ZGF`, `SUP`, `GMS`, `SND`, `PRM`, and `ANM` pass every stated rule in every observed file. `TEX` passes the size and `3,4` rules in all 90 files; word 1 has an 88-file normal variant (`word 0 + 8,192`) and a two-file empty variant (`word 0`). `SUP`, `TEX`, and the `ANM` directory and opaque descriptor block have native parsers with synthetic mutation tests; see [SCENE_SUPPORT_FORMAT.md](SCENE_SUPPORT_FORMAT.md) and [TEXTURE_FORMAT.md](TEXTURE_FORMAT.md). Referenced animation streams remain opaque. The next step for the remaining families is to locate section offsets from these length equations and test mutations against synthetic fixtures.
 
+## LOC discovery boundary
+
+`LocStringIndex` now inventories only printable, NUL-terminated byte runs. It
+does not interpret a run as an identifier, text, locale, or translation. On
+the supported startup and intro LOC members it finds 5,811 and 5,652 candidate
+runs respectively; 1,611 and 1,706 contain an underscore, while 444 and 528
+are at least 32 bytes. These aggregate observations confirm that a structural
+LOC grammar is still required before game text can be localized safely.
+
 ## Reproduce
 
 ```sh
