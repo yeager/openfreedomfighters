@@ -1142,7 +1142,9 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
             .resolve_member=[](std::size_t) -> std::optional<std::uint64_t> {return std::nullopt;},
             .request_member_info=[](std::uint64_t) -> std::optional<off::cutscene::FirstCutMemberInfo> {return std::nullopt;},
             .member_name=[](std::uint64_t) {return std::string_view{};},
-            .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> {return std::nullopt;}});
+            .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> {return std::nullopt;},
+            .register_ordered_command=[](std::size_t,const auto&) {},
+            .close_ordered_command_receiver=[](std::size_t) {}});
         rejects([&]{host.prepare_supported_first_cut_player();});
         if(!host.resources().sounds().empty()) {
           const auto& authored_sound=host.resources().sounds().front();

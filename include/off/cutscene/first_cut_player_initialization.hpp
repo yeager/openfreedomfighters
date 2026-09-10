@@ -37,7 +37,29 @@ struct FirstCutPlayerPhaseTwoServices {
   std::function<std::optional<FirstCutMemberInfo>(std::uint64_t)> request_member_info;
   std::function<std::string_view(std::uint64_t)> member_name;
   std::function<std::optional<std::uint64_t>(std::uint64_t)> resolve_scene_object;
-  std::function<void(const data::GmsIntroCutCommandSource&)> register_ordered_command;
+  std::function<void(std::size_t, const data::GmsIntroCutCommandSource&)> register_ordered_command;
+  std::function<void(std::size_t)> close_ordered_command_receiver;
+};
+
+// Concrete ordered-command receiver for the reviewed first-cut list. It is
+// intentionally separate from the source-65 external-fade list model.
+class FirstCutPlayerListReceiver final {
+public:
+  explicit FirstCutPlayerListReceiver(std::size_t list_component) : list_component_(list_component) {}
+  void open_after_phase_one(std::size_t live_list_component);
+  void register_ordered_command(std::size_t live_list_component,
+                                const data::GmsIntroCutCommandSource& command);
+  void close_after_phase_two(std::size_t live_list_component);
+  [[nodiscard]] const std::vector<data::GmsIntroCutCommandSource>& commands() const noexcept { return commands_; }
+  [[nodiscard]] bool open() const noexcept { return open_; }
+  [[nodiscard]] bool closed() const noexcept { return closed_; }
+
+private:
+  [[nodiscard]] float key_at(std::size_t index) const noexcept;
+  std::size_t list_component_{};
+  std::vector<data::GmsIntroCutCommandSource> commands_;
+  std::optional<std::size_t> cached_command_;
+  bool open_{}, closed_{};
 };
 
 // One reviewed first-cut list initialization. It retains data and executes
@@ -52,6 +74,7 @@ public:
   [[nodiscard]] bool phase_two_complete() const noexcept { return phase_two_complete_; }
   [[nodiscard]] bool source_read_marker() const noexcept { return source_read_marker_; }
   [[nodiscard]] bool events_registered() const noexcept { return events_registered_; }
+  [[nodiscard]] std::size_t list_component() const noexcept { return list_component_; }
   [[nodiscard]] const std::vector<bool>& started() const noexcept { return started_; }
   [[nodiscard]] const std::vector<bool>& completed() const noexcept { return completed_; }
   [[nodiscard]] float derived_end() const noexcept { return derived_end_; }

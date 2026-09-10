@@ -44,11 +44,27 @@ int main() {
       .request_member_info = [&](std::uint64_t member) -> std::optional<off::cutscene::FirstCutMemberInfo> { check(member == 55U, "direct info target"); trace.push_back("info"); return {{175.0F}}; },
       .member_name = [](std::uint64_t) { return std::string_view{"Cut01"}; },
       .resolve_scene_object = [&](std::uint64_t value) -> std::optional<std::uint64_t> { check(value == 99U, "resolve cut object source"); trace.push_back("object"); return 100U; },
-      .register_ordered_command = [&](const auto& command) { trace.push_back("command:" + std::to_string(command.timeline_position)); }});
+      .register_ordered_command = [&](auto component, const auto& command) { check(component == 42U, "retain concrete list identity"); trace.push_back("command:" + std::to_string(command.timeline_position)); },
+      .close_ordered_command_receiver = [&](auto component) { check(component == 42U, "close concrete list identity"); trace.push_back("close"); }});
   check(player.phase_two_complete() && player.derived_end() == 175.0F && player.active_camera_list() == 88U &&
             player.cut_sequence_object() == 100U &&
-            trace == std::vector<std::string>{"one:14", "one:13", "one:12", "one:11", "one:10", "read", "events", "count", "queue", "map", "two:14", "command:1", "two:13", "command:2", "two:12", "command:3", "two:11", "command:4", "two:10", "command:5", "rActiveCameraList", "member", "info", "rCutSequenceObject", "object"},
+            trace == std::vector<std::string>{"one:14", "one:13", "one:12", "one:11", "one:10", "read", "events", "count", "queue", "map", "two:14", "command:1", "two:13", "command:2", "two:12", "command:3", "two:11", "command:4", "two:10", "command:5", "rActiveCameraList", "member", "info", "rCutSequenceObject", "object", "close"},
         "phase two registers each eligible command after its reverse callback without playback");
+  off::cutscene::FirstCutPlayerListReceiver receiver(42U);
+  rejects([&] { receiver.register_ordered_command(42U, {}); }, "receiver is cold before phase one");
+  receiver.open_after_phase_one(42U);
+  off::data::GmsIntroCutCommandSource late{}, early{}, equal{};
+  late.timeline_position = 9U; early.timeline_position = 1U; equal.timeline_position = 1U;
+  receiver.register_ordered_command(42U, late);
+  receiver.register_ordered_command(42U, early);
+  receiver.register_ordered_command(42U, equal);
+  check(receiver.commands().size() == 3U && receiver.commands()[0].timeline_position == 1U &&
+            receiver.commands()[1].timeline_position == 1U && receiver.commands()[2].timeline_position == 9U,
+        "receiver owns cached strict command insertion after phase one");
+  off::data::GmsIntroCutCommandSource negative{}; negative.timeline_position = 0x80000000U;
+  rejects([&] { receiver.register_ordered_command(42U, negative); }, "receiver rejects signed-negative commands");
+  receiver.close_after_phase_two(42U);
+  rejects([&] { receiver.register_ordered_command(42U, early); }, "receiver closes after phase two");
   auto failing = make_player();
   rejects([&] { failing.run_phase_one({
       .invoke_command = [](auto, const auto&) { throw std::runtime_error("injected"); },

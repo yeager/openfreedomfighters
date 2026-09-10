@@ -6,6 +6,34 @@
 #include <stdexcept>
 
 namespace off::cutscene {
+float FirstCutPlayerListReceiver::key_at(std::size_t index) const noexcept {
+  return static_cast<float>(std::bit_cast<std::int32_t>(commands_[index].timeline_position));
+}
+void FirstCutPlayerListReceiver::open_after_phase_one(std::size_t live_list_component) {
+  if (open_ || closed_ || live_list_component != list_component_)
+    throw std::runtime_error("first-cut list receiver phase-one boundary is invalid");
+  open_ = true;
+}
+void FirstCutPlayerListReceiver::register_ordered_command(
+    std::size_t live_list_component, const data::GmsIntroCutCommandSource& command) {
+  if (!open_ || closed_ || live_list_component != list_component_ ||
+      std::bit_cast<std::int32_t>(command.timeline_position) < 0)
+    throw std::runtime_error("first-cut list receiver command admission is invalid");
+  const auto key = static_cast<float>(std::bit_cast<std::int32_t>(command.timeline_position));
+  std::size_t insertion{};
+  if (cached_command_) {
+    insertion = *cached_command_;
+    while (key_at(insertion) > key) { if (insertion == 0U) break; --insertion; }
+    while (insertion < commands_.size() && key > key_at(insertion)) ++insertion;
+  }
+  commands_.insert(commands_.begin() + static_cast<std::ptrdiff_t>(insertion), command);
+  cached_command_ = insertion;
+}
+void FirstCutPlayerListReceiver::close_after_phase_two(std::size_t live_list_component) {
+  if (!open_ || closed_ || live_list_component != list_component_)
+    throw std::runtime_error("first-cut list receiver phase-two boundary is invalid");
+  closed_ = true;
+}
 FirstCutPlayerInitialization::FirstCutPlayerInitialization(FirstCutPlayerDescriptor descriptor)
     : list_(std::move(descriptor.list)), sequence_(std::move(descriptor.sequence)),
       list_component_(descriptor.list_component), command_components_(descriptor.command_components) {
@@ -37,14 +65,14 @@ void FirstCutPlayerInitialization::run_phase_one(const FirstCutPlayerPhaseOneSer
 void FirstCutPlayerInitialization::run_phase_two(const FirstCutPlayerPhaseTwoServices& services) {
   if (!phase_one_complete_ || phase_two_complete_ || running_ || failed_ || !services.invoke_command || !services.read_scene_reference ||
       !services.resolve_member || !services.request_member_info || !services.member_name ||
-      !services.resolve_scene_object || !services.register_ordered_command)
+      !services.resolve_scene_object || !services.register_ordered_command || !services.close_ordered_command_receiver)
     throw std::runtime_error("first-cut player phase two boundary is invalid");
   running_ = true;
   try {
     for (std::size_t index = command_components_.size(); index-- > 0U;) {
       services.invoke_command(command_components_[index], list_.commands[index]);
       if (std::bit_cast<std::int32_t>(list_.commands[index].timeline_position) >= 0)
-        services.register_ordered_command(list_.commands[index]);
+        services.register_ordered_command(list_component_, list_.commands[index]);
     }
     const auto active = services.read_scene_reference("rActiveCameraList");
     float derived = 0.0F;
@@ -59,6 +87,7 @@ void FirstCutPlayerInitialization::run_phase_two(const FirstCutPlayerPhaseTwoSer
     }
     const auto source = services.read_scene_reference("rCutSequenceObject");
     const auto object = source ? services.resolve_scene_object(*source) : std::optional<std::uint64_t>{};
+    services.close_ordered_command_receiver(list_component_);
     active_camera_list_ = active; cut_sequence_object_ = object; derived_end_ = derived;
     phase_two_complete_ = true; running_ = false;
   } catch (...) { running_ = false; failed_ = true; throw; }
