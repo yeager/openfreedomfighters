@@ -361,6 +361,17 @@ struct IntroMovieControllerReaderState {
   std::vector<std::optional<IntroRuntimeResourceHandle>> sequence_members;
   std::vector<std::optional<IntroRuntimeResourceHandle>> group_members;
 };
+// This follows the reviewed MovieControl owner reader. It retains only
+// construction-owned component state; it does not enroll event 16 or create a
+// lifecycle admission.
+struct IntroMovieControllerComponentReaderState {
+  IntroRuntimeHandle owner;
+  std::size_t component_index{};
+  std::uint16_t class_ordinal{};
+  std::uint32_t requested_mask{};
+  std::uint32_t priority{};
+  std::array<std::uint16_t, 7> events{};
+};
 // Immutable state published by the two reviewed first-cut list readers.  It
 // retains authored data and source-directory resource mappings only; it does
 // not construct a CutList, register events, or schedule commands.
@@ -788,6 +799,10 @@ public:
   // not run component phases, enroll events, or activate the controller.
   void apply_supported_movie_control_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroMovieControllerReaderState* movie_controller_reader_state() const noexcept {return movie_controller_reader_state_?&*movie_controller_reader_state_:nullptr;}
+  void apply_supported_movie_control_component_reader(const IntroDeferredReaderWork& work);
+  [[nodiscard]] const IntroMovieControllerComponentReaderState* movie_controller_component_reader_state() const noexcept {
+    return movie_controller_component_reader_state_?&*movie_controller_component_reader_state_:nullptr;
+  }
   // Complete only the two checked first-cut list reader boundaries. These
   // publish immutable source/resource state and do not execute cutscene work.
   void apply_supported_first_cut_sequence_deferred_reader(const IntroDeferredReaderWork& work);
@@ -910,6 +925,7 @@ private:
   std::vector<std::vector<std::size_t>> owner_components_;
   std::size_t controller_component_{};
   std::optional<IntroMovieControllerReaderState> movie_controller_reader_state_;
+  std::optional<IntroMovieControllerComponentReaderState> movie_controller_component_reader_state_;
   std::optional<IntroFirstCutSequenceReaderState> first_cut_sequence_reader_state_;
   std::optional<IntroFirstCutListReaderState> first_cut_list_reader_state_;
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;

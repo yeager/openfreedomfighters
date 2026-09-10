@@ -116,6 +116,12 @@ events, clocks, camera state, or rendering. Normal startup does not invoke this
 single reader independently: the ordinary reader bracket remains all-or-fail
 across every queued owner record.
 
+The following component-reader boundary retains only the already constructed
+MovieControl component identity, requested mask, priority, and declared events.
+It requires the completed owner reader and does not set a live status bit,
+enroll event 16, assign a deadline, or invoke phase two. Normal startup uses
+this checked boundary; all other component-reader work remains deferred.
+
 ## Constructor-owned temporary
 
 LensFlareControl uses a bounded nested common construction/destruction operation,

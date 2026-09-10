@@ -347,7 +347,10 @@ int main(int argc, char **argv) {
                }
              },
              .component_reader_boundary =
-                 [](const off::graphics::IntroDeferredReaderWork &) {},
+                 [&intro](const off::graphics::IntroDeferredReaderWork &work) {
+                   if (work.source_directory_index == intro->resources().controller_index())
+                     intro->apply_supported_movie_control_component_reader(work);
+                 },
              .end_reader_service = [] {}});
       }
       startup_graphics.emplace(off::graphics::load_startup_graphics_asset(

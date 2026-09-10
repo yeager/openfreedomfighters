@@ -2788,6 +2788,29 @@ void IntroRuntime::apply_supported_movie_control_deferred_reader(const IntroDefe
   catch(...) { movie_controller_reader_state_.reset(); throw; }
 }
 
+void IntroRuntime::apply_supported_movie_control_component_reader(
+    const IntroDeferredReaderWork& work) {
+  if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete ||
+      !work.processed || work.source_directory_index != resources_.controller_index() ||
+      !movie_controller_reader_state_ || movie_controller_component_reader_state_)
+    throw std::runtime_error("MovieControl component reader requires its completed owner reader");
+  const auto& component = components_.at(controller_component_);
+  const auto* constructed = constructed_attachment(controller_component_);
+  if (!component.constructed() || component.removed() ||
+      component.source().factory_name != "ZGEOM_MovieControl" ||
+      component.state().attached_owner != movie_controller_reader_state_->owner.value ||
+      !constructed || !constructed->movie_control)
+    throw std::runtime_error("MovieControl component reader has no live constructed controller");
+  movie_controller_component_reader_state_ = {
+      .owner = movie_controller_reader_state_->owner,
+      .component_index = controller_component_,
+      .class_ordinal = component.state().class_ordinal,
+      .requested_mask = component.state().requested,
+      .priority = component.state().priority,
+      .events = constructed->movie_control->events,
+  };
+}
+
 void IntroRuntime::apply_supported_first_cut_sequence_deferred_reader(
     const IntroDeferredReaderWork& work) {
   const auto source_index=resources_.member_index();
