@@ -1045,10 +1045,10 @@ int main() {
             },
         };
         const auto result = DeferredComponentDispatcher::dispatch(stream, readers);
-        check(result.dispatched_components == 2U && received[0] == 17U && received[1] == 11U &&
+        check(result.dispatched_components == 2U && received[0] == 5U && received[1] == 3U &&
                   received_starts[0] == std::byte{0x83} && received_starts[1] == std::byte{0x04} &&
                   result.continuation.size() == 2U && result.continuation.front() == std::byte{0xff},
-              "component dispatcher captures the pre-delimiter cursor independently and retains the terminator");
+              "component dispatcher isolates each bounded payload and retains the terminator");
         {
             const std::array terminal_only{std::byte{0xff}, std::byte{0xa5}};
             const std::array<DeferredComponentReader, 0> no_readers{};
@@ -1067,9 +1067,9 @@ int main() {
                 [&](std::span<const std::byte>& child) { received_size = child.size(); },
             };
             const auto continued = DeferredComponentDispatcher::dispatch(continued_stream, continued_readers);
-            check(received_size == 7U && continued.dispatched_components == 1U &&
-                      continued.continuation.size() == 1U && continued.continuation.front() == std::byte{0xff},
-                  "component dispatcher scans continuation-tagged values and high-bit class-six delimiters without moving reader snapshots");
+            check(received_size == 5U && continued.dispatched_components == 1U &&
+                  continued.continuation.size() == 1U && continued.continuation.front() == std::byte{0xff},
+                  "component dispatcher bounds readers before later delimiters and leaves the terminator external");
         }
         check_rejected([&] {
             const std::array bad{std::byte{0x06}, std::byte{0xff}};
@@ -1176,7 +1176,7 @@ int main() {
             [&](std::span<const std::byte>& input) { reader_input_size = input.size(); },
         };
         const auto dispatched = session.read_components(readers);
-        check(copied_input && reader_input_size == 7U && dispatched.dispatched_components == 1U &&
+        check(copied_input && reader_input_size == 5U && dispatched.dispatched_components == 1U &&
                   dispatched.continuation.size() == 1U && dispatched.continuation.front() == std::byte{0xff} &&
                   session.state() == DeferredReaderSessionState::component_read,
               "deferred reader session copies one owner block and dispatches only its explicit component extent");

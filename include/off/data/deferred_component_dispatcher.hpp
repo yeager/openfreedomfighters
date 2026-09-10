@@ -11,9 +11,9 @@
 namespace off::data {
 
 // Dispatches the component-reader entry boundaries recovered from a deferred
-// compact stream.  This intentionally knows neither an owner prefix nor any
-// component grammar.  Readers receive an independently-owned cursor view, so
-// their consumption cannot change the scan that finds subsequent boundaries.
+// compact stream. This intentionally knows neither an owner prefix nor any
+// component grammar. Readers receive only their delimiter-free bounded payload,
+// so they cannot consume a subsequent attachment while scanning continues.
 using DeferredComponentReader = std::function<void(std::span<const std::byte>&)>;
 
 struct DeferredComponentDispatchResult final {
@@ -27,7 +27,7 @@ class DeferredComponentDispatcher final {
 public:
     // For each attachment, captures the current compact cursor, scans generic
     // values until a raw class-six delimiter or the 0xff terminator, then
-    // consumes that delimiter before dispatching the captured cursor. The
+    // consumes that delimiter before dispatching its bounded payload. The
     // caller supplies readers in attachment order. As with the recovered
     // compact advance helpers, the high tag bit does not change generic class
     // handling.
@@ -43,7 +43,7 @@ public:
             if (reader_index == attachment_readers.size()) {
                 fail("deferred component stream has more delimiters than attachment readers");
             }
-            auto child_cursor = snapshot.remaining();
+            auto child_cursor = snapshot.payload();
             attachment_readers[reader_index++](child_cursor);
         }
         if (reader_index != attachment_readers.size()) {
