@@ -5,6 +5,15 @@ factory-produced FF-StartUp BootMenu component. It consumes the move-only
 source-backed construction token, so neither stage can outlive its FF-StartUp
 scene transaction.
 
+## Evidence boundary
+
+A private re-check of the supported executable and the owned startup archive
+confirms that the startup package, the BootMenu window/component family, and
+the default-camera identity are distinct bootstrap anchors. The intro package
+is a separate anchor. This corroborates the source-package split already used
+by the native loader; it does not establish an order between the two packages,
+make either scene current, or prove a playable transition.
+
 `read_component()` first verifies the live owner/component and registry,
 resolves and retains one opaque registry identity, then invokes the common
 window-component reader. It produces a move-only reader-complete token.

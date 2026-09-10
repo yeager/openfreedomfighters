@@ -36,6 +36,7 @@
 - [Picture projection](PICTURE_PROJECTION.md)
 - [Picture submission cache](PICTURE_SUBMISSION_CACHE.md)
 - [Windows reference capture](STARTUP_STATE_CAPTURE.md)
+- [Startup BootMenu boundary](STARTUP_BOOTMENU_BOUNDARY.md)
 
 ## Project and technical reference
 
