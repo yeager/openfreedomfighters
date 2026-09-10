@@ -12,6 +12,13 @@ Consequently, the normal deferred-reader bracket supplies no MatPosAnim
 component cursor. A deferred owner tail, attachment name, or neighbouring record
 must not be used as a substitute input.
 
+`DeferredAttachmentDispatchClassifier` records this boundary over an already
+bounded compact block: either its terminal occurs before the first attachment
+delimiter or one or more delimiters precede the terminal. It is read-only,
+rejects malformed compact values, and has no reader callback input. Its result
+is observation evidence only: it neither dispatches a component nor contributes
+to lifecycle coverage.
+
 The corresponding component reader and writer are a separate persistence and
 restore virtual route. Their recovered boundary is a fixed object stream; it is
 not the deferred reader/writer grammar and it is not phase one. Phase one takes

@@ -1,5 +1,6 @@
 #include "off/data/gms_image.hpp"
 #include "off/data/bounded_component_block_cursor.hpp"
+#include "off/data/deferred_attachment_dispatch_shape.hpp"
 #include "off/data/compact_typed_value_decoder.hpp"
 #include "off/data/component_reader_context.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
@@ -989,6 +990,31 @@ int main() {
             static_cast<void>(short_cursor.next_attachment(ignored));
             static_cast<void>(short_cursor.next_attachment(ignored));
         }, "bounded component block cursor never reads a terminator outside its supplied block");
+        using off::data::DeferredAttachmentDispatchClassifier;
+        using off::data::DeferredAttachmentDispatchShape;
+        const std::array<std::byte, 6> terminal_only{
+            std::byte{0x03}, std::byte{0x11}, std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0xff}};
+        const auto terminal = DeferredAttachmentDispatchClassifier::observe(terminal_only);
+        const auto delimited = DeferredAttachmentDispatchClassifier::observe(
+            std::span<const std::byte>(stream).first(stream.size() - 1U));
+        check(terminal.shape == DeferredAttachmentDispatchShape::terminal_before_first_attachment_delimiter &&
+                  terminal.delimiter_count == 0U &&
+                  delimited.shape == DeferredAttachmentDispatchShape::attachment_delimiter_precedes_terminal &&
+                  delimited.delimiter_count == 2U,
+              "read-only dispatch classification distinguishes terminal owner blocks from attachment delimiters");
+        const std::array<std::byte, 3> post_terminal{std::byte{0xff}, std::byte{0x06}, std::byte{0xff}};
+        const std::array<std::byte, 2> high_bit_delimiter{std::byte{0x86}, std::byte{0xff}};
+        check(DeferredAttachmentDispatchClassifier::observe(post_terminal).delimiter_count == 0U &&
+                  DeferredAttachmentDispatchClassifier::observe(high_bit_delimiter).delimiter_count == 1U,
+              "dispatch classification leaves terminal suffixes untouched and recognizes high-bit delimiters");
+        check_rejected([] {
+            const std::array<std::byte, 1> truncated{std::byte{0x03}};
+            static_cast<void>(DeferredAttachmentDispatchClassifier::observe(truncated));
+        }, "read-only dispatch classification rejects truncated compact values");
+        check_rejected([] {
+            const std::array<std::byte, 2> unknown{std::byte{0x7f}, std::byte{0xff}};
+            static_cast<void>(DeferredAttachmentDispatchClassifier::observe(unknown));
+        }, "read-only dispatch classification rejects unrecovered classes before its terminal");
     }
     {
         using off::data::DeferredComponentDispatcher;
