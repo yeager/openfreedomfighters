@@ -28,6 +28,17 @@ struct AnimationDescriptor {
   std::uint32_t tag{};
 };
 
+struct AnimationByteRange {
+  std::size_t offset{};
+  std::size_t byte_size{};
+};
+
+struct OpaqueAnimationSection {
+  std::uint32_t preceding_tag{};
+  AnimationByteRange payload;
+  std::vector<AnimationByteRange> components;
+};
+
 class AnimationImage final {
 public:
   [[nodiscard]] static AnimationImage parse(std::span<const std::byte> bytes);
@@ -43,11 +54,16 @@ public:
   descriptors() const noexcept {
     return descriptors_;
   }
+  [[nodiscard]] std::span<const OpaqueAnimationSection>
+  sections() const noexcept {
+    return sections_;
+  }
 
 private:
   AnimationImageHeader header_{};
   std::vector<AnimationReferenceTable> reference_tables_;
   std::vector<AnimationDescriptor> descriptors_;
+  std::vector<OpaqueAnimationSection> sections_;
 };
 
 } // namespace off::data

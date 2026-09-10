@@ -223,7 +223,8 @@ void validate_scene_render_asset(const SceneRenderAsset &asset) {
        asset.animation->header().format_value != 10U ||
        asset.animation->reference_tables().size() !=
            asset.animation->header().reference_table_count ||
-       asset.animation->descriptors().empty())) {
+       asset.animation->descriptors().empty() ||
+       asset.animation->sections().size() != 8U)) {
     throw std::invalid_argument("scene render animation metadata is invalid");
   }
   if (asset.resolutions.size() > maximum_scene_instances ||

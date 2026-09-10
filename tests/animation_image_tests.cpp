@@ -2,6 +2,7 @@
 #include "off/data/zip_archive.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -55,6 +56,15 @@ std::vector<std::byte> fixture() {
   set_u32(bytes, 84, 1U);
   set_u32(bytes, 88, 6U);
   set_u32(bytes, 96, 7U);
+  constexpr std::array<std::uint32_t, 7> following_tags{8U,  6U, 11U, 13U,
+                                                        15U, 4U, 5U};
+  std::size_t section_cursor = 100U;
+  for (const auto tag : following_tags) {
+    set_u32(bytes, section_cursor, 8U);
+    set_u32(bytes, section_cursor + 4U, tag);
+    section_cursor += 8U;
+  }
+  set_u32(bytes, section_cursor, 80U);
   return bytes;
 }
 
@@ -88,6 +98,11 @@ int main(int argc, char **argv) {
             image.descriptors()[1].tag == 1U &&
             image.descriptors()[2].tag == 7U,
         "decode the animation descriptor block");
+  check(image.sections().size() == 8U &&
+            image.sections().front().preceding_tag == 7U &&
+            image.sections().back().preceding_tag == 5U &&
+            image.sections().back().payload.byte_size == 72U,
+        "retain all eight tagged opaque animation sections");
   check_rejected([](auto &value) { set_u32(value, 0, 0); },
                  "reject wrong animation signature");
   check_rejected([](auto &value) { set_u32(value, 4, 60U); },
@@ -118,6 +133,10 @@ int main(int argc, char **argv) {
                  "reject an early animation descriptor terminator");
   check_rejected([](auto &value) { set_u32(value, 96, 5U); },
                  "reject a missing animation descriptor terminator");
+  check_rejected([](auto &value) { set_u32(value, 112, 9U); },
+                 "reject an invalid animation opaque section tag");
+  check_rejected([](auto &value) { set_u32(value, 156, 76U); },
+                 "reject trailing bytes after animation opaque sections");
   auto truncated = fixture();
   truncated.resize(19U);
   try {
@@ -129,6 +148,8 @@ int main(int argc, char **argv) {
     std::size_t parsed_files = 0;
     std::size_t parsed_tables = 0;
     std::size_t parsed_descriptors = 0;
+    std::size_t parsed_sections = 0;
+    std::size_t parsed_components = 0;
     for (const auto &item :
          std::filesystem::recursive_directory_iterator(argv[1])) {
       if (!item.is_regular_file())
@@ -153,15 +174,20 @@ int main(int argc, char **argv) {
         ++parsed_files;
         parsed_tables += parsed.reference_tables().size();
         parsed_descriptors += parsed.descriptors().size();
+        parsed_sections += parsed.sections().size();
+        for (const auto &section : parsed.sections())
+          parsed_components += section.components.size();
       }
     }
     check(parsed_files == 42U && parsed_tables == 112U &&
-              parsed_descriptors == 457U,
+              parsed_descriptors == 457U && parsed_sections == 336U &&
+              parsed_components == 546U,
           "parse the complete supported animation corpus");
     if (failures == 0)
       std::cout << "Validated " << parsed_files << " ANM files, "
                 << parsed_tables << " reference tables, and "
-                << parsed_descriptors << " descriptors\n";
+                << parsed_descriptors << " descriptors across "
+                << parsed_sections << " opaque sections\n";
   }
   return failures == 0 ? 0 : 1;
 }

@@ -3,6 +3,7 @@
 #include "off/data/byte_reader.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
@@ -20,6 +21,8 @@ constexpr std::size_t maximum_animation_size = 16U * 1024U * 1024U;
 constexpr std::uint32_t maximum_table_entries = 65'536U;
 constexpr std::uint32_t minimum_descriptor_count = 3U;
 constexpr std::uint32_t maximum_descriptor_count = 24U;
+constexpr std::array<std::uint32_t, 8> opaque_section_tags{7U,  8U,  6U, 11U,
+                                                           13U, 15U, 4U, 5U};
 
 } // namespace
 
@@ -125,6 +128,82 @@ AnimationImage AnimationImage::parse(std::span<const std::byte> bytes) {
                                    .opaque_word_1 = reader.u32(offset + 4U),
                                    .tag = tag});
   }
+  cursor += descriptor_length;
+  result.sections_.reserve(opaque_section_tags.size());
+  for (std::size_t section_index = 0;
+       section_index < opaque_section_tags.size(); ++section_index) {
+    if (cursor < 4U || cursor > bytes.size() || 4U > bytes.size() - cursor)
+      throw std::runtime_error("animation opaque section is truncated");
+    const auto raw_length = reader.u32(cursor);
+    const auto flags = raw_length & 0xc0000000U;
+    const auto length = static_cast<std::size_t>(raw_length & 0x3fffffffU);
+    const auto expected_flags =
+        result.header_.reference_table_count == 1U ? 0U : 0x40000000U;
+    if (reader.u32(cursor - 4U) != opaque_section_tags[section_index] ||
+        length < 8U || length - 4U > bytes.size() - cursor ||
+        (section_index >= 3U && flags != 0U) ||
+        (section_index < 3U && flags != expected_flags))
+      throw std::runtime_error("animation opaque section envelope is invalid");
+    const auto payload_end = cursor + length - 4U;
+    OpaqueAnimationSection section{.preceding_tag = reader.u32(cursor - 4U),
+                                   .payload = {},
+                                   .components = {}};
+    if (flags == 0U) {
+      section.payload = {.offset = cursor + 4U, .byte_size = length - 8U};
+      section.components.push_back(section.payload);
+    } else {
+      const auto minimum_component_header =
+          16U +
+          static_cast<std::size_t>(result.header_.reference_table_count) * 4U;
+      if (length < minimum_component_header)
+        throw std::runtime_error(
+            "animation section component header is truncated");
+      const auto component_count = reader.u32(cursor + 8U);
+      if (component_count != result.header_.reference_table_count)
+        throw std::runtime_error(
+            "animation section component count is invalid");
+      const auto payload_offset =
+          static_cast<std::size_t>(reader.u32(cursor + 4U));
+      const auto expected_payload_offset =
+          16U + static_cast<std::size_t>(component_count) * 4U;
+      if (payload_offset != expected_payload_offset || payload_offset > length)
+        throw std::runtime_error(
+            "animation section component header is invalid");
+      const auto payload_start = cursor + payload_offset - 4U;
+      section.payload = {.offset = payload_start,
+                         .byte_size = payload_end - payload_start};
+      auto component_start = payload_start;
+      std::size_t component_bytes = 0U;
+      for (std::uint32_t index = 0; index < component_count; ++index) {
+        const auto byte_size =
+            static_cast<std::size_t>(reader.u32(cursor + 12U + index * 4U));
+        if (byte_size > payload_end - component_start)
+          throw std::runtime_error("animation section component is truncated");
+        section.components.push_back(
+            {.offset = component_start, .byte_size = byte_size});
+        component_start += byte_size;
+        component_bytes += byte_size;
+      }
+      const auto aligned_component_bytes =
+          (component_bytes + 3U) & ~std::size_t{3U};
+      if ((section_index < 2U &&
+           component_bytes != section.payload.byte_size) ||
+          (section_index == 2U &&
+           aligned_component_bytes != section.payload.byte_size))
+        throw std::runtime_error(
+            "animation section component sizes are invalid");
+      if (section_index == 2U &&
+          !std::ranges::all_of(
+              bytes.subspan(component_start, payload_end - component_start),
+              [](std::byte value) { return value == std::byte{0}; }))
+        throw std::runtime_error("animation section padding is invalid");
+    }
+    result.sections_.push_back(std::move(section));
+    cursor += length;
+  }
+  if (cursor != bytes.size() + 4U)
+    throw std::runtime_error(
+        "animation opaque sections do not consume the file");
   return result;
 }
 
