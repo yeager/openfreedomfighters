@@ -40,6 +40,10 @@ counts; it never prints source names, offsets, references, handles, types, or
 payloads. `recognized-not-admitted` means a family is identified by a narrow
 reader route but has not contributed a lifecycle reader admission; it is not a
 claim that every instance of that family is implemented.
+For still-unclassified work it additionally records attachment presence and the
+validated terminal-versus-attachment-delimiter shape, retaining an explicit
+unknown bucket for formats outside that narrow classifier. These are aggregate
+investigation counts, not a claim that a deferred attachment reader exists.
 MatPosAnim is explicitly outside the current deferred-reader admission path:
 all 227 associated deferred records terminate before attachment dispatch. Its
 owner-local `KEYS` preparation and its separate persistence/restore object

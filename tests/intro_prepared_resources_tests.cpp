@@ -1091,6 +1091,13 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                   coverage.total_applied==host.preflight_global_lifecycle().covered_readers &&
                   !coverage.entries.empty(),
               "reader coverage inventory aggregates only reviewed applied boundaries");
+        check(coverage.unclassified_with_attachments==
+                  coverage.unclassified_terminal_before_attachment+
+                      coverage.unclassified_attachment_before_terminal+
+                      coverage.unclassified_unknown_dispatch_shape &&
+                  coverage.unclassified_without_attachments+
+                      coverage.unclassified_with_attachments<=coverage.total_discovered,
+              "unclassified reader coverage keeps attachment dispatch observations aggregate and bounded");
         const auto& window=host.window_for_owner(host.source_handle(host.resources().window_index()));
         const auto& camera=host.camera_for_owner(host.source_handle(host.resources().camera_index()));
         const auto window_reference_resource=[&host](std::uint32_t reference)

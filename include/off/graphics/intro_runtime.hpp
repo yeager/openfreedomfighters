@@ -329,6 +329,11 @@ struct IntroDeferredReaderCoverageEntry {
 struct IntroDeferredReaderCoverageInventory {
   IntroReaderBracketStage stage{IntroReaderBracketStage::not_started};
   std::size_t total_discovered{}, total_supported{}, total_applied{};
+  // Aggregate only unclassified queued work. These shape counters are an
+  // investigation aid, not reader admission or attachment execution evidence.
+  std::size_t unclassified_without_attachments{}, unclassified_with_attachments{};
+  std::size_t unclassified_terminal_before_attachment{},
+      unclassified_attachment_before_terminal{}, unclassified_unknown_dispatch_shape{};
   std::vector<IntroDeferredReaderCoverageEntry> entries;
 };
 // Immutable source-format observation only. These counters neither admit a

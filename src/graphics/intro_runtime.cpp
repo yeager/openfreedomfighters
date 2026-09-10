@@ -1917,6 +1917,23 @@ IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() c
         family==IntroDeferredReaderFamily::unclassified ?
           IntroDeferredReaderImplementationState::unimplemented :
           IntroDeferredReaderImplementationState::implemented_not_applied;
+    if(family==IntroDeferredReaderFamily::unclassified) {
+      const auto& source=directory[work.source_directory_index];
+      if(source.attachments.empty()) ++result.unclassified_without_attachments;
+      else {
+        ++result.unclassified_with_attachments;
+        try {
+          const auto block=resources_.sources().deferred_source_block(work.source_directory_index);
+          const auto observation=data::DeferredAttachmentDispatchClassifier::observe(
+              block.subspan(sizeof(std::uint32_t)));
+          if(observation.shape==data::DeferredAttachmentDispatchShape::terminal_before_first_attachment_delimiter)
+            ++result.unclassified_terminal_before_attachment;
+          else ++result.unclassified_attachment_before_terminal;
+        } catch(const std::exception&) {
+          ++result.unclassified_unknown_dispatch_shape;
+        }
+      }
+    }
     ++result.total_discovered;
     if(family!=IntroDeferredReaderFamily::unclassified) ++result.total_supported;
     if(applied) ++result.total_applied;
