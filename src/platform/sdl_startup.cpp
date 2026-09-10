@@ -62,6 +62,10 @@ std::filesystem::path application_deep_audit_cache_root() noexcept {
 #if defined(_WIN32)
   if (const auto* local_app_data=std::getenv("LOCALAPPDATA"); local_app_data && *local_app_data)
     return std::filesystem::path{local_app_data} / "OpenFreedomFighters" / "deep-audit";
+#elif defined(__APPLE__)
+  if (const auto* home=std::getenv("HOME"); home && *home)
+    return std::filesystem::path{home} / "Library" / "Caches" /
+           "OpenFreedomFighters" / "deep-audit";
 #else
   if (const auto* xdg_cache=std::getenv("XDG_CACHE_HOME"); xdg_cache && *xdg_cache)
     return std::filesystem::path{xdg_cache} / "openfreedomfighters" / "deep-audit";
