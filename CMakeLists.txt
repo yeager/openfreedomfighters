@@ -176,7 +176,10 @@ else()
     target_compile_options(off_core PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
 endif()
 
-add_library(off_sdl_audio_output STATIC src/platform/sdl_audio_output.cpp src/platform/sdl_intro_audio.cpp)
+add_library(off_sdl_audio_output STATIC
+  src/platform/sdl_audio_output.cpp
+  src/platform/sdl_intro_audio.cpp
+  src/platform/sdl_soundtrack_audio.cpp)
 target_link_libraries(off_sdl_audio_output PUBLIC off_core ${OFF_SDL3_TARGET})
 if(MSVC)
     target_compile_options(off_sdl_audio_output PRIVATE /W4 /permissive-)
