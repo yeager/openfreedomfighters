@@ -179,6 +179,10 @@ F10 toggles settings. Close the window to exit. For development:
 - `--diagnostic-scene relative/archive.ZIP` inspects one owned scene archive
   below `Scenes/` through the source-only diagnostic renderer. It is not
   gameplay, original camera behavior, or a faithful level renderer.
+- `--diagnostic-startup-graphics` draws the retained startup archive's six
+  decoded images and 77 source-backed quads through the same source-only GPU
+  diagnostic path. Its fit projection is a comparison aid, not recovered menu
+  camera, material, or layout behavior.
 - `--probe-startup-boot` runs an opt-in, no-window structural diagnostic for
   the checked `FF-StartUp` BootMenu source. It prints only call order and GMS
   directory ordinals plus a content-free hierarchy fingerprint; it creates no

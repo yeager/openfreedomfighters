@@ -9,6 +9,7 @@
 #include "off/graphics/scene_gpu_plan.hpp"
 #include "off/graphics/scene_render.hpp"
 #include "off/graphics/startup_graphics_asset.hpp"
+#include "off/graphics/startup_graphics_diagnostic_plan.hpp"
 #include "off/graphics/startup_graphics_expanded_plan.hpp"
 #include "off/mode.hpp"
 #include "off/platform/sdl_gpu_runtime.hpp"
@@ -39,7 +40,7 @@ void usage(std::ostream &output) {
   output << "Usage: openfreedomfighters [--data PATH] [--mode original|modern] "
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] "
-            "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] "
+            "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] "
             "[--probe-startup-boot] [--probe-first-cut-cold]\n";
 }
 
@@ -308,6 +309,7 @@ int main(int argc, char **argv) {
   std::size_t frame_limit = 0;
   bool show_graphics_menu = false;
   bool diagnostic_scene = false;
+  bool diagnostic_startup_graphics = false;
   bool probe_startup_boot = false;
   bool probe_first_cut_cold = false;
   bool mode_specified = false;
@@ -343,6 +345,8 @@ int main(int argc, char **argv) {
       diagnostic_scene = true;
       if (index + 1 < argc && std::string_view{argv[index + 1]}.front() != '-')
         diagnostic_scene_archive = argv[++index];
+    } else if (argument == "--diagnostic-startup-graphics") {
+      diagnostic_startup_graphics = true;
     } else if (argument == "--probe-startup-boot") {
       probe_startup_boot = true;
     } else if (argument == "--probe-first-cut-cold") {
@@ -374,6 +378,10 @@ int main(int argc, char **argv) {
         << "A legally purchased Freedom Fighters installation is required; "
            "pass --data PATH or set OPENFREEDOMFIGHTERS_DATA.\n";
     usage(std::cerr);
+    return 2;
+  }
+  if (diagnostic_scene && diagnostic_startup_graphics) {
+    std::cerr << "Select only one diagnostic renderer.\n";
     return 2;
   }
   if (!screenshot_path.empty() && screenshot_path.extension() != ".bmp") {
@@ -519,7 +527,7 @@ int main(int argc, char **argv) {
             scene_summary.emplace(
                 off::graphics::summarize_scene_render_resolutions(asset));
             scene.emplace(off::graphics::prepare_scene_gpu_plan(asset));
-          } else {
+          } else if (!diagnostic_startup_graphics) {
             // Supported normal (non-restore) cold-load boundary, before
             // resources. Native monotonic samples are an explicit CRT
             // portability policy.
@@ -583,6 +591,9 @@ int main(int argc, char **argv) {
           startup_graphics_cpu_plan.emplace(
               off::graphics::expand_startup_graphics_plan_with_composed_transforms(
                   *startup_graphics, 0x01U));
+          if (diagnostic_startup_graphics)
+            scene.emplace(off::graphics::make_startup_graphics_diagnostic_plan(
+                *startup_graphics, *startup_graphics_cpu_plan));
           ui_fonts = off::ui::load_retail_ui_fonts(data_path / "Scenes" /
                                                    "FF-StartUp.ZIP");
         },
@@ -639,13 +650,16 @@ int main(int argc, char **argv) {
                    "indirect source resolution is pending.\n";
     }
   }
-  if (!diagnostic_scene)
+  if (!diagnostic_scene && !diagnostic_startup_graphics)
     std::cout << "Authored startup resources loaded; world rendering pending. "
                  "This is not gameplay or a faithful rendered startup menu.\n";
   if (startup_graphics_cpu_plan)
     std::cout << "Startup menu CPU plan: "
               << startup_graphics_cpu_plan->submissions().size()
               << " source-backed picture submissions; GPU submission pending.\n";
+  if (diagnostic_startup_graphics)
+    std::cout << "Startup graphics diagnostic: source images and source quad "
+                 "geometry, generic fit projection; not a faithful menu.\n";
   if (intro)
     std::cout << "Source-backed intro runtime retained: "
               << intro->pictures().size() << " picture definitions, "
@@ -694,7 +708,7 @@ int main(int argc, char **argv) {
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       startup_window, mode, scene ? &*scene : nullptr, *startup_graphics,
       ui_fonts, ui_textures, intro, frame_limit, show_graphics_menu,
-      screenshot_path, locale);
+      screenshot_path, locale, diagnostic_startup_graphics);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';
     return 4;

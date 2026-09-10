@@ -1106,7 +1106,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     graphics::IntroRuntime *intro,
                     std::size_t frame_limit, bool show_graphics_menu,
                     const std::filesystem::path &screenshot_path,
-                    std::string_view explicit_locale) {
+                    std::string_view explicit_locale,
+                    bool startup_graphics_scene_diagnostic) {
   if (ui_fonts.fonts.empty())
     return failure("retail UI font set is empty");
   if ((scene != nullptr) == (intro != nullptr))
@@ -1252,7 +1253,9 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                : " (authored startup resources loaded; world rendering "
                  "pending; ") +
           std::to_string(gpu_startup.images.size()) +
-          " startup graphics images uploaded, not rendered; " +
+          (startup_graphics_scene_diagnostic
+               ? " startup graphics images represented by the diagnostic scene; "
+               : " startup graphics images uploaded, not rendered; ") +
           std::to_string(ui_fonts.fonts.size()) + " retail UI fonts loaded)"};
   constexpr std::array<float, 32> matrices{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
                                            0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1,

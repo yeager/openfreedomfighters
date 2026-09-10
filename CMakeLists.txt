@@ -116,6 +116,7 @@ add_library(off_core
     src/graphics/intro_controller_initialization.cpp
     src/graphics/startup_graphics_prepared_plan.cpp
     src/graphics/startup_graphics_expanded_plan.cpp
+    src/graphics/startup_graphics_diagnostic_plan.cpp
     src/graphics/startup_graphics_transform_chain.cpp
     src/graphics/picture_transform.cpp
     src/graphics/picture_submission_cache.cpp

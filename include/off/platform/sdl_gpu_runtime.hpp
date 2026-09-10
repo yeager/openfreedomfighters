@@ -36,6 +36,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     std::size_t frame_limit = 0,
                     bool show_graphics_menu = false,
                     const std::filesystem::path &screenshot_path = {},
-                    std::string_view explicit_locale = {});
+                    std::string_view explicit_locale = {},
+                    bool startup_graphics_scene_diagnostic = false);
 
 } // namespace off::platform
