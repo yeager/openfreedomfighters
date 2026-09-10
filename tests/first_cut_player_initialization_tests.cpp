@@ -1,0 +1,61 @@
+#include "off/cutscene/first_cut_player_initialization.hpp"
+
+#include <cstdlib>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+namespace {
+void check(bool value, const char *message) { if (!value) { std::cerr << "FAIL: " << message << '\n'; std::exit(1); } }
+template <class Function> void rejects(Function function, const char *message) {
+  try { function(); } catch (const std::runtime_error &) { return; }
+  check(false, message);
+}
+off::cutscene::FirstCutPlayerInitialization make_player() {
+  off::data::GmsIntroFirstCutSource list;
+  for (std::size_t index = 0; index < list.commands.size(); ++index)
+    list.commands[index].timeline_position = static_cast<std::uint32_t>(5U - index);
+  list.final_value = 1.0F;
+  off::data::GmsIntroCutSequenceSource sequence; sequence.values = {0.0F, 175.0F};
+  return off::cutscene::FirstCutPlayerInitialization({42U, {10U, 11U, 12U, 13U, 14U}, list, sequence});
+}
+} // namespace
+
+int main() {
+  auto player = make_player();
+  std::vector<std::string> trace;
+  player.run_phase_one({
+      .invoke_command = [&](auto component, const auto&) { trace.push_back("one:" + std::to_string(component)); },
+      .read_retained_source = [&] { trace.push_back("read"); },
+      .register_list_events = [&] { trace.push_back("events"); },
+      .member_count = [&] { trace.push_back("count"); return 1U; },
+      .write_queue_property = [&](auto value) { check(value == 77U, "retain caller queue value"); trace.push_back("queue"); },
+      .setup_action_map = [&] { trace.push_back("map"); },
+      .queue_property_value = 77U});
+  check(player.phase_one_complete() && !player.source_read_marker() && player.events_registered() &&
+            player.started() == std::vector<bool>{false} && player.completed() == std::vector<bool>{false} &&
+            trace == std::vector<std::string>{"one:14", "one:13", "one:12", "one:11", "one:10", "read", "events", "count", "queue", "map"},
+        "phase one visits commands in reverse then initializes the cold list state");
+  player.run_phase_two({
+      .invoke_command = [&](auto component, const auto&) { trace.push_back("two:" + std::to_string(component)); },
+      .read_scene_reference = [&](std::string_view key) -> std::optional<std::uint64_t> { trace.push_back(std::string(key)); return key == "rActiveCameraList" ? std::optional<std::uint64_t>{88U} : std::optional<std::uint64_t>{99U}; },
+      .resolve_member = [&](std::size_t index) -> std::optional<std::uint64_t> { check(index == 0U, "resolve sole member"); trace.push_back("member"); return 55U; },
+      .request_member_info = [&](std::uint64_t member) -> std::optional<off::cutscene::FirstCutMemberInfo> { check(member == 55U, "direct info target"); trace.push_back("info"); return {{175.0F}}; },
+      .member_name = [](std::uint64_t) { return std::string_view{"Cut01"}; },
+      .resolve_scene_object = [&](std::uint64_t value) -> std::optional<std::uint64_t> { check(value == 99U, "resolve cut object source"); trace.push_back("object"); return 100U; }});
+  check(player.phase_two_complete() && player.derived_end() == 175.0F && player.active_camera_list() == 88U &&
+            player.cut_sequence_object() == 100U &&
+            trace == std::vector<std::string>{"one:14", "one:13", "one:12", "one:11", "one:10", "read", "events", "count", "queue", "map", "two:14", "two:13", "two:12", "two:11", "two:10", "rActiveCameraList", "member", "info", "rCutSequenceObject", "object"},
+        "phase two retains properties and direct member information without playback or command insertion");
+  auto failing = make_player();
+  rejects([&] { failing.run_phase_one({
+      .invoke_command = [](auto, const auto&) { throw std::runtime_error("injected"); },
+      .read_retained_source = [] {}, .register_list_events = [] {}, .member_count = [] { return 1U; },
+      .write_queue_property = [](auto) {}}); }, "reject a failed phase-one callback");
+  rejects([&] { failing.run_phase_one({
+      .invoke_command = [](auto, const auto&) {}, .read_retained_source = [] {},
+      .register_list_events = [] {}, .member_count = [] { return 1U; }, .write_queue_property = [](auto) {}}); },
+      "failed initialization does not permit a retry");
+  std::cout << "first-cut player initialization tests passed\n";
+}

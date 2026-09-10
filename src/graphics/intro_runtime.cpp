@@ -2952,6 +2952,26 @@ void IntroRuntime::prepare_supported_first_cut_player() {
   first_cut_player_prepared_state_=std::move(state);
 }
 
+cutscene::FirstCutPlayerInitialization IntroRuntime::first_cut_player_initialization() const {
+  if (!first_cut_player_prepared_state_ || !first_cut_sequence_reader_state_ ||
+      !first_cut_list_reader_state_)
+    throw std::runtime_error("First-cut player initialization requires prepared reader state");
+  const auto& player = *first_cut_player_prepared_state_;
+  const auto& list = *first_cut_list_reader_state_;
+  const auto& sequence = *first_cut_sequence_reader_state_;
+  if (player.list_component_index != list.component_indices[0] ||
+      player.sequence_component_index != sequence.component_index ||
+      player.list_resource != list.resource || player.sequence_resource != sequence.resource)
+    throw std::runtime_error("First-cut player prepared state no longer matches its readers");
+  return cutscene::FirstCutPlayerInitialization({
+      .list_component = player.list_component_index,
+      .command_components = {list.component_indices[1], list.component_indices[2],
+                             list.component_indices[3], list.component_indices[4],
+                             list.component_indices[5]},
+      .list = list.authored,
+      .sequence = sequence.authored});
+}
+
 void IntroRuntime::apply_supported_external_cut_commands_deferred_reader(
     const IntroDeferredReaderWork& work) {
   constexpr std::array<std::string_view,2> factories{

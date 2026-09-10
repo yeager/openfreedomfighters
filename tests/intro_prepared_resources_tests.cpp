@@ -1129,6 +1129,20 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               player->raw_enabled_option==sequence_reader->authored.authored_option &&
               !player->started[0] && !player->completed[0],
               "first-cut player preparation materializes checked reader state with a cold member and no playback");
+        auto initialization=host.first_cut_player_initialization();
+        check(!initialization.phase_one_complete() && !initialization.phase_two_complete(),
+              "first-cut lifecycle boundary is built from live reader state but remains cold");
+        initialization.run_phase_one({
+            .invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},
+            .register_list_events=[] {}, .member_count=[] {return std::size_t{1};},
+            .write_queue_property=[](auto) {}});
+        initialization.run_phase_two({
+            .invoke_command=[](auto,const auto&) {},
+            .read_scene_reference=[](std::string_view) -> std::optional<std::uint64_t> {return std::nullopt;},
+            .resolve_member=[](std::size_t) -> std::optional<std::uint64_t> {return std::nullopt;},
+            .request_member_info=[](std::uint64_t) -> std::optional<off::cutscene::FirstCutMemberInfo> {return std::nullopt;},
+            .member_name=[](std::uint64_t) {return std::string_view{};},
+            .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> {return std::nullopt;}});
         rejects([&]{host.prepare_supported_first_cut_player();});
         if(!host.resources().sounds().empty()) {
           const auto& authored_sound=host.resources().sounds().front();

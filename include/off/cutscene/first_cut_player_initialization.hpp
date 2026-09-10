@@ -1,0 +1,71 @@
+#pragma once
+
+#include "off/data/gms_image.hpp"
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <optional>
+#include <string_view>
+#include <vector>
+
+namespace off::cutscene {
+
+struct FirstCutPlayerDescriptor {
+  std::size_t list_component{};
+  std::array<std::size_t, 5> command_components{};
+  data::GmsIntroFirstCutSource list;
+  data::GmsIntroCutSequenceSource sequence;
+};
+
+struct FirstCutPlayerPhaseOneServices {
+  std::function<void(std::size_t, const data::GmsIntroCutCommandSource&)> invoke_command;
+  std::function<void()> read_retained_source;
+  std::function<void()> register_list_events;
+  std::function<std::size_t()> member_count;
+  std::function<void(std::uint64_t)> write_queue_property;
+  std::function<void()> setup_action_map;
+  std::uint64_t queue_property_value{};
+};
+
+struct FirstCutMemberInfo { float end{}; };
+struct FirstCutPlayerPhaseTwoServices {
+  std::function<void(std::size_t, const data::GmsIntroCutCommandSource&)> invoke_command;
+  std::function<std::optional<std::uint64_t>(std::string_view)> read_scene_reference;
+  std::function<std::optional<std::uint64_t>(std::size_t)> resolve_member;
+  std::function<std::optional<FirstCutMemberInfo>(std::uint64_t)> request_member_info;
+  std::function<std::string_view(std::uint64_t)> member_name;
+  std::function<std::optional<std::uint64_t>(std::uint64_t)> resolve_scene_object;
+};
+
+// One reviewed first-cut list initialization. It retains data and executes
+// only explicit lifecycle callbacks; it never samples clocks or starts a cut.
+class FirstCutPlayerInitialization final {
+public:
+  explicit FirstCutPlayerInitialization(FirstCutPlayerDescriptor descriptor);
+  void run_phase_one(const FirstCutPlayerPhaseOneServices& services);
+  void run_phase_two(const FirstCutPlayerPhaseTwoServices& services);
+
+  [[nodiscard]] bool phase_one_complete() const noexcept { return phase_one_complete_; }
+  [[nodiscard]] bool phase_two_complete() const noexcept { return phase_two_complete_; }
+  [[nodiscard]] bool source_read_marker() const noexcept { return source_read_marker_; }
+  [[nodiscard]] bool events_registered() const noexcept { return events_registered_; }
+  [[nodiscard]] const std::vector<bool>& started() const noexcept { return started_; }
+  [[nodiscard]] const std::vector<bool>& completed() const noexcept { return completed_; }
+  [[nodiscard]] float derived_end() const noexcept { return derived_end_; }
+  [[nodiscard]] std::optional<std::uint64_t> active_camera_list() const noexcept { return active_camera_list_; }
+  [[nodiscard]] std::optional<std::uint64_t> cut_sequence_object() const noexcept { return cut_sequence_object_; }
+
+private:
+  data::GmsIntroFirstCutSource list_;
+  data::GmsIntroCutSequenceSource sequence_;
+  std::size_t list_component_{};
+  std::array<std::size_t, 5> command_components_{};
+  std::vector<bool> started_, completed_;
+  float derived_end_{};
+  std::optional<std::uint64_t> active_camera_list_, cut_sequence_object_;
+  bool source_read_marker_{true}, events_registered_{}, phase_one_complete_{}, phase_two_complete_{}, running_{}, failed_{};
+};
+
+} // namespace off::cutscene

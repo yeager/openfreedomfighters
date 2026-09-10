@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/graphics/fresh_intro_camera.hpp"
+#include "off/cutscene/first_cut_player_initialization.hpp"
 #include "off/graphics/intro_prepared_resources.hpp"
 #include "off/data/keys_backing_evaluator.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
@@ -836,6 +837,9 @@ public:
   [[nodiscard]] const IntroFirstCutPlayerPreparedState* first_cut_player_prepared_state() const noexcept {
     return first_cut_player_prepared_state_?&*first_cut_player_prepared_state_:nullptr;
   }
+  // Projects the two source-validated first-cut reader states into the
+  // dedicated lifecycle boundary. It does not run either phase.
+  [[nodiscard]] cutscene::FirstCutPlayerInitialization first_cut_player_initialization() const;
   void apply_supported_external_cut_commands_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroExternalCutCommandsReaderState* external_cut_commands_reader_state() const noexcept {return external_cut_commands_reader_state_?&*external_cut_commands_reader_state_:nullptr;}
   void apply_supported_first_cut_fade_picture_deferred_reader(const IntroDeferredReaderWork& work);
