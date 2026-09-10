@@ -272,6 +272,7 @@ int main(int argc, char **argv) {
   std::optional<off::graphics::SceneRenderAsset> startup_ui_scene_resources;
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
   std::unique_ptr<off::graphics::NormalIntroSceneSession> intro_session;
+  std::optional<off::cutscene::FirstCutPlayerSession> first_cut_session;
   off::graphics::IntroRuntime *intro{};
   std::optional<off::graphics::IntroPreviewSnapshot>
       intro_legal_picture_preflight;
@@ -338,6 +339,8 @@ int main(int argc, char **argv) {
             intro_session = off::graphics::make_normal_intro_scene_session(
                 std::move(intro_runtime));
             intro_session->complete_postconstruction_reader_bracket(0U);
+            intro->prepare_supported_first_cut_player();
+            first_cut_session.emplace(intro->first_cut_player_session());
             const auto legal_source =
                 intro->resources()
                     .sources()
@@ -422,6 +425,9 @@ int main(int argc, char **argv) {
               << " draw groups, "
               << intro_legal_picture_preflight->images.size()
               << " referenced images; not admitted for display.\n";
+  if (first_cut_session)
+    std::cout << "Source-backed first-cut session retained: cold command "
+                 "admission and no playback.\n";
   if (intro)
     std::cout
         << "Retained component catalog: " << intro->components().size()
