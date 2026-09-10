@@ -2966,8 +2966,9 @@ void IntroRuntime::apply_supported_first_cut_component_reader(
     const IntroDeferredReaderWork& work) {
   const auto source_index=resources_.first_cut_index();
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !work.processed ||
-      work.source_directory_index!=source_index || !first_cut_list_reader_state_)
-    throw std::runtime_error("First-cut component reader requires its completed owner reader");
+      work.source_directory_index!=source_index || !first_cut_list_reader_state_ ||
+      first_cut_component_reader_state_)
+    throw std::runtime_error("First-cut component reader requires its completed unique owner reader");
   if(std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate) {
        return std::addressof(candidate)==std::addressof(work);
      })==deferred_reader_work_.end())
@@ -2993,6 +2994,9 @@ void IntroRuntime::apply_supported_first_cut_component_reader(
         record.event_argument!=command.event_argument || record.target_name!=command.target_name)
       throw std::runtime_error("First-cut component reader command payload disagrees with prepared source");
   }
+  first_cut_component_reader_state_={.owner=first_cut_list_reader_state_->owner,
+      .resource=work.resource,.component_indices=first_cut_list_reader_state_->component_indices,
+      .payloads=parsed};
 }
 
 void IntroRuntime::apply_supported_first_cut_camera_deferred_reader(
@@ -3028,9 +3032,21 @@ void IntroRuntime::prepare_supported_first_cut_player() {
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
       !first_cut_sequence_reader_state_ || !first_cut_list_reader_state_ ||
       first_cut_player_prepared_state_)
-    throw std::runtime_error("First-cut player requires both unconsumed reader states");
+    throw std::runtime_error("First-cut player requires all unconsumed reader states");
   const auto& sequence=*first_cut_sequence_reader_state_;
   const auto& list=*first_cut_list_reader_state_;
+  const bool reviewed_component_form=resources_.sources().deferred_source_block(
+      resources_.first_cut_index()).size()==171U;
+  if(reviewed_component_form && !first_cut_component_reader_state_)
+    throw std::runtime_error("First-cut player requires its reviewed component reader state");
+  if(first_cut_component_reader_state_ &&
+      (first_cut_component_reader_state_->owner!=list.owner ||
+       first_cut_component_reader_state_->resource!=list.resource ||
+       first_cut_component_reader_state_->component_indices!=list.component_indices ||
+       first_cut_component_reader_state_->payloads.list.controls!=list.authored.settings_words ||
+       std::bit_cast<std::uint32_t>(first_cut_component_reader_state_->payloads.list.final_value)!=
+           std::bit_cast<std::uint32_t>(list.authored.final_value)))
+    throw std::runtime_error("First-cut player component reader state does not match its owner reader");
   if(list.sequence_resource!=sequence.resource ||
       list.component_indices[0]>=components_.size() ||
       sequence.component_index>=components_.size())

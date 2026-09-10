@@ -401,6 +401,15 @@ struct IntroFirstCutListReaderState {
   IntroRuntimeResourceHandle sequence_resource;
   std::array<IntroRuntimeResourceHandle,5> command_target_resources;
 };
+// Immutable component-reader evidence for the reviewed first-cut owner form.
+// It preserves bounded payload values and component ownership without granting
+// lifecycle/component admission or creating a player.
+struct IntroFirstCutComponentReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::array<std::size_t,6> component_indices{};
+  data::FirstCutComponentPayloadSession payloads;
+};
 // A checked raw camera-owner boundary.  It retains the parser-validated source
 // only; conversion, renderer registration, selection and frame admission stay
 // outside the reader bracket.
@@ -856,6 +865,7 @@ public:
   void apply_supported_first_cut_camera_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroFirstCutSequenceReaderState* first_cut_sequence_reader_state() const noexcept {return first_cut_sequence_reader_state_?&*first_cut_sequence_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutListReaderState* first_cut_list_reader_state() const noexcept {return first_cut_list_reader_state_?&*first_cut_list_reader_state_:nullptr;}
+  [[nodiscard]] const IntroFirstCutComponentReaderState* first_cut_component_reader_state() const noexcept {return first_cut_component_reader_state_?&*first_cut_component_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutCameraReaderState* first_cut_camera_reader_state() const noexcept {return first_cut_camera_reader_state_?&*first_cut_camera_reader_state_:nullptr;}
   // Atomically materialize the source-backed first-cut player state after both
   // reviewed readers. Playback services remain intentionally absent.
@@ -989,6 +999,7 @@ private:
   std::optional<IntroMovieControllerComponentReaderState> movie_controller_component_reader_state_;
   std::optional<IntroFirstCutSequenceReaderState> first_cut_sequence_reader_state_;
   std::optional<IntroFirstCutListReaderState> first_cut_list_reader_state_;
+  std::optional<IntroFirstCutComponentReaderState> first_cut_component_reader_state_;
   std::optional<IntroFirstCutCameraReaderState> first_cut_camera_reader_state_;
   std::optional<IntroFirstCutPlayerPreparedState> first_cut_player_prepared_state_;
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;

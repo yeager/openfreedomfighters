@@ -77,7 +77,7 @@ The first reader families are the direct first-cut dependencies:
 
 This ordering removes the earliest fail-closed admission gate. Reversing it to
 work on MovieControl phase two or event 16 first would not make normal startup
-valid: the current runtime has 420 queued readers but only ten source-backed
+valid: the current runtime has 420 queued readers but only eleven source-backed
 reader boundaries, so it has no complete owner/component population for the
 global passes.
 
@@ -106,15 +106,13 @@ Known source facts are deliberately narrow:
 
 The reviewed first-cut list owner-base envelope now proves one exact component
 suffix and extent. `FirstCutOwnerReader` accepts only its fixed complete owner
-block, validates the base envelope, and exposes the bounded six-component tail
-through a one-shot `DeferredReaderSession`. It is not connected to normal
-startup: its exact fixed source shape must first be represented by a runtime
-fixture without weakening the fixture's malformed-input variants. It does not
-dispatch the tail. Each component's payload grammar, reader mutation,
-registration point, and failure/cleanup behavior remains missing. Consequently
-the normal component-reader callback remains empty. It must not record
-component admission, schedule an event, activate a cut, construct a player,
-start audio, or submit a frame.
+block, validates the base envelope, and exposes the bounded six-component tail.
+For the reviewed 171-byte owner form, the ordinary component-reader boundary
+now parses the six payloads, retains their immutable component-owner state, and
+cross-checks them against the independent GMS reader. The first-cut player
+requires that state for the reviewed form. Other source forms remain outside
+that route. This read-only boundary does not record component admission,
+schedule an event, activate a cut, start audio, or submit a frame.
 
 `BoundedComponentBlockCursor` now also exposes each delimiter-free attachment
 payload, distinct from its compatibility `remaining()` view. The generic
@@ -123,8 +121,8 @@ attachments or the owner terminator. The first ordered payload has a reviewed,
 read-only parser for its fixed seven controls and one finite scalar. The five
 following command payloads have equivalent bounded parsers. A separate atomic
 read-only session validates the exact six-payload sequence and terminal, then
-retains only parsed values. It is cross-checked in the owned-data cold probe
-but is not dispatched by startup.
+retains only parsed values. It is dispatched by the normal bracket for the
+reviewed form and independently rechecked in the owned-data cold probe.
 
 The next static-analysis pass recovers the six component-reader contracts and
 their owner side effects. Its tests must

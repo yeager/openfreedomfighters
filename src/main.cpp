@@ -135,6 +135,12 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
   }
   if(!first_cut_work)
     throw std::runtime_error("first-cut cold probe found no deferred work");
+  const auto* list_reader=intro.first_cut_list_reader_state();
+  const auto* component_reader=intro.first_cut_component_reader_state();
+  if(!list_reader || !component_reader || component_reader->owner!=intro.source_handle(first_cut_source) ||
+      component_reader->resource!=first_cut_work->resource ||
+      component_reader->component_indices!=list_reader->component_indices)
+    throw std::runtime_error("first-cut cold probe found no matching component reader state");
   const auto& directory=intro.resources().sources().directory();
   const auto mapping=intro.directory_resource_mapping();
   if(first_cut_work->resource.value==0U || first_cut_work->source_offset==0U ||
