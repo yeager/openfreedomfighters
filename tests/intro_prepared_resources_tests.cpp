@@ -2,6 +2,7 @@
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_renderer_resource_envelope.hpp"
 #include "off/graphics/intro_runtime.hpp"
+#include "off/graphics/normal_intro_scene_session.hpp"
 #include "off/graphics/intro_accepted_picture_registry.hpp"
 #include "off/graphics/intro_first_cut_accepted_picture_registry.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
@@ -814,6 +815,28 @@ static OFF_NOINLINE void test_prepared_runtime_scopes() {
       rejects([&]{(void)off::graphics::build_intro_preview(host,999,{1280,720});});
       rejects([&]{(void)off::graphics::build_intro_preview(host,1,{1280,720},
           static_cast<off::graphics::IntroPreviewPolicy>(99));});
+    }
+    {
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+      bool missing_runtime_rejected = false;
+      try {
+        static_cast<void>(off::graphics::make_normal_intro_scene_session({}));
+      } catch (const std::invalid_argument&) {
+        missing_runtime_rejected = true;
+      }
+      check(missing_runtime_rejected,
+            "normal scene session rejects a missing owned runtime");
+      auto session = off::graphics::make_normal_intro_scene_session(
+          std::make_unique<off::graphics::IntroRuntime>(fixture.build(), app, sequence));
+      check(session->stage()==off::graphics::NormalIntroSceneSessionStage::postconstructed &&
+                session->first_cut_player()==nullptr,
+            "normal scene session starts without a detached first-cut session");
+      rejects([&] { session->prepare_supported_first_cut_player(); });
+      check(session->stage()==off::graphics::NormalIntroSceneSessionStage::postconstructed &&
+                session->first_cut_player()==nullptr,
+            "first-cut preparation rejects before the owned reader bracket without changing session state");
     }
     {
       off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
