@@ -12,6 +12,12 @@ void append_u32(std::vector<std::byte> &bytes, std::uint32_t value) {
   for (unsigned shift = 0; shift < 32; shift += 8)
     bytes.push_back(static_cast<std::byte>((value >> shift) & 0xffU));
 }
+std::uint32_t read_u32(const std::vector<std::byte> &bytes, std::size_t offset) {
+  std::uint32_t value = 0;
+  for (unsigned shift = 0; shift < 32; shift += 8)
+    value |= std::to_integer<std::uint32_t>(bytes[offset++]) << shift;
+  return value;
+}
 void check(bool value, const char *message) {
   if (!value) {
     std::cerr << "FAIL: " << message << '\n';
@@ -40,6 +46,7 @@ int main() {
             parsed.groups[0].references.size() == 2U &&
             parsed.groups[0].references[0].address() == 0x100U &&
             parsed.groups[0].references[0].raw == 0x100U &&
+            parsed.groups[0].references[0].word_offset == 5U &&
             parsed.groups[0].references[1].tag() == 1U &&
             parsed.groups[1].references[0].terminal() &&
             parsed.header[1] == 40U,
@@ -72,6 +79,36 @@ int main() {
             tags.groups[0].references[1].raw == 0x127U && tags.groups[0].references[1].address() == 0x120U &&
             tags.groups[0].references[1].tag() == 7U && tags.groups[0].references[1].terminal(),
         "preserve zero addresses, raw values, address masks, and all tag bits");
+  std::vector<std::uint32_t> lookups;
+  const auto prepared = off::graphics::prepare_intro_renderer_relocation_payload(
+      tagged, [&](std::uint32_t lookup) -> std::optional<std::uint32_t> {
+        lookups.push_back(lookup);
+        return 0x880U;
+      });
+  check(lookups == std::vector<std::uint32_t>{0x40000180U} &&
+            read_u32(prepared.bytes, 5U * 4U) == 0U &&
+            read_u32(prepared.bytes, 6U * 4U) == 0x887U &&
+            read_u32(tagged, 6U * 4U) == 0x127U &&
+            prepared.prefix.groups[0].references[1].raw == 0x127U,
+        "relocate an owned copy with the retail bias while preserving source metadata and tags");
+  rejects([&] {
+    static_cast<void>(off::graphics::prepare_intro_renderer_relocation_payload(
+        tagged, [](std::uint32_t) -> std::optional<std::uint32_t> { return std::nullopt; }));
+  }, "reject an unresolved renderer reference");
+  rejects([&] {
+    static_cast<void>(off::graphics::prepare_intro_renderer_relocation_payload(
+        tagged, [](std::uint32_t) -> std::optional<std::uint32_t> { return 3U; }));
+  }, "reject a renderer relocation result that collides with tag bits");
+  rejects([&] {
+    static_cast<void>(off::graphics::prepare_intro_renderer_relocation_payload(tagged, {}));
+  }, "reject a missing renderer relocation service");
+  std::vector<std::byte> outside_domain;
+  for (const auto word : {6U, 0U, 0U, 0U, 0U, 0x3fffffa1U})
+    append_u32(outside_domain, word);
+  rejects([&] {
+    static_cast<void>(off::graphics::prepare_intro_renderer_relocation_payload(
+        outside_domain, [](std::uint32_t) -> std::optional<std::uint32_t> { return 8U; }));
+  }, "reject a source address whose bias collides with the domain marker");
   auto oversized = payload;
   oversized[0] = std::byte{20};
   rejects([&] { static_cast<void>(off::graphics::parse_intro_renderer_relocation_prefix(oversized)); },

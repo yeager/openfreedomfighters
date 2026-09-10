@@ -4,9 +4,17 @@
 
 #include <limits>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 
 namespace off::graphics {
+namespace {
+void write_u32(std::vector<std::byte> &bytes, std::size_t offset,
+               std::uint32_t value) {
+  for (unsigned shift = 0; shift < 32; shift += 8)
+    bytes[offset++] = static_cast<std::byte>((value >> shift) & 0xffU);
+}
+} // namespace
 
 IntroRendererRelocationPrefix
 parse_intro_renderer_relocation_prefix(std::span<const std::byte> payload) {
@@ -41,7 +49,7 @@ parse_intro_renderer_relocation_prefix(std::span<const std::byte> payload) {
         throw std::runtime_error(
             "Renderer relocation group has no terminal reference");
       const auto raw = reader.u32(cursor++ * word_size);
-      group.references.push_back({raw});
+      group.references.push_back({raw, cursor - 1U});
       if ((raw & 1U) != 0U)
         break;
     }
@@ -49,6 +57,39 @@ parse_intro_renderer_relocation_prefix(std::span<const std::byte> payload) {
   }
   if (cursor != prefix_words)
     throw std::runtime_error("Renderer relocation prefix was not consumed exactly");
+  return result;
+}
+
+IntroRendererRelocationPreparedPayload
+prepare_intro_renderer_relocation_payload(
+    std::span<const std::byte> payload,
+    const std::function<std::optional<std::uint32_t>(std::uint32_t)> &resolver) {
+  if (!resolver)
+    throw std::runtime_error("Renderer relocation requires a resolver");
+  IntroRendererRelocationPreparedPayload result{
+      .bytes = {payload.begin(), payload.end()},
+      .prefix = parse_intro_renderer_relocation_prefix(payload)};
+  constexpr std::uint32_t bias = 0x60U;
+  constexpr std::uint32_t domain_marker = 0x40000000U;
+  std::vector<std::tuple<std::size_t, std::uint32_t, std::uint8_t>> resolved_words;
+  for (const auto &group : result.prefix.groups) {
+    for (const auto &reference : group.references) {
+      if (reference.address() == 0U)
+        continue;
+      if (reference.address() >= domain_marker ||
+          reference.address() > domain_marker - 1U - bias)
+        throw std::runtime_error("Renderer relocation reference is outside its source domain");
+      const auto resolved = resolver((reference.address() + bias) | domain_marker);
+      if (!resolved)
+        throw std::runtime_error("Renderer relocation reference did not resolve");
+      if ((*resolved & 7U) != 0U)
+        throw std::runtime_error("Renderer relocation result is not tag-aligned");
+      resolved_words.emplace_back(reference.word_offset, *resolved,
+                                  reference.tag());
+    }
+  }
+  for (const auto &[word_offset, resolved, tag] : resolved_words)
+    write_u32(result.bytes, word_offset * sizeof(std::uint32_t), resolved | tag);
   return result;
 }
 

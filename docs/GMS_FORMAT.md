@@ -43,6 +43,12 @@ corpus, so the portable parser rejects nonzero heads until their serialized
 provenance is recovered. It validates 198,234 references and requires exact
 prefix consumption. For `FF-Intro`, the prefix is 433 words with 157 groups
 and 272 references; the remaining 56,960 renderer bytes stay opaque.
+For each nonzero address, the reviewed relocation pass adds `0x60`, applies the
+`0x40000000` source-reference domain marker, resolves the resulting lookup key,
+and restores the original low-three-bit tag on the aligned result. Zero
+addresses remain unchanged. The portable preparation API performs this pass on
+an owned copy and publishes it only after all lookups succeed; this still does
+not establish a renderer-record grammar or draw readiness.
 
 The object-source directory begins with a 32-bit entry count followed by eight-byte entries:
 
