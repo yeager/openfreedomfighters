@@ -37,6 +37,7 @@
 - [Picture submission cache](PICTURE_SUBMISSION_CACHE.md)
 - [Windows reference capture](STARTUP_STATE_CAPTURE.md)
 - [Startup BootMenu boundary](STARTUP_BOOTMENU_BOUNDARY.md)
+- [Private Windows intro observation boundary](INTRO_OBSERVATION.md)
 
 ## Project and technical reference
 
