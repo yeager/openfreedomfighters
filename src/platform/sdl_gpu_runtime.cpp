@@ -92,13 +92,17 @@ struct GpuStartupImages {
   std::vector<GpuStartupImage> images;
 };
 
+struct GpuOverlayFont {
+  SDL_IOStream *stream{nullptr};
+  TTF_Font *font{nullptr};
+};
+
 struct GpuOverlay {
   SDL_GPUBuffer *vertex_buffer{nullptr};
   SDL_GPUTexture *atlas{nullptr};
   SDL_GPUSampler *sampler{nullptr};
   SDL_GPUGraphicsPipeline *pipeline{nullptr};
-  SDL_IOStream *font_stream{nullptr};
-  TTF_Font *font{nullptr};
+  std::vector<GpuOverlayFont> fonts;
   std::vector<GpuUiTexture> retail_textures;
   bool ttf_initialized{false};
   std::size_t vertex_capacity{};
@@ -138,10 +142,12 @@ void release_scene(SDL_GPUDevice *device, GpuScene &scene) {
 }
 
 void release_overlay(SDL_GPUDevice *device, GpuOverlay &overlay) {
-  if (overlay.font != nullptr)
-    TTF_CloseFont(overlay.font);
-  if (overlay.font_stream != nullptr)
-    SDL_CloseIO(overlay.font_stream);
+  for (auto &font : overlay.fonts)
+    if (font.font != nullptr)
+      TTF_CloseFont(font.font);
+  for (auto &font : overlay.fonts)
+    if (font.stream != nullptr)
+      SDL_CloseIO(font.stream);
   if (overlay.ttf_initialized)
     TTF_Quit();
   if (overlay.pipeline != nullptr)
@@ -297,13 +303,13 @@ create_shader(SDL_GPUDevice *device, const unsigned char *bytes,
   if (fonts.fonts.empty() || !TTF_Init())
     return false;
   result.ttf_initialized = true;
-  const auto &bytes = fonts.fonts.front().sfnt;
-  result.font_stream = SDL_IOFromConstMem(bytes.data(), bytes.size());
-  result.font = result.font_stream == nullptr
-                    ? nullptr
-                    : TTF_OpenFontIO(result.font_stream, false, 24.0F);
-  if (result.font == nullptr)
-    return false;
+  result.fonts.reserve(fonts.fonts.size());
+  for (const auto &source : fonts.fonts) {
+    auto stream = SDL_IOFromConstMem(source.sfnt.data(), source.sfnt.size());
+    auto *font = stream == nullptr ? nullptr : TTF_OpenFontIO(stream, false, 24.0F);
+    result.fonts.push_back({stream, font});
+    if (font == nullptr) return false;
+  }
   result.vertex_capacity =
       (ui::maximum_ui_rects + ui::maximum_ui_texture_commands +
        ui::maximum_ui_text_bytes) *
@@ -380,12 +386,10 @@ void add_clipped_ui_quad(std::vector<PreviewVertex> &vertices,
 }
 
 [[nodiscard]] OverlayBatch
-build_overlay_batch(const ui::GraphicsMenuDrawList &list, TTF_Font *font) {
+build_overlay_batch(const ui::GraphicsMenuDrawList &list,
+                    const ui::RetailUiFontSet &sources,
+                    std::span<const GpuOverlayFont> fonts) {
   OverlayBatch batch;
-  if (!TTF_SetFontSize(font, 24.0F * list.ui_scale)) {
-    batch.valid = false;
-    return batch;
-  }
   batch.atlas_rgba.assign(static_cast<std::size_t>(overlay_atlas_width) *
                               overlay_atlas_height * 4U,
                           255U);
@@ -410,9 +414,15 @@ build_overlay_batch(const ui::GraphicsMenuDrawList &list, TTF_Font *font) {
                 solid_u, solid_v);
   Uint32 cursor_x = 1, cursor_y = 1, shelf_height = 0;
   for (const auto &command : list.texts) {
+    const auto selected = ui::select_font_for_utf8(sources, command.text);
+    if (!selected || *selected >= fonts.size() || fonts[*selected].font == nullptr ||
+        !TTF_SetFontSize(fonts[*selected].font, 24.0F * list.ui_scale)) {
+      batch.valid = false;
+      continue;
+    }
     const auto layer = static_cast<std::size_t>(command.layer);
     SDL_Surface *rendered = TTF_RenderText_Blended(
-        font, command.text.data(), command.text.size(), {255, 255, 255, 255});
+        fonts[*selected].font, command.text.data(), command.text.size(), {255, 255, 255, 255});
     SDL_Surface *surface =
         rendered == nullptr
             ? nullptr
@@ -1425,7 +1435,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         1.0F, explicit_locale, platform_locales);
     const auto overlay_batch =
         draw_list.status == ui::UiBuildStatus::ok
-            ? build_overlay_batch(draw_list, overlay.font)
+            ? build_overlay_batch(draw_list, ui_fonts, overlay.fonts)
             : OverlayBatch{};
     SDL_GPUTransferBuffer *overlay_transfer = nullptr;
     SDL_GPUTransferBuffer *overlay_atlas_transfer = nullptr;

@@ -25,9 +25,11 @@ The countdown is the single constrained `{seconds}` project-authored pattern;
 other formatting contracts remain future work.
 
 The runtime can load bounded font bytes from the user's startup archive for the
-diagnostic overlay. That is not evidence that the fonts cover any target locale:
-the current SDL_ttf build has HarfBuzz disabled, and no glyph-coverage or
-complex-script test exists. See [the retail-font runtime contract](RETAIL_FONT_RUNTIME.md).
+diagnostic overlay. It admits a complete string only when one loaded font's
+bounded cmap covers every scalar; otherwise it rejects the draw batch rather
+than silently drawing missing glyphs. That is not shaping or fallback: the
+current SDL_ttf build has HarfBuzz disabled, and no complex-script layout test
+exists. See [the retail-font runtime contract](RETAIL_FONT_RUNTIME.md).
 
 The engine will support Unicode, locale-aware formatting, font fallback, right-to-left layout, controller-glyph substitution, and UI expansion testing. Swedish is a launch requirement.
 

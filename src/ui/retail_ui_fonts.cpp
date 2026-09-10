@@ -117,7 +117,8 @@ constexpr std::size_t maximum_font_bytes = 32U * 1024U * 1024U;
   if (count == 4U || offset + count > text.size()) return false;
   scalar = lead & (count == 1U ? 0x1fU : count == 2U ? 0x0fU : 0x07U);
   for (unsigned index = 0; index < count; ++index) { const auto value = static_cast<unsigned char>(text[offset++]); if ((value & 0xc0U) != 0x80U) return false; scalar = (scalar << 6U) | (value & 0x3fU); }
-  return scalar <= 0x10ffffU && !(scalar >= 0xd800U && scalar <= 0xdfffU);
+  const auto minimum = count == 1U ? 0x80U : count == 2U ? 0x800U : 0x10000U;
+  return scalar >= minimum && scalar <= 0x10ffffU && !(scalar >= 0xd800U && scalar <= 0xdfffU);
 }
 
 } // namespace
