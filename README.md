@@ -152,6 +152,9 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
 ctest --test-dir build --output-on-failure
 
+# Optional: verify LOC candidate discovery against your owned installation.
+OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
+
 # Check your installation without opening a window.
 ./build/openfreedomfighters --verify-only
 
