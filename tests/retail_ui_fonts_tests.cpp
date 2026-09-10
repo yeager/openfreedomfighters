@@ -247,6 +247,11 @@ int main() {
         "font admission selects a single Cyrillic-capable font");
   check(!off::ui::select_font_for_utf8(coverage, "Apply Применить"),
         "font admission rejects text no single font can cover");
+  const auto fallback=off::ui::select_font_runs_for_utf8(coverage, "Apply Применить");
+  check(fallback && *fallback==std::vector<off::ui::RetailUiFontRun>{{0U,0U,6U},{1U,6U,18U}},
+        "font fallback splits mixed-script UTF-8 into contiguous covering font runs");
+  check(!off::ui::select_font_runs_for_utf8(coverage, std::string_view{"\xc3\x28",2}),
+        "font fallback rejects malformed UTF-8 before selecting any run");
   check(!off::ui::select_font_for_utf8(coverage, std::string_view{"\xc3\x28", 2}),
         "font admission rejects malformed UTF-8");
 

@@ -151,6 +151,26 @@ std::optional<std::size_t> select_font_for_utf8(const RetailUiFontSet &fonts, st
   return std::nullopt;
 }
 
+std::optional<std::vector<RetailUiFontRun>> select_font_runs_for_utf8(
+    const RetailUiFontSet &fonts, std::string_view text) noexcept {
+  std::vector<RetailUiFontRun> result;
+  for(std::size_t offset=0;offset<text.size();) {
+    const auto begin=offset;
+    std::uint32_t scalar{};
+    if(!next_utf8(text,offset,scalar)) return std::nullopt;
+    const auto selected=std::ranges::find_if(fonts.fonts,[&](const auto& font) {
+      return font_has(font.sfnt,scalar);
+    });
+    if(selected==fonts.fonts.end()) return std::nullopt;
+    const auto font_index=static_cast<std::size_t>(selected-fonts.fonts.begin());
+    if(!result.empty() && result.back().font_index==font_index &&
+        result.back().byte_offset+result.back().byte_length==begin) {
+      result.back().byte_length=offset-result.back().byte_offset;
+    } else result.push_back({font_index,begin,offset-begin});
+  }
+  return result;
+}
+
 RetailUiFontSet
 load_retail_ui_fonts(const std::filesystem::path &startup_archive) {
   const auto archive = data::ZipArchive::open(startup_archive);
