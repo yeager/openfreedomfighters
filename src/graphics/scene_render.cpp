@@ -93,6 +93,16 @@ unique_member_with_extension(const data::ZipArchive &archive,
 
 [[nodiscard]] SceneRenderAsset
 build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
+  const data::ZipEntry *animation{};
+  for (const auto &entry : archive.entries()) {
+    const auto dot = entry.name.find_last_of('.');
+    if (dot == std::string::npos ||
+        lowercase(entry.name.substr(dot)) != ".anm")
+      continue;
+    if (animation)
+      throw std::runtime_error("scene archive has invalid animation resource");
+    animation = &entry;
+  }
   const auto primitive_bytes =
       archive.read(unique_member_with_extension(archive, ".prm"));
   const auto texture_bytes =
@@ -116,8 +126,14 @@ build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
       SceneRenderMapView{.kind = SceneRenderMapKind::rmi,
                          .entries = rmi.entries()},
   };
-  return build_scene_render_asset(primitives.entries(), textures.images(),
-                                  objects.directory(), objects.hierarchy(), maps);
+  auto result = build_scene_render_asset(
+      primitives.entries(), textures.images(), objects.directory(),
+      objects.hierarchy(), maps);
+  if (animation)
+    result.animation =
+        data::AnimationImage::parse(archive.read(*animation)).header();
+  validate_scene_render_asset(result);
+  return result;
 }
 
 [[nodiscard]] std::vector<SceneGeometryResolution> expand_container_resolution(
@@ -199,6 +215,12 @@ summarize_scene_render_resolutions(const SceneRenderAsset &asset) noexcept {
 }
 
 void validate_scene_render_asset(const SceneRenderAsset &asset) {
+  if (asset.animation &&
+      (asset.animation->byte_size < 20U ||
+       asset.animation->major_version != 12U ||
+       asset.animation->minor_version != 10U)) {
+    throw std::invalid_argument("scene render animation metadata is invalid");
+  }
   if (asset.resolutions.size() > maximum_scene_instances ||
       asset.instances.size() > maximum_scene_instances) {
     throw std::invalid_argument("scene render asset exceeds instance budget");

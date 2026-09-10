@@ -148,6 +148,17 @@ int main() {
   }
   check(valid_scene_asset_accepted,
         "accept an independently validated owning scene asset");
+  auto invalid_animation_asset = scene_asset;
+  invalid_animation_asset.animation = {
+      .byte_size = 24U, .major_version = 11U, .minor_version = 10U};
+  bool invalid_animation_rejected = false;
+  try {
+    off::graphics::validate_scene_render_asset(invalid_animation_asset);
+  } catch (const std::invalid_argument &) {
+    invalid_animation_rejected = true;
+  }
+  check(invalid_animation_rejected,
+        "reject unsupported animation metadata on a scene asset");
   check(
       scene_asset.resolutions.size() == 3 &&
           scene_asset.instances.size() == 3 && scene_asset.meshes.size() == 2 &&

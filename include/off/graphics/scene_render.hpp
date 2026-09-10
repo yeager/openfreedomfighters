@@ -1,5 +1,6 @@
 #pragma once
 
+#include "off/data/animation_image.hpp"
 #include "off/graphics/render_preview.hpp"
 
 #include <array>
@@ -67,6 +68,7 @@ struct SceneRenderInstance {
 };
 
 struct SceneRenderAsset {
+  std::optional<data::AnimationImageHeader> animation;
   std::vector<SceneRenderTexture> textures;
   std::vector<SceneRenderMesh> meshes;
   std::vector<SceneRenderInstance> instances;
