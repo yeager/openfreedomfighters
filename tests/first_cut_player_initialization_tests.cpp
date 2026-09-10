@@ -47,9 +47,8 @@ int main() {
       .register_ordered_command = [&](const auto& command) { trace.push_back("command:" + std::to_string(command.timeline_position)); }});
   check(player.phase_two_complete() && player.derived_end() == 175.0F && player.active_camera_list() == 88U &&
             player.cut_sequence_object() == 100U &&
-            player.ordered_commands().size() == 5U &&
-            trace == std::vector<std::string>{"one:14", "one:13", "one:12", "one:11", "one:10", "read", "events", "count", "queue", "map", "two:14", "two:13", "two:12", "two:11", "two:10", "rActiveCameraList", "member", "info", "command:1", "command:2", "command:3", "command:4", "command:5", "rCutSequenceObject", "object"},
-        "phase two retains properties, inserts commands, and does not start playback");
+            trace == std::vector<std::string>{"one:14", "one:13", "one:12", "one:11", "one:10", "read", "events", "count", "queue", "map", "two:14", "command:1", "two:13", "command:2", "two:12", "command:3", "two:11", "command:4", "two:10", "command:5", "rActiveCameraList", "member", "info", "rCutSequenceObject", "object"},
+        "phase two registers each eligible command after its reverse callback without playback");
   auto failing = make_player();
   rejects([&] { failing.run_phase_one({
       .invoke_command = [](auto, const auto&) { throw std::runtime_error("injected"); },

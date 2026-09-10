@@ -41,8 +41,11 @@ void FirstCutPlayerInitialization::run_phase_two(const FirstCutPlayerPhaseTwoSer
     throw std::runtime_error("first-cut player phase two boundary is invalid");
   running_ = true;
   try {
-    for (std::size_t index = command_components_.size(); index-- > 0U;)
+    for (std::size_t index = command_components_.size(); index-- > 0U;) {
       services.invoke_command(command_components_[index], list_.commands[index]);
+      if (std::bit_cast<std::int32_t>(list_.commands[index].timeline_position) >= 0)
+        services.register_ordered_command(list_.commands[index]);
+    }
     const auto active = services.read_scene_reference("rActiveCameraList");
     float derived = 0.0F;
     for (std::size_t index = 0; index < started_.size(); ++index) {
@@ -54,28 +57,10 @@ void FirstCutPlayerInitialization::run_phase_two(const FirstCutPlayerPhaseTwoSer
       if (info->end > derived) derived = info->end;
       if (services.member_name(*member) == "Cut_Geom_List_02") derived = 0.0F;
     }
-    std::vector<data::GmsIntroCutCommandSource> commands;
-    std::optional<std::size_t> cached;
-    for (auto command : list_.commands) {
-      if (std::bit_cast<std::int32_t>(command.timeline_position) < 0) continue;
-      const auto key = static_cast<float>(std::bit_cast<std::int32_t>(command.timeline_position));
-      std::size_t insertion{};
-      if (cached) {
-        insertion = *cached;
-        while (static_cast<float>(std::bit_cast<std::int32_t>(commands[insertion].timeline_position)) > key) {
-          if (insertion == 0U) break;
-          --insertion;
-        }
-        while (insertion < commands.size() && key > static_cast<float>(std::bit_cast<std::int32_t>(commands[insertion].timeline_position))) ++insertion;
-      }
-      commands.insert(commands.begin() + static_cast<std::ptrdiff_t>(insertion), std::move(command));
-      cached = insertion;
-    }
-    for (const auto& command : commands) services.register_ordered_command(command);
     const auto source = services.read_scene_reference("rCutSequenceObject");
     const auto object = source ? services.resolve_scene_object(*source) : std::optional<std::uint64_t>{};
     active_camera_list_ = active; cut_sequence_object_ = object; derived_end_ = derived;
-    ordered_commands_ = std::move(commands); phase_two_complete_ = true; running_ = false;
+    phase_two_complete_ = true; running_ = false;
   } catch (...) { running_ = false; failed_ = true; throw; }
 }
 } // namespace off::cutscene

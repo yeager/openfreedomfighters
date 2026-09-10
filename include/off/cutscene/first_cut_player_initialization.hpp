@@ -57,7 +57,6 @@ public:
   [[nodiscard]] float derived_end() const noexcept { return derived_end_; }
   [[nodiscard]] std::optional<std::uint64_t> active_camera_list() const noexcept { return active_camera_list_; }
   [[nodiscard]] std::optional<std::uint64_t> cut_sequence_object() const noexcept { return cut_sequence_object_; }
-  [[nodiscard]] const std::vector<data::GmsIntroCutCommandSource>& ordered_commands() const noexcept { return ordered_commands_; }
 
 private:
   data::GmsIntroFirstCutSource list_;
@@ -65,7 +64,6 @@ private:
   std::size_t list_component_{};
   std::array<std::size_t, 5> command_components_{};
   std::vector<bool> started_, completed_;
-  std::vector<data::GmsIntroCutCommandSource> ordered_commands_;
   float derived_end_{};
   std::optional<std::uint64_t> active_camera_list_, cut_sequence_object_;
   bool source_read_marker_{true}, events_registered_{}, phase_one_complete_{}, phase_two_complete_{}, running_{}, failed_{};
