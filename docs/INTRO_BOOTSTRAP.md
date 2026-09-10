@@ -145,7 +145,7 @@ A private probe using the owned archive checks the complete ROOT-through-469
 construction boundary: all 470 authored resources and owners, 420 queued
 reader records, 383 constructed attachments, saved flags, event mapping,
 hierarchy, and cold sound-owner state. The normal cold path additionally runs
-the bracket and resolves eleven reviewed reader records. It does not activate
+the bracket and resolves twelve reviewed reader records. It does not activate
 components, construct a cut sequence, dispatch events, or create live Picture
 backing.
 

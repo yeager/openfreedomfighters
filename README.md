@@ -64,10 +64,8 @@ for a portable installation.
   retains 383 constructed attachment instances, queues 420 deferred readers,
   and preserves the authored hierarchy, event names, saved flags, and supported
   sound-owner state. Normal startup runs the ordinary deferred-reader bracket
-  and admits eleven reviewed, source-backed reader records: MovieControl, the
-  first-cut sequence, list, and raw camera owner, both sound owners, the
-  first-cut Window, one external-command pair, and the verified FadeToBlack
-  picture targets. The other 409 records remain intentionally unconsumed. A scene-owned session now
+  and admits twelve reviewed, source-backed reader records. The other 408
+  records remain intentionally unconsumed. A scene-owned session now
   retains this runtime and owns the exactly-once reader bracket instead of
   leaving its callback wiring in `main`. The checked loader-tail transition is
   implemented, but its concrete source services and normal-startup call remain
@@ -82,8 +80,10 @@ for a portable installation.
   it must admit lifecycle, the first cut, camera/view, drawing and audio in one
   ordinary-frame order. Its reader-stage session is connected; later lifecycle
   and rendering stages are not implemented yet.
-- F10 opens a working graphics-settings panel. Its current appearance is
-  diagnostic; matching the game's menu design is still on the roadmap.
+- F10 opens a working graphics-settings panel. It renders project-authored text
+  with in-memory retail UI fonts when coverage is available, including
+  mixed-script LTR runs aligned to one baseline. Its current appearance is
+  still diagnostic; matching the game's menu design is on the roadmap.
 - A separate geometry preview is available with `--diagnostic-scene`. It is not
   a loaded level or a gameplay demo.
 - Project-authored deterministic simulation replays have a versioned `OFRP`
@@ -111,7 +111,9 @@ The settings panel has a mode selector. It records DLSS and XeSS requests but
 uses portable temporal or native rendering until a verified native adapter is
 available. HD asset support is not implemented. See [Modern graphics](docs/MODERN_GRAPHICS.md),
 [DLSS](docs/DLSS.md), and [XeSS](docs/XESS.md) for scope and licensing.
-Localization in 20 languages, including Swedish, is also planned.
+Project-authored UI strings already select the system locale across 20 locales,
+including Swedish. Complete game-text localization, shaping and full retail-font
+coverage remain planned.
 
 ## Build and run
 

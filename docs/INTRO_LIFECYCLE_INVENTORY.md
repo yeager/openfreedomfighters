@@ -53,7 +53,7 @@ SDL renderer directly. The required order is fixed by the admitted boundaries:
 5. Assemble and submit an admitted picture frame from an ordinary outer frame
    caller.
 
-The current supported runtime has only eleven admitted reader identities out of
+The current supported runtime has only twelve admitted reader identities out of
 420. This is the first hard gate. Camera/view, picture-frame, audio, and SDL
 bridge code remains intentionally downstream of it; joining any of those
 pieces earlier would create a synthetic visible result rather than native scene
@@ -77,7 +77,7 @@ The first reader families are the direct first-cut dependencies:
 
 This ordering removes the earliest fail-closed admission gate. Reversing it to
 work on MovieControl phase two or event 16 first would not make normal startup
-valid: the current runtime has 420 queued readers but only eleven source-backed
+valid: the current runtime has 420 queued readers but only twelve source-backed
 reader boundaries, so it has no complete owner/component population for the
 global passes.
 
