@@ -313,7 +313,7 @@ struct IntroLifecyclePreflightReport {
 enum class IntroDeferredReaderFamily : std::uint8_t {
   unclassified, sound_owner, window_owner, movie_controller,
   first_cut_sequence, first_cut_list, first_cut_legal_picture,
-  external_cut_commands, first_cut_fade_picture,
+  external_cut_commands, first_cut_fade_picture, first_cut_camera,
 };
 enum class IntroDeferredReaderImplementationState : std::uint8_t {
   unimplemented, implemented_not_applied, applied,
@@ -399,6 +399,14 @@ struct IntroFirstCutListReaderState {
   data::GmsIntroFirstCutSource authored;
   IntroRuntimeResourceHandle sequence_resource;
   std::array<IntroRuntimeResourceHandle,5> command_target_resources;
+};
+// A checked raw camera-owner boundary.  It retains the parser-validated source
+// only; conversion, renderer registration, selection and frame admission stay
+// outside the reader bracket.
+struct IntroFirstCutCameraReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  data::GmsIntroCameraSource authored;
 };
 // Materialized source state for the one reviewed first-cut player. It is not a
 // scheduler, event registration, camera route, or renderer admission.
@@ -840,8 +848,10 @@ public:
   // publish immutable source/resource state and do not execute cutscene work.
   void apply_supported_first_cut_sequence_deferred_reader(const IntroDeferredReaderWork& work);
   void apply_supported_first_cut_list_deferred_reader(const IntroDeferredReaderWork& work);
+  void apply_supported_first_cut_camera_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroFirstCutSequenceReaderState* first_cut_sequence_reader_state() const noexcept {return first_cut_sequence_reader_state_?&*first_cut_sequence_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutListReaderState* first_cut_list_reader_state() const noexcept {return first_cut_list_reader_state_?&*first_cut_list_reader_state_:nullptr;}
+  [[nodiscard]] const IntroFirstCutCameraReaderState* first_cut_camera_reader_state() const noexcept {return first_cut_camera_reader_state_?&*first_cut_camera_reader_state_:nullptr;}
   // Atomically materialize the source-backed first-cut player state after both
   // reviewed readers. Playback services remain intentionally absent.
   void prepare_supported_first_cut_player();
@@ -974,6 +984,7 @@ private:
   std::optional<IntroMovieControllerComponentReaderState> movie_controller_component_reader_state_;
   std::optional<IntroFirstCutSequenceReaderState> first_cut_sequence_reader_state_;
   std::optional<IntroFirstCutListReaderState> first_cut_list_reader_state_;
+  std::optional<IntroFirstCutCameraReaderState> first_cut_camera_reader_state_;
   std::optional<IntroFirstCutPlayerPreparedState> first_cut_player_prepared_state_;
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;
   std::map<std::size_t,IntroFadePictureReaderState> fade_picture_reader_states_;

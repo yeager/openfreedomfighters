@@ -53,7 +53,7 @@ SDL renderer directly. The required order is fixed by the admitted boundaries:
 5. Assemble and submit an admitted picture frame from an ordinary outer frame
    caller.
 
-The current supported runtime has only ten admitted reader identities out of
+The current supported runtime has only eleven admitted reader identities out of
 420. This is the first hard gate. Camera/view, picture-frame, audio, and SDL
 bridge code remains intentionally downstream of it; joining any of those
 pieces earlier would create a synthetic visible result rather than native scene

@@ -1885,6 +1885,8 @@ IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() c
       return IntroDeferredReaderFamily::first_cut_sequence;
     if(work.source_directory_index==resources_.first_cut_index())
       return IntroDeferredReaderFamily::first_cut_list;
+    if(work.source_directory_index==resources_.camera_index())
+      return IntroDeferredReaderFamily::first_cut_camera;
     if(work.source_directory_index==resources_.window_index())
       return IntroDeferredReaderFamily::window_owner;
     const auto legal=resources_.sources().local_source_for_authored_reference(
@@ -2957,6 +2959,35 @@ void IntroRuntime::apply_supported_first_cut_list_deferred_reader(
   first_cut_list_reader_state_=std::move(state);
   try { record_supported_reader_admission(work); }
   catch(...) { first_cut_list_reader_state_.reset(); throw; }
+}
+
+void IntroRuntime::apply_supported_first_cut_camera_deferred_reader(
+    const IntroDeferredReaderWork& work) {
+  const auto source_index=resources_.camera_index();
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !work.processed ||
+      work.source_directory_index!=source_index || first_cut_camera_reader_state_)
+    throw std::runtime_error("First-cut camera reader requires its unique live deferred owner work");
+  if(std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate) {
+       return std::addressof(candidate)==std::addressof(work);
+     })==deferred_reader_work_.end())
+    throw std::runtime_error("First-cut camera reader requires bracket-owned work");
+  const auto& source=resources_.sources().directory().at(source_index);
+  if(source.source_type!=0x00400003U || source.class_data_value!=0U ||
+      source.deferred_source_offset!=work.source_offset || !source.attachments.empty() ||
+      directory_resource_mapping_.at(source_index)!=work.resource ||
+      !associated_resource_owner(work.resource) ||
+      *associated_resource_owner(work.resource)!=source_handle(source_index))
+    throw std::runtime_error("First-cut camera reader source shape is unsupported");
+  const auto authored=resources_.sources().intro_camera_source(source_index);
+  if(authored.near_distance!=resources_.camera().near_distance ||
+      authored.far_distance!=resources_.camera().far_distance ||
+      authored.angle_degrees!=resources_.camera().angle_degrees ||
+      authored.viewport!=resources_.camera().viewport)
+    throw std::runtime_error("First-cut camera reader does not match prepared camera source");
+  first_cut_camera_reader_state_={.owner=source_handle(source_index),.resource=work.resource,
+                                  .authored=authored};
+  try { record_supported_reader_admission(work); }
+  catch(...) { first_cut_camera_reader_state_.reset(); throw; }
 }
 
 void IntroRuntime::prepare_supported_first_cut_player() {

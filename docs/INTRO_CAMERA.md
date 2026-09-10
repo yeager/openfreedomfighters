@@ -22,6 +22,12 @@ Malformed input never supplies guessed camera defaults.
 
 ## Separate runtime boundaries
 
+The normal reader bracket now has a separate first-cut camera-owner boundary.
+It confirms the queued source/resource identity and reparses this exact raw
+block before retaining immutable authored camera state. It has no attachments.
+It does not narrow values, change projection, register or select a camera,
+touch renderer state, or admit a frame.
+
 The original camera reader narrows near distance and clamps it to at least one;
 the later projection helper separately clamps near to at least five. Angle
 conversion narrows to binary32 before multiplication by binary32 pi and division

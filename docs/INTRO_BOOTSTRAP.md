@@ -28,8 +28,8 @@ construction is removed from the live list while preserving its construction
 serial effects. The host also exposes checked, explicit boundaries for the
 post-construction reader bracket, approved reference translation, loader tail,
 and global component passes. Normal startup now runs the ordinary reader bracket
-and admits ten reviewed reader records without executing a command or activating
-a component. The remaining 410 records and the concrete production services
+and admits eleven reviewed reader records without executing a command or activating
+a component. The remaining 409 records and the concrete production services
 needed to invoke the checked loader-tail transition are unavailable, as are
 renderer association, scene update, and rendering. See [live resource flags](RESOURCE_STATE.md) and the
 [component lifecycle](COMPONENT_LIFECYCLE.md).
@@ -121,7 +121,7 @@ A private probe using the owned archive checks the complete ROOT-through-469
 construction boundary: all 470 authored resources and owners, 420 queued
 reader records, 383 constructed attachments, saved flags, event mapping,
 hierarchy, and cold sound-owner state. The normal cold path additionally runs
-the bracket and resolves ten reviewed reader records. It does not activate
+the bracket and resolves eleven reviewed reader records. It does not activate
 components, construct a cut sequence, dispatch events, or create live Picture
 backing.
 

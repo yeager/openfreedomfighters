@@ -64,10 +64,10 @@ for a portable installation.
   retains 383 constructed attachment instances, queues 420 deferred readers,
   and preserves the authored hierarchy, event names, saved flags, and supported
   sound-owner state. Normal startup runs the ordinary deferred-reader bracket
-  and admits ten reviewed, source-backed reader records: MovieControl, the
-  first-cut sequence and list, both sound owners, the first-cut Window, one
-  external-command pair, and the verified FadeToBlack picture targets. The
-  other 410 records remain intentionally unconsumed. A scene-owned session now
+  and admits eleven reviewed, source-backed reader records: MovieControl, the
+  first-cut sequence, list, and raw camera owner, both sound owners, the
+  first-cut Window, one external-command pair, and the verified FadeToBlack
+  picture targets. The other 409 records remain intentionally unconsumed. A scene-owned session now
   retains this runtime and owns the exactly-once reader bracket instead of
   leaving its callback wiring in `main`. The checked loader-tail transition is
   implemented, but its concrete source services and normal-startup call remain
