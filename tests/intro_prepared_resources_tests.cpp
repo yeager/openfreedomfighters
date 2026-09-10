@@ -1059,6 +1059,8 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
             if(work.source_directory_index==host.resources().first_cut_index() &&
                 host.resources().sources().deferred_source_block(work.source_directory_index).size()==171U)
               host.apply_supported_first_cut_component_reader(work);
+            if(work.source_directory_index==host.resources().member_index())
+              host.apply_supported_first_cut_sequence_component_reader(work);
             if(host.fade_picture_reader_states().contains(work.source_directory_index))
               host.apply_supported_first_cut_fade_picture_component_reader(work);
             if(host.legal_picture_reader_state() &&
@@ -1130,6 +1132,21 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               sequence_reader->authored.references==host.resources().member().references &&
               sequence_reader->members[0]==host.directory_resource_mapping()[host.resources().camera_index()],
               "first-cut sequence reader publishes immutable authored references without constructing a cut sequence");
+        const auto* sequence_component_reader=host.first_cut_sequence_component_reader_state();
+        const auto sequence_work=std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
+          return work.source_directory_index==host.resources().member_index();
+        });
+        check(sequence_component_reader && sequence_work!=host.deferred_reader_work().end() &&
+              sequence_component_reader->owner==sequence_reader->owner &&
+              sequence_component_reader->resource==sequence_reader->resource &&
+              sequence_component_reader->source_directory_index==host.resources().member_index() &&
+              sequence_component_reader->source_offset==sequence_work->source_offset &&
+              sequence_component_reader->component_index==sequence_reader->component_index &&
+              sequence_component_reader->authored.references==sequence_reader->authored.references &&
+              sequence_component_reader->members==sequence_reader->members,
+              "CutSequence component boundary retains owner-derived source provenance without lifecycle work");
+        if(sequence_work!=host.deferred_reader_work().end())
+          rejects([&]{host.apply_supported_first_cut_sequence_component_reader(*sequence_work);});
         check(list_reader && list_reader->owner==host.source_handle(host.resources().first_cut_index()) &&
               list_reader->resource==host.directory_resource_mapping()[host.resources().first_cut_index()] &&
               list_reader->component_indices.size()==6 &&

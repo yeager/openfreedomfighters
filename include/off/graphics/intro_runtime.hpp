@@ -393,6 +393,17 @@ struct IntroFirstCutSequenceReaderState {
   data::GmsIntroCutSequenceSource authored;
   std::array<std::optional<IntroRuntimeResourceHandle>,6> members;
 };
+// Cold provenance for the completed first-cut sequence component boundary.
+// It neither creates a player nor establishes timing or lifecycle behavior.
+struct IntroFirstCutSequenceComponentReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t source_directory_index{};
+  std::uint32_t source_offset{};
+  std::size_t component_index{};
+  data::GmsIntroCutSequenceSource authored;
+  std::array<std::optional<IntroRuntimeResourceHandle>,6> members;
+};
 struct IntroFirstCutListReaderState {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
@@ -879,6 +890,7 @@ public:
   // Complete only the two checked first-cut list reader boundaries. These
   // publish immutable source/resource state and do not execute cutscene work.
   void apply_supported_first_cut_sequence_deferred_reader(const IntroDeferredReaderWork& work);
+  void apply_supported_first_cut_sequence_component_reader(const IntroDeferredReaderWork& work);
   void apply_supported_first_cut_list_deferred_reader(const IntroDeferredReaderWork& work);
   // Reads the six bounded first-cut attachment payloads after their owner
   // reader. This retains parsed source values only; it cannot schedule a cut
@@ -886,6 +898,7 @@ public:
   void apply_supported_first_cut_component_reader(const IntroDeferredReaderWork& work);
   void apply_supported_first_cut_camera_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroFirstCutSequenceReaderState* first_cut_sequence_reader_state() const noexcept {return first_cut_sequence_reader_state_?&*first_cut_sequence_reader_state_:nullptr;}
+  [[nodiscard]] const IntroFirstCutSequenceComponentReaderState* first_cut_sequence_component_reader_state() const noexcept {return first_cut_sequence_component_reader_state_?&*first_cut_sequence_component_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutListReaderState* first_cut_list_reader_state() const noexcept {return first_cut_list_reader_state_?&*first_cut_list_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutComponentReaderState* first_cut_component_reader_state() const noexcept {return first_cut_component_reader_state_?&*first_cut_component_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutCameraReaderState* first_cut_camera_reader_state() const noexcept {return first_cut_camera_reader_state_?&*first_cut_camera_reader_state_:nullptr;}
@@ -1024,6 +1037,7 @@ private:
   std::optional<IntroMovieControllerReaderState> movie_controller_reader_state_;
   std::optional<IntroMovieControllerComponentReaderState> movie_controller_component_reader_state_;
   std::optional<IntroFirstCutSequenceReaderState> first_cut_sequence_reader_state_;
+  std::optional<IntroFirstCutSequenceComponentReaderState> first_cut_sequence_component_reader_state_;
   std::optional<IntroFirstCutListReaderState> first_cut_list_reader_state_;
   std::optional<IntroFirstCutComponentReaderState> first_cut_component_reader_state_;
   std::optional<IntroFirstCutCameraReaderState> first_cut_camera_reader_state_;

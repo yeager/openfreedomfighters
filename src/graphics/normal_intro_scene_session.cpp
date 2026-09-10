@@ -76,6 +76,8 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                    runtime_->resources().first_cut_index() &&
                    runtime_->resources().sources().deferred_source_block(work.source_directory_index).size()==171U)
                  runtime_->apply_supported_first_cut_component_reader(work);
+               if (work.source_directory_index == runtime_->resources().member_index())
+                 runtime_->apply_supported_first_cut_sequence_component_reader(work);
                if (runtime_->fade_picture_reader_states().contains(work.source_directory_index))
                  runtime_->apply_supported_first_cut_fade_picture_component_reader(work);
                if (runtime_->legal_picture_reader_state() &&

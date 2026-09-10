@@ -2911,6 +2911,30 @@ void IntroRuntime::apply_supported_first_cut_sequence_deferred_reader(
   catch(...) { first_cut_sequence_reader_state_.reset(); throw; }
 }
 
+void IntroRuntime::apply_supported_first_cut_sequence_component_reader(
+    const IntroDeferredReaderWork& work) {
+  const auto source_index=resources_.member_index();
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !work.processed ||
+      work.source_directory_index!=source_index || !first_cut_sequence_reader_state_ ||
+      first_cut_sequence_component_reader_state_)
+    throw std::runtime_error("First-cut sequence component reader requires its completed unique owner reader");
+  if(std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate) {
+       return std::addressof(candidate)==std::addressof(work);
+     })==deferred_reader_work_.end())
+    throw std::runtime_error("First-cut sequence component reader requires bracket-owned work");
+  const auto& state=*first_cut_sequence_reader_state_;
+  if(state.owner!=source_handle(source_index) || state.resource!=work.resource ||
+      resources_.sources().directory().at(source_index).deferred_source_offset!=work.source_offset)
+    throw std::runtime_error("First-cut sequence component reader source identity is unsupported");
+  const auto& component=components_.at(state.component_index);
+  if(!component.constructed() || component.removed() ||
+      component.source().factory_name!="ZLIST_CutSequence" ||
+      component.state().attached_owner!=state.owner.value)
+    throw std::runtime_error("First-cut sequence component reader has no live CutSequence component");
+  first_cut_sequence_component_reader_state_={state.owner,state.resource,source_index,
+      work.source_offset,state.component_index,state.authored,state.members};
+}
+
 void IntroRuntime::apply_supported_first_cut_list_deferred_reader(
     const IntroDeferredReaderWork& work) {
   const auto source_index=resources_.first_cut_index();
