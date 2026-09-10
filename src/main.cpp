@@ -390,7 +390,8 @@ int main(int argc, char **argv) {
   for (const auto& warning : verification->optional_file_warnings)
     std::cerr << "Optional file skipped: " << warning << '\n';
   std::cout << "Optional soundtrack: " << verification->soundtrack_candidates.size()
-            << " hash-verified files; cue mapping and playback not implemented.\n";
+            << " hash-verified files; decoder and bounded transport ready; "
+               "game-cue mapping not implemented.\n";
   if (verify_only) {
     return 0;
   }
@@ -398,10 +399,14 @@ int main(int argc, char **argv) {
     const auto &summary = *scene_summary;
     std::cout << "Diagnostic scene geometry: "
               << summary.local_primitive << " local, "
-              << summary.no_local_source << " external, "
+              << summary.no_local_source << " no-local-source, "
               << summary.source_without_primitive << " source-without-primitive, "
               << summary.missing_primitive << " missing-primitive, "
               << summary.unresolved_primitive_alias << " unresolved-alias.\n";
+    if (summary.local_primitive == 0U) {
+      std::cout << "Diagnostic scene has no direct-local geometry to draw; "
+                   "indirect source resolution is pending.\n";
+    }
   }
   if (!diagnostic_scene)
     std::cout << "Authored startup resources loaded; world rendering pending. "
