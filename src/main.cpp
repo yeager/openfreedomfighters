@@ -1,4 +1,5 @@
 #include "off/data/install.hpp"
+#include "off/data/first_cut_owner_reader.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
 #include "off/graphics/intro_runtime.hpp"
 #include "off/graphics/normal_intro_scene_session.hpp"
@@ -119,6 +120,47 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
   auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
   session->complete_postconstruction_reader_bracket(0U);
   auto& intro=session->runtime();
+  const auto first_cut_source=intro.resources().first_cut_index();
+  const auto* first_cut_work=static_cast<const off::graphics::IntroDeferredReaderWork*>(nullptr);
+  for(const auto& work:intro.deferred_reader_work()) {
+    if(work.source_directory_index==first_cut_source) {
+      if(first_cut_work)
+        throw std::runtime_error("first-cut cold probe found duplicate deferred work");
+      first_cut_work=&work;
+    }
+  }
+  if(!first_cut_work)
+    throw std::runtime_error("first-cut cold probe found no deferred work");
+  const auto& directory=intro.resources().sources().directory();
+  const auto mapping=intro.directory_resource_mapping();
+  if(first_cut_work->resource.value==0U || first_cut_work->source_offset==0U ||
+      first_cut_work->source_directory_index!=first_cut_source ||
+      first_cut_source>=directory.size() || first_cut_source>=mapping.size() ||
+      directory[first_cut_source].deferred_source_offset!=first_cut_work->source_offset ||
+      mapping[first_cut_source]!=first_cut_work->resource)
+    throw std::runtime_error("first-cut cold probe found an unbound deferred identity");
+  const auto block=intro.resources().sources().deferred_source_block(first_cut_source);
+  const auto suffix=off::data::FirstCutOwnerReader::read(block);
+  if(suffix.component_suffix.data()!=block.data()+14U || suffix.component_suffix.size()!=157U ||
+      suffix.component_extent!=157U)
+    throw std::runtime_error("first-cut cold probe found an unbounded component suffix");
+  const off::data::DeferredReaderWorkIdentity identity{
+      first_cut_work->resource.value,first_cut_work->source_offset,first_cut_work->source_directory_index};
+  off::data::DeferredReaderSession owner_session(identity,block);
+  if(owner_session.state()!=off::data::DeferredReaderSessionState::created ||
+      owner_session.owner_block().data()==block.data())
+    throw std::runtime_error("first-cut cold probe did not copy the owner block");
+  owner_session.prepare(identity);
+  if(owner_session.state()!=off::data::DeferredReaderSessionState::prepared)
+    throw std::runtime_error("first-cut cold probe did not prepare the owner reader");
+  owner_session.read_owner(off::data::FirstCutOwnerReader::read);
+  if(owner_session.state()!=off::data::DeferredReaderSessionState::owner_read ||
+      owner_session.identity()!=identity || owner_session.owner_block().size()!=block.size())
+    throw std::runtime_error("first-cut cold probe did not retain the owner-reader boundary");
+  owner_session.deactivate();
+  if(owner_session.state()!=off::data::DeferredReaderSessionState::deactivated ||
+      !owner_session.owner_block().empty())
+    throw std::runtime_error("first-cut cold probe did not release the owner-reader boundary");
   intro.prepare_supported_first_cut_player();
   const auto first_cut=intro.first_cut_player_session();
   if(first_cut.initialization().phase_one_complete() ||
@@ -127,6 +169,7 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
     throw std::runtime_error("first-cut cold probe observed an unexpected lifecycle transition");
   std::cout << "First-cut cold probe verified\n"
             << "reader-states=2\n"
+            << "owner-envelope=verified\n"
             << "phase-one=not-run\n"
             << "phase-two=not-run\n"
             << "renderer=not-admitted\n"
