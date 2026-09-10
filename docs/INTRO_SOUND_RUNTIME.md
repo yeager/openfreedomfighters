@@ -112,11 +112,13 @@ playback or readiness, so native startup keeps this contract unreachable until
 the complete lifecycle and output-channel services are admitted.
 
 The concrete owner-reader boundary is now retained for both sound owners. At
-the matching processed deferred record it applies the already parsed owner
-prefix to that owner's freshly allocated canonical record exactly once and
-copies each attached component's parser-validated fields into its cold runtime
-state. A scene without a record backend still retains those component fields but
-does not mutate a record. This reader does not resolve authored event or target
+the matching processed deferred record it first confirms the four
+delimiter-bounded payloads beginning at the parsed owner-prefix boundary, then
+applies the already parsed owner prefix to that owner's freshly allocated
+canonical record exactly once and copies each attached component's
+parser-validated fields into its cold runtime state. A scene without a record
+backend still retains those component fields but does not mutate a record. This
+reader does not resolve authored event or target
 references, prepare a record, allocate a channel, register component events or
 enter either lifecycle phase.
 

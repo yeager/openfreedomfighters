@@ -79,10 +79,13 @@ creates a playback acknowledgement or `SoundReady` event. Mutable sound records
 and explicit preparation now exist in the [retained backend](INTRO_SOUND_RUNTIME.md);
 component callbacks and actual playback still need to be connected.
 
-The sound-owner reader validates its fixed prefix and attachment identities,
-not the attached component payloads. The SND parser has a 1 MiB native budget
-after archive extraction, not an extraction allocation limit. Retained bank
-views reopen files by path for offline reads. The
+The sound-owner reader validates its fixed prefix, attachment identities, and
+the four delimiter-bounded attachment payloads from the parsed prefix offset
+before it mutates a canonical sound record. This is a structural boundary
+check only; it does not admit a component, decode a stream, or start audio.
+The SND parser has a 1 MiB native budget after archive extraction, not an
+extraction allocation limit. Retained bank views reopen files by path for
+offline reads. The
 [incremental Vorbis path](INTRO_AUDIO_STREAMING.md) instead owns an opened reader
 for its lifetime. Neither path makes installation files immutable after startup
 verification.

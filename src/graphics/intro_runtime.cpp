@@ -177,12 +177,6 @@ void IntroRuntime::apply_supported_sound_owner_deferred_reader(
       sound.owner_binding_ || sound.active_)
     throw std::runtime_error("Sound owner source reader cannot run twice or after preparation");
 
-  // A scene can retain its parsed sound graph without an output registry. That
-  // path still retains every component field below, but owns no canonical
-  // record to mutate and therefore cannot accidentally issue playback.
-  if(sound.has_record())
-    application_.sound_records().apply_source(sound.record(),sound.source_->source);
-
   const auto attachments=owner_components(sound.handle());
   constexpr std::array<std::string_view,4> factories{
       "ZSNDOBJ_SoundExtend","ZSNDOBJ_SoundNotify","ZSNDOBJ_SoundSegment","ZGEOM_ZSetZDefine"};
@@ -191,6 +185,28 @@ void IntroRuntime::apply_supported_sound_owner_deferred_reader(
   for(std::size_t index=0;index<attachments.size();++index)
     if(components_.at(attachments[index]).source().factory_name!=factories[index])
       throw std::runtime_error("Sound owner reader attachment order is unsupported");
+
+  // The typed attachment parser owns field semantics, but the deferred owner
+  // reader also proves its four payload boundaries from the parsed prefix. It
+  // remains read-only: a delimiter count is not component admission or audio
+  // readiness. Perform it before touching a canonical sound record.
+  const auto block=resources_.sources().deferred_source_block(work.source_directory_index);
+  const auto deferred_offset=static_cast<std::size_t>(owner_source.deferred_source_offset);
+  const auto component_offset=static_cast<std::size_t>(sound.source_->source.component_groups_offset);
+  if(component_offset<deferred_offset || component_offset-deferred_offset<sizeof(std::uint32_t) ||
+      component_offset-deferred_offset>=block.size())
+    throw std::runtime_error("Sound owner reader component payload offset is unsupported");
+  const auto payload_shape=data::DeferredAttachmentDispatchClassifier::observe(
+      block.subspan(component_offset-deferred_offset));
+  if(payload_shape.shape!=data::DeferredAttachmentDispatchShape::attachment_delimiter_precedes_terminal ||
+      payload_shape.delimiter_count!=factories.size())
+    throw std::runtime_error("Sound owner reader component payload count is unsupported");
+
+  // A scene can retain its parsed sound graph without an output registry. That
+  // path still retains every component field below, but owns no canonical
+  // record to mutate and therefore cannot accidentally issue playback.
+  if(sound.has_record())
+    application_.sound_records().apply_source(sound.record(),sound.source_->source);
 
   const auto& authored=sound.source_->attachments;
   auto& extend=constructed_picture_components_.at(attachments[0]).sound_extend;
