@@ -2100,7 +2100,9 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
     }
 
     if(const auto& renderer=services.renderer_resource_payload) {
-      const auto parsed=services.parse_renderer_resource_payload(renderer->bytes);
+      const auto prepared=prepare_intro_renderer_relocation_payload(
+          renderer->bytes,services.resolve_renderer_reference);
+      const auto parsed=services.parse_renderer_resource_payload(prepared.bytes);
       if(!parsed.identity) throw std::runtime_error("Renderer-resource parser did not return a live container");
       // Retain the manager's logical ownership before releasing only the
       // construction reference. This is not renderer readiness.

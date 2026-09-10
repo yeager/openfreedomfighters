@@ -104,6 +104,7 @@ add_library(off_core
     src/graphics/scene_render.cpp
     src/graphics/scene_gpu_plan.cpp
     src/graphics/intro_renderer_relocation_prefix.cpp
+    src/graphics/intro_renderer_workspace_layout.cpp
     src/graphics/startup_graphics_asset.cpp
     src/graphics/intro_prepared_resources.cpp
     src/graphics/intro_runtime.cpp
@@ -473,6 +474,12 @@ if(BUILD_TESTING)
     target_link_libraries(off_intro_renderer_relocation_prefix_tests PRIVATE off_core)
     add_test(NAME off_intro_renderer_relocation_prefix_tests
         COMMAND off_intro_renderer_relocation_prefix_tests)
+
+    add_executable(off_intro_renderer_workspace_layout_tests
+        tests/intro_renderer_workspace_layout_tests.cpp)
+    target_link_libraries(off_intro_renderer_workspace_layout_tests PRIVATE off_core)
+    add_test(NAME off_intro_renderer_workspace_layout_tests
+        COMMAND off_intro_renderer_workspace_layout_tests)
 
     add_executable(off_cut_timeline_tests tests/cut_timeline_tests.cpp)
     target_link_libraries(off_cut_timeline_tests PRIVATE off_core)

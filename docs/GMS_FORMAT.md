@@ -50,6 +50,14 @@ addresses remain unchanged. The portable preparation API performs this pass on
 an owned copy and publishes it only after all lookups succeed; this still does
 not establish a renderer-record grammar or draw readiness.
 
+The post-prefix bytes are also bounded as two source-backed writable workspace
+ranges. Header word 2 frames `word2 / 2` eight-byte slots immediately after
+the prefix; header word 1 then frames `floor(word1 / 4)` sixteen-byte slots.
+Any final `word1 % 4` words are retained opaque. The payload length must equal
+`4 * (word0 + word1 + word2)`. For `FF-Intro`, this is 2,000 eight-byte slots
+followed by 2,560 sixteen-byte slots. The original constructor supplies their
+backing bytes to generic pool initializers; it does not establish draw records.
+
 The object-source directory begins with a 32-bit entry count followed by eight-byte entries:
 
 | Entry offset | Size | Meaning |

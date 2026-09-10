@@ -5,6 +5,7 @@
 #include "off/data/keys_backing_evaluator.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
+#include "off/graphics/intro_renderer_relocation_prefix.hpp"
 #include "off/graphics/intro_controller_initialization.hpp"
 #include "off/graphics/intro_lifecycle_admission.hpp"
 #include "off/runtime/application_services.hpp"
@@ -467,6 +468,9 @@ struct IntroOuterLoaderTailServices {
   std::function<void(IntroNamedGlobalPreparedReader&)> relocate_named_global_references;
   std::function<void(std::string_view,IntroNamedGlobalPreparedReader&)> read_named_global_payload;
   std::optional<IntroRendererResourcePayload> renderer_resource_payload;
+  // Resolves the reviewed 32-bit renderer-prefix lookup key. A payload with
+  // nonzero tagged references cannot be handed to its typed reader without it.
+  std::function<std::optional<std::uint32_t>(std::uint32_t)> resolve_renderer_reference;
   std::function<IntroRendererResourceContainer(std::span<const std::byte>)> parse_renderer_resource_payload;
   std::function<void(IntroRendererResourceContainer)> release_renderer_construction_reference;
   std::vector<IntroResourceAssociationRecord> resource_associations;

@@ -1215,7 +1215,10 @@ struct CompleteOuterLoaderTailObservation final {
         const std::array<std::byte,15> named_payload{std::byte{'G'},std::byte{'l'},std::byte{'o'},
             std::byte{'b'},std::byte{'a'},std::byte{'l'},std::byte{},std::byte{8},std::byte{},
             std::byte{},std::byte{},std::byte{0x31},std::byte{0x32},std::byte{0x33},std::byte{0x34}};
-        const std::array<std::byte,3> renderer_payload{std::byte{1},std::byte{2},std::byte{3}};
+        const std::array<std::byte,24> renderer_payload{std::byte{6},std::byte{},std::byte{},std::byte{},
+            std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},
+            std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},
+            std::byte{1},std::byte{1},std::byte{},std::byte{}};
     [[nodiscard]] off::graphics::IntroOuterLoaderTailServices services() {
         const auto association_raw=[this](std::size_t source) {
           const auto offset=host.resources().sources().directory()[source].local_slot_index*112U;
@@ -1236,8 +1239,13 @@ struct CompleteOuterLoaderTailObservation final {
               check(named_payload[12]==std::byte{0x32},"named relocation never mutates the source payload");
               tail_events.push_back("named-reader");},
             .renderer_resource_payload=off::graphics::IntroRendererResourcePayload{renderer_payload},
+            .resolve_renderer_reference=[this](std::uint32_t key) -> std::optional<std::uint32_t> {
+              check(key==0x40000160U,"renderer relocation applies its independent prefix lookup transform");
+              tail_events.push_back("renderer-relocate"); return 0x880U;},
             .parse_renderer_resource_payload=[this](std::span<const std::byte> payload) {
-              check(payload.size()==renderer_payload.size() && std::equal(payload.begin(),payload.end(),renderer_payload.begin()),"renderer parser receives the complete encoded payload");tail_events.push_back("renderer-parse");return off::graphics::IntroRendererResourceContainer{42};},
+              check(payload.size()==renderer_payload.size() && payload[20]==std::byte{0x81} && payload[21]==std::byte{8} &&
+                        payload[22]==std::byte{} && payload[23]==std::byte{} && renderer_payload[20]==std::byte{1} &&
+                        renderer_payload[21]==std::byte{1},"renderer parser receives an owned, relocated complete payload");tail_events.push_back("renderer-parse");return off::graphics::IntroRendererResourceContainer{42};},
             .release_renderer_construction_reference=[this](auto container) {check(container.identity==42,"release only the parsed renderer construction reference");tail_events.push_back("renderer-release");},
             .resource_associations={{association_raw(6),association_raw(8)}},
             .associate_live_resources=[this](auto first,auto second) {check(first==host.directory_resource_mapping()[6] && second==host.directory_resource_mapping()[8],"association receives both independently resolved live resources");tail_events.push_back("associate");},
@@ -1271,7 +1279,7 @@ static OFF_NOINLINE void check_complete_outer_loader_tail(
               host.first_auxiliary_array().empty() && host.second_auxiliary_array().empty(),
               "tail retains parsed renderer ownership and preserves absent auxiliary arrays as zero-count");
         check(observation.spatial.size()==host.saved_resource_flags().size(),"first saved pass visits every saved entry");
-        std::vector<std::string> expected_tail{"relocate","named-reader","renderer-parse","renderer-release",
+        std::vector<std::string> expected_tail{"relocate","named-reader","renderer-relocate","renderer-parse","renderer-release",
             "associate","release","camera-query",
             "transform","scene","scene","scene"};
         for(const auto& saved:host.saved_resource_flags()) expected_tail.push_back("spatial");

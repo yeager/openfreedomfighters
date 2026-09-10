@@ -64,8 +64,6 @@ IntroRendererRelocationPreparedPayload
 prepare_intro_renderer_relocation_payload(
     std::span<const std::byte> payload,
     const std::function<std::optional<std::uint32_t>(std::uint32_t)> &resolver) {
-  if (!resolver)
-    throw std::runtime_error("Renderer relocation requires a resolver");
   IntroRendererRelocationPreparedPayload result{
       .bytes = {payload.begin(), payload.end()},
       .prefix = parse_intro_renderer_relocation_prefix(payload)};
@@ -76,6 +74,8 @@ prepare_intro_renderer_relocation_payload(
     for (const auto &reference : group.references) {
       if (reference.address() == 0U)
         continue;
+      if (!resolver)
+        throw std::runtime_error("Renderer relocation requires a resolver");
       if (reference.address() >= domain_marker ||
           reference.address() > domain_marker - 1U - bias)
         throw std::runtime_error("Renderer relocation reference is outside its source domain");
