@@ -1,4 +1,5 @@
 #include "off/graphics/startup_graphics_expanded_plan.hpp"
+#include "off/graphics/startup_graphics_transform_chain.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -86,6 +87,26 @@ StartupGraphicsExpandedPlan expand_startup_graphics_plan(
     result.submissions_.push_back(output);
   }
   return result;
+}
+
+StartupGraphicsExpandedPlan
+expand_startup_graphics_plan_with_composed_transforms(
+    const StartupGraphicsAsset &asset, std::uint8_t requested_state) {
+  const auto prepared = prepare_startup_graphics_plan(asset, requested_state);
+  std::vector<StartupGraphicsPictureTransform> transforms;
+  transforms.reserve(prepared.pictures().size());
+  const auto &rows = asset.composition().rows();
+  for (const auto &picture : prepared.pictures()) {
+    if (picture.row_index >= rows.size() || picture.picture_index >= 3U)
+      throw std::runtime_error("prepared startup picture is outside composition");
+    const auto &source = rows[picture.row_index].pictures[picture.picture_index];
+    if (source.directory_index != picture.picture_directory_index)
+      throw std::runtime_error("prepared startup picture identity disagrees with composition");
+    transforms.push_back(
+        {picture.picture_directory_index,
+         compose_startup_graphics_transform_chain(source.transform_chain)});
+  }
+  return expand_startup_graphics_plan(prepared, transforms);
 }
 
 } // namespace off::graphics

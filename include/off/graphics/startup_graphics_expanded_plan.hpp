@@ -75,4 +75,12 @@ private:
     const StartupGraphicsPreparedPlan &prepared,
     std::span<const StartupGraphicsPictureTransform> transforms);
 
+// Convenience source bridge for the recovered startup menu. It prepares the
+// requested visibility state, composes every retained root-to-picture chain,
+// and expands descriptor geometry. It still does not select a camera, project
+// to a window, create GPU resources, or submit pixels.
+[[nodiscard]] StartupGraphicsExpandedPlan
+expand_startup_graphics_plan_with_composed_transforms(
+    const StartupGraphicsAsset &asset, std::uint8_t requested_state);
+
 } // namespace off::graphics

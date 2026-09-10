@@ -295,6 +295,12 @@ int main(int argc, char **argv) {
 
   const auto prepared =
       off::graphics::prepare_startup_graphics_plan(asset, 0x01U);
+  const auto composed_expanded =
+      off::graphics::expand_startup_graphics_plan_with_composed_transforms(
+          asset, 0x01U);
+  check(composed_expanded.pictures().size() == prepared.pictures().size() &&
+            composed_expanded.submissions().size() == prepared.submissions().size(),
+        "source bridge expands every prepared startup submission");
   check(prepared.requested_state() == 0x01U &&
             prepared.effective_state() == 0x01U &&
             prepared.resources().size() == 6 &&
