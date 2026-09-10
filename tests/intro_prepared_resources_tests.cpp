@@ -1056,6 +1056,9 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
             reader_events.push_back("component");
             if(work.source_directory_index==host.resources().controller_index())
               host.apply_supported_movie_control_component_reader(work);
+            if(work.source_directory_index==host.resources().first_cut_index() &&
+                host.resources().sources().deferred_source_block(work.source_directory_index).size()==171U)
+              host.apply_supported_first_cut_component_reader(work);
             if(work.source_directory_index==host.resources().window_index()) {
               const auto& window=host.window_for_owner(host.source_handle(work.source_directory_index));
               check(host.window_camera_projection_applied() && window.cameras==std::vector{host.source_handle(host.resources().camera_index())} &&

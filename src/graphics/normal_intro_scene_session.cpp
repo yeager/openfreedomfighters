@@ -72,6 +72,10 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                if (work.source_directory_index ==
                    runtime_->resources().controller_index())
                  runtime_->apply_supported_movie_control_component_reader(work);
+               if (work.source_directory_index ==
+                   runtime_->resources().first_cut_index() &&
+                   runtime_->resources().sources().deferred_source_block(work.source_directory_index).size()==171U)
+                 runtime_->apply_supported_first_cut_component_reader(work);
              },
          .end_reader_service = [] {}});
     stage_ = NormalIntroSceneSessionStage::reader_bracket_complete;

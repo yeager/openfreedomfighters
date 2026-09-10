@@ -4,6 +4,7 @@
 #include "off/cutscene/first_cut_player_initialization.hpp"
 #include "off/graphics/intro_prepared_resources.hpp"
 #include "off/data/keys_backing_evaluator.hpp"
+#include "off/data/first_cut_component_payload_session.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_renderer_relocation_prefix.hpp"
@@ -848,6 +849,10 @@ public:
   // publish immutable source/resource state and do not execute cutscene work.
   void apply_supported_first_cut_sequence_deferred_reader(const IntroDeferredReaderWork& work);
   void apply_supported_first_cut_list_deferred_reader(const IntroDeferredReaderWork& work);
+  // Reads the six bounded first-cut attachment payloads after their owner
+  // reader. This retains parsed source values only; it cannot schedule a cut
+  // or cause a lifecycle, audio, or renderer effect.
+  void apply_supported_first_cut_component_reader(const IntroDeferredReaderWork& work);
   void apply_supported_first_cut_camera_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const IntroFirstCutSequenceReaderState* first_cut_sequence_reader_state() const noexcept {return first_cut_sequence_reader_state_?&*first_cut_sequence_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutListReaderState* first_cut_list_reader_state() const noexcept {return first_cut_list_reader_state_?&*first_cut_list_reader_state_:nullptr;}

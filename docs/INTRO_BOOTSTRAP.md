@@ -779,13 +779,14 @@ starts a scene, audio stream, transition, or renderer.
 `openfreedomfighters --probe-first-cut-cold --data <owned-data-root>` is an
 opt-in integration probe for the supported Steam installation. It verifies the
 install, constructs the checked intro directory, runs the existing
-postconstruction reader bracket, and creates the first-cut session. It then
-requires that both first-cut lifecycle phases and the ordered-command receiver
-are still cold. It also validates the owner envelope and the bounded first
-component payload plus the five following command payloads against independently
-strict GMS readers. It verifies all five command payloads in authored order
-and retains the enclosing terminal. The fixed report contains no game-data
-identities or payloads.
+postconstruction reader bracket, including its bounded first-cut component
+reader for the reviewed 171-byte owner form, and creates the first-cut session. It then requires that both first-cut
+lifecycle phases and the ordered-command receiver are still cold. It confirms
+the owner envelope and independently rechecks the bounded first component
+payload plus the five following command payloads against strict GMS readers.
+It verifies all five command payloads in authored order and retains the
+enclosing terminal. The fixed report contains no game-data identities or
+payloads.
 
 The probe creates no SDL window and does not admit a renderer, start audio,
 schedule an event, execute a lifecycle phase, or play a cutscene. It is not a

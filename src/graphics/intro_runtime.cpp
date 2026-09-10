@@ -1,5 +1,6 @@
 #include "off/graphics/intro_runtime.hpp"
 #include "off/data/deferred_attachment_dispatch_shape.hpp"
+#include "off/data/first_cut_owner_reader.hpp"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -2959,6 +2960,39 @@ void IntroRuntime::apply_supported_first_cut_list_deferred_reader(
   first_cut_list_reader_state_=std::move(state);
   try { record_supported_reader_admission(work); }
   catch(...) { first_cut_list_reader_state_.reset(); throw; }
+}
+
+void IntroRuntime::apply_supported_first_cut_component_reader(
+    const IntroDeferredReaderWork& work) {
+  const auto source_index=resources_.first_cut_index();
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !work.processed ||
+      work.source_directory_index!=source_index || !first_cut_list_reader_state_)
+    throw std::runtime_error("First-cut component reader requires its completed owner reader");
+  if(std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate) {
+       return std::addressof(candidate)==std::addressof(work);
+     })==deferred_reader_work_.end())
+    throw std::runtime_error("First-cut component reader requires bracket-owned work");
+  const auto& source=resources_.sources().directory().at(source_index);
+  if(source.deferred_source_offset!=work.source_offset ||
+      directory_resource_mapping_.at(source_index)!=work.resource ||
+      first_cut_list_reader_state_->owner!=source_handle(source_index) ||
+      first_cut_list_reader_state_->resource!=work.resource)
+    throw std::runtime_error("First-cut component reader source identity is unsupported");
+  const auto parsed=data::FirstCutComponentPayloadSession::read(
+      data::FirstCutOwnerReader::read(resources_.sources().deferred_source_block(source_index)));
+  const auto& authored=resources_.first_cut();
+  if(parsed.list.controls!=authored.settings_words ||
+      std::bit_cast<std::uint32_t>(parsed.list.final_value)!=std::bit_cast<std::uint32_t>(authored.final_value))
+    throw std::runtime_error("First-cut component reader list payload disagrees with prepared source");
+  for(std::size_t index=0;index<authored.commands.size();++index) {
+    const auto& record=parsed.commands[index];
+    const auto& command=authored.commands[index];
+    if(record.timeline_position!=command.timeline_position ||
+        record.event_reference!=command.event_reference ||
+        record.target_reference!=command.target_reference ||
+        record.event_argument!=command.event_argument || record.target_name!=command.target_name)
+      throw std::runtime_error("First-cut component reader command payload disagrees with prepared source");
+  }
 }
 
 void IntroRuntime::apply_supported_first_cut_camera_deferred_reader(
