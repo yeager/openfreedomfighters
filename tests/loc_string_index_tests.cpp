@@ -1,7 +1,10 @@
 #include "off/data/loc_string_index.hpp"
+#include "off/data/zip_archive.hpp"
 
 #include <array>
 #include <cstddef>
+#include <cstdlib>
+#include <filesystem>
 #include <iostream>
 
 int main() {
@@ -23,6 +26,17 @@ int main() {
   if (!off::data::LocStringIndex::scan(unterminated).candidates().empty()) {
     std::cerr << "LOC candidate scan accepted an unterminated run\n";
     return 1;
+  }
+  // CI has no retail data. An owner may opt in to validate the scanner against
+  // their local archive without copying its bytes into this repository.
+  if (const auto* root = std::getenv("OFF_LOC_DATA_ROOT"); root != nullptr && *root != '\0') {
+    const auto archive = off::data::ZipArchive::open(
+        std::filesystem::path(root) / "Scenes" / "FF-StartUp.ZIP");
+    const auto* entry = archive.find("SCENES/FF-StartUp.LOC");
+    if (entry == nullptr || off::data::LocStringIndex::scan(archive.read(*entry)).candidates().empty()) {
+      std::cerr << "owned LOC candidate scan failed\n";
+      return 1;
+    }
   }
   return 0;
 }
