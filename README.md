@@ -139,7 +139,7 @@ to obtain the source tree; it is not consulted by CMake.
 
 | Platform | Toolchain and direct dependencies |
 |---|---|
-| Ubuntu/Debian | `build-essential cmake ninja-build pkg-config zlib1g-dev libvorbis-dev libfreetype-dev` |
+| Ubuntu/Debian | `build-essential cmake ninja-build pkg-config zlib1g-dev libvorbis-dev libasound2-dev libfreetype-dev libgl-dev libegl-dev libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev libdecor-0-dev libdbus-1-dev libibus-1.0-dev libsamplerate0-dev libpulse-dev` |
 | macOS | Xcode Command Line Tools, then `brew install cmake ninja zlib libvorbis freetype` |
 | Windows | Visual Studio 2022 with **Desktop development with C++**, a current Windows SDK, CMake, and either Ninja or the Visual Studio generator. Provide zlib, FreeType, libogg, and libvorbis (including `vorbisfile` and `vorbisenc`) through `CMAKE_PREFIX_PATH`. The pinned source-build recipe used by CI is [`.github/actions/windows-dependencies/action.yml`](.github/actions/windows-dependencies/action.yml). |
 
@@ -147,10 +147,10 @@ SDL3 is the only graphics/window/input dependency. CMake uses an installed SDL
 3.2+ package when available; otherwise it downloads checksum-pinned SDL 3.4.10
 and SDL_ttf 3.2.2 source archives while configuring. That fallback requires
 network access and the platform headers SDL itself enables. On Ubuntu/Debian,
-the complete fallback package set used in CI is recorded in
-[`.github/workflows/build.yml`](.github/workflows/build.yml); installing a
-compatible system SDL3 package is usually simpler for local builds. SDL_ttf is
-always built from the pinned archive and uses the required system FreeType.
+the full package list above was verified with a clean Ubuntu 24.04 x86-64
+fallback build. Installing a compatible system SDL3 package is usually simpler
+for local builds. SDL_ttf is always built from the pinned archive and uses the
+required system FreeType.
 
 MP3 and FLAC soundtrack support uses the vendored `dr_mp3` and `dr_flac`
 headers, so no MP3 or FLAC development package is needed. Shader compiler tools,
