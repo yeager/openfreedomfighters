@@ -38,6 +38,10 @@
 #include <string_view>
 #include <utility>
 
+#ifndef OFF_VERSION
+#error "OFF_VERSION must be supplied by the CMake release version"
+#endif
+
 namespace {
 
 void usage(std::ostream &output) {
@@ -420,7 +424,7 @@ int main(int argc, char **argv) {
       usage(std::cout);
       return 0;
     } else if (argument == "--version") {
-      std::cout << "OpenFreedomFighters 0.1.0\n";
+      std::cout << "OpenFreedomFighters " OFF_VERSION "\n";
       return 0;
     } else {
       std::cerr << "Unknown or incomplete argument: " << argument << '\n';
