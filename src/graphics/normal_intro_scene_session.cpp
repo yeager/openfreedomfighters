@@ -1,5 +1,6 @@
 #include "off/graphics/normal_intro_scene_session.hpp"
 #include "off/graphics/intro_runtime.hpp"
+#include "off/data/deferred_compact_block_profile.hpp"
 
 #include <stdexcept>
 #include <utility>
@@ -39,6 +40,14 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                  runtime_->apply_supported_first_cut_camera_deferred_reader(work);
                if (work.source_directory_index >= 43U && work.source_directory_index <= 47U)
                  runtime_->apply_supported_following_visual_owner_deferred_reader(work);
+               const auto &source = r.sources().directory().at(work.source_directory_index);
+               if (source.source_type == 0x00100001U && source.attachments.empty()) {
+                 const auto block = r.sources().deferred_source_block(work.source_directory_index);
+                 if (block.size() > sizeof(std::uint32_t) &&
+                     data::DeferredCompactBlockProfiler::profile(
+                         block.subspan(sizeof(std::uint32_t))).framing_notation == "i3f2i3i3i3|!")
+                   runtime_->apply_supported_basic_group_owner_deferred_reader(work);
+               }
                const auto legal =
                    r.sources().local_source_for_authored_reference(
                        r.member().references[1]);

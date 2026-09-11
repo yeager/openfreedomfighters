@@ -78,6 +78,8 @@ owner, resource and bounded framing sequence, retaining no field values or
 inferred group behavior. Other `ZGROUP` bodies remain unclassified: they have
 different tag forms or attachments. These receipts do not count as reader
 admissions and do not attach children, mutate flags, or run lifecycle work.
+The normal reader bracket invokes this receipt for the exact form, so the
+boundary is checked in ordinary startup rather than only in isolated tests.
 MatPosAnim is explicitly outside the current deferred-reader admission path:
 the supported intro has 227 associated deferred records, all with an attachment
 delimiter before the owner terminal (249 delimiters in total). Its owner-local
