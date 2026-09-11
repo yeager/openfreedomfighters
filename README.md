@@ -7,8 +7,8 @@
 A clean-room native reimplementation of *Freedom Fighters*, targeting Windows,
 macOS, Linux and Steam Deck.
 
-**Not playable yet.** The build opens a window and loads startup data, but does
-not render the original intro or run the menus and gameplay.
+**Not playable yet.** The build opens a window and loads startup data, but
+normal startup does not yet run the original intro, menus, or gameplay.
 
 You need your own copy of the game. Buy *Freedom Fighters* from the
 [official Steam store page](https://store.steampowered.com/app/1347780/Freedom_Fighters/).
@@ -44,7 +44,12 @@ for a portable installation.
   updates in tests; their normal input and component dispatch are not connected.
 - A normal two-frame smoke run on the supported owned installation reaches the
   native SDL/Vulkan backend, validates all data, uploads six startup images and
-  26 intro images, and then exits. It does not draw the original intro yet.
+  26 intro images, and then exits. Normal startup does not draw the original
+  intro yet.
+- `--diagnostic-intro-picture` can render one source-backed first-cut picture
+  with its decoded images and quad geometry. It uses an explicitly project-owned
+  fit projection and baseline GPU state, so it is a visual diagnostic—not
+  cutscene playback or a recovered camera path.
 - Clock and sound preferences now share application-lifetime state across intro
   scenes. This does not add intro playback or audible sound.
 - The two intro sound definitions resolve to their original audio-bank streams
@@ -184,6 +189,10 @@ F10 toggles settings. Close the window to exit. For development:
   decoded images and 77 source-backed quads through the same source-only GPU
   diagnostic path. Its fit projection is a comparison aid, not recovered menu
   camera, material, or layout behavior.
+- `--diagnostic-intro-picture` draws the retained first-cut picture through the
+  indexed SDL GPU renderer. It uses the real decoded picture images and quads,
+  but a project-authored fit projection and baseline render state; it is not
+  automatic intro playback or a faithful cutscene camera.
 - `--probe-startup-boot` runs an opt-in, no-window structural diagnostic for
   the checked `FF-StartUp` BootMenu source. It prints only call order and GMS
   directory ordinals plus a content-free hierarchy fingerprint; it creates no

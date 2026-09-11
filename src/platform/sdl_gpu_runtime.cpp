@@ -1,5 +1,6 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
+#include "off/platform/intro_preview_diagnostic.hpp"
 #include "off/platform/sdl_locale.hpp"
 #include "off/platform/sdl_menu_gamepad.hpp"
 #include "off/ui/graphics_menu_draw.hpp"
@@ -1104,6 +1105,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,
                     graphics::IntroRuntime *intro,
+                    const graphics::IntroPreviewSnapshot *intro_preview_diagnostic,
                     std::size_t frame_limit, bool show_graphics_menu,
                     const std::filesystem::path &screenshot_path,
                     std::string_view explicit_locale,
@@ -1200,6 +1202,16 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       gpu_intro = std::make_unique<SdlIntroRenderer>(device, intro->resources().images());
   } catch (const std::exception& error) {
     const RuntimeResult result{false, std::string("intro renderer initialization failed: ") + error.what()};
+    release_startup_images(device, gpu_startup);
+    release_overlay(device, overlay);
+    release_scene(device, gpu);
+    SDL_ReleaseWindowFromGPUDevice(device, window);
+    SDL_DestroyGPUDevice(device);
+    return result;
+  }
+  if (intro_preview_diagnostic != nullptr && gpu_intro == nullptr) {
+    const RuntimeResult result{false,
+        "intro diagnostic requires retained intro image resources"};
     release_startup_images(device, gpu_startup);
     release_overlay(device, overlay);
     release_scene(device, gpu);
@@ -1466,6 +1478,25 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       release_overlay_transfers();
       break;
     }
+    std::optional<IntroPreviewDiagnosticSubmission> diagnostic_submission;
+    std::unique_ptr<SdlIntroFrame> diagnostic_intro_frame;
+    if (intro_preview_diagnostic != nullptr) {
+      try {
+        diagnostic_submission.emplace(IntroPreviewDiagnosticSubmission::build(
+            *intro_preview_diagnostic, swapchain_width, swapchain_height,
+            SDL_GetGPUSwapchainTextureFormat(device, window)));
+        diagnostic_intro_frame = gpu_intro->prepare(command,
+                                                     diagnostic_submission->draws());
+      } catch (const std::exception &error) {
+        result = {.success = false,
+                  .message = std::string("intro diagnostic frame preparation failed: ") +
+                             error.what()};
+        SDL_SubmitGPUCommandBuffer(command);
+        SDL_WaitForGPUIdle(device);
+        release_overlay_transfers();
+        break;
+      }
+    }
     if (swapchain != nullptr) {
       const SDL_GPUColorTargetInfo target{
           .texture = frame_target,
@@ -1544,6 +1575,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
               pass, static_cast<Uint32>(draw.index_count), 1,
               static_cast<Uint32>(draw.first_index), 0, 0);
         }
+      if (diagnostic_intro_frame != nullptr)
+        diagnostic_intro_frame->draw(command, pass);
       SDL_EndGPURenderPass(pass);
 
       if (!overlay_batch.vertices.empty()) {
@@ -1715,6 +1748,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     if (overlay_transfer != nullptr) {
       SDL_WaitForGPUIdle(device);
     }
+    if (diagnostic_intro_frame != nullptr)
+      SDL_WaitForGPUIdle(device);
     release_overlay_transfers();
     ++frames;
     if (frame_limit != 0 && frames >= frame_limit)
@@ -1724,6 +1759,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   if (result.success && intro)
     result.message += " (" + std::to_string(gpu_intro->image_count()) +
         " source-backed intro images uploaded; automatic intro playback pending)";
+  if (result.success && intro_preview_diagnostic != nullptr)
+    result.message += " (source-backed intro picture diagnostic rendered with generic fit projection)";
   gpu_intro.reset();
   release_overlay(device, overlay);
   release_startup_images(device, gpu_startup);

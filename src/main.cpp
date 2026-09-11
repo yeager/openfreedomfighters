@@ -49,7 +49,7 @@ void usage(std::ostream &output) {
   output << "Usage: openfreedomfighters [--data PATH] [--mode original|modern] "
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] "
-            "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] "
+            "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] "
             "[--probe-startup-boot] [--probe-first-cut-cold]\n";
 }
 
@@ -378,6 +378,7 @@ int main(int argc, char **argv) {
   bool show_graphics_menu = false;
   bool diagnostic_scene = false;
   bool diagnostic_startup_graphics = false;
+  bool diagnostic_intro_picture = false;
   bool probe_startup_boot = false;
   bool probe_first_cut_cold = false;
   bool mode_specified = false;
@@ -415,6 +416,8 @@ int main(int argc, char **argv) {
         diagnostic_scene_archive = argv[++index];
     } else if (argument == "--diagnostic-startup-graphics") {
       diagnostic_startup_graphics = true;
+    } else if (argument == "--diagnostic-intro-picture") {
+      diagnostic_intro_picture = true;
     } else if (argument == "--probe-startup-boot") {
       probe_startup_boot = true;
     } else if (argument == "--probe-first-cut-cold") {
@@ -448,7 +451,10 @@ int main(int argc, char **argv) {
     usage(std::cerr);
     return 2;
   }
-  if (diagnostic_scene && diagnostic_startup_graphics) {
+  if (static_cast<unsigned>(diagnostic_scene) +
+          static_cast<unsigned>(diagnostic_startup_graphics) +
+          static_cast<unsigned>(diagnostic_intro_picture) >
+      1U) {
     std::cerr << "Select only one diagnostic renderer.\n";
     return 2;
   }
@@ -461,7 +467,7 @@ int main(int argc, char **argv) {
     return 2;
   }
   if (probe_startup_boot &&
-      (verify_only || diagnostic_scene || frame_limit != 0U ||
+      (verify_only || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() ||
        mode_specified)) {
     std::cerr
@@ -470,7 +476,7 @@ int main(int argc, char **argv) {
     return 2;
   }
   if (probe_first_cut_cold &&
-      (verify_only || probe_startup_boot || diagnostic_scene || frame_limit != 0U ||
+      (verify_only || probe_startup_boot || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified)) {
     std::cerr << "--probe-first-cut-cold cannot be combined with runtime options.\n";
     usage(std::cerr);
@@ -718,7 +724,7 @@ int main(int argc, char **argv) {
                    "indirect source resolution is pending.\n";
     }
   }
-  if (!diagnostic_scene && !diagnostic_startup_graphics)
+  if (!diagnostic_scene && !diagnostic_startup_graphics && !diagnostic_intro_picture)
     std::cout << "Authored startup resources loaded; world rendering pending. "
                  "This is not gameplay or a faithful rendered startup menu.\n";
   if (startup_graphics_cpu_plan)
@@ -728,6 +734,9 @@ int main(int argc, char **argv) {
   if (diagnostic_startup_graphics)
     std::cout << "Startup graphics diagnostic: source images and source quad "
                  "geometry, generic fit projection; not a faithful menu.\n";
+  if (diagnostic_intro_picture)
+    std::cout << "Intro picture diagnostic: source image data and source quad "
+                 "geometry, generic fit projection; not cutscene playback.\n";
   if (intro)
     std::cout << "Source-backed intro runtime retained: "
               << intro->pictures().size() << " picture definitions, "
@@ -775,7 +784,9 @@ int main(int argc, char **argv) {
                  "not activated.\n";
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       startup_window, mode, scene ? &*scene : nullptr, *startup_graphics,
-      ui_fonts, ui_textures, intro, frame_limit, show_graphics_menu,
+      ui_fonts, ui_textures, intro,
+      diagnostic_intro_picture ? &*intro_legal_picture_preflight : nullptr,
+      frame_limit, show_graphics_menu,
       screenshot_path, locale, diagnostic_startup_graphics);
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';

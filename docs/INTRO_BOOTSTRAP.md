@@ -105,9 +105,11 @@ type and source identity, not silently replaced by an empty callback.
 
 Controller activation must then update the actual group, camera, view and picture
 registries before the same update's ordered GPU submission. `sdl_gpu_runtime.cpp`
-currently uploads intro images but calls neither an intro update nor intro draw.
-Its loop is the integration point for the completed host, not evidence that the
-scene is already running.
+can render one explicitly selected picture through its opt-in diagnostic bridge,
+using source image data and quad geometry with project-authored fit projection
+and baseline GPU state. Normal startup still calls neither an intro update nor
+an admitted intro draw. Its loop is the integration point for the completed host,
+not evidence that the scene is already running.
 
 ## Retained native host
 
@@ -146,10 +148,12 @@ startup. All other deferred owner readers remain required boundaries.
 
 The window uploads the retained intro images once per device lifetime, separately
 from startup UI images, and releases them after GPU completion. Normal intro and
-diagnostic-scene ownership are mutually exclusive. Frame and view state remain
-owned by the host; they are not reset on each presentation frame. Automatic cut
-admission and actual intro draw submission are still missing. Unknown runtime
-resource flags are explicit, not copied from source flags or replaced by zero.
+diagnostic-scene ownership are mutually exclusive. The opt-in picture diagnostic
+prepares and submits only its retained snapshot; it has no lifecycle, camera,
+timeline, or automatic-selection authority. Frame and view state remain owned by
+the host; they are not reset on each presentation frame. Automatic cut admission
+and normal intro draw submission are still missing. Unknown runtime resource flags
+are explicit, not copied from source flags or replaced by zero.
 
 The existing synthetic integration suite now checks hierarchy identities, shared
 descriptor/material writes, live draw snapshots, immutable source preservation
@@ -182,9 +186,10 @@ behavior are unchanged.
 
 Normal startup with the owned Steam installation reaches SDL/Vulkan and exits
 after two presentation frames. It verifies 36 optional soundtrack files and
-uploads all 26 intro images. An earlier 45-second run timed out; the subsequent
-run with a 120-second ceiling completed. This proves the data-check,
-construction and GPU-upload path, not intro drawing, audio playback or the menu.
+uploads all 26 intro images. The separate opt-in picture diagnostic has rendered
+one source-backed picture to a private GPU readback with a generic fit projection.
+This proves the data-check, construction, GPU-upload and narrow diagnostic-draw
+paths, not automatic intro playback, audio playback, or the menu.
 
 ## Support-library boundary
 

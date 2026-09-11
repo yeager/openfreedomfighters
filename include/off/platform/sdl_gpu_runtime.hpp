@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/graphics/scene_gpu_plan.hpp"
+#include "off/graphics/intro_preview_builder.hpp"
 #include "off/graphics/intro_runtime.hpp"
 #include "off/graphics/startup_graphics_asset.hpp"
 #include "off/mode.hpp"
@@ -33,6 +34,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,
                     graphics::IntroRuntime *intro,
+                    const graphics::IntroPreviewSnapshot *intro_preview_diagnostic,
                     std::size_t frame_limit = 0,
                     bool show_graphics_menu = false,
                     const std::filesystem::path &screenshot_path = {},

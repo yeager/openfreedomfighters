@@ -240,6 +240,7 @@ endif()
 add_library(off_sdl_intro_renderer STATIC
     src/platform/sdl_intro_renderer.cpp
     src/platform/intro_picture_submission.cpp
+    src/platform/intro_preview_diagnostic.cpp
     src/platform/first_cut_picture_frame.cpp
     src/graphics/normal_intro_scene_host.cpp)
 add_library(off_sdl_intro_presentation STATIC src/platform/sdl_intro_presentation.cpp)
@@ -384,6 +385,9 @@ if(BUILD_TESTING)
     add_executable(off_intro_picture_submission_tests tests/intro_picture_submission_tests.cpp)
     target_link_libraries(off_intro_picture_submission_tests PRIVATE off_sdl_intro_renderer)
     add_test(NAME off_intro_picture_submission_tests COMMAND off_intro_picture_submission_tests)
+    add_executable(off_intro_preview_diagnostic_tests tests/intro_preview_diagnostic_tests.cpp)
+    target_link_libraries(off_intro_preview_diagnostic_tests PRIVATE off_sdl_intro_renderer)
+    add_test(NAME off_intro_preview_diagnostic_tests COMMAND off_intro_preview_diagnostic_tests)
     add_executable(off_first_cut_picture_frame_tests tests/first_cut_picture_frame_tests.cpp)
     target_link_libraries(off_first_cut_picture_frame_tests PRIVATE off_sdl_intro_renderer)
     add_test(NAME off_first_cut_picture_frame_tests COMMAND off_first_cut_picture_frame_tests)
