@@ -346,8 +346,10 @@ attachments. Independent fixtures also check an existing optional lookup
 service, bank separation, source transforms, property ownership and saved-flags
 order. Separate checked APIs model deferred-reader dispatch, approved reference
 translation, the loader tail, and global component-pass ordering. The tail
-accepts only caller-provided boundaries: an optional named/global byte payload
-whose complete header-bearing tagged block is copied, caller-relocated, and
+accepts concrete caller-provided services, but its payloads and association
+pairs now come through `IntroRuntime::outer_loader_source_inputs()`, which is
+borrowed directly from the installed intro resource. Its optional named/global
+byte payload has a complete header-bearing tagged block that is copied, caller-relocated, and
 cursor-reset before its typed-reader callback, an optional renderer-resource parser and
 construction-reference release, independently resolved resource associations,
 and optional auxiliary arrays. It retains no public serialized grammar and does

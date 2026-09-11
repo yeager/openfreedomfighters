@@ -577,6 +577,15 @@ struct IntroResourceAssociationRecord {
   // 0x40000000 reference-domain marker independently before each lookup.
   std::uint32_t first_reference{},second_reference{};
 };
+// Borrowed, source-owned input for the ordinary loader tail. These views remain
+// valid only while this IntroRuntime is alive. They make the retained GMS
+// sections available to a future concrete tail host without allowing that host
+// to substitute project-authored payloads for the installed scene data.
+struct IntroOuterLoaderSourceInputs {
+  std::optional<IntroNamedGlobalPayload> named_global_payload;
+  std::optional<IntroRendererResourcePayload> renderer_resource_payload;
+  std::vector<IntroResourceAssociationRecord> resource_associations;
+};
 struct IntroAuxiliaryArraySources {
   std::optional<std::vector<std::array<std::byte,12>>> first;
   std::optional<std::vector<std::array<std::byte,8>>> second;
@@ -796,6 +805,7 @@ public:
   // Global lifecycle, rendering, audio, and later scene operations remain
   // outside this boundary. Missing concrete services fail visibly.
   void run_outer_loader_tail_through_saved_services(const IntroOuterLoaderTailServices& services);
+  [[nodiscard]] IntroOuterLoaderSourceInputs outer_loader_source_inputs() const;
   [[nodiscard]] IntroOuterLoaderTailStage outer_loader_tail_stage() const noexcept {return outer_loader_tail_stage_;}
   [[nodiscard]] bool loader_source_lease_released() const noexcept {return loader_source_lease_released_;}
   [[nodiscard]] std::optional<IntroRendererResourceContainer> renderer_resource_container() const noexcept {

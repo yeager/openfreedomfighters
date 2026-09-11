@@ -1568,6 +1568,21 @@ struct CompleteOuterLoaderTailObservation final {
 
 static OFF_NOINLINE void check_complete_outer_loader_tail(
     off::graphics::IntroRuntime& host) {
+        const auto inputs=host.outer_loader_source_inputs();
+        const auto& retained=host.resources().outer_loader_sources();
+        const auto same_payload=[](const auto& supplied,const auto& source) {
+          return supplied.has_value()==source.has_value() &&
+              (!supplied || std::ranges::equal(supplied->bytes,*source));
+        };
+        check(same_payload(inputs.named_global_payload,retained.named_global) &&
+              same_payload(inputs.renderer_resource_payload,retained.renderer_resource) &&
+              inputs.resource_associations.size()==retained.resource_associations.size() &&
+              std::ranges::equal(inputs.resource_associations,retained.resource_associations,
+                  [](const auto& input,const auto& source) {
+                    return input.first_reference==source[0] &&
+                           input.second_reference==source[1];
+                  }),
+              "outer loader exposes only source-backed tail payloads and association pairs");
         CompleteOuterLoaderTailObservation observation{host};
         auto tail_services=observation.services();
         host.run_outer_loader_tail_through_saved_services(tail_services);

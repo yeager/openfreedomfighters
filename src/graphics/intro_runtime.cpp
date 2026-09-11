@@ -2255,6 +2255,19 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
   }
 }
 
+IntroOuterLoaderSourceInputs IntroRuntime::outer_loader_source_inputs() const {
+  const auto& sources=resources_.outer_loader_sources();
+  IntroOuterLoaderSourceInputs result;
+  if(sources.named_global)
+    result.named_global_payload=IntroNamedGlobalPayload{*sources.named_global};
+  if(sources.renderer_resource)
+    result.renderer_resource_payload=IntroRendererResourcePayload{*sources.renderer_resource};
+  result.resource_associations.reserve(sources.resource_associations.size());
+  for(const auto& association:sources.resource_associations)
+    result.resource_associations.push_back({association[0],association[1]});
+  return result;
+}
+
 std::optional<IntroRuntimeResourceHandle>
 IntroRuntime::resolve_marked_source_resource_reference(
     std::uint32_t reference) const {

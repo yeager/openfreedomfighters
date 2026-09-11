@@ -574,6 +574,24 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
           "first-cut cold probe found incomplete source-backed command delivery");
   }
   const auto tail_readiness=session->outer_loader_tail_readiness();
+  const auto tail_inputs=intro.outer_loader_source_inputs();
+  const auto& retained_tail_sources=intro.resources().outer_loader_sources();
+  const auto same_payload=[](const auto& supplied,const auto& retained) {
+    if(supplied.has_value()!=retained.has_value()) return false;
+    return !supplied || std::ranges::equal(supplied->bytes,*retained);
+  };
+  if(!same_payload(tail_inputs.named_global_payload,retained_tail_sources.named_global) ||
+      !same_payload(tail_inputs.renderer_resource_payload,
+                    retained_tail_sources.renderer_resource) ||
+      tail_inputs.resource_associations.size()!=
+          retained_tail_sources.resource_associations.size())
+    throw std::runtime_error("first-cut cold probe found incomplete loader-tail source inputs");
+  for(std::size_t index=0;index<tail_inputs.resource_associations.size();++index) {
+    const auto& input=tail_inputs.resource_associations[index];
+    const auto& retained=retained_tail_sources.resource_associations[index];
+    if(input.first_reference!=retained[0] || input.second_reference!=retained[1])
+      throw std::runtime_error("first-cut cold probe found altered loader-tail associations");
+  }
   if(tail_readiness.ready_to_run())
       throw std::runtime_error("first-cut cold probe unexpectedly considers the loader tail runnable");
   std::optional<off::graphics::IntroRendererPayloadObservation> renderer_observation;
@@ -656,7 +674,8 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
   std::cout << "matpos-deferred-records=" << matpos_dispatch.associated_records << '\n'
             << "matpos-terminal-first=" << matpos_dispatch.terminal_before_first_attachment_delimiter << '\n'
             << "matpos-attachment-first=" << matpos_dispatch.attachment_delimiter_precedes_terminal << '\n'
-            << "matpos-attachment-delimiters=" << matpos_dispatch.attachment_delimiters << '\n';
+            << "matpos-attachment-delimiters=" << matpos_dispatch.attachment_delimiters << '\n'
+            << "outer-loader-source-inputs=verified\n";
   std::set<std::uint32_t> unimplemented_source_types;
   for(const auto& entry:reader_coverage.entries) {
     if(entry.family==off::graphics::IntroDeferredReaderFamily::unclassified &&
