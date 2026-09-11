@@ -120,6 +120,12 @@ void NormalIntroSceneSession::complete_outer_loader_tail(
     throw;
   }
 }
+
+IntroOuterLoaderTailReadiness
+NormalIntroSceneSession::outer_loader_tail_readiness() const {
+  return inspect_intro_outer_loader_tail_readiness(
+      runtime_->resources().outer_loader_sources());
+}
 std::unique_ptr<NormalIntroSceneSession>
 make_normal_intro_scene_session(std::unique_ptr<IntroRuntime> runtime) {
   return std::make_unique<NormalIntroSceneSession>(std::move(runtime));

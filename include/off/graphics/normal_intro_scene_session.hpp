@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/cutscene/first_cut_player_initialization.hpp"
+#include "off/graphics/intro_outer_loader_tail_readiness.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -41,6 +42,7 @@ public:
   [[nodiscard]] const cutscene::FirstCutPlayerSession *first_cut_player() const noexcept {
     return first_cut_player_ ? std::addressof(*first_cut_player_) : nullptr;
   }
+  [[nodiscard]] IntroOuterLoaderTailReadiness outer_loader_tail_readiness() const;
 
 private:
   std::unique_ptr<IntroRuntime> runtime_;

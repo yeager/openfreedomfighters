@@ -18,6 +18,10 @@ production services exist. The
 prepared scene now retains parser-validated, owned outer-loader source sections
 (named/global, renderer payload, associations, and sizing rows) for that later
 handoff; retaining them neither invokes a service nor advances the tail.
+`NormalIntroSceneSession::outer_loader_tail_readiness()` exposes the exact
+retained section sizes and the still-required service boundaries for diagnostic
+and recovery work. It is preflight only: it does not provide placeholder
+callbacks, parse a renderer container, or transition the session.
 
 ## Required ordering
 

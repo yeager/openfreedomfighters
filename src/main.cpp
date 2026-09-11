@@ -4,6 +4,7 @@
 #include "off/data/first_cut_list_component_reader.hpp"
 #include "off/data/first_cut_command_component_reader.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
+#include "off/graphics/intro_outer_loader_tail_readiness.hpp"
 #include "off/graphics/intro_runtime.hpp"
 #include "off/graphics/normal_intro_scene_session.hpp"
 #include "off/graphics/scene_gpu_plan.hpp"
@@ -268,6 +269,9 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
       first_cut->initialization().phase_two_complete() || first_cut->receiver().open() ||
       first_cut->receiver().closed())
     throw std::runtime_error("first-cut cold probe observed an unexpected lifecycle transition");
+  const auto tail_readiness=session->outer_loader_tail_readiness();
+  if(tail_readiness.ready_to_run())
+    throw std::runtime_error("first-cut cold probe unexpectedly considers the loader tail runnable");
   std::cout << "First-cut cold probe verified\n"
             << "reader-states=2\n"
             << "component-payloads=6\n"
@@ -276,6 +280,14 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
             << "command-component-payloads=5-verified\n"
             ;
   write_reader_coverage_probe(std::cout,reader_coverage);
+  std::cout << "outer-loader-tail=native-services-required\n"
+            << "outer-loader-named-global-bytes=" << tail_readiness.named_global_bytes << '\n'
+            << "outer-loader-renderer-bytes=" << tail_readiness.renderer_resource_bytes << '\n'
+            << "outer-loader-associations=" << tail_readiness.resource_association_count << '\n'
+            << "outer-loader-allocation-sizing-rows=" << tail_readiness.allocation_sizing_row_count << '\n';
+  for(const auto boundary:tail_readiness.required_boundaries)
+    std::cout << "outer-loader-pending="
+              << off::graphics::intro_outer_loader_tail_boundary_label(boundary) << '\n';
   std::cout
             << "phase-one=not-run\n"
             << "phase-two=not-run\n"

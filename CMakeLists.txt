@@ -109,6 +109,7 @@ add_library(off_core
     src/graphics/intro_renderer_workspace_layout.cpp
     src/graphics/startup_graphics_asset.cpp
     src/graphics/intro_prepared_resources.cpp
+    src/graphics/intro_outer_loader_tail_readiness.cpp
     src/graphics/intro_runtime.cpp
     src/graphics/normal_intro_scene_session.cpp
     src/graphics/intro_lifecycle_admission.cpp
@@ -629,6 +630,7 @@ if(BUILD_TESTING)
     target_compile_definitions(off_intro_prepared_resources_tests PRIVATE
         OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/intro-prepared-resources-work")
     foreach(OFF_INTRO_PREPARED_RESOURCES_TEST_GROUP IN ITEMS
+            outer-loader-tail-readiness
             named-global-envelopes
             prepared-runtime-scopes
             complete-runtime-scopes

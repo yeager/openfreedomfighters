@@ -1,4 +1,5 @@
 #include "off/graphics/intro_prepared_resources.hpp"
+#include "off/graphics/intro_outer_loader_tail_readiness.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_renderer_resource_envelope.hpp"
 #include "off/graphics/intro_runtime.hpp"
@@ -41,6 +42,36 @@ int failures = 0;
 
 void check(bool condition, const char* text) {
     if (!condition) { ++failures; std::cerr << "FAIL: " << text << '\n'; }
+}
+static OFF_NOINLINE void test_outer_loader_tail_readiness() {
+    off::data::GmsOuterLoaderSources sources;
+    sources.named_global=Bytes{std::byte{1},std::byte{2},std::byte{3}};
+    sources.renderer_resource=Bytes{std::byte{4},std::byte{5},std::byte{6},std::byte{7}};
+    sources.resource_associations={{7U,9U},{11U,13U}};
+    sources.allocation_sizing_rows={{1U,2U,3U}};
+    const auto readiness=off::graphics::inspect_intro_outer_loader_tail_readiness(sources);
+    check(readiness.named_global_bytes==3U && readiness.renderer_resource_bytes==4U &&
+              readiness.resource_association_count==2U && readiness.allocation_sizing_row_count==1U &&
+              !readiness.ready_to_run(),
+          "outer loader tail readiness retains exact source section sizes without consuming them");
+    const std::vector expected{
+        off::graphics::IntroOuterLoaderTailBoundary::named_global_relocation_and_reader,
+        off::graphics::IntroOuterLoaderTailBoundary::renderer_reference_resolution_and_container_parser,
+        off::graphics::IntroOuterLoaderTailBoundary::live_resource_association,
+        off::graphics::IntroOuterLoaderTailBoundary::loader_source_lease_release,
+        off::graphics::IntroOuterLoaderTailBoundary::camera_zero_query_and_fallback_registration,
+        off::graphics::IntroOuterLoaderTailBoundary::outer_scene_operations,
+        off::graphics::IntroOuterLoaderTailBoundary::saved_resource_spatial_admission,
+        off::graphics::IntroOuterLoaderTailBoundary::saved_resource_0x4000_service};
+    check(readiness.required_boundaries==expected &&
+              std::string_view{off::graphics::intro_outer_loader_tail_boundary_label(expected[1])}==
+                  "renderer-reference-resolution-and-container-parser",
+          "outer loader tail readiness reports every still-concrete boundary in source order");
+    const auto empty=off::graphics::inspect_intro_outer_loader_tail_readiness({});
+    check(empty.named_global_bytes==0U && empty.renderer_resource_bytes==0U &&
+              empty.resource_association_count==0U && empty.allocation_sizing_row_count==0U &&
+              empty.required_boundaries.size()==5U && !empty.ready_to_run(),
+          "outer loader tail readiness never turns absent source sections into a runnable tail");
 }
 template<class F> void rejects(F operation) {
     bool rejected = false;
@@ -3759,6 +3790,7 @@ int main(int argc, char* argv[]) {
         void (*run)();
     };
     constexpr std::array groups{
+        TestGroup{"outer-loader-tail-readiness", test_outer_loader_tail_readiness},
         TestGroup{"named-global-envelopes", test_named_global_envelopes},
         TestGroup{"prepared-runtime-scopes", test_prepared_runtime_scopes},
         TestGroup{"complete-runtime-scopes", test_complete_runtime_scopes},

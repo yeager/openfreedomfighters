@@ -12,6 +12,11 @@ present.  Every parser, resolver, scene service, lifecycle callback and
 MovieControl phase-two callback remains caller supplied; a missing or failing
 boundary leaves activation failed.
 
+`IntroOuterLoaderTailReadiness` is a source-backed preflight report, not an
+activation service. It records the retained source section sizes and which
+concrete boundary types remain to be supplied; it never makes the loader tail
+runnable by itself.
+
 Successful completion only means MovieControl has received its phase-two
 deadline/setup boundary.  A later admitted ordinary update must strictly pass
 that deadline before cut preparation, and rendering still requires separate
