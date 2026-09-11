@@ -100,6 +100,14 @@ resource ownership, or frame scheduling. The portable implementation therefore
 continues to use explicit SDL GPU backends rather than a Direct3D compatibility
 layer.
 
+A later private re-check refines the bootstrap boundary: startup creates the
+factory lazily, retains it across later renderer work, and performs immediate
+interface checks before any recovered device or presentation selection. This
+confirms that a portable renderer needs an owned backend lifetime rather than a
+per-frame factory call. It does not identify the later interface operations,
+prove a device was created, or establish render targets, swap behavior, frame
+timing, or presentation policy.
+
 The remaining surface is chiefly Win32 process/thread synchronization, files, virtual memory, timing, window/message handling, GDI queries, user identity, COM, GDI+ image loading, and the Visual C++ runtime. This suggests the platform shim can remain small, but ordinal resolution and dynamically loaded APIs must be mapped before that conclusion is final.
 
 | DLL family | Imported symbols | Replacement direction |
