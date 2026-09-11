@@ -10,6 +10,7 @@
 #include "off/data/first_cut_command_component_reader.hpp"
 #include "off/data/loc_string_index.hpp"
 #include "off/data/zip_archive.hpp"
+#include "off/audio/duration_comparison.hpp"
 #include "off/audio/soundtrack_catalog.hpp"
 #include "off/audio/soundtrack_stream.hpp"
 #include "off/cutscene/first_cut_player_initialization.hpp"
@@ -93,6 +94,50 @@ void usage(std::ostream &output) {
   return profile;
 }
 
+[[nodiscard]] std::vector<off::audio::AudioDuration>
+inspect_verified_global_vorbis_durations(const std::filesystem::path& root) {
+  off::data::ArchiveVfs installation_vfs;
+  constexpr std::array<std::string_view, 5> excluded{
+      "Freedom_Fighters_OST", "Launcher.exe", "eax.dll", "steam_api.dll",
+      "steam_appid.txt"};
+  static_cast<void>(installation_vfs.mount_directory(root, excluded));
+  std::set<std::array<std::uint32_t, 5>> unique_records;
+  std::vector<off::audio::AudioDuration> result;
+  std::error_code error;
+  std::filesystem::recursive_directory_iterator entries(root / "Scenes", error);
+  if (error) throw std::runtime_error("could not enumerate verified scene audio");
+  for (const auto& entry : entries) {
+    if (!entry.is_regular_file() || entry.path().extension() != ".WHD") continue;
+    const auto relative = std::filesystem::relative(entry.path(), root, error);
+    if (error) throw std::runtime_error("could not resolve verified scene audio path");
+    const auto header = off::data::AudioBankHeader::parse(
+        installation_vfs.read(relative.generic_string()));
+    for (const auto& record : header.records()) {
+      constexpr std::uint32_t global_bank_flag = 0x80000000U;
+      constexpr std::uint32_t vorbis_format = 0x00001000U;
+      if (!record.uses_global_bank() ||
+          (record.format_flags & ~global_bank_flag) != vorbis_format) {
+        continue;
+      }
+      const std::array identity{record.data_offset, record.encoded_size,
+                                record.sample_rate, record.channels,
+                                record.sample_value_count};
+      if (!unique_records.insert(identity).second) continue;
+      if (record.channels == 0U ||
+          record.sample_value_count % record.channels != 0U) {
+        throw std::runtime_error(
+            "global Vorbis duration has invalid channel layout");
+      }
+      result.push_back({.frames = record.sample_value_count / record.channels,
+                        .sample_rate = record.sample_rate});
+    }
+  }
+  if (result.empty()) {
+    throw std::runtime_error("verified installation has no global Vorbis streams");
+  }
+  return result;
+}
+
 void write_soundtrack_probe(
     const off::data::InstallVerification& verification, std::ostream& output) {
   const auto catalog = off::audio::SoundtrackCatalog::from_verified_candidates(
@@ -106,6 +151,8 @@ void write_soundtrack_probe(
   std::uint64_t longest_track_frames{};
   std::size_t fallback_frame_matches{};
   std::size_t fallback_frame_mismatches{};
+  std::vector<off::audio::AudioDuration> album_durations;
+  album_durations.reserve(catalog.tracks().size());
   for (const auto& track : catalog.tracks()) {
     const auto info = off::audio::SoundtrackStream::open(track.preferred.path).info();
     if ((track.preferred.format == off::audio::SoundtrackFormat::flac &&
@@ -125,6 +172,8 @@ void write_soundtrack_probe(
     maximum_channels = std::max(maximum_channels, info.channels);
     shortest_track_frames = std::min(shortest_track_frames, info.total_frames);
     longest_track_frames = std::max(longest_track_frames, info.total_frames);
+    album_durations.push_back(
+        {.frames = info.total_frames, .sample_rate = info.sample_rate});
     if (track.fallback) {
       const auto fallback = off::audio::SoundtrackStream::open(
           track.fallback->path).info();
@@ -138,6 +187,9 @@ void write_soundtrack_probe(
     }
   }
   const auto game_audio = inspect_verified_game_audio(verification.root);
+  const auto game_vorbis = inspect_verified_global_vorbis_durations(verification.root);
+  const auto duration_comparison = off::audio::compare_audio_durations(
+      game_vorbis, album_durations, 250'000U);
   output << "soundtrack-probe=completed\n"
          << "soundtrack-hash-verified-files=" << verification.soundtrack_candidates.size() << '\n'
          << "soundtrack-album-tracks=" << catalog.tracks().size() << '\n'
@@ -168,7 +220,14 @@ void write_soundtrack_probe(
          << "game-audio-profile-maximum-channels="
          << game_audio.maximum_channels() << '\n'
          << "game-audio-profile-scope=all-scene-streams-not-music-cues\n"
-         << "soundtrack-cue-mapping=unavailable\n";
+         << "soundtrack-global-vorbis-unique-streams=" << game_vorbis.size() << '\n'
+         << "soundtrack-duration-comparison-pairs="
+         << duration_comparison.compared_pairs << '\n'
+         << "soundtrack-duration-exact-pairs="
+         << duration_comparison.exact_duration_pairs << '\n'
+         << "soundtrack-duration-near-pairs-250ms="
+         << duration_comparison.near_duration_pairs << '\n'
+         << "soundtrack-duration-only-cue-mapping=unavailable\n";
 }
 
 void write_localization_probe(const std::filesystem::path& root,

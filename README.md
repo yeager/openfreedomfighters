@@ -188,7 +188,8 @@ OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
 ./build/openfreedomfighters --probe-startup-route-cold
 
 # Inspect hash-verified optional MP3/FLAC soundtrack editions without playing
-# or naming a game cue. The probe reports aggregate layout and duration facts.
+# or naming a game cue. The probe reports aggregate layout and duration facts,
+# plus a duration-only candidate count against unique game Vorbis streams.
 ./build/openfreedomfighters --probe-soundtrack
 
 # Profile the owned startup LOC resource without printing any retail text.
@@ -260,10 +261,11 @@ menu transition.
 - `--probe-soundtrack` opens every hash-verified optional soundtrack edition
   selected by the catalog and reports aggregate format, sample-rate and channel
   coverage. It also profiles metadata from every verified scene audio header,
-  without retaining paths or audio payload. The game-audio profile is not
-  music-cue-specific: it cannot establish track equivalence or authorize
-  substitution. It neither plays audio nor derives a game-cue mapping; game
-  music remains the fallback until that mapping is recovered.
+  without retaining paths or audio payload. It compares only duration against
+  unique global Vorbis streams as a future fingerprinting filter; duration
+  cannot establish track equivalence or authorize substitution. It neither
+  plays audio nor derives a game-cue mapping; game music remains the fallback
+  until that mapping is recovered.
 - `--probe-first-cut-cold` runs the equivalent no-window integration check for
   the reviewed first-cut reader bracket. It checks aggregate bracket ordering,
   the source-backed MovieControl owner/component boundary and its retained

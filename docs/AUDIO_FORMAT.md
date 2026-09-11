@@ -74,6 +74,15 @@ and MP3 through `dr_mp3`. It is deliberately independent from audio-bank
 records. A verified cue-to-album mapping and private timing comparison are
 required before optional soundtrack playback can replace an in-game music cue.
 
+`--probe-soundtrack` also compares the durations of each hash-verified preferred
+album edition with every unique global Vorbis stream from the verified game
+installation. It reports only aggregate exact and 250 ms-near pair counts.
+Duration is deliberately treated as a candidate filter: duplicated streams,
+alternate mastering, loop boundaries, and non-music dialogue make it insufficient
+to identify a cue. The probe never emits stream identities, filenames, samples,
+or a cue-to-album assignment; a content-based private comparison is still
+required before optional playback can be enabled.
+
 `decode_stream` exposes the physical codec output. `decode_bank_stream` additionally
 checks the meaningful WHD counts: PCM and Vorbis must match exactly; IMA may have
 final-block padding, which is trimmed only after enough samples have decoded.
