@@ -882,6 +882,12 @@ It verifies all five command payloads in authored order and retains the
 enclosing terminal. The fixed report contains no game-data identities or
 payloads.
 
+The same probe also checks the source-backed `MovieControl` owner and component
+reader boundaries: their owner/resource identity, controller component identity,
+and every retained cut/group reference translation must agree with the checked
+intro directory mapping. This is still reader-boundary evidence only; it does
+not enroll event 16, run a controller phase, or infer any component callback.
+
 The probe creates no SDL window and does not admit a renderer, start audio,
 schedule an event, execute a lifecycle phase, or play a cutscene. It is not a
 playability test and is deliberately outside public CI because it needs the

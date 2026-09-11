@@ -457,6 +457,39 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
         command_record.target_name!=command.target_name)
       throw std::runtime_error("first-cut cold probe found a command-parser disagreement");
   }
+  // MovieControl is the source-backed gate immediately before the recovered
+  // first-cut path. Verify its immutable reader boundary here, without
+  // inferring a component lifecycle, event enrollment, or renderer state.
+  const auto* movie_controller=intro.movie_controller_reader_state();
+  const auto* movie_controller_component=intro.movie_controller_component_reader_state();
+  const auto controller_source=intro.resources().controller_index();
+  if(!movie_controller || !movie_controller_component ||
+      movie_controller->owner!=intro.source_handle(controller_source) ||
+      controller_source>=mapping.size() ||
+      movie_controller->resource!=mapping[controller_source].value_or(
+          off::graphics::IntroRuntimeResourceHandle{}) ||
+      movie_controller->component_index!=intro.controller_component_index() ||
+      movie_controller_component->owner!=movie_controller->owner ||
+      movie_controller_component->component_index!=movie_controller->component_index ||
+      movie_controller->sequence_list_resource.value==0U ||
+      movie_controller->group_list_resource.value==0U)
+    throw std::runtime_error("first-cut cold probe found an incomplete MovieControl reader");
+  const auto verify_controller_references=[&](std::span<const std::uint32_t> references,
+                                              std::span<const std::optional<off::graphics::IntroRuntimeResourceHandle>> translated) {
+    if(references.size()!=translated.size()) return false;
+    for(std::size_t index=0;index<references.size();++index) {
+      const auto source=intro.resources().sources().local_source_for_authored_reference(
+          references[index]);
+      if(!source || *source>=mapping.size() || translated[index]!=mapping[*source])
+        return false;
+    }
+    return true;
+  };
+  if(!verify_controller_references(intro.resources().cut_references(),
+                                   movie_controller->sequence_members) ||
+      !verify_controller_references(intro.resources().group_references(),
+                                    movie_controller->group_members))
+    throw std::runtime_error("first-cut cold probe found inconsistent MovieControl references");
   const off::data::DeferredReaderWorkIdentity identity{
       first_cut_work->resource.value,first_cut_work->source_offset,first_cut_work->source_directory_index};
   off::data::DeferredReaderSession owner_session(identity,block);
@@ -594,6 +627,8 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
             << "reader-states=2\n"
             << "component-payloads=6\n"
             << "owner-envelope=verified\n"
+            << "movie-controller-reader=verified\n"
+            << "movie-controller-component-reader=verified\n"
             << "first-component-payload=verified\n"
             << "command-component-payloads=5-verified\n"
             << "reader-bracket-external-loader-calls="
