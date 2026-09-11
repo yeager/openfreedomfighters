@@ -231,8 +231,8 @@ menu transition.
   start audio.
 - `--probe-intro-named-global` profiles the bounded named/global tagged block
   from owned data using only framing tags. It reports no labels or payload
-  values, performs no relocation, and does not invoke the still-unimplemented
-  typed reader.
+  values, validates its recovered two-word handoff, performs no relocation,
+  and does not invoke the still-unimplemented typed reader.
 - `--screenshot /path/outside/repo/frame.bmp` saves a GPU readback. The file must
   not already exist. With a frame limit it captures the last frame; otherwise
   it captures the first.

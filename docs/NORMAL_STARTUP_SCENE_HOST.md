@@ -37,7 +37,9 @@ as relocation output would be fabricated and is rejected by design.
 `--probe-intro-named-global` separately profiles the named/global tagged block.
 It reports aggregate tag framing only: the label and every payload value remain
 private. This validates the bounded body grammar but deliberately does not
-relocate references, invoke the typed reader, or advance the loader tail.
+relocate references, invoke the typed reader, or advance the loader tail. The
+admitted form is two opaque 32-bit words, an attachment delimiter, and a final
+terminator; their meaning remains unrecovered.
 
 ## Required ordering
 

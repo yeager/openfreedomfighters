@@ -794,6 +794,7 @@ static OFF_NOINLINE void test_named_global_envelopes() {
                 profile.tagged_values.attachment_delimiters==0U &&
                 profile.tagged_values.continuation_values==0U,
             "named/global profile retains only the tagged-body framing");
+      rejects([&] { (void)off::graphics::read_intro_named_global_word_pair(envelope); });
       rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(image,0,next_section_offset); });
       rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(image,section_offset,0); });
       rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(image,next_section_offset,section_offset); });
@@ -815,6 +816,22 @@ static OFF_NOINLINE void test_named_global_envelopes() {
       const auto header_only_envelope=off::graphics::parse_intro_named_global_section_envelope(
           header_only,7,13);
       rejects([&] { (void)off::graphics::profile_intro_named_global_section(header_only_envelope); });
+      Bytes word_pair(24,std::byte{});
+      word_pair[7]=std::byte{'X'}; word_pair[8]=std::byte{};
+      word_pair[9]=std::byte{16};
+      word_pair[13]=std::byte{0x83}; word_pair[14]=std::byte{0x44};
+      word_pair[15]=std::byte{0x33}; word_pair[16]=std::byte{0x22}; word_pair[17]=std::byte{0x11};
+      word_pair[18]=std::byte{0x88}; word_pair[19]=std::byte{0x88};
+      word_pair[20]=std::byte{0x77}; word_pair[21]=std::byte{0x66}; word_pair[22]=std::byte{0x55};
+      word_pair[23]=std::byte{0x06};
+      // The terminator lies at byte 24, so use a one-byte larger source boundary.
+      word_pair.push_back(std::byte{0xff});
+      const auto word_pair_envelope=off::graphics::parse_intro_named_global_section_envelope(
+          word_pair,7,25);
+      const auto pair=off::graphics::read_intro_named_global_word_pair(word_pair_envelope);
+      check(pair.first_word==0x11223344U && pair.second_word==0x55667788U &&
+                pair.first_tag==0x83U && pair.second_tag==0x88U,
+            "named/global word-pair reader retains bounded opaque words and tags");
     }
 }
 

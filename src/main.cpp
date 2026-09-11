@@ -305,6 +305,7 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
         }));
   }
   std::optional<off::graphics::IntroNamedGlobalSectionProfile> named_global_observation;
+  std::optional<off::graphics::IntroNamedGlobalWordPair> named_global_word_pair;
   if(observe_named_global) {
     const auto& outer_sources=intro.resources().outer_loader_sources();
     if(!outer_sources.named_global)
@@ -313,6 +314,8 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
         *outer_sources.named_global);
     named_global_observation.emplace(
         off::graphics::profile_intro_named_global_section(envelope));
+    named_global_word_pair.emplace(
+        off::graphics::read_intro_named_global_word_pair(envelope));
   }
   std::optional<off::cutscene::FirstCutPlayerInitializationObservation> initialization_observation;
   if(run_initialization) {
@@ -421,7 +424,9 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
               << "named-global-values=" << profile.tagged_values.encoded_values << '\n'
               << "named-global-attachment-delimiters=" << profile.tagged_values.attachment_delimiters << '\n'
               << "named-global-continuation-values=" << profile.tagged_values.continuation_values << '\n'
-              << "named-global-framing-digest=" << profile.tagged_values.framing_digest << '\n';
+              << "named-global-framing-digest=" << profile.tagged_values.framing_digest << '\n'
+              << "named-global-word-pair="
+              << (named_global_word_pair ? "validated" : "unavailable") << '\n';
   }
   std::cout
             << "renderer=not-admitted\n"

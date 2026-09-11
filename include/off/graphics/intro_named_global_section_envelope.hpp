@@ -44,6 +44,18 @@ struct IntroNamedGlobalSectionProfile final {
   [[nodiscard]] bool operator==(const IntroNamedGlobalSectionProfile&) const = default;
 };
 
+// The admitted named/global body grammar is intentionally narrow. It retains
+// two opaque words followed by one recovered attachment delimiter, without
+// naming either word as a resource or assuming what relocation must do with it.
+struct IntroNamedGlobalWordPair final {
+  std::uint32_t first_word{};
+  std::uint32_t second_word{};
+  std::uint8_t first_tag{};
+  std::uint8_t second_tag{};
+
+  [[nodiscard]] bool operator==(const IntroNamedGlobalWordPair&) const = default;
+};
+
 inline IntroNamedGlobalSectionEnvelope parse_intro_named_global_section_envelope(
     std::span<const std::byte> section) {
   std::size_t label_end=0;
@@ -92,6 +104,36 @@ inline IntroNamedGlobalSectionProfile profile_intro_named_global_section(
   return {
       .body_bytes=body.size(),
       .tagged_values=data::DeferredCompactBlockProfiler::profile(body)};
+}
+
+inline IntroNamedGlobalWordPair read_intro_named_global_word_pair(
+    const IntroNamedGlobalSectionEnvelope& envelope) {
+  constexpr std::size_t tagged_block_header_size=4U;
+  if(envelope.tagged_block.size()<=tagged_block_header_size)
+    throw std::runtime_error("Named/global tagged block has no body to read");
+  auto remaining=envelope.tagged_block.subspan(tagged_block_header_size);
+  data::CompactTypedValueDecoder decoder(remaining);
+  const auto before=decoder.next();
+  if(before.kind!=data::CompactTypedValueKind::signed32)
+    throw std::runtime_error("Named/global first value is not a recovered 32-bit word");
+  remaining=remaining.subspan(before.encoded.size());
+  data::CompactTypedValueDecoder after_decoder(remaining);
+  const auto after=after_decoder.next();
+  if(after.kind!=data::CompactTypedValueKind::signed32)
+    throw std::runtime_error("Named/global second value is not a recovered 32-bit word");
+  remaining=remaining.subspan(after.encoded.size());
+  if(remaining.empty() || std::to_integer<std::uint8_t>(remaining.front())!=0x06U)
+    throw std::runtime_error("Named/global words are not followed by the recovered attachment delimiter");
+  remaining=remaining.subspan(1U);
+  data::CompactTypedValueDecoder terminal_decoder(remaining);
+  const auto terminal=terminal_decoder.next();
+  if(terminal.kind!=data::CompactTypedValueKind::terminator || !terminal_decoder.empty())
+    throw std::runtime_error("Named/global word pair has no final terminator");
+  return {
+      .first_word=before.u32_bits(),
+      .second_word=after.u32_bits(),
+      .first_tag=before.raw_tag,
+      .second_tag=after.raw_tag};
 }
 
 }  // namespace off::graphics
