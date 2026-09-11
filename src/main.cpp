@@ -156,6 +156,13 @@ void write_reader_coverage_probe(std::ostream& output,
              << " count=" << counts[family][state] << '\n';
     }
   }
+  for(const auto& entry:coverage.entries) {
+    if(entry.family!=off::graphics::IntroDeferredReaderFamily::unclassified ||
+       entry.state!=off::graphics::IntroDeferredReaderImplementationState::unimplemented)
+      continue;
+    output << "reader-unimplemented-source-type=0x" << std::hex << entry.source_type
+           << std::dec << " count=" << entry.count << '\n';
+  }
 }
 
 int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
