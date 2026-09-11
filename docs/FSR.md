@@ -32,3 +32,8 @@ input, saves, replay hashes, or mission state.
 
 Until these gates are complete, FSR intent is safely retained and the portable
 path stays available on Windows, Linux, Steam Deck, and macOS where supported.
+
+## Primary references
+
+- [AMD FidelityFX SDK manual](https://gpuopen.com/manuals/fidelityfx_sdk/)
+- [AMD FidelityFX SDK API reference](https://gpuopen.com/manuals/fidelityfx_sdk/reference_documentation/sdk/ffx_s_d_k/)
