@@ -2,6 +2,17 @@
 
 ## Next runnable integration
 
+### Private visual observation target
+
+An authorized private run of the owned original establishes a three-part visual
+sequence before interactive menu state: letterboxed information-card frames,
+a title-image transition, and a centered letterboxed main-menu strip. The cards
+and menu share black top and bottom fields, while the transition uses a distinct
+full-width image composition. This is an observation target only: no retail
+pixels, strings, timings, screen captures, or asset identifiers are committed.
+The native timeline must recover its own activation, camera, picture ordering,
+and timing evidence before it may claim to reproduce this sequence.
+
 The missing layer is scene execution, not another image-upload path. A private
 inventory through the public parser finds 470 source objects and 383 attachment
 instances across 22 component types in the owned intro archive. Of those,
@@ -707,9 +718,11 @@ rejects non-picture sources, empty plans, missing or invalid images, duplicate
 image identities, and invalid target extents. It does not select a camera,
 compute a view, alter runtime state, activate a cut, or issue GPU work.
 
-The snapshot is deliberately not wired into normal startup or advertised as
-intro playback. Picture visibility, ordering, camera admission, pass state and
-the original external basis-scale policy still require independent recovery.
+The snapshot is not wired into normal startup or treated as intro playback.
+`--diagnostic-intro-picture` is an opt-in source-data diagnostic that submits
+one selected snapshot through a project-authored fit projection and baseline GPU
+state. Picture visibility, ordering, camera admission, pass state and the
+original external basis-scale policy still require independent recovery.
 
 ## Conditional first-cut presentation
 
