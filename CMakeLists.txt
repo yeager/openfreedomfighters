@@ -107,6 +107,7 @@ add_library(off_core
     src/graphics/scene_gpu_plan.cpp
     src/graphics/intro_renderer_relocation_prefix.cpp
     src/graphics/intro_renderer_workspace_layout.cpp
+    src/graphics/intro_renderer_payload_workspace.cpp
     src/graphics/startup_graphics_asset.cpp
     src/graphics/intro_prepared_resources.cpp
     src/graphics/intro_outer_loader_tail_readiness.cpp
