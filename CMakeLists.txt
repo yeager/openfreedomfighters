@@ -83,6 +83,7 @@ add_library(off_core
     src/data/archive_vfs.cpp
     src/data/animation_image.cpp
     src/data/audio_bank_header.cpp
+    src/data/audio_bank_profile.cpp
     src/data/loc_string_index.cpp
     src/data/sound_definition_bank.cpp
     src/data/gms_image.cpp
@@ -427,6 +428,9 @@ if(BUILD_TESTING)
     add_executable(off_audio_bank_header_tests tests/audio_bank_header_tests.cpp)
     target_link_libraries(off_audio_bank_header_tests PRIVATE off_core)
     add_test(NAME off_audio_bank_header_tests COMMAND off_audio_bank_header_tests)
+    add_executable(off_audio_bank_profile_tests tests/audio_bank_profile_tests.cpp)
+    target_link_libraries(off_audio_bank_profile_tests PRIVATE off_core)
+    add_test(NAME off_audio_bank_profile_tests COMMAND off_audio_bank_profile_tests)
 
     add_executable(off_loc_string_index_tests tests/loc_string_index_tests.cpp)
     target_link_libraries(off_loc_string_index_tests PRIVATE off_core)

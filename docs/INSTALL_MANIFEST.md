@@ -58,6 +58,9 @@ mastering, loop boundaries and in-game cues still need comparison. File format
 alone does not establish that an album track is a drop-in replacement.
 The complete 36-file optional reference set decodes successfully with the
 native FLAC and MP3 decoders; this verifies decodability, not cue equivalence.
+`--probe-soundtrack` additionally profiles all verified scene audio headers as
+aggregate codec, sample-rate and channel metadata. It retains no payload or
+path and has all-scene scope, so it must not be used as a music-cue match.
 
 Playback policy: use a verified, decodable soundtrack version only when its cue
 mapping and required timing/loop behavior are known. Prefer FLAC, then a usable

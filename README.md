@@ -222,8 +222,11 @@ menu transition.
   [STARTUP_BOOT_SCENE_PROBE.md](docs/STARTUP_BOOT_SCENE_PROBE.md).
 - `--probe-soundtrack` opens every hash-verified optional soundtrack edition
   selected by the catalog and reports aggregate format, sample-rate and channel
-  coverage. It neither plays audio nor derives a game-cue mapping; game music
-  remains the fallback until that mapping is recovered.
+  coverage. It also profiles metadata from every verified scene audio header,
+  without retaining paths or audio payload. The game-audio profile is not
+  music-cue-specific: it cannot establish track equivalence or authorize
+  substitution. It neither plays audio nor derives a game-cue mapping; game
+  music remains the fallback until that mapping is recovered.
 - `--probe-first-cut-cold` runs the equivalent no-window integration check for
   the reviewed first-cut reader bracket. It prints aggregate coverage only and
   deliberately leaves cutscene lifecycle, scheduling, audio and rendering

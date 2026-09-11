@@ -1,4 +1,7 @@
 #include "off/data/install.hpp"
+#include "off/data/archive_vfs.hpp"
+#include "off/data/audio_bank_header.hpp"
+#include "off/data/audio_bank_profile.hpp"
 #include "off/data/deferred_attachment_dispatch_shape.hpp"
 #include "off/data/deferred_compact_block_profile.hpp"
 #include "off/data/first_cut_component_payload_session.hpp"
@@ -44,6 +47,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 
 #ifndef OFF_VERSION
@@ -60,6 +64,27 @@ void usage(std::ostream &output) {
             "[--probe-startup-boot] [--probe-soundtrack] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
 }
 
+[[nodiscard]] off::data::AudioBankProfile inspect_verified_game_audio(
+    const std::filesystem::path& root) {
+  off::data::ArchiveVfs installation_vfs;
+  constexpr std::array<std::string_view, 5> excluded{
+      "Freedom_Fighters_OST", "Launcher.exe", "eax.dll", "steam_api.dll",
+      "steam_appid.txt"};
+  static_cast<void>(installation_vfs.mount_directory(root, excluded));
+  off::data::AudioBankProfile profile;
+  std::error_code error;
+  std::filesystem::recursive_directory_iterator entries(root / "Scenes", error);
+  if (error) throw std::runtime_error("could not enumerate verified scene audio");
+  for (const auto& entry : entries) {
+    if (!entry.is_regular_file() || entry.path().extension() != ".WHD") continue;
+    const auto relative = std::filesystem::relative(entry.path(), root, error);
+    if (error) throw std::runtime_error("could not resolve verified scene audio path");
+    profile.add(off::data::AudioBankHeader::parse(
+        installation_vfs.read(relative.generic_string())).records());
+  }
+  return profile;
+}
+
 void write_soundtrack_probe(
     const off::data::InstallVerification& verification, std::ostream& output) {
   const auto catalog = off::audio::SoundtrackCatalog::from_verified_candidates(
@@ -67,6 +92,8 @@ void write_soundtrack_probe(
   std::size_t preferred_flac{}, preferred_mp3{}, fallback_editions{};
   std::set<std::uint32_t> sample_rates;
   std::set<std::uint32_t> channel_counts;
+  std::uint32_t maximum_sample_rate{};
+  std::uint32_t maximum_channels{};
   for (const auto& track : catalog.tracks()) {
     const auto info = off::audio::SoundtrackStream::open(track.preferred.path).info();
     if ((track.preferred.format == off::audio::SoundtrackFormat::flac &&
@@ -82,7 +109,10 @@ void write_soundtrack_probe(
     fallback_editions += track.fallback.has_value() ? 1U : 0U;
     sample_rates.insert(info.sample_rate);
     channel_counts.insert(info.channels);
+    maximum_sample_rate = std::max(maximum_sample_rate, info.sample_rate);
+    maximum_channels = std::max(maximum_channels, info.channels);
   }
+  const auto game_audio = inspect_verified_game_audio(verification.root);
   output << "soundtrack-probe=completed\n"
          << "soundtrack-hash-verified-files=" << verification.soundtrack_candidates.size() << '\n'
          << "soundtrack-album-tracks=" << catalog.tracks().size() << '\n'
@@ -91,6 +121,24 @@ void write_soundtrack_probe(
          << "soundtrack-fallback-editions=" << fallback_editions << '\n'
          << "soundtrack-distinct-sample-rates=" << sample_rates.size() << '\n'
          << "soundtrack-distinct-channel-counts=" << channel_counts.size() << '\n'
+         << "soundtrack-maximum-sample-rate=" << maximum_sample_rate << '\n'
+         << "soundtrack-maximum-channels=" << maximum_channels << '\n'
+         << "game-audio-profile-records=" << game_audio.record_count() << '\n'
+         << "game-audio-profile-pcm=" << game_audio.pcm_record_count() << '\n'
+         << "game-audio-profile-ima-adpcm=" << game_audio.ima_adpcm_record_count() << '\n'
+         << "game-audio-profile-vorbis=" << game_audio.vorbis_record_count() << '\n'
+         << "game-audio-profile-other=" << game_audio.other_record_count() << '\n'
+         << "game-audio-profile-distinct-sample-rates="
+         << game_audio.distinct_sample_rate_count() << '\n'
+         << "game-audio-profile-distinct-channel-counts="
+         << game_audio.distinct_channel_count() << '\n'
+         << "game-audio-profile-maximum-sample-rate="
+         << game_audio.maximum_sample_rate() << '\n'
+         << "game-audio-profile-maximum-bits-per-sample="
+         << game_audio.maximum_bits_per_sample() << '\n'
+         << "game-audio-profile-maximum-channels="
+         << game_audio.maximum_channels() << '\n'
+         << "game-audio-profile-scope=all-scene-streams-not-music-cues\n"
          << "soundtrack-cue-mapping=unavailable\n";
 }
 
