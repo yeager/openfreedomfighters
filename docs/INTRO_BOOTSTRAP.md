@@ -45,8 +45,8 @@ validated terminal-versus-attachment-delimiter shape, retaining an explicit
 unknown bucket for formats outside that narrow classifier. These are aggregate
 investigation counts, not a claim that a deferred attachment reader exists.
 
-For the largest unclassified base-object family, the cold probe also emits a
-privacy-safe compact framing profile: bounded byte count, attachment identities,
+For each unimplemented reader type, the cold probe also emits a privacy-safe
+compact framing profile: source type, bounded byte count, attachment identities,
 delimiter count, encoded-value count, continuation count, and counts by generic
 value framing class. An order-sensitive digest and an abstract type sequence
 cover framing tags only; the sequence retains each low-six-bit tag class plus

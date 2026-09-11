@@ -34,6 +34,7 @@
 #include <memory>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -299,12 +300,19 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
             << "matpos-terminal-first=" << matpos_dispatch.terminal_before_first_attachment_delimiter << '\n'
             << "matpos-attachment-first=" << matpos_dispatch.attachment_delimiter_precedes_terminal << '\n'
             << "matpos-attachment-delimiters=" << matpos_dispatch.attachment_delimiters << '\n';
+  std::set<std::uint32_t> unimplemented_source_types;
+  for(const auto& entry:reader_coverage.entries) {
+    if(entry.family==off::graphics::IntroDeferredReaderFamily::unclassified &&
+       entry.state==off::graphics::IntroDeferredReaderImplementationState::unimplemented)
+      unimplemented_source_types.insert(entry.source_type);
+  }
   std::map<std::string,std::size_t> deferred_signatures;
   for(const auto& work:intro.deferred_reader_work()) {
     const auto& source=intro.resources().sources().directory().at(work.source_directory_index);
-    if(source.source_type!=0x00200002U) continue;
+    if(!unimplemented_source_types.contains(source.source_type)) continue;
     const auto block=intro.resources().sources().deferred_source_block(work.source_directory_index);
-    std::string signature="zstdobj bytes="+std::to_string(block.size())+" attachments=";
+    std::string signature="type="+std::to_string(source.source_type)+
+        " bytes="+std::to_string(block.size())+" attachments=";
     for(std::size_t slot=0;slot<source.attachments.size();++slot) {
       if(slot) signature.push_back(',');
       signature+=intro.resources().sources().attachment_identifier(work.source_directory_index,slot);
