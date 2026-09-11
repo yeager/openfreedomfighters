@@ -23,6 +23,12 @@ retained section sizes and the still-required service boundaries for diagnostic
 and recovery work. It is preflight only: it does not provide placeholder
 callbacks, parse a renderer container, or transition the session.
 
+`IntroRendererPayloadObservation` is a narrower source-backed recovery step.
+It validates the renderer payload's relocation groups through a caller-supplied
+source-reference resolver and derives only workspace counts after every lookup
+succeeds. It retains no renderer container and cannot advance the loader tail,
+admit a frame, or substitute a renderer parser.
+
 ## Required ordering
 
 The session owns one `IntroRuntime` for the lifetime of the admitted scene; the
