@@ -111,6 +111,8 @@ On 2026-09-11, a native Linux ARM64 build passed both first-cut cold probes
 against a verified owned installation, including the source-bound loader-tail
 input handoff. This verifies the implemented data path on ARM64 without an
 emulator; it does not establish intro playback, menu behavior, or gameplay.
+A bounded native startup also reached the current source-backed static intro
+frame and completed a local capture without exporting game assets.
 
 Next: connect the scene's component lifecycle and update loop so normal startup
 renders the original intro and reaches its main menu. This takes priority over
