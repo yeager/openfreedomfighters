@@ -49,8 +49,8 @@ For the largest unclassified base-object family, the cold probe also emits a
 privacy-safe compact framing profile: bounded byte count, attachment identities,
 delimiter count, encoded-value count, continuation count, and counts by generic
 value framing class. An order-sensitive digest and an abstract type sequence
-cover framing tags only; the sequence retains high-bit and continuation markers,
-never payload bytes. The probe never emits values,
+cover framing tags only; the sequence retains each low-six-bit tag class plus
+high-bit and continuation markers, never payload bytes. The probe never emits values,
 source identities, offsets, handles, or payload bytes. The owned intro has one 98-byte single-MatPos form
 (89 records) and three distinct 103-byte framing forms (2, 85, and 29 records).
 Their differing framing profiles prove that a type-wide base-object reader would

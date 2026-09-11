@@ -23,10 +23,11 @@ struct DeferredCompactBlockProfile final {
     // FNV-1a over framing tags only (including delimiters and the terminator).
     // It intentionally excludes every payload byte.
     std::uint64_t framing_digest{14695981039346656037ULL};
-    // One symbol per framing element: d=64-bit, f=32-bit, i=signed word,
-    // s=NUL string, l=length word, |=attachment delimiter, !=terminator.
-    // A trailing ^ marks a raw high bit and + the continuation bit. Payload
-    // bytes are excluded.
+    // One token per framing element: d1=64-bit, f2=32-bit, i3/i8/i10/i11=
+    // signed words, s4/s5=NUL strings, l7=length word, |=attachment
+    // delimiter, !=terminator. The decimal suffix preserves the recovered
+    // low-six-bit tag class without retaining a payload byte. A trailing ^
+    // marks a raw high bit and + the continuation bit.
     std::string framing_notation;
 
     [[nodiscard]] bool operator==(const DeferredCompactBlockProfile&) const = default;
@@ -62,7 +63,8 @@ public:
             ++result.encoded_values;
             if (value.continuation) ++result.continuation_values;
             mix(result.framing_digest, value.raw_tag);
-            result.framing_notation.push_back(symbol(value.kind));
+            result.framing_notation+=symbol(value.kind);
+            result.framing_notation+=std::to_string(value.value_class);
             if ((value.raw_tag & 0x80U) != 0U) result.framing_notation.push_back('^');
             if (value.continuation) result.framing_notation.push_back('+');
             remaining = remaining.subspan(value.encoded.size());
