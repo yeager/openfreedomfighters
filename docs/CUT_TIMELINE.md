@@ -111,6 +111,21 @@ direct dispatcher; it must not convert an authored reference directly to a
 source handle or fall back to name lookup. A future automatic resolver needs a
 verified live-owner registry and shared owner/component dispatcher first.
 
+## Owned-data cold delivery probe
+
+`--probe-first-cut-cold` validates the checked reader bracket before creating a
+temporary command session from the prepared first-cut records. It chooses the
+smallest representable binary32 position strictly after the latest nonnegative
+authored command position, then records only aggregate target and component
+callback counts. The target registry contains only the source-backed command
+owners; no components are admitted to it.
+
+This validates parser-to-router identity and direct-dispatch ordering against
+owned data. Its callbacks are observers: they do not mutate an owner, component,
+camera, cut state, audio state, or renderer. It is therefore not evidence that
+the original target behavior, complete cut activation, or a rendered intro has
+been recovered.
+
 ## Cut-sequence completion coordinator
 
 `CutSequenceCoordinator` models the recovered handoff after an already-admitted
