@@ -1,6 +1,8 @@
 # Private disassembly status
 
 The supported Steam executable was fully disassembled on 2026-09-04. Disassembly and analysis databases are private clean-room research artifacts and are intentionally excluded from Git.
+The byte-complete pass was re-run against the supported owned installation on
+2026-09-11 with the same aggregate result and private-listing digest.
 
 ## Byte-complete linear disassembly
 
@@ -36,4 +38,3 @@ The apparent TLS callback address reported during PE loading is the callback-arr
 ## Clean-room boundary
 
 Private artifacts contain original instructions and bytes. They must never be committed, attached to issues, placed in releases, or shared with implementers. Public work may use only reviewed behavior/interface specifications, aggregate measurements, and independently authored code.
-
