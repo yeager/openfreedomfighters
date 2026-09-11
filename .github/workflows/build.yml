@@ -94,6 +94,15 @@ jobs:
           ninja -C build
       - name: Test
         run: ctest --test-dir build -j4 --output-on-failure
+      - name: Verify install layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --install build --prefix install-check
+          test -x install-check/bin/openfreedomfighters
+          test -f install-check/bin/assets/openfreedomfighters-splash.bmp
+          test -f install-check/bin/assets/Rajdhani-SemiBold.ttf
+          test -f install-check/share/applications/openfreedomfighters.desktop
       - name: Run Python analysis-tool tests
         run: |
           python3 -m pip install --requirement requirements-analysis.txt
@@ -120,6 +129,14 @@ jobs:
           ninja -C build
       - name: Test
         run: ctest --test-dir build -j4 --output-on-failure
+      - name: Verify install layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --install build --prefix install-check
+          test -x install-check/bin/openfreedomfighters
+          test -f install-check/bin/assets/openfreedomfighters-splash.bmp
+          test -f install-check/bin/assets/Rajdhani-SemiBold.ttf
       - name: Verify intro GPU rendering and presentation on Metal when available
         run: OFF_PICTURE_SHADER_TEST_DRIVER=metal ctest --test-dir build -R '^off_sdl_(picture_stage_shader|intro_renderer|intro_presentation)_tests$' -V
 
@@ -140,6 +157,14 @@ jobs:
         run: |
           $env:PATH = "${{ github.workspace }}/zlib-install/bin;$env:PATH"
           ctest --test-dir build -C Release -j4 --output-on-failure
+      - name: Verify install layout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cmake --install build --config Release --prefix install-check
+          if (!(Test-Path install-check/bin/openfreedomfighters.exe)) { throw 'installed executable is missing' }
+          if (!(Test-Path install-check/bin/assets/openfreedomfighters-splash.bmp)) { throw 'installed splash asset is missing' }
+          if (!(Test-Path install-check/bin/assets/Rajdhani-SemiBold.ttf)) { throw 'installed font asset is missing' }
       - name: Verify intro GPU rendering and presentation on D3D12 when available
         shell: pwsh
         run: |
