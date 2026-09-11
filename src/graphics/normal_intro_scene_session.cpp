@@ -22,10 +22,16 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
   try {
     runtime_->run_postconstruction_reader_bracket(
         saved,
-        {.external_loader_service = [](std::uint64_t) {},
-         .source_script_work = [](const IntroSourceScriptWork &) {},
-         .pre_reader_service = [] {},
-         .prepare_deferred_reader = [](const IntroDeferredReaderWork &) {},
+        {.external_loader_service = [this](std::uint64_t value) {
+           reader_bracket_observation_.external_loader_values.push_back(value);
+         },
+         .source_script_work = [this](const IntroSourceScriptWork &work) {
+           reader_bracket_observation_.source_scripts.push_back(work);
+         },
+         .pre_reader_service = [this] { ++reader_bracket_observation_.pre_reader_calls; },
+         .prepare_deferred_reader = [this](const IntroDeferredReaderWork &) {
+           ++reader_bracket_observation_.prepared_reader_calls;
+         },
          .owner_reader_boundary =
              [this](const IntroDeferredReaderWork &work) {
                const auto &r = runtime_->resources();
@@ -95,7 +101,7 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                    runtime_->legal_picture_reader_state()->owner==runtime_->source_handle(work.source_directory_index))
                  runtime_->apply_supported_first_cut_legal_picture_component_reader(work);
              },
-         .end_reader_service = [] {}});
+         .end_reader_service = [this] { ++reader_bracket_observation_.end_reader_calls; }});
     stage_ = NormalIntroSceneSessionStage::reader_bracket_complete;
   } catch (...) {
     stage_ = NormalIntroSceneSessionStage::failed;

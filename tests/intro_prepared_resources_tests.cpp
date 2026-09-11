@@ -898,8 +898,13 @@ static OFF_NOINLINE void test_prepared_runtime_scopes() {
       auto session = off::graphics::make_normal_intro_scene_session(
           std::make_unique<off::graphics::IntroRuntime>(fixture.build(), app, sequence));
       check(session->stage()==off::graphics::NormalIntroSceneSessionStage::postconstructed &&
-                session->first_cut_player()==nullptr && session->first_cut_command_runner()==nullptr,
-            "normal scene session starts without a detached first-cut session");
+                session->first_cut_player()==nullptr && session->first_cut_command_runner()==nullptr &&
+                session->reader_bracket_observation().external_loader_values.empty() &&
+                session->reader_bracket_observation().source_scripts.empty() &&
+                session->reader_bracket_observation().pre_reader_calls==0U &&
+                session->reader_bracket_observation().prepared_reader_calls==0U &&
+                session->reader_bracket_observation().end_reader_calls==0U,
+            "normal scene session starts without reader-bracket observations or a detached first-cut session");
       rejects([&] { session->prepare_supported_first_cut_player(); });
       rejects([&] { session->prepare_first_cut_command_runner(1.0F,{}); });
       check(session->stage()==off::graphics::NormalIntroSceneSessionStage::postconstructed &&

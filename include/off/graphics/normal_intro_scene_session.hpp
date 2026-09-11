@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <vector>
 
 namespace off::graphics {
 class IntroRuntime;
@@ -19,6 +20,17 @@ enum class NormalIntroSceneSessionStage : std::uint8_t {
   reader_bracket_complete,
   outer_loader_tail_complete,
   failed,
+};
+
+// Records ordering-only hooks reached by the reviewed reader bracket.  These
+// observations deliberately do not turn opaque loader callbacks into inferred
+// runtime behavior; they keep their source inputs available for later recovery.
+struct NormalIntroReaderBracketObservation {
+  std::vector<std::uint64_t> external_loader_values;
+  std::vector<IntroSourceScriptWork> source_scripts;
+  std::size_t pre_reader_calls{};
+  std::size_t prepared_reader_calls{};
+  std::size_t end_reader_calls{};
 };
 
 class NormalIntroSceneSession final {
@@ -59,6 +71,10 @@ public:
     return first_cut_command_runner_.get();
   }
   [[nodiscard]] IntroOuterLoaderTailReadiness outer_loader_tail_readiness() const;
+  [[nodiscard]] const NormalIntroReaderBracketObservation &
+  reader_bracket_observation() const noexcept {
+    return reader_bracket_observation_;
+  }
 
 private:
   std::unique_ptr<IntroRuntime> runtime_;
@@ -66,6 +82,7 @@ private:
   std::unique_ptr<cutscene::FirstCutRuntimeCommandRouter> first_cut_command_router_;
   std::unique_ptr<cutscene::FirstCutCommandSession> first_cut_command_session_;
   std::unique_ptr<cutscene::FirstCutClockedCommandRunner> first_cut_command_runner_;
+  NormalIntroReaderBracketObservation reader_bracket_observation_;
   NormalIntroSceneSessionStage stage_{
       NormalIntroSceneSessionStage::postconstructed};
 };
