@@ -1760,7 +1760,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     result.message += " (" + std::to_string(gpu_intro->image_count()) +
         " source-backed intro images uploaded; automatic intro playback pending)";
   if (result.success && intro_preview_diagnostic != nullptr)
-    result.message += " (source-backed intro picture diagnostic rendered with generic fit projection)";
+    result.message += " (source-backed intro picture rendered with generic fit projection; playback pending)";
   gpu_intro.reset();
   release_overlay(device, overlay);
   release_startup_images(device, gpu_startup);

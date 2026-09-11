@@ -202,6 +202,11 @@ F10 toggles settings. Close the window to exit. For development:
   indexed SDL GPU renderer. It uses the real decoded picture images and quads,
   but a project-authored fit projection and baseline render state; it is not
   automatic intro playback or a faithful cutscene camera.
+
+Normal startup also presents that same retained first-cut picture after the
+three-second OpenFreedomFighters splash. This is a source-backed static frame
+using the generic fit projection, not a reconstructed cutscene, camera, or
+menu transition.
 - `--probe-startup-boot` runs an opt-in, no-window structural diagnostic for
   the checked `FF-StartUp` BootMenu source. It prints only call order and GMS
   directory ordinals plus a content-free hierarchy fingerprint; it creates no

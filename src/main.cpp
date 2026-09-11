@@ -817,7 +817,8 @@ int main(int argc, char **argv) {
               << intro_legal_picture_preflight->draw.draw_plan.groups().size()
               << " draw groups, "
               << intro_legal_picture_preflight->images.size()
-              << " referenced images; not admitted for display.\n";
+              << " referenced images; displayed as a source-backed startup frame, "
+                 "not cutscene playback.\n";
   if (intro_session && intro_session->first_cut_player())
     std::cout << "Source-backed first-cut session retained: cold command "
                  "admission and no playback.\n";
@@ -855,7 +856,7 @@ int main(int argc, char **argv) {
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       startup_window, mode, scene ? &*scene : nullptr, *startup_graphics,
       ui_fonts, ui_textures, intro,
-      diagnostic_intro_picture ? &*intro_legal_picture_preflight : nullptr,
+      intro_legal_picture_preflight ? &*intro_legal_picture_preflight : nullptr,
       frame_limit, show_graphics_menu,
       screenshot_path, locale, diagnostic_startup_graphics);
   if (!runtime.success) {
