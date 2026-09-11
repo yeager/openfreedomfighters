@@ -59,7 +59,7 @@ contract have been independently recovered.
 
 The owned-data probe currently finds 420 queued readers: 12 applied, 20
 recognized-but-not-admitted owner forms, and 388 unclassified.
-Of the unclassified work, 70 records have no attachments and 333 have
+Of the unclassified work, 55 records have no attachments and 333 have
 attachments; 302 of those attachment-bearing blocks expose a delimiter before
 their terminal marker, while 31 are outside the narrow classifier. The 302
 recognized shapes contain 429 delimiter events, with at most four in one block.
