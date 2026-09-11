@@ -30,6 +30,8 @@
 #include "off/platform/sdl_startup.hpp"
 #include "off/runtime/startup_boot_scene_directory_source.hpp"
 #include "off/runtime/startup_boot_scene_probe_host.hpp"
+#include "off/runtime/movie_cut_loader_package_source.hpp"
+#include "off/runtime/movie_cut_main_package_source.hpp"
 #include "off/runtime/startup_scene_package_source.hpp"
 #include "off/ui/retail_ui_fonts.hpp"
 #include "off/ui/retail_ui_textures.hpp"
@@ -64,7 +66,7 @@ void usage(std::ostream &output) {
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] "
             "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] "
-            "[--probe-startup-boot] [--probe-soundtrack] [--probe-localization] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
+            "[--probe-startup-boot] [--probe-soundtrack] [--probe-localization] [--probe-movie-cuts] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
 }
 
 [[nodiscard]] off::data::AudioBankProfile inspect_verified_game_audio(
@@ -184,6 +186,55 @@ void write_localization_probe(const std::filesystem::path& root,
          << "localization-startup-structure-digest=" << profile.structure_digest << '\n'
          << "localization-record-grammar=unavailable\n"
          << "localization-text-decoding=unavailable\n";
+}
+
+void write_movie_cut_probe(const std::filesystem::path& root,
+                           std::ostream& output) {
+  const auto movie_root = root / "Scenes" / "Cutscenes" / "MovieCuts";
+  std::error_code error;
+  if (!std::filesystem::is_directory(movie_root, error) || error)
+    throw std::runtime_error("MovieCuts directory is unavailable");
+  std::size_t cut_directories{}, loader_packages{}, main_packages{}, other_packages{};
+  for (const auto& entry : std::filesystem::directory_iterator(movie_root, error)) {
+    if (error) throw std::runtime_error("MovieCuts directory enumeration failed");
+    if (!entry.is_directory() || entry.is_symlink()) continue;
+    const auto cut = entry.path().filename().string();
+    if (!off::runtime::detail::movie_cut_safe_identifier(cut))
+      throw std::runtime_error("MovieCuts directory has an invalid identifier");
+    ++cut_directories;
+    const auto loader = entry.path() / "Loader.ZIP";
+    if (std::filesystem::is_regular_file(loader, error) && !error) {
+      const auto package = off::runtime::MovieCutLoaderPackageSource::prepare_checked(cut, loader);
+      if (package.cut_identifier() != cut)
+        throw std::runtime_error("MovieCut loader identity disagrees with its directory");
+      ++loader_packages;
+    }
+    const auto main_name = cut + "_MAIN";
+    const auto main = entry.path() / (main_name + ".ZIP");
+    if (std::filesystem::is_regular_file(main, error) && !error) {
+      const auto package = off::runtime::MovieCutMainPackageSource::prepare_checked(
+          root, cut, main_name);
+      if (package.cut_identifier() != cut || package.package_identifier() != main_name)
+        throw std::runtime_error("MovieCut main identity disagrees with its directory");
+      ++main_packages;
+    }
+    for (const auto& file : std::filesystem::directory_iterator(entry.path(), error)) {
+      if (error) throw std::runtime_error("MovieCut package enumeration failed");
+      if (!file.is_regular_file() || file.path().extension() != ".ZIP" ||
+          file.path().filename() == "Loader.ZIP" || file.path() == main)
+        continue;
+      ++other_packages;
+    }
+  }
+  if (cut_directories == 0U || loader_packages == 0U || main_packages == 0U)
+    throw std::runtime_error("MovieCuts probe found no complete source packages");
+  output << "movie-cut-probe=completed\n"
+         << "movie-cut-directories=" << cut_directories << '\n'
+         << "movie-cut-verified-loader-packages=" << loader_packages << '\n'
+         << "movie-cut-verified-main-packages=" << main_packages << '\n'
+         << "movie-cut-other-packages=" << other_packages << '\n'
+         << "movie-cut-routing=unavailable\n"
+         << "movie-cut-playback=unavailable\n";
 }
 
 [[nodiscard]] std::string_view startup_boot_probe_call_name(
@@ -600,6 +651,7 @@ int main(int argc, char **argv) {
   bool probe_startup_boot = false;
   bool probe_soundtrack = false;
   bool probe_localization = false;
+  bool probe_movie_cuts = false;
   bool probe_first_cut_cold = false;
   bool probe_first_cut_initialization = false;
   bool probe_intro_renderer_payload = false;
@@ -647,6 +699,8 @@ int main(int argc, char **argv) {
       probe_soundtrack = true;
     } else if (argument == "--probe-localization") {
       probe_localization = true;
+    } else if (argument == "--probe-movie-cuts") {
+      probe_movie_cuts = true;
     } else if (argument == "--probe-first-cut-cold") {
       probe_first_cut_cold = true;
     } else if (argument == "--probe-first-cut-initialization") {
@@ -677,7 +731,7 @@ int main(int argc, char **argv) {
   }
   if (data_path.empty())
     data_path = default_game_data_path();
-  if (data_path.empty() && (verify_only || probe_startup_boot || probe_soundtrack || probe_localization || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
+  if (data_path.empty() && (verify_only || probe_startup_boot || probe_soundtrack || probe_localization || probe_movie_cuts || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
     std::cerr
         << "A legally purchased Freedom Fighters installation is required; "
            "pass --data PATH or set OPENFREEDOMFIGHTERS_DATA.\n";
@@ -702,7 +756,7 @@ int main(int argc, char **argv) {
   if (probe_startup_boot &&
       (verify_only || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || probe_soundtrack ||
-       probe_localization ||
+       probe_localization || probe_movie_cuts ||
        mode_specified)) {
     std::cerr
         << "--probe-startup-boot cannot be combined with runtime options.\n";
@@ -712,7 +766,7 @@ int main(int argc, char **argv) {
   if (probe_soundtrack &&
       (verify_only || probe_startup_boot || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified ||
-       probe_localization || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
+       probe_localization || probe_movie_cuts || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
     std::cerr << "Soundtrack probe cannot be combined with runtime options.\n";
     usage(std::cerr);
     return 2;
@@ -720,13 +774,21 @@ int main(int argc, char **argv) {
   if (probe_localization &&
       (verify_only || probe_startup_boot || probe_soundtrack || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified ||
-       probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
+       probe_movie_cuts || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
     std::cerr << "Localization probe cannot be combined with runtime options.\n";
     usage(std::cerr);
     return 2;
   }
-  if ((probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global) &&
+  if (probe_movie_cuts &&
       (verify_only || probe_startup_boot || probe_soundtrack || probe_localization || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
+       show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified ||
+       probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
+    std::cerr << "MovieCut probe cannot be combined with runtime options.\n";
+    usage(std::cerr);
+    return 2;
+  }
+  if ((probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global) &&
+      (verify_only || probe_startup_boot || probe_soundtrack || probe_localization || probe_movie_cuts || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified)) {
     std::cerr << "First-cut probes cannot be combined with runtime options.\n";
     usage(std::cerr);
@@ -819,6 +881,22 @@ int main(int argc, char **argv) {
       return 0;
     } catch(const std::exception& error) {
       std::cerr << "Localization probe failed: " << error.what() << '\n';
+      return 3;
+    }
+  }
+
+  if (probe_movie_cuts) {
+    const auto verification=off::data::verify_install(
+        data_path,{}, {.deep_audit_cache_root=off::platform::application_deep_audit_cache_root()});
+    if(!verification) {
+      std::cerr << "Game-data verification failed: " << verification.message << '\n';
+      return 3;
+    }
+    try {
+      write_movie_cut_probe(verification.root, std::cout);
+      return 0;
+    } catch(const std::exception& error) {
+      std::cerr << "MovieCut probe failed: " << error.what() << '\n';
       return 3;
     }
   }

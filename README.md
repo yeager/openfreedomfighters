@@ -178,6 +178,10 @@ OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
 # This is format-recovery evidence, not a localization catalog.
 ./build/openfreedomfighters --probe-localization
 
+# Verify the bounded MovieCuts loader and main-package readers without
+# selecting a route, opening a window, or beginning a cinematic.
+./build/openfreedomfighters --probe-movie-cuts
+
 # Inspect the checked, non-playing first-cut reader boundary. This opens no
 # window and never starts audio, schedules an event, or renders a cutscene.
 ./build/openfreedomfighters --probe-first-cut-cold

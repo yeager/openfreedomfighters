@@ -49,6 +49,17 @@ Aggregate sizes, header invariants, and the first three-scene comparison are rec
 
 Across all 90 archives, each of `GMS`, `OCT`, `PRM`, `RMC`, `RMI`, `SGP`, `SND`, `SUP`, `TEX`, and `ZGF` occurs 90 times. `BUF` and `LOC` occur 88 times and `ANM` occurs 42 times. This regularity strongly supports a per-scene resource-family design. The common `ZGF`/`GMS` compression envelope and the inner ZGF resource bundle are decoded, `SUP` is confirmed as a dependency list, `TEX` is decoded to RGBA8, `PRM` primary vertices and grouped topology are decoded, and the common `RMC`/`RMI` spatial envelope is parsed; the remaining family semantics are still hypotheses.
 
+## MovieCut source boundary
+
+MovieCuts are scene packages, not standalone video files. The native source
+layer has checked readers for each explicitly selected `Loader.ZIP` and
+canonical `_MAIN.ZIP` package. They retain validated package resources and
+support dependencies only. `--probe-movie-cuts` enumerates the owner-installed
+MovieCuts directory and reports aggregate package counts after hash verification;
+it does not disclose identifiers, select a cut route, start audio, create a
+scene, or play a cinematic. Noncanonical secondary packages remain visible only
+as an aggregate count until their route and package contracts are recovered.
+
 ## PE image map
 
 The supported executable is PE32/i386, image base `0x00400000`, entry-point RVA `0x00233903`, with relocations present. Its seven sections are:
