@@ -1,6 +1,7 @@
 #include "off/data/gms_image.hpp"
 #include "off/data/bounded_component_block_cursor.hpp"
 #include "off/data/deferred_attachment_dispatch_shape.hpp"
+#include "off/data/deferred_compact_block_profile.hpp"
 #include "off/data/compact_typed_value_decoder.hpp"
 #include "off/data/component_reader_context.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
@@ -1012,6 +1013,20 @@ int main() {
         check(DeferredAttachmentDispatchClassifier::observe(post_terminal).delimiter_count == 0U &&
                   DeferredAttachmentDispatchClassifier::observe(high_bit_delimiter).delimiter_count == 1U,
               "dispatch classification leaves terminal suffixes untouched and recognizes high-bit delimiters");
+        using off::data::DeferredCompactBlockProfiler;
+        const std::array compact_profiled{
+            std::byte{0x03},std::byte{0x04},std::byte{0x00},std::byte{0x00},std::byte{0x00},std::byte{0x06},
+            std::byte{0x43},std::byte{0x02},std::byte{0x00},std::byte{0x00},std::byte{0x00},
+            std::byte{0x04},std::byte{'x'},std::byte{0x00},std::byte{0xff}};
+        const auto compact_profile=DeferredCompactBlockProfiler::profile(compact_profiled);
+        check(compact_profile.encoded_values==3U && compact_profile.attachment_delimiters==1U &&
+                  compact_profile.continuation_values==1U && compact_profile.value_kinds[3U]==2U &&
+                  compact_profile.value_kinds[4U]==1U,
+              "deferred compact block profiler retains framing without decoding payload values");
+        check_rejected([] {
+            static_cast<void>(DeferredCompactBlockProfiler::profile(
+                std::array{std::byte{0xff},std::byte{0x06}}));
+        }, "deferred compact block profiler rejects bytes after the final terminator");
         check_rejected([] {
             const std::array<std::byte, 1> truncated{std::byte{0x03}};
             static_cast<void>(DeferredAttachmentDispatchClassifier::observe(truncated));

@@ -1,5 +1,6 @@
 #include "off/data/install.hpp"
 #include "off/data/deferred_attachment_dispatch_shape.hpp"
+#include "off/data/deferred_compact_block_profile.hpp"
 #include "off/data/first_cut_component_payload_session.hpp"
 #include "off/data/first_cut_owner_reader.hpp"
 #include "off/data/first_cut_list_component_reader.hpp"
@@ -310,6 +311,15 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
       signature+=" delimiters="+std::to_string(observation.delimiter_count);
       signature+=observation.shape==off::data::DeferredAttachmentDispatchShape::terminal_before_first_attachment_delimiter ?
           " terminal-first" : " attachment-first";
+      const auto profile=off::data::DeferredCompactBlockProfiler::profile(
+          block.subspan(sizeof(std::uint32_t)));
+      signature+=" values="+std::to_string(profile.encoded_values)+
+          " continued="+std::to_string(profile.continuation_values)+
+          " kinds="+std::to_string(profile.value_kinds[1U])+","+
+          std::to_string(profile.value_kinds[2U])+","+
+          std::to_string(profile.value_kinds[3U])+","+
+          std::to_string(profile.value_kinds[4U])+","+
+          std::to_string(profile.value_kinds[5U]);
     } catch(const std::exception&) { signature+=" malformed-dispatch"; }
     ++deferred_signatures[std::move(signature)];
   }

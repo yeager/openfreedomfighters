@@ -45,6 +45,16 @@ validated terminal-versus-attachment-delimiter shape, retaining an explicit
 unknown bucket for formats outside that narrow classifier. These are aggregate
 investigation counts, not a claim that a deferred attachment reader exists.
 
+For the largest unclassified base-object family, the cold probe also emits a
+privacy-safe compact framing profile: bounded byte count, attachment identities,
+delimiter count, encoded-value count, continuation count, and counts by generic
+value framing class. It never emits values, source identities, offsets, handles,
+or payload bytes. The owned intro has two common single-MatPos forms (98 bytes,
+89 records; 103 bytes, 116 records). Their differing framing profiles prove
+that a type-wide base-object reader would be unsound. Neither form is admitted
+until its owner fields and attachment dispatch contract have been independently
+recovered.
+
 The owned-data probe currently finds 420 queued readers: 12 applied, five
 recognized-but-not-admitted following-visual owners, and 403 unclassified.
 Of the unclassified work, 70 records have no attachments and 333 have
