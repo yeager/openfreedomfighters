@@ -60,9 +60,11 @@ owner/resource/offset receipt. Their payload is deliberately not parsed and
 they do not count as lifecycle reader admissions; this separates safe boundary
 provenance from unproven reader behavior.
 MatPosAnim is explicitly outside the current deferred-reader admission path:
-all 227 associated deferred records terminate before attachment dispatch. Its
-owner-local `KEYS` preparation and its separate persistence/restore object
-stream are documented in [MatPosAnim recovery](MATPOS_ANIMATION.md). Phase one
+the supported intro has 227 associated deferred records, all with an attachment
+delimiter before the owner terminal (249 delimiters in total). Its owner-local
+`KEYS` preparation and separate persistence/restore object stream are
+documented in [MatPosAnim recovery](MATPOS_ANIMATION.md). This establishes a
+bounded dispatch shape, not a component payload grammar or admission. Phase one
 instead initializes from existing state and runtime providers; neither route
 activates animation nor the intro.
 The conditional DefaultCam factory now constructs its real PreviewCamera and
