@@ -168,6 +168,7 @@ add_library(off_core
     src/ui/graphics_menu_pointer.cpp
     src/ui/font_run_layout.cpp
     src/ui/project_localization.cpp
+    src/ui/retail_localization_cache.cpp
     src/ui/retail_ui_fonts.cpp
     src/ui/retail_ui_textures.cpp
 )
@@ -636,6 +637,10 @@ if(BUILD_TESTING)
     add_executable(off_project_localization_tests tests/project_localization_tests.cpp)
     target_link_libraries(off_project_localization_tests PRIVATE off_core)
     add_test(NAME off_project_localization_tests COMMAND off_project_localization_tests)
+
+    add_executable(off_retail_localization_cache_tests tests/retail_localization_cache_tests.cpp)
+    target_link_libraries(off_retail_localization_cache_tests PRIVATE off_core)
+    add_test(NAME off_retail_localization_cache_tests COMMAND off_retail_localization_cache_tests)
 
     add_executable(off_graphics_menu_pointer_tests tests/graphics_menu_pointer_tests.cpp)
     target_link_libraries(off_graphics_menu_pointer_tests PRIVATE off_core)

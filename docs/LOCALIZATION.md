@@ -43,6 +43,32 @@ The list balances the original market, Nordic coverage, broad PC/Steam audiences
 
 Translation catalogs are keyed by stable semantic IDs. Original retail strings are read at runtime from the user's data where technically possible and are never committed. New Swedish and other translations require independently contributed text with an explicit license grant. CI checks missing keys, placeholders, accelerator collisions, and pseudo-localized UI overflow.
 
+## Private retail-text extraction
+
+`RetailLocalizationCache` is the local-only storage boundary for a future
+reviewed retail-text decoder. At first use, it writes a complete source catalog
+only after a verified decoder provides canonical ordered display-text records.
+The catalog binds the installation and decoder identities, validates its entire
+record sequence, and publishes a checked staging file atomically. A matching
+complete cache is reused; a failed extraction leaves no partial catalog.
+
+Each record receives a deterministic opaque ID from the decoder's versioned,
+verified source-set identity and canonical ordinal, not from English text. The
+private cache stores that source-set identity alongside the installation and
+decoder identities. A translation catalog
+contains only opaque IDs and independently supplied UTF-8 translations. It has
+no English-source field. Removing an original from a translation file does not
+itself make a derivative translation copyright-free, so translated retail text
+also remains private unless its contributor has a documented right to publish
+it.
+
+The present `LOC` scanner is not such a decoder. It inventories raw printable
+byte runs but does not establish text records, English source language,
+encoding, keys, or lookup behavior. It must not populate this cache or drive
+game text. Once the LOC grammar is recovered, startup may call the cache after
+successful game-data verification using the verified archive snapshot. The
+optional soundtrack is not part of the text-cache identity.
+
 ## Clean-room delivery plan
 
 1. Recover only non-expressive format and lookup behavior for retail LOC data.
