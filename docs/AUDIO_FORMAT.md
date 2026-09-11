@@ -51,6 +51,29 @@ The decoder verifies encoded size, channel count, sample rate, bit depth, block 
 
 The 2,051 Vorbis references resolve to 72 unique payload ranges in the global stream bank. This confirms that scene headers reuse streamed music or dialogue objects rather than embedding independent copies.
 
+## Optional Steam soundtrack
+
+The Steam purchase may place a separately mastered soundtrack alongside the
+game. It is optional runtime data: its absence never changes installation
+verification or prevents the game from starting. Every candidate is SHA-256
+verified before the project opens it. `SoundtrackCatalog` groups the verified
+FLAC and MP3 editions by album ordinal and always chooses FLAC when both are
+present.
+
+On the supported owned installation, the 18 preferred FLAC tracks and 18 MP3
+fallbacks are 44.1 kHz stereo. The two editions of every track have different
+exact decoded PCM-frame counts. That is expected for separate containers and
+encoder delay/padding, but it means the project must not treat album ordinals
+or MP3/FLAC duration equality as music-cue identity. The probe reports only
+aggregate layout and frame-count ranges; it does not expose titles, paths,
+samples, or fingerprints.
+
+The soundtrack decoder is a bounded sequential source with a 64 MiB encoded
+file limit and a 65,536-frame maximum read. It supports FLAC through `dr_flac`
+and MP3 through `dr_mp3`. It is deliberately independent from audio-bank
+records. A verified cue-to-album mapping and private timing comparison are
+required before optional soundtrack playback can replace an in-game music cue.
+
 `decode_stream` exposes the physical codec output. `decode_bank_stream` additionally
 checks the meaningful WHD counts: PCM and Vorbis must match exactly; IMA may have
 final-block padding, which is trimmed only after enough samples have decoded.

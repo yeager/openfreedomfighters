@@ -13,6 +13,9 @@ struct SoundtrackStreamInfo {
   Encoding encoding{};
   std::uint32_t sample_rate{};
   std::uint32_t channels{};
+  // Exact decoded PCM frames reported by the container. This is metadata only:
+  // it does not decode, cache, map, or schedule the album track.
+  std::uint64_t total_frames{};
 };
 
 // Sequential, bounded decoder for a verified optional soundtrack file. It has

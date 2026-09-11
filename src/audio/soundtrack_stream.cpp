@@ -26,7 +26,8 @@ std::string lower_extension(const std::filesystem::path& path) {
 
 void validate_info(const SoundtrackStreamInfo& info) {
   if ((info.encoding != Encoding::flac && info.encoding != Encoding::mp3) ||
-      (info.channels != 1U && info.channels != 2U) || info.sample_rate == 0U)
+      (info.channels != 1U && info.channels != 2U) || info.sample_rate == 0U ||
+      info.total_frames == 0U)
     throw std::runtime_error("soundtrack stream has unsupported audio metadata");
 }
 
@@ -66,7 +67,8 @@ SoundtrackStream SoundtrackStream::open(const std::filesystem::path& path) {
     impl->flac = drflac_open_file(native_path.c_str(), nullptr);
 #endif
     if (!impl->flac) throw std::runtime_error("invalid FLAC soundtrack stream");
-    impl->stream_info = {Encoding::flac, impl->flac->sampleRate, impl->flac->channels};
+    impl->stream_info = {Encoding::flac, impl->flac->sampleRate,
+                         impl->flac->channels, impl->flac->totalPCMFrameCount};
   } else if (extension == ".mp3") {
 #if defined(_WIN32)
     if (!drmp3_init_file_w(&impl->mp3, path.c_str(), nullptr))
@@ -76,7 +78,9 @@ SoundtrackStream SoundtrackStream::open(const std::filesystem::path& path) {
 #endif
       throw std::runtime_error("invalid MP3 soundtrack stream");
     impl->mp3_open = true;
-    impl->stream_info = {Encoding::mp3, impl->mp3.sampleRate, impl->mp3.channels};
+    const auto frames = drmp3_get_pcm_frame_count(&impl->mp3);
+    impl->stream_info = {Encoding::mp3, impl->mp3.sampleRate, impl->mp3.channels,
+                         frames};
   } else {
     throw std::invalid_argument("soundtrack format must be FLAC or MP3");
   }

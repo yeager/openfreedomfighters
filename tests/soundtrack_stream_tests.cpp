@@ -27,7 +27,8 @@ int main(int argc, char** argv) {
     auto stream = off::audio::SoundtrackStream::open(argv[index]);
     const auto info = stream.info();
     check((info.encoding == off::audio::Encoding::flac || info.encoding == off::audio::Encoding::mp3) &&
-              (info.channels == 1U || info.channels == 2U) && info.sample_rate > 0U,
+              (info.channels == 1U || info.channels == 2U) && info.sample_rate > 0U &&
+              info.total_frames > 0U,
           "owned soundtrack has supported metadata");
     std::vector<std::int16_t> buffer(info.channels * 257U);
     const auto frames = stream.read_frames(buffer);

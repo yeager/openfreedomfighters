@@ -36,8 +36,10 @@ for a portable installation.
   A local, disposable deep-audit certificate avoids repeating the much slower
   archive parse after a successful hash pass; it never replaces hashing.
   The Steam soundtrack's optional MP3 and FLAC files are detected separately:
-  they can be decoded safely when installed, but cue mapping and music playback
-  are not implemented yet. Their absence never blocks startup.
+  FLAC is preferred and MP3 is retained only as a fallback. Both editions have
+  the same 44.1 kHz stereo layout, but their exact decoded lengths differ, so
+  they cannot be interchanged for time-based cue synchronization. Cue mapping
+  and music playback are not implemented yet. Their absence never blocks startup.
 - The first intro sequence's camera, pictures and textures load from game data.
   One retained runtime owns their hierarchy and mutable picture state; intro
   textures upload to the GPU. Indexed drawing works in explicit integration
@@ -169,7 +171,7 @@ OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
 ./build/openfreedomfighters --verify-only
 
 # Inspect hash-verified optional MP3/FLAC soundtrack editions without playing
-# or naming a game cue. The probe reports aggregate stream capabilities only.
+# or naming a game cue. The probe reports aggregate layout and duration facts.
 ./build/openfreedomfighters --probe-soundtrack
 
 # Inspect the checked, non-playing first-cut reader boundary. This opens no

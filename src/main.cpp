@@ -41,6 +41,7 @@
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <map>
 #include <optional>
@@ -94,6 +95,10 @@ void write_soundtrack_probe(
   std::set<std::uint32_t> channel_counts;
   std::uint32_t maximum_sample_rate{};
   std::uint32_t maximum_channels{};
+  std::uint64_t shortest_track_frames{std::numeric_limits<std::uint64_t>::max()};
+  std::uint64_t longest_track_frames{};
+  std::size_t fallback_frame_matches{};
+  std::size_t fallback_frame_mismatches{};
   for (const auto& track : catalog.tracks()) {
     const auto info = off::audio::SoundtrackStream::open(track.preferred.path).info();
     if ((track.preferred.format == off::audio::SoundtrackFormat::flac &&
@@ -111,6 +116,19 @@ void write_soundtrack_probe(
     channel_counts.insert(info.channels);
     maximum_sample_rate = std::max(maximum_sample_rate, info.sample_rate);
     maximum_channels = std::max(maximum_channels, info.channels);
+    shortest_track_frames = std::min(shortest_track_frames, info.total_frames);
+    longest_track_frames = std::max(longest_track_frames, info.total_frames);
+    if (track.fallback) {
+      const auto fallback = off::audio::SoundtrackStream::open(
+          track.fallback->path).info();
+      if (fallback.sample_rate != info.sample_rate ||
+          fallback.channels != info.channels)
+        throw std::runtime_error("soundtrack editions disagree on stream layout");
+      if (fallback.total_frames == info.total_frames)
+        ++fallback_frame_matches;
+      else
+        ++fallback_frame_mismatches;
+    }
   }
   const auto game_audio = inspect_verified_game_audio(verification.root);
   output << "soundtrack-probe=completed\n"
@@ -123,6 +141,10 @@ void write_soundtrack_probe(
          << "soundtrack-distinct-channel-counts=" << channel_counts.size() << '\n'
          << "soundtrack-maximum-sample-rate=" << maximum_sample_rate << '\n'
          << "soundtrack-maximum-channels=" << maximum_channels << '\n'
+         << "soundtrack-shortest-track-frames=" << shortest_track_frames << '\n'
+         << "soundtrack-longest-track-frames=" << longest_track_frames << '\n'
+         << "soundtrack-fallback-exact-frame-matches=" << fallback_frame_matches << '\n'
+         << "soundtrack-fallback-frame-mismatches=" << fallback_frame_mismatches << '\n'
          << "game-audio-profile-records=" << game_audio.record_count() << '\n'
          << "game-audio-profile-pcm=" << game_audio.pcm_record_count() << '\n'
          << "game-audio-profile-ima-adpcm=" << game_audio.ima_adpcm_record_count() << '\n'
