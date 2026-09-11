@@ -71,8 +71,9 @@ high-bit and continuation markers, never payload bytes. The probe never emits va
 source identities, offsets, handles, or payload bytes. The owned intro has one 98-byte single-MatPos form
 (89 records) and three distinct 103-byte framing forms (2, 85, and 29 records).
 Their differing framing profiles prove that a type-wide base-object reader would
-be unsound. None is admitted until its owner fields and attachment dispatch
-contract have been independently recovered.
+be unsound. The recovered MatPos reader has a further owner-local `KEYS` gate;
+the current owned probe finds no form that clears its complete admission
+predicate, so none is applied.
 
 The current owned-data probe records 420 queued readers: 31 applied, five
 recognized-but-not-admitted following-visual owner forms, and 384
@@ -100,14 +101,15 @@ rejected. It consumes the owner delimiter, proves an empty component tail, and
 does not attach children, mutate resources or transforms, or run lifecycle,
 audio, cutscene, or rendering behavior. Other `ZGROUP` bodies remain
 unclassified because they have different tag forms or attachments.
-MatPosAnim is explicitly outside the current deferred-reader admission path:
-the supported intro has 227 associated deferred records, all with an attachment
-delimiter before the owner terminal (249 delimiters in total). Its owner-local
-`KEYS` preparation and separate persistence/restore object stream are
-documented in [MatPosAnim recovery](MATPOS_ANIMATION.md). This establishes a
-bounded dispatch shape, not a component payload grammar or admission. Phase one
-instead initializes from existing state and runtime providers; neither route
-activates animation nor the intro.
+MatPosAnim has a strict, currently unapplied deferred-reader path: the
+supported intro has 227 associated deferred records, all with an attachment
+delimiter before the owner terminal (249 delimiters in total). The reader only
+considers the independently recovered 98/103-byte ordinary-geometry forms and
+requires a supported owner-local `KEYS` profile before parsing. The current
+owned probe finds no record that clears the full gate. Its separate
+persistence/restore object stream is documented in [MatPosAnim recovery](MATPOS_ANIMATION.md).
+Phase one instead initializes from existing state and runtime providers;
+neither route activates animation nor the intro.
 The conditional DefaultCam factory now constructs its real PreviewCamera and
 ordinary membership in that host. Its callback writes directly into the scene
 hierarchy after the complete global initializer. The post-load root state and

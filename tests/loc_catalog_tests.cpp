@@ -81,6 +81,14 @@ int main() {
               "Project authored A", "Project authored B"},
           "decoder preserves depth-first child and tail order");
 
+    const auto empty_value_member = list({
+        scalar_node("synthetic.blank", ""),
+        scalar_node("synthetic.nonblank", "Project authored nonblank")});
+    const auto empty_values = off::data::decode_loc_member_display_texts(empty_value_member);
+    check(empty_values && empty_values->values == std::vector<std::string>{
+              "", "Project authored nonblank"},
+          "decoder preserves intentionally blank display-text values in canonical order");
+
     auto bad_offset = member;
     bad_offset[1] = std::byte{2};
     bad_offset[2] = std::byte{0xff};

@@ -65,6 +65,15 @@ int main() {
     const auto second = ensure_retail_localization_snapshot(root, "install-test-v1", "loc-parser-v1", "ff.loc.startup.v1", extract);
     check(second.status == RetailLocalizationCacheStatus::loaded && second.snapshot && extraction_calls == 1U,
           "matching private snapshot does not re-extract source text");
+    const auto blank_source = ensure_retail_localization_snapshot(
+        root, "install-test-v1", "loc-parser-v1", "ff.loc.blank.v1", [] {
+          return std::optional<std::vector<RetailSourceString>>{
+              std::vector<RetailSourceString>{{0U, ""}, {1U, "Project-authored nonblank source"}}};
+        });
+    check(blank_source.status == RetailLocalizationCacheStatus::extracted && blank_source.snapshot &&
+              blank_source.snapshot->strings[0].english.empty() &&
+              blank_source.snapshot->strings[1].ordinal == 1U,
+          "private source cache preserves intentionally blank records and their ordinals");
     check(make_retail_string_id("ff.loc.startup.v1", 9U) == "off.retail.ff.loc.startup.v1.9",
           "opaque ID is stable and contains no source text");
     const auto translations = RetailTranslationCatalog::build({

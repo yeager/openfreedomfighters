@@ -54,9 +54,10 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                          block.subspan(sizeof(std::uint32_t))))
                    runtime_->apply_supported_basic_group_owner_deferred_reader(work);
                }
-               if (source.source_type == 0x00200002U && source.attachments.size() == 1U &&
-                   r.sources().attachment_identifier(work.source_directory_index, 0U) ==
-                       "ZGEOM_MatPosAnim")
+               // A strict reader must not be used as an ordinary MatPos
+               // classifier.  The runtime-owned predicate includes its full
+               // no-side-effect source, component, KEYS and payload gates.
+               if (runtime_->supports_matpos_deferred_reader(work))
                  runtime_->apply_supported_matpos_deferred_reader(work);
                const auto legal =
                    r.sources().local_source_for_authored_reference(

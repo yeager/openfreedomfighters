@@ -21,7 +21,9 @@ is rejected.
 All 88 supported members pass this grammar. Extraction walks normalized logical
 member IDs in order, then child lists depth-first, then each node's sequential
 values. It assigns opaque ordinals from that order. The source-set identity is
-a text-free digest of the parser revision and those ordered member IDs.
+a text-free digest of the parser revision, ordered member IDs, and complete
+member-content digests. Intentionally blank display-text values are retained so
+later ordinals remain stable.
 
 `off::data::LocStringIndex` remains a deliberately limited inventory of
 bounded printable byte runs. It preserves non-ASCII bytes unchanged and makes

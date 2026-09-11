@@ -27,7 +27,7 @@ decode_loc_member_display_texts(std::span<const std::byte> bytes);
 
 struct OwnedLocCatalog final {
   // An opaque, text-free identity derived from the ordered normalized logical
-  // member IDs and the parser revision.
+  // member IDs, complete member-content digests, and parser revision.
   std::string source_set;
   std::vector<std::string> values;
 };
@@ -38,8 +38,9 @@ struct OwnedLocCatalog final {
 [[nodiscard]] std::optional<OwnedLocCatalog>
 extract_verified_owned_loc_catalog(const std::filesystem::path& root);
 
-// Computes the cache identity from verified logical member identities without
-// decoding or retaining retail text.  This is the only LOC work on a cache hit.
+// Computes the cache identity from verified logical member identities and
+// complete member-content digests without decoding or retaining retail text.
+// This is the only LOC work on a cache hit.
 [[nodiscard]] std::optional<std::string>
 verified_owned_loc_source_set(const std::filesystem::path& root);
 

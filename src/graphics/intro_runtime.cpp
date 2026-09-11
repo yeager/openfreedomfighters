@@ -3422,12 +3422,62 @@ void IntroRuntime::apply_supported_basic_group_owner_deferred_reader(
   if(parsed.fourth_is_zero) group->flags&=~0x02000000U;
 }
 
+bool IntroRuntime::supports_matpos_deferred_reader(
+    const IntroDeferredReaderWork& work) const noexcept {
+  try {
+    if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete ||
+        !work.processed || matpos_deferred_reader_states_.contains(work.source_directory_index) ||
+        matpos_owner_refresh_receipts_.contains(work.source_directory_index) ||
+        std::ranges::find_if(deferred_reader_work_, [&](const auto& candidate) {
+          return std::addressof(candidate) == std::addressof(work);
+        }) == deferred_reader_work_.end())
+      return false;
+    const auto& source = resources_.sources().directory().at(work.source_directory_index);
+    const auto owner = source_handle(work.source_directory_index);
+    const auto components = owner_components(owner);
+    const auto* object = constructed_object_owner(work.source_directory_index);
+    if (source.source_type != 0x00200002U || source.source_variant ||
+        source.attachments.size() != 1U || components.size() != 1U ||
+        resources_.sources().attachment_identifier(work.source_directory_index, 0U) != "ZGEOM_MatPosAnim" ||
+        source.deferred_source_offset != work.source_offset ||
+        directory_resource_mapping_.at(work.source_directory_index) != work.resource ||
+        !associated_resource_owner(work.resource) || *associated_resource_owner(work.resource) != owner ||
+        !object || object->owner != owner || object->resource != work.resource ||
+        !scene_lifetime_keys_registry_ ||
+        !scene_lifetime_keys_registry_->resolve_required_keys(owner.value, {'K','E','Y','S'}))
+      return false;
+    const auto component_index = components.front();
+    const auto& component = components_.at(component_index);
+    if (!component.constructed() || component.source().directory_index != work.source_directory_index ||
+        component.source().attachment_index != 0U || component.source().factory_name != "ZGEOM_MatPosAnim" ||
+        component.state().attached_owner != owner.value)
+      return false;
+    const auto block = resources_.sources().deferred_source_block(work.source_directory_index);
+    if ((block.size() != 98U && block.size() != 103U) || block.size() < sizeof(std::uint32_t))
+      return false;
+    std::uint32_t declared_size{};
+    for (std::size_t index{}; index < sizeof(declared_size); ++index)
+      declared_size |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(block[index])) << (8U * index);
+    if (declared_size != block.size() ||
+        std::to_integer<std::uint8_t>(block[block.size()-2U]) != 0x06U ||
+        std::to_integer<std::uint8_t>(block.back()) != 0xffU ||
+        !resource_state_for_handle(work.resource))
+      return false;
+    static_cast<void>(data::MatPosDeferredComponentReader::read(
+        block.subspan(sizeof(std::uint32_t), block.size()-sizeof(std::uint32_t)-2U)));
+    return true;
+  } catch (const std::exception&) {
+    return false;
+  }
+}
+
 void IntroRuntime::apply_supported_matpos_deferred_reader(
     const IntroDeferredReaderWork& work) {
   // This admission is intentionally narrower than the retained MatPosAnim
   // construction family: only the observed ordinary-geometry, sole-slot form
   // has a recovered deferred grammar.
-  if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete ||
+  if (!supports_matpos_deferred_reader(work) ||
+      resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete ||
       !work.processed || matpos_deferred_reader_states_.contains(work.source_directory_index) ||
       matpos_owner_refresh_receipts_.contains(work.source_directory_index) ||
       std::ranges::find_if(deferred_reader_work_, [&](const auto& candidate) {

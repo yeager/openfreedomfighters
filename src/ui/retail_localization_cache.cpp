@@ -49,8 +49,11 @@ bool valid_utf8(std::string_view value) noexcept {
   }
   return true;
 }
-bool valid_text(std::string_view value) noexcept {
-  return !value.empty() && value.size() <= maximum_text_bytes && value.find('\0') == std::string_view::npos && valid_utf8(value);
+bool valid_source_text(std::string_view value) noexcept {
+  return value.size() <= maximum_text_bytes && value.find('\0') == std::string_view::npos && valid_utf8(value);
+}
+bool valid_translation_text(std::string_view value) noexcept {
+  return !value.empty() && valid_source_text(value);
 }
 bool valid_snapshot(const RetailLocalizationSnapshot& snapshot) noexcept {
   if (snapshot.installation_identity.size() > 128U || snapshot.parser_identity.size() > 128U ||
@@ -60,7 +63,7 @@ bool valid_snapshot(const RetailLocalizationSnapshot& snapshot) noexcept {
                       snapshot.parser_identity.size() + 8U + snapshot.source_set.size() + 8U;
   if (total > maximum_catalog_bytes) return false;
   for (std::size_t index{}; index < snapshot.strings.size(); ++index) {
-    if (snapshot.strings[index].ordinal != index || !valid_text(snapshot.strings[index].english) ||
+    if (snapshot.strings[index].ordinal != index || !valid_source_text(snapshot.strings[index].english) ||
         total > maximum_catalog_bytes - 16U ||
         snapshot.strings[index].english.size() > maximum_catalog_bytes - total - 16U) return false;
     total += 16U + snapshot.strings[index].english.size();
@@ -168,7 +171,7 @@ std::string make_retail_string_id(std::string_view source_set, std::uint64_t ord
 }
 std::optional<RetailTranslationCatalog> RetailTranslationCatalog::build(std::vector<RetailTranslationEntry> entries) {
   if (entries.empty()) return std::nullopt;
-  for (const auto& entry : entries) if (!valid_identifier(entry.id) || !valid_text(entry.text)) return std::nullopt;
+  for (const auto& entry : entries) if (!valid_identifier(entry.id) || !valid_translation_text(entry.text)) return std::nullopt;
   std::ranges::sort(entries, {}, &RetailTranslationEntry::id);
   if (std::ranges::adjacent_find(entries, {}, &RetailTranslationEntry::id) != entries.end()) return std::nullopt;
   RetailTranslationCatalog result; result.entries_ = std::move(entries); return result;

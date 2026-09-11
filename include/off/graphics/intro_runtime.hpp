@@ -1020,6 +1020,9 @@ public:
   [[nodiscard]] const std::map<std::size_t,IntroFollowingVisualOwnerReaderReceipt>& following_visual_owner_reader_receipts() const noexcept {return following_visual_owner_reader_receipts_;}
   void apply_supported_basic_group_owner_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroBasicGroupOwnerReaderState>& basic_group_owner_reader_states() const noexcept {return basic_group_owner_reader_states_;}
+  // Non-mutating gate for the one recovered MatPos deferred reader.  The
+  // normal dispatcher must leave every other MatPos record unclassified.
+  [[nodiscard]] bool supports_matpos_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
   void apply_supported_matpos_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroMatPosDeferredReaderState>& matpos_deferred_reader_states() const noexcept { return matpos_deferred_reader_states_; }
   [[nodiscard]] const std::map<std::size_t,IntroMatPosOwnerRefreshReceipt>& matpos_owner_refresh_receipts() const noexcept { return matpos_owner_refresh_receipts_; }

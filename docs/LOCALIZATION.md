@@ -50,8 +50,11 @@ Steam-English LOC display-text decoder. At first normal start, after full
 installation verification, it writes a complete source catalog from canonical
 ordered display-text records.
 The catalog binds the installation and decoder identities, validates its entire
-record sequence, and publishes a checked staging file atomically. A matching
-complete cache is reused; a failed extraction leaves no partial catalog.
+record sequence, and publishes a checked staging file atomically. The
+source-set identity binds normalized member IDs and complete member-content
+digests without including source text. A matching complete cache is reused; a
+failed extraction leaves no partial catalog. Intentionally blank display-text
+records are preserved to keep ordinals stable.
 
 Each record receives a deterministic opaque ID from the decoder's versioned,
 verified source-set identity and canonical ordinal, not from English text. The
@@ -65,7 +68,8 @@ it.
 
 The legacy `LOC` scanner is not this decoder; it remains an isolated raw-run
 inventory. The decoder verifies complete member framing and UTF-8 source
-fields, derives its source set from normalized logical member IDs, and drives
+fields, derives its source set from normalized logical member IDs and
+text-free complete-member digests, and drives
 only the private cache. It does not implement original key lookup, language
 selection, formatting, or game-text presentation. The optional soundtrack is
 not part of the text-cache identity.

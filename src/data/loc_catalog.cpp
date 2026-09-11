@@ -65,6 +65,12 @@ constexpr std::size_t expected_member_count = 88U;
   return dot != std::string_view::npos && folded(value.substr(dot)) == ".loc";
 }
 
+[[nodiscard]] std::string bytes_sha256(std::span<const std::byte> bytes) {
+  crypto::Sha256 digest;
+  digest.update(bytes);
+  return crypto::to_hex(digest.finish());
+}
+
 [[nodiscard]] std::optional<std::uint32_t> read_u32(std::span<const std::byte> bytes,
                                                       std::size_t offset,
                                                       std::size_t end) noexcept {
@@ -100,7 +106,7 @@ private:
   }
 
   [[nodiscard]] bool append_value(std::string_view value) {
-    if (value.empty() || value.size() > maximum_value_bytes || values_.size() == maximum_values ||
+    if (value.size() > maximum_value_bytes || values_.size() == maximum_values ||
         value.size() > maximum_catalog_bytes - total_value_bytes_) return false;
     total_value_bytes_ += value.size();
     values_.emplace_back(value);
@@ -188,6 +194,9 @@ private:
 
 struct Member final {
   std::string id;
+  // The digest binds a source-set to the complete decoded LOC member without
+  // retaining or emitting any of its text.
+  std::string content_sha256;
   std::filesystem::path archive;
 };
 
@@ -223,7 +232,13 @@ struct Member final {
     if (entries.empty()) continue;
     const auto entry_id = folded(entries.front()->name);
     if (entry_id.empty()) return std::nullopt;
-    members.push_back({archive_id + "|" + entry_id, archive_path});
+    std::vector<std::byte> bytes;
+    try { bytes = archive.read(*entries.front()); }
+    catch (const std::exception&) { return std::nullopt; }
+    if (bytes.size() > maximum_member_bytes) return std::nullopt;
+    members.push_back({archive_id + "|" + entry_id,
+                       bytes_sha256(bytes),
+                       archive_path});
   }
   if (members.size() != expected_member_count) return std::nullopt;
   std::ranges::sort(members, {}, &Member::id);
@@ -236,6 +251,8 @@ struct Member final {
   for (const auto& member : members) {
     identity_input.push_back('\n');
     identity_input += member.id;
+    identity_input.push_back(':');
+    identity_input += member.content_sha256;
   }
   return "loc-source-" + crypto::to_hex(crypto::sha256(identity_input));
 }
