@@ -117,6 +117,31 @@ void NormalIntroSceneSession::prepare_supported_first_cut_player() {
   }
 }
 
+void NormalIntroSceneSession::prepare_first_cut_command_runner(
+    float derived_end, runtime::IntroLiveTargetRegistry::DispatchServices dispatch) {
+  if (stage_ != NormalIntroSceneSessionStage::reader_bracket_complete ||
+      !first_cut_player_ || first_cut_command_router_ || first_cut_command_session_ ||
+      first_cut_command_runner_) {
+    throw std::runtime_error(
+        "normal intro scene first-cut command runner is unavailable");
+  }
+  try {
+    auto router = std::make_unique<cutscene::FirstCutRuntimeCommandRouter>(*runtime_);
+    auto command_session = std::make_unique<cutscene::FirstCutCommandSession>(
+        *runtime_, derived_end, router->command_session_services(std::move(dispatch)),
+        router->sender());
+    auto runner = std::make_unique<cutscene::FirstCutClockedCommandRunner>(*command_session);
+    first_cut_command_router_ = std::move(router);
+    first_cut_command_session_ = std::move(command_session);
+    first_cut_command_runner_ = std::move(runner);
+  } catch (...) {
+    first_cut_command_runner_.reset();
+    first_cut_command_session_.reset();
+    first_cut_command_router_.reset();
+    throw;
+  }
+}
+
 void NormalIntroSceneSession::complete_outer_loader_tail(
     const IntroOuterLoaderTailServices &services) {
   if (stage_ != NormalIntroSceneSessionStage::reader_bracket_complete)

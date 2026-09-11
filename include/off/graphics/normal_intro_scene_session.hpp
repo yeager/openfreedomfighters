@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/cutscene/first_cut_player_initialization.hpp"
+#include "off/cutscene/first_cut_clocked_command_runner.hpp"
 #include "off/graphics/intro_outer_loader_tail_readiness.hpp"
 
 #include <cstdint>
@@ -31,6 +32,12 @@ public:
   // scene-owned lifetime as its source runtime. This does not execute either
   // lifecycle phase, schedule a cut, start audio, or admit rendering.
   void prepare_supported_first_cut_player();
+  // Builds the source-backed command router and its scene-clock runner under
+  // this session's lifetime. The caller still owns lifecycle admission, cut
+  // start/stop, clock sampling, and concrete target/component behavior.
+  void prepare_first_cut_command_runner(
+      float derived_end,
+      runtime::IntroLiveTargetRegistry::DispatchServices dispatch);
   void complete_outer_loader_tail(const IntroOuterLoaderTailServices &services);
   [[nodiscard]] NormalIntroSceneSessionStage stage() const noexcept {
     return stage_;
@@ -45,11 +52,20 @@ public:
   [[nodiscard]] cutscene::FirstCutPlayerSession *first_cut_player() noexcept {
     return first_cut_player_ ? std::addressof(*first_cut_player_) : nullptr;
   }
+  [[nodiscard]] cutscene::FirstCutClockedCommandRunner *first_cut_command_runner() noexcept {
+    return first_cut_command_runner_.get();
+  }
+  [[nodiscard]] const cutscene::FirstCutClockedCommandRunner *first_cut_command_runner() const noexcept {
+    return first_cut_command_runner_.get();
+  }
   [[nodiscard]] IntroOuterLoaderTailReadiness outer_loader_tail_readiness() const;
 
 private:
   std::unique_ptr<IntroRuntime> runtime_;
   std::optional<cutscene::FirstCutPlayerSession> first_cut_player_;
+  std::unique_ptr<cutscene::FirstCutRuntimeCommandRouter> first_cut_command_router_;
+  std::unique_ptr<cutscene::FirstCutCommandSession> first_cut_command_session_;
+  std::unique_ptr<cutscene::FirstCutClockedCommandRunner> first_cut_command_runner_;
   NormalIntroSceneSessionStage stage_{
       NormalIntroSceneSessionStage::postconstructed};
 };

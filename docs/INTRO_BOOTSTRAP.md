@@ -547,6 +547,13 @@ callbacks; a missing callback is an error. The router does not register events,
 infer name lookup, start a clock, or provide target behavior, and must outlive
 the session that uses its resolver callbacks.
 
+`NormalIntroSceneSession` now owns this router, its `FirstCutCommandSession`,
+and its `FirstCutClockedCommandRunner` as one optional scene-owned unit. It can
+be prepared only after the source-backed first-cut player is cold and ready.
+Preparation alone does not start it: lifecycle admission supplies the derived
+end, the scene host supplies callbacks, and a later recovered activation route
+must explicitly supply the first scene-clock sample.
+
 `FirstCutPlayerInitialization` is the separate lifecycle boundary for that
 player; it is not the source-65 external-fade `CutSequenceList`. Its phase one
 visits the five commands in reverse source order, then reads the list, registers
