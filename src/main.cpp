@@ -312,12 +312,8 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
     const auto& source=intro.resources().sources().directory().at(work.source_directory_index);
     if(!unimplemented_source_types.contains(source.source_type)) continue;
     const auto block=intro.resources().sources().deferred_source_block(work.source_directory_index);
-    std::string signature="type="+std::to_string(source.source_type)+
-        " bytes="+std::to_string(block.size())+" attachments=";
-    for(std::size_t slot=0;slot<source.attachments.size();++slot) {
-      if(slot) signature.push_back(',');
-      signature+=intro.resources().sources().attachment_identifier(work.source_directory_index,slot);
-    }
+    std::string signature="bytes="+std::to_string(block.size())+
+        " attachment-count="+std::to_string(source.attachments.size());
     try {
       const auto observation=off::data::DeferredAttachmentDispatchClassifier::observe(
           block.subspan(sizeof(std::uint32_t)));
