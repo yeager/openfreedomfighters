@@ -1,4 +1,5 @@
 #include "off/data/install.hpp"
+#include "off/data/deferred_attachment_dispatch_shape.hpp"
 #include "off/data/first_cut_component_payload_session.hpp"
 #include "off/data/first_cut_owner_reader.hpp"
 #include "off/data/first_cut_list_component_reader.hpp"
@@ -30,6 +31,7 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -287,6 +289,27 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
             << "command-component-payloads=5-verified\n"
             ;
   write_reader_coverage_probe(std::cout,reader_coverage);
+  std::map<std::string,std::size_t> deferred_signatures;
+  for(const auto& work:intro.deferred_reader_work()) {
+    const auto& source=intro.resources().sources().directory().at(work.source_directory_index);
+    if(source.source_type!=0x00200002U) continue;
+    const auto block=intro.resources().sources().deferred_source_block(work.source_directory_index);
+    std::string signature="zstdobj bytes="+std::to_string(block.size())+" attachments=";
+    for(std::size_t slot=0;slot<source.attachments.size();++slot) {
+      if(slot) signature.push_back(',');
+      signature+=intro.resources().sources().attachment_identifier(work.source_directory_index,slot);
+    }
+    try {
+      const auto observation=off::data::DeferredAttachmentDispatchClassifier::observe(
+          block.subspan(sizeof(std::uint32_t)));
+      signature+=" delimiters="+std::to_string(observation.delimiter_count);
+      signature+=observation.shape==off::data::DeferredAttachmentDispatchShape::terminal_before_first_attachment_delimiter ?
+          " terminal-first" : " attachment-first";
+    } catch(const std::exception&) { signature+=" malformed-dispatch"; }
+    ++deferred_signatures[std::move(signature)];
+  }
+  for(const auto& [signature,count]:deferred_signatures)
+    std::cout << "reader-signature=" << signature << " count=" << count << '\n';
   std::cout << "outer-loader-tail=native-services-required\n"
             << "outer-loader-named-global-bytes=" << tail_readiness.named_global_bytes << '\n'
             << "outer-loader-renderer-bytes=" << tail_readiness.renderer_resource_bytes << '\n'
