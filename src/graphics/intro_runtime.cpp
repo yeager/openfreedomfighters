@@ -1,6 +1,8 @@
 #include "off/graphics/intro_runtime.hpp"
 #include "off/data/deferred_attachment_dispatch_shape.hpp"
 #include "off/data/basic_group_deferred_reader_shape.hpp"
+#include "off/data/basic_group_deferred_reader.hpp"
+#include "off/data/deferred_component_dispatcher.hpp"
 #include "off/data/first_cut_owner_reader.hpp"
 #include <algorithm>
 #include <bit>
@@ -3365,13 +3367,13 @@ void IntroRuntime::apply_supported_following_visual_owner_deferred_reader(
 void IntroRuntime::apply_supported_basic_group_owner_deferred_reader(
     const IntroDeferredReaderWork& work) {
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !work.processed ||
-      basic_group_owner_reader_receipts_.contains(work.source_directory_index) ||
+      basic_group_owner_reader_states_.contains(work.source_directory_index) ||
       std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate) {
         return std::addressof(candidate)==std::addressof(work);
       })==deferred_reader_work_.end())
-    throw std::runtime_error("Basic group owner receipt requires unique live deferred work");
+    throw std::runtime_error("Basic Group owner reader requires unique live deferred work");
   const auto& source=resources_.sources().directory().at(work.source_directory_index);
-  const auto* group=group_owner(source_handle(work.source_directory_index));
+  auto* group=group_owner(source_handle(work.source_directory_index));
   if(source.source_type!=0x00100001U || source.source_variant || source.attachments.size()!=0U ||
       !owner_components(source_handle(work.source_directory_index)).empty() ||
       source.deferred_source_offset!=work.source_offset ||
@@ -3379,14 +3381,35 @@ void IntroRuntime::apply_supported_basic_group_owner_deferred_reader(
       !associated_resource_owner(work.resource) ||
       *associated_resource_owner(work.resource)!=source_handle(work.source_directory_index) ||
       !group || group->owner!=source_handle(work.source_directory_index) || group->resource!=work.resource)
-    throw std::runtime_error("Basic group owner receipt source shape is unsupported");
+    throw std::runtime_error("Basic Group owner reader source shape is unsupported");
   const auto block=resources_.sources().deferred_source_block(work.source_directory_index);
   if(block.size()<=sizeof(std::uint32_t) ||
       !data::BasicGroupDeferredReaderShape::matches(block.subspan(sizeof(std::uint32_t))))
-    throw std::runtime_error("Basic group owner receipt has an unsupported compact body");
-  basic_group_owner_reader_receipts_.emplace(work.source_directory_index,
-      IntroBasicGroupOwnerReaderReceipt{source_handle(work.source_directory_index),work.resource,
-          work.source_directory_index,work.source_offset});
+    throw std::runtime_error("Basic Group owner reader has an unsupported compact body");
+  const auto parsed=data::BasicGroupDeferredReader::read(block);
+  const std::array<data::DeferredComponentReader,0> no_component_readers{};
+  const auto dispatched=data::DeferredComponentDispatcher::dispatch(
+      parsed.component_tail.component_suffix.first(parsed.component_tail.component_extent),no_component_readers);
+  if(dispatched.dispatched_components!=0U ||
+      dispatched.continuation.data()!=parsed.component_tail.component_suffix.data() ||
+      dispatched.continuation.size()!=parsed.component_tail.component_suffix.size())
+    throw std::runtime_error("Basic Group owner reader did not retain its empty component tail");
+  const auto [state, inserted] = basic_group_owner_reader_states_.emplace(
+      work.source_directory_index, IntroBasicGroupOwnerReaderState{
+          source_handle(work.source_directory_index), work.resource,
+          work.source_directory_index, work.source_offset});
+  if (!inserted)
+    throw std::runtime_error("Basic Group owner reader cannot retain duplicate state");
+  try {
+    record_supported_reader_admission(work);
+  } catch(...) {
+    basic_group_owner_reader_states_.erase(work.source_directory_index);
+    throw;
+  }
+  group->scalar=parsed.scalar;
+  group->flags|=0x03000000U;
+  if(parsed.third_is_zero) group->flags&=~0x01000000U;
+  if(parsed.fourth_is_zero) group->flags&=~0x02000000U;
 }
 
 void IntroRuntime::prepare_supported_first_cut_player() {

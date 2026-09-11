@@ -3,6 +3,7 @@
 #include "off/data/deferred_attachment_dispatch_shape.hpp"
 #include "off/data/deferred_compact_block_profile.hpp"
 #include "off/data/basic_group_deferred_reader_shape.hpp"
+#include "off/data/basic_group_deferred_reader.hpp"
 #include "off/data/compact_typed_value_decoder.hpp"
 #include "off/data/component_reader_context.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
@@ -1048,8 +1049,38 @@ int main() {
         auto marked_basic_group_body=basic_group_body;
         marked_basic_group_body[0]=std::byte{0x83};
         check(off::data::BasicGroupDeferredReaderShape::matches(basic_group_body) &&
-                  !off::data::BasicGroupDeferredReaderShape::matches(marked_basic_group_body),
-              "basic group shape requires its exact reviewed framing tags");
+                  off::data::BasicGroupDeferredReaderShape::matches(marked_basic_group_body),
+              "basic group routing accepts the reviewed ignored high bit on its first field");
+        std::array<std::byte,31> basic_group_record{};
+        basic_group_record[0]=std::byte{31};
+        std::copy(basic_group_body.begin(),basic_group_body.end(),basic_group_record.begin()+4);
+        const auto basic_group=off::data::BasicGroupDeferredReader::read(basic_group_record);
+        check(std::bit_cast<std::uint32_t>(basic_group.scalar)==0U && basic_group.third_is_zero &&
+                  basic_group.fourth_is_zero && basic_group.component_tail.component_extent==1U &&
+                  basic_group.component_tail.component_suffix.size()==1U &&
+                  basic_group.component_tail.component_suffix.front()==std::byte{0xff},
+              "basic group reader parses its full header and preserves the empty component tail");
+        auto scalar_matrix=basic_group_record;
+        scalar_matrix[13]=std::byte{0x80}; // IEEE-754 negative zero, retained bit-for-bit.
+        scalar_matrix[20]=std::byte{1}; // fourth integer is nonzero; third remains zero.
+        const auto matrix=off::data::BasicGroupDeferredReader::read(scalar_matrix);
+        check(std::bit_cast<std::uint32_t>(matrix.scalar)==0x80000000U && matrix.third_is_zero &&
+                  !matrix.fourth_is_zero,
+              "basic group reader preserves scalar bits and distinguishes only exact integer zero values");
+        const auto rejects_basic_group=[&](auto mutate) {
+          auto malformed=basic_group_record; mutate(malformed);
+          check_rejected([&] { static_cast<void>(off::data::BasicGroupDeferredReader::read(malformed)); },
+              "basic group reader rejects malformed fixed-form records before owner mutation");
+        };
+        rejects_basic_group([](auto& record) { record[0]=std::byte{30}; });
+        rejects_basic_group([](auto& record) { record[3]=std::byte{1}; });
+        rejects_basic_group([](auto& record) { record[4]=std::byte{0x43}; });
+        rejects_basic_group([](auto& record) { record[9]=std::byte{0x82}; });
+        rejects_basic_group([](auto& record) { record[29]=std::byte{0x07}; });
+        rejects_basic_group([](auto& record) { record[30]=std::byte{0}; });
+        check_rejected([&] { static_cast<void>(off::data::BasicGroupDeferredReader::read(
+            std::span<const std::byte>{basic_group_record}.first(30U))); },
+            "basic group reader rejects a truncated fixed-form record");
         check_rejected([] {
             const std::array<std::byte, 2> unknown{std::byte{0x7f}, std::byte{0xff}};
             static_cast<void>(DeferredAttachmentDispatchClassifier::observe(unknown));

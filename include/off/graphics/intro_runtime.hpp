@@ -457,10 +457,10 @@ struct IntroFollowingVisualOwnerReaderReceipt {
   std::size_t source_directory_index{};
   std::uint32_t source_offset{};
 };
-// Provenance for the narrow attachment-free ZGROUP reader form. It validates
-// only a recovered compact framing shape and canonical live ownership; field
-// semantics, child registration and lifecycle behavior remain unavailable.
-struct IntroBasicGroupOwnerReaderReceipt {
+// Completed source-bound state for the narrow attachment-free ZGROUP reader.
+// It retains provenance only; scalar and flag effects are applied directly to
+// the canonical Group owner and no child/component behavior is invented.
+struct IntroBasicGroupOwnerReaderState {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
   std::size_t source_directory_index{};
@@ -998,7 +998,7 @@ public:
   void apply_supported_following_visual_owner_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroFollowingVisualOwnerReaderReceipt>& following_visual_owner_reader_receipts() const noexcept {return following_visual_owner_reader_receipts_;}
   void apply_supported_basic_group_owner_deferred_reader(const IntroDeferredReaderWork& work);
-  [[nodiscard]] const std::map<std::size_t,IntroBasicGroupOwnerReaderReceipt>& basic_group_owner_reader_receipts() const noexcept {return basic_group_owner_reader_receipts_;}
+  [[nodiscard]] const std::map<std::size_t,IntroBasicGroupOwnerReaderState>& basic_group_owner_reader_states() const noexcept {return basic_group_owner_reader_states_;}
   // Atomically materialize the source-backed first-cut player state after both
   // reviewed readers. Playback services remain intentionally absent.
   void prepare_supported_first_cut_player();
@@ -1156,7 +1156,7 @@ private:
   std::optional<IntroFirstCutComponentReaderState> first_cut_component_reader_state_;
   std::optional<IntroFirstCutCameraReaderState> first_cut_camera_reader_state_;
   std::map<std::size_t,IntroFollowingVisualOwnerReaderReceipt> following_visual_owner_reader_receipts_;
-  std::map<std::size_t,IntroBasicGroupOwnerReaderReceipt> basic_group_owner_reader_receipts_;
+  std::map<std::size_t,IntroBasicGroupOwnerReaderState> basic_group_owner_reader_states_;
   std::optional<IntroFirstCutPlayerPreparedState> first_cut_player_prepared_state_;
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;
   std::map<std::size_t,IntroFadePictureReaderState> fade_picture_reader_states_;

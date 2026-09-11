@@ -74,8 +74,10 @@ Their differing framing profiles prove that a type-wide base-object reader would
 be unsound. None is admitted until its owner fields and attachment dispatch
 contract have been independently recovered.
 
-An earlier owned-data probe recorded 420 queued readers: 12 applied, 20
-recognized-but-not-admitted owner forms, and 388 unclassified.
+The current owned-data probe records 420 queued readers: 31 applied, five
+recognized-but-not-admitted following-visual owner forms, and 384
+unclassified. The 19 admitted attachment-free Group readers are included in
+the applied count.
 Of the unclassified work, 55 records have no attachments and 333 have
 attachments; 302 of those attachment-bearing blocks expose a delimiter before
 their terminal marker, while 31 are outside the narrow classifier. The 302
@@ -89,14 +91,15 @@ owner/resource/offset receipt. Their payload is deliberately not parsed and
 they do not count as lifecycle reader admissions; this separates safe boundary
 provenance from unproven reader behavior.
 
-The same boundary is now available for 15 attachment-free `ZGROUP` records
-with one exact compact framing form. It validates the canonical live group,
-owner, resource and bounded framing sequence, retaining no field values or
-inferred group behavior. Other `ZGROUP` bodies remain unclassified: they have
-different tag forms or attachments. These receipts do not count as reader
-admissions and do not attach children, mutate flags, or run lifecycle work.
-The normal reader bracket invokes this receipt for the exact form, so the
-boundary is checked in ordinary startup rather than only in isolated tests.
+The normal reader bracket now admits 19 attachment-free `ZGROUP` records with
+one exact 31-byte form. The complete reader validates the record header and
+five fixed fields, copies its scalar field to the canonical live Group, and
+sets or clears only the two recovered Group flag bits. The first field's
+ignored high bit is accepted; continuation bits and high bits elsewhere are
+rejected. It consumes the owner delimiter, proves an empty component tail, and
+does not attach children, mutate resources or transforms, or run lifecycle,
+audio, cutscene, or rendering behavior. Other `ZGROUP` bodies remain
+unclassified because they have different tag forms or attachments.
 MatPosAnim is explicitly outside the current deferred-reader admission path:
 the supported intro has 227 associated deferred records, all with an attachment
 delimiter before the owner terminal (249 delimiters in total). Its owner-local

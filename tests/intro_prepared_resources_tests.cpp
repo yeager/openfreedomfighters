@@ -1217,15 +1217,18 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                         receipt.source_offset==host.resources().sources().directory()[source].deferred_source_offset;
                   }),
               "following visual owner receipts retain only exact attachment-free reader provenance");
-        check(!host.basic_group_owner_reader_receipts().empty() &&
-              std::ranges::all_of(host.basic_group_owner_reader_receipts(),[&](const auto& entry) {
+        check(!host.basic_group_owner_reader_states().empty() &&
+              std::ranges::all_of(host.basic_group_owner_reader_states(),[&](const auto& entry) {
                 const auto& [source,receipt]=entry;
                 return host.resources().sources().directory()[source].source_type==0x00100001U &&
                     receipt.source_directory_index==source && receipt.owner==host.source_handle(source) &&
                     receipt.resource==host.directory_resource_mapping()[source] &&
-                    receipt.source_offset==host.resources().sources().directory()[source].deferred_source_offset;
+                    receipt.source_offset==host.resources().sources().directory()[source].deferred_source_offset &&
+                    host.constructed_group_owner(source) &&
+                    std::bit_cast<std::uint32_t>(host.constructed_group_owner(source)->scalar)==std::bit_cast<std::uint32_t>(1.0F) &&
+                    (host.constructed_group_owner(source)->flags&0x03000000U)==0x03000000U;
               }),
-              "basic group owner receipts retain only canonical bounded provenance");
+              "basic group readers apply only canonical scalar and flag state after proving an empty component tail");
         const auto& window=host.window_for_owner(host.source_handle(host.resources().window_index()));
         const auto& camera=host.camera_for_owner(host.source_handle(host.resources().camera_index()));
         const auto window_reference_resource=[&host](std::uint32_t reference)

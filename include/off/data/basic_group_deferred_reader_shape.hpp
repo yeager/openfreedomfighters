@@ -1,26 +1,29 @@
 #pragma once
 
-#include "off/data/deferred_compact_block_profile.hpp"
-
 #include <cstddef>
 #include <span>
-#include <string_view>
 
 namespace off::data {
 
-// The only reviewed attachment-free ZGROUP compact body. This is a framing
-// gate, not a field parser: matching it grants no interpretation of values,
-// child membership, flags, or lifecycle behavior.
+// A cheap routing gate for the exact record parsed by BasicGroupDeferredReader.
+// It retains no values and must never be used as an admission on its own.
 class BasicGroupDeferredReaderShape final {
 public:
     [[nodiscard]] static bool matches(std::span<const std::byte> body) {
-        const auto profile=DeferredCompactBlockProfiler::profile(body);
-        return profile.attachment_delimiters==1U && profile.encoded_values==5U &&
-            profile.continuation_values==0U && profile.framing_notation==notation;
+        if (body.size()!=27U || byte(body,25U)!=0x06U || byte(body,26U)!=0xffU) return false;
+        return tag(body,0U,3U,true) && tag(body,5U,2U,false) && tag(body,10U,3U,false) &&
+            tag(body,15U,3U,false) && tag(body,20U,3U,false);
     }
 
 private:
-    static constexpr std::string_view notation{"i3f2i3i3i3|!"};
+    [[nodiscard]] static std::uint8_t byte(std::span<const std::byte> body,std::size_t offset) {
+        return std::to_integer<std::uint8_t>(body[offset]);
+    }
+    [[nodiscard]] static bool tag(std::span<const std::byte> body,std::size_t offset,
+                                  std::uint8_t expected,bool allow_high_bit) {
+        const auto raw=byte(body,offset);
+        return (raw&0x40U)==0U && (raw&0x3fU)==expected && (allow_high_bit || (raw&0x80U)==0U);
+    }
 };
 
 } // namespace off::data
