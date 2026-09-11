@@ -1,4 +1,5 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
+#include "off/graphics/render_scale.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
 #include "off/platform/intro_preview_diagnostic.hpp"
 #include "off/platform/sdl_locale.hpp"
@@ -189,15 +190,6 @@ void release_render_scale_target(SDL_GPUDevice *device,
   target.height = height;
   target.format = format;
   return true;
-}
-
-[[nodiscard]] std::optional<Uint32>
-scaled_dimension(Uint32 extent, std::uint16_t percent) {
-  const auto product = static_cast<std::uint64_t>(extent) * percent;
-  const auto rounded = (product + 99U) / 100U;
-  if (rounded == 0U || rounded > std::numeric_limits<Uint32>::max())
-    return std::nullopt;
-  return static_cast<Uint32>(rounded);
 }
 
 void release_overlay(SDL_GPUDevice *device, GpuOverlay &overlay) {
@@ -1500,9 +1492,9 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     SDL_GPUTexture *presentation_target =
         capture_texture != nullptr ? capture_texture : swapchain;
     const auto render_scale = menu.live_effective().render_scale_percent;
-    const auto scaled_width = scaled_dimension(swapchain_width, render_scale);
-    const auto scaled_height = scaled_dimension(swapchain_height, render_scale);
-    if (!scaled_width || !scaled_height) {
+    const auto scaled_extent = graphics::resolve_render_scale_extent(
+        {swapchain_width, swapchain_height}, render_scale);
+    if (!scaled_extent) {
       result = {.success = false, .message = "render scale dimensions are unsupported"};
       SDL_SubmitGPUCommandBuffer(command);
       if (capture_transfer != nullptr)
@@ -1514,7 +1506,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     SDL_GPUTexture *content_target = presentation_target;
     if (render_scale != 100U) {
       const auto format = SDL_GetGPUSwapchainTextureFormat(device, window);
-      if (!ensure_render_scale_target(device, *scaled_width, *scaled_height,
+      if (!ensure_render_scale_target(device, scaled_extent->width, scaled_extent->height,
                                       format, render_scale_target)) {
         result = failure("render scale target creation failed");
         SDL_SubmitGPUCommandBuffer(command);
@@ -1526,8 +1518,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       }
       content_target = render_scale_target.texture;
     }
-    const Uint32 content_width = render_scale == 100U ? swapchain_width : *scaled_width;
-    const Uint32 content_height = render_scale == 100U ? swapchain_height : *scaled_height;
+    const Uint32 content_width = render_scale == 100U ? swapchain_width : scaled_extent->width;
+    const Uint32 content_height = render_scale == 100U ? swapchain_height : scaled_extent->height;
     if (scene && swapchain != nullptr &&
         !ensure_scene_depth(device, content_width, content_height, gpu)) {
       result = failure("scene depth target creation failed");
