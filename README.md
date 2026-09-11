@@ -248,9 +248,11 @@ menu transition.
   substitution. It neither plays audio nor derives a game-cue mapping; game
   music remains the fallback until that mapping is recovered.
 - `--probe-first-cut-cold` runs the equivalent no-window integration check for
-  the reviewed first-cut reader bracket. It checks aggregate bracket ordering
-  and runs due source-backed commands through observer-only target callbacks.
-  Cutscene lifecycle, gameplay effects, audio and rendering remain cold. See
+  the reviewed first-cut reader bracket. It checks aggregate bracket ordering,
+  the source-backed MovieControl owner/component boundary and its retained
+  cut/group reference translations, then runs due source-backed commands
+  through observer-only target callbacks. Cutscene lifecycle, gameplay effects,
+  audio and rendering remain cold. See
   [INTRO_BOOTSTRAP.md](docs/INTRO_BOOTSTRAP.md#first-cut-cold-probe).
 - `--probe-first-cut-initialization` extends that check through the two
   recovered first-cut initialization phases, using retained runtime identities
