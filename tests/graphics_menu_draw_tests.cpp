@@ -93,6 +93,19 @@ int main() {
   check(fsr.status == off::ui::UiBuildStatus::ok && has_text(fsr, "FSR") &&
             off::ui::validate_graphics_menu_draw_list(fsr),
         "FSR intent is rendered as its product name in every F10 locale");
+  constexpr std::array<std::string_view, 20> f10_locale_tags{{
+      "en-US", "sv-SE", "da-DK", "nb-NO", "fi-FI", "de-DE", "fr-FR",
+      "es-ES", "it-IT", "pt-BR", "pl-PL", "cs-CZ", "hu-HU", "ro-RO",
+      "tr-TR", "ru-RU", "uk-UA", "ja-JP", "ko-KR", "zh-CN",
+  }};
+  for (const auto locale : f10_locale_tags) {
+    const auto localized_fsr = off::ui::build_graphics_menu_draw_list(
+        menu, {640, 360}, now, 1.0F, locale, "en-US");
+    check(localized_fsr.status == off::ui::UiBuildStatus::ok &&
+              has_text(localized_fsr, "FSR") &&
+              off::ui::validate_graphics_menu_draw_list(localized_fsr),
+          "FSR product naming is stable across every supported F10 locale");
+  }
   menu.draft().upscaler = off::settings::Upscaler::native;
   const auto platform_swedish = off::ui::build_graphics_menu_draw_list(
       menu, {640, 480}, now, 1.0F, "xx-XX", "sv_SE.UTF-8");
