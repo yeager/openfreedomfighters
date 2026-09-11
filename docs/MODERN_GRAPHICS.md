@@ -68,7 +68,7 @@ Original reference, GPU captures for pass and resource correctness, and frametim
 budgets rather than average FPS alone. Windows, Linux, macOS, and Steam Deck must
 render the same material semantics even when their native graphics backends differ.
 
-## Temporal upscaling, DLSS, and XeSS
+## Temporal upscaling, DLSS, FSR, and XeSS
 
 Modern always retains a portable native-resolution and temporal anti-aliasing
 path. The renderer-facing temporal interface owns color, depth, motion vectors,
@@ -92,11 +92,13 @@ or labeled as active. The [XeSS plan](XESS.md) records the supported API and
 packaging boundary.
 
 AMD GPUs use the same native-resolution and portable temporal paths as every
-other supported adapter. FSR is not currently an engine feature or a substitute
-label for that path. A future optional FSR adapter may use AMD's official SDK
-only after its supported APIs, platforms, redistribution terms, motion-vector
-and exposure requirements, and image-quality behavior are verified. Its absence
-must never remove native, temporal, resolution, or quality controls.
+other supported adapter. The F10 menu can retain an FSR request, but resolves it
+to portable temporal or native rendering until a verified AMD adapter is loaded.
+FSR is never a substitute label for that path. A future optional FSR adapter may
+use AMD's official SDK only after its supported APIs, platforms, redistribution
+terms, motion-vector and exposure requirements, and image-quality behavior are
+verified. Its absence must never remove native, temporal, resolution, or quality
+controls. The [FSR plan](FSR.md) owns that integration boundary.
 
 A future DLSS 5 backend is not a current deliverable. It may replace or supplement
 4.5 only after NVIDIA publishes official documentation, an SDK, platform support,

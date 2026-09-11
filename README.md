@@ -117,12 +117,12 @@ These are targets, not working renderers:
 
 - **Original:** the original gameplay and presentation.
 - **Modern:** higher resolutions, improved lighting, shadows and filtering.
-- **Modern+:** optional HD assets and future DLSS 4.5 / Intel XeSS-SR backends on supported hardware.
+- **Modern+:** optional HD assets and future DLSS 4.5, AMD FSR, and Intel XeSS-SR backends on supported hardware.
 
-The settings panel has a mode selector. It records DLSS and XeSS requests but
+The settings panel has a mode selector. It records DLSS, FSR, and XeSS requests but
 uses portable temporal or native rendering until a verified native adapter is
 available. HD asset support is not implemented. See [Modern graphics](docs/MODERN_GRAPHICS.md),
-[DLSS](docs/DLSS.md), and [XeSS](docs/XESS.md) for scope and licensing.
+[DLSS](docs/DLSS.md), [FSR](docs/FSR.md), and [XeSS](docs/XESS.md) for scope and licensing.
 Project-authored UI strings already select the system locale across 20 locales,
 including Swedish. Complete game-text localization, shaping and full retail-font
 coverage remain planned.

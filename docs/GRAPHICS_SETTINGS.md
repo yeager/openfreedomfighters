@@ -152,7 +152,7 @@ the recovery paths.
 | F10 overlay and portable settings | Required | Required | Required |
 | Native and portable temporal paths | Required | Required | Required |
 | AMD GPU support | Native and portable temporal paths | Native and portable temporal paths | Native and portable temporal paths where the active backend supports the adapter |
-| FSR Super Resolution | Not currently exposed; future optional official AMD adapter | Not currently exposed; future support requires an officially supported native stack | Not currently exposed |
+| FSR Super Resolution | Request retained; active only with a verified AMD adapter | Request retained; active only with a verified official native stack | Request retained; no active adapter yet |
 | Modern+ replacement assets | Portable asset contract | Portable asset contract | Portable asset contract |
 | DLSS 4.5 Super Resolution | Planned for supported NVIDIA RTX, D3D12, driver, and licensed runtime combinations | Exposed only if an official NVIDIA SDK explicitly supports the active native stack | Not expected; portable temporal fallback remains available |
 | Intel XeSS-SR | Planned for a verified D3D12 or Vulkan native backend, supported adapter, driver, and licensed SDK runtime | Planned only after the renderer owns the required native resources and temporal inputs | Not currently exposed; portable temporal fallback remains available |
@@ -164,9 +164,11 @@ as DLSS. If DLSS 4.5 cannot load, the retained request may resolve to portable
 temporal upscaling or native rendering with a visible reason.
 This fallback must not remove resolution controls or prevent Modern+ from running.
 
-FSR must likewise name an actual loaded AMD runtime and version. Until an
-adapter is implemented and validated, the overlay must describe the active AMD
-path as native or portable temporal upscaling, never as FSR.
+FSR must likewise name an actual loaded AMD runtime and version. The F10 menu
+may retain an FSR request, but until an adapter is implemented and validated it
+must resolve to portable temporal or native rendering with a visible reason.
+The overlay must describe the active AMD path as native or portable temporal
+upscaling, never as FSR.
 
 XeSS follows the same rule. The F10 menu may retain a XeSS-SR request, but it
 must resolve it to portable temporal or native rendering with a visible reason

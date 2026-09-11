@@ -143,6 +143,26 @@ int main() {
                 off::settings::FallbackReason::xess_upscaler_unavailable,
         "fall back from unavailable XeSS to portable temporal upscaling");
 
+  advanced.upscaler = off::settings::Upscaler::fsr;
+  const auto fsr_fallback =
+      off::settings::resolve_graphics_settings(advanced, portable);
+  check(fsr_fallback.effective.has_value() &&
+            fsr_fallback.effective->upscaler ==
+                off::settings::Upscaler::temporal &&
+            fsr_fallback.effective->fallbacks.size() == 3 &&
+            fsr_fallback.effective->fallbacks[1].reason ==
+                off::settings::FallbackReason::fsr_upscaler_unavailable,
+        "fall back from unavailable FSR to portable temporal upscaling");
+
+  auto fsr_available = portable;
+  fsr_available.fsr_upscaler = true;
+  const auto fsr_enabled =
+      off::settings::resolve_graphics_settings(advanced, fsr_available);
+  check(fsr_enabled.effective.has_value() &&
+            fsr_enabled.effective->upscaler == off::settings::Upscaler::fsr &&
+            fsr_enabled.effective->fallbacks.size() == 2,
+        "preserve an FSR request only when the runtime reports a loaded adapter");
+
   advanced.upscaler = off::settings::Upscaler::dlss;
   advanced.profile = off::Mode::original;
   const auto original_advanced =

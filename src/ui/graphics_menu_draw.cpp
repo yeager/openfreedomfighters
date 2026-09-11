@@ -71,6 +71,10 @@ std::string upscaler_name(settings::Upscaler value,
                      platform_locales);
   case settings::Upscaler::dlss:
     return localized(l10n::MessageId::dlss, explicit_locale, platform_locales);
+  case settings::Upscaler::fsr:
+    // FSR is a product name and intentionally remains unchanged in every UI
+    // locale, like DLSS and XeSS.
+    return "FSR";
   case settings::Upscaler::xess:
     return localized(l10n::MessageId::xess, explicit_locale, platform_locales);
   }

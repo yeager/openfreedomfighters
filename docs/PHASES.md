@@ -112,7 +112,7 @@ Inputs are the shared simulation, retail-backed Original presentation, newly
 authored licensed translations, and optional independently licensed enhancement
 assets. Deliverables are Unicode shaping and fallback, 20 reviewed locale packs
 including Swedish, accessibility, Modern presets and budgets, a replacement-asset
-contract, and capability-gated DLSS 4.5 and Intel XeSS-SR with native and
+contract, and capability-gated DLSS 4.5, AMD FSR, and Intel XeSS-SR with native and
 portable temporal fallbacks.
 
 The gate requires catalog completeness, placeholder validation, pseudo-localized

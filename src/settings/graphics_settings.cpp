@@ -21,7 +21,8 @@ namespace {
 
 [[nodiscard]] bool valid(Upscaler value) {
   return value == Upscaler::native || value == Upscaler::temporal ||
-         value == Upscaler::dlss || value == Upscaler::xess;
+         value == Upscaler::dlss || value == Upscaler::fsr ||
+         value == Upscaler::xess;
 }
 
 [[nodiscard]] bool valid(ShadowQuality value) {
@@ -104,6 +105,12 @@ resolve_graphics_settings(const RequestedGraphicsSettings &requested,
                                                           : Upscaler::native;
       effective.fallbacks.push_back(
           {GraphicsField::upscaler, FallbackReason::dlss_upscaler_unavailable});
+    } else if (effective.upscaler == Upscaler::fsr &&
+               !capabilities.fsr_upscaler) {
+      effective.upscaler = capabilities.temporal_upscaler ? Upscaler::temporal
+                                                          : Upscaler::native;
+      effective.fallbacks.push_back(
+          {GraphicsField::upscaler, FallbackReason::fsr_upscaler_unavailable});
     } else if (effective.upscaler == Upscaler::xess &&
                !capabilities.xess_upscaler) {
       effective.upscaler = capabilities.temporal_upscaler ? Upscaler::temporal

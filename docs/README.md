@@ -77,6 +77,8 @@
 - [Retail font runtime contract](RETAIL_FONT_RUNTIME.md)
 - [Retail UI texture runtime contract](RETAIL_UI_TEXTURES.md)
 - [DLSS 4.5 integration plan](DLSS.md)
+- [AMD FSR integration plan](FSR.md)
+- [Intel XeSS-SR integration plan](XESS.md)
 - [Roadmap and acceptance gates](ROADMAP.md)
 - [Phase execution specifications](PHASES.md)
 - [Localization plan](LOCALIZATION.md)
