@@ -66,20 +66,20 @@ int main() {
           "layout is bounded and truthful at every target size");
   }
   const auto reference =
-      off::ui::build_graphics_menu_draw_list(menu, {640, 480}, now);
+      off::ui::build_graphics_menu_draw_list(menu, {640, 360}, now);
   const auto *title = find_text(reference, "GRAPHICS SETTINGS");
   const auto *profile = find_text(reference, "Profile");
   const auto *profile_value = find_text(reference, "Modern");
   const auto *shadows = find_text(reference, "Shadows");
   const auto *action = find_text(reference, "Apply");
-  check(title != nullptr && near(title->x, 60.0F) && near(title->y, 155.0F) &&
+  check(title != nullptr && near(title->x, 60.0F) && near(title->y, 120.0F) &&
             profile != nullptr && near(profile->x, 60.0F) &&
-            near(profile->y, 185.0F) && profile_value != nullptr &&
-            near(profile_value->x, 400.0F) && near(profile_value->y, 185.0F) &&
-            shadows != nullptr && near(shadows->y, 293.0F) &&
+            near(profile->y, 150.0F) && profile_value != nullptr &&
+            near(profile_value->x, 400.0F) && near(profile_value->y, 150.0F) &&
+            shadows != nullptr && near(shadows->y, 258.0F) &&
             action != nullptr && near(action->x, 60.0F) &&
-            near(action->y, 400.0F),
-        "640x480 uses recovered retail anchors and seven-slot rhythm");
+            near(action->y, 294.0F),
+        "16:9 uses project-authored menu anchors and seven-slot rhythm");
   const auto swedish = off::ui::build_graphics_menu_draw_list(
       menu, {640, 480}, now, 1.0F, "sv-SE", "en-US");
   check(has_text(swedish, "GRAFIKINSTÄLLNINGAR") &&
@@ -104,18 +104,18 @@ int main() {
             !has_text(explicit_german, "GRAFIKINSTÄLLNINGAR"),
         "an explicit F10 locale override wins over system preferences");
   check(reference.rectangles.back().layer == off::ui::UiLayer::focus &&
-            near(reference.rectangles.back().bounds.x, 44.0F) &&
-            near(reference.rectangles.back().bounds.y, 183.0F) &&
-            near(reference.rectangles.back().bounds.width, 16.0F) &&
-            near(reference.rectangles.back().bounds.height, 16.0F),
-        "focus uses only the recovered 16x16 state marker geometry");
+            near(reference.rectangles.back().bounds.x, 60.0F) &&
+            near(reference.rectangles.back().bounds.y, 164.0F) &&
+            near(reference.rectangles.back().bounds.width, 520.0F) &&
+            near(reference.rectangles.back().bounds.height, 2.0F),
+        "focus uses a project-authored active-row underline");
 
   const auto widescreen =
       off::ui::build_graphics_menu_draw_list(menu, {1280, 720}, now);
   const auto *wide_title = find_text(widescreen, "GRAPHICS SETTINGS");
-  check(wide_title != nullptr && near(wide_title->x, 250.0F) &&
-            near(wide_title->y, 232.5F),
-        "widescreen centers an aspect-preserving 640x480 authored viewport");
+  check(wide_title != nullptr && near(wide_title->x, 120.0F) &&
+            near(wide_title->y, 240.0F),
+        "widescreen fills an aspect-preserving 16:9 authored viewport");
   const auto first =
       off::ui::build_graphics_menu_draw_list(menu, {1280, 720}, now);
   check(first == off::ui::build_graphics_menu_draw_list(menu, {1280, 720}, now),
@@ -135,16 +135,16 @@ int main() {
                 off::ui::GraphicsMenuEffect::apply_requested,
         "Apply yields a transaction request");
   const auto apply_state =
-      off::ui::build_graphics_menu_draw_list(menu, {640, 480}, now);
+      off::ui::build_graphics_menu_draw_list(menu, {640, 360}, now);
   static_cast<void>(
       menu.handle_key(off::ui::GraphicsMenuKey::down, true, false));
   const auto back_state =
-      off::ui::build_graphics_menu_draw_list(menu, {640, 480}, now);
+      off::ui::build_graphics_menu_draw_list(menu, {640, 360}, now);
   const auto *apply_text = find_text(apply_state, "Apply");
   const auto *back_text = find_text(back_state, "Back");
   check(apply_text != nullptr && back_text != nullptr &&
             near(apply_text->x, 60.0F) && near(back_text->x, 240.0F) &&
-            near(apply_text->y, 400.0F) && near(back_text->y, 400.0F) &&
+            near(apply_text->y, 294.0F) && near(back_text->y, 294.0F) &&
             apply_state.hit_targets[7].control == off::ui::UiControl::apply &&
             back_state.hit_targets[8].control == off::ui::UiControl::cancel &&
             back_state.hit_targets[9].control == off::ui::UiControl::defaults,
