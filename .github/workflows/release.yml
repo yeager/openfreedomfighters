@@ -31,12 +31,12 @@ jobs:
             libxtst-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev \
             libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev \
             libudev-dev libthai-dev libusb-1.0-0-dev libpipewire-0.3-dev \
-            libwayland-dev libdecor-0-dev liburing-dev
+            libwayland-dev libdecor-0-dev liburing-dev xvfb
       - name: Build and test
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           ninja -C build
-          ctest --test-dir build -j4 --output-on-failure
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ctest --test-dir build -j4 --output-on-failure
       - name: Package
         run: |
           cmake --install build --prefix package
