@@ -17,6 +17,19 @@ constexpr float depth_span = 0.9F;
 constexpr float minimum_extent = 1.0e-6F;
 constexpr std::size_t maximum_gpu_draws = 4'000'000;
 
+[[nodiscard]] bool fits_rgba8_extent(std::uint32_t width,
+                                     std::uint32_t height) {
+  if (width == 0 || height == 0) return false;
+  if constexpr (sizeof(std::size_t) < sizeof(std::uint64_t)) {
+    if (static_cast<std::uint64_t>(width) >
+        std::numeric_limits<std::size_t>::max() / 4U)
+      return false;
+  }
+  const auto row_bytes = static_cast<std::size_t>(width) * 4U;
+  return static_cast<std::size_t>(height) <=
+         std::numeric_limits<std::size_t>::max() / row_bytes;
+}
+
 [[nodiscard]] bool finite(const std::array<float, 3> &value) {
   return std::ranges::all_of(
       value, [](float component) { return std::isfinite(component); });
@@ -29,10 +42,7 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
     throw std::invalid_argument("scene GPU plan has an invalid contract");
   }
   for (const auto &texture : plan.textures) {
-    if (texture.width == 0 || texture.height == 0 ||
-        texture.width > std::numeric_limits<std::size_t>::max() / 4U ||
-        texture.height > std::numeric_limits<std::size_t>::max() /
-                             (static_cast<std::size_t>(texture.width) * 4U) ||
+    if (!fits_rgba8_extent(texture.width, texture.height) ||
         texture.rgba8.size() !=
             static_cast<std::size_t>(texture.width) * texture.height * 4U) {
       throw std::invalid_argument("scene GPU texture storage is inconsistent");

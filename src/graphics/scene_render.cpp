@@ -28,6 +28,19 @@ constexpr std::size_t maximum_scene_directory_entries = 1024;
 constexpr std::array required_scene_extensions{".prm", ".tex", ".gms", ".rmc",
                                                ".rmi"};
 constexpr std::uint32_t zgroup_source_type = 0x00100001U;
+
+[[nodiscard]] bool fits_rgba8_extent(std::uint32_t width,
+                                     std::uint32_t height) {
+  if (width == 0 || height == 0) return false;
+  if constexpr (sizeof(std::size_t) < sizeof(std::uint64_t)) {
+    if (static_cast<std::uint64_t>(width) >
+        std::numeric_limits<std::size_t>::max() / 4U)
+      return false;
+  }
+  const auto row_bytes = static_cast<std::size_t>(width) * 4U;
+  return static_cast<std::size_t>(height) <=
+         std::numeric_limits<std::size_t>::max() / row_bytes;
+}
 constexpr std::uint32_t zroom_source_type = 0x00100021U;
 
 void add_bounded(std::size_t &total, std::size_t value, std::size_t limit,
@@ -237,11 +250,7 @@ void validate_scene_render_asset(const SceneRenderAsset &asset) {
   std::size_t total_draws = 0;
   std::size_t total_rgba_bytes = 0;
   for (const auto &texture : asset.textures) {
-    if (texture.mip_zero.width == 0 || texture.mip_zero.height == 0 ||
-        texture.mip_zero.width > std::numeric_limits<std::size_t>::max() / 4U ||
-        texture.mip_zero.height >
-            std::numeric_limits<std::size_t>::max() /
-                (static_cast<std::size_t>(texture.mip_zero.width) * 4U)) {
+    if (!fits_rgba8_extent(texture.mip_zero.width, texture.mip_zero.height)) {
       throw std::invalid_argument(
           "scene render texture has invalid dimensions");
     }
