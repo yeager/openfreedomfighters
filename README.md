@@ -168,6 +168,11 @@ OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
 # window and never starts audio, schedules an event, or renders a cutscene.
 ./build/openfreedomfighters --probe-first-cut-cold
 
+# Exercise both recovered first-cut initialization phases against retained
+# owned-data identities. This is still cold: no clock, scene host, audio, or
+# renderer is admitted.
+./build/openfreedomfighters --probe-first-cut-initialization
+
 # Start the current native prototype.
 ./build/openfreedomfighters --mode original
 ```
@@ -202,6 +207,11 @@ F10 toggles settings. Close the window to exit. For development:
   the reviewed first-cut reader bracket. It prints aggregate coverage only and
   deliberately leaves cutscene lifecycle, scheduling, audio and rendering
   cold. See [INTRO_BOOTSTRAP.md](docs/INTRO_BOOTSTRAP.md#first-cut-cold-probe).
+- `--probe-first-cut-initialization` extends that check through the two
+  recovered first-cut initialization phases, using retained runtime identities
+  from the owned installation while recording aggregate lifecycle evidence.
+  It is not a cutscene player: no clock, host callback, audio, or rendering is
+  started. See [INTRO_BOOTSTRAP.md](docs/INTRO_BOOTSTRAP.md#first-cut-initialization-probe).
 - `--screenshot /path/outside/repo/frame.bmp` saves a GPU readback. The file must
   not already exist. With a frame limit it captures the last frame; otherwise
   it captures the first.

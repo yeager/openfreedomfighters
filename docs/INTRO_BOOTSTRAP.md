@@ -864,6 +864,19 @@ schedule an event, execute a lifecycle phase, or play a cutscene. It is not a
 playability test and is deliberately outside public CI because it needs the
 user-owned installation.
 
+## First-cut initialization probe
+
+`openfreedomfighters --probe-first-cut-initialization --data <owned-data-root>`
+performs the same checked construction, then exercises the two recovered
+first-cut initialization phases through a strict cold adapter. Its bindings are
+retained list, camera, sequence, and picture identities from the prepared owned
+scene; the report exposes counts and completion state only.
+
+The adapter does not provide a scheduler, clock, scene host, event dispatcher,
+audio output, or renderer. It is evidence that the recovered phase boundaries
+can consume the prepared source-backed state, not evidence that the original
+intro can play or transition to the menu.
+
 ## Windows observation: opening sequence
 
 On 2026-09-09, a private Windows retail run was captured over RDP. The images

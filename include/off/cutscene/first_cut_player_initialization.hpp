@@ -115,4 +115,36 @@ private:
   FirstCutPlayerListReceiver receiver_;
 };
 
+// A strictly cold adapter for exercising the two recovered initialization
+// phases against retained, caller-provided live identities. It records only
+// aggregate lifecycle evidence; it does not schedule a cut or invoke a host.
+struct FirstCutPlayerInitializationObservationBindings {
+  std::uint64_t active_camera_list{};
+  std::uint64_t cut_sequence_object{};
+  std::uint64_t member{};
+  float member_end{};
+  std::size_t member_count{};
+  std::uint64_t queue_property{};
+};
+
+struct FirstCutPlayerInitializationObservation {
+  std::size_t phase_one_command_invocations{};
+  std::size_t phase_two_command_invocations{};
+  std::size_t ordered_command_registrations{};
+  bool retained_source_read{};
+  bool list_events_registered{};
+  bool queue_property_written{};
+  bool action_map_setup{};
+  bool receiver_open{};
+  bool receiver_closed{};
+  bool active_camera_list_resolved{};
+  bool cut_sequence_object_resolved{};
+  float derived_end{};
+};
+
+[[nodiscard]] FirstCutPlayerInitializationObservation
+observe_first_cut_player_initialization(
+    FirstCutPlayerSession& session,
+    const FirstCutPlayerInitializationObservationBindings& bindings);
+
 } // namespace off::cutscene

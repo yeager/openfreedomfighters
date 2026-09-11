@@ -113,4 +113,60 @@ void FirstCutPlayerSession::run_phase_two(const FirstCutPlayerSessionPhaseTwoSer
         receiver_.close_after_phase_two(component);
       }});
 }
+
+FirstCutPlayerInitializationObservation observe_first_cut_player_initialization(
+    FirstCutPlayerSession& session,
+    const FirstCutPlayerInitializationObservationBindings& bindings) {
+  if (session.initialization().phase_one_complete() ||
+      session.initialization().phase_two_complete() || bindings.member == 0U ||
+      !std::isfinite(bindings.member_end))
+    throw std::runtime_error("first-cut initialization observation requires a cold session and finite live bindings");
+  FirstCutPlayerInitializationObservation observation;
+  session.run_phase_one({
+      .invoke_command = [&](auto, const auto&) { ++observation.phase_one_command_invocations; },
+      .read_retained_source = [&] { observation.retained_source_read = true; },
+      .register_list_events = [&] { observation.list_events_registered = true; },
+      .member_count = [&] { return bindings.member_count; },
+      .write_queue_property = [&](auto value) {
+        if (value != bindings.queue_property)
+          throw std::runtime_error("first-cut initialization observation queue property changed");
+        observation.queue_property_written = true;
+      },
+      .setup_action_map = [&] { observation.action_map_setup = true; },
+      .queue_property_value = bindings.queue_property});
+  session.run_phase_two({
+      .invoke_command = [&](auto, const auto&) { ++observation.phase_two_command_invocations; },
+      .read_scene_reference = [&](std::string_view name) -> std::optional<std::uint64_t> {
+        if (name == "rActiveCameraList") {
+          observation.active_camera_list_resolved = true;
+          return bindings.active_camera_list;
+        }
+        if (name == "rCutSequenceObject") return bindings.cut_sequence_object;
+        throw std::runtime_error("first-cut initialization observation requested an unknown scene reference");
+      },
+      .resolve_member = [&](std::size_t index) -> std::optional<std::uint64_t> {
+        return index == 0U ? std::optional<std::uint64_t>{bindings.member} : std::nullopt;
+      },
+      .request_member_info = [&](std::uint64_t member) -> std::optional<FirstCutMemberInfo> {
+        if (member != bindings.member)
+          throw std::runtime_error("first-cut initialization observation changed the member identity");
+        return FirstCutMemberInfo{bindings.member_end};
+      },
+      .member_name = [](std::uint64_t) { return std::string_view{}; },
+      .resolve_scene_object = [&](std::uint64_t source) -> std::optional<std::uint64_t> {
+        if (source != bindings.cut_sequence_object)
+          throw std::runtime_error("first-cut initialization observation changed the cut object identity");
+        observation.cut_sequence_object_resolved = true;
+        return source;
+      }});
+  observation.receiver_open = session.receiver().open();
+  observation.receiver_closed = session.receiver().closed();
+  observation.ordered_command_registrations = session.receiver().commands().size();
+  observation.derived_end = session.initialization().derived_end();
+  if (!session.initialization().phase_one_complete() ||
+      !session.initialization().phase_two_complete() || !observation.receiver_open ||
+      !observation.receiver_closed)
+    throw std::runtime_error("first-cut initialization observation did not complete both cold phases");
+  return observation;
+}
 } // namespace off::cutscene

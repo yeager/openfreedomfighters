@@ -91,6 +91,17 @@ int main() {
             session.receiver().commands()[1].timeline_position == 1U &&
             session.receiver().commands()[2].timeline_position == 4U,
         "session alone binds first-cut command admission and never starts playback");
+  off::cutscene::FirstCutPlayerSession observed({42U, {10U, 11U, 12U, 13U, 14U}, session_list, session_sequence});
+  const auto observation=off::cutscene::observe_first_cut_player_initialization(
+      observed,{.active_camera_list=88U,.cut_sequence_object=99U,.member=55U,
+                .member_end=175.0F,.member_count=1U,.queue_property=77U});
+  check(observation.phase_one_command_invocations==5U && observation.phase_two_command_invocations==5U &&
+            observation.ordered_command_registrations==3U && observation.retained_source_read &&
+            observation.list_events_registered && observation.queue_property_written &&
+            observation.action_map_setup && observation.receiver_open && observation.receiver_closed &&
+            observation.active_camera_list_resolved && observation.cut_sequence_object_resolved &&
+            observation.derived_end==175.0F,
+        "cold observation records source-driven initialization without playback");
   auto failing = make_player();
   rejects([&] { failing.run_phase_one({
       .invoke_command = [](auto, const auto&) { throw std::runtime_error("injected"); },

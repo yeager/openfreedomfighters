@@ -5,6 +5,7 @@
 #include "off/data/first_cut_owner_reader.hpp"
 #include "off/data/first_cut_list_component_reader.hpp"
 #include "off/data/first_cut_command_component_reader.hpp"
+#include "off/cutscene/first_cut_player_initialization.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
 #include "off/graphics/intro_outer_loader_tail_readiness.hpp"
 #include "off/graphics/intro_runtime.hpp"
@@ -26,6 +27,7 @@
 #include <charconv>
 #include <array>
 #include <bit>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <exception>
@@ -50,7 +52,7 @@ void usage(std::ostream &output) {
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] "
             "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] "
-            "[--probe-startup-boot] [--probe-first-cut-cold]\n";
+            "[--probe-startup-boot] [--probe-first-cut-cold] [--probe-first-cut-initialization]\n";
 }
 
 [[nodiscard]] std::string_view startup_boot_probe_call_name(
@@ -174,7 +176,7 @@ void write_reader_coverage_probe(std::ostream& output,
   }
 }
 
-int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
+int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initialization) {
   off::runtime::ApplicationServices application(
       off::runtime::ClockExecutionPolicy::no_recording_or_replay,
       off::runtime::make_monotonic_clock_samples());
@@ -281,7 +283,7 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
       !owner_session.owner_block().empty())
     throw std::runtime_error("first-cut cold probe did not release the owner-reader boundary");
   session->prepare_supported_first_cut_player();
-  const auto* first_cut=session->first_cut_player();
+  auto* first_cut=session->first_cut_player();
   if(!first_cut || first_cut->initialization().phase_one_complete() ||
       first_cut->initialization().phase_two_complete() || first_cut->receiver().open() ||
       first_cut->receiver().closed())
@@ -289,6 +291,31 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
   const auto tail_readiness=session->outer_loader_tail_readiness();
   if(tail_readiness.ready_to_run())
     throw std::runtime_error("first-cut cold probe unexpectedly considers the loader tail runnable");
+  std::optional<off::cutscene::FirstCutPlayerInitializationObservation> initialization_observation;
+  if(run_initialization) {
+    const auto* prepared=intro.first_cut_player_prepared_state();
+    if(!prepared || prepared->camera_owner.value==0U || prepared->sequence_owner.value==0U ||
+       prepared->legal_picture_owner.value==0U || prepared->started.empty() ||
+       !std::isfinite(prepared->sequence_values[1]))
+      throw std::runtime_error("first-cut initialization probe found incomplete live bindings");
+    initialization_observation.emplace(off::cutscene::observe_first_cut_player_initialization(
+        *first_cut,{.active_camera_list=prepared->camera_owner.value,
+                    .cut_sequence_object=prepared->sequence_owner.value,
+                    .member=prepared->legal_picture_owner.value,
+                    .member_end=prepared->sequence_values[1],
+                    .member_count=prepared->started.size(),
+                    .queue_property=prepared->list_resource.value}));
+    if(initialization_observation->phase_one_command_invocations!=first_cut_source_data.commands.size() ||
+       initialization_observation->phase_two_command_invocations!=first_cut_source_data.commands.size() ||
+       !initialization_observation->retained_source_read ||
+       !initialization_observation->list_events_registered ||
+       !initialization_observation->queue_property_written ||
+       !initialization_observation->action_map_setup ||
+       !initialization_observation->receiver_open || !initialization_observation->receiver_closed ||
+       !initialization_observation->active_camera_list_resolved ||
+       !initialization_observation->cut_sequence_object_resolved)
+      throw std::runtime_error("first-cut initialization probe observed an incomplete cold lifecycle");
+  }
   std::cout << "First-cut cold probe verified\n"
             << "reader-states=2\n"
             << "component-payloads=6\n"
@@ -344,9 +371,18 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
   for(const auto boundary:tail_readiness.required_boundaries)
     std::cout << "outer-loader-pending="
               << off::graphics::intro_outer_loader_tail_boundary_label(boundary) << '\n';
+  if(initialization_observation) {
+    std::cout << "first-cut-initialization-probe=completed\n"
+              << "phase-one-command-invocations=" << initialization_observation->phase_one_command_invocations << '\n'
+              << "phase-two-command-invocations=" << initialization_observation->phase_two_command_invocations << '\n'
+              << "ordered-command-registrations=" << initialization_observation->ordered_command_registrations << '\n'
+              << "phase-one=cold-complete\n"
+              << "phase-two=cold-complete\n";
+  } else {
+    std::cout << "phase-one=not-run\n"
+              << "phase-two=not-run\n";
+  }
   std::cout
-            << "phase-one=not-run\n"
-            << "phase-two=not-run\n"
             << "renderer=not-admitted\n"
             << "audio=not-started\n";
   return 0;
@@ -381,6 +417,7 @@ int main(int argc, char **argv) {
   bool diagnostic_intro_picture = false;
   bool probe_startup_boot = false;
   bool probe_first_cut_cold = false;
+  bool probe_first_cut_initialization = false;
   bool mode_specified = false;
   std::optional<std::filesystem::path> diagnostic_scene_archive;
   std::filesystem::path screenshot_path;
@@ -422,6 +459,8 @@ int main(int argc, char **argv) {
       probe_startup_boot = true;
     } else if (argument == "--probe-first-cut-cold") {
       probe_first_cut_cold = true;
+    } else if (argument == "--probe-first-cut-initialization") {
+      probe_first_cut_initialization = true;
     } else if (argument == "--screenshot" && index + 1 < argc) {
       screenshot_path = argv[++index];
     } else if (argument == "--locale" && index + 1 < argc) {
@@ -444,7 +483,7 @@ int main(int argc, char **argv) {
   }
   if (data_path.empty())
     data_path = default_game_data_path();
-  if (data_path.empty() && (verify_only || probe_startup_boot || probe_first_cut_cold)) {
+  if (data_path.empty() && (verify_only || probe_startup_boot || probe_first_cut_cold || probe_first_cut_initialization)) {
     std::cerr
         << "A legally purchased Freedom Fighters installation is required; "
            "pass --data PATH or set OPENFREEDOMFIGHTERS_DATA.\n";
@@ -475,11 +514,15 @@ int main(int argc, char **argv) {
     usage(std::cerr);
     return 2;
   }
-  if (probe_first_cut_cold &&
+  if ((probe_first_cut_cold || probe_first_cut_initialization) &&
       (verify_only || probe_startup_boot || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified)) {
-    std::cerr << "--probe-first-cut-cold cannot be combined with runtime options.\n";
+    std::cerr << "First-cut probes cannot be combined with runtime options.\n";
     usage(std::cerr);
+    return 2;
+  }
+  if (probe_first_cut_cold && probe_first_cut_initialization) {
+    std::cerr << "Select only one first-cut probe.\n";
     return 2;
   }
   if (!screenshot_path.empty()) {
@@ -533,14 +576,14 @@ int main(int argc, char **argv) {
     }
   }
 
-  if (probe_first_cut_cold) {
+  if (probe_first_cut_cold || probe_first_cut_initialization) {
     const auto verification=off::data::verify_install(
         data_path,{}, {.deep_audit_cache_root=off::platform::application_deep_audit_cache_root()});
     if(!verification) {
       std::cerr << "Game-data verification failed: " << verification.message << '\n';
       return 3;
     }
-    try { return run_first_cut_cold_probe(data_path); }
+    try { return run_first_cut_probe(data_path,probe_first_cut_initialization); }
     catch(const std::exception& error) {
       std::cerr << "First-cut cold probe failed: " << error.what() << '\n';
       return 3;
