@@ -87,7 +87,7 @@ jobs:
             libxtst-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev \
             libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev \
             libudev-dev libthai-dev libusb-1.0-0-dev libpipewire-0.3-dev \
-            libwayland-dev libdecor-0-dev liburing-dev xvfb
+            libwayland-dev libdecor-0-dev liburing-dev xvfb libvulkan1 mesa-vulkan-drivers
       - name: Build
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
@@ -98,7 +98,7 @@ jobs:
           set -euo pipefail
           LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ctest --test-dir build -j4 --output-on-failure \
             --output-junit ctest-results.xml
-          python3 -c 'import sys, xml.etree.ElementTree as ET; skipped=[case.attrib.get("name", "unnamed") for case in ET.parse("ctest-results.xml").iter("testcase") if case.find("skipped") is not None]; sys.exit("Skipped CTest cases: " + ", ".join(skipped) if skipped else 0)'
+          python3 -c 'import sys, xml.etree.ElementTree as ET; skipped=[case.attrib.get("name", "unnamed") for case in ET.parse("build/ctest-results.xml").iter("testcase") if case.find("skipped") is not None]; sys.exit("Skipped CTest cases: " + ", ".join(skipped) if skipped else 0)'
       - name: Verify install layout
         shell: bash
         run: |
