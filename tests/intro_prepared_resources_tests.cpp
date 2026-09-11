@@ -10,6 +10,7 @@
 #include "off/graphics/preview_camera_component.hpp"
 #include "off/data/packed_resource.hpp"
 #include "off/data/archive_vfs.hpp"
+#include "off/data/deferred_compact_block_profile.hpp"
 
 #include <algorithm>
 #include <array>
@@ -304,7 +305,11 @@ struct Fixture {
             const auto deferred=payload.size();
             set(payload,record+32,static_cast<std::uint32_t>(deferred));
             Bytes deferred_blob(4);scalar(deferred_blob,3,12345U);finish(deferred_blob);
-            payload.insert(payload.end(),deferred_blob.begin(),deferred_blob.end());
+            Bytes basic_group_blob(4);
+            scalar(basic_group_blob,3,12345U);floating(basic_group_blob,2,1.0F);
+            scalar(basic_group_blob,3,2U);scalar(basic_group_blob,3,3U);scalar(basic_group_blob,3,4U);
+            basic_group_blob.push_back(std::byte{0x06});finish(basic_group_blob);
+            payload.insert(payload.end(),basic_group_blob.begin(),basic_group_blob.end());
             while(payload.size()%4) payload.push_back(std::byte{0});
             const auto language_record=payload.size();
             if(language_group) {
@@ -1076,6 +1081,14 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               host.apply_supported_first_cut_camera_deferred_reader(work);
             if(work.source_directory_index>=43U && work.source_directory_index<=47U)
               host.apply_supported_following_visual_owner_deferred_reader(work);
+            const auto& group_source=host.resources().sources().directory().at(work.source_directory_index);
+            if(group_source.source_type==0x00100001U && group_source.attachments.empty()) {
+              const auto block=host.resources().sources().deferred_source_block(work.source_directory_index);
+              if(block.size()>sizeof(std::uint32_t) &&
+                 off::data::DeferredCompactBlockProfiler::profile(
+                     block.subspan(sizeof(std::uint32_t))).framing_notation=="i3f2i3i3i3|!")
+                host.apply_supported_basic_group_owner_deferred_reader(work);
+            }
             if(work.source_directory_index==466U) {
               bool supported_external_payload{};
               try {
@@ -1165,6 +1178,15 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                         receipt.source_offset==host.resources().sources().directory()[source].deferred_source_offset;
                   }),
               "following visual owner receipts retain only exact attachment-free reader provenance");
+        check(!host.basic_group_owner_reader_receipts().empty() &&
+              std::ranges::all_of(host.basic_group_owner_reader_receipts(),[&](const auto& entry) {
+                const auto& [source,receipt]=entry;
+                return host.resources().sources().directory()[source].source_type==0x00100001U &&
+                    receipt.source_directory_index==source && receipt.owner==host.source_handle(source) &&
+                    receipt.resource==host.directory_resource_mapping()[source] &&
+                    receipt.source_offset==host.resources().sources().directory()[source].deferred_source_offset;
+              }),
+              "basic group owner receipts retain only canonical bounded provenance");
         const auto& window=host.window_for_owner(host.source_handle(host.resources().window_index()));
         const auto& camera=host.camera_for_owner(host.source_handle(host.resources().camera_index()));
         const auto window_reference_resource=[&host](std::uint32_t reference)

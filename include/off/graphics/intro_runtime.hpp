@@ -315,7 +315,7 @@ enum class IntroDeferredReaderFamily : std::uint8_t {
   unclassified, sound_owner, window_owner, movie_controller,
   first_cut_sequence, first_cut_list, first_cut_legal_picture,
   external_cut_commands, first_cut_fade_picture, first_cut_camera,
-  following_visual_owner,
+  basic_group_owner, following_visual_owner,
 };
 enum class IntroDeferredReaderImplementationState : std::uint8_t {
   unimplemented, implemented_not_applied, applied,
@@ -443,6 +443,15 @@ struct IntroFirstCutCameraReaderState {
 // following-visual records. It establishes identity only; their payload and
 // runtime behavior remain unrecovered and therefore unadmitted.
 struct IntroFollowingVisualOwnerReaderReceipt {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t source_directory_index{};
+  std::uint32_t source_offset{};
+};
+// Provenance for the narrow attachment-free ZGROUP reader form. It validates
+// only a recovered compact framing shape and canonical live ownership; field
+// semantics, child registration and lifecycle behavior remain unavailable.
+struct IntroBasicGroupOwnerReaderReceipt {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
   std::size_t source_directory_index{};
@@ -934,6 +943,8 @@ public:
   [[nodiscard]] const IntroFirstCutCameraReaderState* first_cut_camera_reader_state() const noexcept {return first_cut_camera_reader_state_?&*first_cut_camera_reader_state_:nullptr;}
   void apply_supported_following_visual_owner_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroFollowingVisualOwnerReaderReceipt>& following_visual_owner_reader_receipts() const noexcept {return following_visual_owner_reader_receipts_;}
+  void apply_supported_basic_group_owner_deferred_reader(const IntroDeferredReaderWork& work);
+  [[nodiscard]] const std::map<std::size_t,IntroBasicGroupOwnerReaderReceipt>& basic_group_owner_reader_receipts() const noexcept {return basic_group_owner_reader_receipts_;}
   // Atomically materialize the source-backed first-cut player state after both
   // reviewed readers. Playback services remain intentionally absent.
   void prepare_supported_first_cut_player();
@@ -1074,6 +1085,7 @@ private:
   std::optional<IntroFirstCutComponentReaderState> first_cut_component_reader_state_;
   std::optional<IntroFirstCutCameraReaderState> first_cut_camera_reader_state_;
   std::map<std::size_t,IntroFollowingVisualOwnerReaderReceipt> following_visual_owner_reader_receipts_;
+  std::map<std::size_t,IntroBasicGroupOwnerReaderReceipt> basic_group_owner_reader_receipts_;
   std::optional<IntroFirstCutPlayerPreparedState> first_cut_player_prepared_state_;
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;
   std::map<std::size_t,IntroFadePictureReaderState> fade_picture_reader_states_;

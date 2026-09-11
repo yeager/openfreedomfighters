@@ -57,8 +57,8 @@ Their differing framing profiles prove that a type-wide base-object reader would
 be unsound. None is admitted until its owner fields and attachment dispatch
 contract have been independently recovered.
 
-The owned-data probe currently finds 420 queued readers: 12 applied, five
-recognized-but-not-admitted following-visual owners, and 403 unclassified.
+The owned-data probe currently finds 420 queued readers: 12 applied, 20
+recognized-but-not-admitted owner forms, and 388 unclassified.
 Of the unclassified work, 70 records have no attachments and 333 have
 attachments; 302 of those attachment-bearing blocks expose a delimiter before
 their terminal marker, while 31 are outside the narrow classifier. The 302
@@ -71,6 +71,13 @@ The five reviewed following-visual owners now retain only a completed
 owner/resource/offset receipt. Their payload is deliberately not parsed and
 they do not count as lifecycle reader admissions; this separates safe boundary
 provenance from unproven reader behavior.
+
+The same boundary is now available for 15 attachment-free `ZGROUP` records
+with one exact compact framing form. It validates the canonical live group,
+owner, resource and bounded framing sequence, retaining no field values or
+inferred group behavior. Other `ZGROUP` bodies remain unclassified: they have
+different tag forms or attachments. These receipts do not count as reader
+admissions and do not attach children, mutate flags, or run lifecycle work.
 MatPosAnim is explicitly outside the current deferred-reader admission path:
 the supported intro has 227 associated deferred records, all with an attachment
 delimiter before the owner terminal (249 delimiters in total). Its owner-local
