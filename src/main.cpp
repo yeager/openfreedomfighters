@@ -31,6 +31,7 @@
 #include "off/platform/sdl_startup.hpp"
 #include "off/runtime/startup_boot_scene_directory_source.hpp"
 #include "off/runtime/startup_boot_scene_probe_host.hpp"
+#include "off/runtime/startloader_prepared_route.hpp"
 #include "off/runtime/movie_cut_loader_package_source.hpp"
 #include "off/runtime/movie_cut_main_package_source.hpp"
 #include "off/runtime/startup_scene_package_source.hpp"
@@ -68,7 +69,7 @@ void usage(std::ostream &output) {
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] "
             "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] "
-            "[--probe-startup-boot] [--probe-soundtrack] [--probe-localization] [--probe-movie-cuts] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
+            "[--probe-startup-boot] [--probe-startup-route-cold] [--probe-soundtrack] [--probe-localization] [--probe-movie-cuts] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
 }
 
 [[nodiscard]] off::data::AudioBankProfile inspect_verified_game_audio(
@@ -283,6 +284,53 @@ void write_startup_boot_probe_trace(
            << " source-owner-ordinal="
            << entry.source_boot_owner_directory_ordinal << '\n';
   }
+}
+
+void write_startup_route_cold_probe(const std::filesystem::path &root,
+                                    std::ostream &output) {
+  const auto startloader_archive =
+      off::data::ZipArchive::open(root / "Scenes" / "StartLoader.ZIP");
+  const auto *source_entry =
+      startloader_archive.find("SCENES/StartLoader.GMS");
+  if (source_entry == nullptr) {
+    throw std::runtime_error("StartLoader source is unavailable");
+  }
+  const auto startloader_gms = off::data::GmsImage::parse(
+      off::data::PackedResource::parse(startloader_archive.read(*source_entry)));
+  auto route = off::runtime::StartLoaderPreparedRoute::from_checked_gms(
+      startloader_gms, root / "Scenes" / "FF-StartUp.ZIP",
+      {.initial_update_count = 0U, .one_time_setup_pending = true});
+  std::size_t setup_calls{};
+  for (std::size_t update = 0; update < 3U; ++update) {
+    const auto result = route.ordinary_update([&setup_calls] { ++setup_calls; });
+    if ((update < 2U && result !=
+                           off::runtime::StartLoaderPreparedRouteResult::awaiting_target) ||
+        (update == 2U && result !=
+                            off::runtime::StartLoaderPreparedRouteResult::package_prepared)) {
+      throw std::runtime_error("StartLoader route did not retain its checked handoff");
+    }
+  }
+  if (setup_calls != 1U || route.update_count() != 3U ||
+      route.one_time_setup_pending() || !route.has_prepared_package()) {
+    throw std::runtime_error("StartLoader route reached an invalid prepared state");
+  }
+  const auto &package = *route.prepared_package();
+  if (!package.factory_inputs().has_value()) {
+    throw std::runtime_error("StartLoader route prepared no typed startup inputs");
+  }
+  const auto directory = route.prepared_boot_directory_source();
+  if (!directory.matches_checked_gms(package.factory_inputs()->gms())) {
+    throw std::runtime_error("StartLoader route lost BootMenu source provenance");
+  }
+  output << "startup-route-cold-probe=completed\n"
+         << "startup-route-one-time-setup-calls=" << setup_calls << '\n'
+         << "startup-route-updates=" << route.update_count() << '\n'
+         << "startup-route-package-prepared=true\n"
+         << "startup-route-boot-directory-source=verified\n"
+         << "startup-route-scene-construction=unavailable\n"
+         << "startup-route-lifecycle=unavailable\n"
+         << "startup-route-renderer=unavailable\n"
+         << "startup-route-input=unavailable\n";
 }
 
 [[nodiscard]] std::string_view reader_family_label(
@@ -788,6 +836,7 @@ int main(int argc, char **argv) {
   bool diagnostic_startup_graphics = false;
   bool diagnostic_intro_picture = false;
   bool probe_startup_boot = false;
+  bool probe_startup_route_cold = false;
   bool probe_soundtrack = false;
   bool probe_localization = false;
   bool probe_movie_cuts = false;
@@ -834,6 +883,8 @@ int main(int argc, char **argv) {
       diagnostic_intro_picture = true;
     } else if (argument == "--probe-startup-boot") {
       probe_startup_boot = true;
+    } else if (argument == "--probe-startup-route-cold") {
+      probe_startup_route_cold = true;
     } else if (argument == "--probe-soundtrack") {
       probe_soundtrack = true;
     } else if (argument == "--probe-localization") {
@@ -870,7 +921,7 @@ int main(int argc, char **argv) {
   }
   if (data_path.empty())
     data_path = default_game_data_path();
-  if (data_path.empty() && (verify_only || probe_startup_boot || probe_soundtrack || probe_localization || probe_movie_cuts || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
+  if (data_path.empty() && (verify_only || probe_startup_boot || probe_startup_route_cold || probe_soundtrack || probe_localization || probe_movie_cuts || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
     std::cerr
         << "A legally purchased Freedom Fighters installation is required; "
            "pass --data PATH or set OPENFREEDOMFIGHTERS_DATA.\n";
@@ -892,18 +943,18 @@ int main(int argc, char **argv) {
     std::cerr << "A screenshot cannot be captured in verify-only mode.\n";
     return 2;
   }
-  if (probe_startup_boot &&
+  if ((probe_startup_boot || probe_startup_route_cold) &&
       (verify_only || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || probe_soundtrack ||
        probe_localization || probe_movie_cuts ||
        mode_specified)) {
     std::cerr
-        << "--probe-startup-boot cannot be combined with runtime options.\n";
+        << "Startup probes cannot be combined with runtime options.\n";
     usage(std::cerr);
     return 2;
   }
   if (probe_soundtrack &&
-      (verify_only || probe_startup_boot || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
+      (verify_only || probe_startup_boot || probe_startup_route_cold || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified ||
        probe_localization || probe_movie_cuts || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
     std::cerr << "Soundtrack probe cannot be combined with runtime options.\n";
@@ -911,7 +962,7 @@ int main(int argc, char **argv) {
     return 2;
   }
   if (probe_localization &&
-      (verify_only || probe_startup_boot || probe_soundtrack || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
+      (verify_only || probe_startup_boot || probe_startup_route_cold || probe_soundtrack || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified ||
        probe_movie_cuts || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
     std::cerr << "Localization probe cannot be combined with runtime options.\n";
@@ -919,7 +970,7 @@ int main(int argc, char **argv) {
     return 2;
   }
   if (probe_movie_cuts &&
-      (verify_only || probe_startup_boot || probe_soundtrack || probe_localization || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
+      (verify_only || probe_startup_boot || probe_startup_route_cold || probe_soundtrack || probe_localization || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified ||
        probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
     std::cerr << "MovieCut probe cannot be combined with runtime options.\n";
@@ -927,7 +978,7 @@ int main(int argc, char **argv) {
     return 2;
   }
   if ((probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global) &&
-      (verify_only || probe_startup_boot || probe_soundtrack || probe_localization || probe_movie_cuts || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
+      (verify_only || probe_startup_boot || probe_startup_route_cold || probe_soundtrack || probe_localization || probe_movie_cuts || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified)) {
     std::cerr << "First-cut probes cannot be combined with runtime options.\n";
     usage(std::cerr);
@@ -987,6 +1038,24 @@ int main(int argc, char **argv) {
       return 0;
     } catch (const std::exception &error) {
       std::cerr << "Startup BootMenu probe failed: " << error.what() << '\n';
+      return 3;
+    }
+  }
+
+  if (probe_startup_route_cold) {
+    const auto verification = off::data::verify_install(
+        data_path, {}, {.deep_audit_cache_root =
+                             off::platform::application_deep_audit_cache_root()});
+    if (!verification) {
+      std::cerr << "Game-data verification failed: " << verification.message
+                << '\n';
+      return 3;
+    }
+    try {
+      write_startup_route_cold_probe(verification.root, std::cout);
+      return 0;
+    } catch (const std::exception &error) {
+      std::cerr << "Startup route cold probe failed: " << error.what() << '\n';
       return 3;
     }
   }

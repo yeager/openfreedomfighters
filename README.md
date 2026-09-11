@@ -183,6 +183,10 @@ OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
 # Check your installation without opening a window.
 ./build/openfreedomfighters --verify-only
 
+# Verify the source-only StartLoader to FF-StartUp package handoff. This does
+# not construct a scene, present a menu, or admit lifecycle, rendering, or input.
+./build/openfreedomfighters --probe-startup-route-cold
+
 # Inspect hash-verified optional MP3/FLAC soundtrack editions without playing
 # or naming a game cue. The probe reports aggregate layout and duration facts.
 ./build/openfreedomfighters --probe-soundtrack
@@ -247,6 +251,12 @@ menu transition.
   directory ordinals plus a content-free hierarchy fingerprint; it creates no
   scene or runtime service. See
   [STARTUP_BOOT_SCENE_PROBE.md](docs/STARTUP_BOOT_SCENE_PROBE.md).
+- `--probe-startup-route-cold` validates the complete owned-data StartLoader
+  handoff through the checked FF-StartUp package and its BootMenu directory
+  source. It runs only the recovered three-update deferred route and reports
+  construction, lifecycle, rendering, and input as unavailable. It is not a
+  title-screen or playable-menu test. See
+  [SCENE_TRANSITIONS.md](docs/SCENE_TRANSITIONS.md).
 - `--probe-soundtrack` opens every hash-verified optional soundtrack edition
   selected by the catalog and reports aggregate format, sample-rate and channel
   coverage. It also profiles metadata from every verified scene audio header,

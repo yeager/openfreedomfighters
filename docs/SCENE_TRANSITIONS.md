@@ -53,6 +53,14 @@ input, preserving the checked chain from StartLoader to the BootMenu source.
 This remains source evidence, not a scene factory, manager-state mutation,
 lifecycle, renderer, input, or presentation path.
 
+`openfreedomfighters --probe-startup-route-cold` runs that handoff against a
+verified owned installation. It parses the installed StartLoader source,
+executes exactly the three retained ordinary updates from the reviewed initial
+state, prepares the checked FF-StartUp package, and derives the BootMenu
+directory source from that package's retained GMS input. Its output explicitly
+marks scene construction, lifecycle, rendering, and input as unavailable. It
+is a cold data-flow check, not a title-screen or playable-menu test.
+
 `StartupBootSceneDirectorySource` is the corresponding source-only boundary
 inside the prepared `FF-StartUp.GMS`. It accepts one exact ordinary-window
 owner with the reviewed `ZWINDOW_BootMenu` attachment and parameter, and
