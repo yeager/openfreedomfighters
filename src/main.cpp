@@ -205,6 +205,7 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
   session->complete_postconstruction_reader_bracket(0U);
   auto& intro=session->runtime();
   const auto reader_coverage=intro.reader_coverage_inventory();
+  const auto matpos_dispatch=intro.matpos_deferred_dispatch_inventory();
   if(reader_coverage.stage!=off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete ||
       reader_coverage.total_discovered!=intro.deferred_reader_work().size())
     throw std::runtime_error("first-cut cold probe found incomplete reader coverage");
@@ -289,6 +290,10 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
             << "command-component-payloads=5-verified\n"
             ;
   write_reader_coverage_probe(std::cout,reader_coverage);
+  std::cout << "matpos-deferred-records=" << matpos_dispatch.associated_records << '\n'
+            << "matpos-terminal-first=" << matpos_dispatch.terminal_before_first_attachment_delimiter << '\n'
+            << "matpos-attachment-first=" << matpos_dispatch.attachment_delimiter_precedes_terminal << '\n'
+            << "matpos-attachment-delimiters=" << matpos_dispatch.attachment_delimiters << '\n';
   std::map<std::string,std::size_t> deferred_signatures;
   for(const auto& work:intro.deferred_reader_work()) {
     const auto& source=intro.resources().sources().directory().at(work.source_directory_index);
