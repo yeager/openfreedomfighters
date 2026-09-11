@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -19,9 +20,24 @@ struct LocStringCandidate final {
   bool ascii_identifier_like{};
 };
 
+// Aggregate structural evidence for a LOC member. It deliberately excludes
+// every source byte and candidate string, so it can be recorded publicly while
+// text and legacy encoding remain private owner data.
+struct LocStringProfile final {
+  std::size_t member_bytes{};
+  std::size_t candidate_count{};
+  std::size_t ascii_identifier_candidate_count{};
+  std::size_t candidate_bytes{};
+  std::size_t maximum_candidate_bytes{};
+  std::uint64_t structure_digest{14695981039346656037ULL};
+
+  [[nodiscard]] bool operator==(const LocStringProfile&) const = default;
+};
+
 class LocStringIndex final {
 public:
   [[nodiscard]] static LocStringIndex scan(std::span<const std::byte> bytes);
+  [[nodiscard]] static LocStringProfile profile(std::span<const std::byte> bytes);
   [[nodiscard]] std::span<const LocStringCandidate> candidates() const noexcept {
     return candidates_;
   }

@@ -29,6 +29,14 @@ int main() {
     std::cerr << "LOC candidate scan accepted an unterminated run\n";
     return 1;
   }
+  const auto profile = off::data::LocStringIndex::profile(fixture);
+  if (profile.member_bytes != fixture.size() || profile.candidate_count != 3U ||
+      profile.ascii_identifier_candidate_count != 2U ||
+      profile.candidate_bytes != 8U || profile.maximum_candidate_bytes != 4U ||
+      profile.structure_digest == 14695981039346656037ULL) {
+    std::cerr << "LOC profile did not retain aggregate candidate structure\n";
+    return 1;
+  }
   // CI has no retail data. An owner may opt in to validate the scanner against
   // their local archive without copying its bytes into this repository.
   if (const auto* root = std::getenv("OFF_LOC_DATA_ROOT"); root != nullptr && *root != '\0') {

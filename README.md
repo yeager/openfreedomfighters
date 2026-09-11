@@ -174,6 +174,10 @@ OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
 # or naming a game cue. The probe reports aggregate layout and duration facts.
 ./build/openfreedomfighters --probe-soundtrack
 
+# Profile the owned startup LOC resource without printing any retail text.
+# This is format-recovery evidence, not a localization catalog.
+./build/openfreedomfighters --probe-localization
+
 # Inspect the checked, non-playing first-cut reader boundary. This opens no
 # window and never starts audio, schedules an event, or renders a cutscene.
 ./build/openfreedomfighters --probe-first-cut-cold

@@ -1,6 +1,7 @@
 #include "off/data/loc_string_index.hpp"
 
 #include <cstdint>
+#include <algorithm>
 #include <limits>
 #include <stdexcept>
 
@@ -25,6 +26,13 @@ constexpr std::size_t maximum_candidate_count = 1'000'000;
   }
   return true;
 }
+
+void hash_u64(std::uint64_t value, std::uint64_t& digest) noexcept {
+  for (unsigned byte{}; byte < sizeof(value); ++byte) {
+    digest ^= (value >> (byte * 8U)) & 0xffU;
+    digest *= 1099511628211ULL;
+  }
+}
 }  // namespace
 
 LocStringIndex LocStringIndex::scan(std::span<const std::byte> bytes) {
@@ -42,6 +50,24 @@ LocStringIndex LocStringIndex::scan(std::span<const std::byte> bytes) {
     result.candidates_.push_back({start, std::string_view(text, cursor - start),
                                   ascii_identifier_like(bytes.subspan(start, cursor - start))});
     ++cursor;
+  }
+  return result;
+}
+
+LocStringProfile LocStringIndex::profile(std::span<const std::byte> bytes) {
+  const auto index = scan(bytes);
+  LocStringProfile result{.member_bytes = bytes.size()};
+  for (const auto& candidate : index.candidates()) {
+    const auto length = candidate.bytes.size();
+    if (length > std::numeric_limits<std::size_t>::max() - result.candidate_bytes)
+      throw std::runtime_error("LOC candidate bytes exceed the safety limit");
+    ++result.candidate_count;
+    result.ascii_identifier_candidate_count += candidate.ascii_identifier_like ? 1U : 0U;
+    result.candidate_bytes += length;
+    result.maximum_candidate_bytes = std::max(result.maximum_candidate_bytes, length);
+    hash_u64(candidate.offset, result.structure_digest);
+    hash_u64(length, result.structure_digest);
+    hash_u64(candidate.ascii_identifier_like ? 1U : 0U, result.structure_digest);
   }
   return result;
 }

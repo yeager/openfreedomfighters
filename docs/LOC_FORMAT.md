@@ -19,6 +19,14 @@ no key, language, source-text, or translation claim. The optional owned-data
 test exercises this boundary without retaining any retail bytes in the source
 tree.
 
+`--probe-localization` reports a second, anonymous structural profile for the
+owned startup LOC member: member size, candidate count, identifier-like count,
+aggregate candidate bytes, maximum candidate length, and a digest of candidate
+offsets, lengths, and identifier classification. The digest excludes all source
+bytes. It enables reproducible format research across owner installations
+without publishing retail text, paths, or text fingerprints. It does not
+recover a record grammar, encoding, language, or display behavior.
+
 ## Required recovery before retail localization
 
 1. Recover the record framing and validate every offset/reference stays within

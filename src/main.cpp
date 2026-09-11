@@ -8,6 +8,8 @@
 #include "off/data/first_cut_owner_reader.hpp"
 #include "off/data/first_cut_list_component_reader.hpp"
 #include "off/data/first_cut_command_component_reader.hpp"
+#include "off/data/loc_string_index.hpp"
+#include "off/data/zip_archive.hpp"
 #include "off/audio/soundtrack_catalog.hpp"
 #include "off/audio/soundtrack_stream.hpp"
 #include "off/cutscene/first_cut_player_initialization.hpp"
@@ -62,7 +64,7 @@ void usage(std::ostream &output) {
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] "
             "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] "
-            "[--probe-startup-boot] [--probe-soundtrack] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
+            "[--probe-startup-boot] [--probe-soundtrack] [--probe-localization] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
 }
 
 [[nodiscard]] off::data::AudioBankProfile inspect_verified_game_audio(
@@ -162,6 +164,26 @@ void write_soundtrack_probe(
          << game_audio.maximum_channels() << '\n'
          << "game-audio-profile-scope=all-scene-streams-not-music-cues\n"
          << "soundtrack-cue-mapping=unavailable\n";
+}
+
+void write_localization_probe(const std::filesystem::path& root,
+                              std::ostream& output) {
+  const auto archive = off::data::ZipArchive::open(root / "Scenes" / "FF-StartUp.ZIP");
+  const auto* entry = archive.find("SCENES/FF-StartUp.LOC");
+  if (!entry)
+    throw std::runtime_error("startup LOC member is unavailable");
+  const auto profile = off::data::LocStringIndex::profile(archive.read(*entry));
+  output << "localization-probe=completed\n"
+         << "localization-startup-member-bytes=" << profile.member_bytes << '\n'
+         << "localization-startup-candidates=" << profile.candidate_count << '\n'
+         << "localization-startup-identifier-like-candidates="
+         << profile.ascii_identifier_candidate_count << '\n'
+         << "localization-startup-candidate-bytes=" << profile.candidate_bytes << '\n'
+         << "localization-startup-maximum-candidate-bytes="
+         << profile.maximum_candidate_bytes << '\n'
+         << "localization-startup-structure-digest=" << profile.structure_digest << '\n'
+         << "localization-record-grammar=unavailable\n"
+         << "localization-text-decoding=unavailable\n";
 }
 
 [[nodiscard]] std::string_view startup_boot_probe_call_name(
@@ -577,6 +599,7 @@ int main(int argc, char **argv) {
   bool diagnostic_intro_picture = false;
   bool probe_startup_boot = false;
   bool probe_soundtrack = false;
+  bool probe_localization = false;
   bool probe_first_cut_cold = false;
   bool probe_first_cut_initialization = false;
   bool probe_intro_renderer_payload = false;
@@ -622,6 +645,8 @@ int main(int argc, char **argv) {
       probe_startup_boot = true;
     } else if (argument == "--probe-soundtrack") {
       probe_soundtrack = true;
+    } else if (argument == "--probe-localization") {
+      probe_localization = true;
     } else if (argument == "--probe-first-cut-cold") {
       probe_first_cut_cold = true;
     } else if (argument == "--probe-first-cut-initialization") {
@@ -652,7 +677,7 @@ int main(int argc, char **argv) {
   }
   if (data_path.empty())
     data_path = default_game_data_path();
-  if (data_path.empty() && (verify_only || probe_startup_boot || probe_soundtrack || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
+  if (data_path.empty() && (verify_only || probe_startup_boot || probe_soundtrack || probe_localization || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
     std::cerr
         << "A legally purchased Freedom Fighters installation is required; "
            "pass --data PATH or set OPENFREEDOMFIGHTERS_DATA.\n";
@@ -677,6 +702,7 @@ int main(int argc, char **argv) {
   if (probe_startup_boot &&
       (verify_only || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || probe_soundtrack ||
+       probe_localization ||
        mode_specified)) {
     std::cerr
         << "--probe-startup-boot cannot be combined with runtime options.\n";
@@ -686,13 +712,21 @@ int main(int argc, char **argv) {
   if (probe_soundtrack &&
       (verify_only || probe_startup_boot || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified ||
-       probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
+       probe_localization || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
     std::cerr << "Soundtrack probe cannot be combined with runtime options.\n";
     usage(std::cerr);
     return 2;
   }
-  if ((probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global) &&
+  if (probe_localization &&
       (verify_only || probe_startup_boot || probe_soundtrack || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
+       show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified ||
+       probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
+    std::cerr << "Localization probe cannot be combined with runtime options.\n";
+    usage(std::cerr);
+    return 2;
+  }
+  if ((probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global) &&
+      (verify_only || probe_startup_boot || probe_soundtrack || probe_localization || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified)) {
     std::cerr << "First-cut probes cannot be combined with runtime options.\n";
     usage(std::cerr);
@@ -769,6 +803,22 @@ int main(int argc, char **argv) {
       return 0;
     } catch (const std::exception& error) {
       std::cerr << "Soundtrack probe failed: " << error.what() << '\n';
+      return 3;
+    }
+  }
+
+  if (probe_localization) {
+    const auto verification=off::data::verify_install(
+        data_path,{}, {.deep_audit_cache_root=off::platform::application_deep_audit_cache_root()});
+    if(!verification) {
+      std::cerr << "Game-data verification failed: " << verification.message << '\n';
+      return 3;
+    }
+    try {
+      write_localization_probe(verification.root, std::cout);
+      return 0;
+    } catch(const std::exception& error) {
+      std::cerr << "Localization probe failed: " << error.what() << '\n';
       return 3;
     }
   }
