@@ -166,6 +166,10 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
 ctest --test-dir build --output-on-failure
 
+# On a Linux builder without a desktop session, run the SDL GPU tests through
+# a software-rendered virtual display (install the `xvfb` package first).
+LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ctest --test-dir build --output-on-failure
+
 # Optional: verify LOC candidate discovery against your owned installation.
 OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
 
