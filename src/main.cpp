@@ -7,6 +7,7 @@
 #include "off/data/first_cut_command_component_reader.hpp"
 #include "off/cutscene/first_cut_player_initialization.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
+#include "off/graphics/intro_renderer_payload_observation.hpp"
 #include "off/graphics/intro_outer_loader_tail_readiness.hpp"
 #include "off/graphics/intro_runtime.hpp"
 #include "off/graphics/normal_intro_scene_session.hpp"
@@ -52,7 +53,7 @@ void usage(std::ostream &output) {
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] "
             "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] "
-            "[--probe-startup-boot] [--probe-first-cut-cold] [--probe-first-cut-initialization]\n";
+            "[--probe-startup-boot] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload]\n";
 }
 
 [[nodiscard]] std::string_view startup_boot_probe_call_name(
@@ -176,7 +177,8 @@ void write_reader_coverage_probe(std::ostream& output,
   }
 }
 
-int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initialization) {
+int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initialization,
+                        bool observe_renderer_payload) {
   off::runtime::ApplicationServices application(
       off::runtime::ClockExecutionPolicy::no_recording_or_replay,
       off::runtime::make_monotonic_clock_samples());
@@ -290,7 +292,17 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
     throw std::runtime_error("first-cut cold probe observed an unexpected lifecycle transition");
   const auto tail_readiness=session->outer_loader_tail_readiness();
   if(tail_readiness.ready_to_run())
-    throw std::runtime_error("first-cut cold probe unexpectedly considers the loader tail runnable");
+      throw std::runtime_error("first-cut cold probe unexpectedly considers the loader tail runnable");
+  std::optional<off::graphics::IntroRendererPayloadObservation> renderer_observation;
+  if(observe_renderer_payload) {
+    const auto& outer_sources=intro.resources().outer_loader_sources();
+    if(!outer_sources.renderer_resource)
+      throw std::runtime_error("intro renderer payload probe found no retained source payload");
+    renderer_observation.emplace(off::graphics::observe_intro_renderer_payload(
+        *outer_sources.renderer_resource,[&intro](std::uint32_t reference) {
+          return intro.resolve_marked_source_address(reference);
+        }));
+  }
   std::optional<off::cutscene::FirstCutPlayerInitializationObservation> initialization_observation;
   if(run_initialization) {
     const auto* prepared=intro.first_cut_player_prepared_state();
@@ -382,6 +394,15 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
     std::cout << "phase-one=not-run\n"
               << "phase-two=not-run\n";
   }
+  if(renderer_observation) {
+    std::cout << "intro-renderer-payload-probe=completed\n"
+              << "renderer-relocation-groups=" << renderer_observation->relocation_groups << '\n'
+              << "renderer-relocation-references=" << renderer_observation->relocation_references << '\n'
+              << "renderer-relocated-references=" << renderer_observation->resolved_references << '\n'
+              << "renderer-eight-byte-slots=" << renderer_observation->eight_byte_slots << '\n'
+              << "renderer-sixteen-byte-slots=" << renderer_observation->sixteen_byte_slots << '\n'
+              << "renderer-trailing-bytes=" << renderer_observation->trailing_bytes << '\n';
+  }
   std::cout
             << "renderer=not-admitted\n"
             << "audio=not-started\n";
@@ -418,6 +439,7 @@ int main(int argc, char **argv) {
   bool probe_startup_boot = false;
   bool probe_first_cut_cold = false;
   bool probe_first_cut_initialization = false;
+  bool probe_intro_renderer_payload = false;
   bool mode_specified = false;
   std::optional<std::filesystem::path> diagnostic_scene_archive;
   std::filesystem::path screenshot_path;
@@ -461,6 +483,8 @@ int main(int argc, char **argv) {
       probe_first_cut_cold = true;
     } else if (argument == "--probe-first-cut-initialization") {
       probe_first_cut_initialization = true;
+    } else if (argument == "--probe-intro-renderer-payload") {
+      probe_intro_renderer_payload = true;
     } else if (argument == "--screenshot" && index + 1 < argc) {
       screenshot_path = argv[++index];
     } else if (argument == "--locale" && index + 1 < argc) {
@@ -483,7 +507,7 @@ int main(int argc, char **argv) {
   }
   if (data_path.empty())
     data_path = default_game_data_path();
-  if (data_path.empty() && (verify_only || probe_startup_boot || probe_first_cut_cold || probe_first_cut_initialization)) {
+  if (data_path.empty() && (verify_only || probe_startup_boot || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload)) {
     std::cerr
         << "A legally purchased Freedom Fighters installation is required; "
            "pass --data PATH or set OPENFREEDOMFIGHTERS_DATA.\n";
@@ -514,15 +538,17 @@ int main(int argc, char **argv) {
     usage(std::cerr);
     return 2;
   }
-  if ((probe_first_cut_cold || probe_first_cut_initialization) &&
+  if ((probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload) &&
       (verify_only || probe_startup_boot || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified)) {
     std::cerr << "First-cut probes cannot be combined with runtime options.\n";
     usage(std::cerr);
     return 2;
   }
-  if (probe_first_cut_cold && probe_first_cut_initialization) {
-    std::cerr << "Select only one first-cut probe.\n";
+  if (static_cast<unsigned>(probe_first_cut_cold) +
+          static_cast<unsigned>(probe_first_cut_initialization) +
+          static_cast<unsigned>(probe_intro_renderer_payload) > 1U) {
+    std::cerr << "Select only one intro probe.\n";
     return 2;
   }
   if (!screenshot_path.empty()) {
@@ -576,14 +602,15 @@ int main(int argc, char **argv) {
     }
   }
 
-  if (probe_first_cut_cold || probe_first_cut_initialization) {
+  if (probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload) {
     const auto verification=off::data::verify_install(
         data_path,{}, {.deep_audit_cache_root=off::platform::application_deep_audit_cache_root()});
     if(!verification) {
       std::cerr << "Game-data verification failed: " << verification.message << '\n';
       return 3;
     }
-    try { return run_first_cut_probe(data_path,probe_first_cut_initialization); }
+    try { return run_first_cut_probe(data_path,probe_first_cut_initialization,
+                                     probe_intro_renderer_payload); }
     catch(const std::exception& error) {
       std::cerr << "First-cut cold probe failed: " << error.what() << '\n';
       return 3;

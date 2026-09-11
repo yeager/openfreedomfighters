@@ -173,6 +173,10 @@ OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
 # renderer is admitted.
 ./build/openfreedomfighters --probe-first-cut-initialization
 
+# Validate the retained intro renderer payload through its source-reference
+# relocation and workspace grammar. This creates no renderer container or frame.
+./build/openfreedomfighters --probe-intro-renderer-payload
+
 # Start the current native prototype.
 ./build/openfreedomfighters --mode original
 ```
@@ -212,6 +216,10 @@ F10 toggles settings. Close the window to exit. For development:
   from the owned installation while recording aggregate lifecycle evidence.
   It is not a cutscene player: no clock, host callback, audio, or rendering is
   started. See [INTRO_BOOTSTRAP.md](docs/INTRO_BOOTSTRAP.md#first-cut-initialization-probe).
+- `--probe-intro-renderer-payload` relocates the retained intro renderer
+  payload through the source GMS slot domain and reports aggregate workspace
+  structure. It does not create a renderer container, submit a frame, or
+  start audio.
 - `--screenshot /path/outside/repo/frame.bmp` saves a GPU readback. The file must
   not already exist. With a frame limit it captures the last frame; otherwise
   it captures the first.

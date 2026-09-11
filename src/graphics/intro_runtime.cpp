@@ -2266,6 +2266,17 @@ IntroRuntime::resolve_marked_source_resource_reference(
   return resource;
 }
 
+std::optional<std::uint32_t>
+IntroRuntime::resolve_marked_source_address(std::uint32_t reference) const {
+  const auto source=resources_.sources().local_source_for_handle(reference);
+  if(!source) return std::nullopt;
+  const auto slot=resources_.sources().directory().at(*source).local_slot_index;
+  constexpr std::uint32_t slot_bytes=112U;
+  if(slot>std::numeric_limits<std::uint32_t>::max()/slot_bytes)
+    throw std::runtime_error("GMS source slot address overflows relocation domain");
+  return slot*slot_bytes;
+}
+
 void IntroRuntime::construct_room_animation_scope_without_engine_renderer() {
   if(resource_load_stage_!=IntroResourceLoadStage::following_visual_scope_ready || loaded_resource_handles_.size()!=48 ||
       count_group_selector_!=5 || current_source_parent()!=source_handle(42) || resource_allocation_enabled_ ||

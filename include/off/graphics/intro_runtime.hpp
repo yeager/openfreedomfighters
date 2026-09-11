@@ -792,6 +792,10 @@ public:
   }
   [[nodiscard]] std::optional<IntroRuntimeResourceHandle>
   resolve_marked_source_resource_reference(std::uint32_t reference) const;
+  // Returns a GMS-local, tag-aligned slot address for relocation payloads.
+  // This is deliberately separate from the native runtime-resource identity.
+  [[nodiscard]] std::optional<std::uint32_t>
+  resolve_marked_source_address(std::uint32_t reference) const;
   [[nodiscard]] std::span<const std::array<std::byte,12>> first_auxiliary_array() const noexcept {
     return first_auxiliary_array_;
   }

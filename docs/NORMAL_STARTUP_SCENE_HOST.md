@@ -29,6 +29,11 @@ source-reference resolver and derives only workspace counts after every lookup
 succeeds. It retains no renderer container and cannot advance the loader tail,
 admit a frame, or substitute a renderer parser.
 
+The `--probe-intro-renderer-payload` command runs this check against owned game
+data. Its resolver returns the GMS-local slot address, which is a different
+domain from the process-local `IntroRuntimeResourceHandle`; treating the latter
+as relocation output would be fabricated and is rejected by design.
+
 ## Required ordering
 
 The session owns one `IntroRuntime` for the lifetime of the admitted scene; the
