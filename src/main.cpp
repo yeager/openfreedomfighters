@@ -396,6 +396,13 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
   auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
   session->complete_postconstruction_reader_bracket(0U);
   auto& intro=session->runtime();
+  const auto& bracket_observation=session->reader_bracket_observation();
+  if(bracket_observation.external_loader_values!=std::vector<std::uint64_t>{0U,0U} ||
+      bracket_observation.source_scripts.size()!=intro.source_script_work().size() ||
+      bracket_observation.pre_reader_calls!=1U ||
+      bracket_observation.prepared_reader_calls!=intro.deferred_reader_work().size() ||
+      bracket_observation.end_reader_calls!=1U)
+    throw std::runtime_error("first-cut cold probe found an incomplete reader-bracket observation");
   const auto reader_coverage=intro.reader_coverage_inventory();
   const auto matpos_dispatch=intro.matpos_deferred_dispatch_inventory();
   if(reader_coverage.stage!=off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete ||
@@ -531,6 +538,16 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
             << "owner-envelope=verified\n"
             << "first-component-payload=verified\n"
             << "command-component-payloads=5-verified\n"
+            << "reader-bracket-external-loader-calls="
+            << bracket_observation.external_loader_values.size() << '\n'
+            << "reader-bracket-source-script-calls="
+            << bracket_observation.source_scripts.size() << '\n'
+            << "reader-bracket-pre-reader-calls="
+            << bracket_observation.pre_reader_calls << '\n'
+            << "reader-bracket-prepared-reader-calls="
+            << bracket_observation.prepared_reader_calls << '\n'
+            << "reader-bracket-end-reader-calls="
+            << bracket_observation.end_reader_calls << '\n'
             ;
   write_reader_coverage_probe(std::cout,reader_coverage);
   std::cout << "matpos-deferred-records=" << matpos_dispatch.associated_records << '\n'
