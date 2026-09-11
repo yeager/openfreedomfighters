@@ -220,7 +220,23 @@ int main() {
   check(menu.draft().profile == off::Mode::original &&
             !menu.draft().modern_plus,
         "wrap the profile selector after Modern+");
-  static_cast<void>(menu.handle_key(off::ui::GraphicsMenuKey::up, true, false));
+  check(menu.select_row(off::ui::GraphicsMenuRow::upscaler),
+        "allow the active F10 session to focus the upscaler row");
+  menu.draft().upscaler = off::settings::Upscaler::native;
+  for (int step = 0; step < 3; ++step)
+    static_cast<void>(
+        menu.handle_key(off::ui::GraphicsMenuKey::right, true, false));
+  check(menu.draft().upscaler == off::settings::Upscaler::fsr,
+        "cycle from Native through Temporal and DLSS to FSR");
+  for (int step = 0; step < 2; ++step)
+    static_cast<void>(
+        menu.handle_key(off::ui::GraphicsMenuKey::right, true, false));
+  check(menu.draft().upscaler == off::settings::Upscaler::native,
+        "wrap the upscaler selector after FSR and XeSS");
+  check(menu.select_row(off::ui::GraphicsMenuRow::profile),
+        "return focus to Profile before testing top-of-menu wrapping");
+  static_cast<void>(
+      menu.handle_key(off::ui::GraphicsMenuKey::up, true, false));
   check(menu.selected_row() == off::ui::GraphicsMenuRow::defaults,
         "wrap upward from the first row to Defaults");
   menu.draft() = requested;

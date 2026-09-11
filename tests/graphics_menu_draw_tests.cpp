@@ -87,6 +87,13 @@ int main() {
             has_text(swedish, "Fönsterläge") && has_text(swedish, "Tillämpa") &&
             has_text(swedish, "Kantlöst skrivbord"),
         "explicit Swedish locale resolves only project-authored F10 text");
+  menu.draft().upscaler = off::settings::Upscaler::fsr;
+  const auto fsr = off::ui::build_graphics_menu_draw_list(
+      menu, {640, 360}, now, 1.0F, "sv-SE", "en-US");
+  check(fsr.status == off::ui::UiBuildStatus::ok && has_text(fsr, "FSR") &&
+            off::ui::validate_graphics_menu_draw_list(fsr),
+        "FSR intent is rendered as its product name in every F10 locale");
+  menu.draft().upscaler = off::settings::Upscaler::native;
   const auto platform_swedish = off::ui::build_graphics_menu_draw_list(
       menu, {640, 480}, now, 1.0F, "xx-XX", "sv_SE.UTF-8");
   check(has_text(platform_swedish, "Tillbaka") &&
