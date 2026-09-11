@@ -93,6 +93,13 @@ This is strong evidence that Glacier uses exported static class metadata to regi
 
 The executable imports 274 symbols from 24 DLLs. The narrow multimedia boundary is encouraging: one Direct3D 8 factory call, one DirectInput 8 factory call, one XInput state call, one ordinal DirectSound entry, and one ordinal EAX entry. Steam integration uses only init, shutdown, and restart-if-needed imports. Winsock contributes 11 ordinal imports.
 
+Private static review also finds one direct caller of the Direct3D 8 factory,
+inside a larger startup routine. That narrows the platform boundary to one
+renderer-bootstrap path, but does not recover device creation, render state,
+resource ownership, or frame scheduling. The portable implementation therefore
+continues to use explicit SDL GPU backends rather than a Direct3D compatibility
+layer.
+
 The remaining surface is chiefly Win32 process/thread synchronization, files, virtual memory, timing, window/message handling, GDI queries, user identity, COM, GDI+ image loading, and the Visual C++ runtime. This suggests the platform shim can remain small, but ordinal resolution and dynamically loaded APIs must be mapped before that conclusion is final.
 
 | DLL family | Imported symbols | Replacement direction |
