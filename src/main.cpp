@@ -704,8 +704,8 @@ int main(int argc, char **argv) {
     std::cerr << "Optional file skipped: " << warning << '\n';
   std::cout << "Optional soundtrack: "
             << verification->soundtrack_candidates.size()
-            << " hash-verified files; decoder and bounded transport ready; "
-               "game-cue mapping not implemented.\n";
+            << " hash-verified candidates; playback remains disabled until "
+               "cue mapping is verified, so game music is retained.\n";
   if (verify_only) {
     return 0;
   }
