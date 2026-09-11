@@ -40,6 +40,22 @@ public:
   IntroLiveTargetRegistry(IntroLiveTargetRegistry&&) = delete;
   IntroLiveTargetRegistry& operator=(IntroLiveTargetRegistry&&) = delete;
 
+  // A live sender need not have an authored target reference. Register it
+  // separately so an owner that issues commands is not given a fabricated
+  // reference merely to pass direct-dispatch validation. If the owner is also
+  // a registered target this is an idempotent declaration.
+  void register_sender(OwnerHandle owner) {
+    reject_mutation_during_dispatch();
+    if (owner == 0U) {
+      throw std::runtime_error("invalid live intro target sender");
+    }
+    if (find_owner(owner) ||
+        std::find(senders_.begin(), senders_.end(), owner) != senders_.end()) {
+      return;
+    }
+    senders_.push_back(owner);
+  }
+
   // A zero owner/reference, duplicate owner/reference, duplicate nonempty
   // name, or a registration attempted from a direct-dispatch callback is
   // rejected. An empty name has no name-resolution entry.
@@ -112,7 +128,8 @@ public:
   }
 
   [[nodiscard]] bool contains_owner(OwnerHandle owner) const noexcept {
-    return find_owner(owner) != nullptr;
+    return find_owner(owner) != nullptr ||
+           std::find(senders_.begin(), senders_.end(), owner) != senders_.end();
   }
   [[nodiscard]] bool contains_component(ComponentHandle component) const noexcept {
     return find_component(component) != nullptr;
@@ -184,6 +201,7 @@ private:
   }
 
   std::vector<Owner> owners_;
+  std::vector<OwnerHandle> senders_;
   bool dispatching_{false};
 };
 

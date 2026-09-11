@@ -2,6 +2,7 @@
 
 #include "off/cutscene/command_pass.hpp"
 #include "off/graphics/intro_runtime.hpp"
+#include "off/runtime/intro_live_target_registry.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -23,6 +24,66 @@ struct FirstCutCommandSessionServices {
   std::function<std::optional<std::uint64_t>(std::string_view)> resolve_name;
   std::function<void(std::uint64_t, std::uint16_t, std::uint32_t,
                      std::uint64_t)> direct_dispatch;
+};
+
+// Admits only the already-prepared first-cut command targets into the shared
+// live-target boundary. It is deliberately independent of event registration
+// and target behavior: callers provide the synchronous owner/component
+// dispatches after recovering them. The router must outlive every command
+// session built with command_session_services().
+class FirstCutRuntimeCommandRouter final {
+public:
+  explicit FirstCutRuntimeCommandRouter(const graphics::IntroRuntime& runtime)
+      : sender_(sender_from(runtime)) {
+    for (const auto& target : runtime.first_cut_command_target_provenance()) {
+      targets_.register_owner({.owner = target.owner.value,
+                               .authored_reference = target.authored_reference,
+                               .name = {}});
+    }
+    targets_.register_sender(sender_);
+  }
+
+  FirstCutRuntimeCommandRouter(const FirstCutRuntimeCommandRouter&) = delete;
+  FirstCutRuntimeCommandRouter& operator=(const FirstCutRuntimeCommandRouter&) = delete;
+  FirstCutRuntimeCommandRouter(FirstCutRuntimeCommandRouter&&) = delete;
+  FirstCutRuntimeCommandRouter& operator=(FirstCutRuntimeCommandRouter&&) = delete;
+
+  [[nodiscard]] std::uint64_t sender() const noexcept { return sender_; }
+  [[nodiscard]] std::optional<std::uint64_t>
+  resolve_reference(std::uint32_t reference) const noexcept {
+    return targets_.resolve_reference(reference);
+  }
+
+  [[nodiscard]] FirstCutCommandSessionServices command_session_services(
+      runtime::IntroLiveTargetRegistry::DispatchServices dispatch) {
+    if (!dispatch.direct_target || !dispatch.direct_component) {
+      throw std::runtime_error("first-cut runtime command router dispatch is incomplete");
+    }
+    return {
+        .resolve_reference = [this](std::uint32_t reference) {
+          return resolve_reference(reference);
+        },
+        .resolve_name = {},
+        .direct_dispatch = [this, dispatch = std::move(dispatch)](
+                               std::uint64_t target, std::uint16_t event,
+                               std::uint32_t argument, std::uint64_t sender) {
+          targets_.dispatch(target, event, argument, sender, dispatch);
+        },
+    };
+  }
+
+private:
+  [[nodiscard]] static std::uint64_t sender_from(
+      const graphics::IntroRuntime& runtime) {
+    const auto* player = runtime.first_cut_player_prepared_state();
+    if (player == nullptr || player->list_owner.value == 0U) {
+      throw std::runtime_error("first-cut runtime command router requires prepared list owner");
+    }
+    return player->list_owner.value;
+  }
+
+  runtime::IntroLiveTargetRegistry targets_;
+  std::uint64_t sender_{};
 };
 
 // Binds CommandPass to the checked first-cut command records and the runtime's

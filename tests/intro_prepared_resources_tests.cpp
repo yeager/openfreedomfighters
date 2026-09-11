@@ -3,6 +3,7 @@
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_renderer_resource_envelope.hpp"
 #include "off/graphics/intro_runtime.hpp"
+#include "off/cutscene/first_cut_command_session.hpp"
 #include "off/graphics/normal_intro_scene_session.hpp"
 #include "off/graphics/intro_accepted_picture_registry.hpp"
 #include "off/graphics/intro_first_cut_accepted_picture_registry.hpp"
@@ -1354,6 +1355,30 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                     target.resource==host.directory_resource_mapping()[*source];
               }),
               "first-cut command targets retain unique source-backed live owner provenance without dispatch");
+        off::cutscene::FirstCutRuntimeCommandRouter command_router{host};
+        check(command_router.sender()==player->list_owner.value &&
+              std::ranges::all_of(command_targets,[&](const auto& target) {
+                return command_router.resolve_reference(target.authored_reference)==
+                    std::optional<std::uint64_t>{target.owner.value};
+              }),
+              "first-cut command router resolves only prepared source-backed live targets");
+        if(!command_targets.empty()) {
+          std::vector<std::uint64_t> routed_owners;
+          auto routing_services=command_router.command_session_services({
+              .direct_target=[&](std::uint64_t target,std::uint16_t,std::uint32_t,
+                                 std::uint64_t sender) {
+                routed_owners.push_back(target);
+                check(sender==command_router.sender(),
+                      "first-cut command router preserves the prepared list sender");
+              },
+              .direct_component=[](std::uint64_t,std::uint64_t,std::uint16_t,
+                                   std::uint32_t,std::uint64_t) {},
+          });
+          routing_services.direct_dispatch(command_targets.front().owner.value,0x401U,0U,
+                                           command_router.sender());
+          check(routed_owners==std::vector<std::uint64_t>{command_targets.front().owner.value},
+                "first-cut command router sends a resolved target through the supplied live boundary");
+        }
         auto initialization=host.first_cut_player_initialization();
         check(!initialization.phase_one_complete() && !initialization.phase_two_complete(),
               "first-cut lifecycle boundary is built from live reader state but remains cold");

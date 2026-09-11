@@ -539,6 +539,14 @@ not expose a source address as an owner identity, resolve a name, enroll an
 event or dispatch a command; those behaviors still require recovered live
 target semantics.
 
+`FirstCutRuntimeCommandRouter` is the corresponding lifetime-bound bridge for
+an eventual `FirstCutCommandSession`. It registers those checked targets and
+the prepared list owner as a sender without inventing an authored reference for
+that sender. The host supplies synchronous target and component dispatch
+callbacks; a missing callback is an error. The router does not register events,
+infer name lookup, start a clock, or provide target behavior, and must outlive
+the session that uses its resolver callbacks.
+
 `FirstCutPlayerInitialization` is the separate lifecycle boundary for that
 player; it is not the source-65 external-fade `CutSequenceList`. Its phase one
 visits the five commands in reverse source order, then reads the list, registers

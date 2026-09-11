@@ -248,6 +248,8 @@ int main() {
     targets.register_owner({.owner = 100U, .authored_reference = 9U, .name = "leader"});
     targets.register_owner({.owner = 200U, .authored_reference = 10U, .name = "sender"});
     targets.register_owner({.owner = 300U, .authored_reference = 11U, .name = ""});
+    targets.register_sender(500U);
+    targets.register_sender(500U);
     targets.register_component(100U, 101U);
     targets.register_component(100U, 102U, false);
     targets.register_component(100U, 103U);
@@ -265,7 +267,8 @@ int main() {
         .direct_target = [&](std::uint64_t target, std::uint16_t event, std::uint32_t argument,
                              std::uint64_t sender) {
           target_trace.push_back("target");
-          check(target == 100U && event == 0x402U && argument == 55U && sender == 200U);
+          check(target == 100U && event == 0x402U && argument == 55U &&
+                (sender == 200U || sender == 500U));
           rejects([&] { targets.register_component(100U, 104U); });
           rejects([&] { targets.dispatch(100U, event, argument, sender, target_services); });
         },
@@ -276,6 +279,9 @@ int main() {
         },
     };
     targets.dispatch(100U, 0x402U, 55U, 200U, target_services);
+    check(target_trace == std::vector<std::string>({"target", "component:101", "component:103"}));
+    target_trace.clear();
+    targets.dispatch(100U, 0x402U, 55U, 500U, target_services);
     check(target_trace == std::vector<std::string>({"target", "component:101", "component:103"}));
     targets.set_component_eligible(102U, true);
     target_trace.clear();
@@ -300,7 +306,8 @@ int main() {
           !targets.contains_component(103U));
     targets.unregister_owner(100U);
     check(!targets.contains_owner(100U) && !targets.contains_component(101U) &&
-          targets.resolve_reference(9U) == std::nullopt && targets.resolve_name("leader") == std::nullopt);
+          targets.resolve_reference(9U) == std::nullopt && targets.resolve_name("leader") == std::nullopt &&
+          targets.contains_owner(500U));
     rejects([&] { targets.dispatch(100U, 0x402U, 55U, 200U, target_services); });
     rejects([&] { targets.dispatch(200U, 0x402U, 55U, 100U, target_services); });
     targets.register_owner({.owner = 400U, .authored_reference = 12U, .name = "ephemeral"});
