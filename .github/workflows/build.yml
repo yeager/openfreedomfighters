@@ -93,7 +93,12 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
           ninja -C build
       - name: Test
-        run: LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ctest --test-dir build -j4 --output-on-failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ctest --test-dir build -j4 --output-on-failure \
+            --output-junit ctest-results.xml
+          python3 -c 'import sys, xml.etree.ElementTree as ET; skipped=[case.attrib.get("name", "unnamed") for case in ET.parse("ctest-results.xml").iter("testcase") if case.find("skipped") is not None]; sys.exit("Skipped CTest cases: " + ", ".join(skipped) if skipped else 0)'
       - name: Verify install layout
         shell: bash
         run: |

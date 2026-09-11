@@ -36,7 +36,9 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           ninja -C build
-          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ctest --test-dir build -j4 --output-on-failure
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a ctest --test-dir build -j4 --output-on-failure \
+            --output-junit ctest-results.xml
+          python3 -c 'import sys, xml.etree.ElementTree as ET; skipped=[case.attrib.get("name", "unnamed") for case in ET.parse("ctest-results.xml").iter("testcase") if case.find("skipped") is not None]; sys.exit("Skipped CTest cases: " + ", ".join(skipped) if skipped else 0)'
       - name: Package
         run: |
           cmake --install build --prefix package
