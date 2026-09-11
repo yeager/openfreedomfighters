@@ -872,6 +872,12 @@ first-cut initialization phases through a strict cold adapter. Its bindings are
 retained list, camera, sequence, and picture identities from the prepared owned
 scene; the report exposes counts and completion state only.
 
+The report also profiles the closed receiver's ordered nonnegative command
+positions as aggregate count, distinct-position count, final position, and a
+position-only digest. It does not print event identities, targets, arguments,
+or names. This is timing evidence for a future clock-driven player, not a
+substitute timer.
+
 The adapter does not provide a scheduler, clock, scene host, event dispatcher,
 audio output, or renderer. It is evidence that the recovered phase boundaries
 can consume the prepared source-backed state, not evidence that the original

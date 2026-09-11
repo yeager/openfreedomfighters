@@ -1,4 +1,5 @@
 #include "off/cutscene/first_cut_player_initialization.hpp"
+#include "off/cutscene/first_cut_timeline_profile.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -91,6 +92,14 @@ int main() {
             session.receiver().commands()[1].timeline_position == 1U &&
             session.receiver().commands()[2].timeline_position == 4U,
         "session alone binds first-cut command admission and never starts playback");
+  const auto timeline=off::cutscene::profile_first_cut_timeline(session.receiver().commands());
+  check(timeline.command_count==3U && timeline.distinct_positions==2U &&
+            timeline.final_position==4 && timeline.position_digest!=0U,
+        "timeline profile retains only ordered timing evidence from the closed receiver");
+  std::vector<off::data::GmsIntroCutCommandSource> unordered=session.receiver().commands();
+  std::swap(unordered[0],unordered[2]);
+  rejects([&] { static_cast<void>(off::cutscene::profile_first_cut_timeline(unordered)); },
+      "timeline profile rejects an unordered receiver sequence");
   off::cutscene::FirstCutPlayerSession observed({42U, {10U, 11U, 12U, 13U, 14U}, session_list, session_sequence});
   const auto observation=off::cutscene::observe_first_cut_player_initialization(
       observed,{.active_camera_list=88U,.cut_sequence_object=99U,.member=55U,

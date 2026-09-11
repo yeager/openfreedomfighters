@@ -223,8 +223,9 @@ menu transition.
 - `--probe-first-cut-initialization` extends that check through the two
   recovered first-cut initialization phases, using retained runtime identities
   from the owned installation while recording aggregate lifecycle evidence.
-  It is not a cutscene player: no clock, host callback, audio, or rendering is
-  started. See [INTRO_BOOTSTRAP.md](docs/INTRO_BOOTSTRAP.md#first-cut-initialization-probe).
+  It also verifies the closed command receiver's timing order without exposing
+  commands. It is not a cutscene player: no clock, host callback, audio, or
+  rendering is started. See [INTRO_BOOTSTRAP.md](docs/INTRO_BOOTSTRAP.md#first-cut-initialization-probe).
 - `--probe-intro-renderer-payload` relocates the retained intro renderer
   payload through the source GMS slot domain and reports aggregate workspace
   structure. It does not create a renderer container, submit a frame, or

@@ -6,6 +6,7 @@
 #include "off/data/first_cut_list_component_reader.hpp"
 #include "off/data/first_cut_command_component_reader.hpp"
 #include "off/cutscene/first_cut_player_initialization.hpp"
+#include "off/cutscene/first_cut_timeline_profile.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_renderer_payload_observation.hpp"
@@ -318,6 +319,7 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
         off::graphics::read_intro_named_global_word_pair(envelope));
   }
   std::optional<off::cutscene::FirstCutPlayerInitializationObservation> initialization_observation;
+  std::optional<off::cutscene::FirstCutTimelineProfile> timeline_observation;
   if(run_initialization) {
     const auto* prepared=intro.first_cut_player_prepared_state();
     if(!prepared || prepared->camera_owner.value==0U || prepared->sequence_owner.value==0U ||
@@ -341,6 +343,8 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
        !initialization_observation->active_camera_list_resolved ||
        !initialization_observation->cut_sequence_object_resolved)
       throw std::runtime_error("first-cut initialization probe observed an incomplete cold lifecycle");
+    timeline_observation.emplace(off::cutscene::profile_first_cut_timeline(
+        first_cut->receiver().commands()));
   }
   std::cout << "First-cut cold probe verified\n"
             << "reader-states=2\n"
@@ -402,6 +406,10 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
               << "phase-one-command-invocations=" << initialization_observation->phase_one_command_invocations << '\n'
               << "phase-two-command-invocations=" << initialization_observation->phase_two_command_invocations << '\n'
               << "ordered-command-registrations=" << initialization_observation->ordered_command_registrations << '\n'
+              << "timeline-command-count=" << timeline_observation->command_count << '\n'
+              << "timeline-distinct-positions=" << timeline_observation->distinct_positions << '\n'
+              << "timeline-final-position=" << timeline_observation->final_position << '\n'
+              << "timeline-position-digest=" << timeline_observation->position_digest << '\n'
               << "phase-one=cold-complete\n"
               << "phase-two=cold-complete\n";
   } else {
