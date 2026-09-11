@@ -91,7 +91,8 @@ for a portable installation.
   it must admit lifecycle, the first cut, camera/view, drawing and audio in one
   ordinary-frame order. Its reader-stage session is connected; later lifecycle
   and rendering stages are not implemented yet.
-- F10 opens a working graphics-settings panel. It uses a project-authored,
+- F10 opens a working graphics-settings panel. Its 50--200% render-scale row
+  uses an internal GPU target and full-resolution UI composition. It uses a project-authored,
   letterboxed menu composition and restrained text focus, informed by private
   observation without copying retail UI pixels or wording. Text follows the
   system locale and uses in-memory retail UI fonts when coverage is available,
@@ -119,9 +120,10 @@ These are targets, not working renderers:
 - **Modern:** higher resolutions, improved lighting, shadows and filtering.
 - **Modern+:** optional HD assets and future DLSS 4.5, AMD FSR, and Intel XeSS-SR backends on supported hardware.
 
-The settings panel has a mode selector. It records DLSS, FSR, and XeSS requests but
-uses portable temporal or native rendering until a verified native adapter is
-available. HD asset support is not implemented. See [Modern graphics](docs/MODERN_GRAPHICS.md),
+The settings panel has a mode selector and a working 50--200% render-scale
+control. It records DLSS, FSR, and XeSS requests but uses portable temporal or
+native rendering until a verified native adapter is available. HD asset support
+is not implemented. See [Modern graphics](docs/MODERN_GRAPHICS.md),
 [DLSS](docs/DLSS.md), [FSR](docs/FSR.md), and [XeSS](docs/XESS.md) for scope and licensing.
 Project-authored UI strings already select the system locale across 20 locales,
 including Swedish. Complete game-text localization, shaping and full retail-font

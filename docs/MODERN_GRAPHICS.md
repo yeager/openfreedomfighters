@@ -76,6 +76,12 @@ exposure, jitter, reactive-mask, and HUD-less inputs; UI is composed afterward a
 output resolution. This contract allows quality-equivalent fallbacks on AMD,
 Intel, Apple, and Steam Deck hardware without affecting simulation state.
 
+The existing F10 render-scale control is already portable: scene content renders
+to a 50--200% internal SDL GPU target and is linearly scaled to the output,
+while UI remains at output resolution. It is a fixed user-selected scale, not
+dynamic resolution, temporal reconstruction, or a claim of original-engine
+behavior.
+
 Modern+ targets the documented DLSS 4.5 release as an optional NVIDIA RTX backend.
 The integration must use NVIDIA's official SDK and redistributable binaries, expose
 the supported quality presets, and report the loaded runtime version exactly.

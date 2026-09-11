@@ -95,9 +95,10 @@ The complete overlay is organized into these sections:
 - **Resolution:** native, fixed-scale, or dynamic rendering; scale bounds and
   target presentation rate. UI and subtitles render at output resolution.
 - **Anti-aliasing and upscaling:** reference, FXAA, TAA, DLAA, portable temporal
-  upscaling, and Modern+ DLSS 4.5 Super Resolution with quality and sharpening;
-  a future FSR row appears only after a real AMD adapter exists. Unsupported
-  combinations are disabled or resolved with a visible reason.
+  upscaling, and Modern+ DLSS 4.5 Super Resolution with quality and sharpening.
+  DLSS, FSR, and XeSS requests remain visible but resolve with a reason until a
+  real adapter is active. Unsupported combinations are disabled or resolved
+  with a visible reason.
 - **Textures:** retail or independently licensed Modern+ source, bilinear,
   trilinear, anisotropy, and mip bias.
 - **Shadows:** reference/off/modern mode, quality, map resolution, cascades,
@@ -111,6 +112,16 @@ fallback reason. Destructive-looking actions such as clearing a shader cache
 require a separate confirmation and must not share the normal Apply action.
 Preset selection may populate individual rows, but later row edits mark the
 preset as Custom rather than silently changing those edits.
+
+## Current render-scale implementation
+
+The current 50--200% F10 render-scale setting is applied by rendering scene
+content to an internal SDL GPU color target at the resolved scaled dimensions.
+That target is linearly blitted to the output target; the overlay is then drawn
+at output resolution. This applies to the current source-backed intro picture
+and diagnostic scene paths. It is not evidence of the original engine's
+resolution policy, dynamic-resolution behavior, or a vendor super-resolution
+backend.
 
 Rows may appear before their renderer implementation is complete only when they
 are visibly disabled and explain the missing capability. A setting must never

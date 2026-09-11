@@ -66,6 +66,15 @@ struct GpuScene {
   Uint32 depth_height{0};
 };
 
+// The scene may render below or above presentation resolution. UI remains on
+// the presentation target and is therefore never softened by render scaling.
+struct GpuRenderScaleTarget {
+  SDL_GPUTexture *texture{nullptr};
+  Uint32 width{0};
+  Uint32 height{0};
+  SDL_GPUTextureFormat format{SDL_GPU_TEXTUREFORMAT_INVALID};
+};
+
 struct OverlayBatch {
   struct DrawRange {
     std::size_t first_vertex{};
@@ -141,6 +150,54 @@ void release_scene(SDL_GPUDevice *device, GpuScene &scene) {
       SDL_ReleaseGPUBuffer(device, mesh.vertex_buffer);
   }
   scene = {};
+}
+
+void release_render_scale_target(SDL_GPUDevice *device,
+                                 GpuRenderScaleTarget &target) {
+  if (target.texture != nullptr)
+    SDL_ReleaseGPUTexture(device, target.texture);
+  target = {};
+}
+
+[[nodiscard]] bool ensure_render_scale_target(
+    SDL_GPUDevice *device, Uint32 width, Uint32 height,
+    SDL_GPUTextureFormat format, GpuRenderScaleTarget &target) {
+  if (width == 0 || height == 0 || format == SDL_GPU_TEXTUREFORMAT_INVALID)
+    return false;
+  if (target.texture != nullptr && target.width == width &&
+      target.height == height && target.format == format)
+    return true;
+  if (target.texture != nullptr) {
+    if (!SDL_WaitForGPUIdle(device))
+      return false;
+    release_render_scale_target(device, target);
+  }
+  const SDL_GPUTextureCreateInfo info{
+      .type = SDL_GPU_TEXTURETYPE_2D,
+      .format = format,
+      .usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
+               SDL_GPU_TEXTUREUSAGE_SAMPLER,
+      .width = width,
+      .height = height,
+      .layer_count_or_depth = 1,
+      .num_levels = 1,
+      .sample_count = SDL_GPU_SAMPLECOUNT_1};
+  target.texture = SDL_CreateGPUTexture(device, &info);
+  if (target.texture == nullptr)
+    return false;
+  target.width = width;
+  target.height = height;
+  target.format = format;
+  return true;
+}
+
+[[nodiscard]] std::optional<Uint32>
+scaled_dimension(Uint32 extent, std::uint16_t percent) {
+  const auto product = static_cast<std::uint64_t>(extent) * percent;
+  const auto rounded = (product + 99U) / 100U;
+  if (rounded == 0U || rounded > std::numeric_limits<Uint32>::max())
+    return std::nullopt;
+  return static_cast<Uint32>(rounded);
 }
 
 void release_overlay(SDL_GPUDevice *device, GpuOverlay &overlay) {
@@ -1252,6 +1309,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     static_cast<void>(menu.handle_key(ui::GraphicsMenuKey::f10, true, false));
   }
   Mode active_mode = mode;
+  GpuRenderScaleTarget render_scale_target;
 
   RuntimeResult result{
       .success = true,
@@ -1439,10 +1497,39 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         break;
       }
     }
-    SDL_GPUTexture *frame_target =
+    SDL_GPUTexture *presentation_target =
         capture_texture != nullptr ? capture_texture : swapchain;
+    const auto render_scale = menu.live_effective().render_scale_percent;
+    const auto scaled_width = scaled_dimension(swapchain_width, render_scale);
+    const auto scaled_height = scaled_dimension(swapchain_height, render_scale);
+    if (!scaled_width || !scaled_height) {
+      result = {.success = false, .message = "render scale dimensions are unsupported"};
+      SDL_SubmitGPUCommandBuffer(command);
+      if (capture_transfer != nullptr)
+        SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
+      if (capture_texture != nullptr)
+        SDL_ReleaseGPUTexture(device, capture_texture);
+      break;
+    }
+    SDL_GPUTexture *content_target = presentation_target;
+    if (render_scale != 100U) {
+      const auto format = SDL_GetGPUSwapchainTextureFormat(device, window);
+      if (!ensure_render_scale_target(device, *scaled_width, *scaled_height,
+                                      format, render_scale_target)) {
+        result = failure("render scale target creation failed");
+        SDL_SubmitGPUCommandBuffer(command);
+        if (capture_transfer != nullptr)
+          SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
+        if (capture_texture != nullptr)
+          SDL_ReleaseGPUTexture(device, capture_texture);
+        break;
+      }
+      content_target = render_scale_target.texture;
+    }
+    const Uint32 content_width = render_scale == 100U ? swapchain_width : *scaled_width;
+    const Uint32 content_height = render_scale == 100U ? swapchain_height : *scaled_height;
     if (scene && swapchain != nullptr &&
-        !ensure_scene_depth(device, swapchain_width, swapchain_height, gpu)) {
+        !ensure_scene_depth(device, content_width, content_height, gpu)) {
       result = failure("scene depth target creation failed");
       SDL_SubmitGPUCommandBuffer(command);
       if (capture_transfer != nullptr)
@@ -1483,7 +1570,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     if (intro_preview_diagnostic != nullptr) {
       try {
         diagnostic_submission.emplace(IntroPreviewDiagnosticSubmission::build(
-            *intro_preview_diagnostic, swapchain_width, swapchain_height,
+            *intro_preview_diagnostic, content_width, content_height,
             SDL_GetGPUSwapchainTextureFormat(device, window)));
         diagnostic_intro_frame = gpu_intro->prepare(command,
                                                      diagnostic_submission->draws());
@@ -1499,7 +1586,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     }
     if (swapchain != nullptr) {
       const SDL_GPUColorTargetInfo target{
-          .texture = frame_target,
+          .texture = content_target,
           .clear_color = active_mode == Mode::original
                              ? SDL_FColor{0, 0, 0, 1}
                              : SDL_FColor{0.015F, 0.025F, 0.05F, 1},
@@ -1561,7 +1648,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
           }
           if (bound_instance != draw.instance_index) {
             const auto scene_uniform = graphics::make_scene_diagnostic_matrices(
-                *scene, draw.instance_index, swapchain_width, swapchain_height);
+                *scene, draw.instance_index, content_width, content_height);
             std::array<float, 32> packed{};
             std::copy(scene_uniform.projection_view.begin(),
                       scene_uniform.projection_view.end(), packed.begin());
@@ -1579,9 +1666,24 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         diagnostic_intro_frame->draw(command, pass);
       SDL_EndGPURenderPass(pass);
 
+      if (content_target != presentation_target) {
+        const SDL_GPUBlitInfo scale_blit{
+            .source = {.texture = content_target,
+                       .w = content_width,
+                       .h = content_height},
+            .destination = {.texture = presentation_target,
+                            .w = swapchain_width,
+                            .h = swapchain_height},
+            .load_op = SDL_GPU_LOADOP_DONT_CARE,
+            .flip_mode = SDL_FLIP_NONE,
+            .filter = SDL_GPU_FILTER_LINEAR,
+            .cycle = false};
+        SDL_BlitGPUTexture(command, &scale_blit);
+      }
+
       if (!overlay_batch.vertices.empty()) {
         const SDL_GPUColorTargetInfo overlay_target{
-            .texture = frame_target,
+          .texture = presentation_target,
             .load_op = SDL_GPU_LOADOP_LOAD,
             .store_op = SDL_GPU_STOREOP_STORE};
         SDL_GPURenderPass *overlay_pass =
@@ -1764,6 +1866,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   gpu_intro.reset();
   release_overlay(device, overlay);
   release_startup_images(device, gpu_startup);
+  release_render_scale_target(device, render_scale_target);
   release_scene(device, gpu);
   SDL_ReleaseWindowFromGPUDevice(device, window);
   SDL_DestroyGPUDevice(device);
