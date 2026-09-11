@@ -9,6 +9,7 @@
 #include "off/data/first_cut_list_component_reader.hpp"
 #include "off/data/first_cut_command_component_reader.hpp"
 #include "off/data/loc_string_index.hpp"
+#include "off/data/loc_catalog.hpp"
 #include "off/data/zip_archive.hpp"
 #include "off/audio/duration_comparison.hpp"
 #include "off/audio/soundtrack_catalog.hpp"
@@ -38,6 +39,7 @@
 #include "off/runtime/startup_scene_package_source.hpp"
 #include "off/ui/retail_ui_fonts.hpp"
 #include "off/ui/retail_ui_textures.hpp"
+#include "off/ui/retail_localization_cache.hpp"
 
 #include <charconv>
 #include <algorithm>
@@ -885,6 +887,39 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
   return std::filesystem::path{home} / ".openfreedomfighters";
 }
 
+void initialize_private_owned_localization_cache(
+    const off::data::InstallVerification& verification) noexcept {
+  try {
+    const auto cache_root = off::platform::application_deep_audit_cache_root();
+    if (cache_root.empty()) return;
+    const auto source_set = off::data::verified_owned_loc_source_set(verification.root);
+    if (!source_set) return;
+    const auto installation_identity = "steam-pc-" + verification.executable_sha256;
+    const auto result = off::ui::l10n::ensure_retail_localization_snapshot(
+        cache_root, installation_identity, off::data::loc_catalog_parser_identity,
+        *source_set, [root = verification.root, expected_source_set = *source_set] {
+          const auto catalog = off::data::extract_verified_owned_loc_catalog(root);
+          if (!catalog || catalog->source_set != expected_source_set) {
+            return std::optional<std::vector<off::ui::l10n::RetailSourceString>>{};
+          }
+          std::vector<off::ui::l10n::RetailSourceString> strings;
+          strings.reserve(catalog->values.size());
+          for (std::size_t index{}; index < catalog->values.size(); ++index) {
+            strings.push_back({static_cast<std::uint64_t>(index), catalog->values[index]});
+          }
+          return std::optional<std::vector<off::ui::l10n::RetailSourceString>>{
+              std::move(strings)};
+        });
+    // Intentionally no text, member name, ordinal, or cache path is reported.
+    // The cache is an extraction substrate only; original runtime lookup is
+    // still evidence-gated and consumes none of these values today.
+    static_cast<void>(result);
+  } catch (const std::exception&) {
+    // Localization extraction is optional until the native lookup contract is
+    // recovered.  It must never weaken verified game-data startup.
+  }
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -1349,6 +1384,7 @@ int main(int argc, char **argv) {
   if (verify_only) {
     return 0;
   }
+  initialize_private_owned_localization_cache(*verification);
   if (scene_summary) {
     const auto &summary = *scene_summary;
     std::cout << "Diagnostic scene geometry: " << summary.local_primitive

@@ -45,9 +45,10 @@ Translation catalogs are keyed by stable semantic IDs. Original retail strings a
 
 ## Private retail-text extraction
 
-`RetailLocalizationCache` is the local-only storage boundary for a future
-reviewed retail-text decoder. At first use, it writes a complete source catalog
-only after a verified decoder provides canonical ordered display-text records.
+`RetailLocalizationCache` is the local-only storage boundary for the reviewed
+Steam-English LOC display-text decoder. At first normal start, after full
+installation verification, it writes a complete source catalog from canonical
+ordered display-text records.
 The catalog binds the installation and decoder identities, validates its entire
 record sequence, and publishes a checked staging file atomically. A matching
 complete cache is reused; a failed extraction leaves no partial catalog.
@@ -62,12 +63,12 @@ itself make a derivative translation copyright-free, so translated retail text
 also remains private unless its contributor has a documented right to publish
 it.
 
-The present `LOC` scanner is not such a decoder. It inventories raw printable
-byte runs but does not establish text records, English source language,
-encoding, keys, or lookup behavior. It must not populate this cache or drive
-game text. Once the LOC grammar is recovered, startup may call the cache after
-successful game-data verification using the verified archive snapshot. The
-optional soundtrack is not part of the text-cache identity.
+The legacy `LOC` scanner is not this decoder; it remains an isolated raw-run
+inventory. The decoder verifies complete member framing and UTF-8 source
+fields, derives its source set from normalized logical member IDs, and drives
+only the private cache. It does not implement original key lookup, language
+selection, formatting, or game-text presentation. The optional soundtrack is
+not part of the text-cache identity.
 
 ## Clean-room delivery plan
 

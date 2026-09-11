@@ -150,7 +150,9 @@ is not implemented. See [Modern graphics](docs/MODERN_GRAPHICS.md),
 [DLSS](docs/DLSS.md), [FSR](docs/FSR.md), and [XeSS](docs/XESS.md) for scope and licensing.
 Project-authored UI strings already select the system locale across 20 locales,
 including Swedish. Complete game-text localization, shaping and full retail-font
-coverage remain planned.
+coverage remain planned. After a verified normal start, a private local cache
+can extract supported English LOC source records under opaque stable IDs; it
+does not enable retail-text lookup or publish game text.
 
 ## Build and run
 

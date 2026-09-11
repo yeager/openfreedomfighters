@@ -4,16 +4,30 @@
 owner-local data are prepared during scene construction, but that is not an
 animation player and does not activate the intro.
 
-## Deferred readers are not its input
+## Deferred reader boundary
 
 The supported intro contains 227 deferred records associated with MatPosAnim
 owners. Each exposes one or more attachment delimiters before its owner
-terminator (249 delimiters in total). This establishes only that the compact
-owner block has an attachment tail; it does not establish the payload grammar,
-the dispatch target, or the callback order. Consequently, the normal
-deferred-reader bracket still supplies no verified MatPosAnim component cursor.
-A deferred owner tail, attachment name, or neighbouring record must not be used
-as a substitute input.
+terminator (249 delimiters in total). The recovered reader admits only the
+205 ordinary-geometry owners with exactly one `ZGEOM_MatPosAnim` attachment in
+slot zero and one complete 98- or 103-byte source record. Every other MatPos
+owner remains outside this reader boundary.
+
+The reader requires the existing owner-local `KEYS` child before it decodes
+anything. It reads one fixed component payload, then the owner boundary
+consumes exactly one delimiter and the terminal. A malformed tag, continuation,
+length, second component, foreign/lost owner or trailing byte rejects the whole
+record without publishing reader state. This is not a generic compact-value or
+attachment parser.
+
+The retained deferred state comprises the observed booleans, raw scalar,
+narrowed three-double vector, low-16-bit word, raw signed `R0`/`R1`, raw `K`,
+and the optional final boolean of the 103-byte form. For ordinary geometry,
+`K` is normalized to `-1.0` after full framing validation. If the canonical
+resource has bit `0x00800000`, its owner refresh receipt is recorded once;
+otherwise no refresh is emitted. The reader does not resolve references,
+sample `KEYS`, apply transforms, run animation/lifecycle phases, emit events,
+or touch rendering.
 
 `DeferredAttachmentDispatchClassifier` records this boundary over an already
 bounded compact block: either its terminal occurs before the first attachment

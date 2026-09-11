@@ -1128,6 +1128,14 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                      block.subspan(sizeof(std::uint32_t))))
                 host.apply_supported_basic_group_owner_deferred_reader(work);
             }
+            if(group_source.source_type==0x00200002U && !group_source.source_variant &&
+                group_source.attachments.size()==1U &&
+                host.resources().sources().attachment_identifier(work.source_directory_index,0U)==
+                    "ZGEOM_MatPosAnim") {
+              const auto block=host.resources().sources().deferred_source_block(work.source_directory_index);
+              if(block.size()==98U || block.size()==103U)
+                host.apply_supported_matpos_deferred_reader(work);
+            }
             if(work.source_directory_index==466U) {
               bool supported_external_payload{};
               try {
@@ -1229,6 +1237,22 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                     (host.constructed_group_owner(source)->flags&0x03000000U)==0x03000000U;
               }),
               "basic group readers apply only canonical scalar and flag state after proving an empty component tail");
+        check(host.matpos_deferred_reader_states().empty() ?
+                  host.matpos_owner_refresh_receipts().empty() :
+                  std::ranges::all_of(host.matpos_deferred_reader_states(),[&](const auto& entry) {
+                    const auto& [source,state]=entry;
+                    const auto found=host.matpos_owner_refresh_receipts().find(source);
+                    return host.resources().sources().directory()[source].source_type==0x00200002U &&
+                        state.source_directory_index==source && state.owner==host.source_handle(source) &&
+                        state.resource==host.directory_resource_mapping()[source] &&
+                        state.component_index==host.owner_components(state.owner).front() &&
+                        state.values.k==-1.0F &&
+                        ((state.refresh_count==0U && found==host.matpos_owner_refresh_receipts().end()) ||
+                         (state.refresh_count==1U && found!=host.matpos_owner_refresh_receipts().end() &&
+                          found->second.owner==state.owner && found->second.resource==state.resource &&
+                          found->second.source_offset==state.source_offset));
+                  }),
+              "MatPos reader fixtures preserve the source gate, or normalize K before one owner-scoped refresh receipt");
         const auto& window=host.window_for_owner(host.source_handle(host.resources().window_index()));
         const auto& camera=host.camera_for_owner(host.source_handle(host.resources().camera_index()));
         const auto window_reference_resource=[&host](std::uint32_t reference)

@@ -15,6 +15,7 @@
 #include "off/data/keys_descriptor_range.hpp"
 #include "off/data/keys_backing_evaluator.hpp"
 #include "off/data/matpos_pose_evaluator.hpp"
+#include "off/data/matpos_deferred_component_reader.hpp"
 #include "off/data/keys_property_materializer.hpp"
 #include "off/data/owner_buf_keys_profile.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
@@ -1877,6 +1878,85 @@ int main() {
                       .second_group = {std::numeric_limits<float>::infinity(), 0.0F, 0.0F},
                   }),
               "MatPos pose evaluator rejects degenerate or non-finite detached samples");
+    }
+    {
+        using off::data::MatPosDeferredComponentReader;
+
+        // Synthetic values exercise only the recovered fixed payload grammar;
+        // they do not model retail authored values or an animation player.
+        const auto payload = [](bool with_optional) {
+            std::vector<std::byte> bytes;
+            const auto u32 = [&bytes](std::uint8_t tag, std::uint32_t value) {
+                bytes.push_back(static_cast<std::byte>(tag));
+                append_u32(bytes, value);
+            };
+            const auto u64 = [&bytes](std::uint8_t tag, std::uint64_t value) {
+                bytes.push_back(static_cast<std::byte>(tag));
+                for (unsigned int shift = 0U; shift < 64U; shift += 8U)
+                    bytes.push_back(static_cast<std::byte>((value >> shift) & 0xffU));
+            };
+            u32(0x03U, 2U);                         // secondary
+            u32(0x03U, 1U);                         // primary
+            u32(0x02U, std::bit_cast<std::uint32_t>(-0.0F));
+            u64(0x01U, std::bit_cast<std::uint64_t>(1.25));
+            u64(0x41U, std::bit_cast<std::uint64_t>(-2.5));
+            u64(0x41U, std::bit_cast<std::uint64_t>(3.75));
+            u32(0x03U, 0U); u32(0x03U, 1U); u32(0x03U, 2U); u32(0x03U, 3U);
+            u32(0x0aU, 0x1234beefU);
+            u32(0x03U, 0U); u32(0x03U, 9U);
+            u32(0x03U, 0x80000000U); u32(0x03U, 0x7fffffffU);
+            u32(0x02U, std::bit_cast<std::uint32_t>(42.25F));
+            if (with_optional) u32(0x03U, 7U);
+            return bytes;
+        };
+        const auto base = payload(false);
+        const auto values = MatPosDeferredComponentReader::read(base);
+        check(values.a_secondary && values.a_primary &&
+                  std::bit_cast<std::uint32_t>(values.scalar) == 0x80000000U &&
+                  values.vector == std::array<float, 3>{1.25F, -2.5F, 3.75F} &&
+                  values.controls_a == std::array<bool, 4>{false, true, true, true} &&
+                  values.word == 0xbeefU &&
+                  values.controls_b == std::array<bool, 2>{false, true} &&
+                  values.raw_r0 == std::numeric_limits<std::int32_t>::min() &&
+                  values.raw_r1 == std::numeric_limits<std::int32_t>::max() &&
+                  values.k == 42.25F && !values.control_i,
+              "MatPos deferred reader assigns every fixed 98-byte payload field without normalizing raw values");
+        const auto extended = MatPosDeferredComponentReader::read(payload(true));
+        check(extended.control_i && *extended.control_i,
+              "MatPos deferred reader accepts only the fixed optional final control in the 103-byte form");
+        {
+            auto raw = base;
+            set_u32(raw, 11U, 0x7fc01234U);
+            const auto raw_values = MatPosDeferredComponentReader::read(raw);
+            check(std::bit_cast<std::uint32_t>(raw_values.scalar) == 0x7fc01234U,
+                  "MatPos deferred reader preserves a raw scalar bit pattern without imposing animation semantics");
+        }
+
+        check_rejected([&] {
+            auto malformed = base;
+            malformed[24U] = std::byte{0x01};
+            static_cast<void>(MatPosDeferredComponentReader::read(malformed));
+        }, "MatPos deferred reader requires the recovered continuation tag on the second double");
+        check_rejected([&] {
+            auto malformed = base;
+            malformed[33U] = std::byte{0xc1};
+            static_cast<void>(MatPosDeferredComponentReader::read(malformed));
+        }, "MatPos deferred reader rejects high-bit compact tag variants");
+        check_rejected([&] {
+            auto malformed = base;
+            malformed[62U] = std::byte{0x03};
+            static_cast<void>(MatPosDeferredComponentReader::read(malformed));
+        }, "MatPos deferred reader rejects a wrong fixed word tag");
+        check_rejected([&] {
+            auto malformed = base;
+            malformed.pop_back();
+            static_cast<void>(MatPosDeferredComponentReader::read(malformed));
+        }, "MatPos deferred reader rejects a truncated fixed payload");
+        check_rejected([&] {
+            auto malformed = base;
+            malformed.push_back(std::byte{0});
+            static_cast<void>(MatPosDeferredComponentReader::read(malformed));
+        }, "MatPos deferred reader rejects trailing component bytes");
     }
     {
         using off::data::TypedValue;

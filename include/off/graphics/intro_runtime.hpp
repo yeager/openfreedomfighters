@@ -6,6 +6,7 @@
 #include "off/data/keys_backing_evaluator.hpp"
 #include "off/data/first_cut_component_payload_session.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
+#include "off/data/matpos_deferred_component_reader.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_named_global_references.hpp"
 #include "off/graphics/intro_renderer_relocation_prefix.hpp"
@@ -461,6 +462,26 @@ struct IntroFollowingVisualOwnerReaderReceipt {
 // It retains provenance only; scalar and flag effects are applied directly to
 // the canonical Group owner and no child/component behavior is invented.
 struct IntroBasicGroupOwnerReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t source_directory_index{};
+  std::uint32_t source_offset{};
+};
+// Completed state of one fixed MatPosAnim deferred attachment.  It is separate
+// from construction defaults and carries no animation, transform or event
+// behavior.
+struct IntroMatPosDeferredReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t source_directory_index{}, component_index{};
+  std::uint32_t source_offset{};
+  data::MatPosDeferredComponentValues values;
+  std::size_t refresh_count{};
+};
+// Completion evidence for the recovered no-argument MatPos owner refresh.
+// It is owner-scoped, occurs only after reader admission, and deliberately
+// does not invoke rendering, events, or lifecycle work.
+struct IntroMatPosOwnerRefreshReceipt {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
   std::size_t source_directory_index{};
@@ -999,6 +1020,9 @@ public:
   [[nodiscard]] const std::map<std::size_t,IntroFollowingVisualOwnerReaderReceipt>& following_visual_owner_reader_receipts() const noexcept {return following_visual_owner_reader_receipts_;}
   void apply_supported_basic_group_owner_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroBasicGroupOwnerReaderState>& basic_group_owner_reader_states() const noexcept {return basic_group_owner_reader_states_;}
+  void apply_supported_matpos_deferred_reader(const IntroDeferredReaderWork& work);
+  [[nodiscard]] const std::map<std::size_t,IntroMatPosDeferredReaderState>& matpos_deferred_reader_states() const noexcept { return matpos_deferred_reader_states_; }
+  [[nodiscard]] const std::map<std::size_t,IntroMatPosOwnerRefreshReceipt>& matpos_owner_refresh_receipts() const noexcept { return matpos_owner_refresh_receipts_; }
   // Atomically materialize the source-backed first-cut player state after both
   // reviewed readers. Playback services remain intentionally absent.
   void prepare_supported_first_cut_player();
@@ -1157,6 +1181,8 @@ private:
   std::optional<IntroFirstCutCameraReaderState> first_cut_camera_reader_state_;
   std::map<std::size_t,IntroFollowingVisualOwnerReaderReceipt> following_visual_owner_reader_receipts_;
   std::map<std::size_t,IntroBasicGroupOwnerReaderState> basic_group_owner_reader_states_;
+  std::map<std::size_t,IntroMatPosDeferredReaderState> matpos_deferred_reader_states_;
+  std::map<std::size_t,IntroMatPosOwnerRefreshReceipt> matpos_owner_refresh_receipts_;
   std::optional<IntroFirstCutPlayerPreparedState> first_cut_player_prepared_state_;
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;
   std::map<std::size_t,IntroFadePictureReaderState> fade_picture_reader_states_;
@@ -1201,6 +1227,7 @@ private:
   // readiness registrations for entering the global initializer.
   std::vector<IntroComponentAdmissionIdentity> supported_component_admissions_;
   void record_supported_reader_admission(const IntroDeferredReaderWork& work);
+  void unrecord_supported_reader_admission(const IntroDeferredReaderWork& work) noexcept;
   void record_supported_owner_admission(std::size_t source, IntroRuntimeHandle owner);
   void record_supported_component_admission(std::size_t component);
   [[nodiscard]] bool first_cut_fade_reader_matches(std::size_t component) const;

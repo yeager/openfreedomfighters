@@ -2,6 +2,7 @@
 #include "off/data/deferred_attachment_dispatch_shape.hpp"
 #include "off/data/basic_group_deferred_reader_shape.hpp"
 #include "off/data/basic_group_deferred_reader.hpp"
+#include "off/data/matpos_deferred_component_reader.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
 #include "off/data/first_cut_owner_reader.hpp"
 #include <algorithm>
@@ -2029,6 +2030,15 @@ void IntroRuntime::record_supported_reader_admission(const IntroDeferredReaderWo
   supported_reader_admissions_.push_back(identity);
 }
 
+void IntroRuntime::unrecord_supported_reader_admission(
+    const IntroDeferredReaderWork& work) noexcept {
+  const IntroReaderAdmissionIdentity identity{work.resource.value, work.source_offset,
+                                              work.source_directory_index};
+  const auto found = std::ranges::find(supported_reader_admissions_, identity);
+  if (found != supported_reader_admissions_.end())
+    supported_reader_admissions_.erase(found);
+}
+
 void IntroRuntime::record_supported_owner_admission(std::size_t source, IntroRuntimeHandle owner) {
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
       owner!=source_handle(source) || !sound_for_source(source).source_applied_)
@@ -3410,6 +3420,86 @@ void IntroRuntime::apply_supported_basic_group_owner_deferred_reader(
   group->flags|=0x03000000U;
   if(parsed.third_is_zero) group->flags&=~0x01000000U;
   if(parsed.fourth_is_zero) group->flags&=~0x02000000U;
+}
+
+void IntroRuntime::apply_supported_matpos_deferred_reader(
+    const IntroDeferredReaderWork& work) {
+  // This admission is intentionally narrower than the retained MatPosAnim
+  // construction family: only the observed ordinary-geometry, sole-slot form
+  // has a recovered deferred grammar.
+  if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete ||
+      !work.processed || matpos_deferred_reader_states_.contains(work.source_directory_index) ||
+      matpos_owner_refresh_receipts_.contains(work.source_directory_index) ||
+      std::ranges::find_if(deferred_reader_work_, [&](const auto& candidate) {
+        return std::addressof(candidate) == std::addressof(work);
+      }) == deferred_reader_work_.end())
+    throw std::runtime_error("MatPos deferred reader requires unique live deferred work");
+  const auto& source = resources_.sources().directory().at(work.source_directory_index);
+  const auto owner = source_handle(work.source_directory_index);
+  const auto components = owner_components(owner);
+  const auto* object = constructed_object_owner(work.source_directory_index);
+  if (source.source_type != 0x00200002U || source.source_variant ||
+      source.attachments.size() != 1U || components.size() != 1U ||
+      resources_.sources().attachment_identifier(work.source_directory_index, 0U) != "ZGEOM_MatPosAnim" ||
+      source.deferred_source_offset != work.source_offset ||
+      directory_resource_mapping_.at(work.source_directory_index) != work.resource ||
+      !associated_resource_owner(work.resource) || *associated_resource_owner(work.resource) != owner ||
+      !object || object->owner != owner || object->resource != work.resource ||
+      !scene_lifetime_keys_registry_ ||
+      !scene_lifetime_keys_registry_->resolve_required_keys(owner.value, {'K','E','Y','S'}))
+    throw std::runtime_error("MatPos deferred reader source gate is unsupported");
+  const auto component_index = components.front();
+  const auto& component = components_.at(component_index);
+  if (!component.constructed() || component.source().directory_index != work.source_directory_index ||
+      component.source().attachment_index != 0U || component.source().factory_name != "ZGEOM_MatPosAnim" ||
+      component.state().attached_owner != owner.value)
+    throw std::runtime_error("MatPos deferred reader component gate is unsupported");
+
+  const auto block = resources_.sources().deferred_source_block(work.source_directory_index);
+  if ((block.size() != 98U && block.size() != 103U) ||
+      block.size() < sizeof(std::uint32_t))
+    throw std::runtime_error("MatPos deferred reader framing is unsupported");
+  const auto declared_size = [&block] {
+    std::uint32_t value{};
+    for (std::size_t index{}; index < sizeof(value); ++index)
+      value |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(block[index])) << (8U * index);
+    return value;
+  }();
+  if (declared_size != block.size() ||
+      std::to_integer<std::uint8_t>(block[block.size()-2U]) != 0x06U ||
+      std::to_integer<std::uint8_t>(block.back()) != 0xffU)
+    throw std::runtime_error("MatPos deferred reader framing is unsupported");
+  // The component parser receives exactly its delimiter-free payload.  The
+  // owner boundary validates and consumes the sole delimiter and terminator.
+  auto values = data::MatPosDeferredComponentReader::read(
+      block.subspan(sizeof(std::uint32_t), block.size()-sizeof(std::uint32_t)-2U));
+  values.k = -1.0F; // This supported route is ordinary geometry, never Camera.
+  const auto& resource_state = resource_state_for_handle(work.resource);
+  if (!resource_state) throw std::runtime_error("MatPos deferred reader has no live resource state");
+  const bool refresh = (resource_state->flags & 0x00800000U) != 0U;
+  const auto [it, inserted] = matpos_deferred_reader_states_.emplace(
+      work.source_directory_index, IntroMatPosDeferredReaderState{
+          owner, work.resource, work.source_directory_index, component_index,
+          work.source_offset, std::move(values), refresh ? 1U : 0U});
+  if (!inserted) throw std::runtime_error("MatPos deferred reader cannot retain duplicate state");
+  try {
+    record_supported_reader_admission(work);
+    // The recovered no-argument owner refresh is observable only as this
+    // owner-scoped completion receipt. It follows K normalization and reader
+    // admission; it has no renderer, event or lifecycle service target.
+    if (refresh) {
+      const auto [refresh_it, refresh_inserted] = matpos_owner_refresh_receipts_.emplace(
+          work.source_directory_index, IntroMatPosOwnerRefreshReceipt{
+              owner, work.resource, work.source_directory_index, work.source_offset});
+      if (!refresh_inserted)
+        throw std::runtime_error("MatPos deferred reader cannot refresh an owner twice");
+    }
+  } catch (...) {
+    matpos_owner_refresh_receipts_.erase(work.source_directory_index);
+    unrecord_supported_reader_admission(work);
+    matpos_deferred_reader_states_.erase(it);
+    throw;
+  }
 }
 
 void IntroRuntime::prepare_supported_first_cut_player() {
