@@ -531,6 +531,14 @@ independently parsed six-payload reader state. It never registers events,
 samples a clock, routes a camera, activates a picture, executes a command or
 submits a draw. Natural playback and completion remain separate recovery work.
 
+`IntroRuntime::first_cut_command_target_provenance()` additionally exposes the
+unique nonzero command targets in authored command order only after that same
+prepared-player validation. Each route joins its authored reference to the
+existing directory source, live owner and live resource. It deliberately does
+not expose a source address as an owner identity, resolve a name, enroll an
+event or dispatch a command; those behaviors still require recovered live
+target semantics.
+
 `FirstCutPlayerInitialization` is the separate lifecycle boundary for that
 player; it is not the source-65 external-fade `CutSequenceList`. Its phase one
 visits the five commands in reverse source order, then reads the list, registers

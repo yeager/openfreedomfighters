@@ -1334,6 +1334,26 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               player->raw_enabled_option==sequence_reader->authored.authored_option &&
               !player->started[0] && !player->completed[0],
               "first-cut player preparation materializes checked reader state with a cold member and no playback");
+        const auto command_targets=host.first_cut_command_target_provenance();
+        std::vector<std::uint32_t> unique_command_target_references;
+        for(const auto& command:host.resources().first_cut().commands) {
+          if(command.target_reference!=0U &&
+              std::ranges::find(unique_command_target_references,command.target_reference)==
+                  unique_command_target_references.end())
+            unique_command_target_references.push_back(command.target_reference);
+        }
+        check(command_targets.size()==unique_command_target_references.size() &&
+              std::ranges::equal(command_targets,unique_command_target_references,{},
+                  [](const auto& target){return target.authored_reference;},
+                  [](const auto reference){return reference;}) &&
+              std::ranges::all_of(command_targets,[&](const auto& target) {
+                const auto source=host.resources().sources().local_source_for_authored_reference(
+                    target.authored_reference);
+                return source && target.source_directory_index==*source &&
+                    target.owner==host.source_handle(*source) &&
+                    target.resource==host.directory_resource_mapping()[*source];
+              }),
+              "first-cut command targets retain unique source-backed live owner provenance without dispatch");
         auto initialization=host.first_cut_player_initialization();
         check(!initialization.phase_one_complete() && !initialization.phase_two_complete(),
               "first-cut lifecycle boundary is built from live reader state but remains cold");

@@ -466,6 +466,17 @@ struct IntroFirstCutTailMemberProvenance {
   IntroRuntimeResourceHandle resource;
   bool operator==(const IntroFirstCutTailMemberProvenance&) const = default;
 };
+// A checked target route for one authored first-cut command reference.  This
+// is provenance only: it makes the existing source-to-live-owner mapping
+// available to a future command dispatcher without assigning event behavior
+// or treating a source address as a native handle.
+struct IntroFirstCutCommandTargetProvenance {
+  std::uint32_t authored_reference{};
+  std::size_t source_directory_index{};
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  bool operator==(const IntroFirstCutCommandTargetProvenance&) const = default;
+};
 // Materialized source state for the one reviewed first-cut player. It is not a
 // scheduler, event registration, camera route, or renderer admission.
 struct IntroFirstCutPlayerPreparedState {
@@ -955,6 +966,12 @@ public:
   [[nodiscard]] const IntroFirstCutPlayerPreparedState* first_cut_player_prepared_state() const noexcept {
     return first_cut_player_prepared_state_?&*first_cut_player_prepared_state_:nullptr;
   }
+  // Enumerates unique nonzero first-cut command targets in authored command
+  // order. The player must already be prepared, and every returned route is
+  // checked against the live directory/resource association. This does not
+  // resolve names, register events, invoke a target, or begin playback.
+  [[nodiscard]] std::vector<IntroFirstCutCommandTargetProvenance>
+  first_cut_command_target_provenance() const;
   // Projects the two source-validated first-cut reader states into the
   // dedicated lifecycle boundary. It does not run either phase.
   [[nodiscard]] cutscene::FirstCutPlayerInitialization first_cut_player_initialization() const;

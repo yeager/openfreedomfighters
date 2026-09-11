@@ -3425,6 +3425,40 @@ cutscene::FirstCutPlayerSession IntroRuntime::first_cut_player_session() const {
   return cutscene::FirstCutPlayerSession(first_cut_player_descriptor());
 }
 
+std::vector<IntroFirstCutCommandTargetProvenance>
+IntroRuntime::first_cut_command_target_provenance() const {
+  // Reuse the complete prepared-player consistency boundary rather than
+  // accepting merely parsed command records as proof of a live target.
+  static_cast<void>(first_cut_player_descriptor());
+  std::vector<IntroFirstCutCommandTargetProvenance> result;
+  result.reserve(resources_.first_cut().commands.size());
+  for (const auto& command : resources_.first_cut().commands) {
+    if (command.target_reference == 0U) continue;
+    const auto source = resources_.sources().local_source_for_authored_reference(
+        command.target_reference);
+    if (!source || *source >= directory_resource_mapping_.size() ||
+        !directory_resource_mapping_[*source]) {
+      throw std::runtime_error("first-cut command target has no live source resource");
+    }
+    const auto resource = *directory_resource_mapping_[*source];
+    const auto owner = source_handle(*source);
+    if (!associated_resource_owner(resource) ||
+        *associated_resource_owner(resource) != owner) {
+      throw std::runtime_error("first-cut command target resource owner is not live");
+    }
+    const auto existing = std::ranges::find_if(result, [&](const auto& candidate) {
+      return candidate.authored_reference == command.target_reference;
+    });
+    if (existing == result.end()) {
+      result.push_back({command.target_reference, *source, owner, resource});
+    } else if (existing->source_directory_index != *source || existing->owner != owner ||
+               existing->resource != resource) {
+      throw std::runtime_error("first-cut command target reference changed identity");
+    }
+  }
+  return result;
+}
+
 void IntroRuntime::apply_supported_external_cut_commands_deferred_reader(
     const IntroDeferredReaderWork& work) {
   constexpr std::array<std::string_view,2> factories{
