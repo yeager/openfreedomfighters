@@ -1,4 +1,5 @@
 #include "off/cutscene/command_pass.hpp"
+#include "off/cutscene/first_cut_clocked_command_runner.hpp"
 #include "off/cutscene/cut_sequence_list.hpp"
 #include "off/cutscene/first_cut_command_session.hpp"
 #include "off/cutscene/external_cut_sequence_command.hpp"
@@ -201,6 +202,22 @@ int main() {
     session_trace.clear();
     session.run(4.0F);
     check(session_trace == std::vector<std::string>({"reference:91", "dispatch"}));
+    static_assert(!std::is_copy_constructible_v<off::cutscene::FirstCutClockedCommandRunner> &&
+                  !std::is_move_constructible_v<off::cutscene::FirstCutClockedCommandRunner>);
+    off::cutscene::FirstCutClockedCommandRunner clocked(session);
+    rejects([&] { clocked.update(100U); });
+    session_trace.clear();
+    clocked.start(100U);
+    check(clocked.active() && clocked.scene_clock_start()==100U);
+    clocked.update(100U);
+    check(session_trace.empty());
+    // The recovered converter produces 2.001953125 at this scene-clock delta,
+    // which crosses the first command's strict position threshold.
+    clocked.update(182U);
+    check(session_trace == std::vector<std::string>({"reference:91", "dispatch"}));
+    rejects([&] { clocked.start(100U); });
+    clocked.stop();
+    check(!clocked.active());
     rejects([&] {
       FirstCutCommandSession incomplete(first_cut_commands, event_mapping, 10.0F, {}, 1U);
     });

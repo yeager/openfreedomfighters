@@ -878,6 +878,13 @@ position-only digest. It does not print event identities, targets, arguments,
 or names. This is timing evidence for a future clock-driven player, not a
 substitute timer.
 
+`FirstCutClockedCommandRunner` now binds an already-admitted command session to
+the recovered scene-clock-to-timeline conversion. The scene host supplies the
+start word and each sampled scene-clock word. The runner does not create a
+clock, begin a cut, decide completion, resolve targets, or provide dispatch;
+those lifecycle and renderer boundaries remain required before normal startup
+can use it.
+
 The adapter does not provide a scheduler, clock, scene host, event dispatcher,
 audio output, or renderer. It is evidence that the recovered phase boundaries
 can consume the prepared source-backed state, not evidence that the original
