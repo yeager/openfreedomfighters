@@ -478,6 +478,10 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
                                               std::span<const std::optional<off::graphics::IntroRuntimeResourceHandle>> translated) {
     if(references.size()!=translated.size()) return false;
     for(std::size_t index=0;index<references.size();++index) {
+      if(references[index]==0U) {
+        if(translated[index]) return false;
+        continue;
+      }
       const auto source=intro.resources().sources().local_source_for_authored_reference(
           references[index]);
       if(!source || *source>=mapping.size() || translated[index]!=mapping[*source])
