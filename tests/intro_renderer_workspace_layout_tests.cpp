@@ -1,4 +1,5 @@
 #include "off/graphics/intro_renderer_workspace_layout.hpp"
+#include "off/graphics/intro_renderer_payload_workspace.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -16,7 +17,7 @@ void check(bool value, const char *message) {
   if (!value) { std::cerr << "FAIL: " << message << '\n'; std::exit(1); }
 }
 template <class Function> void rejects(Function function, const char *message) {
-  try { function(); } catch (const std::runtime_error &) { return; }
+  try { function(); } catch (const std::exception &) { return; }
   check(false, message);
 }
 } // namespace
@@ -39,5 +40,19 @@ int main() {
   auto short_prefix = payload; short_prefix[0] = std::byte{3};
   rejects([&] { static_cast<void>(off::graphics::parse_intro_renderer_workspace_layout(short_prefix)); },
           "reject a prefix extent inside the header");
+  std::vector<std::byte> prepared_payload;
+  for (const auto word : {6U, 4U, 2U, 0U, 0U, 1U}) append_u32(prepared_payload, word);
+  prepared_payload.resize(48U);
+  for (std::size_t index=24U;index<prepared_payload.size();++index)
+    prepared_payload[index]=static_cast<std::byte>(index);
+  const auto workspace=off::graphics::IntroRendererPayloadWorkspace::from_prepared(
+      off::graphics::prepare_intro_renderer_relocation_payload(prepared_payload,{}));
+  check(workspace.bytes().size()==48U && workspace.prefix().groups.size()==1U &&
+            workspace.eight_byte_slot(0U).size()==8U && workspace.eight_byte_slot(0U)[0]==std::byte{24} &&
+            workspace.sixteen_byte_slot(0U).size()==16U && workspace.sixteen_byte_slot(0U)[0]==std::byte{32} &&
+            workspace.sixteen_byte_trailing_bytes().empty(),
+        "retain prepared renderer bytes through bounded opaque workspace slots");
+  rejects([&] { static_cast<void>(workspace.eight_byte_slot(1U)); },
+          "reject an absent eight-byte workspace slot");
   std::cout << "intro renderer workspace layout tests passed\n";
 }
