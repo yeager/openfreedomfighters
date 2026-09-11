@@ -107,6 +107,11 @@ The picture renderer has passed GPU tests on Linux/Vulkan, Windows/Direct3D 12
 and macOS/Metal. CI uses independent fixtures, not retail assets; these tests
 do not establish complete intro playback.
 
+On 2026-09-11, a native Linux ARM64 build passed both first-cut cold probes
+against a verified owned installation, including the source-bound loader-tail
+input handoff. This verifies the implemented data path on ARM64 without an
+emulator; it does not establish intro playback, menu behavior, or gameplay.
+
 Next: connect the scene's component lifecycle and update loop so normal startup
 renders the original intro and reaches its main menu. This takes priority over
 graphics polish and more isolated helpers. Details
