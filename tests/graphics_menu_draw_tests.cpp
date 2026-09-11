@@ -106,6 +106,15 @@ int main() {
               off::ui::validate_graphics_menu_draw_list(localized_fsr),
           "FSR product naming is stable across every supported F10 locale");
   }
+  menu.draft().upscaler = off::settings::Upscaler::xess;
+  for (const auto locale : f10_locale_tags) {
+    const auto localized_xess = off::ui::build_graphics_menu_draw_list(
+        menu, {640, 360}, now, 1.0F, locale, "en-US");
+    check(localized_xess.status == off::ui::UiBuildStatus::ok &&
+              has_text(localized_xess, "XeSS") &&
+              off::ui::validate_graphics_menu_draw_list(localized_xess),
+          "XeSS product naming is stable across every supported F10 locale");
+  }
   menu.draft().upscaler = off::settings::Upscaler::native;
   const auto platform_swedish = off::ui::build_graphics_menu_draw_list(
       menu, {640, 480}, now, 1.0F, "xx-XX", "sv_SE.UTF-8");
