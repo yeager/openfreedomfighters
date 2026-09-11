@@ -10,7 +10,7 @@
 #include "off/graphics/preview_camera_component.hpp"
 #include "off/data/packed_resource.hpp"
 #include "off/data/archive_vfs.hpp"
-#include "off/data/deferred_compact_block_profile.hpp"
+#include "off/data/basic_group_deferred_reader_shape.hpp"
 
 #include <algorithm>
 #include <array>
@@ -1085,8 +1085,8 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
             if(group_source.source_type==0x00100001U && group_source.attachments.empty()) {
               const auto block=host.resources().sources().deferred_source_block(work.source_directory_index);
               if(block.size()>sizeof(std::uint32_t) &&
-                 off::data::DeferredCompactBlockProfiler::profile(
-                     block.subspan(sizeof(std::uint32_t))).framing_notation=="i3f2i3i3i3|!")
+                 off::data::BasicGroupDeferredReaderShape::matches(
+                     block.subspan(sizeof(std::uint32_t))))
                 host.apply_supported_basic_group_owner_deferred_reader(work);
             }
             if(work.source_directory_index==466U) {

@@ -2,6 +2,7 @@
 #include "off/data/bounded_component_block_cursor.hpp"
 #include "off/data/deferred_attachment_dispatch_shape.hpp"
 #include "off/data/deferred_compact_block_profile.hpp"
+#include "off/data/basic_group_deferred_reader_shape.hpp"
 #include "off/data/compact_typed_value_decoder.hpp"
 #include "off/data/component_reader_context.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
@@ -1037,6 +1038,18 @@ int main() {
             const std::array<std::byte, 1> truncated{std::byte{0x03}};
             static_cast<void>(DeferredAttachmentDispatchClassifier::observe(truncated));
         }, "read-only dispatch classification rejects truncated compact values");
+        const std::array basic_group_body{
+            std::byte{0x03},std::byte{0},std::byte{0},std::byte{0},std::byte{0},
+            std::byte{0x02},std::byte{0},std::byte{0},std::byte{0},std::byte{0},
+            std::byte{0x03},std::byte{0},std::byte{0},std::byte{0},std::byte{0},
+            std::byte{0x03},std::byte{0},std::byte{0},std::byte{0},std::byte{0},
+            std::byte{0x03},std::byte{0},std::byte{0},std::byte{0},std::byte{0},
+            std::byte{0x06},std::byte{0xff}};
+        auto marked_basic_group_body=basic_group_body;
+        marked_basic_group_body[0]=std::byte{0x83};
+        check(off::data::BasicGroupDeferredReaderShape::matches(basic_group_body) &&
+                  !off::data::BasicGroupDeferredReaderShape::matches(marked_basic_group_body),
+              "basic group shape requires its exact reviewed framing tags");
         check_rejected([] {
             const std::array<std::byte, 2> unknown{std::byte{0x7f}, std::byte{0xff}};
             static_cast<void>(DeferredAttachmentDispatchClassifier::observe(unknown));

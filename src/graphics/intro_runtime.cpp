@@ -1,6 +1,6 @@
 #include "off/graphics/intro_runtime.hpp"
 #include "off/data/deferred_attachment_dispatch_shape.hpp"
-#include "off/data/deferred_compact_block_profile.hpp"
+#include "off/data/basic_group_deferred_reader_shape.hpp"
 #include "off/data/first_cut_owner_reader.hpp"
 #include <algorithm>
 #include <bit>
@@ -15,11 +15,6 @@ bool engine_identity_bits(const std::array<float,9>& matrix) {
   for(std::size_t i=0;i<engine_identity.size();++i)
     if(std::bit_cast<std::uint32_t>(matrix[i])!=std::bit_cast<std::uint32_t>(engine_identity[i])) return false;
   return true;
-}
-bool is_standard_basic_group_body(std::span<const std::byte> body) {
-  const auto profile=data::DeferredCompactBlockProfiler::profile(body);
-  return profile.attachment_delimiters==1U && profile.encoded_values==5U &&
-      profile.continuation_values==0U && profile.framing_notation=="i3f2i3i3i3|!";
 }
 }
 
@@ -1900,7 +1895,7 @@ IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() c
       try {
         const auto block=resources_.sources().deferred_source_block(work.source_directory_index);
         if(block.size()>sizeof(std::uint32_t) &&
-           is_standard_basic_group_body(block.subspan(sizeof(std::uint32_t))))
+           data::BasicGroupDeferredReaderShape::matches(block.subspan(sizeof(std::uint32_t))))
           return IntroDeferredReaderFamily::basic_group_owner;
       } catch(const std::exception&) {}
     }
@@ -3143,7 +3138,7 @@ void IntroRuntime::apply_supported_basic_group_owner_deferred_reader(
     throw std::runtime_error("Basic group owner receipt source shape is unsupported");
   const auto block=resources_.sources().deferred_source_block(work.source_directory_index);
   if(block.size()<=sizeof(std::uint32_t) ||
-      !is_standard_basic_group_body(block.subspan(sizeof(std::uint32_t))))
+      !data::BasicGroupDeferredReaderShape::matches(block.subspan(sizeof(std::uint32_t))))
     throw std::runtime_error("Basic group owner receipt has an unsupported compact body");
   basic_group_owner_reader_receipts_.emplace(work.source_directory_index,
       IntroBasicGroupOwnerReaderReceipt{source_handle(work.source_directory_index),work.resource,

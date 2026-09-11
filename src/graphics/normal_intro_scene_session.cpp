@@ -1,6 +1,6 @@
 #include "off/graphics/normal_intro_scene_session.hpp"
 #include "off/graphics/intro_runtime.hpp"
-#include "off/data/deferred_compact_block_profile.hpp"
+#include "off/data/basic_group_deferred_reader_shape.hpp"
 
 #include <stdexcept>
 #include <utility>
@@ -44,8 +44,8 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                if (source.source_type == 0x00100001U && source.attachments.empty()) {
                  const auto block = r.sources().deferred_source_block(work.source_directory_index);
                  if (block.size() > sizeof(std::uint32_t) &&
-                     data::DeferredCompactBlockProfiler::profile(
-                         block.subspan(sizeof(std::uint32_t))).framing_notation == "i3f2i3i3i3|!")
+                     data::BasicGroupDeferredReaderShape::matches(
+                         block.subspan(sizeof(std::uint32_t))))
                    runtime_->apply_supported_basic_group_owner_deferred_reader(work);
                }
                const auto legal =
