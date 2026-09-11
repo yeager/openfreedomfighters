@@ -7,10 +7,13 @@ animation player and does not activate the intro.
 ## Deferred readers are not its input
 
 The supported intro contains 227 deferred records associated with MatPosAnim
-owners. Each reaches the deferred-record terminator before attachment dispatch.
-Consequently, the normal deferred-reader bracket supplies no MatPosAnim
-component cursor. A deferred owner tail, attachment name, or neighbouring record
-must not be used as a substitute input.
+owners. Each exposes one or more attachment delimiters before its owner
+terminator (249 delimiters in total). This establishes only that the compact
+owner block has an attachment tail; it does not establish the payload grammar,
+the dispatch target, or the callback order. Consequently, the normal
+deferred-reader bracket still supplies no verified MatPosAnim component cursor.
+A deferred owner tail, attachment name, or neighbouring record must not be used
+as a substitute input.
 
 `DeferredAttachmentDispatchClassifier` records this boundary over an already
 bounded compact block: either its terminal occurs before the first attachment

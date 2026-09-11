@@ -299,8 +299,9 @@ object token; it reuses an existing collection or creates one and appends the
 actual owner. This native storage does not claim verified original teardown.
 ROOT does not consume the directory Room notification counter.
 
-MatPosAnim's supported deferred records do not dispatch attachments, so they
-are not a source for its component reader. Its separate phase-one boundary and
+MatPosAnim's supported deferred records expose attachment delimiters, but their
+payload grammar and dispatch behavior are not yet recovered. They are therefore
+not a source for its component reader. Its separate phase-one boundary and
 prepared owner-local `KEYS` registry are described in
 [MatPosAnim recovery](MATPOS_ANIMATION.md). They do not make animation data
 available or admit lifecycle execution.
