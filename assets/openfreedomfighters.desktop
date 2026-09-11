@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=OpenFreedomFighters
+Comment=Native clean-room reimplementation of Freedom Fighters
+Exec=openfreedomfighters
+Terminal=false
+Categories=Game;ActionGame;
+Keywords=Freedom Fighters;action;game;
+StartupNotify=true

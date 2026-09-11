@@ -17,6 +17,10 @@ The supported data set is the Steam Windows release; other editions have not
 been validated. No original game files, executable code, soundtrack files, or
 other retail assets are included here.
 
+On Linux and Steam Deck, `cmake --install` also installs a standard desktop
+entry. It launches the native binary and still requires a verified owned game
+data directory at runtime.
+
 By default, OpenFreedomFighters looks for the owned data in
 `~/.openfreedomfighters` (or `%USERPROFILE%\\.openfreedomfighters` on Windows).
 Pass `--data PATH` to use another location, or set `OPENFREEDOMFIGHTERS_DATA`

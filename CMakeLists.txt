@@ -293,6 +293,10 @@ install(TARGETS openfreedomfighters RUNTIME DESTINATION bin)
 install(FILES assets/branding/openfreedomfighters-splash.bmp
               assets/fonts/Rajdhani-SemiBold.ttf
         DESTINATION bin/assets)
+if(UNIX AND NOT APPLE)
+    install(FILES assets/openfreedomfighters.desktop
+            DESTINATION share/applications)
+endif()
 
 if(BUILD_TESTING)
     add_executable(off_scene_event_names_tests tests/scene_event_names_tests.cpp)
