@@ -1023,6 +1023,12 @@ int main() {
                   compact_profile.continuation_values==1U && compact_profile.value_kinds[3U]==2U &&
                   compact_profile.value_kinds[4U]==1U,
               "deferred compact block profiler retains framing without decoding payload values");
+        auto reordered_profiled=compact_profiled;
+        std::swap(reordered_profiled[0],reordered_profiled[6]);
+        const auto reordered_profile=DeferredCompactBlockProfiler::profile(reordered_profiled);
+        check(reordered_profile.value_kinds==compact_profile.value_kinds &&
+                  reordered_profile.framing_digest!=compact_profile.framing_digest,
+              "deferred compact block profiler distinguishes value ordering without retaining payload bytes");
         check_rejected([] {
             static_cast<void>(DeferredCompactBlockProfiler::profile(
                 std::array{std::byte{0xff},std::byte{0x06}}));
