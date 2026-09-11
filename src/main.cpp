@@ -13,6 +13,7 @@
 #include "off/audio/soundtrack_catalog.hpp"
 #include "off/audio/soundtrack_stream.hpp"
 #include "off/cutscene/first_cut_player_initialization.hpp"
+#include "off/cutscene/first_cut_command_session.hpp"
 #include "off/cutscene/first_cut_timeline_profile.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
@@ -37,6 +38,7 @@
 #include "off/ui/retail_ui_textures.hpp"
 
 #include <charconv>
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <cmath>
@@ -478,6 +480,42 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
       first_cut->initialization().phase_two_complete() || first_cut->receiver().open() ||
       first_cut->receiver().closed())
     throw std::runtime_error("first-cut cold probe observed an unexpected lifecycle transition");
+  std::optional<std::int32_t> latest_command_position;
+  for(const auto& command:first_cut_source_data.commands) {
+    const auto position=std::bit_cast<std::int32_t>(command.timeline_position);
+    if(position>=0 && (!latest_command_position || position>*latest_command_position))
+      latest_command_position=position;
+  }
+  std::size_t command_delivery_attempts{};
+  std::size_t command_component_delivery_attempts{};
+  if(latest_command_position) {
+    const auto* prepared_player=intro.first_cut_player_prepared_state();
+    if(!prepared_player || !std::isfinite(prepared_player->sequence_values[1]))
+      throw std::runtime_error("first-cut cold probe found no finite command-derived end");
+    std::vector<std::uint64_t> source_backed_targets;
+    for(const auto& target:intro.first_cut_command_target_provenance())
+      source_backed_targets.push_back(target.owner.value);
+    off::cutscene::FirstCutRuntimeCommandRouter command_router{intro};
+    off::cutscene::FirstCutCommandSession command_session{
+        intro,prepared_player->sequence_values[1],
+        command_router.command_session_services({
+            .direct_target=[&](std::uint64_t target,std::uint16_t,std::uint32_t,
+                               std::uint64_t sender) {
+              if(sender!=command_router.sender() ||
+                  std::ranges::find(source_backed_targets,target)==source_backed_targets.end())
+                throw std::runtime_error("first-cut cold probe found an unbound command target");
+              ++command_delivery_attempts;
+            },
+            .direct_component=[&](std::uint64_t,std::uint64_t,std::uint16_t,
+                                  std::uint32_t,std::uint64_t) {
+              ++command_component_delivery_attempts;
+            }}),
+        command_router.sender()};
+    const auto sampled_position=std::nextafter(
+        static_cast<float>(*latest_command_position),
+        std::numeric_limits<float>::infinity());
+    command_session.run(sampled_position);
+  }
   const auto tail_readiness=session->outer_loader_tail_readiness();
   if(tail_readiness.ready_to_run())
       throw std::runtime_error("first-cut cold probe unexpectedly considers the loader tail runnable");
@@ -548,6 +586,10 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
             << bracket_observation.prepared_reader_calls << '\n'
             << "reader-bracket-end-reader-calls="
             << bracket_observation.end_reader_calls << '\n'
+            << "first-cut-command-delivery-attempts="
+            << command_delivery_attempts << '\n'
+            << "first-cut-command-component-delivery-attempts="
+            << command_component_delivery_attempts << '\n'
             ;
   write_reader_coverage_probe(std::cout,reader_coverage);
   std::cout << "matpos-deferred-records=" << matpos_dispatch.associated_records << '\n'
