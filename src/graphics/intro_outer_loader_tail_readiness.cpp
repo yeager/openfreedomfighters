@@ -1,4 +1,5 @@
 #include "off/graphics/intro_outer_loader_tail_readiness.hpp"
+#include "off/graphics/intro_named_global_references.hpp"
 
 namespace off::graphics {
 
@@ -11,9 +12,16 @@ IntroOuterLoaderTailReadiness inspect_intro_outer_loader_tail_readiness(
       .resource_association_count = sources.resource_associations.size(),
       .allocation_sizing_row_count = sources.allocation_sizing_rows.size(),
       .required_boundaries = {}};
-  if (sources.named_global)
-    result.required_boundaries.push_back(
-        IntroOuterLoaderTailBoundary::named_global_relocation_and_reader);
+  if (sources.named_global) {
+    try {
+      static_cast<void>(read_intro_named_global_null_references(
+          parse_intro_named_global_section_envelope(*sources.named_global)));
+      result.named_global_native_supported = true;
+    } catch (const std::runtime_error&) {
+      result.required_boundaries.push_back(
+          IntroOuterLoaderTailBoundary::named_global_relocation_and_reader);
+    }
+  }
   if (sources.renderer_resource)
     result.required_boundaries.push_back(
         IntroOuterLoaderTailBoundary::renderer_reference_resolution_and_container_parser);

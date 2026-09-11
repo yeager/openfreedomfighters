@@ -5,12 +5,16 @@ records recovered behavior only; it does not make a component runnable. Global
 lifecycle remains blocked until every eligible component has its real reader,
 callback, owner state, and required services.
 
+The [intro and main-menu plan](INTRO_AND_MENU_PLAN.md) defines the delivery
+batches. Recompute coverage from the current cold probe before using this
+inventory to select implementation work.
+
 | Factory group | Phase-one recovery | Phase-two recovery | Current blocker |
 | --- | --- | --- | --- |
 | `ZGROUP_RootGroup` | Initializer and phase-one seam | None | Ordinary input and phase-two behavior |
 | `ZGEOM_MovieControl` | None | Callback ordering | Full global admission, live services, event 16 and cut dependencies |
 | `ZGEOM_Center` | Legal-picture owner/component provenance and position/cache seam | None | Global admission, position service and event delivery |
-| `ZWINPIC_FadeToBlack` | Owner/component provenance and fade/dimension seams | None | Material/color path and event delivery |
+| `ZWINPIC_FadeToBlack` | Three source-bound first-cut callbacks update canonical size/cache state | Not requested by the supported first-cut factory | Live dimension/invalidation services, owner/global admission, material/color path and event delivery |
 | `ZGEOM_MatPosAnim` | KEYS preparation seam | None | Existing-state provider, events and special-owner behavior |
 | `ZLIST_CutSequence`, `ZLIST_CutSequenceList`, `ZLIST_CutSequenceCommand` | Owner/component provenance and timeline/source sub-boundaries | None | Player registration, dispatch and completion timing |
 | `ZSNDOBJ_SoundExtend`, `ZSNDOBJ_SoundNotify`, `ZSNDOBJ_SoundSegment`, `ZGEOM_ZSetZDefine` | Typed data and owner-side sub-boundaries | None | Output/channel admission and readiness producer |
@@ -20,18 +24,21 @@ callback, owner state, and required services.
 
 All 22 authored factory types are constructed and catalogued. Their generic
 lifecycle callbacks intentionally fail closed until their real behavior is
-recovered. MovieControl's phase-two callback is the only authored callback body
-usable in isolation; it still cannot be called through normal startup.
+recovered. Scoped tests exercise implemented MovieControl phase two and
+source-bound first-cut FadeToBlack phase one. Neither establishes whole-scene
+readiness or intro playback through normal startup.
 
 ## Required order
 
 1. Complete the 420 deferred owner/component reader boundaries, including the
    separate MatPos provider route.
-2. Implement loader-tail services: named/global data, renderer payload,
-   associations, saved flags and live resource state.
+2. Integrate the implemented named null-reference reader and finish loader-tail
+   services: renderer payload, typed associations, saved flags and live state.
 3. Complete reader-backed component factories, owner hooks and event/ordinary
    membership.
-4. Run the full reverse phase-one pass, then the reverse phase-two pass.
+4. Validate cold-entry implementations/services, run the full reverse phase-one
+   pass and reverse phase-two pass, then verify completed effects. The current
+   completed-effects report is not an entry gate.
 5. Recover ordinary updates, first-cut activation, camera/view admission and
    scene rendering.
 
@@ -43,9 +50,10 @@ examples of step 1. Neither is an independent startup path.
 The currently prepared first-cut data cannot be made visible by connecting an
 SDL renderer directly. The required order is fixed by the admitted boundaries:
 
-1. Complete the full reader, component, and owner coverage required by global
-   lifecycle preflight.
-2. Run the real global passes and the later MovieControl event boundary.
+1. Complete required readers and validate installed owner/component
+   implementations and live services for cold entry.
+2. Run the ordered global passes, verify their completed effects, then reach
+   the later MovieControl event boundary.
 3. Establish the requested camera, live view, and positive-time first-cut
    activation.
 4. Recover the renderer-record association and ordered traversal for the live
@@ -53,8 +61,8 @@ SDL renderer directly. The required order is fixed by the admitted boundaries:
 5. Assemble and submit an admitted picture frame from an ordinary outer frame
    caller.
 
-The current supported runtime has only twelve admitted reader identities out of
-420. This is the first hard gate. Camera/view, picture-frame, audio, and SDL
+The supported construction has 420 queued readers, with only partial admitted
+coverage. This is the first hard gate. Camera/view, picture-frame, audio, and SDL
 bridge code remains intentionally downstream of it; joining any of those
 pieces earlier would create a synthetic visible result rather than native scene
 admission.
@@ -77,8 +85,7 @@ The first reader families are the direct first-cut dependencies:
 
 This ordering removes the earliest fail-closed admission gate. Reversing it to
 work on MovieControl phase two or event 16 first would not make normal startup
-valid: the current runtime has 420 queued readers but only twelve source-backed
-reader boundaries, so it has no complete owner/component population for the
+valid: the runtime has no complete reader-backed owner/component population for the
 global passes.
 
 For the supported global initializer, the recovered structure is root pre-hook,

@@ -42,16 +42,16 @@ for a portable installation.
   and music playback are not implemented yet. Their absence never blocks startup.
 - The first intro sequence's camera, pictures and textures load from game data.
   One retained runtime owns their hierarchy and mutable picture state; intro
-  textures upload to the GPU. Indexed drawing works in explicit integration
-  tests; normal startup activation is not connected yet.
+  textures upload to the GPU. Normal startup displays one static source-backed
+  picture; scene activation and timed playback are not connected yet.
   [Camera membership and listener selection](docs/CAMERA_REGISTRATION.md) now
   share the scene's runtime identities, including across scene reloads.
   [Preview-camera controls](docs/PREVIEW_CAMERA.md) handle keyboard and pointer
   updates in tests; their normal input and component dispatch are not connected.
-- A normal two-frame smoke run on the supported owned installation reaches the
-  native SDL/Vulkan backend, validates all data, uploads six startup images and
-  26 intro images, and then exits. Normal startup does not draw the original
-  intro yet.
+- The native SDL/Vulkan startup path validates the supported owned data,
+  uploads six startup images and 26 intro images, and presents the static
+  intro preview. Bounded smoke runs verify startup, not intro playback or a
+  rendered main menu.
 - `--diagnostic-intro-picture` can render one source-backed first-cut picture
   with its decoded images and quad geometry. It uses an explicitly project-owned
   fit projection and baseline GPU state, so it is a visual diagnostic—not
@@ -74,14 +74,16 @@ for a portable installation.
   from the supported scene directory. It allocates all 470 authored resources,
   retains 383 constructed attachment instances, queues 420 deferred readers,
   and preserves the authored hierarchy, event names, saved flags, and supported
-  sound-owner state. Normal startup runs the ordinary deferred-reader bracket
-  and admits twelve reviewed, source-backed reader records. The other 408
-  records remain intentionally unconsumed. A scene-owned session now
+  sound-owner state. Normal startup runs the ordinary deferred-reader bracket,
+  but only a subset has implemented source-backed readers. A scene-owned session
   retains this runtime and owns the exactly-once reader bracket instead of
   leaving its callback wiring in `main`. The checked loader-tail transition is
-  implemented, but its concrete source services and normal-startup call remain
-  missing. Global lifecycle admission, renderer associations, scene updates,
-  rendering, audio playback, menus, and gameplay remain unimplemented.
+  implemented, including the supported [named-reference reader](docs/INTRO_NAMED_GLOBAL.md),
+  but the remaining concrete services and normal-startup call are missing.
+  Source-bound first-cut fade initialization is tested separately; it does not
+  complete owner or global initialization. Global lifecycle admission, renderer associations, scene updates,
+  admitted scene rendering, audio playback, menus, and gameplay remain
+  unimplemented.
   Window console/property bindings and the scene event-name table are live.
   None of the cameras is registered for normal rendering yet.
   DefaultCam and its PreviewCamera now share an [ordinary update queue](docs/ORDINARY_COMPONENTS.md)
@@ -116,8 +118,11 @@ frame and completed a local capture without exporting game assets.
 
 Next: connect the scene's component lifecycle and update loop so normal startup
 renders the original intro and reaches its main menu. This takes priority over
-graphics polish and more isolated helpers. Details
-are in the [intro notes](docs/INTRO_BOOTSTRAP.md) and [roadmap](docs/ROADMAP.md).
+graphics polish and more isolated helpers. The
+[intro and main-menu plan](docs/INTRO_AND_MENU_PLAN.md) sets the work order,
+dependencies and acceptance tests. Format and behavior details remain in the
+[intro notes](docs/INTRO_BOOTSTRAP.md); project-wide gates are in the
+[roadmap](docs/ROADMAP.md).
 
 ## Planned modes
 

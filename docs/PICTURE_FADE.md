@@ -130,6 +130,27 @@ phase one. The helper does not manufacture that admission or add another once-on
 latch; a caller can explicitly initialize again with changed dimensions. Actual
 startup dimensions and scene activation remain separate from this CPU contract.
 
+The supported first-cut factory now installs a concrete phase-one callback for
+each of its three FadeToBlack components. Binding requires their completed owner
+and component readers, exact source/resource/attachment joins, and retained
+engine-dimension and resource-invalidation services. Binding does not sample
+dimensions or initialize a component.
+
+During the callback, `FadePictureSize` borrows the constructed owner's canonical
+size pair and submission cache. The invalidation service therefore observes
+committed owner state, not a helper copy awaiting write-back. Source joins are
+checked again after callbacks. Completion is recorded only after successful
+effects; the lifecycle then sets phase-one status. This supplies component
+completion evidence, not owner or whole-scene readiness. Missing services and
+exceptions cannot produce successful coverage. Normal startup does not bind or
+run these callbacks yet.
+
+The `first-cut-fade-phase-one` fixture exercises the real factory callbacks
+through the scoped lifecycle test API, including cache/hook order and failures.
+Repeat tests explicitly reopen the scoped status gate; they do not represent
+global initialization. Cold global-entry validation remains separate work in
+the [intro and menu plan](INTRO_AND_MENU_PLAN.md).
+
 The 39-test suite and targeted size/cache/transform ASan/UBSan executable pass
 locally. The private owned-resource probe also checks that explicit dimension
 initialization leaves actual descriptor spans and modulation unchanged. Private

@@ -23,10 +23,18 @@ the authored callbacks still require their real reader and runtime services.
 `IntroRuntime::preflight_global_lifecycle()` derives its inventory from the
 loaded scene and remains read-only. The complete supported fixture has 420
 deferred reader identities, 383 authored attachment identities and 471 owner
-identities including ROOT. Normal startup now enters the ordinary reader bracket
-and reports ten reader identities covered by reviewed typed readers. It still
-reports no component or owner coverage, and fails closed at reader coverage for
-the remaining 410 identities. Global lifecycle admission is not attempted.
+identities including ROOT. Normal startup enters the ordinary reader bracket
+with partial source-backed coverage. Earlier ten-reader counts are historical;
+use the current cold probe for coverage by family. Global lifecycle admission
+is not attempted.
+
+Despite its name, this preflight includes completed effects, not only entry
+prerequisites. Component coverage recognizes supported sound state and successful
+source-bound first-cut FadeToBlack phase-one callbacks; owner coverage remains
+sound-only. Fade service binding and reader receipts do not count as callback
+completion. Using this completed-effects report as permission for the first
+global pass would be circular. The normal integration must validate installed
+implementations/live services before dispatch and completed effects afterward.
 
 ## Construction and ownership
 
@@ -98,7 +106,10 @@ Normal startup constructs RootGroup and the reviewed authored directory, but
 does not run global initialization or construct the deferred runtime state.
 The remaining concrete constructors/readers/callbacks, live
 owner flags, root/additional-owner loader hooks, progress behavior, retirement,
-scene properties and shared command containers remain needed. The ordinary
+remaining scene-property consumers and shared command containers remain needed.
+The supported [named null-reference reader](INTRO_NAMED_GLOBAL.md) and first-cut
+[fade dimension callbacks](PICTURE_FADE.md) are implemented but do not complete
+the surrounding loader or owner services. The ordinary
 dispatcher exists, but most admitted concrete callbacks are still missing.
 The component-pass API does not perform those surrounding loader operations.
 
@@ -120,7 +131,8 @@ The following component-reader boundary retains only the already constructed
 MovieControl component identity, requested mask, priority, and declared events.
 It requires the completed owner reader and does not set a live status bit,
 enroll event 16, assign a deadline, or invoke phase two. Normal startup uses
-this checked boundary; all other component-reader work remains deferred.
+this checked boundary alongside other reviewed first-cut and sound readers;
+complete required component-reader coverage remains unfinished.
 
 ## Constructor-owned temporary
 

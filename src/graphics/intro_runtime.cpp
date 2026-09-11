@@ -954,7 +954,10 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
           application_.set_particle_emitter_event(event_names_.declare("FrameCurrent"));
         }
         if(black || character || logo) {payload.fade_start=0;payload.fade_deadline=0;}
-        if(black) payload.fade_state=3;
+        if(black) {
+          payload.fade_state=3;
+          payload.fade_size=std::make_unique<FadePictureSize>();
+        }
         if(external) {payload.target_name="";payload.script_reference=0;}
         if(vert || mat) {
           payload.animation.emplace();
@@ -996,10 +999,15 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
         runtime::ComponentCallback phase_one=[](auto&){
           throw std::runtime_error("Constructed attachment requires its source reader and live initialization services");
         };
-        // The two authored sound owners are the only independently recovered
-        // first-phase family.  These callbacks deliberately stay attached to
-        // their concrete factory/source pair; every other component continues
-        // to fail closed above.
+        if(black && std::ranges::any_of(resources_.first_cut().commands,[&](const auto& command) {
+             const auto target=resources_.sources().local_source_for_authored_reference(command.target_reference);
+             return target && *target==row;
+           }))
+          phase_one=[this,component_index](runtime::ComponentRecord& record) {
+            run_first_cut_fade_phase_one(component_index,record);
+          };
+        // Sound callbacks likewise stay attached to their concrete source and
+        // factory pair. Other unrecovered families retain the throwing body.
         if(sound_extend) phase_one=[this,row,component_index](runtime::ComponentRecord& callback_record) {
           auto& component=components_.at(component_index);
           auto& sound=sound_for_source(row);
@@ -1844,11 +1852,17 @@ IntroLifecyclePreflightReport IntroRuntime::preflight_global_lifecycle() const {
     });
     if(found==components_.construction_order().end()) continue;
     const auto& component=components_.at(*found);
+    if(component.removed() || !(component.state().status&4U)) continue;
+    if(component.source().factory_name=="ZWINPIC_FadeToBlack") {
+      if(fade_picture_phase_one_services_ && first_cut_fade_reader_matches(*found))
+        admissions.cover_component(identity);
+      continue;
+    }
     const auto owner=IntroRuntimeHandle{component.state().attached_owner};
     const auto sound=std::ranges::find_if(sounds_,[&](const auto& candidate) {
       return candidate->handle()==owner;
     });
-    if(component.removed() || !(component.state().status&4U) || sound==sounds_.end() ||
+    if(sound==sounds_.end() ||
         !(*sound)->active() || (*sound)->failed() || !(*sound)->owner_binding())
       continue;
     admissions.cover_component(identity);
@@ -2146,9 +2160,11 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
   // still-unimplemented concrete readers and scene operations. Validate the
   // complete required ordinary path before doing any externally visible work.
   const bool named_requires_reader=services.named_global_payload.has_value();
+  const bool partial_named_reader=static_cast<bool>(services.relocate_named_global_references)!=
+      static_cast<bool>(services.read_named_global_payload);
   const bool renderer_requires_parser=services.renderer_resource_payload.has_value();
   const bool associations_require_services=!services.resource_associations.empty();
-  if((named_requires_reader && (!services.relocate_named_global_references || !services.read_named_global_payload)) ||
+  if((named_requires_reader && partial_named_reader) ||
       (renderer_requires_parser && (!services.parse_renderer_resource_payload ||
           !services.release_renderer_construction_reference)) ||
       (associations_require_services && !services.associate_live_resources) ||
@@ -2171,12 +2187,31 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
       const auto envelope=parse_intro_named_global_section_envelope(named->bytes);
       IntroNamedGlobalPreparedReader prepared{
           .owned_block={envelope.tagged_block.begin(),envelope.tagged_block.end()}};
-      services.relocate_named_global_references(prepared);
+      if(services.relocate_named_global_references)
+        services.relocate_named_global_references(prepared);
+      else
+        validate_intro_named_global_null_reference_block(prepared.complete_block());
       // The retail traversal restores its tagged-reader cursor before scene
       // dispatch. Preserve that observable handoff even when the native
       // relocation service used a cursor while walking its owned copy.
       prepared.reset_to_base();
-      services.read_named_global_payload(envelope.label,prepared);
+      if(services.read_named_global_payload) {
+        services.read_named_global_payload(envelope.label,prepared);
+      } else {
+        const auto entries=read_intro_named_global_null_references(
+            {envelope.label,prepared.complete_block()});
+        // Copy/commit is a native failure policy. Earlier scene properties
+        // survive both a bad second value and allocation failure, and names
+        // never borrow the loader's temporary source block.
+        auto staged=scene_resource_properties_;
+        for(const auto& name:entries.names) {
+          staged.erase(name);
+          staged.emplace(name,IntroSceneResourceProperty{
+              .type=entries.registry_type,.resource={},
+              .scalar_reference_bits=entries.reference_bits});
+        }
+        scene_resource_properties_.swap(staged);
+      }
     }
 
     if(const auto& renderer=services.renderer_resource_payload) {
@@ -3596,6 +3631,105 @@ void IntroRuntime::apply_supported_first_cut_fade_picture_component_reader(
         state.owner,state.resource,work.source_directory_index,work.source_offset,
         state.component_index,state.authored,state.picture_asset_reference});
   if(!inserted) throw std::runtime_error("Fade picture component reader cannot run twice");
+}
+
+bool IntroRuntime::first_cut_fade_reader_matches(std::size_t component_index) const {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      reader_bracket_stage_!=IntroReaderBracketStage::ordinary_reader_boundary_complete ||
+      component_index>=components_.size())
+    return false;
+  const auto& component=components_.at(component_index);
+  if(!component.constructed() || component.removed() ||
+      component.source().factory_name!="ZWINPIC_FadeToBlack" ||
+      !component.source().directory_index || component.source().attachment_index!=0U ||
+      (component.state().requested&3U)!=1U)
+    return false;
+  const auto source_index=*component.source().directory_index;
+  if(source_index>=resources_.sources().directory().size() ||
+      source_index>=directory_resource_mapping_.size())
+    return false;
+  const auto& source=resources_.sources().directory()[source_index];
+  const auto owner=source_handle(source_index);
+  const auto resource=directory_resource_mapping_[source_index];
+  if(source.source_type!=0x00200046U || source.class_data_value!=0U ||
+      source.attachments.size()!=1U || source.attachments[0].parameter!=0.0F ||
+      !source.deferred_source_offset || component.source().owner!=owner.value ||
+      component.state().attached_owner!=owner.value || !resource ||
+      associated_resource_owner(*resource)!=owner || !resource_state_for_handle(*resource))
+    return false;
+  if(!std::ranges::any_of(resources_.first_cut().commands,[&](const auto& command) {
+       const auto target=resources_.sources().local_source_for_authored_reference(command.target_reference);
+       return target && *target==source_index;
+     }))
+    return false;
+  const auto indices=owner_components(owner);
+  const auto live=constructed_picture_owners_.find(source_index);
+  const auto payload=constructed_picture_components_.find(component_index);
+  const auto reader=fade_picture_reader_states_.find(source_index);
+  const auto component_reader=fade_picture_component_reader_states_.find(source_index);
+  if(indices.size()!=1U || indices[0]!=component_index ||
+      live==constructed_picture_owners_.end() || live->second.owner!=owner ||
+      live->second.resource!=*resource || live->second.class_identifier!=0x00200046U ||
+      live->second.attachments.size()!=1U || live->second.attachments[0]!=component_handle(component_index) ||
+      payload==constructed_picture_components_.end() || payload->second.owner!=owner ||
+      !payload->second.fade_size || reader==fade_picture_reader_states_.end() ||
+      component_reader==fade_picture_component_reader_states_.end())
+    return false;
+  const auto& read=reader->second;
+  const auto& attachment=component_reader->second;
+  if(read.owner!=owner || read.resource!=*resource || read.component_index!=component_index ||
+      attachment.owner!=owner || attachment.resource!=*resource ||
+      attachment.component_index!=component_index || attachment.source_directory_index!=source_index ||
+      attachment.source_offset!=source.deferred_source_offset ||
+      attachment.picture_asset_reference!=read.picture_asset_reference ||
+      attachment.authored.picture_asset_reference!=read.authored.picture_asset_reference)
+    return false;
+  const IntroReaderAdmissionIdentity identity{resource->value,source.deferred_source_offset,source_index};
+  if(std::ranges::find(supported_reader_admissions_,identity)==supported_reader_admissions_.end())
+    return false;
+  const auto picture=std::ranges::find_if(pictures_,[&](const auto& candidate) {
+    return candidate->source_index()==source_index && candidate->handle()==owner &&
+        candidate->source_->source.picture_asset_reference==read.picture_asset_reference;
+  });
+  return picture!=pictures_.end();
+}
+
+void IntroRuntime::bind_first_cut_fade_phase_one_services(IntroFadePicturePhaseOneServices services) {
+  if(fade_picture_phase_one_services_ || components_.failed() ||
+      !services.engine_dimensions || !services.invalidate_resource ||
+      fade_picture_reader_states_.size()!=3U || fade_picture_component_reader_states_.size()!=3U)
+    throw std::runtime_error("First-cut fade phase one requires complete readers and retained scene services");
+  for(const auto& [source,reader]:fade_picture_reader_states_) {
+    static_cast<void>(source);
+    if(!first_cut_fade_reader_matches(reader.component_index))
+      throw std::runtime_error("First-cut fade phase one has mismatched live reader state");
+  }
+  fade_picture_phase_one_services_=std::move(services);
+}
+
+void IntroRuntime::run_first_cut_fade_phase_one(std::size_t component_index,
+                                               runtime::ComponentRecord& record) {
+  if(component_index>=components_.size() || &record!=&components_.at(component_index) ||
+      !fade_picture_phase_one_services_ || !first_cut_fade_reader_matches(component_index))
+    throw std::runtime_error("FadeToBlack phase one requires its source-backed picture and scene services");
+  // A later explicit phase-one pass may initialize the same live component
+  // again. Revoke its previous completion evidence before invoking services;
+  // failures must not leave a stale success registration behind.
+  const IntroComponentAdmissionIdentity identity{component_handle(component_index)};
+  std::erase(supported_component_admissions_,identity);
+  const auto dimensions=fade_picture_phase_one_services_->engine_dimensions();
+  if(!first_cut_fade_reader_matches(component_index))
+    throw std::runtime_error("FadeToBlack dimension sampling changed its live reader state");
+  const auto source=*record.source().directory_index;
+  auto& owner=constructed_picture_owners_.at(source);
+  auto& picture=picture_for_source(source);
+  auto& size=*constructed_picture_components_.at(component_index).fade_size;
+  size.initialize(owner.size_scale,dimensions[0],dimensions[1],picture.submission_cache(),[&] {
+    fade_picture_phase_one_services_->invalidate_resource(owner.owner,owner.resource);
+  });
+  if(!first_cut_fade_reader_matches(component_index))
+    throw std::runtime_error("FadeToBlack invalidation changed its live reader state");
+  record_supported_component_admission(component_index);
 }
 
 void IntroRuntime::apply_supported_first_cut_legal_picture_deferred_reader(

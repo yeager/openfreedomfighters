@@ -1,5 +1,10 @@
 # Intro bootstrap evidence and implementation gates
 
+See the [intro and main-menu plan](INTRO_AND_MENU_PLAN.md) for the current
+delivery order and complete-path acceptance tests. Historical probe counts below
+are measurements of their recorded implementation boundary, not a completion
+percentage or a replacement for current reader-coverage output.
+
 ## Next runnable integration
 
 ### Private visual observation target
@@ -38,11 +43,12 @@ CharFader reuses Fade events, while LogoFade declares none. Temporary component
 construction is removed from the live list while preserving its construction
 serial effects. The host also exposes checked, explicit boundaries for the
 post-construction reader bracket, approved reference translation, loader tail,
-and global component passes. Normal startup now runs the ordinary reader bracket
-and admits twelve reviewed reader records without executing a command or activating
-a component. The remaining 408 records and the concrete production services
-needed to invoke the checked loader-tail transition are unavailable, as are
-renderer association, scene update, and rendering. See [live resource flags](RESOURCE_STATE.md) and the
+and global component passes. Normal startup runs the ordinary reader bracket
+with partial source-backed reader coverage, without executing a command or
+activating a component. Full required reader coverage and the concrete services
+needed to invoke the checked loader-tail transition remain incomplete, as do
+renderer association, scene update, and admitted scene rendering.
+See [live resource flags](RESOURCE_STATE.md) and the
 [component lifecycle](COMPONENT_LIFECYCLE.md).
 
 `--probe-first-cut-cold` also emits a privacy-safe reader-coverage summary from
@@ -68,7 +74,7 @@ Their differing framing profiles prove that a type-wide base-object reader would
 be unsound. None is admitted until its owner fields and attachment dispatch
 contract have been independently recovered.
 
-The owned-data probe currently finds 420 queued readers: 12 applied, 20
+An earlier owned-data probe recorded 420 queued readers: 12 applied, 20
 recognized-but-not-admitted owner forms, and 388 unclassified.
 Of the unclassified work, 55 records have no attachments and 333 have
 attachments; 302 of those attachment-bearing blocks expose a delimiter before
@@ -116,10 +122,10 @@ type and source identity, not silently replaced by an empty callback.
 
 Controller activation must then update the actual group, camera, view and picture
 registries before the same update's ordered GPU submission. `sdl_gpu_runtime.cpp`
-can render one explicitly selected picture through its opt-in diagnostic bridge,
-using source image data and quad geometry with project-authored fit projection
-and baseline GPU state. Normal startup still calls neither an intro update nor
-an admitted intro draw. Its loop is the integration point for the completed host,
+renders one selected picture using source image data and quad geometry with a
+project-authored fit projection and baseline GPU state. Normal startup now uses
+the same static preview after the splash, but calls neither an intro update nor
+an admitted scene draw. Its loop is the integration point for the completed host,
 not evidence that the scene is already running.
 
 ## Retained native host
@@ -185,7 +191,7 @@ A private probe using the owned archive checks the complete ROOT-through-469
 construction boundary: all 470 authored resources and owners, 420 queued
 reader records, 383 constructed attachments, saved flags, event mapping,
 hierarchy, and cold sound-owner state. The normal cold path additionally runs
-the bracket and resolves twelve reviewed reader records. It does not activate
+the bracket and applies its implemented reader subset. It does not activate
 components, construct a cut sequence, dispatch events, or create live Picture
 backing.
 
@@ -741,11 +747,11 @@ rejects non-picture sources, empty plans, missing or invalid images, duplicate
 image identities, and invalid target extents. It does not select a camera,
 compute a view, alter runtime state, activate a cut, or issue GPU work.
 
-The snapshot is not wired into normal startup or treated as intro playback.
-`--diagnostic-intro-picture` is an opt-in source-data diagnostic that submits
-one selected snapshot through a project-authored fit projection and baseline GPU
-state. Picture visibility, ordering, camera admission, pass state and the
-original external basis-scale policy still require independent recovery.
+Normal startup displays this snapshot after the project splash through a
+project-authored fit projection and baseline GPU state. The same bridge is
+available explicitly through `--diagnostic-intro-picture`. Neither path is
+intro playback. Picture visibility, ordering, camera admission, pass state and
+the original external basis-scale policy still require independent recovery.
 
 ## Conditional first-cut presentation
 

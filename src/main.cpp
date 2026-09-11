@@ -820,6 +820,8 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
     std::cout << "reader-signature=" << signature << " count=" << count << '\n';
   std::cout << "outer-loader-tail=native-services-required\n"
             << "outer-loader-named-global-bytes=" << tail_readiness.named_global_bytes << '\n'
+            << "outer-loader-named-global-native-supported="
+            << (tail_readiness.named_global_native_supported ? "yes" : "no") << '\n'
             << "outer-loader-renderer-bytes=" << tail_readiness.renderer_resource_bytes << '\n'
             << "outer-loader-associations=" << tail_readiness.resource_association_count << '\n'
             << "outer-loader-allocation-sizing-rows=" << tail_readiness.allocation_sizing_row_count << '\n';

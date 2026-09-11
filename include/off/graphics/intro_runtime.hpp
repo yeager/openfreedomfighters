@@ -7,6 +7,7 @@
 #include "off/data/first_cut_component_payload_session.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
+#include "off/graphics/intro_named_global_references.hpp"
 #include "off/graphics/intro_renderer_relocation_prefix.hpp"
 #include "off/graphics/intro_controller_initialization.hpp"
 #include "off/graphics/intro_lifecycle_admission.hpp"
@@ -24,6 +25,7 @@
 #include "off/graphics/root_group_component.hpp"
 #include "off/graphics/picture_ordered_coordinator.hpp"
 #include "off/graphics/center_picture_position.hpp"
+#include "off/graphics/fade_picture_size.hpp"
 #include "off/cutscene/picture_activation_prefix.hpp"
 #include <map>
 #include <memory>
@@ -147,6 +149,7 @@ struct IntroConstructedPictureComponent {
   std::int32_t attachment_argument{};
   std::uint32_t raw_attachment_argument{};
   std::optional<std::uint32_t> fade_start,fade_deadline,fade_state,fade_in_event,fade_out_event;
+  std::unique_ptr<FadePictureSize> fade_size;
   std::optional<std::string> target_name;
   std::optional<std::uint32_t> script_reference;
   std::optional<IntroAnimationConstructionState> animation;
@@ -301,9 +304,9 @@ struct IntroDeferredReaderWork {
 enum class IntroLifecyclePreflightFailure : std::uint8_t {
   none,stage,reader_coverage,component_coverage,owner_coverage,live_mapping,unsupported
 };
-// Snapshot of the dynamic scene inventory required before normal startup may
-// enter its reader bracket or global lifecycle. Counts are evidence, never a
-// substitute for typed implementation registration.
+// Snapshot of dynamic scene requirements and completed typed work. Component
+// and owner counts describe completed effects, not readiness to enter a fresh
+// global initializer; reader receipts alone cannot satisfy them.
 struct IntroLifecyclePreflightReport {
   std::size_t expected_readers{},covered_readers{};
   std::size_t expected_components{},covered_components{};
@@ -520,6 +523,15 @@ struct IntroFadePictureComponentReaderState {
   data::GmsWindowPictureSource authored;
   std::uint32_t picture_asset_reference{};
 };
+// Retained scene services for the reviewed first-cut FadeToBlack phase one.
+// Dimensions are one engine snapshot per callback, not source/texture extents.
+// Invalidation observes committed canonical size and dirty picture cache. It
+// must preserve owner/component lifetime and may perform only its documented
+// resource-service effects. Neither callback grants scene or draw admission.
+struct IntroFadePicturePhaseOneServices {
+  std::function<std::array<std::int32_t,2>()> engine_dimensions;
+  std::function<void(IntroRuntimeHandle,IntroRuntimeResourceHandle)> invalidate_resource;
+};
 struct IntroLegalPictureReaderState {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
@@ -595,6 +607,9 @@ struct IntroAuxiliaryArraySources {
 // present source section as successfully consumed by a no-op substitute.
 struct IntroOuterLoaderTailServices {
   std::optional<IntroNamedGlobalPayload> named_global_payload;
+  // Omit both callbacks to use the concrete supported-intro null-reference
+  // reader and this scene's property registry. Supplying only one is invalid.
+  // Other forms still require a separately implemented explicit pair.
   // The relocation callback receives an owned copy of the complete tagged
   // block (including its header). It is responsible for only independently
   // verified reference relocations; it must not imply typed-reader success.
@@ -642,6 +657,10 @@ struct IntroSceneResourceProperty {
   std::optional<std::uint64_t> object_token{};
   std::optional<IntroRuntimeHandle> owner_handle{};
   std::uint32_t setter_flags{};
+  // Present even when null. This is the copied four-byte source reference,
+  // not an allocated resource, owner identity or collection lease. Only zero
+  // is admitted by the supported named/global reader.
+  std::optional<std::uint32_t> scalar_reference_bits{};
 };
 struct IntroSourceResourceScope {
   std::uint32_t count_group{};
@@ -881,9 +900,9 @@ public:
   [[nodiscard]] std::span<const IntroRuntimeResourceHandle> loaded_resource_handles() const noexcept {return loaded_resource_handles_;}
   [[nodiscard]] std::span<const std::optional<IntroRuntimeResourceHandle>> directory_resource_mapping() const noexcept {return directory_resource_mapping_;}
   [[nodiscard]] std::span<const IntroDeferredReaderWork> deferred_reader_work() const noexcept {return deferred_reader_work_;}
-  // Does not execute a reader, lifecycle callback or host service. Current
-  // concrete coverage is intentionally incomplete, so ordinary startup must
-  // remain outside this boundary until typed registrations are installed.
+  // Read-only completed-work diagnostic, not readiness to enter initialization:
+  // component/owner coverage requires actual completed callbacks. It does not
+  // execute services or authorize a fresh global lifecycle pass.
   [[nodiscard]] IntroLifecyclePreflightReport preflight_global_lifecycle() const;
   // Aggregate-only recovery inventory. It exposes neither source identities nor
   // payloads, and classifies a family only through an existing reviewed reader
@@ -992,6 +1011,11 @@ public:
   [[nodiscard]] const IntroExternalCutCommandsReaderState* external_cut_commands_reader_state() const noexcept {return external_cut_commands_reader_state_?&*external_cut_commands_reader_state_:nullptr;}
   void apply_supported_first_cut_fade_picture_deferred_reader(const IntroDeferredReaderWork& work);
   void apply_supported_first_cut_fade_picture_component_reader(const IntroDeferredReaderWork& work);
+  // Bind once after all three source-backed owner/component readers complete.
+  // Does not invoke the services or factory callbacks. Borrowed service state
+  // must outlive this runtime; normal startup remains cold until real lifecycle
+  // admission. Existing lifecycle dispatch invokes the concrete phase-one body.
+  void bind_first_cut_fade_phase_one_services(IntroFadePicturePhaseOneServices services);
   [[nodiscard]] const std::map<std::size_t,IntroFadePictureReaderState>& fade_picture_reader_states() const noexcept {return fade_picture_reader_states_;}
   [[nodiscard]] const std::map<std::size_t,IntroFadePictureComponentReaderState>& fade_picture_component_reader_states() const noexcept {return fade_picture_component_reader_states_;}
   void apply_supported_first_cut_legal_picture_deferred_reader(const IntroDeferredReaderWork& work);
@@ -1121,6 +1145,7 @@ private:
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;
   std::map<std::size_t,IntroFadePictureReaderState> fade_picture_reader_states_;
   std::map<std::size_t,IntroFadePictureComponentReaderState> fade_picture_component_reader_states_;
+  std::optional<IntroFadePicturePhaseOneServices> fade_picture_phase_one_services_;
   std::optional<IntroLegalPictureReaderState> legal_picture_reader_state_;
   std::optional<IntroLegalPictureComponentReaderState> legal_picture_component_reader_state_;
   IntroControllerInitialization controller_initialization_;
@@ -1153,12 +1178,15 @@ private:
   // Written only after the reviewed sound-owner pre-hook completes. This is
   // evidence for that one owner boundary, not a substitute for traversal.
   std::vector<IntroOwnerAdmissionIdentity> supported_owner_admissions_;
-  // Written only by the four reviewed sound-family phase-one callbacks after
-  // each callback has completed its concrete live-state work.
+  // Written by reviewed sound and first-cut FadeToBlack phase-one callbacks
+  // after their concrete live-state work. These are completion evidence, not
+  // readiness registrations for entering the global initializer.
   std::vector<IntroComponentAdmissionIdentity> supported_component_admissions_;
   void record_supported_reader_admission(const IntroDeferredReaderWork& work);
   void record_supported_owner_admission(std::size_t source, IntroRuntimeHandle owner);
   void record_supported_component_admission(std::size_t component);
+  [[nodiscard]] bool first_cut_fade_reader_matches(std::size_t component) const;
+  void run_first_cut_fade_phase_one(std::size_t component,runtime::ComponentRecord& record);
   void allocate_source_scope(std::uint32_t count_group);
   std::map<std::size_t,std::unique_ptr<IntroWindowOwner>> window_owners_;
   IntroWindowOwner* window_owner_{}; // Non-owning first-cut convenience, never latest Window.
@@ -1186,7 +1214,7 @@ private:
   std::uint64_t next_scene_lifetime_keys_handle_{1};
   std::uint64_t next_scene_lifetime_keys_backing_generation_{1};
   IntroRuntimeHandle current_source_parent_{};
-  std::map<std::string,IntroSceneResourceProperty,std::less<>> scene_resource_properties_;
+  std::map<std::string,IntroSceneResourceProperty,IntroPropertyNameLess> scene_resource_properties_;
   std::optional<IntroRootOwnerState> root_owner_state_;
   std::vector<std::size_t> root_attachments_;
   bool resource_allocation_enabled_{}; // Actual scene-constructor mode starts off.

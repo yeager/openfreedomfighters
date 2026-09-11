@@ -23,6 +23,7 @@ enum class IntroOuterLoaderTailBoundary {
 
 struct IntroOuterLoaderTailReadiness {
   std::size_t named_global_bytes{};
+  bool named_global_native_supported{};
   std::size_t renderer_resource_bytes{};
   std::size_t resource_association_count{};
   std::size_t allocation_sizing_row_count{};

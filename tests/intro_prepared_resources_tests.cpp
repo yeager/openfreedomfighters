@@ -157,14 +157,15 @@ Bytes controller(FixtureReferenceMap map={}) {
     scalar(b, 0x83, 17); scalar(b, 0x88, 0); scalar(b, 8, 2);
     b.push_back(std::byte{6}); finish(b); return b;
 }
-Bytes first_cut(FixtureReferenceMap map={},bool include_events=true) {
+Bytes first_cut(FixtureReferenceMap map={},bool include_events=true,bool three_fade_targets=false) {
     Bytes b(4); scalar(b, 0x89, 8); word(b, map(5)); b.push_back(std::byte{6});
     constexpr std::array<std::uint8_t, 7> tags{0x83, 0x83, 3, 8, 3, 0x83, 3};
     for (std::size_t i = 0; i < tags.size(); ++i) scalar(b, tags[i], i == 3 ? 0 : 1);
     floating(b, 2, -0.0F); b.push_back(std::byte{6});
     for (std::uint32_t i = 0; i < 5; ++i) {
         scalar(b, 3, 31 - i); scalar(b, 0x8a, i == 4 || !include_events ? 0 : 1);
-        scalar(b, 0x88, map(2)); scalar(b, 0x83, 100 + i);
+        constexpr std::array<std::uint32_t,5> fade_references{5U,8U,10U,5U,8U};
+        scalar(b, 0x88, three_fade_targets?fade_references[i]:map(2)); scalar(b, 0x83, 100 + i);
         b.push_back(std::byte{4}); text(b, "IndependentTarget"); b.push_back(std::byte{6});
     }
     finish(b); return b;
@@ -242,7 +243,7 @@ struct Fixture {
     std::array<std::size_t, 10> block_offsets{};
     std::array<std::size_t, 10> attachment_offsets{};
     std::size_t remaining_sound_source_offset{};
-    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false,bool room_animation_scope=false,bool lens_flare_scope=false,bool remaining_scope=false) : payload(1024), snd(16) {
+    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false,bool room_animation_scope=false,bool lens_flare_scope=false,bool remaining_scope=false,bool three_fade_targets=false) : payload(1024), snd(16) {
         if(language_group && !leading_group) throw std::runtime_error("language fixture requires leading group");
         if(camera_row && !language_group) throw std::runtime_error("camera row fixture requires language group");
         if(second_window && !camera_row) throw std::runtime_error("second Window fixture requires Camera row");
@@ -251,6 +252,7 @@ struct Fixture {
         if(room_animation_scope && !following_visual_scope) throw std::runtime_error("Room fixture requires preceding visual scope");
         if(lens_flare_scope && !room_animation_scope) throw std::runtime_error("Lens fixture requires preceding Room scope");
         if(remaining_scope && !lens_flare_scope) throw std::runtime_error("remaining fixture requires the preceding clean scope");
+        if(three_fade_targets && !remaining_scope) throw std::runtime_error("three fade targets require the complete fixture");
         // Deliberately permuted directory roles; no retail source indices.
         set(payload, 0, 32); set(payload, 4, 128); set(payload, 12, 4); set(payload, 20, 176);
         set(payload, 32, include_sound?10:9); set(payload, 128, 1); set(payload, 132, 144);
@@ -493,7 +495,7 @@ struct Fixture {
                 remaining_member_source=payload.size();
                 payload.insert(payload.end(),member_source.begin(),member_source.end());
                 while(payload.size()%4) payload.push_back(std::byte{0});
-                Bytes first_cut_source=first_cut(bias);
+                Bytes first_cut_source=first_cut(bias,true,three_fade_targets);
                 set(first_cut_source,9,460U);
                 remaining_first_cut_source=payload.size();
                 payload.insert(payload.end(),first_cut_source.begin(),first_cut_source.end());
@@ -1566,8 +1568,10 @@ struct CompleteOuterLoaderTailObservation final {
     }
 };
 
+enum class NamedTailTestMode { callbacks, native, invalid_second, partial_reader, partial_relocator };
+
 static OFF_NOINLINE void check_complete_outer_loader_tail(
-    off::graphics::IntroRuntime& host) {
+    off::graphics::IntroRuntime& host, NamedTailTestMode named_mode) {
         const auto inputs=host.outer_loader_source_inputs();
         const auto& retained=host.resources().outer_loader_sources();
         const auto same_payload=[](const auto& supplied,const auto& source) {
@@ -1585,7 +1589,63 @@ static OFF_NOINLINE void check_complete_outer_loader_tail(
               "outer loader exposes only source-backed tail payloads and association pairs");
         CompleteOuterLoaderTailObservation observation{host};
         auto tail_services=observation.services();
+        Bytes native_named_payload;
+        bool native_renderer_reached{};
+        const auto root_resource=host.resource_handle(host.root_handle());
+        if(named_mode!=NamedTailTestMode::callbacks) {
+          text(native_named_payload,"FixtureCamera,FixtureListener");
+          const auto block_offset=native_named_payload.size();
+          Bytes block(4);
+          scalar(block,0x08,0U);scalar(block,0x08,0U);
+          block.push_back(std::byte{0x06});finish(block);
+          native_named_payload.insert(native_named_payload.end(),block.begin(),block.end());
+          if(named_mode==NamedTailTestMode::invalid_second)
+            native_named_payload[block_offset+10U]=std::byte{1};
+          tail_services.named_global_payload=off::graphics::IntroNamedGlobalPayload{native_named_payload};
+          if(named_mode!=NamedTailTestMode::partial_relocator)
+            tail_services.relocate_named_global_references={};
+          if(named_mode!=NamedTailTestMode::partial_reader)
+            tail_services.read_named_global_payload={};
+          host.set_scene_resource_property_native("FIXTURECAMERA",root_resource);
+          host.set_scene_resource_property_native("UnrelatedFixture",root_resource);
+          const auto original_parser=tail_services.parse_renderer_resource_payload;
+          tail_services.parse_renderer_resource_payload=[&,original_parser](auto bytes) {
+            native_renderer_reached=true;
+            for(const auto name:{"fixturecamera","FIXTURELISTENER"}) {
+              const auto property=host.scene_resource_property(name);
+              check(property && property->type==16U && property->scalar_reference_bits==0U &&
+                        !property->resource.value && !property->object_token && !property->owner_handle,
+                    "renderer parser sees both published typed null properties, not missing or live handles");
+            }
+            check(!host.scene_resource_property("FixtureCamer") &&
+                      host.scene_resource_property("UnrelatedFixture")->resource==root_resource,
+                  "native reader matches full ASCII names and preserves unrelated scene properties");
+            Bytes{}.swap(native_named_payload);
+            return original_parser(bytes);
+          };
+        }
+        if(named_mode==NamedTailTestMode::invalid_second ||
+            named_mode==NamedTailTestMode::partial_reader ||
+            named_mode==NamedTailTestMode::partial_relocator) {
+          rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
+          const auto retained=host.scene_resource_property("fixturecamera");
+          check(retained && retained->resource==root_resource && !retained->scalar_reference_bits &&
+                    !host.scene_resource_property("FixtureListener") && !native_renderer_reached &&
+                    !host.loader_source_lease_released(),
+                "invalid named data or partial callbacks cannot publish a partial registry or advance loading");
+          check(host.outer_loader_tail_stage()==
+                    (named_mode==NamedTailTestMode::invalid_second ?
+                     off::graphics::IntroOuterLoaderTailStage::failed :
+                     off::graphics::IntroOuterLoaderTailStage::incomplete),
+                "invalid named source and incomplete callback pairs retain distinct failure stages");
+          return;
+        }
         host.run_outer_loader_tail_through_saved_services(tail_services);
+        if(named_mode==NamedTailTestMode::native)
+          check(native_renderer_reached && native_named_payload.empty() &&
+                    host.scene_resource_property("FixtureCamera")->scalar_reference_bits==0U &&
+                    host.scene_resource_property("FixtureListener")->scalar_reference_bits==0U,
+                "named properties retain copied names and null values after source destruction and loader release");
         check(host.outer_loader_tail_stage()==off::graphics::IntroOuterLoaderTailStage::second_saved_pass_complete,
               "outer tail reaches the second saved-resource pass");
         check(host.loader_source_lease_released() && host.default_camera_handle() &&
@@ -1598,6 +1658,7 @@ static OFF_NOINLINE void check_complete_outer_loader_tail(
         std::vector<std::string> expected_tail{"relocate","named-reader","renderer-relocate","renderer-parse","renderer-release",
             "associate","release","camera-query",
             "transform","scene","scene","scene"};
+        if(named_mode==NamedTailTestMode::native) expected_tail.erase(expected_tail.begin(),expected_tail.begin()+2);
         for(const auto& saved:host.saved_resource_flags()) expected_tail.push_back("spatial");
         expected_tail.push_back("between");expected_tail.push_back("finalize");
         std::vector<off::graphics::IntroRuntimeResourceHandle> expected_4000;
@@ -1610,7 +1671,13 @@ static OFF_NOINLINE void check_complete_outer_loader_tail(
 }
 
 static OFF_NOINLINE void test_complete_runtime_scopes() {
-    for(const bool policy:{false,true}) {
+    struct Case {bool restore; NamedTailTestMode named;};
+    constexpr std::array cases{
+        Case{false,NamedTailTestMode::callbacks}, Case{true,NamedTailTestMode::callbacks},
+        Case{false,NamedTailTestMode::native}, Case{false,NamedTailTestMode::invalid_second},
+        Case{false,NamedTailTestMode::partial_reader}, Case{false,NamedTailTestMode::partial_relocator}};
+    for(const auto scenario:cases) {
+      const bool policy=scenario.restore;
       Fixture complete(false,true,true,true,true,true,true,true,true,true,true);
       if(!policy) {
         // The complete scope fixture normally exercises a deliberately wider
@@ -1858,9 +1925,176 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
         const auto stopped_admission=host.preflight_global_lifecycle();
         check(stopped_admission.covered_components==4 && stopped_admission.covered_owners==1,
               "stopped sound owners revoke their dependent component and owner lifecycle coverage");
-        check_complete_outer_loader_tail(host);
+        check_complete_outer_loader_tail(host,scenario.named);
       }
       rejects([&]{host.construct_remaining_directory_without_engine_renderer();});
+    }
+}
+
+static OFF_NOINLINE void test_first_cut_fade_runtime_phase_one() {
+    enum class Scenario { complete,missing_binding,missing_component_reader,invalid_dimensions,
+                          dimension_failure,invalidation_failure,changed_owner };
+    for(const auto scenario:{Scenario::complete,Scenario::missing_binding,Scenario::missing_component_reader,
+                             Scenario::invalid_dimensions,Scenario::dimension_failure,
+                             Scenario::invalidation_failure,Scenario::changed_owner}) {
+      Fixture fixture(false,true,true,true,true,true,true,true,true,true,true,true);
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
+      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+      app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
+      app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
+      app.initialize_native_remaining_intro_scope_registration();
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
+      off::graphics::IntroRuntime host(fixture.build(),app,sequence,"FF-Intro.gms",
+          off::graphics::IntroSoundLoadPolicy::directory_construction);
+      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+      host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
+      host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
+      host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
+      host.construct_room_animation_scope_without_engine_renderer();host.set_light_policy(false);
+      host.construct_lens_flare_animation_scope_without_engine_renderer();host.construct_remaining_directory_without_engine_renderer();
+
+      std::vector<std::size_t> sources;
+      for(const auto& command:host.resources().first_cut().commands) {
+        const auto source=host.resources().sources().local_source_for_authored_reference(command.target_reference);
+        if(source && std::ranges::find(sources,*source)==sources.end()) sources.push_back(*source);
+      }
+      std::ranges::sort(sources,std::greater{});
+      check(sources.size()==3U,"complete generated intro has three distinct authored first-cut fade targets");
+      std::vector<std::size_t> components;
+      std::vector<std::uint32_t> flags;
+      for(const auto source:sources) {
+        components.push_back(host.owner_components(host.source_handle(source)).front());
+        flags.push_back(host.resource_state(host.source_handle(source))->flags);
+      }
+      const auto prepare_cache=[&](std::size_t source) {
+        constexpr std::array<float,9> basis{0,0,1,0,1,0,1,0,0};
+        const auto scale=host.constructed_picture_owner(source)->size_scale;
+        const off::graphics::PictureCacheTransformInput input{
+            .submission_position={0,0,0},.aligned_local_position={0,0,0},
+            .virtual_window_scale={0,0,1,1},.cached_basis=basis,.object_matrix=basis,
+            .viewport_width=100,.viewport_height=80,.picture_width=scale[0],.picture_height=scale[1],
+            .owner_projection_scalar=2,.external_y_basis_scale=1};
+        host.picture_for_source(source).submission_cache().submit(
+            std::span<const off::data::BoundPictureDrawGroup>{},input,0,{});
+      };
+      for(const auto source:sources) prepare_cache(source);
+      std::array<std::int32_t,2> dimensions{640,480};
+      std::size_t dimension_calls{};
+      std::vector<std::size_t> notifications,coverage_at_notification;
+      const off::graphics::IntroFadePicturePhaseOneServices services{
+          [&] {
+            ++dimension_calls;
+            if(scenario==Scenario::dimension_failure) throw std::runtime_error("engine dimension service failed");
+            return scenario==Scenario::invalid_dimensions?std::array<std::int32_t,2>{0,480}:dimensions;
+          },
+          [&](auto owner,auto resource) {
+            const auto source=host.source_index(owner).value();
+            const auto component=host.owner_components(owner).front();
+            const auto* picture=host.constructed_picture_owner(source);
+            const auto expected=std::array<float,2>{static_cast<float>(dimensions[0]/16+1),
+                                                   static_cast<float>(dimensions[1]/16+1)};
+            check(picture && picture->owner==owner && picture->resource==resource &&
+                      picture->size_scale==expected && host.picture_for_source(source).submission_cache().dirty() &&
+                      !(host.components().at(component).state().status&4U),
+                  "real fade factory notification sees canonical size and dirty cache before lifecycle completion");
+            notifications.push_back(source);
+            coverage_at_notification.push_back(host.preflight_global_lifecycle().covered_components);
+            if(scenario==Scenario::invalidation_failure && source==sources[1])
+              throw std::runtime_error("native resource invalidation failed");
+          }};
+      rejects([&]{host.bind_first_cut_fade_phase_one_services(services);});
+      host.run_postconstruction_reader_bracket(0,{
+          .external_loader_service=[](auto){},.source_script_work=[](const auto&){},.pre_reader_service=[]{},
+          .prepare_deferred_reader=[](const auto&){},
+          .owner_reader_boundary=[&](const auto& work) {
+            if(std::ranges::find(sources,work.source_directory_index)!=sources.end())
+              host.apply_supported_first_cut_fade_picture_deferred_reader(work);
+          },
+          .component_reader_boundary=[&](const auto& work) {
+            if(host.fade_picture_reader_states().contains(work.source_directory_index) &&
+                !(scenario==Scenario::missing_component_reader && work.source_directory_index==sources[1]))
+              host.apply_supported_first_cut_fade_picture_component_reader(work);
+          },.end_reader_service=[]{}});
+      check(host.fade_picture_reader_states().size()==3U &&
+                host.preflight_global_lifecycle().covered_readers==3U &&
+                host.preflight_global_lifecycle().covered_components==0U,
+            "all three real fade owner readers remain cold and do not establish component completion");
+      if(scenario==Scenario::missing_component_reader) {
+        rejects([&]{host.bind_first_cut_fade_phase_one_services(services);});
+        check(dimension_calls==0U && notifications.empty() && !host.components().failed(),
+              "missing one component reader rejects complete-family binding before any service");
+        continue;
+      }
+      rejects([&]{host.bind_first_cut_fade_phase_one_services({{},services.invalidate_resource});});
+      rejects([&]{host.bind_first_cut_fade_phase_one_services({services.engine_dimensions,{}});});
+      auto& first=host.components().at(components.front());
+      const auto original_owner=first.state().attached_owner;
+      first.state().attached_owner=host.root_handle().value;
+      rejects([&]{host.bind_first_cut_fade_phase_one_services(services);});
+      first.state().attached_owner=original_owner;
+      if(scenario!=Scenario::missing_binding) {
+        host.bind_first_cut_fade_phase_one_services(services);
+        rejects([&]{host.bind_first_cut_fade_phase_one_services(services);});
+      }
+      check(dimension_calls==0U && notifications.empty() &&
+                std::ranges::all_of(sources,[&](auto source) {
+                  return host.constructed_picture_owner(source)->size_scale==std::array<float,2>{1,1} &&
+                      !host.picture_for_source(source).submission_cache().dirty();
+                }),"binding retains required services without initializing a picture or sampling dimensions");
+      if(scenario==Scenario::changed_owner)
+        host.components().at(components[1]).state().attached_owner=host.root_handle().value;
+      if(scenario==Scenario::complete) {
+        host.components().run_scoped_phase_one(components);
+        check(notifications==sources && coverage_at_notification==std::vector<std::size_t>{0,1,2} &&
+                  dimension_calls==3U && host.preflight_global_lifecycle().covered_components==3U,
+              "actual factory callbacks complete three source-backed fades in reverse construction order");
+        for(const auto source:sources) prepare_cache(source);
+        // Scoped dispatch intentionally has a once-only completion gate. Clear
+        // only that test gate to exercise the same factory body on a repeated
+        // explicit phase-one visit, as permitted by the global pass contract.
+        for(const auto component:components) host.components().at(component).state().status&=~4U;
+        dimensions={655,495};
+        host.components().run_scoped_phase_one(components);
+        check(notifications.size()==3U && dimension_calls==6U &&
+                  host.preflight_global_lifecycle().covered_components==3U &&
+                  std::ranges::all_of(sources,[&](auto source) {
+                    return !host.picture_for_source(source).submission_cache().dirty();
+                  }),"repeated equal dimensions preserve clean caches and do not duplicate completion identities");
+        for(const auto component:components) host.components().at(component).state().status&=~4U;
+        dimensions={656,496};
+        host.components().run_scoped_phase_one(components);
+        check(notifications.size()==6U && dimension_calls==9U &&
+                  host.preflight_global_lifecycle().covered_components==3U &&
+                  std::ranges::all_of(sources,[&](auto source) {
+                    return host.constructed_picture_owner(source)->size_scale==std::array<float,2>{42,32};
+                  }),"later changed dimensions update the same canonical stores through the same factory callbacks");
+        first.state().attached_owner=host.root_handle().value;
+        check(host.preflight_global_lifecycle().covered_components==2U,
+              "completed fade coverage rejects a later mismatched canonical component owner");
+        first.state().attached_owner=original_owner;
+      } else {
+        rejects([&]{host.components().run_scoped_phase_one(components);});
+        const bool prefix=scenario==Scenario::invalidation_failure || scenario==Scenario::changed_owner;
+        check(host.components().failed() && host.preflight_global_lifecycle().covered_components==(prefix?1U:0U),
+              "failed factory dispatch retains only the actually completed component prefix");
+        for(std::size_t index=0;index<sources.size();++index) {
+          const bool changed=prefix && (index==0U || (index==1U && scenario==Scenario::invalidation_failure));
+          check(host.constructed_picture_owner(sources[index])->size_scale==
+                    (changed?std::array<float,2>{41,31}:std::array<float,2>{1,1}) &&
+                    host.picture_for_source(sources[index]).submission_cache().dirty()==changed &&
+                    ((host.components().at(components[index]).state().status&4U)!=0U)==(prefix && index==0U),
+                "failed dimension/source/notification paths preserve precise size, cache and completion prefixes");
+        }
+      }
+      const auto report=host.preflight_global_lifecycle();
+      check(!report.ready() && report.covered_owners==0U && report.covered_readers==3U &&
+                !host.components().phases_completed() && host.registered_cameras().entries().empty(),
+            "fade component completion does not admit owners, global lifecycle, cameras or rendering");
+      for(std::size_t index=0;index<sources.size();++index)
+        check(host.resource_state(host.source_handle(sources[index]))->flags==flags[index],
+              "fade dimension initialization does not invent resource flag effects");
     }
 }
 
@@ -2789,9 +3023,9 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         const auto property=host.scene_resource_property("rWindows");
         check(property && property->type==16 && property->resource==window->group.resource &&
               host.scene_resource_property("IndependentProperty")->resource==root_resource &&
-              host.scene_resource_property("rwindows")->resource==root_resource &&
+              host.scene_resource_property("rwindows")->resource==window->group.resource &&
               !host.scene_resource_property("AbsentProperty"),
-              "Window replaces its typed scene property while preserving unrelated and differently cased keys");
+              "Window replaces ASCII case variants in its shared registry and preserves unrelated keys");
         check(host.child_owners(root)==std::vector<off::graphics::IntroRuntimeHandle>{host.source_handle(0),window->group.owner} &&
               host.child_owners(window->group.owner)==std::vector<off::graphics::IntroRuntimeHandle>{language->owner} &&
               host.child_owners(language->owner).empty() &&
@@ -3912,6 +4146,7 @@ int main(int argc, char* argv[]) {
         TestGroup{"named-global-envelopes", test_named_global_envelopes},
         TestGroup{"prepared-runtime-scopes", test_prepared_runtime_scopes},
         TestGroup{"complete-runtime-scopes", test_complete_runtime_scopes},
+        TestGroup{"first-cut-fade-phase-one", test_first_cut_fade_runtime_phase_one},
         TestGroup{"room-animation-runtime-scope", test_room_animation_runtime_scope},
         TestGroup{"visual-scope-lifecycle", test_visual_scope_lifecycle},
         TestGroup{"prepared-resource-variants", test_prepared_resource_variants},

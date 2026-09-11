@@ -2,11 +2,13 @@
 
 ## Startup and intro
 
+- [Intro and main-menu implementation plan](INTRO_AND_MENU_PLAN.md)
 - [Intro bootstrap](INTRO_BOOTSTRAP.md)
 - [Application clock and sound preferences](APPLICATION_SERVICES.md)
 - [Retained component lifecycle](COMPONENT_LIFECYCLE.md)
 - [Intro lifecycle recovery inventory](INTRO_LIFECYCLE_INVENTORY.md)
 - [Live resource flags and root construction](RESOURCE_STATE.md)
+- [Intro named-reference properties](INTRO_NAMED_GLOBAL.md)
 - [Ordinary component updates](ORDINARY_COMPONENTS.md)
 - [Camera registration and sound listener](CAMERA_REGISTRATION.md)
 - [Preview camera controls](PREVIEW_CAMERA.md)

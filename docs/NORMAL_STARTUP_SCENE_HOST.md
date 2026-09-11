@@ -4,8 +4,9 @@ Normal startup constructs and retains the supported intro directory, but it
 does not make that scene current. `NormalIntroSceneSession` owns the retained
 runtime, its exactly-once postconstruction reader bracket, its cold reviewed
 first-cut command session, and the following outer loader-tail transition. The
-tail still requires every concrete service
-from its caller; the session supplies no placeholder parser, association,
+tail now supplies the supported null-reference named reader when neither named
+callback is provided. The remaining services must come from its caller; the
+session supplies no placeholder renderer parser, association,
 camera, scene operation, or saved-resource callback. Reader callback routing
 no longer lives in `main`. `NormalIntroSceneHost` implements the later strict
 ordering state machine described here, but is not yet connected to that session
@@ -19,7 +20,7 @@ prepared scene now retains parser-validated, owned outer-loader source sections
 (named/global, renderer payload, associations, and sizing rows) for that later
 handoff; retaining them neither invokes a service nor advances the tail.
 `NormalIntroSceneSession::outer_loader_tail_readiness()` exposes the exact
-retained section sizes and the still-required service boundaries for diagnostic
+retained section sizes, supported named-reference form and still-required service boundaries for diagnostic
 and recovery work. It is preflight only: it does not provide placeholder
 callbacks, parse a renderer container, or transition the session.
 
@@ -38,8 +39,11 @@ as relocation output would be fabricated and is rejected by design.
 It reports aggregate tag framing only: the label and every payload value remain
 private. This validates the bounded body grammar but deliberately does not
 relocate references, invoke the typed reader, or advance the loader tail. The
-admitted form is two opaque 32-bit words, an attachment delimiter, and a final
-terminator; their meaning remains unrecovered.
+probe accepts two opaque 32-bit words, an attachment delimiter, and a final
+terminator. The separate [native named reader](INTRO_NAMED_GLOBAL.md) now handles
+the narrower supported form: two named null references stored as type-16 values
+in the scene's shared case-insensitive ASCII registry. Its loader-tail integration
+is tested, but normal startup cannot call that tail until the other services exist.
 
 ## Required ordering
 

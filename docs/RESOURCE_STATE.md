@@ -349,14 +349,18 @@ translation, the loader tail, and global component-pass ordering. The tail
 accepts concrete caller-provided services, but its payloads and association
 pairs now come through `IntroRuntime::outer_loader_source_inputs()`, which is
 borrowed directly from the installed intro resource. Its optional named/global
-byte payload has a complete header-bearing tagged block that is copied, caller-relocated, and
-cursor-reset before its typed-reader callback, an optional renderer-resource parser and
-construction-reference release, independently resolved resource associations,
-and optional auxiliary arrays. It retains no public serialized grammar and does
-not substitute no-op readers or renderer state. These APIs are not part of
-normal startup, and they do not provide concrete reader fields, renderer
-associations, scene updates, rendering, or gameplay. Those integrations still
-precede intro playback.
+byte payload has a complete header-bearing tagged block that is copied,
+relocated and cursor-reset before typed reading. Omitting both named callbacks
+selects the [supported native null-reference reader](INTRO_NAMED_GLOBAL.md);
+providing only one callback is rejected. It copies both names and type-16 null
+values into the shared scene registry before renderer processing, preserving
+unrelated properties. ASCII lookup and replacement ignore case.
+
+The tail still needs concrete renderer parsing and construction-reference
+release, independently resolved associations, and any required auxiliary-array
+services. These APIs are not invoked by normal startup and do not substitute
+no-op readers or renderer state. Renderer materialization, scene updates and
+admitted scene rendering remain prerequisites for intro playback.
 
 The reviewed ordinary renderer-payload reader performs bounded retained-payload
 reference relocation only. It is not a renderer-resource materializer: no

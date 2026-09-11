@@ -22,6 +22,10 @@ Recover missing behavior in batches around these paths. Add lower-level work
 when it blocks a target; keep clean-room, data validation and regression checks
 as delivery requirements. Modern graphics polish follows a working Original path.
 
+The [intro and main-menu plan](INTRO_AND_MENU_PLAN.md) breaks the first two
+targets into runnable milestones, with dependencies, concrete integration work
+and normal-launch acceptance tests. It does not replace the later gameplay gates.
+
 ## Phase 0 - Evidence, policy, and reproducibility
 
 - [x] Identify the Steam installation and record aggregate inventory.

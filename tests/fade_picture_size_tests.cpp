@@ -29,6 +29,94 @@ PictureCacheTransformInput transform_input() {
             .picture_width = 1, .picture_height = 1,
             .owner_projection_scalar = 2, .external_y_basis_scale = 2};
 }
+
+void check_borrowed_scale_initialization() {
+    FadePictureSize size;
+    PictureSubmissionCache cache;
+    std::array<float, 2> scale{3, 4};
+    const std::array<off::data::BoundPictureDrawGroup, 0> groups{};
+    auto input = transform_input();
+    const auto prepare = [&] {
+        input.picture_width = scale[0];
+        input.picture_height = scale[1];
+        cache.submit(groups, input, 0, {});
+    };
+    prepare();
+    const auto previous = cache.cached_state()->transform;
+    int notifications = 0;
+    size.initialize(scale, 640, 480, cache, [&] {
+        ++notifications;
+        check(scale == std::array<float, 2>{41, 31} && cache.dirty(),
+              "borrowed hook sees both canonical scales committed before notification");
+        check(cache.cached_state()->transform.basis == previous.basis &&
+                  size.scale() == std::array<float, 2>{1, 1},
+              "borrowed initialization leaves cached transform and standalone storage untouched");
+    });
+    prepare();
+    check(cache.cached_state()->transform.basis == prepare_picture_cache_transform(input).basis &&
+              cache.cached_state()->transform.basis != previous.basis,
+          "borrowed canonical scales feed the invalidated transform");
+    size.initialize(scale, 655, 495, cache, {});
+    check(notifications == 1 && !cache.dirty(),
+          "equal borrowed scales need no notification hook or invalidation");
+
+    const auto retained = scale;
+    const auto notify = [&] { ++notifications; };
+    for (const auto invalid : {0, -1, std::numeric_limits<std::int32_t>::min()}) {
+        rejects([&] { size.initialize(scale, invalid, 1, cache, notify); });
+        rejects([&] { size.initialize(scale, 1, invalid, cache, notify); });
+    }
+    rejects([&] { size.initialize(scale, 16, 16, cache, {}); });
+    check(scale == retained && !cache.dirty() && notifications == 1,
+          "invalid borrowed inputs preserve canonical scale and cache");
+    for (const auto mode : {FE_DOWNWARD, FE_UPWARD, FE_TOWARDZERO}) {
+        if (std::fesetround(mode) == 0) {
+            rejects([&] { size.initialize(scale, 16, 16, cache, notify); });
+            check(scale == retained && !cache.dirty() && notifications == 1,
+                  "unsupported borrowed rounding fails before owner mutations");
+        }
+    }
+    check(std::fesetround(FE_TONEAREST) == 0, "restore nearest rounding for borrowed state");
+
+    rejects([&] { size.initialize(scale, 64, 80, cache, [&] {
+        ++notifications;
+        check(scale == std::array<float, 2>{5, 6} && cache.dirty(),
+              "failing borrowed hook observes the committed canonical prefix");
+        throw std::runtime_error("borrowed resource notification failure");
+    }); });
+    check(scale == std::array<float, 2>{5, 6} && cache.dirty(),
+          "borrowed notification failure retains scale and cache mutations");
+    prepare();
+    size.initialize(scale, 64, 80, cache, {});
+    check(notifications == 2 && !cache.dirty(),
+          "equal borrowed retry does not repeat a failed notification");
+
+    size.initialize(scale, 80, 96, cache, [&] {
+        rejects([&] { size.initialize(scale, 80, 96, cache, {}); });
+        rejects([&] { size.initialize(scale, 96, 112, cache, notify); });
+        rejects([&] { size.initialize(1, 1, cache, {}); });
+        rejects([&] { size.initialize(16, 16, cache, notify); });
+        check(scale == std::array<float, 2>{6, 7} &&
+                  size.scale() == std::array<float, 2>{1, 1},
+              "borrowed callback rejects equal and changed reentry through both overloads");
+    });
+    size.initialize(16, 16, cache, [&] {
+        rejects([&] { size.initialize(scale, 80, 96, cache, {}); });
+        rejects([&] { size.initialize(scale, 96, 112, cache, notify); });
+        check(scale == std::array<float, 2>{6, 7} &&
+                  size.scale() == std::array<float, 2>{2, 2},
+              "standalone callback uses the same guard as borrowed initialization");
+    });
+    rejects([&] { size.initialize(scale, 96, 112, cache, [&] {
+        size.initialize(32, 32, cache, notify);
+    }); });
+    check(scale == std::array<float, 2>{7, 8} &&
+              size.scale() == std::array<float, 2>{2, 2},
+          "uncaught cross-overload reentry retains only the outer canonical write");
+    size.initialize(scale, 112, 128, cache, notify);
+    check(scale == std::array<float, 2>{8, 9},
+          "shared guard releases after a borrowed callback throws");
+}
 }
 
 int main() {
@@ -125,6 +213,7 @@ int main() {
     check(size.scale() == std::array<float, 2>{6, 7}, "uncaught nested rejection retains outer committed write");
     size.initialize(96, 112, cache, notify);
     check(size.scale() == std::array<float, 2>{7, 8}, "guard releases after callback exception");
+    check_borrowed_scale_initialization();
     if (original_rounding != -1) check(std::fesetround(original_rounding) == 0, "restore incoming rounding mode");
     return failures == 0 ? 0 : 1;
 }

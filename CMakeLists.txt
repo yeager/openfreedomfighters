@@ -662,6 +662,7 @@ if(BUILD_TESTING)
     foreach(OFF_INTRO_PREPARED_RESOURCES_TEST_GROUP IN ITEMS
             outer-loader-tail-readiness
             named-global-envelopes
+            first-cut-fade-phase-one
             prepared-runtime-scopes
             complete-runtime-scopes
             room-animation-runtime-scope
@@ -675,6 +676,12 @@ if(BUILD_TESTING)
             COMMAND off_intro_prepared_resources_tests
                     "${OFF_INTRO_PREPARED_RESOURCES_TEST_GROUP}")
     endforeach()
+
+    add_executable(off_intro_named_global_references_tests
+        tests/intro_named_global_references_tests.cpp)
+    target_link_libraries(off_intro_named_global_references_tests PRIVATE off_core)
+    add_test(NAME off_intro_named_global_references_tests
+        COMMAND off_intro_named_global_references_tests)
 
     add_executable(off_intro_lifecycle_admission_tests
         tests/intro_lifecycle_admission_tests.cpp)

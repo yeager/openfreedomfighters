@@ -26,6 +26,13 @@ public:
     // Caller must supply this owner's cache; no reentry or owner destruction.
     void initialize(std::int32_t engine_width, std::int32_t engine_height,
                     PictureSubmissionCache& cache, const InvalidationHook& hook);
+    // Operates directly on this owner's canonical scale storage. The reference
+    // is borrowed only for the call; scale() still returns standalone storage.
+    // The hook sees committed canonical scales and the dirty paired cache.
+    // Both overloads share the same guard against callback reentry.
+    void initialize(std::array<float, 2>& scale, std::int32_t engine_width,
+                    std::int32_t engine_height, PictureSubmissionCache& cache,
+                    const InvalidationHook& hook);
     [[nodiscard]] const std::array<float, 2>& scale() const noexcept { return scale_; }
 
 private:
