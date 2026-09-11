@@ -80,10 +80,11 @@ for a portable installation.
   it must admit lifecycle, the first cut, camera/view, drawing and audio in one
   ordinary-frame order. Its reader-stage session is connected; later lifecycle
   and rendering stages are not implemented yet.
-- F10 opens a working graphics-settings panel. It renders project-authored text
-  with in-memory retail UI fonts when coverage is available, including
-  mixed-script LTR runs aligned to one baseline. Its current appearance is
-  still diagnostic; matching the game's menu design is on the roadmap.
+- F10 opens a working graphics-settings panel. It uses a project-authored,
+  letterboxed menu composition and restrained text focus, informed by private
+  observation without copying retail UI pixels or wording. Text follows the
+  system locale and uses in-memory retail UI fonts when coverage is available,
+  including mixed-script LTR runs aligned to one baseline.
 - A separate geometry preview is available with `--diagnostic-scene`. It is not
   a loaded level or a gameplay demo.
 - Project-authored deterministic simulation replays have a versioned `OFRP`
