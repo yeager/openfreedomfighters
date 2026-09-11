@@ -59,6 +59,10 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                // no-side-effect source, component, KEYS and payload gates.
                if (runtime_->supports_matpos_deferred_reader(work))
                  runtime_->apply_supported_matpos_deferred_reader(work);
+               // VertAnim has its own fixed source-backed reader gate. Other
+               // records with the same component name remain unclassified.
+               if (runtime_->supports_vert_anim_deferred_reader(work))
+                 runtime_->apply_supported_vert_anim_deferred_reader(work);
                const auto legal =
                    r.sources().local_source_for_authored_reference(
                        r.member().references[1]);

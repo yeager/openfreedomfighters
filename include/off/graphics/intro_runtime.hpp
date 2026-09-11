@@ -7,6 +7,7 @@
 #include "off/data/first_cut_component_payload_session.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
 #include "off/data/matpos_deferred_component_reader.hpp"
+#include "off/data/vert_anim_deferred_component_reader.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_named_global_references.hpp"
 #include "off/graphics/intro_renderer_relocation_prefix.hpp"
@@ -320,7 +321,7 @@ enum class IntroDeferredReaderFamily : std::uint8_t {
   unclassified, sound_owner, window_owner, movie_controller,
   first_cut_sequence, first_cut_list, first_cut_legal_picture,
   external_cut_commands, first_cut_fade_picture, first_cut_camera,
-  basic_group_owner, following_visual_owner,
+  basic_group_owner, following_visual_owner, vert_anim_component,
 };
 enum class IntroDeferredReaderImplementationState : std::uint8_t {
   unimplemented, implemented_not_applied, applied,
@@ -477,6 +478,15 @@ struct IntroMatPosDeferredReaderState {
   std::uint32_t source_offset{};
   data::MatPosDeferredComponentValues values;
   std::size_t refresh_count{};
+};
+// Immutable state for the one verified VertAnim reader form. It is not a
+// player, event registration, lifecycle completion, or draw request.
+struct IntroVertAnimDeferredReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t source_directory_index{}, component_index{};
+  std::uint32_t source_offset{};
+  data::VertAnimDeferredComponentValues values;
 };
 // Completion evidence for the recovered no-argument MatPos owner refresh.
 // It is owner-scoped, occurs only after reader admission, and deliberately
@@ -1026,6 +1036,9 @@ public:
   void apply_supported_matpos_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroMatPosDeferredReaderState>& matpos_deferred_reader_states() const noexcept { return matpos_deferred_reader_states_; }
   [[nodiscard]] const std::map<std::size_t,IntroMatPosOwnerRefreshReceipt>& matpos_owner_refresh_receipts() const noexcept { return matpos_owner_refresh_receipts_; }
+  [[nodiscard]] bool supports_vert_anim_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
+  void apply_supported_vert_anim_deferred_reader(const IntroDeferredReaderWork& work);
+  [[nodiscard]] const std::map<std::size_t,IntroVertAnimDeferredReaderState>& vert_anim_deferred_reader_states() const noexcept { return vert_anim_deferred_reader_states_; }
   // Atomically materialize the source-backed first-cut player state after both
   // reviewed readers. Playback services remain intentionally absent.
   void prepare_supported_first_cut_player();
@@ -1186,6 +1199,7 @@ private:
   std::map<std::size_t,IntroBasicGroupOwnerReaderState> basic_group_owner_reader_states_;
   std::map<std::size_t,IntroMatPosDeferredReaderState> matpos_deferred_reader_states_;
   std::map<std::size_t,IntroMatPosOwnerRefreshReceipt> matpos_owner_refresh_receipts_;
+  std::map<std::size_t,IntroVertAnimDeferredReaderState> vert_anim_deferred_reader_states_;
   std::optional<IntroFirstCutPlayerPreparedState> first_cut_player_prepared_state_;
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;
   std::map<std::size_t,IntroFadePictureReaderState> fade_picture_reader_states_;

@@ -16,6 +16,7 @@
 #include "off/data/keys_backing_evaluator.hpp"
 #include "off/data/matpos_pose_evaluator.hpp"
 #include "off/data/matpos_deferred_component_reader.hpp"
+#include "off/data/vert_anim_deferred_component_reader.hpp"
 #include "off/data/keys_property_materializer.hpp"
 #include "off/data/owner_buf_keys_profile.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
@@ -1878,6 +1879,45 @@ int main() {
                       .second_group = {std::numeric_limits<float>::infinity(), 0.0F, 0.0F},
                   }),
               "MatPos pose evaluator rejects degenerate or non-finite detached samples");
+    }
+    {
+        using off::data::VertAnimDeferredComponentReader;
+        const auto record = [](std::uint8_t high_pattern = 0U) {
+            std::vector<std::byte> bytes;
+            append_u32(bytes, 61U);
+            const std::array<std::uint8_t, 11U> tags{3U,3U,2U,3U,3U,10U,3U,3U,3U,3U,3U};
+            const std::array<std::uint32_t, 11U> values{1U,0U,0x7fc01234U,2U,0U,0x12345678U,
+                                                          1U,0U,1U,0x80000000U,0x7fffffffU};
+            for (std::size_t i{}; i < tags.size(); ++i) {
+                const bool high = (high_pattern == 1U && (i == 0U || i == 1U)) ||
+                                  (high_pattern == 2U && (i == 0U || i == 1U || i == 3U));
+                bytes.push_back(static_cast<std::byte>(tags[i] | (high ? 0x80U : 0U)));
+                append_u32(bytes, values[i]);
+            }
+            bytes.push_back(std::byte{0x06}); bytes.push_back(std::byte{0xff});
+            return bytes;
+        };
+        const auto values = VertAnimDeferredComponentReader::read(record());
+        check(values.mirrored_first_control && !values.primary_control &&
+                  std::bit_cast<std::uint32_t>(values.rate) == 0x7fc01234U &&
+                  values.control_a && !values.control_b && values.short_control == 0x5678U &&
+                  values.control_c && !values.control_d && values.control_e &&
+                  values.raw_word_a == std::numeric_limits<std::int32_t>::min() &&
+                  values.raw_word_b == std::numeric_limits<std::int32_t>::max() &&
+                  values.component_tail.component_extent == 1U,
+              "VertAnim reader preserves the recovered fixed fields without animation semantics");
+        static_cast<void>(VertAnimDeferredComponentReader::read(record(1U)));
+        static_cast<void>(VertAnimDeferredComponentReader::read(record(2U)));
+        check_rejected([&] { auto bad=record(); bad[4U]=std::byte{0x83}; static_cast<void>(VertAnimDeferredComponentReader::read(bad)); },
+                       "VertAnim reader rejects an unmatched observed high-bit pair");
+        check_rejected([&] { auto bad=record(); bad[14U]=std::byte{0x82}; static_cast<void>(VertAnimDeferredComponentReader::read(bad)); },
+                       "VertAnim reader rejects unobserved high-bit scalar tags");
+        check_rejected([&] { auto bad=record(); bad[9U]=std::byte{0x43}; static_cast<void>(VertAnimDeferredComponentReader::read(bad)); },
+                       "VertAnim reader rejects continuation tags");
+        check_rejected([&] { auto bad=record(); bad[59U]=std::byte{0xff}; static_cast<void>(VertAnimDeferredComponentReader::read(bad)); },
+                       "VertAnim reader requires its sole delimiter");
+        check_rejected([&] { auto bad=record(); bad.pop_back(); static_cast<void>(VertAnimDeferredComponentReader::read(bad)); },
+                       "VertAnim reader rejects truncated records");
     }
     {
         using off::data::MatPosDeferredComponentReader;

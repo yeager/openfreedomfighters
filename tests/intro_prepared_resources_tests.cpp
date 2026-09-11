@@ -1136,6 +1136,8 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               if(block.size()==98U || block.size()==103U)
                 host.apply_supported_matpos_deferred_reader(work);
             }
+            if(host.supports_vert_anim_deferred_reader(work))
+              host.apply_supported_vert_anim_deferred_reader(work);
             if(work.source_directory_index==466U) {
               bool supported_external_payload{};
               try {
@@ -1253,6 +1255,17 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                           found->second.source_offset==state.source_offset));
                   }),
               "MatPos reader fixtures preserve the source gate, or normalize K before one owner-scoped refresh receipt");
+        check(std::ranges::all_of(host.vert_anim_deferred_reader_states(),[&](const auto& entry) {
+                    const auto& [source,state]=entry;
+                    const auto& directory=host.resources().sources().directory()[source];
+                    return directory.source_type==0x00200002U && directory.attachments.size()==1U &&
+                        host.resources().sources().attachment_identifier(source,0U)=="ZSTDOBJ_VertAnim" &&
+                        state.source_directory_index==source && state.owner==host.source_handle(source) &&
+                        state.resource==host.directory_resource_mapping()[source] &&
+                        state.component_index==host.owner_components(state.owner).front() &&
+                        state.values.component_tail.component_extent==1U;
+                  }),
+              "VertAnim reader applies only the fixed source-backed state and retains no component suffix");
         const auto& window=host.window_for_owner(host.source_handle(host.resources().window_index()));
         const auto& camera=host.camera_for_owner(host.source_handle(host.resources().camera_index()));
         const auto window_reference_resource=[&host](std::uint32_t reference)

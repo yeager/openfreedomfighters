@@ -1925,6 +1925,8 @@ IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() c
     }
     if(work.source_directory_index>=43U && work.source_directory_index<=47U)
       return IntroDeferredReaderFamily::following_visual_owner;
+    if(vert_anim_deferred_reader_states_.contains(work.source_directory_index))
+      return IntroDeferredReaderFamily::vert_anim_component;
     if(work.source_directory_index==resources_.window_index())
       return IntroDeferredReaderFamily::window_owner;
     const auto legal=resources_.sources().local_source_for_authored_reference(
@@ -3548,6 +3550,75 @@ void IntroRuntime::apply_supported_matpos_deferred_reader(
     matpos_owner_refresh_receipts_.erase(work.source_directory_index);
     unrecord_supported_reader_admission(work);
     matpos_deferred_reader_states_.erase(it);
+    throw;
+  }
+}
+
+bool IntroRuntime::supports_vert_anim_deferred_reader(
+    const IntroDeferredReaderWork& work) const noexcept {
+  try {
+    if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete ||
+        !work.processed || vert_anim_deferred_reader_states_.contains(work.source_directory_index) ||
+        std::ranges::find_if(deferred_reader_work_, [&](const auto& candidate) {
+          return std::addressof(candidate) == std::addressof(work);
+        }) == deferred_reader_work_.end())
+      return false;
+    const auto& source = resources_.sources().directory().at(work.source_directory_index);
+    const auto owner = source_handle(work.source_directory_index);
+    const auto attached = owner_components(owner);
+    const auto* object = constructed_object_owner(work.source_directory_index);
+    if (source.source_type != 0x00200002U || source.source_variant ||
+        source.attachments.size() != 1U || attached.size() != 1U ||
+        std::bit_cast<std::uint32_t>(source.attachments[0].parameter) != 0x3f800000U ||
+        resources_.sources().attachment_identifier(work.source_directory_index, 0U) != "ZSTDOBJ_VertAnim" ||
+        source.deferred_source_offset != work.source_offset ||
+        directory_resource_mapping_.at(work.source_directory_index) != work.resource ||
+        !associated_resource_owner(work.resource) || *associated_resource_owner(work.resource) != owner ||
+        !object || object->owner != owner || object->resource != work.resource ||
+        !resource_state_for_handle(work.resource))
+      return false;
+    const auto component_index = attached.front();
+    const auto& component = components_.at(component_index);
+    if (!component.constructed() || component.removed() ||
+        component.source().directory_index != work.source_directory_index ||
+        component.source().attachment_index != 0U ||
+        component.source().factory_name != "ZSTDOBJ_VertAnim" ||
+        component.state().attached_owner != owner.value)
+      return false;
+    static_cast<void>(data::VertAnimDeferredComponentReader::read(
+        resources_.sources().deferred_source_block(work.source_directory_index)));
+    return true;
+  } catch (const std::exception&) {
+    return false;
+  }
+}
+
+void IntroRuntime::apply_supported_vert_anim_deferred_reader(
+    const IntroDeferredReaderWork& work) {
+  if (!supports_vert_anim_deferred_reader(work) ||
+      vert_anim_deferred_reader_states_.contains(work.source_directory_index))
+    throw std::runtime_error("VertAnim deferred reader requires unique supported live work");
+  const auto owner = source_handle(work.source_directory_index);
+  const auto component_index = owner_components(owner).front();
+  const auto values = data::VertAnimDeferredComponentReader::read(
+      resources_.sources().deferred_source_block(work.source_directory_index));
+  const std::array<data::DeferredComponentReader, 0U> no_component_readers{};
+  const auto dispatched = data::DeferredComponentDispatcher::dispatch(
+      values.component_tail.component_suffix.first(values.component_tail.component_extent),
+      no_component_readers);
+  if (dispatched.dispatched_components != 0U ||
+      dispatched.continuation.data() != values.component_tail.component_suffix.data() ||
+      dispatched.continuation.size() != values.component_tail.component_suffix.size())
+    throw std::runtime_error("VertAnim deferred reader has a nonempty component suffix");
+  const auto [entry, inserted] = vert_anim_deferred_reader_states_.emplace(
+      work.source_directory_index, IntroVertAnimDeferredReaderState{
+          owner, work.resource, work.source_directory_index, component_index,
+          work.source_offset, values});
+  if (!inserted) throw std::runtime_error("VertAnim deferred reader cannot retain duplicate state");
+  try {
+    record_supported_reader_admission(work);
+  } catch (...) {
+    vert_anim_deferred_reader_states_.erase(entry);
     throw;
   }
 }

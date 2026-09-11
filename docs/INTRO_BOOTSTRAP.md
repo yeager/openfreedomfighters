@@ -75,17 +75,17 @@ be unsound. The recovered MatPos reader has a further owner-local `KEYS` gate;
 the current owned probe finds no form that clears its complete admission
 predicate, so none is applied.
 
-The current owned-data probe records 420 queued readers: 31 applied, five
-recognized-but-not-admitted following-visual owner forms, and 384
-unclassified. The 19 admitted attachment-free Group readers are included in
-the applied count.
-Of the unclassified work, 55 records have no attachments and 333 have
-attachments; 302 of those attachment-bearing blocks expose a delimiter before
-their terminal marker, while 31 are outside the narrow classifier. The 302
-recognized shapes contain 429 delimiter events, with at most four in one block.
-This does not authorize a generic attachment dispatcher. The next candidate must
-be an exact, attachment-free owner form with a separately recovered payload and
-failure contract.
+The current owned-data probe records 420 queued readers: 50 applied, five
+recognized-but-not-admitted following-visual owner forms, and 365
+unclassified. The 19 admitted attachment-free Group readers and 19 admitted
+VertAnim reader forms are included in the applied count.
+Of the unclassified work, 51 records have no attachments and 314 have
+attachments; 283 of those attachment-bearing blocks expose a delimiter before
+their terminal marker, while 31 are outside the narrow classifier. The 283
+recognized shapes contain 410 delimiter events, with at most four in one block.
+This does not authorize a generic attachment dispatcher. The next candidate
+needs an exact owner/attachment partition, payload contract, and failure
+behavior before it can enter the normal reader bracket.
 
 The five reviewed following-visual owners now retain only a completed
 owner/resource/offset receipt. Their payload is deliberately not parsed and
@@ -101,6 +101,13 @@ rejected. It consumes the owner delimiter, proves an empty component tail, and
 does not attach children, mutate resources or transforms, or run lifecycle,
 audio, cutscene, or rendering behavior. Other `ZGROUP` bodies remain
 unclassified because they have different tag forms or attachments.
+`ZSTDOBJ_VertAnim` now has one separate, bounded reader form: a 61-byte
+ordinary-object record with one live slot-zero VertAnim attachment. It accepts
+only the three observed high-bit tag variants, retains eleven reader fields in
+source order, validates the sole delimiter and terminal marker, and proves the
+empty attachment suffix. It has no animation sampling, event registration,
+lifecycle, cutscene, audio, or rendering effect. Other VertAnim records remain
+unclassified.
 MatPosAnim has a strict, currently unapplied deferred-reader path: the
 supported intro has 227 associated deferred records, all with an attachment
 delimiter before the owner terminal (249 delimiters in total). The reader only
