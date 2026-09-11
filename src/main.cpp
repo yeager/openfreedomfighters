@@ -320,6 +320,7 @@ int run_first_cut_cold_probe(const std::filesystem::path &data_path) {
       signature+=" values="+std::to_string(profile.encoded_values)+
           " continued="+std::to_string(profile.continuation_values)+
           " framing="+std::to_string(profile.framing_digest)+
+          " notation="+profile.framing_notation+
           " kinds="+std::to_string(profile.value_kinds[1U])+","+
           std::to_string(profile.value_kinds[2U])+","+
           std::to_string(profile.value_kinds[3U])+","+

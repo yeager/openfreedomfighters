@@ -1021,7 +1021,7 @@ int main() {
         const auto compact_profile=DeferredCompactBlockProfiler::profile(compact_profiled);
         check(compact_profile.encoded_values==3U && compact_profile.attachment_delimiters==1U &&
                   compact_profile.continuation_values==1U && compact_profile.value_kinds[3U]==2U &&
-                  compact_profile.value_kinds[4U]==1U,
+                  compact_profile.value_kinds[4U]==1U && compact_profile.framing_notation=="i|i+s!",
               "deferred compact block profiler retains framing without decoding payload values");
         auto reordered_profiled=compact_profiled;
         std::swap(reordered_profiled[0],reordered_profiled[6]);
