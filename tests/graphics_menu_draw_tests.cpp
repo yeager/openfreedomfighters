@@ -1,5 +1,6 @@
 #include "off/ui/graphics_menu_draw.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <iostream>
@@ -103,12 +104,15 @@ int main() {
   check(has_text(explicit_german, "GRAFIKEINSTELLUNGEN") &&
             !has_text(explicit_german, "GRAFIKINSTÄLLNINGAR"),
         "an explicit F10 locale override wins over system preferences");
-  check(reference.rectangles.back().layer == off::ui::UiLayer::focus &&
-            near(reference.rectangles.back().bounds.x, 60.0F) &&
-            near(reference.rectangles.back().bounds.y, 164.0F) &&
-            near(reference.rectangles.back().bounds.width, 520.0F) &&
-            near(reference.rectangles.back().bounds.height, 2.0F),
-        "focus uses a project-authored active-row underline");
+  check(profile != nullptr && profile_value != nullptr &&
+            profile->color == off::ui::UiColor{240, 243, 248, 255} &&
+            profile_value->color == off::ui::UiColor{240, 243, 248, 255} &&
+            shadows != nullptr &&
+            shadows->color == off::ui::UiColor{166, 174, 187, 255} &&
+            std::none_of(reference.rectangles.begin(), reference.rectangles.end(), [](const auto &rectangle) {
+              return rectangle.layer == off::ui::UiLayer::focus;
+            }),
+        "focus uses the selected row's light text instead of a synthetic underline");
 
   const auto widescreen =
       off::ui::build_graphics_menu_draw_list(menu, {1280, 720}, now);

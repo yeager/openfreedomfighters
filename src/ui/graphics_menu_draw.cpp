@@ -12,7 +12,6 @@ constexpr UiColor dim{0, 0, 0, 170};
 constexpr UiColor panel{0, 0, 0, 235};
 constexpr UiColor scene_strip{69, 48, 31, 218};
 constexpr UiColor scene_shadow{16, 13, 11, 155};
-constexpr UiColor focus{232, 176, 55, 255};
 constexpr UiColor white{240, 243, 248, 255};
 constexpr UiColor muted{166, 174, 187, 255};
 constexpr float reference_width = 640.0F;
@@ -307,17 +306,12 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
     const UiRect bounds =
         reference_rect(60.0F, reference_y - 2.0F, 520.0F, 18.0F);
     out.hit_targets.push_back({bounds, controls[i], true});
+    const bool selected = static_cast<std::size_t>(menu.selected_row()) == i;
+    const UiColor row_color = selected ? white : muted;
     add_text(UiLayer::content, point_x(60.0F), point_y(reference_y), labels[i],
-             muted);
+             row_color);
     add_text(UiLayer::content, point_x(400.0F), point_y(reference_y),
-             values[i]);
-    if (static_cast<std::size_t>(menu.selected_row()) == i) {
-      // Project-authored active-row underline; it deliberately does not use
-      // retail menu geometry or assets.
-      out.rectangles.push_back(
-          {UiLayer::focus,
-           reference_rect(60.0F, reference_y + 14.0F, 520.0F, 2.0F), focus});
-    }
+             values[i], row_color);
   }
   // Project diagnostic extension: expose all actions for pointer access.
   // Only the first anchor comes from retail layout evidence; these three
@@ -335,11 +329,8 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
     const float x = 60.0F + static_cast<float>(i) * 180.0F;
     out.hit_targets.push_back(
         {reference_rect(x, 292.0F, 160.0F, 18.0F), actions[i], true});
-    add_text(UiLayer::content, point_x(x), point_y(294.0F), action_labels[i]);
-    if (menu.selected_row() == action_rows[i])
-      out.rectangles.push_back({UiLayer::focus,
-                                reference_rect(x, 308.0F, 160.0F, 2.0F),
-                                focus});
+    add_text(UiLayer::content, point_x(x), point_y(294.0F), action_labels[i],
+             menu.selected_row() == action_rows[i] ? white : muted);
   }
   return finish();
 }
