@@ -40,7 +40,9 @@ FirstCutViewAdmissionResult FirstCutViewAdmissionGate::admit(
   if (!supplied.resolve_selected_camera || !supplied.enabled_camera_matches)
     throw std::runtime_error("First-cut view admission gate requires selected-camera services");
 
-  const auto services = supplied;
+  // The admission executes synchronously. Keep the caller-owned service
+  // bundle immutable rather than copying intentionally empty callbacks.
+  const auto& services = supplied;
   BusyGuard guard(busy_);
   try {
     if (startup_stage != IntroStartupActivationStage::movie_control_phase_two_complete)
