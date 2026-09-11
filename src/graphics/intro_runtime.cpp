@@ -1925,6 +1925,9 @@ IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() c
     }
     if(work.source_directory_index>=43U && work.source_directory_index<=47U)
       return IntroDeferredReaderFamily::following_visual_owner;
+    if(lens_flare_deferred_reader_states_.contains(work.source_directory_index) ||
+       supports_lens_flare_deferred_reader(work))
+      return IntroDeferredReaderFamily::lens_flare_component;
     if(vert_anim_deferred_reader_states_.contains(work.source_directory_index))
       return IntroDeferredReaderFamily::vert_anim_component;
     if(work.source_directory_index==resources_.window_index())
@@ -3621,6 +3624,85 @@ void IntroRuntime::apply_supported_vert_anim_deferred_reader(
     vert_anim_deferred_reader_states_.erase(entry);
     throw;
   }
+}
+
+bool IntroRuntime::supports_lens_flare_deferred_reader(
+    const IntroDeferredReaderWork& work) const noexcept {
+  try {
+    if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete ||
+        !work.processed || lens_flare_deferred_reader_states_.contains(work.source_directory_index) ||
+        std::ranges::find_if(deferred_reader_work_, [&](const auto& candidate) {
+          return std::addressof(candidate) == std::addressof(work);
+        }) == deferred_reader_work_.end())
+      return false;
+    const auto& source = resources_.sources().directory().at(work.source_directory_index);
+    const auto owner = source_handle(work.source_directory_index);
+    const auto attached = owner_components(owner);
+    const auto picture = constructed_picture_owners_.find(work.source_directory_index);
+    if (source.source_type != 0x00200046U || source.source_variant ||
+        source.class_data_value != 0U || source.object_flags != 0U ||
+        source.attachments.size() != 1U || attached.size() != 1U ||
+        std::bit_cast<std::uint32_t>(source.attachments[0].parameter) != 0U ||
+        resources_.sources().attachment_identifier(work.source_directory_index, 0U) != "ZWINPIC_LensFlare" ||
+        source.deferred_source_offset != work.source_offset ||
+        directory_resource_mapping_.at(work.source_directory_index) != work.resource ||
+        !associated_resource_owner(work.resource) || *associated_resource_owner(work.resource) != owner ||
+        picture == constructed_picture_owners_.end() || picture->second.owner != owner ||
+        picture->second.resource != work.resource || !resource_state_for_handle(work.resource))
+      return false;
+    const auto component_index = attached.front();
+    const auto& component = components_.at(component_index);
+    const auto payload = constructed_picture_components_.find(component_index);
+    if (!component.constructed() || component.removed() ||
+        component.source().directory_index != work.source_directory_index ||
+        component.source().attachment_index != 0U ||
+        component.source().factory_name != "ZWINPIC_LensFlare" ||
+        component.state().attached_owner != owner.value ||
+        payload == constructed_picture_components_.end() || payload->second.owner != owner ||
+        payload->second.raw_attachment_argument != 0U || payload->second.lens_flare)
+      return false;
+    static_cast<void>(data::LensFlareDeferredReader::read(
+        resources_.sources().deferred_source_block(work.source_directory_index)));
+    return true;
+  } catch (const std::exception&) {
+    return false;
+  }
+}
+
+void IntroRuntime::apply_supported_lens_flare_deferred_reader(
+    const IntroDeferredReaderWork& work) {
+  if (!supports_lens_flare_deferred_reader(work))
+    throw std::runtime_error("LensFlare deferred reader requires unique supported live work");
+  const auto owner = source_handle(work.source_directory_index);
+  const auto component_index = owner_components(owner).front();
+  // Parse the entire owner/component envelope before creating a receipt or
+  // touching live picture/component state. A rejected record is a no-op.
+  const auto values = data::LensFlareDeferredReader::read(
+      resources_.sources().deferred_source_block(work.source_directory_index));
+  const auto [entry, inserted] = lens_flare_deferred_reader_states_.emplace(
+      work.source_directory_index, IntroLensFlareDeferredReaderState{
+          owner, work.resource, work.source_directory_index, component_index,
+          work.source_offset, values});
+  if (!inserted)
+    throw std::runtime_error("LensFlare deferred reader cannot retain duplicate state");
+  try {
+    record_supported_reader_admission(work);
+  } catch (...) {
+    lens_flare_deferred_reader_states_.erase(entry);
+    throw;
+  }
+  // All assignments below are scalar/array stores and cannot throw. They are
+  // delayed until the record, source and live component gates have succeeded.
+  auto& picture = constructed_picture_owners_.at(work.source_directory_index);
+  auto& component = constructed_picture_components_.at(component_index);
+  picture.exponent_control = values.exponent_control;
+  picture.material_selector = values.base_property;
+  picture.alpha = values.alpha;
+  picture.alignment = values.alignment;
+  picture.submission_control = values.extension_control;
+  picture.picture_asset_reference = values.picture_asset_reference;
+  component.lens_flare = IntroConstructedPictureComponent::LensFlareState{
+      values.scalars, values.raw_words};
 }
 
 void IntroRuntime::prepare_supported_first_cut_player() {

@@ -1138,6 +1138,8 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
             }
             if(host.supports_vert_anim_deferred_reader(work))
               host.apply_supported_vert_anim_deferred_reader(work);
+            if(host.supports_lens_flare_deferred_reader(work))
+              host.apply_supported_lens_flare_deferred_reader(work);
             if(work.source_directory_index==466U) {
               bool supported_external_payload{};
               try {
@@ -1266,6 +1268,29 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                         state.values.component_tail.component_extent==1U;
                   }),
               "VertAnim reader applies only the fixed source-backed state and retains no component suffix");
+        check(std::ranges::all_of(host.lens_flare_deferred_reader_states(),[&](const auto& entry) {
+                    const auto& [source,state]=entry;
+                    const auto& directory=host.resources().sources().directory()[source];
+                    const auto* owner=host.constructed_picture_owner(source);
+                    const auto* component=host.constructed_picture_component(state.component_index);
+                    return directory.source_type==0x00200046U && !directory.source_variant &&
+                        directory.class_data_value==0U && directory.object_flags==0U &&
+                        directory.attachments.size()==1U &&
+                        host.resources().sources().attachment_identifier(source,0U)=="ZWINPIC_LensFlare" &&
+                        std::bit_cast<std::uint32_t>(directory.attachments[0].parameter)==0U &&
+                        state.source_directory_index==source && state.owner==host.source_handle(source) &&
+                        state.resource==host.directory_resource_mapping()[source] &&
+                        state.component_index==host.owner_components(state.owner).front() && owner &&
+                        component && component->lens_flare &&
+                        owner->exponent_control==state.values.exponent_control &&
+                        owner->material_selector==state.values.base_property && owner->alpha==state.values.alpha &&
+                        owner->alignment==state.values.alignment &&
+                        owner->submission_control==state.values.extension_control &&
+                        owner->picture_asset_reference==state.values.picture_asset_reference &&
+                        component->lens_flare->scalars==state.values.scalars &&
+                        component->lens_flare->raw_words==state.values.raw_words;
+                  }),
+              "LensFlare reader atomically commits only the fixed Picture prefix, asset key and six local fields");
         const auto& window=host.window_for_owner(host.source_handle(host.resources().window_index()));
         const auto& camera=host.camera_for_owner(host.source_handle(host.resources().camera_index()));
         const auto window_reference_resource=[&host](std::uint32_t reference)

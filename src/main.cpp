@@ -411,6 +411,7 @@ void write_startup_route_cold_probe(const std::filesystem::path &root,
   case Family::basic_group_owner: return "basic-group-owner";
   case Family::following_visual_owner: return "following-visual-owner";
   case Family::vert_anim_component: return "vert-anim-component";
+  case Family::lens_flare_component: return "lens-flare-component";
   }
   return "unknown";
 }
@@ -428,7 +429,7 @@ void write_startup_route_cold_probe(const std::filesystem::path &root,
 
 void write_reader_coverage_probe(std::ostream& output,
     const off::graphics::IntroDeferredReaderCoverageInventory& coverage) {
-  constexpr std::size_t family_count=13U;
+  constexpr std::size_t family_count=14U;
   constexpr std::size_t state_count=3U;
   std::array<std::array<std::size_t,state_count>,family_count> counts{};
   for(const auto& entry:coverage.entries) {

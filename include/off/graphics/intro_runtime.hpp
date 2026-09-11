@@ -8,6 +8,7 @@
 #include "off/data/scene_lifetime_keys_registry.hpp"
 #include "off/data/matpos_deferred_component_reader.hpp"
 #include "off/data/vert_anim_deferred_component_reader.hpp"
+#include "off/data/lens_flare_deferred_reader.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_named_global_references.hpp"
 #include "off/graphics/intro_renderer_relocation_prefix.hpp"
@@ -143,6 +144,9 @@ struct IntroConstructedPictureOwner {
   std::string name;
   std::uint32_t class_identifier{0x00200046U},packed_color{0xffffffffU},material_selector{},component_mask{};
   std::uint8_t alpha{255},alignment{0x11},exponent_control{0x80},submission_control{8};
+  // This is the deferred picture-resource key, not a native resource handle.
+  // It remains zero until a reviewed owner reader has committed it.
+  std::uint32_t picture_asset_reference{};
   std::array<float,2> size_scale{1.0F,1.0F},alignment_offset{};
   bool backing_available{},submission_transform_dirty{},submission_cache_available{};
   std::vector<std::uint64_t> attachments;
@@ -172,6 +176,12 @@ struct IntroConstructedPictureComponent {
   std::optional<ParamAnimationStorage> param_animation;
   std::optional<ParticleEmitterStorage> particle_emitter;
   struct ScrollTextureState {std::uint16_t start_event{},stop_event{};};
+  // Local LensFlare reader storage. It is intentionally inert: rendering and
+  // all component callbacks remain outside this bounded reader boundary.
+  struct LensFlareState {
+    std::array<float,3> scalars{};
+    std::array<std::int32_t,3> raw_words{};
+  };
   struct SoundExtendState {
     std::array<float,6> scalars{};
     std::array<std::uint32_t,4> integers{};
@@ -212,6 +222,7 @@ struct IntroConstructedPictureComponent {
     std::optional<std::vector<std::uint32_t>> additional_timing_words;
   };
   std::optional<ScrollTextureState> scroll_texture;
+  std::optional<LensFlareState> lens_flare;
   std::optional<std::string> command_text;
   std::optional<SoundExtendState> sound_extend;
   std::optional<SoundNotifyState> sound_notify;
@@ -322,6 +333,7 @@ enum class IntroDeferredReaderFamily : std::uint8_t {
   first_cut_sequence, first_cut_list, first_cut_legal_picture,
   external_cut_commands, first_cut_fade_picture, first_cut_camera,
   basic_group_owner, following_visual_owner, vert_anim_component,
+  lens_flare_component,
 };
 enum class IntroDeferredReaderImplementationState : std::uint8_t {
   unimplemented, implemented_not_applied, applied,
@@ -487,6 +499,16 @@ struct IntroVertAnimDeferredReaderState {
   std::size_t source_directory_index{}, component_index{};
   std::uint32_t source_offset{};
   data::VertAnimDeferredComponentValues values;
+};
+// Completed state for the one observed combined Picture/LensFlare record.
+// It preserves reader-local values only; no LensFlare rendering, event or
+// lifecycle behavior is inferred from this receipt.
+struct IntroLensFlareDeferredReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t source_directory_index{}, component_index{};
+  std::uint32_t source_offset{};
+  data::LensFlareDeferredReaderValues values;
 };
 // Completion evidence for the recovered no-argument MatPos owner refresh.
 // It is owner-scoped, occurs only after reader admission, and deliberately
@@ -1039,6 +1061,9 @@ public:
   [[nodiscard]] bool supports_vert_anim_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
   void apply_supported_vert_anim_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroVertAnimDeferredReaderState>& vert_anim_deferred_reader_states() const noexcept { return vert_anim_deferred_reader_states_; }
+  [[nodiscard]] bool supports_lens_flare_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
+  void apply_supported_lens_flare_deferred_reader(const IntroDeferredReaderWork& work);
+  [[nodiscard]] const std::map<std::size_t,IntroLensFlareDeferredReaderState>& lens_flare_deferred_reader_states() const noexcept { return lens_flare_deferred_reader_states_; }
   // Atomically materialize the source-backed first-cut player state after both
   // reviewed readers. Playback services remain intentionally absent.
   void prepare_supported_first_cut_player();
@@ -1200,6 +1225,7 @@ private:
   std::map<std::size_t,IntroMatPosDeferredReaderState> matpos_deferred_reader_states_;
   std::map<std::size_t,IntroMatPosOwnerRefreshReceipt> matpos_owner_refresh_receipts_;
   std::map<std::size_t,IntroVertAnimDeferredReaderState> vert_anim_deferred_reader_states_;
+  std::map<std::size_t,IntroLensFlareDeferredReaderState> lens_flare_deferred_reader_states_;
   std::optional<IntroFirstCutPlayerPreparedState> first_cut_player_prepared_state_;
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;
   std::map<std::size_t,IntroFadePictureReaderState> fade_picture_reader_states_;

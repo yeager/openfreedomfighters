@@ -20,7 +20,8 @@ inventory to select implementation work.
 | `ZSNDOBJ_SoundExtend`, `ZSNDOBJ_SoundNotify`, `ZSNDOBJ_SoundSegment`, `ZGEOM_ZSetZDefine` | Typed data and owner-side sub-boundaries | None | Output/channel admission and readiness producer |
 | `ZCHAROBJ_CharFader`, `ZWINPIC_LogoFade` | None | None | Reader and event/mode behavior |
 | `ZLIST_ExternCutSequenceCommand`, `ZSTDOBJ_VertAnim` | None | None | Reader, update and dispatch behavior |
-| `ZGEOM_FilmGrainCamSetup`, `ZWINDOW_LensFlareControl`, `ZWINPIC_LensFlare`, `ZGEOM_ParamAnim`, `ZGEOM_ParticleEmitter`, `ZLIST_LensFlareLights`, `ZSTDOBJ_ScrollTexture` | Constructor-only state | None | Complete reader and runtime callbacks |
+| `ZWINPIC_LensFlare` | Closed 68-byte owner/component reader; Picture/local data only | None | Rendering, event and lifecycle callbacks |
+| `ZGEOM_FilmGrainCamSetup`, `ZWINDOW_LensFlareControl`, `ZGEOM_ParamAnim`, `ZGEOM_ParticleEmitter`, `ZLIST_LensFlareLights`, `ZSTDOBJ_ScrollTexture` | Constructor-only state | None | Complete reader and runtime callbacks |
 
 All 22 authored factory types are constructed and catalogued. Their generic
 lifecycle callbacks intentionally fail closed until their real behavior is

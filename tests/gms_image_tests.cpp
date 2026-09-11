@@ -17,6 +17,7 @@
 #include "off/data/matpos_pose_evaluator.hpp"
 #include "off/data/matpos_deferred_component_reader.hpp"
 #include "off/data/vert_anim_deferred_component_reader.hpp"
+#include "off/data/lens_flare_deferred_reader.hpp"
 #include "off/data/keys_property_materializer.hpp"
 #include "off/data/owner_buf_keys_profile.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
@@ -863,9 +864,55 @@ void intro_fade_picture_tests() {
                    "intro tail does not relax startup picture grammar");
 }
 
+void lens_flare_deferred_reader_tests() {
+    const auto fixture = [] {
+        std::vector<std::byte> bytes;
+        append_u32(bytes, 68U);
+        const auto value = [&](std::uint8_t tag, std::uint32_t raw) {
+            bytes.push_back(static_cast<std::byte>(tag)); append_u32(bytes, raw);
+        };
+        // Picture prefix: exponent, base property, alpha, alignment, extension.
+        value(0x03U, 7U); value(0x83U, 0xabcdef12U); value(0x03U, 73U);
+        value(0x83U, 15U); value(0x03U, 12U); bytes.push_back(std::byte{0x06});
+        value(0x03U, 0xf1234567U); bytes.push_back(std::byte{0x06});
+        value(0x82U, std::bit_cast<std::uint32_t>(0.5F));
+        value(0x82U, std::bit_cast<std::uint32_t>(-0.0F));
+        value(0x82U, std::bit_cast<std::uint32_t>(2.0F));
+        value(0x83U, 0xffffffffU); value(0x03U, 0U); value(0x83U, 0x80000000U);
+        bytes.push_back(std::byte{0x06}); bytes.push_back(std::byte{0xff});
+        return bytes;
+    };
+    const auto value = off::data::LensFlareDeferredReader::read(fixture());
+    check(value.exponent_control == 7U && value.base_property == 0xabcdef12U &&
+              value.alpha == 73U && value.alignment == 15U && value.extension_control == 12U &&
+              value.picture_asset_reference == 0xf1234567U && value.scalars[0] == 0.5F &&
+              std::signbit(value.scalars[1]) && value.scalars[2] == 2.0F &&
+              value.raw_words == std::array<std::int32_t,3>{-1,0,std::numeric_limits<std::int32_t>::min()},
+          "LensFlare reader preserves its fixed owner and six local fields");
+    const auto reject = [&](auto mutate) {
+        auto bytes = fixture(); mutate(bytes);
+        check_rejected([&] { static_cast<void>(off::data::LensFlareDeferredReader::read(bytes)); },
+                       "LensFlare reader rejects a malformed closed envelope");
+    };
+    reject([](auto& bytes) { set_u32(bytes, 0U, 67U); });
+    reject([](auto& bytes) { bytes[4U] = std::byte{0x83}; });
+    reject([](auto& bytes) { bytes[9U] = std::byte{0x03}; });
+    reject([](auto& bytes) { bytes[14U] = std::byte{0x83}; });
+    reject([](auto& bytes) { bytes[19U] = std::byte{0x03}; });
+    reject([](auto& bytes) { bytes[29U] = std::byte{0x83}; });
+    reject([](auto& bytes) { bytes[35U] = std::byte{0x83}; });
+    reject([](auto& bytes) { bytes[41U] = std::byte{0x02}; });
+    reject([](auto& bytes) { bytes[51U] = std::byte{0x03}; }); // final 001 is not admitted
+    reject([](auto& bytes) { bytes[66U] = std::byte{0x05}; });
+    reject([](auto& bytes) { bytes[67U] = std::byte{0x7f}; });
+    reject([](auto& bytes) { set_u32(bytes, 5U, 8U); });
+    reject([](auto& bytes) { set_u32(bytes, 20U, 16U); });
+}
+
 }  // namespace
 
 int main() {
+    lens_flare_deferred_reader_tests();
     {
         using off::runtime::OwnerComponentProviderBinding;
         using off::runtime::OwnerComponentProviderBindings;

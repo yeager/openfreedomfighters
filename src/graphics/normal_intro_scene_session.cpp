@@ -63,6 +63,11 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                // records with the same component name remain unclassified.
                if (runtime_->supports_vert_anim_deferred_reader(work))
                  runtime_->apply_supported_vert_anim_deferred_reader(work);
+               // LensFlare is a separate complete-envelope reader gate. It
+               // excludes the adjacent control/light components and every
+               // other Picture attachment form.
+               if (runtime_->supports_lens_flare_deferred_reader(work))
+                 runtime_->apply_supported_lens_flare_deferred_reader(work);
                const auto legal =
                    r.sources().local_source_for_authored_reference(
                        r.member().references[1]);

@@ -75,14 +75,15 @@ be unsound. The recovered MatPos reader has a further owner-local `KEYS` gate;
 the current owned probe finds no form that clears its complete admission
 predicate, so none is applied.
 
-The current owned-data probe records 420 queued readers: 50 applied, five
-recognized-but-not-admitted following-visual owner forms, and 365
-unclassified. The 19 admitted attachment-free Group readers and 19 admitted
-VertAnim reader forms are included in the applied count.
-Of the unclassified work, 51 records have no attachments and 314 have
-attachments; 283 of those attachment-bearing blocks expose a delimiter before
-their terminal marker, while 31 are outside the narrow classifier. The 283
-recognized shapes contain 410 delimiter events, with at most four in one block.
+The current owned-data probe records 420 queued readers: 75 applied, five
+recognized-but-not-admitted following-visual owner forms, and 340
+unclassified. The 19 admitted attachment-free Group readers, 19 admitted
+VertAnim reader forms, and 25 admitted LensFlare reader forms are included in
+the applied count.
+Of the unclassified work, 51 records have no attachments and 289 have
+attachments; 258 of those attachment-bearing blocks expose a delimiter before
+their terminal marker, while 31 are outside the narrow classifier. The 258
+recognized shapes contain 335 delimiter events, with at most four in one block.
 This does not authorize a generic attachment dispatcher. The next candidate
 needs an exact owner/attachment partition, payload contract, and failure
 behavior before it can enter the normal reader bracket.
@@ -108,6 +109,16 @@ source order, validates the sole delimiter and terminal marker, and proves the
 empty attachment suffix. It has no animation sampling, event registration,
 lifecycle, cutscene, audio, or rendering effect. Other VertAnim records remain
 unclassified.
+`ZWINPIC_LensFlare` has a separate combined owner/component reader for the
+observed 68-byte Picture envelope only. It requires a live, ordinary `ZWINPIC`
+owner with one zero-argument LensFlare attachment; it explicitly excludes
+`ZWINDOW_LensFlareControl` and `ZLIST_LensFlareLights`. The reader validates
+the fixed owner-prefix high-bit pattern, a one-field picture-resource section,
+three high-bit float fields, and only the three observed final tag tuples. It
+commits the five Picture controls, the opaque picture-resource key, and six
+LensFlare-local values as one bounded receipt. It does not submit a flare,
+register an event, or run a lifecycle callback. All other Picture/LensFlare
+forms remain unclassified.
 MatPosAnim has a strict, currently unapplied deferred-reader path: the
 supported intro has 227 associated deferred records, all with an attachment
 delimiter before the owner terminal (249 delimiters in total). The reader only
