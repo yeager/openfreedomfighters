@@ -5,6 +5,8 @@
 #include "off/data/first_cut_owner_reader.hpp"
 #include "off/data/first_cut_list_component_reader.hpp"
 #include "off/data/first_cut_command_component_reader.hpp"
+#include "off/audio/soundtrack_catalog.hpp"
+#include "off/audio/soundtrack_stream.hpp"
 #include "off/cutscene/first_cut_player_initialization.hpp"
 #include "off/cutscene/first_cut_timeline_profile.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
@@ -55,7 +57,41 @@ void usage(std::ostream &output) {
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] "
             "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] "
-            "[--probe-startup-boot] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
+            "[--probe-startup-boot] [--probe-soundtrack] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
+}
+
+void write_soundtrack_probe(
+    const off::data::InstallVerification& verification, std::ostream& output) {
+  const auto catalog = off::audio::SoundtrackCatalog::from_verified_candidates(
+      verification.soundtrack_candidates);
+  std::size_t preferred_flac{}, preferred_mp3{}, fallback_editions{};
+  std::set<std::uint32_t> sample_rates;
+  std::set<std::uint32_t> channel_counts;
+  for (const auto& track : catalog.tracks()) {
+    const auto info = off::audio::SoundtrackStream::open(track.preferred.path).info();
+    if ((track.preferred.format == off::audio::SoundtrackFormat::flac &&
+         info.encoding != off::audio::Encoding::flac) ||
+        (track.preferred.format == off::audio::SoundtrackFormat::mp3 &&
+         info.encoding != off::audio::Encoding::mp3)) {
+      throw std::runtime_error("verified soundtrack edition has inconsistent stream format");
+    }
+    if (track.preferred.format == off::audio::SoundtrackFormat::flac)
+      ++preferred_flac;
+    else
+      ++preferred_mp3;
+    fallback_editions += track.fallback.has_value() ? 1U : 0U;
+    sample_rates.insert(info.sample_rate);
+    channel_counts.insert(info.channels);
+  }
+  output << "soundtrack-probe=completed\n"
+         << "soundtrack-hash-verified-files=" << verification.soundtrack_candidates.size() << '\n'
+         << "soundtrack-album-tracks=" << catalog.tracks().size() << '\n'
+         << "soundtrack-preferred-flac=" << preferred_flac << '\n'
+         << "soundtrack-preferred-mp3=" << preferred_mp3 << '\n'
+         << "soundtrack-fallback-editions=" << fallback_editions << '\n'
+         << "soundtrack-distinct-sample-rates=" << sample_rates.size() << '\n'
+         << "soundtrack-distinct-channel-counts=" << channel_counts.size() << '\n'
+         << "soundtrack-cue-mapping=unavailable\n";
 }
 
 [[nodiscard]] std::string_view startup_boot_probe_call_name(
@@ -470,6 +506,7 @@ int main(int argc, char **argv) {
   bool diagnostic_startup_graphics = false;
   bool diagnostic_intro_picture = false;
   bool probe_startup_boot = false;
+  bool probe_soundtrack = false;
   bool probe_first_cut_cold = false;
   bool probe_first_cut_initialization = false;
   bool probe_intro_renderer_payload = false;
@@ -513,6 +550,8 @@ int main(int argc, char **argv) {
       diagnostic_intro_picture = true;
     } else if (argument == "--probe-startup-boot") {
       probe_startup_boot = true;
+    } else if (argument == "--probe-soundtrack") {
+      probe_soundtrack = true;
     } else if (argument == "--probe-first-cut-cold") {
       probe_first_cut_cold = true;
     } else if (argument == "--probe-first-cut-initialization") {
@@ -543,7 +582,7 @@ int main(int argc, char **argv) {
   }
   if (data_path.empty())
     data_path = default_game_data_path();
-  if (data_path.empty() && (verify_only || probe_startup_boot || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
+  if (data_path.empty() && (verify_only || probe_startup_boot || probe_soundtrack || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
     std::cerr
         << "A legally purchased Freedom Fighters installation is required; "
            "pass --data PATH or set OPENFREEDOMFIGHTERS_DATA.\n";
@@ -567,15 +606,23 @@ int main(int argc, char **argv) {
   }
   if (probe_startup_boot &&
       (verify_only || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
-       show_graphics_menu || !screenshot_path.empty() || !locale.empty() ||
+       show_graphics_menu || !screenshot_path.empty() || !locale.empty() || probe_soundtrack ||
        mode_specified)) {
     std::cerr
         << "--probe-startup-boot cannot be combined with runtime options.\n";
     usage(std::cerr);
     return 2;
   }
-  if ((probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global) &&
+  if (probe_soundtrack &&
       (verify_only || probe_startup_boot || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
+       show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified ||
+       probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
+    std::cerr << "Soundtrack probe cannot be combined with runtime options.\n";
+    usage(std::cerr);
+    return 2;
+  }
+  if ((probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global) &&
+      (verify_only || probe_startup_boot || probe_soundtrack || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified)) {
     std::cerr << "First-cut probes cannot be combined with runtime options.\n";
     usage(std::cerr);
@@ -635,6 +682,23 @@ int main(int argc, char **argv) {
       return 0;
     } catch (const std::exception &error) {
       std::cerr << "Startup BootMenu probe failed: " << error.what() << '\n';
+      return 3;
+    }
+  }
+
+  if (probe_soundtrack) {
+    const auto verification = off::data::verify_install(
+        data_path, {}, {.deep_audit_cache_root =
+                            off::platform::application_deep_audit_cache_root()});
+    if (!verification) {
+      std::cerr << "Game-data verification failed: " << verification.message << '\n';
+      return 3;
+    }
+    try {
+      write_soundtrack_probe(verification, std::cout);
+      return 0;
+    } catch (const std::exception& error) {
+      std::cerr << "Soundtrack probe failed: " << error.what() << '\n';
       return 3;
     }
   }

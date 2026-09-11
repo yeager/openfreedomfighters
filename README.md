@@ -164,6 +164,10 @@ OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
 # Check your installation without opening a window.
 ./build/openfreedomfighters --verify-only
 
+# Inspect hash-verified optional MP3/FLAC soundtrack editions without playing
+# or naming a game cue. The probe reports aggregate stream capabilities only.
+./build/openfreedomfighters --probe-soundtrack
+
 # Inspect the checked, non-playing first-cut reader boundary. This opens no
 # window and never starts audio, schedules an event, or renders a cutscene.
 ./build/openfreedomfighters --probe-first-cut-cold
@@ -216,6 +220,10 @@ menu transition.
   directory ordinals plus a content-free hierarchy fingerprint; it creates no
   scene or runtime service. See
   [STARTUP_BOOT_SCENE_PROBE.md](docs/STARTUP_BOOT_SCENE_PROBE.md).
+- `--probe-soundtrack` opens every hash-verified optional soundtrack edition
+  selected by the catalog and reports aggregate format, sample-rate and channel
+  coverage. It neither plays audio nor derives a game-cue mapping; game music
+  remains the fallback until that mapping is recovered.
 - `--probe-first-cut-cold` runs the equivalent no-window integration check for
   the reviewed first-cut reader bracket. It prints aggregate coverage only and
   deliberately leaves cutscene lifecycle, scheduling, audio and rendering
