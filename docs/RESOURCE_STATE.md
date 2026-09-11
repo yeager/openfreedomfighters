@@ -280,9 +280,10 @@ Room owner, while the Room retains its ordinary and category-two resources.
 Category-two attachment propagates the group capability bit through ancestors.
 
 The loader preserves the directory's full unsigned renderer identifier on each
-resource, independently of metadata, property data and transforms. This is not
-an offset or a native handle. Assignment does not register anything while the
-actual resource-allocation mode is off.
+resource, independently of metadata, property data and transforms. For the
+supported intro it selects a renderer relation group by its prefix word offset,
+not a BUF offset or native handle; zero is unassigned. Assignment does not
+register anything while the actual resource-allocation mode is off.
 
 Three camera property sections borrow their complete 64-byte blocks from the
 retained BUF allocation. External property blocks are copied using their
@@ -356,18 +357,24 @@ providing only one callback is rejected. It copies both names and type-16 null
 values into the shared scene registry before renderer processing, preserving
 unrelated properties. ASCII lookup and replacement ignore case.
 
-The tail still needs concrete renderer parsing and construction-reference
-release, independently resolved associations, and any required auxiliary-array
-services. These APIs are not invoked by normal startup and do not substitute
-no-op readers or renderer state. Renderer materialization, scene updates and
-admitted scene rendering remain prerequisites for intro playback.
+The renderer branch now constructs a scene-owned
+[relation container](INTRO_RENDERER_RELATIONS.md), resolves original references
+through the canonical live resource mapping and validates every current
+selector. Its copied payload, workspace and ordered relation lists outlive the
+loader's borrowed inputs. Related resources remain borrowed.
 
-The reviewed ordinary renderer-payload reader performs bounded retained-payload
-reference relocation only. It is not a renderer-resource materializer: no
-runtime render entry, view, texture binding, backend request, or presentation
-follows from that relocation pass. A verified producer from relocated payload
-to the container's runtime entries is still required before this boundary can
-participate in intro playback.
+The allocation-service save/restore pair carries a returned 32-bit diagnostic
+state token. It is not a construction-reference release; the scene directly
+owns and destroys the container. Native error cleanup discards the container
+and attempts restoration once. Reentry is rejected and callback-table changes
+cannot replace the saved token's restoration service.
+
+Normal startup still does not invoke this tail. Allocation-state services,
+independently resolved List associations and the remaining scene/saved-resource
+operations must be supplied. Initial relation membership does not implement
+dynamic relation maintenance, draw records, views, texture binding or backend
+acceptance. Those consumers and the ordinary update path remain prerequisites
+for intro playback.
 
 The reviewed ordinary tail association is likewise a live list-relation setup
 with internal member containers, not a renderer association. It must be

@@ -7,6 +7,8 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <type_traits>
+#include <utility>
 
 namespace off::graphics {
 namespace {
@@ -1062,8 +1064,13 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
           set_scene_owner_property_native(payload->second.sound_define->property_key,sound.handle(),2U);
           record_supported_component_admission(component_index);
         };
-        return runtime::ConstructedComponent{state,std::move(phase_one),
-            [](auto&){throw std::runtime_error("Constructed attachment requires its live second-phase services");}};
+        runtime::ComponentCallback phase_two=[](auto&) {
+          throw std::runtime_error("Constructed attachment requires its live second-phase services");
+        };
+        if(movie) phase_two=[this,component_index](runtime::ComponentRecord& record) {
+          run_movie_control_phase_two(component_index,record);
+        };
+        return runtime::ConstructedComponent{state,std::move(phase_one),std::move(phase_two)};
       });
       const auto notification=application_.register_component_class_instance(components_.at(component_index).source().factory_name);
       if(cut_list) {
@@ -2150,11 +2157,19 @@ void IntroRuntime::run_postconstruction_reader_bracket(
 }
 
 void IntroRuntime::run_outer_loader_tail_through_saved_services(
-    const IntroOuterLoaderTailServices& services) {
-  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+    const IntroOuterLoaderTailServices& supplied) {
+  if(outer_loader_tail_running_ || resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
       reader_bracket_stage_!=IntroReaderBracketStage::ordinary_reader_boundary_complete ||
       outer_loader_tail_stage_!=IntroOuterLoaderTailStage::not_started)
     throw std::runtime_error("Outer loader tail is unavailable at this loader stage");
+  struct Guard {
+    bool& active;
+    explicit Guard(bool& value):active(value) {active=true;}
+    ~Guard() {active=false;}
+  } guard(outer_loader_tail_running_);
+  // Retain matching select/restore and other callbacks even if a synchronous
+  // service mutates the caller's original table. Payload views remain borrowed.
+  const auto services=supplied;
 
   // These are explicit external boundaries, not native stand-ins for their
   // still-unimplemented concrete readers and scene operations. Validate the
@@ -2165,8 +2180,8 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
   const bool renderer_requires_parser=services.renderer_resource_payload.has_value();
   const bool associations_require_services=!services.resource_associations.empty();
   if((named_requires_reader && partial_named_reader) ||
-      (renderer_requires_parser && (!services.parse_renderer_resource_payload ||
-          !services.release_renderer_construction_reference)) ||
+      (renderer_requires_parser && (!services.select_renderer_allocation_state ||
+          !services.restore_renderer_allocation_state)) ||
       (associations_require_services && !services.associate_live_resources) ||
       !services.release_loader_source_lease || !services.camera_zero_present ||
       !services.outer_scene_operation || !services.between_saved_scene_operation ||
@@ -2215,14 +2230,33 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
     }
 
     if(const auto& renderer=services.renderer_resource_payload) {
-      const auto prepared=prepare_intro_renderer_relocation_payload(
-          renderer->bytes,services.resolve_renderer_reference);
-      const auto parsed=services.parse_renderer_resource_payload(prepared.bytes);
-      if(!parsed.identity) throw std::runtime_error("Renderer-resource parser did not return a live container");
-      // Retain the manager's logical ownership before releasing only the
-      // construction reference. This is not renderer readiness.
-      renderer_resource_container_=parsed;
-      services.release_renderer_construction_reference(parsed);
+      const auto saved=services.select_renderer_allocation_state();
+      bool restore_attempted=false;
+      try {
+        // Scene ownership precedes reading; destruction owns all copied bytes
+        // and relation storage, but never the borrowed canonical resources.
+        renderer_resource_container_=std::make_unique<IntroRendererResourceRelations>(renderer->bytes);
+        renderer_resource_container_->read([this](std::uint32_t key) -> std::optional<std::uint64_t> {
+          const auto resource=resolve_marked_source_resource_reference(key);
+          if(!resource) return std::nullopt;
+          return resource->value;
+        });
+        for(const auto resource:loaded_resource_handles_) {
+          const auto& state=resource_state_for_handle(resource);
+          if(!state || !renderer_resource_container_->has_selector(state->directory_auxiliary))
+            throw std::runtime_error("Live resource relation selector has no container group");
+        }
+        restore_attempted=true;
+        services.restore_renderer_allocation_state(saved);
+      } catch(...) {
+        renderer_resource_container_.reset();
+        // Failure restoration is a native safety policy. Preserve a failure
+        // even if restoration itself fails; never retry a failed restore call.
+        if(!restore_attempted) {
+          try { services.restore_renderer_allocation_state(saved); } catch(...) {}
+        }
+        throw;
+      }
     }
 
     constexpr std::uint32_t reference_domain_marker=0x40000000U;
@@ -2312,6 +2346,25 @@ IntroRuntime::resolve_marked_source_resource_reference(
   if(!resource || !associated_resource_owner(*resource) ||
       !resource_state_for_handle(*resource)) return std::nullopt;
   return resource;
+}
+
+std::optional<std::vector<IntroRuntimeResourceHandle>>
+IntroRuntime::renderer_relation_members(IntroRuntimeResourceHandle resource) const {
+  if(!renderer_resource_container_ || outer_loader_tail_stage_==IntroOuterLoaderTailStage::failed ||
+      resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      !associated_resource_owner(resource))
+    throw std::runtime_error("Renderer relation query requires a live scene resource and container");
+  const auto& state=resource_state_for_handle(resource);
+  if(!state) throw std::runtime_error("Renderer relation resource has no retained state");
+  const auto members=renderer_resource_container_->members(state->directory_auxiliary,[this](std::uint64_t value) {
+    const IntroRuntimeResourceHandle member{value};
+    return associated_resource_owner(member).has_value() && resource_state_for_handle(member).has_value();
+  });
+  if(!members) return std::nullopt;
+  std::vector<IntroRuntimeResourceHandle> result;
+  result.reserve(members->size());
+  for(const auto value:*members) result.push_back({value});
+  return result;
 }
 
 std::optional<std::uint32_t>
@@ -2886,9 +2939,134 @@ runtime::ComponentCallback IntroRuntime::controller_phase_two_callback(
   };
 }
 
+bool IntroRuntime::movie_control_reader_matches() const {
+  const auto source_index=resources_.controller_index();
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      reader_bracket_stage_!=IntroReaderBracketStage::ordinary_reader_boundary_complete ||
+      !movie_controller_reader_state_ || !movie_controller_component_reader_state_ ||
+      controller_component_>=components_.size() || source_index>=directory_resource_mapping_.size())
+    return false;
+  const auto& component=components_.at(controller_component_);
+  const auto& source=resources_.sources().directory().at(source_index);
+  const auto owner=source_handle(source_index);
+  const auto resource=directory_resource_mapping_[source_index];
+  if(!component.constructed() || component.removed() ||
+      component.source().factory_name!="ZGEOM_MovieControl" ||
+      component.source().directory_index!=source_index || component.source().attachment_index!=0U ||
+      component.source().owner!=owner.value || component.source().owner_reader_offset!=source.deferred_source_offset ||
+      component.state().attached_owner!=owner.value || component.state().class_ordinal!=314U ||
+      component.state().requested!=0x37U || component.state().priority!=0U ||
+      source.source_type!=0x0800001aU || !source.deferred_source_offset ||
+      source.attachments.size()!=1U || source.attachments[0].parameter!=0.0F ||
+      !resource || associated_resource_owner(*resource)!=owner || !resource_state_for_handle(*resource))
+    return false;
+  const auto indices=owner_components(owner);
+  const auto list=constructed_list_owners_.find(source_index);
+  const auto payload=constructed_picture_components_.find(controller_component_);
+  if(indices.size()!=1U || indices[0]!=controller_component_ || list==constructed_list_owners_.end() ||
+      list->second.owner!=owner || list->second.resource!=*resource ||
+      list->second.class_identifier!=0x0800001aU || list->second.attachments.size()!=1U ||
+      list->second.attachments[0]!=component_handle(controller_component_) ||
+      payload==constructed_picture_components_.end() || payload->second.owner!=owner || !payload->second.movie_control)
+    return false;
+  const auto& read=*movie_controller_reader_state_;
+  const auto& attachment=*movie_controller_component_reader_state_;
+  if(read.owner!=owner || read.resource!=*resource || read.source_directory_index!=source_index ||
+      read.source_offset!=source.deferred_source_offset || read.component_index!=controller_component_ ||
+      attachment.owner!=owner || attachment.resource!=*resource || attachment.source_directory_index!=source_index ||
+      attachment.source_offset!=source.deferred_source_offset || attachment.component_index!=controller_component_ ||
+      attachment.class_ordinal!=component.state().class_ordinal || attachment.requested_mask!=component.state().requested ||
+      attachment.priority!=component.state().priority || attachment.events!=payload->second.movie_control->events)
+    return false;
+  const IntroReaderAdmissionIdentity identity{resource->value,source.deferred_source_offset,source_index};
+  if(std::ranges::find(supported_reader_admissions_,identity)==supported_reader_admissions_.end() ||
+      !std::ranges::any_of(deferred_reader_work_,[&](const auto& work) {
+        return work.processed && work.resource==*resource && work.source_directory_index==source_index &&
+            work.source_offset==source.deferred_source_offset;
+      }))
+    return false;
+  const auto resolved=[&](std::uint32_t reference) -> std::optional<IntroRuntimeResourceHandle> {
+    if(!reference) return std::nullopt;
+    const auto target=resources_.sources().local_source_for_authored_reference(reference);
+    if(!target || *target>=directory_resource_mapping_.size()) return std::nullopt;
+    return directory_resource_mapping_[*target];
+  };
+  const auto& authored=resources_.controller();
+  if(resolved(authored.sequence_reference)!=read.sequence_list_resource ||
+      resolved(authored.group_reference)!=read.group_list_resource ||
+      resolved(authored.additional_reference)!=read.additional_resource ||
+      resolved(authored.first_optional_reference.value_or(0))!=read.first_optional_resource ||
+      resolved(authored.second_optional_reference.value_or(0))!=read.second_optional_resource)
+    return false;
+  const auto members_match=[&](const auto& references,const auto& members) {
+    if(references.size()!=members.size()) return false;
+    for(std::size_t index=0;index<references.size();++index)
+      if(resolved(references[index])!=members[index]) return false;
+    return true;
+  };
+  return members_match(resources_.cut_references(),read.sequence_members) &&
+      members_match(resources_.group_references(),read.group_members);
+}
+
+void IntroRuntime::bind_movie_control_phase_two_services(IntroControllerPhaseTwoServices services) {
+  if(movie_control_phase_two_services_ || components_.failed() || controller_initialization_.failed() ||
+      controller_initialization_.phase_two_completed() || !movie_control_reader_matches())
+    throw std::runtime_error("MovieControl phase two requires its complete live readers and unbound scene services");
+  // These four clock/audio operations belong to the retained application, not
+  // to a caller-created replacement controller or copied preference state.
+  application_.bind_controller_phase_two(services);
+  IntroControllerInitialization::validate_services(services);
+  movie_control_phase_two_services_=std::move(services);
+}
+
+void IntroRuntime::run_movie_control_phase_two(std::size_t component_index,runtime::ComponentRecord& record) {
+  if(component_index!=controller_component_ || &record!=&components_.at(controller_component_) ||
+      !movie_control_phase_two_services_ || !movie_control_reader_matches())
+    throw std::runtime_error("MovieControl phase two requires its source-backed component and retained scene services");
+  auto services=*movie_control_phase_two_services_;
+  const auto check_live=[this] {
+    if(!movie_control_reader_matches())
+      throw std::runtime_error("MovieControl phase-two service changed its live reader state");
+  };
+  // Check after each synchronous service while the canonical initializer's
+  // failure guard is active. A last-presentation owner mutation must not leave
+  // its completion flag true when the lifecycle callback rejects that state.
+  const auto guarded=[check_live](auto callback) {
+    return [check_live,callback](auto&&... args) {
+      check_live();
+      if constexpr(std::is_void_v<std::invoke_result_t<decltype(callback),decltype(args)...>>) {
+        callback(std::forward<decltype(args)>(args)...);
+        check_live();
+      } else {
+        auto result=callback(std::forward<decltype(args)>(args)...);
+        check_live();
+        return result;
+      }
+    };
+  };
+  services.input_manager_exists=guarded(services.input_manager_exists);
+  services.register_movie_control_action_map=guarded(services.register_movie_control_action_map);
+  services.assign_engine_clock_mode=guarded(services.assign_engine_clock_mode);
+  services.query_global_property=guarded(services.query_global_property);
+  services.current_audio_volume=guarded(services.current_audio_volume);
+  services.request_audio_volume=guarded(services.request_audio_volume);
+  services.scene_integer_clock=guarded(services.scene_integer_clock);
+  services.first_renderer=guarded(services.first_renderer);
+  services.renderer_height=guarded(services.renderer_height);
+  services.renderer_width=guarded(services.renderer_width);
+  services.set_viewport=guarded(services.set_viewport);
+  services.renderer_has_stencil=guarded(services.renderer_has_stencil);
+  services.clear=guarded(services.clear);
+  services.present=guarded(services.present);
+  controller_initialization_.run_phase_two(services);
+  // The dispatcher sets status 0x8 only after return. Phase one, owner work,
+  // event-16 activation and complete-scene admission are separate operations.
+}
+
 void IntroRuntime::apply_supported_movie_control_deferred_reader(const IntroDeferredReaderWork& work) {
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
       !work.processed || work.source_directory_index!=resources_.controller_index() ||
+      !std::ranges::any_of(deferred_reader_work_,[&](const auto& live) {return &live==&work;}) ||
       work.source_offset!=resources_.sources().directory().at(work.source_directory_index).deferred_source_offset ||
       work.resource!=directory_resource_mapping_.at(work.source_directory_index).value_or(IntroRuntimeResourceHandle{}))
     throw std::runtime_error("MovieControl reader requires its live deferred owner work");
@@ -2920,6 +3098,7 @@ void IntroRuntime::apply_supported_movie_control_deferred_reader(const IntroDefe
   const auto& authored=resources_.controller();
   IntroMovieControllerReaderState state{
       .owner=source_handle(work.source_directory_index), .resource=work.resource,
+      .source_directory_index=work.source_directory_index,.source_offset=work.source_offset,
       .component_index=controller_component_, .authored=authored,
       .sequence_list_resource=resolve(authored.sequence_reference),
       .group_list_resource=resolve(authored.group_reference),
@@ -2939,6 +3118,7 @@ void IntroRuntime::apply_supported_movie_control_component_reader(
     const IntroDeferredReaderWork& work) {
   if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete ||
       !work.processed || work.source_directory_index != resources_.controller_index() ||
+      !std::ranges::any_of(deferred_reader_work_,[&](const auto& live) {return &live==&work;}) ||
       !movie_controller_reader_state_ || movie_controller_component_reader_state_)
     throw std::runtime_error("MovieControl component reader requires its completed owner reader");
   const auto& component = components_.at(controller_component_);
@@ -2946,10 +3126,15 @@ void IntroRuntime::apply_supported_movie_control_component_reader(
   if (!component.constructed() || component.removed() ||
       component.source().factory_name != "ZGEOM_MovieControl" ||
       component.state().attached_owner != movie_controller_reader_state_->owner.value ||
+      work.resource != movie_controller_reader_state_->resource ||
+      work.source_offset != movie_controller_reader_state_->source_offset ||
       !constructed || !constructed->movie_control)
     throw std::runtime_error("MovieControl component reader has no live constructed controller");
   movie_controller_component_reader_state_ = {
       .owner = movie_controller_reader_state_->owner,
+      .resource = work.resource,
+      .source_directory_index = work.source_directory_index,
+      .source_offset = work.source_offset,
       .component_index = controller_component_,
       .class_ordinal = component.state().class_ordinal,
       .requested_mask = component.state().requested,

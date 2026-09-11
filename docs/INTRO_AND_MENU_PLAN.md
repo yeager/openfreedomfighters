@@ -1,7 +1,7 @@
 # Intro and main-menu implementation plan
 
-Source review: 2026-09-11, baseline `1ed6956` plus the named-reference and
-FadeToBlack initialization changes described below. This is an implementation
+Source review: 2026-09-11, baseline `017bdfe` plus the renderer-relation and
+MovieControl binding changes described below. This is an implementation
 plan, not a report of completed playback. The milestones below are all open;
 the existing splash and individual tested components are inputs to them.
 
@@ -29,6 +29,8 @@ soundtrack files must never be required to launch.
 | --- | --- | --- |
 | Launch | Timed splash, full file hashing, worker preparation, error popup and same-window GPU handoff | Regression coverage across the complete intro-to-menu path |
 | Intro data | Directory construction, retained source/resource identities, partial deferred readers and cold first-cut preparation | Complete required readers, concrete loader-tail services and global lifecycle |
+| Renderer relations | Scene-owned initial relation lists resolved through canonical resources | Dynamic maintenance, separate List associations and accepted draw-record production |
+| MovieControl | Source-checked factory phase-two callback and retained service binding | Phase one, live external services, global dispatch and event-16 activation |
 | Intro picture | A source-backed static legal picture drawn using a generic fit projection | Authored camera, live cut timing, animation and admitted scene draws |
 | Scene host | Checked ordering boundaries and a first-frame assembler | Connection to the scene session and a repeatable ordinary update/render loop |
 | Intro audio | Source-bank bindings, decoders, channel service and SDL output adapters | Scene-driven start, readiness, update, stop and audible normal playback |
@@ -115,15 +117,20 @@ not unpublished disassembly. Retail captures, text and audio remain private.
    implementations. A no-effect path needs its own reviewed behavior contract.
 2. Integrate the implemented [null-reference named reader](INTRO_NAMED_GLOBAL.md)
    through the production tail. Its supported form needs no reference lookup;
-   broader forms remain unsupported. Implement renderer-resource
-   parsing and retained container ownership; typed list/resource associations; source-lease
-   release; camera-zero/fallback behavior; and the required scene, spatial and
-   saved-resource operations. Workspace counts are not a renderer container.
-   Keep serialized references, relocation addresses and native handles distinct.
+   broader forms remain unsupported. Initial renderer-resource relation parsing
+   and retained container ownership are implemented. Supply the paired allocation
+   diagnostic-state services, typed List associations, source-lease release,
+   camera-zero/fallback behavior, and required scene, spatial and saved-resource
+   operations. Implement dynamic relation maintenance where the live path needs
+   it. The saved state token is not a construction-reference release. Relation
+   membership is not draw-record production. Keep serialized references,
+   relocation addresses and native handles distinct.
 3. Implement required owner hooks, component phases, event membership and
    ordinary-update admission. Extend completion validation beyond the current
    sound paths and source-bound first-cut FadeToBlack phase-one effects; owner
-   coverage remains sound-only. Separate cold-entry validation of installed
+   coverage remains sound-only. MovieControl's factory-owned phase-two callback
+   and exact reader/service binding now exist, but its phase one and surrounding
+   global admission do not. Separate cold-entry validation of installed
    implementations and live services from the completed-effects report currently
    named `preflight_global_lifecycle()`. Requiring successful callback effects
    before their first global run would be circular. Check entry prerequisites,
@@ -133,7 +140,9 @@ not unpublished disassembly. Retail captures, text and audio remain private.
 4. Give the owning session a checked activation continuation. The normal path
    already ran its reader bracket; the current activation helper tries to run
    it again. Do not replay readers, bypass them with no-ops, or initialize
-   MovieControl twice. Use one canonical controller and scene lifetime.
+   MovieControl twice: its production factory now owns the phase-two callback,
+   so a global phase-two pass must not be followed by the helper's separate
+   controller initialization. Use one canonical controller and scene lifetime.
 5. Connect the session/host to the SDL application lifetime. CPU preparation
    stays on the worker; GPU creation, presentation and SDL event handling stay
    on their owning thread. Introduce manager-owned current-scene dispatch for
@@ -385,22 +394,33 @@ normal intro playback.
 
 Start with I1, not soundtrack matching or graphics polish:
 
-Two I1 pieces are implemented: the supported named-reference reader updates the
-shared scene registry, and the three source-bound first-cut FadeToBlack callbacks
-update canonical picture size and cache state. They do not complete I1. Normal
-startup still does not invoke the loader tail or bind the fade runtime services.
-The 125-test Linux x86-64 suite passes with software Vulkan, including loader-tail
-integration and scoped fade callbacks. All 13 targeted reader/resource/fade
-tests also pass with ASan, leak detection and UBSan. An owned-data check validates
-the null-reference form without activating the scene. These are component
-results, not a playback acceptance run.
+Implemented I1 work includes the shared named-reference registry, the three
+source-bound first-cut FadeToBlack callbacks, the scene-owned initial renderer
+relation container, and MovieControl's canonical factory phase-two binding.
+I1 remains open. Normal startup still does not run the loader tail, bind these
+live services or dispatch the global lifecycle.
+
+The current 127-test Linux x86-64 suite passes with software Vulkan. All 14
+targeted controller/resource/relation tests also pass ASan/UBSan with leak
+detection. A separate
+owned-data run constructs all 470 resources, runs the ordinary reader bracket
+with partial reader coverage and resolves the relation lists through canonical
+resource mapping: 157 assigned selectors, 313 unassigned resources, 97 empty
+assigned groups and 248 expanded members. It validates MovieControl service
+binding with zero service calls. The Steam manifest and 36 optional soundtrack
+candidates passed hash checks. These checks do not execute the full loader tail,
+activate a scene or establish playback. A two-frame normal SDL/Vulkan startup
+run also completed, retaining 470 resources and 384 components and uploading
+26 intro images. It displayed the current static picture with a generic fit
+projection; the timed intro and menu remain disconnected.
 
 1. Produce a current required-reader/owner/component coverage matrix from the
    checked data and current validators; tie each gap to its lifecycle consumer.
-2. Close the renderer-container behavior contract together with its relocation,
-   typed associations and ownership consumers. Connect the supported named
-   reader when the other production tail services exist. Keep parser and runtime
-   identity domains explicit in tests.
+2. Complete the loader-tail consumers around the concrete relation container:
+   allocation-state pairing, typed List associations, saved-resource operations
+   and required dynamic maintenance. Recover the accepted draw-record producer
+   without treating relation members as draw records. Join the supported named
+   reader and container through the same production tail.
 3. Implement the required reader families and concrete lifecycle state, separate
    entry validation from completion checks, then join the loader tail and checked
    session continuation. Land an integrated normal-start test with that batch;

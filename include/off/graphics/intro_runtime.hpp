@@ -9,6 +9,7 @@
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_named_global_references.hpp"
 #include "off/graphics/intro_renderer_relocation_prefix.hpp"
+#include "off/graphics/intro_renderer_resource_relations.hpp"
 #include "off/graphics/intro_controller_initialization.hpp"
 #include "off/graphics/intro_lifecycle_admission.hpp"
 #include "off/runtime/application_services.hpp"
@@ -375,6 +376,8 @@ struct FirstCutLegalPictureActivationResult {
 struct IntroMovieControllerReaderState {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
+  std::size_t source_directory_index{};
+  std::uint32_t source_offset{};
   std::size_t component_index{};
   data::GmsIntroMovieControllerSource authored;
   IntroRuntimeResourceHandle sequence_list_resource;
@@ -390,6 +393,9 @@ struct IntroMovieControllerReaderState {
 // lifecycle admission.
 struct IntroMovieControllerComponentReaderState {
   IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t source_directory_index{};
+  std::uint32_t source_offset{};
   std::size_t component_index{};
   std::uint16_t class_ordinal{};
   std::uint32_t requested_mask{};
@@ -581,6 +587,8 @@ struct IntroRendererResourcePayload {
   std::span<const std::byte> bytes;
 };
 struct IntroRendererResourceContainer {
+  // Legacy envelope-only test token. Production loader ownership uses the
+  // concrete IntroRendererResourceRelations object, never this integer.
   std::uint64_t identity{};
   bool operator==(const IntroRendererResourceContainer&) const = default;
 };
@@ -616,11 +624,11 @@ struct IntroOuterLoaderTailServices {
   std::function<void(IntroNamedGlobalPreparedReader&)> relocate_named_global_references;
   std::function<void(std::string_view,IntroNamedGlobalPreparedReader&)> read_named_global_payload;
   std::optional<IntroRendererResourcePayload> renderer_resource_payload;
-  // Resolves the reviewed 32-bit renderer-prefix lookup key. A payload with
-  // nonzero tagged references cannot be handed to its typed reader without it.
-  std::function<std::optional<std::uint32_t>(std::uint32_t)> resolve_renderer_reference;
-  std::function<IntroRendererResourceContainer(std::span<const std::byte>)> parse_renderer_resource_payload;
-  std::function<void(IntroRendererResourceContainer)> release_renderer_construction_reference;
+  // Select the allocation diagnostic state and return its previous token;
+  // restore that same service state after reading. This is NOT a container
+  // reference-count operation. Native failure cleanup also attempts restoration.
+  std::function<std::uint32_t()> select_renderer_allocation_state;
+  std::function<void(std::uint32_t)> restore_renderer_allocation_state;
   std::vector<IntroResourceAssociationRecord> resource_associations;
   std::function<void(IntroRuntimeResourceHandle,IntroRuntimeResourceHandle)> associate_live_resources;
   IntroAuxiliaryArraySources auxiliary_arrays;
@@ -827,9 +835,11 @@ public:
   [[nodiscard]] IntroOuterLoaderSourceInputs outer_loader_source_inputs() const;
   [[nodiscard]] IntroOuterLoaderTailStage outer_loader_tail_stage() const noexcept {return outer_loader_tail_stage_;}
   [[nodiscard]] bool loader_source_lease_released() const noexcept {return loader_source_lease_released_;}
-  [[nodiscard]] std::optional<IntroRendererResourceContainer> renderer_resource_container() const noexcept {
-    return renderer_resource_container_;
+  [[nodiscard]] const IntroRendererResourceRelations* renderer_resource_container() const noexcept {
+    return renderer_resource_container_.get();
   }
+  [[nodiscard]] std::optional<std::vector<IntroRuntimeResourceHandle>>
+  renderer_relation_members(IntroRuntimeResourceHandle resource) const;
   [[nodiscard]] std::optional<IntroRuntimeResourceHandle>
   resolve_marked_source_resource_reference(std::uint32_t reference) const;
   // Returns a GMS-local, tag-aligned slot address for relocation payloads.
@@ -1025,7 +1035,13 @@ public:
   // Caller still owes actual global lifecycle admission and external services.
   // Clock/audio resolve through the same application state retained by this scene.
   void run_controller_phase_two(const IntroControllerPhaseTwoServices& external);
-  // Install on the concrete MovieControl instance constructed in components().
+  // Retain once after both controller readers and the ordinary reader bracket.
+  // The real factory callback uses this binding; binding itself invokes no
+  // service and supplies no phase-one, owner or global lifecycle completion.
+  // Captured external service state must outlive this scene host.
+  void bind_movie_control_phase_two_services(IntroControllerPhaseTwoServices services);
+  // Compatibility helper for independently constructed lifecycle fixtures;
+  // production construction installs its source-checked callback directly.
   [[nodiscard]] runtime::ComponentCallback controller_phase_two_callback(
       const IntroControllerPhaseTwoServices& external);
   [[nodiscard]] IntroControllerInitialization& controller_initialization() noexcept { return controller_initialization_; }
@@ -1149,6 +1165,7 @@ private:
   std::optional<IntroLegalPictureReaderState> legal_picture_reader_state_;
   std::optional<IntroLegalPictureComponentReaderState> legal_picture_component_reader_state_;
   IntroControllerInitialization controller_initialization_;
+  std::optional<IntroControllerPhaseTwoServices> movie_control_phase_two_services_;
   FreshIntroCamera prepared_camera_;
   std::map<std::size_t,std::unique_ptr<IntroLiveCameraOwner>> live_cameras_;
   RendererCameraRegistry registered_cameras_;
@@ -1165,7 +1182,8 @@ private:
   std::optional<std::uint64_t> reader_bracket_retained_saved_value_;
   IntroOuterLoaderTailStage outer_loader_tail_stage_{IntroOuterLoaderTailStage::not_started};
   bool loader_source_lease_released_{};
-  std::optional<IntroRendererResourceContainer> renderer_resource_container_;
+  std::unique_ptr<IntroRendererResourceRelations> renderer_resource_container_;
+  bool outer_loader_tail_running_{};
   std::vector<std::array<std::byte,12>> first_auxiliary_array_;
   std::vector<std::array<std::byte,8>> second_auxiliary_array_;
   runtime::SceneEventNames event_names_;
@@ -1187,6 +1205,8 @@ private:
   void record_supported_component_admission(std::size_t component);
   [[nodiscard]] bool first_cut_fade_reader_matches(std::size_t component) const;
   void run_first_cut_fade_phase_one(std::size_t component,runtime::ComponentRecord& record);
+  [[nodiscard]] bool movie_control_reader_matches() const;
+  void run_movie_control_phase_two(std::size_t component,runtime::ComponentRecord& record);
   void allocate_source_scope(std::uint32_t count_group);
   std::map<std::size_t,std::unique_ptr<IntroWindowOwner>> window_owners_;
   IntroWindowOwner* window_owner_{}; // Non-owning first-cut convenience, never latest Window.

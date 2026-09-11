@@ -4,10 +4,11 @@ Normal startup constructs and retains the supported intro directory, but it
 does not make that scene current. `NormalIntroSceneSession` owns the retained
 runtime, its exactly-once postconstruction reader bracket, its cold reviewed
 first-cut command session, and the following outer loader-tail transition. The
-tail now supplies the supported null-reference named reader when neither named
-callback is provided. The remaining services must come from its caller; the
-session supplies no placeholder renderer parser, association,
-camera, scene operation, or saved-resource callback. Reader callback routing
+tail supplies the supported null-reference named reader when neither named
+callback is provided and constructs the concrete renderer relation container.
+The remaining services must come from its caller: allocation diagnostic-state
+selection/restoration, List associations, camera, scene and saved-resource
+operations. Reader callback routing
 no longer lives in `main`. `NormalIntroSceneHost` implements the later strict
 ordering state machine described here, but is not yet connected to that session
 or SDL. It prevents a shortcut that creates an audio device or a draw call
@@ -19,10 +20,17 @@ production services exist. The
 prepared scene now retains parser-validated, owned outer-loader source sections
 (named/global, renderer payload, associations, and sizing rows) for that later
 handoff; retaining them neither invokes a service nor advances the tail.
-`NormalIntroSceneSession::outer_loader_tail_readiness()` exposes the exact
-retained section sizes, supported named-reference form and still-required service boundaries for diagnostic
-and recovery work. It is preflight only: it does not provide placeholder
-callbacks, parse a renderer container, or transition the session.
+`NormalIntroSceneSession::outer_loader_tail_readiness()` reports retained
+sections and outstanding service boundaries. It is preflight only: it does not
+provide callbacks, construct a container or transition the session.
+
+The [relation reader](INTRO_RENDERER_RELATIONS.md) uses original marked source
+references and the runtime's canonical resource mapping. Queries preserve
+authored member order and read each resource's current selector. The container
+owns its source/workspace bytes but borrows the related resources. Its
+allocation-state restoration token is not a reference-count release. Dynamic
+relation updates, the separate outer-tail List associations and generic draw
+production remain unfinished.
 
 `IntroRendererPayloadObservation` is a narrower source-backed recovery step.
 It validates the renderer payload's relocation groups through a caller-supplied
@@ -33,7 +41,9 @@ admit a frame, or substitute a renderer parser.
 The `--probe-intro-renderer-payload` command runs this check against owned game
 data. Its resolver returns the GMS-local slot address, which is a different
 domain from the process-local `IntroRuntimeResourceHandle`; treating the latter
-as relocation output would be fabricated and is rejected by design.
+as relocation output would be fabricated and is rejected by design. The new
+concrete relation reader resolves native resources directly from the original
+source references instead of reinterpreting those proxy bytes.
 
 `--probe-intro-named-global` separately profiles the named/global tagged block.
 It reports aggregate tag framing only: the label and every payload value remain
@@ -45,6 +55,15 @@ the narrower supported form: two named null references stored as type-16 values
 in the scene's shared case-insensitive ASCII registry. Its loader-tail integration
 is tested, but normal startup cannot call that tail until the other services exist.
 
+MovieControl's concrete factory now retains a source-checked phase-two callback.
+`bind_movie_control_phase_two_services` requires both exact reader receipts and
+the completed ordinary reader bracket. Binding copies the service table without
+calling it; execution uses the scene's canonical controller and application
+clock/audio state. Required input, property and renderer services remain external.
+Normal startup does not bind or invoke this callback yet. The future activation
+continuation must dispatch it once through the real global phase-two pass, not
+repeat it after that pass through a second controller helper.
+
 ## Required ordering
 
 The session owns one `IntroRuntime` for the lifetime of the admitted scene; the
@@ -53,8 +72,9 @@ source-directory construction has completed. It performs
 the following stages exactly once, with real services at every boundary:
 
 1. The session runs the post-construction reader bracket and outer loader tail.
-   The host then continues the activation boundary at global lifecycle and
-   MovieControl phase two; it must not replay either loader stage.
+   The host then continues at global lifecycle, including the concrete
+   MovieControl phase-two callback; it must not replay either loader stage or
+   initialize the controller again afterward.
 2. On a later ordinary frame, run the reviewed MovieControl event-16 update.
    It must be strictly past the phase-two deadline.
 3. Route the selected first-cut camera and pass the live camera/view evidence
@@ -81,6 +101,12 @@ stops channels before releasing readers and destroys the host before global SDL
 shutdown.
 
 ## Verification plan
+
+The current owned-data integration check constructs 470 resources, runs the
+ordinary reader bracket with partial reader coverage and resolves the initial
+relation lists through the same runtime. It validates MovieControl service
+binding with zero bound-service calls. It does not complete the loader tail or
+activate the scene. The following end-to-end checks remain required:
 
 - A source-free recording host proves the stages above cannot be reordered and
   that a failed prerequisite emits no draw or notification.

@@ -1,16 +1,26 @@
 # Intro startup activation boundary
 
-`IntroStartupActivation` is a strict, caller-wired ordinary-startup sequence.
+`IntroStartupActivation` is a caller-wired startup ordering model.
 It runs the post-construction reader bracket, the outer loader tail through the
 saved-resource services, a supplied concrete global-lifecycle call, and
 MovieControl phase two, in that order.
 
-The class is intentionally not connected to normal application startup.  It
-does not parse named/global or renderer payloads, provide association/resource
-services, create a renderer view, activate a cut, execute an update, draw, or
-present.  Every parser, resolver, scene service, lifecycle callback and
-MovieControl phase-two callback remains caller supplied; a missing or failing
-boundary leaves activation failed.
+The class is not connected to normal application startup. Its runtime tail now
+has concrete supported named-reference and renderer-relation readers; scene,
+List-association and saved-resource services remain required from the caller.
+The ordering model itself does not create a view, activate a cut, run an
+ordinary update, draw or present. Missing or failing boundaries leave it failed.
+
+The production MovieControl factory now installs a source-checked phase-two
+callback using the same retained controller and application clock/audio state.
+Its service binding requires both readers and calls no service. Phase one and
+whole-scene lifecycle admission remain incomplete.
+
+The future normal activation continuation must adapt this model to resume the
+already completed reader bracket. It must also avoid the model's separate
+MovieControl phase-two call after a global pass that already dispatched the
+factory-owned callback. Replaying readers or initializing a second controller
+would not implement the original startup sequence.
 
 `IntroOuterLoaderTailReadiness` is a source-backed preflight report, not an
 activation service. It records the retained source section sizes and which

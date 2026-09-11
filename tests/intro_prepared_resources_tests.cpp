@@ -58,7 +58,7 @@ static OFF_NOINLINE void test_outer_loader_tail_readiness() {
           "outer loader tail readiness retains exact source section sizes without consuming them");
     const std::vector expected{
         off::graphics::IntroOuterLoaderTailBoundary::named_global_relocation_and_reader,
-        off::graphics::IntroOuterLoaderTailBoundary::renderer_reference_resolution_and_container_parser,
+        off::graphics::IntroOuterLoaderTailBoundary::renderer_allocation_diagnostic_state,
         off::graphics::IntroOuterLoaderTailBoundary::live_resource_association,
         off::graphics::IntroOuterLoaderTailBoundary::loader_source_lease_release,
         off::graphics::IntroOuterLoaderTailBoundary::camera_zero_query_and_fallback_registration,
@@ -67,7 +67,7 @@ static OFF_NOINLINE void test_outer_loader_tail_readiness() {
         off::graphics::IntroOuterLoaderTailBoundary::saved_resource_0x4000_service};
     check(readiness.required_boundaries==expected &&
               std::string_view{off::graphics::intro_outer_loader_tail_boundary_label(expected[1])}==
-                  "renderer-reference-resolution-and-container-parser",
+                  "renderer-allocation-diagnostic-state",
           "outer loader tail readiness reports every still-concrete boundary in source order");
     const auto empty=off::graphics::inspect_intro_outer_loader_tail_readiness({});
     check(empty.named_global_bytes==0U && empty.renderer_resource_bytes==0U &&
@@ -1518,11 +1518,27 @@ struct CompleteOuterLoaderTailObservation final {
         const std::array<std::byte,15> named_payload{std::byte{'G'},std::byte{'l'},std::byte{'o'},
             std::byte{'b'},std::byte{'a'},std::byte{'l'},std::byte{},std::byte{8},std::byte{},
             std::byte{},std::byte{},std::byte{0x31},std::byte{0x32},std::byte{0x33},std::byte{0x34}};
-        const std::array<std::byte,24> renderer_payload{std::byte{6},std::byte{},std::byte{},std::byte{},
+        std::array<std::byte,24> renderer_payload{std::byte{6},std::byte{},std::byte{},std::byte{},
             std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},
             std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},
             std::byte{1},std::byte{1},std::byte{},std::byte{}};
     [[nodiscard]] off::graphics::IntroOuterLoaderTailServices services() {
+        // This loader fixture gives previously arbitrary source identifiers a
+        // valid shared relation group. Full construction tests above retain
+        // their independent opaque-word preservation assertions.
+        for(const auto resource:host.loaded_resource_handles()) {
+          const auto owner=host.resource_owner(resource);
+          auto state=*host.resource_state(owner);
+          if(state.directory_auxiliary) state.directory_auxiliary=4U;
+          if(owner==host.source_handle(6) || owner==host.source_handle(8))
+            state.directory_auxiliary=4U;
+          host.assign_resource_state(owner,state);
+        }
+        const auto member_offset=host.resources().sources().directory()[8].local_slot_index*112U;
+        check(member_offset>=0x60U,"renderer member uses a bias-addressable source slot");
+        const auto member_word=(member_offset-0x60U)|1U;
+        for(unsigned byte=0;byte<4;++byte)
+          renderer_payload[20U+byte]=static_cast<std::byte>((member_word>>(8U*byte))&0xffU);
         const auto association_raw=[this](std::size_t source) {
           const auto offset=host.resources().sources().directory()[source].local_slot_index*112U;
           check(offset>=0x70U,"association fixture requires a bias-addressable pool slot");
@@ -1542,14 +1558,21 @@ struct CompleteOuterLoaderTailObservation final {
               check(named_payload[12]==std::byte{0x32},"named relocation never mutates the source payload");
               tail_events.push_back("named-reader");},
             .renderer_resource_payload=off::graphics::IntroRendererResourcePayload{renderer_payload},
-            .resolve_renderer_reference=[this](std::uint32_t key) -> std::optional<std::uint32_t> {
-              check(key==0x40000160U,"renderer relocation applies its independent prefix lookup transform");
-              tail_events.push_back("renderer-relocate"); return 0x880U;},
-            .parse_renderer_resource_payload=[this](std::span<const std::byte> payload) {
-              check(payload.size()==renderer_payload.size() && payload[20]==std::byte{0x81} && payload[21]==std::byte{8} &&
-                        payload[22]==std::byte{} && payload[23]==std::byte{} && renderer_payload[20]==std::byte{1} &&
-                        renderer_payload[21]==std::byte{1},"renderer parser receives an owned, relocated complete payload");tail_events.push_back("renderer-parse");return off::graphics::IntroRendererResourceContainer{42};},
-            .release_renderer_construction_reference=[this](auto container) {check(container.identity==42,"release only the parsed renderer construction reference");tail_events.push_back("renderer-release");},
+            .select_renderer_allocation_state=[this] {
+              check(!host.renderer_resource_container(),"allocation state is selected before scene-owned construction");
+              tail_events.push_back("renderer-select"); return 0xa713U;},
+            .restore_renderer_allocation_state=[this](std::uint32_t token) {
+              check(token==0xa713U,"restore passes the saved service token, not a container identity");
+              const auto* container=host.renderer_resource_container();
+              check(container && container->loaded() && container->group_count()==1U &&
+                        container->member_count()==1U && container->workspace().bytes().data()!=renderer_payload.data(),
+                    "scene owns copied payload and concrete resource relations before state restoration");
+              const auto members=host.renderer_relation_members(*host.directory_resource_mapping()[6]);
+              check(members && *members==std::vector<off::graphics::IntroRuntimeResourceHandle>{*host.directory_resource_mapping()[8]} &&
+                        host.renderer_relation_members(*host.directory_resource_mapping()[8])==members &&
+                        !host.renderer_relation_members(*host.directory_resource_mapping()[0]),
+                    "exact selectors alias typed members while zero stays unassigned");
+              tail_events.push_back("renderer-restore");},
             .resource_associations={{association_raw(6),association_raw(8)}},
             .associate_live_resources=[this](auto first,auto second) {check(first==host.directory_resource_mapping()[6] && second==host.directory_resource_mapping()[8],"association receives both independently resolved live resources");tail_events.push_back("associate");},
             .auxiliary_arrays={},
@@ -1568,7 +1591,8 @@ struct CompleteOuterLoaderTailObservation final {
     }
 };
 
-enum class NamedTailTestMode { callbacks, native, invalid_second, partial_reader, partial_relocator };
+enum class NamedTailTestMode { callbacks, native, invalid_second, partial_reader, partial_relocator,
+                              invalid_selector, invalid_renderer, restore_failure };
 
 static OFF_NOINLINE void check_complete_outer_loader_tail(
     off::graphics::IntroRuntime& host, NamedTailTestMode named_mode) {
@@ -1608,8 +1632,8 @@ static OFF_NOINLINE void check_complete_outer_loader_tail(
             tail_services.read_named_global_payload={};
           host.set_scene_resource_property_native("FIXTURECAMERA",root_resource);
           host.set_scene_resource_property_native("UnrelatedFixture",root_resource);
-          const auto original_parser=tail_services.parse_renderer_resource_payload;
-          tail_services.parse_renderer_resource_payload=[&,original_parser](auto bytes) {
+          const auto original_select=tail_services.select_renderer_allocation_state;
+          tail_services.select_renderer_allocation_state=[&,original_select] {
             native_renderer_reached=true;
             for(const auto name:{"fixturecamera","FIXTURELISTENER"}) {
               const auto property=host.scene_resource_property(name);
@@ -1621,7 +1645,7 @@ static OFF_NOINLINE void check_complete_outer_loader_tail(
                       host.scene_resource_property("UnrelatedFixture")->resource==root_resource,
                   "native reader matches full ASCII names and preserves unrelated scene properties");
             Bytes{}.swap(native_named_payload);
-            return original_parser(bytes);
+            return original_select();
           };
         }
         if(named_mode==NamedTailTestMode::invalid_second ||
@@ -1640,7 +1664,46 @@ static OFF_NOINLINE void check_complete_outer_loader_tail(
                 "invalid named source and incomplete callback pairs retain distinct failure stages");
           return;
         }
+        if(named_mode==NamedTailTestMode::invalid_selector ||
+            named_mode==NamedTailTestMode::invalid_renderer ||
+            named_mode==NamedTailTestMode::restore_failure) {
+          if(named_mode==NamedTailTestMode::invalid_selector) {
+            auto state=*host.resource_state(host.source_handle(6));
+            state.directory_auxiliary=5U; // Reference word, not the group head.
+            host.assign_resource_state(host.source_handle(6),state);
+          }
+          if(named_mode==NamedTailTestMode::invalid_renderer)
+            observation.renderer_payload[0]=std::byte{255};
+          unsigned restores{};
+          tail_services.restore_renderer_allocation_state=[&](std::uint32_t token) {
+            ++restores;
+            check(token==0xa713U,"failure cleanup restores the original diagnostic token");
+            if(named_mode==NamedTailTestMode::restore_failure)
+              throw std::runtime_error("independent restore failure");
+          };
+          rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
+          check(restores==1U && !host.renderer_resource_container() && !host.loader_source_lease_released() &&
+                    host.outer_loader_tail_stage()==off::graphics::IntroOuterLoaderTailStage::failed,
+                "invalid payload, selector or state restoration destroys container and fails without later effects");
+          rejects([&]{static_cast<void>(host.renderer_relation_members(*host.directory_resource_mapping()[6]));});
+          return;
+        }
+        const auto retained_select=tail_services.select_renderer_allocation_state;
+        const auto retained_restore=tail_services.restore_renderer_allocation_state;
+        unsigned rejected_reentries{};
+        tail_services.select_renderer_allocation_state=[&] {
+          rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
+          ++rejected_reentries;
+          tail_services.restore_renderer_allocation_state={};
+          return retained_select();
+        };
+        tail_services.restore_renderer_allocation_state=[&,retained_restore](std::uint32_t token) {
+          rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
+          ++rejected_reentries;
+          retained_restore(token);
+        };
         host.run_outer_loader_tail_through_saved_services(tail_services);
+        check(rejected_reentries==2U,"outer tail rejects recursive calls and retains the original restoration callback");
         if(named_mode==NamedTailTestMode::native)
           check(native_renderer_reached && native_named_payload.empty() &&
                     host.scene_resource_property("FixtureCamera")->scalar_reference_bits==0U &&
@@ -1651,11 +1714,11 @@ static OFF_NOINLINE void check_complete_outer_loader_tail(
         check(host.loader_source_lease_released() && host.default_camera_handle() &&
               host.registered_cameras().camera_at(0,[&](auto owner){return owner==host.default_camera_handle()->value;}),
               "outer tail releases its lease and registers DefaultCam at zero");
-        check(host.renderer_resource_container()==off::graphics::IntroRendererResourceContainer{42} &&
+        check(host.renderer_resource_container() && host.renderer_resource_container()->loaded() &&
               host.first_auxiliary_array().empty() && host.second_auxiliary_array().empty(),
               "tail retains parsed renderer ownership and preserves absent auxiliary arrays as zero-count");
         check(observation.spatial.size()==host.saved_resource_flags().size(),"first saved pass visits every saved entry");
-        std::vector<std::string> expected_tail{"relocate","named-reader","renderer-relocate","renderer-parse","renderer-release",
+        std::vector<std::string> expected_tail{"relocate","named-reader","renderer-select","renderer-restore",
             "associate","release","camera-query",
             "transform","scene","scene","scene"};
         if(named_mode==NamedTailTestMode::native) expected_tail.erase(expected_tail.begin(),expected_tail.begin()+2);
@@ -1667,6 +1730,17 @@ static OFF_NOINLINE void check_complete_outer_loader_tail(
         }
         check(observation.tail_events==expected_tail && observation.flag_4000==expected_4000,
               "outer tail keeps concrete section boundaries, releases only its lease, registers camera zero and consumes saved entries through services");
+        const auto source_member=host.renderer_relation_members(*host.directory_resource_mapping()[6]);
+        observation.renderer_payload.fill(std::byte{});
+        check(host.renderer_relation_members(*host.directory_resource_mapping()[6])==source_member,
+              "relation storage survives destruction of temporary payload bytes");
+        auto state=*host.resource_state(host.source_handle(6));
+        state.directory_auxiliary=5U;
+        host.assign_resource_state(host.source_handle(6),state);
+        rejects([&]{static_cast<void>(host.renderer_relation_members(*host.directory_resource_mapping()[6]));});
+        state.directory_auxiliary=4U;
+        host.assign_resource_state(host.source_handle(6),state);
+        rejects([&]{static_cast<void>(host.renderer_relation_members({0}));});
         rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
 }
 
@@ -1675,7 +1749,9 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
     constexpr std::array cases{
         Case{false,NamedTailTestMode::callbacks}, Case{true,NamedTailTestMode::callbacks},
         Case{false,NamedTailTestMode::native}, Case{false,NamedTailTestMode::invalid_second},
-        Case{false,NamedTailTestMode::partial_reader}, Case{false,NamedTailTestMode::partial_relocator}};
+        Case{false,NamedTailTestMode::partial_reader}, Case{false,NamedTailTestMode::partial_relocator},
+        Case{false,NamedTailTestMode::invalid_selector}, Case{false,NamedTailTestMode::invalid_renderer},
+        Case{false,NamedTailTestMode::restore_failure}};
     for(const auto scenario:cases) {
       const bool policy=scenario.restore;
       Fixture complete(false,true,true,true,true,true,true,true,true,true,true);
@@ -1928,6 +2004,178 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
         check_complete_outer_loader_tail(host,scenario.named);
       }
       rejects([&]{host.construct_remaining_directory_without_engine_renderer();});
+    }
+}
+
+static OFF_NOINLINE void test_movie_control_runtime_phase_two() {
+    enum class Scenario { complete,missing_binding,missing_owner_reader,missing_component_reader,
+                          changed_owner,presentation_failure,changed_owner_during_present,phase_one_unsupported };
+    for(const auto scenario:{Scenario::complete,Scenario::missing_binding,Scenario::missing_owner_reader,
+                             Scenario::missing_component_reader,Scenario::changed_owner,
+                             Scenario::presentation_failure,Scenario::changed_owner_during_present,
+                             Scenario::phase_one_unsupported}) {
+      Fixture fixture(false,true,true,true,true,true,true,true,true,true,true);
+      std::int32_t clock_sample=1000;
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[&]{return clock_sample;}});
+      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
+      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+      app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
+      app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
+      app.initialize_native_remaining_intro_scope_registration();
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
+      off::graphics::IntroRuntime host(fixture.build(),app,sequence,"FF-Intro.gms",
+          off::graphics::IntroSoundLoadPolicy::directory_construction);
+      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+      host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
+      host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
+      host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
+      host.construct_room_animation_scope_without_engine_renderer();host.set_light_policy(false);
+      host.construct_lens_flare_animation_scope_without_engine_renderer();host.construct_remaining_directory_without_engine_renderer();
+      app.reset_clock();app.clock().assign_crt_mode(true);clock_sample=1250;
+      app.advance_crt();app.clock().publish_scene(false);
+      check(app.clock().scene_integer_word()==256U,
+            "controller fixture publishes its actual CRT-derived scene clock before binding");
+      const auto controller=host.controller_component_index();
+      auto& record=host.components().at(controller);
+      const auto owner=record.state().attached_owner;
+      unsigned presented{},cleared{},viewports{},input_queries{},action_maps{},property_queries{};
+      off::graphics::IntroControllerPhaseTwoServices services;
+      services.input_manager_exists=[&] {++input_queries;return true;};
+      services.register_movie_control_action_map=[&] {++action_maps;};
+      services.query_global_property=[&](std::string_view key,std::uint32_t& out) {
+        ++property_queries;
+        check(out==0,"bound MovieControl queries retain zero-initialized property outputs");
+        out=key=="SoundReadFromMem"?1U:60U;
+      };
+      services.first_renderer=[] {return 7U;};
+      services.renderer_height=[](auto renderer) {
+        check(renderer==7U,"bound MovieControl uses the supplied live renderer identity");return 480;
+      };
+      services.renderer_width=[](auto renderer) {check(renderer==7U,"same viewport renderer");return 640;};
+      services.set_viewport=[&](auto,const auto& viewport) {
+        ++viewports;
+        check(host.controller_initialization().deadline_assigned() && viewport.width==640U && viewport.height==480U,
+              "real factory commits the canonical deadline before viewport setup");
+      };
+      services.renderer_has_stencil=[](auto) {return false;};
+      services.clear=[&](auto,const auto& clear) {
+        ++cleared;check(clear.color && clear.depth && !clear.stencil,"bound controller clears the requested planes");
+      };
+      services.present=[&](auto) {
+        ++presented;
+        check(!host.controller_initialization().phase_two_completed(),
+              "canonical phase-two completion stays false until all presentation services return");
+        if(scenario==Scenario::changed_owner_during_present && presented==2U)
+          record.state().attached_owner=host.root_handle().value;
+        return scenario==Scenario::presentation_failure?off::graphics::IntroPresentationResult::device_lost:
+            off::graphics::IntroPresentationResult::presented;
+      };
+      // Caller-supplied clock/audio replacements must not displace the actual
+      // application services retained by the source-bound factory callback.
+      services.assign_engine_clock_mode=[](bool) {throw std::runtime_error("foreign clock used");};
+      services.scene_integer_clock=[]()->std::uint32_t {throw std::runtime_error("foreign deadline clock used");};
+      services.current_audio_volume=[]()->std::int32_t {throw std::runtime_error("foreign volume read");};
+      services.request_audio_volume=[](auto) {throw std::runtime_error("foreign volume write");};
+      rejects([&]{host.bind_movie_control_phase_two_services(services);});
+      host.run_postconstruction_reader_bracket(0,{
+          .external_loader_service=[](auto){},.source_script_work=[](const auto&){},.pre_reader_service=[]{},
+          .prepare_deferred_reader=[](const auto&){},
+          .owner_reader_boundary=[&](const auto& work) {
+            if(work.source_directory_index!=host.resources().controller_index()) return;
+            auto detached=work;
+            rejects([&]{host.apply_supported_movie_control_deferred_reader(detached);});
+            if(scenario!=Scenario::missing_owner_reader)
+              host.apply_supported_movie_control_deferred_reader(work);
+          },
+          .component_reader_boundary=[&](const auto& work) {
+            if(work.source_directory_index!=host.resources().controller_index()) return;
+            auto detached=work;
+            rejects([&]{host.apply_supported_movie_control_component_reader(detached);});
+            if(scenario==Scenario::missing_owner_reader)
+              rejects([&]{host.apply_supported_movie_control_component_reader(work);});
+            else if(scenario!=Scenario::missing_component_reader)
+              host.apply_supported_movie_control_component_reader(work);
+          },.end_reader_service=[]{}});
+      if(scenario==Scenario::missing_owner_reader || scenario==Scenario::missing_component_reader) {
+        rejects([&]{host.bind_movie_control_phase_two_services(services);});
+        check(input_queries==0U && !host.controller_initialization().deadline_assigned() && !host.components().failed(),
+              "missing exact controller reader rejects service binding before effects");
+        continue;
+      }
+      auto missing=services;missing.present={};
+      rejects([&]{host.bind_movie_control_phase_two_services(missing);});
+      missing=services;missing.set_viewport={};
+      rejects([&]{host.bind_movie_control_phase_two_services(missing);});
+      missing=services;missing.query_global_property={};
+      rejects([&]{host.bind_movie_control_phase_two_services(missing);});
+      record.state().attached_owner=host.root_handle().value;
+      rejects([&]{host.bind_movie_control_phase_two_services(services);});
+      record.state().attached_owner=owner;
+      ++record.state().priority;
+      rejects([&]{host.bind_movie_control_phase_two_services(services);});
+      --record.state().priority;
+      {
+        off::graphics::IntroRuntime other_scene(fixture.build(),app,sequence,"OtherSyntheticScene.gms",
+            off::graphics::IntroSoundLoadPolicy::directory_construction);
+        record.state().attached_owner=other_scene.source_handle(other_scene.resources().controller_index()).value;
+        check(record.state().attached_owner!=owner,"independent scene owns distinct controller handles");
+        rejects([&]{host.bind_movie_control_phase_two_services(services);});
+        rejects([&]{other_scene.bind_movie_control_phase_two_services(services);});
+        record.state().attached_owner=owner;
+      }
+      if(scenario!=Scenario::missing_binding) {
+        host.bind_movie_control_phase_two_services(services);
+        rejects([&]{host.bind_movie_control_phase_two_services(services);});
+        // Binding owns a function-table copy, not the caller's mutable table.
+        services={};
+      }
+      check(input_queries==0U && property_queries==0U && presented==0U &&
+                !host.controller_initialization().deadline_assigned() && !(record.state().status&0xcU),
+            "controller service binding does not initialize or complete the live component");
+      if(scenario==Scenario::changed_owner) record.state().attached_owner=host.root_handle().value;
+      // Test-only isolation: retain all actual factories and the exact
+      // MovieControl mask, but suppress other phase visits. Hide this owner
+      // during phase one, then expose it for phase two. This is not normal
+      // scene admission and supplies no replacement MovieControl phase one.
+      for(std::size_t index=0;index<host.components().size();++index)
+        if(index!=controller) host.components().at(index).state().requested&=~3U;
+      bool second_phase{};
+      const off::runtime::ComponentLifecycleServices dispatch{
+          [&](bool second,auto&,auto) {second_phase=second;},
+          [&](auto) {return std::optional<std::uint32_t>{
+              !second_phase && scenario!=Scenario::phase_one_unsupported?0x400U:0U};},
+          [](auto){},[](auto&) {throw std::runtime_error("unexpected isolated controller retirement");}};
+      if(scenario==Scenario::complete) {
+        host.components().run_global_phases(dispatch);
+        check(input_queries==1U && action_maps==1U && property_queries==2U &&
+                  cleared==2U && presented==2U && viewports==1U &&
+                  host.controller_initialization().deadline()==2304U &&
+                  host.controller_initialization().phase_two_completed() &&
+                  app.sound().volume()==60 && *app.configuration().find("SoundEffectsVolume")=="60" &&
+                  (record.state().status&8U) && !(record.state().status&4U),
+              "production MovieControl factory executes canonical initialization without a phase-one completion");
+        clock_sample=1500;app.advance_crt();app.clock().publish_scene(false);
+        host.components().run_global_phases(dispatch);
+        check(presented==4U && cleared==4U && viewports==2U &&
+                  host.controller_initialization().deadline()==2560U && !(record.state().status&4U),
+              "later explicit phase two repeats the real factory and updates the same canonical deadline");
+      } else {
+        rejects([&]{host.components().run_global_phases(dispatch);});
+        const bool effect_prefix=scenario==Scenario::presentation_failure ||
+            scenario==Scenario::changed_owner_during_present;
+        check(host.components().failed() && !host.controller_initialization().phase_two_completed() &&
+                  !(record.state().status&0xcU) && host.controller_initialization().deadline_assigned()==effect_prefix &&
+                  input_queries==(effect_prefix?1U:0U) &&
+                  presented==(scenario==Scenario::changed_owner_during_present?2U:
+                              scenario==Scenario::presentation_failure?1U:0U),
+              "binding, provenance, unsupported phase-one and renderer failures cannot complete the controller");
+        rejects([&]{host.components().run_global_phases(dispatch);});
+      }
+      check(!host.preflight_global_lifecycle().ready() && host.preflight_global_lifecycle().covered_components==0U &&
+                host.preflight_global_lifecycle().covered_owners==0U && host.registered_cameras().entries().empty() &&
+                !host.constructed_attachment(controller)->movie_control->activated,
+            "isolated real phase two supplies no scene admission, camera registration or event-16 activation");
     }
 }
 
@@ -4147,6 +4395,7 @@ int main(int argc, char* argv[]) {
         TestGroup{"prepared-runtime-scopes", test_prepared_runtime_scopes},
         TestGroup{"complete-runtime-scopes", test_complete_runtime_scopes},
         TestGroup{"first-cut-fade-phase-one", test_first_cut_fade_runtime_phase_one},
+        TestGroup{"movie-control-phase-two", test_movie_control_runtime_phase_two},
         TestGroup{"room-animation-runtime-scope", test_room_animation_runtime_scope},
         TestGroup{"visual-scope-lifecycle", test_visual_scope_lifecycle},
         TestGroup{"prepared-resource-variants", test_prepared_resource_variants},

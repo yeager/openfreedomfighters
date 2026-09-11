@@ -12,7 +12,7 @@ inventory to select implementation work.
 | Factory group | Phase-one recovery | Phase-two recovery | Current blocker |
 | --- | --- | --- | --- |
 | `ZGROUP_RootGroup` | Initializer and phase-one seam | None | Ordinary input and phase-two behavior |
-| `ZGEOM_MovieControl` | None | Callback ordering | Full global admission, live services, event 16 and cut dependencies |
+| `ZGEOM_MovieControl` | None | Concrete factory callback, exact reader/resource binding and canonical controller state | Phase one, full global admission, live services, event 16 and cut dependencies |
 | `ZGEOM_Center` | Legal-picture owner/component provenance and position/cache seam | None | Global admission, position service and event delivery |
 | `ZWINPIC_FadeToBlack` | Three source-bound first-cut callbacks update canonical size/cache state | Not requested by the supported first-cut factory | Live dimension/invalidation services, owner/global admission, material/color path and event delivery |
 | `ZGEOM_MatPosAnim` | KEYS preparation seam | None | Existing-state provider, events and special-owner behavior |
@@ -24,7 +24,7 @@ inventory to select implementation work.
 
 All 22 authored factory types are constructed and catalogued. Their generic
 lifecycle callbacks intentionally fail closed until their real behavior is
-recovered. Scoped tests exercise implemented MovieControl phase two and
+recovered. Scoped tests exercise the factory-owned MovieControl phase two and
 source-bound first-cut FadeToBlack phase one. Neither establishes whole-scene
 readiness or intro playback through normal startup.
 
@@ -32,8 +32,9 @@ readiness or intro playback through normal startup.
 
 1. Complete the 420 deferred owner/component reader boundaries, including the
    separate MatPos provider route.
-2. Integrate the implemented named null-reference reader and finish loader-tail
-   services: renderer payload, typed associations, saved flags and live state.
+2. Integrate the implemented named null-reference reader and initial renderer
+   relation container; finish allocation-state services, typed List associations,
+   saved flags and live state. Dynamic relation mutations are separate work.
 3. Complete reader-backed component factories, owner hooks and event/ordinary
    membership.
 4. Validate cold-entry implementations/services, run the full reverse phase-one
@@ -56,8 +57,8 @@ SDL renderer directly. The required order is fixed by the admitted boundaries:
    the later MovieControl event boundary.
 3. Establish the requested camera, live view, and positive-time first-cut
    activation.
-4. Recover the renderer-record association and ordered traversal for the live
-   legal picture.
+4. Connect the decoded resource relations to their real dynamic consumers,
+   accepted draw-record producer and ordered traversal for the live legal picture.
 5. Assemble and submit an admitted picture frame from an ordinary outer frame
    caller.
 
@@ -83,10 +84,11 @@ The first reader families are the direct first-cut dependencies:
 3. `ZSNDOBJ_SoundExtend`, `ZSNDOBJ_SoundNotify`, and
    `ZSNDOBJ_SoundSegment`.
 
-This ordering removes the earliest fail-closed admission gate. Reversing it to
-work on MovieControl phase two or event 16 first would not make normal startup
-valid: the runtime has no complete reader-backed owner/component population for the
-global passes.
+This ordering closes the earliest incomplete reader families. The implemented
+MovieControl phase-two binding does not bypass them: the runtime still lacks a
+complete reader-backed owner/component population for the global passes.
+Its owned-data binding check invokes zero services, and its isolated callback
+tests do not establish phase-one or whole-scene completion.
 
 For the supported global initializer, the recovered structure is root pre-hook,
 append-ordered additional-owner pre-hooks, reverse phase one, a fresh reverse

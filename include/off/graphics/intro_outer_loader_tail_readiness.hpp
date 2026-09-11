@@ -12,7 +12,7 @@ namespace off::graphics {
 // creates callbacks nor advances IntroRuntime.
 enum class IntroOuterLoaderTailBoundary {
   named_global_relocation_and_reader,
-  renderer_reference_resolution_and_container_parser,
+  renderer_allocation_diagnostic_state,
   live_resource_association,
   loader_source_lease_release,
   camera_zero_query_and_fallback_registration,

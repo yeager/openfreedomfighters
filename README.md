@@ -78,10 +78,13 @@ for a portable installation.
   but only a subset has implemented source-backed readers. A scene-owned session
   retains this runtime and owns the exactly-once reader bracket instead of
   leaving its callback wiring in `main`. The checked loader-tail transition is
-  implemented, including the supported [named-reference reader](docs/INTRO_NAMED_GLOBAL.md),
-  but the remaining concrete services and normal-startup call are missing.
-  Source-bound first-cut fade initialization is tested separately; it does not
-  complete owner or global initialization. Global lifecycle admission, renderer associations, scene updates,
+  implemented, including the supported [named-reference reader](docs/INTRO_NAMED_GLOBAL.md)
+  and [renderer resource relations](docs/INTRO_RENDERER_RELATIONS.md). The latter
+  owns copied payloads and resolves ordered members to real scene resources;
+  it does not produce draw records. Remaining tail services and the normal-startup
+  call are missing. Source-bound first-cut fade initialization and MovieControl's
+  factory-owned phase-two callback are tested separately; neither completes
+  owner or global initialization. Global lifecycle admission, draw-record production, scene updates,
   admitted scene rendering, audio playback, menus, and gameplay remain
   unimplemented.
   Window console/property bindings and the scene event-name table are live.
@@ -115,6 +118,14 @@ input handoff. This verifies the implemented data path on ARM64 without an
 emulator; it does not establish intro playback, menu behavior, or gameplay.
 A bounded native startup also reached the current source-backed static intro
 frame and completed a local capture without exporting game assets.
+
+The current Linux x86-64 suite passes all 127 tests with software Vulkan;
+14 targeted tests also pass ASan/UBSan with leak detection. A
+separate owned-data run validates the 470-resource intro's relation lists and
+MovieControl service binding without activating the scene. Required Steam data
+and all 36 optional soundtrack candidates passed their hash checks. A two-frame
+SDL/Vulkan startup run also completed successfully, uploading 26 intro images
+and displaying the current static picture, not a playing intro.
 
 Next: connect the scene's component lifecycle and update loop so normal startup
 renders the original intro and reaches its main menu. This takes priority over

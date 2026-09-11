@@ -50,6 +50,16 @@ addresses remain unchanged. The portable preparation API performs this pass on
 an owned copy and publishes it only after all lookups succeed; this still does
 not establish a renderer-record grammar or draw readiness.
 
+The concrete [intro relation reader](INTRO_RENDERER_RELATIONS.md) instead keeps
+original reference provenance and resolves directly to live native resources.
+A directory auxiliary selector identifies a group's head by word offset;
+zero is unassigned. Bit 1 expands a range in 112-byte source-slot steps up to
+the following reference's inclusive endpoint; bit 2 has no query effect.
+Authored order and duplicates are preserved. A sole null terminal group is
+assigned but empty, distinct from selector zero. Nonzero initial dynamic heads,
+mixed nulls and malformed ranges remain unsupported. Dynamic mutation and
+generic draw-record production are separate from these initial relation lists.
+
 The post-prefix bytes are also bounded as two source-backed writable workspace
 ranges. Header word 2 frames `word2 / 2` eight-byte slots immediately after
 the prefix; header word 1 then frames `floor(word1 / 4)` sixteen-byte slots.
@@ -63,7 +73,7 @@ The object-source directory begins with a 32-bit entry count followed by eight-b
 | Entry offset | Size | Meaning |
 |---:|---:|---|
 | 0 | 4 | packed object-source reference |
-| 4 | 4 | auxiliary value retained without guessed semantics |
+| 4 | 4 | renderer relation selector, retained as an unsigned word |
 
 Bits 23-0 of the packed reference are a word offset to a source record and therefore become a byte offset after multiplication by four. Bits 31-25 tell the loader how many parent pool contexts to leave before processing the entry. Bit 24 enters a child pool context after the current object is created. The loader reads a 48-byte source record; the public parser validates its complete range.
 

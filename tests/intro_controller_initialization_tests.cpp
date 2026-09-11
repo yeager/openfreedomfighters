@@ -52,6 +52,11 @@ struct Fixture {
 int main() {
   try {
     Fixture f;
+    IntroControllerInitialization::validate_services(f.services);
+    auto incomplete=f.services;incomplete.clear={};
+    rejects([&]{IntroControllerInitialization::validate_services(incomplete);});
+    check(f.log.empty() && !f.controller.failed() && !f.controller.deadline_assigned(),
+          "retaining service shape validates without invocation or initialization state");
     check(f.controller.deadline()==0&&!f.controller.deadline_assigned()&&!f.controller.phase_two_completed(),"fresh state is not admission");
     f.global={{"SoundReadFromMem",1},{"SfxV",37}};
     f.controller.run_phase_two(f.services);

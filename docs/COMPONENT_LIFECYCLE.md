@@ -85,7 +85,12 @@ An eligible callback runs synchronously, then receives completion bit `0x4` or
 `0x8`. Existing completion bits do not suppress later explicit global passes.
 Missing callbacks fail at the named component and phase. MovieControl's phase-two
 callback binds to the same retained host controller, application clock and sound
-preferences; it cannot be used for another catalog record.
+preferences; it cannot be used for another catalog record. Its concrete factory
+now installs that callback directly. After the ordinary reader bracket,
+`bind_movie_control_phase_two_services` validates both source-bound readers and
+copies the required external services without invoking them. Callback execution
+rechecks owner, resource, attachment and reader identity, including after
+synchronous external calls. Binding is not lifecycle completion.
 
 Retirement requires a concrete cleanup/removal service. It must preserve cleanup,
 current-owner lookup, status and destruction ordering, including repeated cleanup
@@ -102,14 +107,17 @@ policies, not replicas of the original allocator.
 
 ## Remaining startup work
 
-Normal startup constructs RootGroup and the reviewed authored directory, but
-does not run global initialization or construct the deferred runtime state.
-The remaining concrete constructors/readers/callbacks, live
+Normal startup constructs RootGroup and the reviewed authored directory and
+runs the partial deferred-reader implementation, but does not run global
+initialization. The remaining concrete readers/callbacks, live
 owner flags, root/additional-owner loader hooks, progress behavior, retirement,
 remaining scene-property consumers and shared command containers remain needed.
 The supported [named null-reference reader](INTRO_NAMED_GLOBAL.md) and first-cut
-[fade dimension callbacks](PICTURE_FADE.md) are implemented but do not complete
-the surrounding loader or owner services. The ordinary
+[fade dimension callbacks](PICTURE_FADE.md), initial
+[renderer relation container](INTRO_RENDERER_RELATIONS.md), and source-bound
+MovieControl phase-two callback are implemented but do not complete the
+surrounding loader or owner services. MovieControl phase one remains unsupported;
+phase-two tests do not fill that gap. The ordinary
 dispatcher exists, but most admitted concrete callbacks are still missing.
 The component-pass API does not perform those surrounding loader operations.
 
@@ -127,8 +135,9 @@ events, clocks, camera state, or rendering. Normal startup does not invoke this
 single reader independently: the ordinary reader bracket remains all-or-fail
 across every queued owner record.
 
-The following component-reader boundary retains only the already constructed
-MovieControl component identity, requested mask, priority, and declared events.
+The following component-reader boundary retains the already constructed
+MovieControl component identity, source/resource provenance, requested mask,
+priority, and declared events.
 It requires the completed owner reader and does not set a live status bit,
 enroll event 16, assign a deadline, or invoke phase two. Normal startup uses
 this checked boundary alongside other reviewed first-cut and sound readers;
@@ -153,9 +162,14 @@ preserves the completed prefix and poisons the lifecycle rather than retrying.
 
 Independent fixtures cover identity ordering, live counts, construction mode,
 full reverse passes, progress ordering, hide/status changes, retirement, repeat
-invocation and failure prefixes. The existing retained-intro fixture now enters
-MovieControl phase two through this lifecycle and checks canonical clock/volume
-changes and deadline assignment.
+invocation and failure prefixes. The retained-intro fixture dispatches the real
+factory-owned MovieControl phase-two callback and checks canonical clock/volume
+changes, deadline assignment and completion only after presentation returns.
+It also checks missing binding/readers, changed owner identity, failed services
+and unsupported phase one. Other phase visits are suppressed in this test;
+renderer/input services are synthetic. It proves the callback connection, not
+whole-scene initialization or complete original startup.
 
-Other component callbacks and renderer services in that integration fixture are
-synthetic. The fixture proves the connection, not complete original startup.
+The owned-data integration run separately validates the exact controller readers
+and service binding without invoking any bound service. It supplies no
+phase-one, owner, global-lifecycle or playback completion.

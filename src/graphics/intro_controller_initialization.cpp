@@ -4,15 +4,19 @@
 #include <stdexcept>
 
 namespace off::graphics {
+void IntroControllerInitialization::validate_services(const IntroControllerPhaseTwoServices& s) {
+  if(!s.input_manager_exists||!s.register_movie_control_action_map||!s.assign_engine_clock_mode||
+     !s.query_global_property||!s.current_audio_volume||!s.request_audio_volume||!s.scene_integer_clock||
+     !s.first_renderer||!s.renderer_height||!s.renderer_width||!s.set_viewport||!s.renderer_has_stencil||!s.clear||!s.present)
+    throw std::runtime_error("intro phase two requires every named service");
+}
+
 void IntroControllerInitialization::run_phase_two(const IntroControllerPhaseTwoServices& supplied) {
   if(running_||failed_) throw std::runtime_error("intro phase two is reentrant or previously failed");
   // Snapshot function objects before effects; callbacks may replace the caller's
   // service table without invalidating the currently executing callable.
   const auto s=supplied;
-  if(!s.input_manager_exists||!s.register_movie_control_action_map||!s.assign_engine_clock_mode||
-     !s.query_global_property||!s.current_audio_volume||!s.request_audio_volume||!s.scene_integer_clock||
-     !s.first_renderer||!s.renderer_height||!s.renderer_width||!s.set_viewport||!s.renderer_has_stencil||!s.clear||!s.present)
-    throw std::runtime_error("intro phase two requires every named service");
+  validate_services(s);
   running_=true; completed_=false;
   try {
     if(s.input_manager_exists()) s.register_movie_control_action_map();

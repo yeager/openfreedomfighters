@@ -51,6 +51,9 @@ public:
   [[nodiscard]] bool clock_mode_assignment_completed() const noexcept { return mode_assigned_; }
   [[nodiscard]] bool phase_two_completed() const noexcept { return completed_; }
   [[nodiscard]] bool failed() const noexcept { return failed_; }
+  // Shape-only check used when retaining services; does not invoke them or
+  // establish that their external state is ready for initialization.
+  static void validate_services(const IntroControllerPhaseTwoServices& services);
   // Caller owes global lifecycle owner/mask/status admission. No status bits,
   // scene clock, renderer frame clock, readiness or activation are fabricated.
   // Preflight rejects missing services without effects. Callback failure retains

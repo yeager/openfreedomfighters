@@ -25,6 +25,7 @@
 - [Picture texture-stage shader](PICTURE_STAGE_SHADER.md)
 - [Indexed intro picture renderer](SDL_INTRO_RENDERER.md)
 - [Intro picture submission boundary](INTRO_PICTURE_SUBMISSION.md)
+- [Intro renderer resource relations](INTRO_RENDERER_RELATIONS.md)
 - [Intro renderer association boundary](INTRO_RENDERER_ASSOCIATION.md)
 - [Intro initialization presentation](SDL_INTRO_PRESENTATION.md)
 - [Picture draw order](PICTURE_DRAW_ORDER.md)

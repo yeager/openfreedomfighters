@@ -111,6 +111,7 @@ add_library(off_core
     src/graphics/intro_renderer_workspace_layout.cpp
     src/graphics/intro_renderer_payload_workspace.cpp
     src/graphics/intro_renderer_payload_observation.cpp
+    src/graphics/intro_renderer_resource_relations.cpp
     src/graphics/startup_graphics_asset.cpp
     src/graphics/intro_prepared_resources.cpp
     src/graphics/intro_outer_loader_tail_readiness.cpp
@@ -663,6 +664,7 @@ if(BUILD_TESTING)
             outer-loader-tail-readiness
             named-global-envelopes
             first-cut-fade-phase-one
+            movie-control-phase-two
             prepared-runtime-scopes
             complete-runtime-scopes
             room-animation-runtime-scope
@@ -682,6 +684,12 @@ if(BUILD_TESTING)
     target_link_libraries(off_intro_named_global_references_tests PRIVATE off_core)
     add_test(NAME off_intro_named_global_references_tests
         COMMAND off_intro_named_global_references_tests)
+
+    add_executable(off_intro_renderer_resource_relations_tests
+        tests/intro_renderer_resource_relations_tests.cpp)
+    target_link_libraries(off_intro_renderer_resource_relations_tests PRIVATE off_core)
+    add_test(NAME off_intro_renderer_resource_relations_tests
+        COMMAND off_intro_renderer_resource_relations_tests)
 
     add_executable(off_intro_lifecycle_admission_tests
         tests/intro_lifecycle_admission_tests.cpp)

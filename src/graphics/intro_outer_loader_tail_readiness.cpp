@@ -24,7 +24,7 @@ IntroOuterLoaderTailReadiness inspect_intro_outer_loader_tail_readiness(
   }
   if (sources.renderer_resource)
     result.required_boundaries.push_back(
-        IntroOuterLoaderTailBoundary::renderer_reference_resolution_and_container_parser);
+        IntroOuterLoaderTailBoundary::renderer_allocation_diagnostic_state);
   if (!sources.resource_associations.empty())
     result.required_boundaries.push_back(
         IntroOuterLoaderTailBoundary::live_resource_association);
@@ -42,8 +42,8 @@ const char *intro_outer_loader_tail_boundary_label(
   switch (boundary) {
   case IntroOuterLoaderTailBoundary::named_global_relocation_and_reader:
     return "named-global-relocation-and-reader";
-  case IntroOuterLoaderTailBoundary::renderer_reference_resolution_and_container_parser:
-    return "renderer-reference-resolution-and-container-parser";
+  case IntroOuterLoaderTailBoundary::renderer_allocation_diagnostic_state:
+    return "renderer-allocation-diagnostic-state";
   case IntroOuterLoaderTailBoundary::live_resource_association:
     return "live-resource-association";
   case IntroOuterLoaderTailBoundary::loader_source_lease_release:
