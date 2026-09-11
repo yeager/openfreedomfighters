@@ -18,6 +18,24 @@ retail fonts, or retail image data.
   upper-right regions plus a left-side movement tutorial prompt. The camera is
   a downward-looking third-person view in an interior environment.
 
+## Private x86 Steam observation
+
+A separate, user-authorized Steam run on x86 Linux in September 2026 reached
+the retail launcher, its explicit play action, and the original opening
+sequence. The compatibility layer and captures remain private and are not a
+native target qualification.
+
+This repeat establishes that the executable passes through a launcher boundary
+before the game process and that the opening sequence includes chronology-card
+presentation before a title treatment. The observed frames used a cinematic
+letterboxed presentation rather than the full-height gameplay viewport. It
+does not retain card wording, images, frame timings, audio, input behavior, or
+any executable-derived details.
+
+This corroborates the broad opening-state ordering recorded above. It does not
+authorize a pixel replica, timeline implementation, or automatic native intro
+presentation.
+
 ## What it does not establish
 
 The sample does not identify the serialized sequence-player records, frame

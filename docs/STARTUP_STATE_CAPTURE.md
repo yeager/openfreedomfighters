@@ -65,13 +65,13 @@ fidelity, or later-frame behavior.
 
 ## Current limits
 
-The current development host is ARM64 Linux. A private Windows retail run was
-captured over RDP on 2026-09-09; its behavior-only opening-sequence findings
-are recorded in `INTRO_BOOTSTRAP.md`. It did not capture the state listed
-above. The native reimplementation does not need an emulator, but further
-original-game research remains necessary for this boundary. Independent CPU
-components can continue to be implemented from reviewed behavioral contracts
-while final startup renderer wiring remains gated.
+The current development host is ARM64 Linux. Private Windows and x86
+Steam/compatibility-layer runs established only broad opening-sequence behavior;
+the latter is recorded in `INTRO_OBSERVATION.md`. Neither run captured the
+state listed above. The native reimplementation does not need an emulator, but
+further original-game research remains necessary for this boundary. Independent
+CPU components can continue to be implemented from reviewed behavioral
+contracts while final startup renderer wiring remains gated.
 
 Reset initializes the material cache to `(0xffffffff, 0, 0)`, but preceding
 passes can alter it. Setup clears suppression, while another pass temporarily
