@@ -787,6 +787,13 @@ static OFF_NOINLINE void test_named_global_envelopes() {
       check(envelope.tagged_block.size()==10 && envelope.tagged_block[0]==std::byte{10} &&
                 envelope.tagged_block[4]==std::byte{0x88} && envelope.tagged_block[9]==std::byte{0xff},
             "named/global envelope preserves exactly the declared header-bearing tagged block");
+      const auto profile=off::graphics::profile_intro_named_global_section(envelope);
+      check(profile.body_bytes==6U && profile.tagged_values.encoded_values==1U &&
+                profile.tagged_values.value_kinds[static_cast<std::size_t>(
+                    off::data::CompactTypedValueKind::signed32)]==1U &&
+                profile.tagged_values.attachment_delimiters==0U &&
+                profile.tagged_values.continuation_values==0U,
+            "named/global profile retains only the tagged-body framing");
       rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(image,0,next_section_offset); });
       rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(image,section_offset,0); });
       rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(image,next_section_offset,section_offset); });
@@ -802,6 +809,12 @@ static OFF_NOINLINE void test_named_global_envelopes() {
       set(oversized,14,12U);
       rejects([&] { (void)off::graphics::parse_intro_named_global_section_envelope(
           oversized,section_offset,next_section_offset); });
+      Bytes header_only(13,std::byte{});
+      header_only[7]=std::byte{'X'}; header_only[8]=std::byte{};
+      header_only[9]=std::byte{4};
+      const auto header_only_envelope=off::graphics::parse_intro_named_global_section_envelope(
+          header_only,7,13);
+      rejects([&] { (void)off::graphics::profile_intro_named_global_section(header_only_envelope); });
     }
 }
 

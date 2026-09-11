@@ -34,6 +34,11 @@ data. Its resolver returns the GMS-local slot address, which is a different
 domain from the process-local `IntroRuntimeResourceHandle`; treating the latter
 as relocation output would be fabricated and is rejected by design.
 
+`--probe-intro-named-global` separately profiles the named/global tagged block.
+It reports aggregate tag framing only: the label and every payload value remain
+private. This validates the bounded body grammar but deliberately does not
+relocate references, invoke the typed reader, or advance the loader tail.
+
 ## Required ordering
 
 The session owns one `IntroRuntime` for the lifetime of the admitted scene; the

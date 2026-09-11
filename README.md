@@ -177,6 +177,10 @@ OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
 # relocation and workspace grammar. This creates no renderer container or frame.
 ./build/openfreedomfighters --probe-intro-renderer-payload
 
+# Profile the retained named/global tagged block without printing its label or
+# payload. This does not relocate references or run its typed reader.
+./build/openfreedomfighters --probe-intro-named-global
+
 # Start the current native prototype.
 ./build/openfreedomfighters --mode original
 ```
@@ -225,6 +229,10 @@ menu transition.
   payload through the source GMS slot domain and reports aggregate workspace
   structure. It does not create a renderer container, submit a frame, or
   start audio.
+- `--probe-intro-named-global` profiles the bounded named/global tagged block
+  from owned data using only framing tags. It reports no labels or payload
+  values, performs no relocation, and does not invoke the still-unimplemented
+  typed reader.
 - `--screenshot /path/outside/repo/frame.bmp` saves a GPU readback. The file must
   not already exist. With a frame limit it captures the last frame; otherwise
   it captures the first.

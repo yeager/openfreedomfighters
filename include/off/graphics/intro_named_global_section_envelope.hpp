@@ -1,5 +1,7 @@
 #pragma once
 
+#include "off/data/deferred_compact_block_profile.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -30,6 +32,16 @@ struct IntroNamedGlobalPreparedReader {
   [[nodiscard]] std::span<std::byte> mutable_block() { return owned_block; }
   [[nodiscard]] std::span<const std::byte> complete_block() const { return owned_block; }
   void reset_to_base() { cursor=0; }
+};
+
+// A payload-free structural profile for the recovered tagged block. The label
+// remains deliberately outside the result: it is source content, while this
+// type only reports framing that can guide a future concrete typed reader.
+struct IntroNamedGlobalSectionProfile final {
+  std::size_t body_bytes{};
+  data::DeferredCompactBlockProfile tagged_values;
+
+  [[nodiscard]] bool operator==(const IntroNamedGlobalSectionProfile&) const = default;
 };
 
 inline IntroNamedGlobalSectionEnvelope parse_intro_named_global_section_envelope(
@@ -69,6 +81,17 @@ inline IntroNamedGlobalSectionEnvelope parse_intro_named_global_section_envelope
     throw std::runtime_error("Named/global section bounds are outside the decoded GMS image");
   return parse_intro_named_global_section_envelope(
       decoded_gms_image.subspan(begin,end-begin));
+}
+
+inline IntroNamedGlobalSectionProfile profile_intro_named_global_section(
+    const IntroNamedGlobalSectionEnvelope& envelope) {
+  constexpr std::size_t tagged_block_header_size=4U;
+  if(envelope.tagged_block.size()<=tagged_block_header_size)
+    throw std::runtime_error("Named/global tagged block has no body to profile");
+  const auto body=envelope.tagged_block.subspan(tagged_block_header_size);
+  return {
+      .body_bytes=body.size(),
+      .tagged_values=data::DeferredCompactBlockProfiler::profile(body)};
 }
 
 }  // namespace off::graphics
