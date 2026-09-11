@@ -488,6 +488,7 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
   }
   std::size_t command_delivery_attempts{};
   std::size_t command_component_delivery_attempts{};
+  std::size_t expected_command_target_deliveries{};
   if(latest_command_position) {
     const auto* prepared_player=intro.first_cut_player_prepared_state();
     if(!prepared_player || !std::isfinite(prepared_player->sequence_values[1]))
@@ -495,6 +496,22 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
     std::vector<std::uint64_t> source_backed_targets;
     for(const auto& target:intro.first_cut_command_target_provenance())
       source_backed_targets.push_back(target.owner.value);
+    for(const auto& command:first_cut_source_data.commands) {
+      const auto position=std::bit_cast<std::int32_t>(command.timeline_position);
+      const auto event_is_mapped=
+          command.event_reference<intro.source_event_name_mapping().size() &&
+          intro.source_event_name_mapping()[command.event_reference].has_value() &&
+          *intro.source_event_name_mapping()[command.event_reference]!=0U &&
+          *intro.source_event_name_mapping()[command.event_reference]<=
+              std::numeric_limits<std::uint16_t>::max();
+      const auto target_is_source_backed=std::ranges::any_of(
+          intro.first_cut_command_target_provenance(),[&](const auto& target) {
+            return target.authored_reference==command.target_reference;
+          });
+      if(position>=0 && event_is_mapped && command.target_reference!=0U &&
+          target_is_source_backed)
+        ++expected_command_target_deliveries;
+    }
     off::cutscene::FirstCutRuntimeCommandRouter command_router{intro};
     off::cutscene::FirstCutCommandSession command_session{
         intro,prepared_player->sequence_values[1],
@@ -515,6 +532,9 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
         static_cast<float>(*latest_command_position),
         std::numeric_limits<float>::infinity());
     command_session.run(sampled_position);
+    if(command_delivery_attempts!=expected_command_target_deliveries)
+      throw std::runtime_error(
+          "first-cut cold probe found incomplete source-backed command delivery");
   }
   const auto tail_readiness=session->outer_loader_tail_readiness();
   if(tail_readiness.ready_to_run())
@@ -588,6 +608,8 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
             << bracket_observation.end_reader_calls << '\n'
             << "first-cut-command-delivery-attempts="
             << command_delivery_attempts << '\n'
+            << "first-cut-command-target-deliveries-expected="
+            << expected_command_target_deliveries << '\n'
             << "first-cut-command-component-delivery-attempts="
             << command_component_delivery_attempts << '\n'
             ;
