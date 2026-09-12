@@ -59,8 +59,16 @@ void SdlMenuGamepad::select_available(SDL_JoystickID excluded) {
 }
 std::optional<ui::GraphicsMenuKey>
 SdlMenuGamepad::handle_event(const SDL_Event &event, bool menu_visible) {
+  // A controller belongs to the application rather than an SDL window.  Do
+  // not let a press made while this window is hidden or minimized become a
+  // menu action when the application returns from the Steam overlay or a
+  // suspend.  We intentionally resume only on INPUT_FOCUS_GAINED, not merely
+  // a restore event, because restoring a background window does not grant it
+  // input ownership.
   if ((event.type == SDL_EVENT_WINDOW_FOCUS_LOST ||
-       event.type == SDL_EVENT_WINDOW_FOCUS_GAINED) &&
+       event.type == SDL_EVENT_WINDOW_FOCUS_GAINED ||
+       event.type == SDL_EVENT_WINDOW_HIDDEN ||
+       event.type == SDL_EVENT_WINDOW_MINIMIZED) &&
       event.window.windowID == window_id_) {
     focused_ = event.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
     focus_epoch_ = SDL_GetTicksNS();

@@ -16,10 +16,10 @@ during loading and then incorrectly reports an active intro.
 
 Normal startup currently stops after preparing the cold first-cut command
 session. It does not call the session's loader-tail transition until those
-production services exist. It does present one static, source-backed legal
-picture after the project splash, but that frame uses the project's generic
-fit projection and is not host admission, a cut start, a camera view, or timed
-playback. The
+production services exist. It retains the source-backed legal-picture data but
+does not render it on the normal path; the project's generic-fit projection is
+limited to the explicit diagnostic command. Neither path is host admission, a
+cut start, a camera view, or timed playback. The
 prepared scene now retains parser-validated, owned outer-loader source sections
 (named/global, renderer payload, associations, and sizing rows) for that later
 handoff; retaining them neither invokes a service nor advances the tail.
@@ -90,7 +90,7 @@ This is not host wiring. It neither constructs `NormalIntroSceneHost`, enters
 lifecycle work, dispatches event 16, admits a view, submits a picture, creates
 audio, nor invokes SDL. A future session factory still needs explicit complete
 loader/lifecycle services and source-free negative tests for every absent
-service before normal startup can progress past its static preview.
+service before normal startup can progress beyond retained preflight state.
 
 ## Required ordering
 

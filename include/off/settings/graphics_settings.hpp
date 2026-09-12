@@ -106,6 +106,18 @@ struct GraphicsResolution {
   std::optional<GraphicsValidationError> error;
 };
 
+// Startup preferences can follow a player between displays.  Unlike an
+// interactive request, a previously valid windowed extent may be outside the
+// current native backend's bounds (for example after moving from a desktop to
+// Steam Deck).  Keep that narrow recovery explicit: only extent-bound errors
+// may be clamped, and the caller retains the adjusted request for its live
+// session without rewriting the stored preference.
+struct InitialGraphicsResolution {
+  RequestedGraphicsSettings requested;
+  GraphicsResolution resolution;
+  bool recovered_windowed_size{false};
+};
+
 enum class InitialGraphicsSetup : std::uint8_t {
   ready,
   invalid_resolution,
@@ -125,6 +137,10 @@ enum class GraphicsApplyTransaction : std::uint8_t {
 [[nodiscard]] GraphicsResolution
 resolve_graphics_settings(const RequestedGraphicsSettings &requested,
                           const GraphicsCapabilities &capabilities);
+
+[[nodiscard]] InitialGraphicsResolution
+resolve_initial_graphics_settings(const RequestedGraphicsSettings &requested,
+                                  const GraphicsCapabilities &capabilities);
 
 // The native backend owns the actual display calls.  This small boundary makes
 // the boot contract explicit: apply the already-resolved configuration once,

@@ -1467,8 +1467,12 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   // one-launch override rather than a stored mutation.
   const auto initial = settings::load_initial_graphics_settings(
       graphics_settings_path, mode, mode_explicitly_requested);
-  const auto initial_resolution =
-      settings::resolve_graphics_settings(initial, capabilities);
+  // A valid portable settings file can name the resolution of the previous
+  // display.  Clamp only that extent at boot; do not overwrite the stored
+  // intent, so returning to the former display can retain its preference.
+  const auto initial_graphics =
+      settings::resolve_initial_graphics_settings(initial, capabilities);
+  const auto &initial_resolution = initial_graphics.resolution;
   const auto initial_setup = settings::initialize_graphics_settings(
       initial_resolution, [&](const settings::EffectiveGraphicsSettings &value) {
         return apply_graphics(device, window, value);
@@ -1486,7 +1490,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     SDL_DestroyGPUDevice(device);
     return result;
   }
-  menu.set_confirmed(initial, *initial_resolution.effective);
+  menu.set_confirmed(initial_graphics.requested, *initial_resolution.effective);
   if (show_graphics_menu) {
     static_cast<void>(menu.handle_key(ui::GraphicsMenuKey::f10, true, false));
   }

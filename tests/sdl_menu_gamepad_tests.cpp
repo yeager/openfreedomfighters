@@ -64,6 +64,14 @@ void focus(off::platform::SdlMenuGamepad &input, SDL_WindowID window,
   check(!input.handle_event(event, true), "focus transition emits no menu key");
   SDL_Delay(1);
 }
+void window_state(off::platform::SdlMenuGamepad &input, SDL_WindowID window,
+                  Uint32 type) {
+  SDL_Event event{};
+  event.type = type;
+  event.window.windowID = window;
+  check(!input.handle_event(event, true), "window state emits no menu key");
+  SDL_Delay(1);
+}
 std::vector<Key> drain(off::platform::SdlMenuGamepad &input, bool visible) {
   std::vector<Key> keys;
   SDL_Event event{};
@@ -193,6 +201,27 @@ int run() {
         "stale release ignored");
   check(!input.handle_event(button_event(first.id, SDL_GAMEPAD_BUTTON_START, true), false),
         "stale release did not clear held baseline");
+  static_cast<void>(edge(input, first, SDL_GAMEPAD_BUTTON_START, false, false));
+
+  window_state(input, window, SDL_EVENT_WINDOW_HIDDEN);
+  check(edge(input, first, SDL_GAMEPAD_BUTTON_START, true, false).empty(),
+        "hidden window suppresses controller input");
+  window_state(input, window, SDL_EVENT_WINDOW_RESTORED);
+  check(!input.handle_event(button_event(first.id, SDL_GAMEPAD_BUTTON_START, true),
+                            false),
+        "restore alone does not regain controller ownership");
+  focus(input, window, true);
+  check(!input.handle_event(button_event(first.id, SDL_GAMEPAD_BUTTON_START, true),
+                            false),
+        "focus gain snapshots Start held while hidden");
+  static_cast<void>(edge(input, first, SDL_GAMEPAD_BUTTON_START, false, false));
+  expect(edge(input, first, SDL_GAMEPAD_BUTTON_START, true, false), Key::f10,
+         "fresh Start press activates after hidden-window baseline");
+  static_cast<void>(edge(input, first, SDL_GAMEPAD_BUTTON_START, false, false));
+  window_state(input, window, SDL_EVENT_WINDOW_MINIMIZED);
+  check(edge(input, first, SDL_GAMEPAD_BUTTON_START, true, false).empty(),
+        "minimized window suppresses controller input");
+  focus(input, window, true);
   static_cast<void>(edge(input, first, SDL_GAMEPAD_BUTTON_START, false, false));
 
   off::ui::GraphicsMenuSession menu{off::settings::GraphicsCapabilities{}};

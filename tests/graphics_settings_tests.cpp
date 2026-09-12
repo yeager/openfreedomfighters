@@ -125,6 +125,33 @@ int main() {
             invalid_resolution.error ==
                 off::settings::GraphicsValidationError::zero_window_dimension,
         "reject a zero output dimension without partially resolving settings");
+
+  auto portable_extent = capabilities;
+  portable_extent.maximum_windowed_size = {1280, 720};
+  const auto boot_recovery = off::settings::resolve_initial_graphics_settings(
+      requested, portable_extent);
+  check(boot_recovery.recovered_windowed_size &&
+            boot_recovery.requested.windowed_size ==
+                off::settings::WindowSize{1280, 720} &&
+            boot_recovery.resolution.effective.has_value() &&
+            boot_recovery.resolution.effective->windowed_size ==
+                off::settings::WindowSize{1280, 720},
+        "clamp a portable startup extent to the current native display bounds");
+  const auto interactive_extent =
+      off::settings::resolve_graphics_settings(requested, portable_extent);
+  check(!interactive_extent.effective &&
+            interactive_extent.error ==
+                off::settings::GraphicsValidationError::window_size_above_maximum,
+        "keep interactive out-of-range requests explicit instead of silently clamping them");
+  auto impossible_extent = portable_extent;
+  impossible_extent.minimum_windowed_size = {1920, 1080};
+  const auto rejected_boot_recovery =
+      off::settings::resolve_initial_graphics_settings(requested, impossible_extent);
+  check(!rejected_boot_recovery.recovered_windowed_size &&
+            !rejected_boot_recovery.resolution.effective &&
+            rejected_boot_recovery.resolution.error ==
+                off::settings::GraphicsValidationError::window_size_above_maximum,
+        "refuse to invent a startup extent for contradictory backend bounds");
   initial_apply_calls = 0;
   check(off::settings::initialize_graphics_settings(
             invalid_resolution,

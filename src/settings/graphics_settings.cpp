@@ -1,5 +1,6 @@
 #include "off/settings/graphics_settings.hpp"
 
+#include <algorithm>
 #include <utility>
 
 namespace off::settings {
@@ -160,6 +161,30 @@ resolve_graphics_settings(const RequestedGraphicsSettings &requested,
         {GraphicsField::present_mode, FallbackReason::immediate_unavailable});
   }
   return {.effective = std::move(effective), .error = std::nullopt};
+}
+
+InitialGraphicsResolution resolve_initial_graphics_settings(
+    const RequestedGraphicsSettings &requested,
+    const GraphicsCapabilities &capabilities) {
+  auto resolution = resolve_graphics_settings(requested, capabilities);
+  if (resolution.effective ||
+      (resolution.error != GraphicsValidationError::window_size_below_minimum &&
+       resolution.error != GraphicsValidationError::window_size_above_maximum) ||
+      capabilities.minimum_windowed_size.width >
+          capabilities.maximum_windowed_size.width ||
+      capabilities.minimum_windowed_size.height >
+          capabilities.maximum_windowed_size.height) {
+    return {requested, std::move(resolution), false};
+  }
+
+  auto recovered = requested;
+  recovered.windowed_size.width = std::clamp(
+      recovered.windowed_size.width, capabilities.minimum_windowed_size.width,
+      capabilities.maximum_windowed_size.width);
+  recovered.windowed_size.height = std::clamp(
+      recovered.windowed_size.height, capabilities.minimum_windowed_size.height,
+      capabilities.maximum_windowed_size.height);
+  return {recovered, resolve_graphics_settings(recovered, capabilities), true};
 }
 
 InitialGraphicsSetup initialize_graphics_settings(
