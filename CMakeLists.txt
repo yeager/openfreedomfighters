@@ -902,6 +902,8 @@ if(BUILD_TESTING)
 
     add_executable(off_retail_ui_textures_tests tests/retail_ui_textures_tests.cpp)
     target_link_libraries(off_retail_ui_textures_tests PRIVATE off_core)
+    target_compile_definitions(off_retail_ui_textures_tests PRIVATE
+        OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/retail-ui-textures-work")
     add_test(NAME off_retail_ui_textures_tests COMMAND off_retail_ui_textures_tests)
 
     add_executable(off_simulation_runtime_tests tests/simulation_runtime_tests.cpp)

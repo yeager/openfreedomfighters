@@ -315,8 +315,48 @@ int main() {
   truncated_directory.resize(20);
   check(!off::ui::is_bounded_sfnt(truncated_directory),
         "reject an sfnt with a truncated table directory");
+  auto table_inside_directory = valid_sfnt();
+  table_inside_directory[20] = std::byte{0};
+  table_inside_directory[21] = std::byte{0};
+  table_inside_directory[22] = std::byte{0};
+  table_inside_directory[23] = std::byte{16};
+  check(!off::ui::is_bounded_sfnt(table_inside_directory),
+        "reject an sfnt table that aliases the table directory");
+  auto misaligned_table = valid_sfnt();
+  misaligned_table[20] = std::byte{0};
+  misaligned_table[21] = std::byte{0};
+  misaligned_table[22] = std::byte{0};
+  misaligned_table[23] = std::byte{29};
+  check(!off::ui::is_bounded_sfnt(misaligned_table),
+        "reject an sfnt whose table data is not four-byte aligned");
+  auto unsorted_directory = valid_sfnt();
+  unsorted_directory[4] = std::byte{0};
+  unsorted_directory[5] = std::byte{2};
+  unsorted_directory[12] = std::byte{'z'};
+  unsorted_directory[13] = std::byte{'z'};
+  unsorted_directory[14] = std::byte{'z'};
+  unsorted_directory[15] = std::byte{'z'};
+  unsorted_directory[20] = std::byte{0};
+  unsorted_directory[21] = std::byte{0};
+  unsorted_directory[22] = std::byte{0};
+  unsorted_directory[23] = std::byte{44};
+  unsorted_directory.resize(52);
+  unsorted_directory[28] = std::byte{'a'};
+  unsorted_directory[29] = std::byte{'a'};
+  unsorted_directory[30] = std::byte{'a'};
+  unsorted_directory[31] = std::byte{'a'};
+  unsorted_directory[36] = std::byte{0};
+  unsorted_directory[37] = std::byte{0};
+  unsorted_directory[38] = std::byte{0};
+  unsorted_directory[39] = std::byte{48};
+  unsorted_directory[40] = std::byte{0};
+  unsorted_directory[41] = std::byte{0};
+  unsorted_directory[42] = std::byte{0};
+  unsorted_directory[43] = std::byte{4};
+  check(!off::ui::is_bounded_sfnt(unsorted_directory),
+        "reject an sfnt with an unsorted table directory");
   check(off::ui::is_bounded_sfnt(first),
-        "accept a bounded TrueType sfnt structure");
+        "accept a bounded canonical TrueType sfnt structure");
 
   std::filesystem::remove_all(work, error);
   return failures == 0 ? 0 : 1;

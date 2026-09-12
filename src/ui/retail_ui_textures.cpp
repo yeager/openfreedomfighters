@@ -4,9 +4,7 @@
 
 #include <algorithm>
 #include <array>
-#include <cctype>
 #include <stdexcept>
-#include <string>
 #include <string_view>
 
 namespace off::ui {
@@ -14,23 +12,31 @@ namespace {
 
 constexpr std::size_t role_count = 16;
 
-[[nodiscard]] std::string normalized(std::string_view value) {
-  std::string out;
-  out.reserve(value.size());
-  for (const auto character : value) {
-    const auto byte = static_cast<unsigned char>(character);
-    out.push_back(
-        std::isalnum(byte) != 0 ? static_cast<char>(std::tolower(byte)) : '_');
-  }
-  return out;
-}
+[[nodiscard]] const data::ZipEntry &startup_texture_member(
+    const data::ZipArchive &archive) {
+  constexpr std::array<std::string_view, 11> required_members{
+      "SCENES/FF-StartUp.ZGF", "SCENES/FF-StartUp.SUP",
+      "SCENES/FF-StartUp.BUF", "SCENES/FF-StartUp.GMS",
+      "SCENES/FF-StartUp.TEX", "SCENES/FF-StartUp.SND",
+      "SCENES/FF-StartUp.LOC", "SCENES/FF-StartUp.OCT",
+      "SCENES/FF-StartUp.SGP", "SCENES/FF-StartUp.RMC",
+      "SCENES/FF-StartUp.RMI"};
+  if (archive.entries().size() != required_members.size())
+    throw std::runtime_error("retail UI texture archive is not the canonical startup family");
 
-[[nodiscard]] bool has_extension(std::string_view name,
-                                 std::string_view extension) {
-  const auto dot = name.find_last_of('.');
-  if (dot == std::string_view::npos)
-    return false;
-  return normalized(name.substr(dot)) == normalized(extension);
+  const data::ZipEntry *texture = nullptr;
+  for (const auto expected : required_members) {
+    const auto count = static_cast<std::size_t>(std::count_if(
+        archive.entries().begin(), archive.entries().end(),
+        [expected](const data::ZipEntry &entry) { return entry.name == expected; }));
+    if (count != 1U)
+      throw std::runtime_error("retail UI texture archive is not the canonical startup family");
+    if (expected.ends_with(".TEX"))
+      texture = archive.find(expected);
+  }
+  if (texture == nullptr)
+    throw std::runtime_error("retail UI texture archive is not the canonical startup family");
+  return *texture;
 }
 
 [[nodiscard]] bool is_size(const data::TextureImage &image, std::uint32_t width,
@@ -104,17 +110,7 @@ RetailUiTextureSet
 load_retail_ui_textures(const std::filesystem::path &startup_archive,
                         std::span<const RetailUiTextureBinding> bindings) {
   const auto archive = data::ZipArchive::open(startup_archive);
-  const data::ZipEntry *texture_entry = nullptr;
-  for (const auto &entry : archive.entries()) {
-    if (!has_extension(entry.name, ".tex"))
-      continue;
-    if (texture_entry != nullptr)
-      throw std::runtime_error("startup archive has multiple TEX members");
-    texture_entry = &entry;
-  }
-  if (texture_entry == nullptr)
-    throw std::runtime_error("startup archive has no TEX member");
-  const auto bytes = archive.read(*texture_entry);
+  const auto bytes = archive.read(startup_texture_member(archive));
   const auto catalog = data::TextureCatalog::parse(bytes);
   return resolve_retail_ui_textures(catalog.images(), bindings);
 }

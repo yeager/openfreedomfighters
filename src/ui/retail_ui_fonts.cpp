@@ -134,12 +134,37 @@ bool is_bounded_sfnt(std::span<const std::byte> bytes) noexcept {
   if (table_count == 0 || table_count > 4096 ||
       static_cast<std::size_t>(table_count) > (bytes.size() - 12) / 16)
     return false;
+  const auto directory_end = 12U + static_cast<std::size_t>(table_count) * 16U;
+  std::uint32_t previous_tag{};
   for (std::size_t index = 0; index < table_count; ++index) {
     const auto record = 12 + index * 16;
+    const auto tag = be32(bytes, record);
     const auto offset = static_cast<std::size_t>(be32(bytes, record + 8));
     const auto length = static_cast<std::size_t>(be32(bytes, record + 12));
-    if (offset > bytes.size() || length > bytes.size() - offset)
+    // SFNT table data starts after the directory on a four-byte boundary.
+    // Requiring this here keeps malformed input out of platform font parsers,
+    // whose tolerance differs between the supported native targets.
+    // The SFNT directory is strictly sorted by tag.  Some native rasterizers
+    // binary-search it while others scan it, so admitting an unsorted payload
+    // would make startup behaviour platform-dependent.
+    if ((index != 0U && tag <= previous_tag) ||
+        offset < directory_end || offset % 4U != 0U ||
+        offset > bytes.size() || length > bytes.size() - offset)
       return false;
+    previous_tag = tag;
+    for (std::size_t previous = 0; previous < index; ++previous) {
+      const auto previous_record = 12U + previous * 16U;
+      if (be32(bytes, previous_record) == tag)
+        return false;
+      const auto previous_offset =
+          static_cast<std::size_t>(be32(bytes, previous_record + 8U));
+      const auto previous_length =
+          static_cast<std::size_t>(be32(bytes, previous_record + 12U));
+      if (length != 0U && previous_length != 0U &&
+          offset < previous_offset + previous_length &&
+          previous_offset < offset + length)
+        return false;
+    }
   }
   return true;
 }
