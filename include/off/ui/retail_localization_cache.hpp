@@ -18,14 +18,14 @@ namespace off::ui::l10n {
 struct RetailSourceString final {
   std::uint64_t ordinal{};
   std::string english;
-  bool operator==(const RetailSourceString&) const = default;
+  bool operator==(const RetailSourceString &) const = default;
 };
 
 // The stable ID is derived from the parser's versioned source-set identifier
 // and canonical ordinal, never from English text. Translation packs can
 // therefore contain only this ID and independently supplied translated text.
 [[nodiscard]] std::string make_retail_string_id(std::string_view source_set,
-                                                 std::uint64_t ordinal);
+                                                std::uint64_t ordinal);
 
 struct RetailTranslationEntry final {
   std::string id;
@@ -48,33 +48,44 @@ public:
                        std::vector<RetailTranslationEntry> entries);
   [[nodiscard]] std::optional<std::string_view>
   find(std::string_view id) const noexcept;
+
 private:
   std::vector<RetailTranslationEntry> entries_;
 };
 
-struct RetailLocalizationSnapshot final {
+// This is the only extraction outcome exposed outside the cache.  It binds
+// future local translation packs to the exact private source catalog without
+// exposing any retail display text.
+struct RetailLocalizationMetadata final {
   std::string installation_identity;
   std::string parser_identity;
   std::string source_set;
-  std::vector<RetailSourceString> strings;
-  bool operator==(const RetailLocalizationSnapshot&) const = default;
+  std::uint64_t first_ordinal{};
+  std::uint64_t ordinal_count{};
+  bool operator==(const RetailLocalizationMetadata &) const = default;
 };
 
 enum class RetailLocalizationCacheStatus : std::uint8_t {
-  loaded, extracted, unavailable, invalid,
+  loaded,
+  extracted,
+  unavailable,
+  invalid,
 };
 
 struct RetailLocalizationCacheResult final {
-  RetailLocalizationCacheStatus status{RetailLocalizationCacheStatus::unavailable};
-  std::optional<RetailLocalizationSnapshot> snapshot;
+  RetailLocalizationCacheStatus status{
+      RetailLocalizationCacheStatus::unavailable};
+  std::optional<RetailLocalizationMetadata> metadata;
 };
 
 // The cache is private per-user state. It is never a source of install
 // verification and never writes to the game-data folder. `extract` is invoked
 // only on a cache miss. Callers must not pass an unrecovered LOC byte scanner.
-[[nodiscard]] RetailLocalizationCacheResult ensure_retail_localization_snapshot(
-    const std::filesystem::path& cache_root, std::string_view installation_identity,
-    std::string_view parser_identity, std::string_view source_set,
-    const std::function<std::optional<std::vector<RetailSourceString>>()>& extract);
+[[nodiscard]] RetailLocalizationCacheResult ensure_retail_localization_metadata(
+    const std::filesystem::path &cache_root,
+    std::string_view installation_identity, std::string_view parser_identity,
+    std::string_view source_set,
+    const std::function<std::optional<std::vector<RetailSourceString>>()>
+        &extract);
 
 } // namespace off::ui::l10n

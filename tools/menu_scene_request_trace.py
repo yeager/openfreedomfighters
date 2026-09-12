@@ -17,8 +17,8 @@ from typing import Any
 
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent
-INPUT_FORMAT = "off.startup-menu-scene-request.raw/v1"
-OUTPUT_FORMAT = "off.startup-menu-scene-request/v1"
+INPUT_FORMAT = "off.startup-menu-scene-request.raw/v2"
+OUTPUT_FORMAT = "off.startup-menu-scene-request/v2"
 MAX_EVENTS = 4096
 MAX_CALLBACK_ORDINAL = 65535
 MASK_LIMIT = (1 << 32) - 1
@@ -27,7 +27,9 @@ _PHASES = ("selection", "active_window", "receiver", "scene_manager", "package_a
 _PHASE_RANK = {phase: rank for rank, phase in enumerate(_PHASES)}
 _SELECTIONS = frozenset(("not_attempted", "rejected", "resolved", "delivered", "failed"))
 _ACTIVE_WINDOWS = frozenset(("not_observed", "unchanged", "replaced", "failed"))
+_ACTIVE_WINDOW_SELECTION_DELIVERIES = frozenset(("not_observed", "delivered", "failed"))
 _ROUTES = frozenset(("not_entered", "receiver_only", "runtime_transition", "scene_request", "failed"))
+_RECEIVER_MANAGER_EDGES = frozenset(("not_observed", "not_entered", "entered", "failed"))
 _MANAGER_REQUESTS = frozenset(("not_entered", "clear_only", "request_only", "clear_then_request", "failed"))
 _TARGETS = frozenset(("not_observed", "retained", "validated", "rejected"))
 _PACKAGE_ADMISSIONS = frozenset(("not_entered", "candidate", "admitted", "rejected", "failed"))
@@ -62,7 +64,9 @@ def _validate(event: dict[str, Any]) -> None:
     phase = event["phase"]
     selection = event["selection"]
     active_window = event["active_window"]
+    active_window_selection_delivery = event["active_window_selection_delivery"]
     route = event["receiver_route"]
+    receiver_manager_edge = event["receiver_manager_edge"]
     manager = event["manager_request"]
     target = event["request_target"]
     package = event["package_admission"]
@@ -71,6 +75,20 @@ def _validate(event: dict[str, Any]) -> None:
         raise ValueError("a delivered selection requires a receiver or later phase")
     if active_window == "replaced" and phase not in ("active_window", "receiver", "scene_manager", "package_admission", "completion", "failure"):
         raise ValueError("active-window replacement requires its own or a later phase")
+    if active_window_selection_delivery == "delivered":
+        if selection != "delivered" or active_window != "replaced":
+            raise ValueError("active-window selection delivery requires delivered selection and replacement")
+        if phase not in ("active_window", "receiver", "scene_manager", "package_admission", "completion", "failure"):
+            raise ValueError("active-window selection delivery requires the active-window or a later phase")
+    if active_window_selection_delivery == "failed":
+        if selection != "delivered" or active_window != "failed":
+            raise ValueError("failed active-window selection delivery requires a delivered selection and failed window update")
+        if phase not in ("active_window", "receiver", "scene_manager", "package_admission", "completion", "failure"):
+            raise ValueError("failed active-window selection delivery requires the active-window or a later phase")
+    if active_window == "replaced" and active_window_selection_delivery != "delivered":
+        raise ValueError("active-window replacement must identify selection delivery")
+    if active_window == "failed" and active_window_selection_delivery != "failed":
+        raise ValueError("failed active-window update must identify selection delivery failure")
     if route == "scene_request":
         if phase not in ("scene_manager", "package_admission", "completion", "failure"):
             raise ValueError("a scene request requires the manager or a later phase")
@@ -78,8 +96,24 @@ def _validate(event: dict[str, Any]) -> None:
             raise ValueError("a scene request requires a manager request result")
         if target not in ("retained", "validated", "rejected"):
             raise ValueError("a scene request requires a retained target result")
+    if receiver_manager_edge == "entered":
+        if phase not in ("scene_manager", "package_admission", "completion", "failure"):
+            raise ValueError("receiver-to-manager entry requires the manager or a later phase")
+        if active_window_selection_delivery != "delivered":
+            raise ValueError("receiver-to-manager entry requires delivered active-window selection")
+        if route != "scene_request" or manager not in ("request_only", "clear_then_request"):
+            raise ValueError("receiver-to-manager entry requires a scene-manager request result")
+    if receiver_manager_edge == "failed":
+        if phase not in ("scene_manager", "failure"):
+            raise ValueError("failed receiver-to-manager edge requires the manager or failure phase")
+        if active_window_selection_delivery != "delivered" or route != "scene_request" or manager != "failed":
+            raise ValueError("failed receiver-to-manager edge requires delivered selection and failed manager request")
     if manager in ("request_only", "clear_then_request") and route != "scene_request":
         raise ValueError("manager request evidence requires a scene-request receiver route")
+    if manager in ("request_only", "clear_then_request") and receiver_manager_edge != "entered":
+        raise ValueError("manager request evidence requires a receiver-to-manager edge")
+    if manager == "failed" and receiver_manager_edge != "failed":
+        raise ValueError("failed manager request evidence requires a failed receiver-to-manager edge")
     if package != "not_entered":
         if phase not in ("package_admission", "completion", "failure"):
             raise ValueError("package admission belongs only after scene-manager handoff")
@@ -108,7 +142,8 @@ def sanitize_trace(raw: Any) -> dict[str, Any]:
         "observation_order", "phase", "callback_ordinal", "menu_component_constructed",
         "reader_graph_receipt", "component_status_before", "component_status_after",
         "owner_status_before", "owner_status_after", "selection", "active_window",
-        "receiver_route", "manager_request", "request_target", "package_admission",
+        "active_window_selection_delivery", "receiver_route", "receiver_manager_edge",
+        "manager_request", "request_target", "package_admission",
         "outcome", "external_service",
     ))
     clean_events: list[dict[str, Any]] = []
@@ -139,7 +174,17 @@ def sanitize_trace(raw: Any) -> dict[str, Any]:
             "owner_status_after": _natural(event["owner_status_after"], "owner_status_after", MASK_LIMIT),
             "selection": _enum(event["selection"], "selection", _SELECTIONS),
             "active_window": _enum(event["active_window"], "active_window", _ACTIVE_WINDOWS),
+            "active_window_selection_delivery": _enum(
+                event["active_window_selection_delivery"],
+                "active_window_selection_delivery",
+                _ACTIVE_WINDOW_SELECTION_DELIVERIES,
+            ),
             "receiver_route": _enum(event["receiver_route"], "receiver_route", _ROUTES),
+            "receiver_manager_edge": _enum(
+                event["receiver_manager_edge"],
+                "receiver_manager_edge",
+                _RECEIVER_MANAGER_EDGES,
+            ),
             "manager_request": _enum(event["manager_request"], "manager_request", _MANAGER_REQUESTS),
             "request_target": _enum(event["request_target"], "request_target", _TARGETS),
             "package_admission": _enum(event["package_admission"], "package_admission", _PACKAGE_ADMISSIONS),

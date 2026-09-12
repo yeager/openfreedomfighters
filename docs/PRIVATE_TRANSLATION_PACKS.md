@@ -7,9 +7,10 @@ identity, canonical locale tag, exact ordinal span, a complete flag, and pairs
 of opaque IDs with UTF-8 translated text. It has no source-text or English-text
 field, and the loader emits no pack contents to logs.
 
-Before loading, `translation_source_binding` reduces a validated private
-extraction snapshot to parser identity, source set, and its contiguous ordinal
-span. The loader requires an exact match. IDs must be canonical
+Before loading, `translation_source_binding` accepts only text-free extraction
+metadata: parser identity, source set, and its contiguous ordinal span. The
+retail-text snapshot remains private to the cache implementation. The loader
+requires an exact match. IDs must be canonical
 `off.retail.<source-set>.<ordinal>` values inside that span; duplicate IDs,
 invalid UTF-8, unsupported locale tags, malformed files, and incomplete packs
 declared complete are rejected.

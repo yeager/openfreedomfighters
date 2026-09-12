@@ -24,7 +24,9 @@ def event(**changes: object) -> dict[str, object]:
         "owner_status_after": 4,
         "selection": "delivered",
         "active_window": "replaced",
+        "active_window_selection_delivery": "delivered",
         "receiver_route": "receiver_only",
+        "receiver_manager_edge": "not_entered",
         "manager_request": "not_entered",
         "request_target": "not_observed",
         "package_admission": "not_entered",
@@ -45,6 +47,7 @@ class MenuSceneRequestTraceTests(unittest.TestCase):
         record = event(
             phase="package_admission",
             receiver_route="scene_request",
+            receiver_manager_edge="entered",
             manager_request="clear_then_request",
             request_target="validated",
             package_admission="admitted",
@@ -66,6 +69,26 @@ class MenuSceneRequestTraceTests(unittest.TestCase):
             trace.sanitize_trace({"format": trace.INPUT_FORMAT, "events": [event(), event(observation_order=1, phase="selection", selection="resolved", active_window="not_observed")]})
         with self.assertRaises(ValueError):
             trace.sanitize_trace({"format": trace.INPUT_FORMAT, "events": [event(phase="package_admission", receiver_route="scene_request", manager_request="request_only", request_target="retained", package_admission="candidate")]})
+
+    def test_requires_explicit_selection_delivery_and_receiver_manager_edge(self) -> None:
+        with self.assertRaises(ValueError):
+            trace.sanitize_trace({"format": trace.INPUT_FORMAT, "events": [event(active_window_selection_delivery="not_observed")]})
+        with self.assertRaises(ValueError):
+            trace.sanitize_trace({"format": trace.INPUT_FORMAT, "events": [event(
+                phase="scene_manager",
+                receiver_route="scene_request",
+                manager_request="request_only",
+                receiver_manager_edge="not_entered",
+            )]})
+        with self.assertRaises(ValueError):
+            trace.sanitize_trace({"format": trace.INPUT_FORMAT, "events": [event(
+                phase="scene_manager",
+                active_window_selection_delivery="failed",
+                active_window="failed",
+                receiver_route="scene_request",
+                receiver_manager_edge="entered",
+                manager_request="request_only",
+            )]})
 
 
 if __name__ == "__main__":

@@ -49,15 +49,11 @@ void write(const std::filesystem::path &path, std::string_view contents) {
   check(static_cast<bool>(stream), "synthetic pack fixture writes");
 }
 off::ui::l10n::TranslationSourceBinding binding() {
-  off::ui::l10n::RetailLocalizationSnapshot snapshot{
-      "install.synthetic.v1",
-      "parser.synthetic.v1",
-      "source.synthetic.v1",
-      {{0U, "Project authored one"},
-       {1U, "Project authored two"},
-       {2U, "Project authored three"}}};
-  const auto result = off::ui::l10n::translation_source_binding(snapshot);
-  check(result.has_value(), "canonical synthetic snapshot binds");
+  off::ui::l10n::RetailLocalizationMetadata metadata{
+      "install.synthetic.v1", "parser.synthetic.v1", "source.synthetic.v1", 0U,
+      3U};
+  const auto result = off::ui::l10n::translation_source_binding(metadata);
+  check(result.has_value(), "canonical synthetic metadata binds");
   return *result;
 }
 } // namespace
@@ -161,12 +157,11 @@ int main() {
     check(
         !PrivateTranslationPack::load_local(root, "../english.offl10n", source),
         "loader rejects paths outside local pack directory");
-    RetailLocalizationSnapshot malformed{"install.synthetic.v1",
+    RetailLocalizationMetadata malformed{"install.synthetic.v1",
                                          source.parser_identity,
-                                         source.source_set,
-                                         {{1U, "Project authored"}}};
+                                         source.source_set, 1U, 1U};
     check(!translation_source_binding(malformed),
-          "noncanonical extracted snapshot cannot bind a pack");
+          "noncanonical extracted metadata cannot bind a pack");
     std::filesystem::remove_all(root, error);
     std::cout << "private translation pack tests passed\n";
   } catch (const std::exception &error) {

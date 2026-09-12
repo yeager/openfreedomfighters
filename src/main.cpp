@@ -943,7 +943,7 @@ void initialize_private_owned_localization_cache(
     const auto source_set = off::data::verified_owned_loc_source_set(verification.root);
     if (!source_set) return;
     const auto installation_identity = "steam-pc-" + verification.executable_sha256;
-    const auto result = off::ui::l10n::ensure_retail_localization_snapshot(
+    const auto result = off::ui::l10n::ensure_retail_localization_metadata(
         cache_root, installation_identity, off::data::loc_catalog_parser_identity,
         *source_set, [root = verification.root, expected_source_set = *source_set] {
           const auto catalog = off::data::extract_verified_owned_loc_catalog(root);

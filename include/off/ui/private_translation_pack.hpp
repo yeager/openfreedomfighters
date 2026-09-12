@@ -12,8 +12,8 @@
 
 namespace off::ui::l10n {
 
-// This is deliberately text-free. It is derived from a validated private
-// extraction snapshot, then used to bind a local translation pack to the
+// This is deliberately text-free. It is derived from validated private
+// extraction metadata, then used to bind a local translation pack to the
 // exact parser, source-set and canonical ordinal span that produced it.
 struct TranslationSourceBinding final {
   std::string parser_identity;
@@ -24,7 +24,7 @@ struct TranslationSourceBinding final {
 };
 
 [[nodiscard]] std::optional<TranslationSourceBinding>
-translation_source_binding(const RetailLocalizationSnapshot &snapshot);
+translation_source_binding(const RetailLocalizationMetadata &metadata);
 
 struct PrivateTranslationEntry final {
   std::string id;

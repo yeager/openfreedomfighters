@@ -251,17 +251,15 @@ PrivateTranslationPack::decode(std::string_view bytes,
 }
 
 std::optional<TranslationSourceBinding>
-translation_source_binding(const RetailLocalizationSnapshot &snapshot) {
-  if (!valid_identifier(snapshot.parser_identity, 128U) ||
-      !valid_identifier(snapshot.source_set, 96U) || snapshot.strings.empty() ||
-      snapshot.strings.size() > maximum_entries)
+translation_source_binding(const RetailLocalizationMetadata &metadata) {
+  if (!valid_identifier(metadata.parser_identity, 128U) ||
+      !valid_identifier(metadata.source_set, 96U) ||
+      metadata.first_ordinal != 0U || metadata.ordinal_count == 0U ||
+      metadata.ordinal_count > maximum_entries)
     return std::nullopt;
-  for (std::size_t index{}; index < snapshot.strings.size(); ++index)
-    if (snapshot.strings[index].ordinal != index)
-      return std::nullopt;
-  return TranslationSourceBinding{
-      snapshot.parser_identity, snapshot.source_set, 0U,
-      static_cast<std::uint64_t>(snapshot.strings.size())};
+  return TranslationSourceBinding{metadata.parser_identity, metadata.source_set,
+                                  metadata.first_ordinal,
+                                  metadata.ordinal_count};
 }
 std::optional<PrivateTranslationPack>
 PrivateTranslationPack::load_local(const std::filesystem::path &local_directory,
