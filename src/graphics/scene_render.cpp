@@ -2,6 +2,7 @@
 
 #include "off/data/packed_resource.hpp"
 #include "off/data/scene_support.hpp"
+#include "off/data/scene_resource_catalog.hpp"
 #include "off/data/zip_archive.hpp"
 #include "off/data/zgf_bundle.hpp"
 
@@ -36,7 +37,6 @@ constexpr std::size_t maximum_scene_directory_entries = 1024;
 constexpr std::array required_scene_extensions{
     ".zgf", ".sup", ".gms", ".tex", ".prm",
     ".rmc", ".rmi", ".snd", ".oct", ".sgp"};
-constexpr std::array optional_scene_extensions{".buf", ".loc", ".anm"};
 constexpr std::uint32_t zgroup_source_type = 0x00100001U;
 
 [[nodiscard]] bool fits_rgba8_extent(std::uint32_t width,
@@ -74,29 +74,6 @@ void add_bounded(std::size_t &total, std::size_t value, std::size_t limit,
   return value;
 }
 
-[[nodiscard]] const data::ZipEntry &
-unique_member_with_extension(const data::ZipArchive &archive,
-                             const char *extension) {
-  const data::ZipEntry *match = nullptr;
-  for (const auto &entry : archive.entries()) {
-    const auto dot = entry.name.find_last_of('.');
-    if (dot == std::string::npos ||
-        lowercase(entry.name.substr(dot)) != extension) {
-      continue;
-    }
-    if (match != nullptr) {
-      throw std::runtime_error(
-          "scene archive contains duplicate scene-resource members");
-    }
-    match = &entry;
-  }
-  if (match == nullptr) {
-    throw std::runtime_error(
-        "scene archive does not contain the required scene resources");
-  }
-  return *match;
-}
-
 [[nodiscard]] std::array<std::size_t, required_scene_extensions.size()>
 required_scene_member_counts(const data::ZipArchive &archive) {
   std::array<std::size_t, required_scene_extensions.size()> counts{};
@@ -121,88 +98,36 @@ required_scene_member_counts(const data::ZipArchive &archive) {
                              [](std::size_t count) { return count != 0U; });
 }
 
-void validate_scene_archive_family(const data::ZipArchive &archive) {
-  const auto counts = required_scene_member_counts(archive);
-  if (!std::ranges::all_of(counts,
-                           [](std::size_t count) { return count == 1U; })) {
-    throw std::runtime_error(
-        "scene archive does not contain every required resource exactly once");
-  }
-
-  std::array<std::size_t, optional_scene_extensions.size()> optional_counts{};
-  for (const auto &entry : archive.entries()) {
-    const auto dot = entry.name.find_last_of('.');
-    if (dot == std::string::npos) {
-      throw std::runtime_error("scene archive has an unknown resource family");
-    }
-    const auto extension = lowercase(entry.name.substr(dot));
-    if (std::ranges::find(required_scene_extensions, extension) !=
-        required_scene_extensions.end()) {
-      continue;
-    }
-    const auto optional =
-        std::ranges::find(optional_scene_extensions, extension);
-    if (optional == optional_scene_extensions.end()) {
-      throw std::runtime_error("scene archive has an unknown resource family");
-    }
-    auto &count = optional_counts[static_cast<std::size_t>(
-        std::distance(optional_scene_extensions.begin(), optional))];
-    if (++count != 1U) {
-      throw std::runtime_error("scene archive has duplicate optional resources");
-    }
-  }
-}
-
 [[nodiscard]] SceneRenderAsset
 build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
-  validate_scene_archive_family(archive);
-  const auto *animation = [&]() -> const data::ZipEntry * {
-    const data::ZipEntry *match = nullptr;
-    for (const auto &entry : archive.entries()) {
-      const auto dot = entry.name.find_last_of('.');
-      if (dot == std::string::npos ||
-          lowercase(entry.name.substr(dot)) != ".anm")
-        continue;
-      match = &entry;
-      break;
-    }
-    return match;
-  }();
+  const auto catalog = data::SceneResourceCatalog::from_archive(archive);
   // ZGF and SUP are mandatory scene-package members even though this source-
   // only renderer does not yet consume their runtime semantics. Parsing them
   // here establishes that every admitted campaign archive has the same checked
   // ownership boundary as the startup package.
   static_cast<void>(data::ZgfBundle::parse(data::PackedResource::parse(
-      archive.read(unique_member_with_extension(archive, ".zgf")))));
+      archive.read(catalog.member(data::SceneResourceKind::zgf)))));
   const auto support = data::SceneSupport::parse(
-      archive.read(unique_member_with_extension(archive, ".sup")));
+      archive.read(catalog.member(data::SceneResourceKind::sup)));
   if (support.dependencies().empty()) {
     throw std::runtime_error("scene archive support has no dependencies");
   }
   const auto primitive_bytes =
-      archive.read(unique_member_with_extension(archive, ".prm"));
+      archive.read(catalog.member(data::SceneResourceKind::prm));
   const auto texture_bytes =
-      archive.read(unique_member_with_extension(archive, ".tex"));
+      archive.read(catalog.member(data::SceneResourceKind::tex));
   const auto object_bytes =
-      archive.read(unique_member_with_extension(archive, ".gms"));
+      archive.read(catalog.member(data::SceneResourceKind::gms));
   const auto rmc_bytes =
-      archive.read(unique_member_with_extension(archive, ".rmc"));
+      archive.read(catalog.member(data::SceneResourceKind::rmc));
   const auto rmi_bytes =
-      archive.read(unique_member_with_extension(archive, ".rmi"));
+      archive.read(catalog.member(data::SceneResourceKind::rmi));
 
   const auto primitives = data::PrimitiveCatalog::parse(primitive_bytes);
   const auto textures = data::TextureCatalog::parse(texture_bytes);
   const auto objects =
       data::GmsImage::parse(data::PackedResource::parse(object_bytes));
-  const auto *buf = [&]() -> const data::ZipEntry * {
-    for (const auto &entry : archive.entries()) {
-      const auto dot = entry.name.find_last_of('.');
-      if (dot != std::string::npos &&
-          lowercase(entry.name.substr(dot)) == ".buf")
-        return &entry;
-    }
-    return nullptr;
-  }();
+  const auto *buf = catalog.optional_member(data::SceneResourceKind::buf);
   if (objects.directory().empty()) {
     if (buf != nullptr) {
       throw std::runtime_error(
@@ -224,8 +149,10 @@ build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
   auto result =
       build_scene_render_asset(primitives.entries(), textures.images(),
                                objects.directory(), objects.hierarchy(), maps);
-  if (animation)
+  if (const auto *animation =
+          catalog.optional_member(data::SceneResourceKind::anm)) {
     result.animation = data::AnimationImage::parse(archive.read(*animation));
+  }
   validate_scene_render_asset(result);
   return result;
 }

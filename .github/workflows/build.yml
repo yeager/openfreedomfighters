@@ -143,7 +143,15 @@ jobs:
             -E '^(off_sdl_intro_presentation_tests|off_sdl_intro_renderer_tests|off_sdl_picture_stage_shader_tests|off_sdl_picture_clear_tests|off_sdl_picture_depth_stencil_tests)$'
 
   build-macos:
-    runs-on: macos-14
+    name: build-macos (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-15-intel is the hosted Intel runner; macos-14 is the hosted Apple
+        # silicon runner. Keep both because the supported native macOS target
+        # set includes x86-64 and arm64.
+        runner: [macos-15-intel, macos-14]
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6

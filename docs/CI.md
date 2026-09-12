@@ -9,7 +9,7 @@ be compared mechanically with the requested OpenCapture workflow convention.
 Every push to `main`, pull request targeting `main`, and manual dispatch runs:
 
 - a tracked-file extension audit plus full-history and working-tree Gitleaks scans using a checksum-pinned CLI;
-- CMake/Ninja builds with SDL3, zlib, and Xiph Vorbis dependencies, followed by CTest on Ubuntu 24.04 and macOS 14;
+- CMake/Ninja builds with SDL3, zlib, and Xiph Vorbis dependencies, followed by CTest on Ubuntu 24.04 plus native macOS Intel (`macos-15-intel`) and Apple-silicon (`macos-14`) runners;
 - an explicitly x64 CMake/MSVC build and CTest on Windows Server 2022 using
   source-built, pinned zlib, FreeType, libogg, and libvorbis dependencies;
 - an install-layout smoke check on every native platform: executable and

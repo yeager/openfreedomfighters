@@ -106,6 +106,7 @@ add_library(off_core
     src/data/startup_graphics_composition.cpp
     src/data/primitive_catalog.cpp
     src/data/render_map.cpp
+    src/data/scene_resource_catalog.cpp
     src/data/scene_support.cpp
     src/data/texture_catalog.cpp
     src/data/vfs_file_view.cpp
@@ -182,6 +183,7 @@ add_library(off_core
     src/settings/graphics_settings_store.cpp
     src/settings/upscaler_runtime.cpp
     src/simulation/fixed_step.cpp
+    src/simulation/component_store.cpp
     src/simulation/input.cpp
     src/simulation/replay.cpp
     src/simulation/save_store.cpp
@@ -534,6 +536,14 @@ if(BUILD_TESTING)
     add_executable(off_scene_support_tests tests/scene_support_tests.cpp)
     target_link_libraries(off_scene_support_tests PRIVATE off_core)
     add_test(NAME off_scene_support_tests COMMAND off_scene_support_tests)
+
+    add_executable(off_scene_resource_catalog_tests
+        tests/scene_resource_catalog_tests.cpp)
+    target_link_libraries(off_scene_resource_catalog_tests PRIVATE off_core)
+    target_compile_definitions(off_scene_resource_catalog_tests PRIVATE
+        OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/scene-resource-catalog-work")
+    add_test(NAME off_scene_resource_catalog_tests
+        COMMAND off_scene_resource_catalog_tests)
 
     add_executable(off_animation_image_tests tests/animation_image_tests.cpp)
     target_link_libraries(off_animation_image_tests PRIVATE off_core)
@@ -930,6 +940,9 @@ if(BUILD_TESTING)
     add_executable(off_simulation_world_tests tests/simulation_world_tests.cpp)
     target_link_libraries(off_simulation_world_tests PRIVATE off_core)
     add_test(NAME off_simulation_world_tests COMMAND off_simulation_world_tests)
+    add_executable(off_simulation_component_store_tests tests/simulation_component_store_tests.cpp)
+    target_link_libraries(off_simulation_component_store_tests PRIVATE off_core)
+    add_test(NAME off_simulation_component_store_tests COMMAND off_simulation_component_store_tests)
 
     add_executable(off_simulation_save_store_tests tests/simulation_save_store_tests.cpp)
     target_link_libraries(off_simulation_save_store_tests PRIVATE off_core)

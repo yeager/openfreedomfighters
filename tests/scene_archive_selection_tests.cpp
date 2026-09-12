@@ -113,16 +113,11 @@ void write_zip(
 std::vector<std::pair<std::string, std::string>>
 complete_members(bool duplicate_primitive = false) {
   std::vector<std::pair<std::string, std::string>> members{
-      {"synthetic/bundle.ZGF", "z"},
-      {"synthetic/support.SUP", "s"},
-      {"synthetic/mesh.PRM", "p"},
-      {"synthetic/image.TEX", "t"},
-      {"synthetic/object.GMS", "g"},
-      {"synthetic/map.RMC", "c"},
-      {"synthetic/instance.RMI", "i"},
-      {"synthetic/sound.SND", "n"},
-      {"synthetic/octree.OCT", "o"},
-      {"synthetic/parameters.SGP", "q"}};
+      {"synthetic/bootstrap.ZGF", "z"}, {"synthetic/bootstrap.SUP", "s"},
+      {"synthetic/bootstrap.PRM", "p"}, {"synthetic/bootstrap.TEX", "t"},
+      {"synthetic/bootstrap.GMS", "g"}, {"synthetic/bootstrap.RMC", "c"},
+      {"synthetic/bootstrap.RMI", "i"}, {"synthetic/bootstrap.SND", "n"},
+      {"synthetic/bootstrap.OCT", "o"}, {"synthetic/bootstrap.SGP", "q"}};
   if (duplicate_primitive) {
     members.emplace_back("synthetic/duplicate.prm", "d");
   }
@@ -171,7 +166,7 @@ int main() {
   write_zip(ordering_root / "Scenes" / "ALPHA.zIp", complete_members(true));
   const auto ordering_error = selection_error(ordering_root);
   check(ordering_error ==
-            "scene archive does not contain every required resource exactly once",
+            "scene archive contains duplicate scene-resource members",
         "select case-insensitive ZIP candidates in stable path order");
   check(ordering_error.find("ALPHA") == std::string::npos &&
             ordering_error.find(work.string()) == std::string::npos,
@@ -218,7 +213,7 @@ int main() {
     startup_error = failure.what();
   }
   check(startup_error ==
-                "scene archive does not contain every required resource exactly once" &&
+                "scene archive contains duplicate scene-resource members" &&
             selection_error(startup_root) != startup_error,
         "exact UI archive loading does not use alphabetical diagnostic selection");
 
