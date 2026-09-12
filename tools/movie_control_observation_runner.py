@@ -199,10 +199,15 @@ def _discard_raw_records(workspace: pathlib.Path) -> None:
         os.close(descriptor)
 
 
-def _phase_one_success_callbacks(phase_trace: dict[str, Any]) -> set[int]:
-    """Return only completed constructed phase-one callback ordinals."""
-    return {
-        event["callback_ordinal"]
+def _phase_one_success_candidates(phase_trace: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return every completed constructed phase-one candidate.
+
+    Do not reduce this to a set of callback ordinals.  An observer that emits
+    the same apparently successful candidate twice has recorded an ambiguous
+    lifecycle boundary even when both records use the same run-local ordinal.
+    """
+    return [
+        event
         for event in phase_trace["events"]
         if event["component_is_constructed"]
         and event["owner_is_constructed_owner"]
@@ -211,7 +216,7 @@ def _phase_one_success_callbacks(phase_trace: dict[str, Any]) -> set[int]:
         and event["global_lifecycle_outcome"] == "success"
         and event["phase_one_completed"]
         and event["outcome"] == "success"
-    }
+    ]
 
 
 def _validate_trace_relation(
@@ -225,7 +230,7 @@ def _validate_trace_relation(
     without an admitted constructed MovieControl route is not actionable
     observation evidence and must not leave a misleading pair of files.
     """
-    successful_callbacks = _phase_one_success_callbacks(phase_trace)
+    successful_candidates = _phase_one_success_candidates(phase_trace)
     admitted_callbacks = {
         event["callback_ordinal"]
         for event in dispatch_trace_record["events"]
@@ -234,8 +239,9 @@ def _validate_trace_relation(
         and event["movie_owner_is_constructed_owner"]
         and event["movie_phase_one_completed"]
     }
-    if len(successful_callbacks) != 1:
+    if len(successful_candidates) != 1:
         raise ValueError("phase-one record must contain exactly one completed constructed callback")
+    successful_callbacks = {successful_candidates[0]["callback_ordinal"]}
     if admitted_callbacks != successful_callbacks:
         raise ValueError("dispatch record is not tied to the completed phase-one callback")
 

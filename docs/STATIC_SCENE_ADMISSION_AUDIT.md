@@ -2,8 +2,8 @@
 
 ## Established chain
 
-The only source-backed normal-startup chain that currently reaches a static
-frame is the supported first-cut legal-picture route:
+The only source-backed chain that currently reaches a static frame is the
+supported first-cut legal-picture diagnostic route:
 
 ```text
 verified `Scenes/FF-Intro.ZIP`
@@ -44,7 +44,8 @@ No source-backed path currently establishes all of the following together:
 The retained camera reader and converter prove authored camera state, but not
 runtime selection, registration, enablement, renderer dimensions, or a
 presentable view. Renderer relation membership proves resource relationships,
-not generic draw records. Therefore normal startup must continue to stop at the
-source-backed static picture preview. Connecting the existing host model or SDL
+not generic draw records. Therefore normal startup must keep automatic picture
+presentation disabled. The source-backed static preview remains restricted to
+its explicit diagnostic route. Connecting the existing host model or SDL
 renderer without the above inputs would fabricate lifecycle, camera, or draw
 admission.

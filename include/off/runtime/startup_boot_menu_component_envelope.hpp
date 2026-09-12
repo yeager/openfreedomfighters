@@ -16,8 +16,10 @@ namespace off::runtime {
 // Source-only retention for the one checked BootMenu deferred component block.
 // It copies no interpretation out of the block: component construction,
 // reader dispatch, initialization, focus, input, rendering and transitions
-// remain deliberately unavailable.  The checked package lease is retained so
-// the copied bytes can never be paired with a different parsed GMS image.
+// remain deliberately unavailable. The checked package and its registry's
+// scene lease are retained so the copied bytes and native owner handle cannot
+// outlive their source transaction or be paired with a different parsed GMS
+// image.
 class StartupBootMenuComponentEnvelope final {
 public:
   StartupBootMenuComponentEnvelope(const StartupBootMenuComponentEnvelope &) =
@@ -30,7 +32,8 @@ public:
       StartupBootMenuComponentEnvelope &&) noexcept = default;
 
   [[nodiscard]] bool valid() const noexcept {
-    return package_ && owner_handle_ != 0U && !deferred_source_block_.empty();
+    return package_ && scene_lifetime_ && owner_handle_ != 0U &&
+           !deferred_source_block_.empty();
   }
   [[nodiscard]] std::size_t owner_source_directory_index() const noexcept {
     return owner_source_directory_index_;
@@ -50,16 +53,19 @@ private:
   friend class StartupBootMenuComponentEnvelopeFactory;
   StartupBootMenuComponentEnvelope(
       std::shared_ptr<const StartupSceneLoadPackage> package,
+      std::shared_ptr<const void> scene_lifetime,
       std::size_t owner_source_directory_index, std::uint64_t owner_handle,
       std::vector<std::byte> deferred_source_block,
       StartupBootMenuDeferredProfile deferred_profile)
       : package_(std::move(package)),
+        scene_lifetime_(std::move(scene_lifetime)),
         owner_source_directory_index_(owner_source_directory_index),
         owner_handle_(owner_handle),
         deferred_source_block_(std::move(deferred_source_block)),
         deferred_profile_(std::move(deferred_profile)) {}
 
   std::shared_ptr<const StartupSceneLoadPackage> package_;
+  std::shared_ptr<const void> scene_lifetime_;
   std::size_t owner_source_directory_index_{};
   std::uint64_t owner_handle_{};
   std::vector<std::byte> deferred_source_block_;
@@ -90,13 +96,18 @@ public:
     }
     const auto source_block =
         package->factory_inputs()->gms().deferred_source_block(owner_source);
+    const auto scene_lifetime = registry.scene_lifetime_lease();
     if (source_block.empty()) {
       throw std::runtime_error("startup BootMenu deferred source block is empty");
+    }
+    if (!scene_lifetime) {
+      throw std::runtime_error("startup BootMenu scene lifetime is unavailable");
     }
     const auto deferred_profile =
         StartupBootMenuDeferredProfiler::profile(source_block);
     return StartupBootMenuComponentEnvelope(
-        std::move(package), owner_source, *owner_handle,
+        std::move(package), std::move(scene_lifetime), owner_source,
+        *owner_handle,
         {source_block.begin(), source_block.end()}, deferred_profile);
   }
 };

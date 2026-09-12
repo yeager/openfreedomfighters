@@ -42,16 +42,16 @@ for a portable installation.
   and music playback are not implemented yet. Their absence never blocks startup.
 - The first intro sequence's camera, pictures and textures load from game data.
   One retained runtime owns their hierarchy and mutable picture state; intro
-  textures upload to the GPU. Normal startup displays one static source-backed
-  picture; scene activation and timed playback are not connected yet.
+  textures upload to the GPU. The source-backed picture path is available only
+  through an explicit diagnostic; scene activation and timed playback are not
+  connected yet.
   [Camera membership and listener selection](docs/CAMERA_REGISTRATION.md) now
   share the scene's runtime identities, including across scene reloads.
   [Preview-camera controls](docs/PREVIEW_CAMERA.md) handle keyboard and pointer
   updates in tests; their normal input and component dispatch are not connected.
-- The native SDL/Vulkan startup path validates the supported owned data,
-  uploads six startup images and 26 intro images, and presents the static
-  intro preview. Bounded smoke runs verify startup, not intro playback or a
-  rendered main menu.
+- The native SDL/Vulkan startup path validates the supported owned data and
+  uploads six startup images and 26 intro images. Bounded smoke runs verify
+  startup, not intro presentation, playback, or a rendered main menu.
 - `--diagnostic-intro-picture` can render one source-backed first-cut picture
   with its decoded images and quad geometry. It uses an explicitly project-owned
   fit projection and baseline GPU state, so it is a visual diagnostic—not
@@ -122,8 +122,8 @@ On 2026-09-11, a native Linux ARM64 build passed both first-cut cold probes
 against a verified owned installation, including the source-bound loader-tail
 input handoff. This verifies the implemented data path on ARM64 without an
 emulator; it does not establish intro playback, menu behavior, or gameplay.
-A bounded native startup also reached the current source-backed static intro
-frame and completed a local capture without exporting game assets.
+A bounded native startup completed a local capture after preparing the retained
+intro resources without exporting game assets.
 
 The current Linux x86-64 suite passes all 127 tests with software Vulkan;
 14 targeted tests also pass ASan/UBSan with leak detection. A
@@ -131,7 +131,7 @@ separate owned-data run validates the 470-resource intro's relation lists and
 MovieControl service binding without activating the scene. Required Steam data
 and all 36 optional soundtrack candidates passed their hash checks. A two-frame
 SDL/Vulkan startup run also completed successfully, uploading 26 intro images
-and displaying the current static picture, not a playing intro.
+without presenting an intro picture or playing the intro.
 
 Next: connect the scene's component lifecycle and update loop so normal startup
 renders the original intro and reaches its main menu. This takes priority over
@@ -273,10 +273,10 @@ work. Close the window to exit. For development:
   but a project-authored fit projection and baseline render state; it is not
   automatic intro playback or a faithful cutscene camera.
 
-Normal startup also presents that same retained first-cut picture after the
-three-second OpenFreedomFighters splash. This is a source-backed static frame
-using the generic fit projection, not a reconstructed cutscene, camera, or
-menu transition.
+Normal startup does not present an intro picture after the three-second
+OpenFreedomFighters splash. The generic-fit first-cut image path is restricted
+to the explicit diagnostic command; it is not a reconstructed cutscene, camera,
+or menu transition.
 - `--probe-startup-boot` runs an opt-in, no-window structural diagnostic for
   the checked `FF-StartUp` BootMenu source. It prints only call order and GMS
   directory ordinals plus a content-free hierarchy fingerprint; it creates no

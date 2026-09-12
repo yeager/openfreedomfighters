@@ -72,7 +72,12 @@ std::optional<TemporalResolveInputs> TemporalResolveBaseline::begin_frame(
 }
 
 bool TemporalResolveBaseline::commit_submission() noexcept {
-  if (!inputs_.commit() || !history_.commit_frame()) {
+  const auto pending = inputs_.pending();
+  // Publish history last.  A failed input transaction means the backend did
+  // not retain the complete resolve contract, so its output must never become
+  // usable history for a later frame.
+  if (!pending || !inputs_.commit() ||
+      !history_.commit_frame(pending->history_frame)) {
     cancel_submission();
     return false;
   }

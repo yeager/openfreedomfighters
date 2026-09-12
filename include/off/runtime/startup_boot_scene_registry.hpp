@@ -59,6 +59,14 @@ public:
       noexcept {
     return package_ == package;
   }
+  // A deferred component envelope may outlive the registry object that
+  // assigned its native owner handle.  It must therefore retain the same
+  // opaque scene lease, rather than merely remembering an unowned handle.
+  // The lease exposes no scene behavior or construction capability.
+  [[nodiscard]] std::shared_ptr<const void> scene_lifetime_lease() const
+      noexcept {
+    return lifetime_;
+  }
   [[nodiscard]] std::optional<std::uint64_t>
   handle_for_source_directory(std::size_t source_directory_index) const noexcept {
     const auto found = by_source_.find(source_directory_index);

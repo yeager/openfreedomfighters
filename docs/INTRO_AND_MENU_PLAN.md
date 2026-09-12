@@ -47,10 +47,11 @@ reproduction route are maintained in the [I1 coverage matrix](INTRO_I1_COVERAGE_
 
 The current normal path is visible in [main.cpp](../src/main.cpp) and
 [sdl_gpu_runtime.cpp](../src/platform/sdl_gpu_runtime.cpp). It prepares a cold
-`NormalIntroSceneSession`, then passes a runtime pointer and static preview to
-SDL. It does not construct `NormalIntroSceneHost`, complete the loader tail,
-update a cut or commit a menu scene. Source-picture diagnostics and synthetic
-BootMenu probes must remain separate from the production route.
+`NormalIntroSceneSession`, then passes its retained runtime to SDL. A static
+source-picture preview is built only for the explicit diagnostic command. The
+normal route does not construct `NormalIntroSceneHost`, complete the loader
+tail, update a cut or commit a menu scene. Source-picture diagnostics and
+synthetic BootMenu probes must remain separate from the production route.
 
 ## Delivery order
 

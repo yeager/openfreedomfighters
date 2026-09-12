@@ -118,6 +118,19 @@ class MovieControlObservationRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exactly one"):
             runner._validate_trace_relation(failed, dispatch)
 
+    def test_collection_rejects_duplicate_completed_candidate_with_same_ordinal(self) -> None:
+        duplicate = phase_one_trace.sanitize_trace({
+            "format": phase_one_trace.INPUT_FORMAT,
+            "events": [phase_one_event(), phase_one_event(dispatch_order=5)],
+        })
+        dispatch = dispatch_trace.sanitize_trace({
+            "format": dispatch_trace.INPUT_FORMAT, "events": [dispatch_event()],
+        })
+        # A set of ordinals would incorrectly collapse these two lifecycle
+        # records into one candidate.  The observation must remain unambiguous.
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            runner._validate_trace_relation(duplicate, dispatch)
+
     def test_invalid_observer_deadline_is_rejected_before_start(self) -> None:
         with self.assertRaisesRegex(ValueError, "timeout"):
             runner.execute_observation(

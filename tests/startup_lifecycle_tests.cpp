@@ -944,6 +944,8 @@ int main() {
   off::runtime::SceneTransitionPump pump;
   std::vector<std::string> pump_events;
   off::runtime::StartupSceneLoadState pump_state;
+  const auto* candidate_queue = &pump_queue;
+  std::size_t candidate_entry_count = 2U;
   const auto pump_lease = [](std::uint64_t value) {
     return std::shared_ptr<const void>(
         std::make_shared<const std::uint64_t>(value));
@@ -963,11 +965,11 @@ int main() {
             // Regression: the old notification pump had already consumed this
             // request before invoking its handoff. Construction must instead
             // observe the still-owned pending request and marked removals.
-            check(
-                pump_queue.pending() && pump_queue.entries().size() == 2U &&
-                    pump_queue.targets() ==
-                        std::vector<std::string>{"FF-Startup"},
-                "manager pump retains request until the live candidate exists");
+            check(candidate_queue->pending() &&
+                      candidate_queue->entries().size() == candidate_entry_count &&
+                      candidate_queue->targets() ==
+                          std::vector<std::string>{"FF-Startup"},
+                  "manager pump retains request until the live candidate exists");
             pump_events.emplace_back("factory");
             return off::runtime::StartupLiveScene::from_factory(
                 34U, pump_lease(34U));
@@ -993,8 +995,11 @@ int main() {
   check(!delayed_load_screen.ordinary_update(delayed_pump_queue, delayed_setup) &&
             !delayed_load_screen.ordinary_update(delayed_pump_queue, delayed_setup) &&
             delayed_load_screen.ordinary_update(delayed_pump_queue, delayed_setup) &&
-            !delayed_load_screen.ordinary_update(delayed_pump_queue, delayed_setup) &&
-            pump.consume(delayed_pump_queue, pump_state, pump_services) ==
+            !delayed_load_screen.ordinary_update(delayed_pump_queue, delayed_setup),
+        "later empty LoadScreen updates preserve a clear-then-target request");
+  candidate_queue = &delayed_pump_queue;
+  candidate_entry_count = 1U;
+  check(pump.consume(delayed_pump_queue, pump_state, pump_services) ==
                 off::runtime::SceneTransitionPumpResult::committed &&
             !delayed_pump_queue.pending() && delayed_pump_queue.entries().empty() &&
             pump_state.current_scene()->identity() == 34U,
@@ -1551,6 +1556,35 @@ int main() {
             std::ranges::equal(boot_envelope.deferred_source_block(),
                                expected_boot_deferred_source),
         "source-backed BootMenu envelope retains the exact checked deferred block");
+  // The envelope records an owner handle from the registry. It must retain the
+  // opaque scene lease itself because a deferred component can legitimately
+  // outlive the registry value that assigned that handle.
+  std::weak_ptr<const void> envelope_scene_lifetime;
+  std::optional<off::runtime::StartupBootMenuComponentEnvelope>
+      detached_boot_envelope;
+  {
+    const auto detached_package =
+        std::make_shared<const off::runtime::StartupSceneLoadPackage>(
+            off::runtime::StartupScenePackageSource::prepare_checked(
+                "FF-Startup", boot_factory_fixture));
+    const auto detached_directory =
+        off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
+            detached_package->factory_inputs()->gms());
+    const auto detached_lifetime =
+        std::shared_ptr<const void>(std::make_shared<const std::uint8_t>(91U));
+    envelope_scene_lifetime = detached_lifetime;
+    const auto detached_scene =
+        off::runtime::StartupBootSceneLease::live(detached_lifetime);
+    auto detached_registry = boot_registry_factory.construct(
+        detached_package, detached_directory, detached_scene, 13U);
+    detached_boot_envelope.emplace(boot_envelope_factory.construct(
+        detached_package, detached_directory, detached_registry));
+  }
+  check(detached_boot_envelope->valid() && !envelope_scene_lifetime.expired(),
+        "BootMenu envelope retains its registry scene lease after registry release");
+  detached_boot_envelope.reset();
+  check(envelope_scene_lifetime.expired(),
+        "BootMenu envelope releases its registry scene lease with the envelope");
   check(boot_envelope.deferred_profile().body_bytes == 1U &&
             boot_envelope.deferred_profile().framing.encoded_values == 0U &&
             boot_envelope.deferred_profile().framing.attachment_delimiters ==

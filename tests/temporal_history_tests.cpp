@@ -27,7 +27,7 @@ int main() {
             !first->history_valid,
         "first submission writes the alternate slot without history");
   check(!history.begin_frame(), "overlapping submissions are rejected");
-  check(history.commit_frame(), "completed submission publishes history");
+  check(first && history.commit_frame(*first), "completed submission publishes history");
   const auto second = history.begin_frame();
   check(second && second->history_slot == 1 && second->output_slot == 0 &&
             second->history_valid,
@@ -37,10 +37,28 @@ int main() {
   check(retry && retry->history_slot == 1 && retry->history_valid,
         "cancel retains last submitted history");
   history.cancel_frame();
+  const auto stale = history.begin_frame();
+  check(stale && stale->history_valid,
+        "a prepared frame starts with the last committed history");
   history.invalidate();
   const auto cut = history.begin_frame();
-  check(cut && !cut->history_valid,
-        "a discontinuity suppresses stale temporal history");
+  check(cut && !cut->history_valid && stale && cut->generation > stale->generation,
+        "a discontinuity suppresses stale temporal history in a new generation");
+  check(stale && !history.commit_frame(*stale) && history.frame_in_flight(),
+        "a delayed pre-cut completion cannot publish or cancel the replacement frame");
+  check(cut && history.commit_frame(*cut),
+        "the replacement frame remains committable after stale completion rejection");
+  const auto cancelled = history.begin_frame();
+  check(cancelled && cancelled->history_valid,
+        "a later frame begins from the replacement history");
+  history.cancel_frame();
+  const auto replacement = history.begin_frame();
+  check(replacement && replacement->generation > cancelled->generation,
+        "a replacement submission receives a distinct completion token");
+  check(cancelled && !history.commit_frame(*cancelled) && history.frame_in_flight(),
+        "a delayed cancelled completion cannot publish a same-epoch replacement");
+  check(replacement && history.commit_frame(*replacement),
+        "the same-epoch replacement remains committable after stale rejection");
   history.cancel_frame();
   check(history.configure({1920, 1080, 1}),
         "extent changes require fresh double-buffer allocation");

@@ -36,9 +36,11 @@ public:
   // frame after configuration or invalidation has no usable history.
   [[nodiscard]] std::optional<TemporalHistoryFrame> begin_frame() noexcept;
 
-  // Makes the output slot the next frame's history only after the backend has
-  // successfully submitted its GPU work.
-  [[nodiscard]] bool commit_frame() noexcept;
+  // Makes `frame`'s output slot the next frame's history only after the
+  // backend has successfully submitted that exact GPU work.  The frame token
+  // prevents a delayed completion from an invalidated or cancelled submission
+  // from publishing a newer in-flight frame.
+  [[nodiscard]] bool commit_frame(const TemporalHistoryFrame &frame) noexcept;
   void cancel_frame() noexcept;
 
   // Camera cuts, scene replacement, and other discontinuities must call this
@@ -47,13 +49,15 @@ public:
   void invalidate() noexcept;
 
   [[nodiscard]] std::optional<TemporalHistoryTarget> target() const noexcept;
-  [[nodiscard]] bool frame_in_flight() const noexcept { return in_flight_; }
+  [[nodiscard]] bool frame_in_flight() const noexcept {
+    return in_flight_frame_.has_value();
+  }
 
 private:
   std::optional<TemporalHistoryTarget> target_;
   std::uint8_t newest_slot_{};
   bool history_valid_{};
-  bool in_flight_{};
+  std::optional<TemporalHistoryFrame> in_flight_frame_;
   std::uint64_t generation_{};
 };
 
