@@ -21,6 +21,19 @@ untranslated ID. This boundary neither performs retail key lookup nor connects
 to UI rendering. A text-free ID does not determine copyright status: translated
 retail text remains local unless its provenance and licence permit publication.
 
+## Private pack compiler
+
+`tools/compile_private_translation_pack.py` creates one `.offl10n` file from an
+existing text-free binding manifest and a private
+`off.private-retail-translation-source/v1` JSON file. The source has exactly
+`format`, `locale`, `complete`, and `entries`; each entry has only `id` and
+`text`. It has no English or retail-source field. The compiler accepts only the
+20 canonical pack locales, IDs in the binding's ordinal span, valid UTF-8
+translations, and complete coverage when requested. It rejects repository
+paths, symlinks, unexpected fields, duplicates, and overwrites; output is a
+new owner-only canonical `<locale>.offl10n` file. Translation provenance and
+licensing remain the contributor's responsibility.
+
 ## Enrollment
 
 After a verified installation has produced private, text-free cache metadata,
