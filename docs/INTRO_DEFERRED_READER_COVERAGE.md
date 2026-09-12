@@ -49,3 +49,32 @@ before implementation. It must state:
 Only after all four are reviewed can a bounded reader be added with admission
 and failure tests. That implementation must preserve the existing separation
 between reader-local state and global lifecycle completion.
+
+## Private observation schema
+
+`tools/paramanim_deferred_reader_observation.py` is the only repository-side
+format for collecting the missing evidence. It accepts a private JSON file and
+produces a new private JSON file; both paths must be outside the repository and
+the output is never overwritten. It does not inspect executable or asset data.
+
+Each bounded observation record carries only these categorical relations:
+
+- owner and component input form: `accepted_bounded`,
+  `rejected_malformed`, or `rejected_unsupported`;
+- terminal rule, attachment-delimiter rule, and a no-trailing-bytes policy;
+- reader boundary for a destination write, raw-value preservation, local
+  ownership, and duplicate/re-entry behavior;
+- rollback/no-write behavior, a possible later-callback consumer, outcome, and
+  the required `none` side-effect category.
+
+The sanitizer requires exact keys and bounded enum values. It rejects every
+other field, including IDs, arbitrary strings, paths, assets, bytes, addresses,
+offsets, symbols, and screenshots. The enum labels are schema categories, not
+captured source strings. Rejected grammar forms must report failure, no write,
+no side effect, and `no_write` rollback. A reported write must occur at the
+declared owner- or component-reader stage and include complete grammar,
+preservation, ownership, and re-entry evidence. A later consumer may be
+reported only at the later-callback stage.
+
+This schema records evidence for review; it neither admits a reader nor changes
+ParamAnim construction, lifecycle, rendering, activation, or playback.
