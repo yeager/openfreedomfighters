@@ -520,6 +520,7 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
   const auto reader_coverage=intro.reader_coverage_inventory();
   const auto matpos_dispatch=intro.matpos_deferred_dispatch_inventory();
   const auto paramanim_dispatch=intro.paramanim_deferred_dispatch_inventory();
+  const auto particle_dispatch=intro.particle_emitter_deferred_dispatch_inventory();
   if(reader_coverage.stage!=off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete ||
       reader_coverage.total_discovered!=intro.deferred_reader_work().size())
     throw std::runtime_error("first-cut cold probe found incomplete reader coverage");
@@ -528,6 +529,11 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
   if(paramanim_dispatch.attachment_instances<paramanim_dispatch.attachment_owners ||
       paramanim_dispatch.owners_with_deferred_blocks!=paramanim_profiled_owners)
     throw std::runtime_error("first-cut cold probe found inconsistent ParamAnim structural inventory");
+  std::size_t particle_profiled_owners{};
+  for(const auto& shape:particle_dispatch.shapes) particle_profiled_owners+=shape.count;
+  if(particle_dispatch.attachment_instances<particle_dispatch.attachment_owners ||
+      particle_dispatch.owners_with_deferred_blocks!=particle_profiled_owners)
+    throw std::runtime_error("first-cut cold probe found inconsistent ParticleEmitter structural inventory");
   const auto first_cut_source=intro.resources().first_cut_index();
   const auto* first_cut_work=static_cast<const off::graphics::IntroDeferredReaderWork*>(nullptr);
   for(const auto& work:intro.deferred_reader_work()) {
@@ -798,6 +804,20 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
             << "paramanim-owners-with-deferred-blocks=" << paramanim_dispatch.owners_with_deferred_blocks << '\n';
   for(const auto& shape:paramanim_dispatch.shapes) {
     std::cout << "paramanim-structural-shape="
+              << "bytes=" << shape.block_bytes
+              << " attachments=" << shape.attachment_count
+              << " delimiters=" << shape.attachment_delimiters
+              << " tags=" << shape.tag_classes[0] << ',' << shape.tag_classes[1]
+              << ',' << shape.tag_classes[2] << ',' << shape.tag_classes[3]
+              << ',' << shape.tag_classes[4] << ',' << shape.tag_classes[5]
+              << " framing-digest=" << shape.framing_digest
+              << " count=" << shape.count << '\n';
+  }
+  std::cout << "particle-emitter-attachment-owners=" << particle_dispatch.attachment_owners << '\n'
+            << "particle-emitter-attachment-instances=" << particle_dispatch.attachment_instances << '\n'
+            << "particle-emitter-owners-with-deferred-blocks=" << particle_dispatch.owners_with_deferred_blocks << '\n';
+  for(const auto& shape:particle_dispatch.shapes) {
+    std::cout << "particle-emitter-structural-shape="
               << "bytes=" << shape.block_bytes
               << " attachments=" << shape.attachment_count
               << " delimiters=" << shape.attachment_delimiters

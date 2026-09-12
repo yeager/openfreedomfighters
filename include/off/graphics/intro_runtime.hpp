@@ -390,6 +390,23 @@ struct IntroParamAnimDeferredDispatchInventory {
   std::size_t owners_with_deferred_blocks{};
   std::vector<IntroParamAnimDeferredShape> shapes;
 };
+// Same privacy boundary as the ParamAnim inventory, but kept as a distinct
+// family because shared framing is not evidence of shared reader semantics.
+struct IntroParticleEmitterDeferredShape {
+  std::size_t block_bytes{};
+  std::size_t attachment_count{};
+  std::size_t attachment_delimiters{};
+  std::array<std::size_t, 6> tag_classes{};
+  std::uint64_t framing_digest{};
+  std::size_t count{};
+  [[nodiscard]] bool operator==(const IntroParticleEmitterDeferredShape&) const = default;
+};
+struct IntroParticleEmitterDeferredDispatchInventory {
+  std::size_t attachment_owners{};
+  std::size_t attachment_instances{};
+  std::size_t owners_with_deferred_blocks{};
+  std::vector<IntroParticleEmitterDeferredShape> shapes;
+};
 // Live values are owned by the real lifecycle caller. This adapter must never
 // derive them from archived source flags or prepared picture positions.
 struct FirstCutLegalPictureActivationPrerequisites {
@@ -1000,6 +1017,9 @@ public:
   // Structural research aid only. This neither invokes ParamAnim behavior nor
   // changes deferred-reader admission.
   [[nodiscard]] IntroParamAnimDeferredDispatchInventory paramanim_deferred_dispatch_inventory() const;
+  // Structural research aid only. ParticleEmitter stays separate from
+  // ParamAnim even when a private probe finds matching compact framing.
+  [[nodiscard]] IntroParticleEmitterDeferredDispatchInventory particle_emitter_deferred_dispatch_inventory() const;
   // Explicit first-cut activation bridge. It is disconnected from normal
   // startup and does not create a view, submit a draw or dispatch cut events.
   [[nodiscard]] FirstCutLegalPictureActivationResult activate_first_cut_legal_picture(

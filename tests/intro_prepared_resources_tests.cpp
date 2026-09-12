@@ -1035,6 +1035,19 @@ static OFF_NOINLINE void check_complete_runtime_post_directory(
                 paramanim_dispatch.shapes.front().attachment_count==1U &&
                 paramanim_dispatch.shapes.front().attachment_delimiters==1U,
             "synthetic ParamAnim owners produce one aggregate-only bounded deferred shape");
+      const auto particle_dispatch=host.particle_emitter_deferred_dispatch_inventory();
+      std::size_t profiled_particle_owners{};
+      bool valid_particle_shapes=!particle_dispatch.shapes.empty();
+      for(const auto& shape:particle_dispatch.shapes) {
+        profiled_particle_owners+=shape.count;
+        valid_particle_shapes=valid_particle_shapes && shape.count>0U &&
+            shape.block_bytes>sizeof(std::uint32_t) && shape.attachment_count>0U;
+      }
+      check(particle_dispatch.attachment_owners>0U &&
+                particle_dispatch.attachment_instances>=particle_dispatch.attachment_owners &&
+                particle_dispatch.owners_with_deferred_blocks==profiled_particle_owners &&
+                valid_particle_shapes,
+            "synthetic ParticleEmitter owners produce bounded aggregate-only deferred shapes");
       rejects([&]{host.prepare_scene_lifetime_keys_registry();});
       host.prepare_scene_lifetime_keys_backing();
       const auto* keys_backing=host.scene_lifetime_keys_backing();

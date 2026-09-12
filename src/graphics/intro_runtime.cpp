@@ -2090,6 +2090,67 @@ IntroRuntime::paramanim_deferred_dispatch_inventory() const {
   return result;
 }
 
+IntroParticleEmitterDeferredDispatchInventory
+IntroRuntime::particle_emitter_deferred_dispatch_inventory() const {
+  IntroParticleEmitterDeferredDispatchInventory result;
+  if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete)
+    return result;
+  const auto& sources = resources_.sources();
+  const auto& directory = sources.directory();
+  for (std::size_t row = 0; row < directory.size(); ++row) {
+    const auto& source = directory[row];
+    std::size_t emitter_attachments{};
+    for (std::size_t slot = 0; slot < source.attachments.size(); ++slot) {
+      if (sources.attachment_identifier(row, slot) == "ZGEOM_ParticleEmitter")
+        ++emitter_attachments;
+    }
+    if (emitter_attachments == 0U)
+      continue;
+    ++result.attachment_owners;
+    result.attachment_instances += emitter_attachments;
+    if (source.deferred_source_offset == 0U)
+      continue;
+    const auto matching_work = std::ranges::count_if(
+        deferred_reader_work_, [row](const IntroDeferredReaderWork& work) {
+          return work.source_directory_index == row;
+        });
+    if (matching_work != 1U)
+      throw std::runtime_error(
+          "ParticleEmitter structural inventory requires exactly one queued owner reader");
+    const auto block = sources.deferred_source_block(row);
+    if (block.size() <= sizeof(std::uint32_t))
+      throw std::runtime_error("ParticleEmitter structural inventory requires a bounded block body");
+    const auto profile = data::DeferredCompactBlockProfiler::profile(
+        block.subspan(sizeof(std::uint32_t)));
+    ++result.owners_with_deferred_blocks;
+    IntroParticleEmitterDeferredShape shape{
+        .block_bytes = block.size(),
+        .attachment_count = source.attachments.size(),
+        .attachment_delimiters = profile.attachment_delimiters,
+        .tag_classes = profile.value_kinds,
+        .framing_digest = profile.framing_digest,
+        .count = 1U};
+    const auto existing = std::ranges::find_if(
+        result.shapes, [&shape](const IntroParticleEmitterDeferredShape& candidate) {
+          return candidate.block_bytes == shape.block_bytes &&
+                 candidate.attachment_count == shape.attachment_count &&
+                 candidate.attachment_delimiters == shape.attachment_delimiters &&
+                 candidate.tag_classes == shape.tag_classes &&
+                 candidate.framing_digest == shape.framing_digest;
+        });
+    if (existing == result.shapes.end())
+      result.shapes.push_back(shape);
+    else
+      ++existing->count;
+  }
+  std::ranges::sort(result.shapes, {}, [](const IntroParticleEmitterDeferredShape& shape) {
+    return std::tuple{shape.block_bytes, shape.attachment_count,
+                      shape.attachment_delimiters, shape.tag_classes,
+                      shape.framing_digest};
+  });
+  return result;
+}
+
 void IntroRuntime::record_supported_reader_admission(const IntroDeferredReaderWork& work) {
   if(work.source_directory_index>=directory_resource_mapping_.size() ||
       directory_resource_mapping_.at(work.source_directory_index)!=work.resource ||
