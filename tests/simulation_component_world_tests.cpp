@@ -30,7 +30,7 @@ int main() {
   using namespace off::simulation;
 
   ComponentWorld bridge;
-  const auto request = bridge.world().queue_spawn({{4, 5, 6}, 7});
+  const auto request = bridge.queue_spawn({{4, 5, 6}, 7});
   const auto spawned = bridge.step(input(1));
   check(spawned.spawned.size() == 1 && spawned.spawned.front().request_id == request,
         "bridge preserves the world spawn result");
@@ -48,13 +48,13 @@ int main() {
   }
   check(rejected, "stale entity generation never receives a component");
 
-  bridge.world().queue_destroy(entity);
+  bridge.queue_destroy(entity);
   const auto destroyed = bridge.step(input(2));
   check(destroyed.destroyed == std::vector<EntityId>{entity} &&
             bridge.components().find(12, entity).empty(),
         "destroyed entity components are retired at the same bridge step");
 
-  const auto second_request = bridge.world().queue_spawn({{7, 8, 9}, 10});
+  const auto second_request = bridge.queue_spawn({{7, 8, 9}, 10});
   const auto reused = bridge.step(input(3));
   const auto replacement = reused.spawned.front().entity;
   check(reused.spawned.front().request_id == second_request &&
@@ -63,12 +63,12 @@ int main() {
         "slot reuse cannot expose components from the prior generation");
 
   ComponentWorld equivalent;
-  static_cast<void>(equivalent.world().queue_spawn({{4, 5, 6}, 7}));
+  static_cast<void>(equivalent.queue_spawn({{4, 5, 6}, 7}));
   const auto equivalent_entity = equivalent.step(input(1)).spawned.front().entity;
   equivalent.upsert_component(12, equivalent_entity, payload);
-  equivalent.world().queue_destroy(equivalent_entity);
+  equivalent.queue_destroy(equivalent_entity);
   static_cast<void>(equivalent.step(input(2)));
-  static_cast<void>(equivalent.world().queue_spawn({{7, 8, 9}, 10}));
+  static_cast<void>(equivalent.queue_spawn({{7, 8, 9}, 10}));
   static_cast<void>(equivalent.step(input(3)));
   check(bridge.state_hash() == equivalent.state_hash(),
         "bridge checkpoint is deterministic across equal world/component history");

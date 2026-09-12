@@ -181,6 +181,8 @@ public:
     const auto queue_checkpoint = queue.checkpoint();
     try {
       if (queue.targets_.size() != 1U || queue.targets_.front() != "FF-Startup" ||
+          !queue.clear_target_offset_.has_value() ||
+          *queue.clear_target_offset_ != 0U ||
           !services.prepare_complete_checked_package ||
           !services.construct_live_scene) {
         active_ = false;

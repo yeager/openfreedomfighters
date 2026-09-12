@@ -20,7 +20,6 @@ public:
   explicit ComponentWorld(WorldLimits world_limits = {},
                           ComponentStoreLimits component_limits = {});
 
-  [[nodiscard]] SimulationWorld &world() noexcept { return world_; }
   [[nodiscard]] const SimulationWorld &world() const noexcept { return world_; }
   [[nodiscard]] const ComponentStore &components() const noexcept {
     return components_;
@@ -30,6 +29,15 @@ public:
                         std::span<const std::byte> payload);
   [[nodiscard]] bool erase_component(std::uint32_t type,
                                      EntityId entity) noexcept;
+
+  // These are the only live-world mutations exposed by the adapter.  Keeping
+  // reset and snapshot replacement private prevents a caller from replacing
+  // entity lifetimes while leaving project-owned components behind.
+  [[nodiscard]] std::uint64_t queue_spawn(SpawnState state);
+  void queue_destroy(EntityId entity);
+  [[nodiscard]] std::uint64_t
+  queue_event(std::uint64_t tick, std::uint32_t type, EntityId source = {},
+              EntityId target = {}, std::int64_t value = 0);
 
   // Delegates the world's complete tick unchanged, then removes components
   // owned by each identity that the returned result says was destroyed.

@@ -21,6 +21,21 @@ bool ComponentWorld::erase_component(std::uint32_t type,
   return components_.erase(type, entity);
 }
 
+std::uint64_t ComponentWorld::queue_spawn(SpawnState state) {
+  return world_.queue_spawn(state);
+}
+
+void ComponentWorld::queue_destroy(EntityId entity) {
+  world_.queue_destroy(entity);
+}
+
+std::uint64_t ComponentWorld::queue_event(std::uint64_t tick,
+                                          std::uint32_t type,
+                                          EntityId source, EntityId target,
+                                          std::int64_t value) {
+  return world_.queue_event(tick, type, source, target, value);
+}
+
 WorldStepResult ComponentWorld::step(const InputSnapshot &input) {
   auto result = world_.step(input);
   for (const auto entity : result.destroyed)

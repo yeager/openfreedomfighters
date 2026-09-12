@@ -92,6 +92,18 @@ public:
     }
     current_scene_.reset();
     pending_ = true;
+    // A supported replacement must retain exactly one target *after* its
+    // clear request.  Keeping the offset makes a target-only request, or one
+    // queued before the clear, distinguishable without inventing a generic
+    // manager ordering policy.
+    // Once the proven clear-then-one-target handoff exists, the component's
+    // later empty-target updates must not invalidate it before the manager
+    // gets a chance to consume the request.  A target that existed before
+    // its first clear still retains a nonzero offset and remains rejected.
+    if (!clear_target_offset_.has_value() || *clear_target_offset_ != 0U ||
+        targets_.size() != 1U) {
+      clear_target_offset_ = targets_.size();
+    }
     ++clear_requests_;
   }
 
@@ -136,6 +148,7 @@ public:
     current_scene_.reset();
     targets_ = std::move(staged_targets);
     pending_ = true;
+    clear_target_offset_ = targets_.size() - 1U;
     ++clear_requests_;
     return true;
   }
@@ -168,15 +181,18 @@ private:
     std::optional<std::uint64_t> current_scene;
     bool pending{};
     std::uint32_t clear_requests{};
+    std::optional<std::size_t> clear_target_offset;
   };
 
   [[nodiscard]] Checkpoint checkpoint() const {
-    return {entries_, targets_, current_scene_, pending_, clear_requests_};
+    return {entries_, targets_, current_scene_, pending_, clear_requests_,
+            clear_target_offset_};
   }
 
   [[nodiscard]] bool matches(const Checkpoint& checkpoint) const noexcept {
     if (current_scene_ != checkpoint.current_scene || pending_ != checkpoint.pending ||
         clear_requests_ != checkpoint.clear_requests || targets_ != checkpoint.targets ||
+        clear_target_offset_ != checkpoint.clear_target_offset ||
         entries_.size() != checkpoint.entries.size()) {
       return false;
     }
@@ -196,6 +212,7 @@ private:
     current_scene_ = checkpoint.current_scene;
     pending_ = checkpoint.pending;
     clear_requests_ = checkpoint.clear_requests;
+    clear_target_offset_ = checkpoint.clear_target_offset;
   }
 
   void commit_supported_transition() noexcept {
@@ -206,6 +223,7 @@ private:
                    entries_.end());
     targets_.clear();
     pending_ = false;
+    clear_target_offset_.reset();
   }
 
   std::vector<DeferredSceneEntry> entries_;
@@ -213,6 +231,7 @@ private:
   std::optional<std::uint64_t> current_scene_;
   bool pending_{};
   std::uint32_t clear_requests_{};
+  std::optional<std::size_t> clear_target_offset_;
 };
 
 // Models the proven request boundary only. Its caller must establish ordinary

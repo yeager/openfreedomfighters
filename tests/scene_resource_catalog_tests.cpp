@@ -161,6 +161,12 @@ int main() {
             "scene archive resources do not share one source identity",
         "reject a mixed scene resource directory before payload parsing");
 
+  auto alternate_separator = complete_members();
+  alternate_separator.back() = "scene\\bootstrap.SGP";
+  write_zip(work / "alternate-separator.zip", alternate_separator);
+  check(catalog_error(work / "alternate-separator.zip").empty(),
+        "accept one source identity across ZIP's equivalent separators");
+
   auto duplicate = complete_members();
   duplicate.emplace_back("scene/other.PRM");
   write_zip(work / "duplicate.zip", duplicate);

@@ -985,6 +985,22 @@ int main() {
               std::vector<std::string>{"prepare:FF-Startup", "factory"},
       "manager pump keeps its request through construction then commits once");
 
+  off::runtime::SceneTransitionQueue delayed_pump_queue;
+  delayed_pump_queue.retain_scene_entry(36U);
+  delayed_pump_queue.set_current_scene(36U);
+  off::runtime::LoadScreenTransition delayed_load_screen(source);
+  const auto delayed_setup = [] {};
+  check(!delayed_load_screen.ordinary_update(delayed_pump_queue, delayed_setup) &&
+            !delayed_load_screen.ordinary_update(delayed_pump_queue, delayed_setup) &&
+            delayed_load_screen.ordinary_update(delayed_pump_queue, delayed_setup) &&
+            !delayed_load_screen.ordinary_update(delayed_pump_queue, delayed_setup) &&
+            pump.consume(delayed_pump_queue, pump_state, pump_services) ==
+                off::runtime::SceneTransitionPumpResult::committed &&
+            !delayed_pump_queue.pending() && delayed_pump_queue.entries().empty() &&
+            pump_state.current_scene()->identity() == 34U,
+        "later empty LoadScreen updates retain the clear-then-target ordering "
+        "until the manager commits it");
+
   off::runtime::SceneTransitionQueue rejected_queue;
   rejected_queue.retain_scene_entry(41U);
   rejected_queue.set_current_scene(41U);
@@ -1013,6 +1029,21 @@ int main() {
             !rejected_queue.current_scene().has_value() &&
             pump_state.current_scene()->identity() == 34U,
         "manager-pump rejection preserves its pending request and prior scene");
+
+  off::runtime::SceneTransitionQueue target_only_queue;
+  target_only_queue.retain_scene_entry(42U);
+  target_only_queue.set_current_scene(42U);
+  check(target_only_queue.request_target("FF-Startup"),
+        "target-only ordering test retains its unsupported request");
+  check(pump.consume(target_only_queue, pump_state, pump_services) ==
+                off::runtime::SceneTransitionPumpResult::rejected &&
+            target_only_queue.pending() &&
+            target_only_queue.entries().size() == 1U &&
+            !target_only_queue.entries().front().removal_requested &&
+            target_only_queue.current_scene() == std::optional<std::uint64_t>{42U} &&
+            target_only_queue.targets() == std::vector<std::string>{"FF-Startup"} &&
+            pump_state.current_scene()->identity() == 34U,
+        "manager pump rejects a target that was not ordered after a clear");
 
   off::runtime::SceneTransitionQueue multiple_targets_queue;
   multiple_targets_queue.request_clear();

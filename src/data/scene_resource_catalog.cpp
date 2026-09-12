@@ -20,6 +20,21 @@ namespace {
   return result;
 }
 
+// ZIP itself treats both separator spellings as one path namespace.  Keep the
+// catalog identity in that same namespace so a valid archive cannot be
+// rejected merely because its otherwise identical resource records use the
+// alternate ZIP separator spelling.
+[[nodiscard]] std::string normalized_directory(std::string_view value) {
+  std::string result;
+  result.reserve(value.size());
+  for (const auto character : value) {
+    const auto separator = character == '\\' ? '/' : character;
+    result.push_back(static_cast<char>(
+        std::tolower(static_cast<unsigned char>(separator))));
+  }
+  return result;
+}
+
 [[nodiscard]] std::optional<SceneResourceKind>
 kind_for_extension(std::string_view extension) noexcept {
   if (extension == ".zgf")
@@ -74,7 +89,7 @@ struct MemberIdentity {
         "scene archive has an invalid resource member name");
   }
   return {
-      .directory = lowercase(
+      .directory = normalized_directory(
           std::string_view(entry.name)
               .substr(0U, slash == std::string::npos ? 0U : slash + 1U)),
       .stem = lowercase(name.substr(0U, dot)),
