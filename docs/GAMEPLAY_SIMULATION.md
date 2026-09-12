@@ -11,6 +11,11 @@ Public tests use independently authored fixtures. Private comparison may use a
 verified user-owned installation, but never publishes retail code, data,
 dialogue, media, or expressive traces.
 
+The required first-mission evidence is defined by the
+[first-mission observation contract](FIRST_MISSION_OBSERVATION_CONTRACT.md).
+Until that contract admits one behavior boundary, the portable runtime remains
+infrastructure rather than gameplay compatibility.
+
 ## Vertical-slice boundary
 
 The selected first-mission segment must have a stable project-authored ID and a
