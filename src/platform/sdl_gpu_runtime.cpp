@@ -6,6 +6,7 @@
 #include "off/platform/intro_preview_diagnostic.hpp"
 #include "off/platform/sdl_locale.hpp"
 #include "off/platform/sdl_menu_gamepad.hpp"
+#include "off/platform/sdl_menu_keyboard.hpp"
 #include "off/settings/upscaler_runtime.hpp"
 #include "off/settings/graphics_settings_store.hpp"
 #include "off/ui/graphics_menu_draw.hpp"
@@ -805,30 +806,6 @@ build_overlay_batch(const ui::GraphicsMenuDrawList &list,
   return true;
 }
 
-[[nodiscard]] std::optional<ui::GraphicsMenuKey> menu_key(SDL_Keycode key) {
-  switch (key) {
-  case SDLK_F10:
-    return ui::GraphicsMenuKey::f10;
-  case SDLK_ESCAPE:
-    return ui::GraphicsMenuKey::escape;
-  case SDLK_UP:
-    return ui::GraphicsMenuKey::up;
-  case SDLK_DOWN:
-    return ui::GraphicsMenuKey::down;
-  case SDLK_LEFT:
-    return ui::GraphicsMenuKey::left;
-  case SDLK_RIGHT:
-    return ui::GraphicsMenuKey::right;
-  case SDLK_RETURN:
-  case SDLK_KP_ENTER:
-    return ui::GraphicsMenuKey::enter;
-  case SDLK_SPACE:
-    return ui::GraphicsMenuKey::space;
-  default:
-    return std::nullopt;
-  }
-}
-
 [[nodiscard]] SDL_GPUPresentMode present_mode(settings::PresentMode mode) {
   switch (mode) {
   case settings::PresentMode::mailbox:
@@ -1556,7 +1533,9 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       bool pressed = gamepad_key.has_value();
       bool repeated = false;
       if (event.type == SDL_EVENT_KEY_DOWN || event.type == SDL_EVENT_KEY_UP) {
-        translated_key = menu_key(event.key.key);
+        translated_key = translate_menu_keyboard_event(
+            event, SDL_GetWindowID(window),
+            (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0);
         pressed = event.type == SDL_EVENT_KEY_DOWN;
         repeated = event.key.repeat;
       }

@@ -227,6 +227,7 @@ add_executable(
     src/main.cpp
     src/platform/sdl_gpu_runtime.cpp
     src/platform/sdl_menu_gamepad.cpp
+    src/platform/sdl_menu_keyboard.cpp
     src/platform/sdl_startup.cpp
 )
 add_library(off_sdl_picture_stage_shader STATIC src/platform/picture_stage_shader.cpp)
@@ -877,6 +878,11 @@ if(BUILD_TESTING)
     target_link_libraries(off_sdl_menu_gamepad_tests PRIVATE off_core ${OFF_SDL3_TARGET})
     add_test(NAME off_sdl_menu_gamepad_tests COMMAND off_sdl_menu_gamepad_tests)
     set_tests_properties(off_sdl_menu_gamepad_tests PROPERTIES SKIP_RETURN_CODE 77)
+
+    add_executable(off_sdl_menu_keyboard_tests
+        tests/sdl_menu_keyboard_tests.cpp src/platform/sdl_menu_keyboard.cpp)
+    target_link_libraries(off_sdl_menu_keyboard_tests PRIVATE off_core ${OFF_SDL3_TARGET})
+    add_test(NAME off_sdl_menu_keyboard_tests COMMAND off_sdl_menu_keyboard_tests)
 
     add_executable(off_retail_ui_fonts_tests tests/retail_ui_fonts_tests.cpp)
     target_link_libraries(off_retail_ui_fonts_tests PRIVATE off_core)
