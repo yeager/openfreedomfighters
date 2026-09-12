@@ -143,6 +143,24 @@ std::filesystem::path application_translation_packs_directory() noexcept {
   return directory / "translation-packs";
 }
 
+std::filesystem::path application_project_saves_directory() noexcept {
+  // Save persistence belongs beside other application-owned preferences,
+  // never in the verified retail-data tree or beside a launched executable.
+  // Do not create this directory here: normal startup has not recovered a
+  // campaign lifecycle and must therefore have no save side effect.
+  char *raw_path =
+      SDL_GetPrefPath("OpenFreedomFighters", "OpenFreedomFighters");
+  if (raw_path == nullptr)
+    return {};
+  std::unique_ptr<char, decltype(&SDL_free)> path{raw_path, SDL_free};
+  if (*path == '\0')
+    return {};
+  const std::filesystem::path directory{path.get()};
+  if (!directory.is_absolute())
+    return {};
+  return directory / "saves";
+}
+
 namespace {
 
 constexpr int startup_width = 1280;

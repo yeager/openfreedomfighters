@@ -81,5 +81,28 @@ atomically replacing only the invalid or older generation. Symlink leaves,
 invalid identities, exhausted generations, and I/O failures are rejected. This
 is portable project persistence, not retail-save import.
 
+## Application-lifecycle admission
+
+The store is deliberately not constructed by ordinary startup. A verified
+installation fingerprint proves only which required data is present; it does
+not identify a campaign, slot, scene, player profile, or safe restoration
+point. Normal startup has no `SimulationWorld` and must not create, inspect,
+or migrate campaign saves.
+
+The platform layer reserves the application-owned `saves` preference directory
+through `application_project_saves_directory()`. The helper neither creates the
+directory nor derives a slot name. Once a campaign route, authoritative world,
+and checkpoint contract have been recovered, the owning campaign session must:
+
+1. obtain a verified required-data manifest fingerprint;
+2. receive a route-derived project campaign ID and explicit slot contract;
+3. create the application-owned slot directory without following links;
+4. construct `ProjectSaveStore` only for that admitted session; and
+5. load before the first authoritative tick, then save only at a recovered
+   checkpoint boundary.
+
+Until then, the reserved directory is a portability prerequisite, not an
+enabled save feature.
+
 The required ordered command-capture boundary for future replay is specified in
 [Simulation replay](SIMULATION_REPLAY.md).

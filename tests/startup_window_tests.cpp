@@ -81,6 +81,13 @@ int main() {
             cache_root.filename() == "deep-audit" &&
             cache_root.parent_path().is_absolute(),
         "deep-audit cache uses an absolute application-owned location");
+  const auto saves_directory =
+      off::platform::application_project_saves_directory();
+  check(!saves_directory.empty() && saves_directory.is_absolute() &&
+            saves_directory.filename() == "saves" &&
+            saves_directory.parent_path().is_absolute() &&
+            saves_directory.parent_path() != cache_root,
+        "project saves reserve an absolute application-owned directory");
   {
     StartupWindow empty;
   }

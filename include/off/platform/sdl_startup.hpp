@@ -96,6 +96,15 @@ application_graphics_settings_path() noexcept;
 [[nodiscard]] std::filesystem::path
 application_translation_packs_directory() noexcept;
 
+// Returns the SDL-owned per-user directory reserved for portable,
+// project-authored campaign saves. This only names the durable-storage
+// boundary; it does not create a directory, choose a campaign, or create a
+// save. Those actions require a recovered campaign lifecycle contract.
+// An unavailable preferences location disables save persistence for the
+// launch; no environment or home-directory fallback is used.
+[[nodiscard]] std::filesystem::path
+application_project_saves_directory() noexcept;
+
 // Opens the project-owned splash before touching retail data. This entry point
 // is intentionally not used by --verify-only, --help, or --version.
 // prepare_assets runs on the verification worker after successful verification.
