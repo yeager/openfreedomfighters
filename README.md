@@ -148,9 +148,10 @@ These are targets, not working renderers:
 - **Modern+:** optional HD assets and future DLSS 4.5, AMD FSR, and Intel XeSS-SR backends on supported hardware.
 
 The settings panel has a mode selector and a working 50--200% render-scale
-control. It records DLSS, FSR, and XeSS requests but uses portable temporal or
-native rendering until a verified native adapter is available. HD asset support
-is not implemented. See [Modern graphics](docs/MODERN_GRAPHICS.md),
+control. The current SDL Modern path is spatial-only: it records DLSS, FSR, and
+XeSS requests but uses fixed render scaling and linear output scaling until a
+verified native adapter exists. No portable temporal fallback or resolver is
+implemented or exposed. HD asset support is not implemented. See [Modern graphics](docs/MODERN_GRAPHICS.md),
 [DLSS](docs/DLSS.md), [FSR](docs/FSR.md), and [XeSS](docs/XESS.md) for scope and licensing.
 Project-authored UI strings already select the system locale across 20 locales,
 including Swedish. Complete game-text localization, shaping and full retail-font

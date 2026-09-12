@@ -112,8 +112,9 @@ Inputs are the shared simulation, retail-backed Original presentation, newly
 authored licensed translations, and optional independently licensed enhancement
 assets. Deliverables are Unicode shaping and fallback, 20 reviewed locale packs
 including Swedish, accessibility, Modern presets and budgets, a replacement-asset
-contract, and capability-gated DLSS 4.5, AMD FSR, and Intel XeSS-SR with native and
-portable temporal fallbacks.
+contract, a portable temporal resolver, and capability-gated DLSS 4.5, AMD FSR,
+and Intel XeSS-SR. Until that resolver ships, the SDL Modern path remains
+spatial/native only.
 
 The gate requires catalog completeness, placeholder validation, pseudo-localized
 overflow tests, in-context layout review for every locale, per-platform Modern

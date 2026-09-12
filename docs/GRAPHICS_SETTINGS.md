@@ -78,11 +78,11 @@ not be claimed before it has been validated on each target.
 
 The configuration stores user intent as `requested`. Runtime capability
 resolution produces separate `effective` values and explicit fallback reasons.
-For example, a retained Modern+ DLSS request can resolve to portable temporal
-upscaling on unsupported hardware without overwriting the request. If support is
-later available, the same request becomes effective automatically. The UI must
-show the active renderer/API and exact loaded DLSS runtime rather than inferring
-them from configuration.
+For example, a retained Modern+ DLSS request currently resolves to the available
+spatial/native path without overwriting the request. If a supported backend is
+later available, the same request can become effective automatically. The UI
+must show the active renderer/API and exact loaded DLSS runtime rather than
+inferring them from configuration.
 
 ## Sections
 
@@ -94,9 +94,10 @@ The complete overlay is organized into these sections:
   refresh rate, VSync/present mode, frame cap, HDR, and UI scale.
 - **Resolution:** native, fixed-scale, or dynamic rendering; scale bounds and
   target presentation rate. UI and subtitles render at output resolution.
-- **Anti-aliasing and upscaling:** reference, FXAA, TAA, DLAA, portable temporal
-  upscaling, and Modern+ DLSS 4.5 Super Resolution with quality and sharpening.
-  DLSS, FSR, and XeSS requests remain visible but resolve with a reason until a
+- **Anti-aliasing and upscaling:** current spatial render scaling, plus planned
+  reference, FXAA, TAA, DLAA, portable temporal upscaling, and Modern+ DLSS 4.5
+  Super Resolution with quality and sharpening. DLSS, FSR, and XeSS requests
+  remain visible but resolve to the spatial/native path with a reason until a
   real adapter is active. Unsupported combinations are disabled or resolved
   with a visible reason.
 - **Textures:** retail or independently licensed Modern+ source, bilinear,
@@ -167,29 +168,30 @@ configuration intact but cannot survive a relaunch.
 | Feature | Windows | Linux / Steam Deck | macOS |
 |---|---|---|---|
 | F10 overlay and portable settings | Required | Required | Required |
-| Native and portable temporal paths | Required | Required | Required |
-| AMD GPU support | Native and portable temporal paths | Native and portable temporal paths | Native and portable temporal paths where the active backend supports the adapter |
+| Current renderer path | Spatial/native only; no temporal resolver | Spatial/native only; no temporal resolver | Spatial/native only; no temporal resolver |
+| AMD GPU support | Spatial/native path | Spatial/native path | Spatial/native path where the active backend supports the adapter |
 | FSR Super Resolution | Request retained; active only with a verified AMD adapter | Request retained; active only with a verified official native stack | Request retained; no active adapter yet |
 | Modern+ replacement assets | Portable asset contract | Portable asset contract | Portable asset contract |
-| DLSS 4.5 Super Resolution | Planned for supported NVIDIA RTX, D3D12, driver, and licensed runtime combinations | Exposed only if an official NVIDIA SDK explicitly supports the active native stack | Not expected; portable temporal fallback remains available |
-| Intel XeSS-SR | Planned for a verified D3D12 or Vulkan native backend, supported adapter, driver, and licensed SDK runtime | Planned only after the renderer owns the required native resources and temporal inputs | Not currently exposed; portable temporal fallback remains available |
+| DLSS 4.5 Super Resolution | Planned for supported NVIDIA RTX, D3D12, driver, and licensed runtime combinations | Exposed only if an official NVIDIA SDK explicitly supports the active native stack | Not expected; current spatial/native path remains available |
+| Intel XeSS-SR | Planned for a verified D3D12 or Vulkan native backend, supported adapter, driver, and licensed SDK runtime | Planned only after the renderer owns the required native resources and temporal inputs | Not currently exposed; current spatial/native path remains available |
 | DLSS 5 | Not a current setting or deliverable | Not a current setting or deliverable | Not a current setting or deliverable |
 
 DLSS labels must name the API version actually loaded. The overlay must never
 label a shader, post-process filter, portable upscaler, or unavailable future SDK
-as DLSS. If DLSS 4.5 cannot load, the retained request may resolve to portable
-temporal upscaling or native rendering with a visible reason.
+as DLSS. If DLSS 4.5 cannot load, the retained request resolves to the current
+spatial/native path with a visible reason. A future temporal resolver may add a
+portable temporal choice only after it is implemented.
 This fallback must not remove resolution controls or prevent Modern+ from running.
 
 FSR must likewise name an actual loaded AMD runtime and version. The F10 menu
 may retain an FSR request, but until an adapter is implemented and validated it
-must resolve to portable temporal or native rendering with a visible reason.
-The overlay must describe the active AMD path as native or portable temporal
-upscaling, never as FSR.
+must resolve to the current spatial/native path with a visible reason. The
+overlay must describe the active AMD path as spatial/native rendering, never as
+FSR.
 
 XeSS follows the same rule. The F10 menu may retain a XeSS-SR request, but it
-must resolve it to portable temporal or native rendering with a visible reason
-until an Intel SDK adapter is actually active.
+must resolve it to the current spatial/native path with a visible reason until
+an Intel SDK adapter is actually active.
 
 Graphics settings cannot affect fixed simulation time, input timestamps, RNG,
 AI visibility, collision, damage, mission state, save/replay state, or authoritative

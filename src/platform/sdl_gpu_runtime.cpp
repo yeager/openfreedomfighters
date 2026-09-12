@@ -1,8 +1,6 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/graphics/render_scale.hpp"
 #include "off/graphics/scene_instance_history.hpp"
-#include "off/graphics/temporal_history.hpp"
-#include "off/graphics/temporal_jitter.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
 #include "off/platform/intro_preview_diagnostic.hpp"
 #include "off/platform/sdl_locale.hpp"
@@ -79,54 +77,6 @@ struct GpuRenderScaleTarget {
   Uint32 width{0};
   Uint32 height{0};
   SDL_GPUTextureFormat format{SDL_GPU_TEXTUREFORMAT_INVALID};
-};
-
-// These are deliberately separate from the presentation and render-scale
-// targets.  They retain the completed Modern content frame for a future
-// temporal resolve, but are not sampled by the current renderer.
-struct GpuTemporalHistoryTargets {
-  std::array<SDL_GPUTexture *, 2> textures{nullptr, nullptr};
-  Uint32 width{0};
-  Uint32 height{0};
-  SDL_GPUTextureFormat format{SDL_GPU_TEXTUREFORMAT_INVALID};
-};
-
-// This is intentionally only storage plumbing.  No current pass attaches,
-// clears, samples, or otherwise exposes this texture: a future renderer must
-// first provide a real vector-writing pass and its matching consumer.
-struct GpuMotionVectorTarget {
-  SDL_GPUTexture *texture{nullptr};
-  Uint32 width{0};
-  Uint32 height{0};
-  SDL_GPUTextureFormat format{SDL_GPU_TEXTUREFORMAT_INVALID};
-};
-
-class TemporalHistoryFrameGuard {
-public:
-  explicit TemporalHistoryFrameGuard(graphics::TemporalHistoryLifecycle &history)
-      : history_(history) {}
-  TemporalHistoryFrameGuard(const TemporalHistoryFrameGuard &) = delete;
-  TemporalHistoryFrameGuard &operator=(const TemporalHistoryFrameGuard &) = delete;
-  ~TemporalHistoryFrameGuard() {
-    if (frame_)
-      history_.cancel_frame();
-  }
-
-  [[nodiscard]] std::optional<graphics::TemporalHistoryFrame> begin() {
-    frame_ = history_.begin_frame();
-    return frame_;
-  }
-
-  [[nodiscard]] bool commit() {
-    if (!frame_ || !history_.commit_frame())
-      return false;
-    frame_.reset();
-    return true;
-  }
-
-private:
-  graphics::TemporalHistoryLifecycle &history_;
-  std::optional<graphics::TemporalHistoryFrame> frame_;
 };
 
 class SceneInstanceHistorySubmissionGuard {
@@ -242,89 +192,6 @@ void release_render_scale_target(SDL_GPUDevice *device,
   if (target.texture != nullptr)
     SDL_ReleaseGPUTexture(device, target.texture);
   target = {};
-}
-
-void release_temporal_history_targets(SDL_GPUDevice *device,
-                                      GpuTemporalHistoryTargets &targets) {
-  for (auto *texture : targets.textures)
-    if (texture != nullptr)
-      SDL_ReleaseGPUTexture(device, texture);
-  targets = {};
-}
-
-void release_motion_vector_target(SDL_GPUDevice *device,
-                                  GpuMotionVectorTarget &target) {
-  if (target.texture != nullptr)
-    SDL_ReleaseGPUTexture(device, target.texture);
-  target = {};
-}
-
-[[nodiscard]] bool ensure_motion_vector_target(
-    SDL_GPUDevice *device, Uint32 width, Uint32 height,
-    SDL_GPUTextureFormat format, GpuMotionVectorTarget &target) {
-  if (width == 0 || height == 0 || format == SDL_GPU_TEXTUREFORMAT_INVALID)
-    return false;
-  if (target.texture != nullptr && target.width == width &&
-      target.height == height && target.format == format)
-    return true;
-  if (target.texture != nullptr) {
-    if (!SDL_WaitForGPUIdle(device))
-      return false;
-    release_motion_vector_target(device, target);
-  }
-  const SDL_GPUTextureCreateInfo info{
-      .type = SDL_GPU_TEXTURETYPE_2D,
-      .format = format,
-      .usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET,
-      .width = width,
-      .height = height,
-      .layer_count_or_depth = 1,
-      .num_levels = 1,
-      .sample_count = SDL_GPU_SAMPLECOUNT_1};
-  target.texture = SDL_CreateGPUTexture(device, &info);
-  if (target.texture == nullptr)
-    return false;
-  target.width = width;
-  target.height = height;
-  target.format = format;
-  return true;
-}
-
-[[nodiscard]] bool ensure_temporal_history_targets(
-    SDL_GPUDevice *device, Uint32 width, Uint32 height,
-    SDL_GPUTextureFormat format, GpuTemporalHistoryTargets &targets) {
-  if (width == 0 || height == 0 || format == SDL_GPU_TEXTUREFORMAT_INVALID)
-    return false;
-  if (targets.textures[0] != nullptr && targets.textures[1] != nullptr &&
-      targets.width == width && targets.height == height &&
-      targets.format == format)
-    return true;
-  if (targets.textures[0] != nullptr || targets.textures[1] != nullptr) {
-    if (!SDL_WaitForGPUIdle(device))
-      return false;
-    release_temporal_history_targets(device, targets);
-  }
-  const SDL_GPUTextureCreateInfo info{
-      .type = SDL_GPU_TEXTURETYPE_2D,
-      .format = format,
-      .usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
-               SDL_GPU_TEXTUREUSAGE_SAMPLER,
-      .width = width,
-      .height = height,
-      .layer_count_or_depth = 1,
-      .num_levels = 1,
-      .sample_count = SDL_GPU_SAMPLECOUNT_1};
-  for (auto &texture : targets.textures) {
-    texture = SDL_CreateGPUTexture(device, &info);
-    if (texture == nullptr) {
-      release_temporal_history_targets(device, targets);
-      return false;
-    }
-  }
-  targets.width = width;
-  targets.height = height;
-  targets.format = format;
-  return true;
 }
 
 [[nodiscard]] bool ensure_render_scale_target(
@@ -1479,11 +1346,6 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   }
   Mode active_mode = mode;
   GpuRenderScaleTarget render_scale_target;
-  GpuTemporalHistoryTargets temporal_history_targets;
-  GpuMotionVectorTarget motion_vector_target;
-  graphics::TemporalHistoryLifecycle temporal_history;
-  graphics::TemporalJitterProvider temporal_jitter;
-  Mode temporal_history_mode = active_mode;
   graphics::SceneInstanceHistoryLifecycle scene_instance_history;
   std::vector<std::uint64_t> scene_instance_identities;
   std::optional<std::array<Uint32, 2>> scene_history_extent;
@@ -1495,8 +1357,6 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       scene_instance_identities.push_back(instance.identity);
     if (!scene_instance_history.initialize(initial_submission)) {
       const auto result = failure("scene instance history initialization failed");
-      release_motion_vector_target(device, motion_vector_target);
-      release_temporal_history_targets(device, temporal_history_targets);
       release_render_scale_target(device, render_scale_target);
       gpu_intro.reset();
       release_startup_images(device, gpu_startup);
@@ -1660,13 +1520,6 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       if (restored)
         active_mode = menu.confirmed_effective().profile;
     }
-    // A profile transition is a temporal discontinuity even when its current
-    // extent happens to match.  Do this before acquiring a submission.
-    if (active_mode != temporal_history_mode) {
-      temporal_history.invalidate();
-      temporal_jitter.reset();
-      temporal_history_mode = active_mode;
-    }
     SDL_GPUCommandBuffer *command = SDL_AcquireGPUCommandBuffer(device);
     SDL_GPUTexture *swapchain = nullptr;
     Uint32 swapchain_width = 0;
@@ -1819,62 +1672,13 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         break;
       }
     }
-    TemporalHistoryFrameGuard temporal_history_frame{temporal_history};
-    std::optional<graphics::TemporalHistoryFrame> temporal_frame;
-    if (active_mode == Mode::modern && swapchain != nullptr) {
-      const auto format = SDL_GetGPUSwapchainTextureFormat(device, window);
-      // Motion vectors are provisioned from this acquired frame's internal
-      // extent.  They are deliberately not bound below until a pass can write
-      // genuine per-pixel motion.  R16G16_FLOAT holds the conventional XY
-      // vector pair without manufacturing vector data from scene transforms.
-      if (!ensure_motion_vector_target(device, content_width, content_height,
-                                       SDL_GPU_TEXTUREFORMAT_R16G16_FLOAT,
-                                       motion_vector_target)) {
-        result = failure("motion-vector target creation failed");
-        SDL_SubmitGPUCommandBuffer(command);
-        SDL_WaitForGPUIdle(device);
-        release_overlay_transfers();
-        break;
-      }
-      if (!ensure_temporal_history_targets(device, content_width, content_height,
-                                           format, temporal_history_targets)) {
-        result = failure("temporal history target creation failed");
-        SDL_SubmitGPUCommandBuffer(command);
-        SDL_WaitForGPUIdle(device);
-        release_overlay_transfers();
-        break;
-      }
-      const graphics::TemporalHistoryTarget descriptor{
-          .width = content_width,
-          .height = content_height,
-          .format = static_cast<std::uint32_t>(format)};
-      static_cast<void>(temporal_history.configure(descriptor));
-      temporal_frame = temporal_history_frame.begin();
-      if (!temporal_frame) {
-        result = {.success = false,
-                  .message = "temporal history frame acquisition failed"};
-        SDL_SubmitGPUCommandBuffer(command);
-        SDL_WaitForGPUIdle(device);
-        release_overlay_transfers();
-        break;
-      }
-    }
-    // The diagnostic scene constructs a fresh local projection per draw, so it
-    // is a safe hook for Modern-only jitter. This remains only an input to the
-    // projection: no temporal resolve or upscaler is enabled by this binding.
-    std::optional<graphics::TemporalJitterSample> temporal_jitter_sample;
-    if (active_mode == Mode::modern && scene != nullptr) {
-      temporal_jitter_sample = temporal_jitter.next(
-          true, {swapchain_width, swapchain_height},
-          {content_width, content_height});
-      if (!temporal_jitter_sample) {
-        result = {.success = false, .message = "temporal jitter acquisition failed"};
-        SDL_SubmitGPUCommandBuffer(command);
-        SDL_WaitForGPUIdle(device);
-        release_overlay_transfers();
-        break;
-      }
-    }
+    // Modern mode remains spatial-only until a renderer binds and submits a
+    // complete temporal resolve pass.  In particular, do not acquire history,
+    // allocate vector/history targets, or jitter this scene's projection:
+    // doing any of those without a consuming resolve would change the image
+    // while still advertising no temporal capability.  The renderer-neutral
+    // TemporalHistoryLifecycle, TemporalJitterProvider and
+    // TemporalResolveInputLifecycle remain the contract for that future pass.
     SceneInstanceHistorySubmissionGuard scene_history_frame{
         scene_instance_history};
     if (scene != nullptr && swapchain != nullptr) {
@@ -1973,17 +1777,10 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
           if (bound_instance != draw.instance_index) {
             const auto scene_uniform = graphics::make_scene_diagnostic_matrices(
                 *scene, draw.instance_index, content_width, content_height);
-            auto jittered_uniform = scene_uniform;
-            if (temporal_jitter_sample) {
-              jittered_uniform.projection_view[12] +=
-                  temporal_jitter_sample->internal_ndc_offset[0];
-              jittered_uniform.projection_view[13] +=
-                  temporal_jitter_sample->internal_ndc_offset[1];
-            }
             std::array<float, 32> packed{};
-            std::copy(jittered_uniform.projection_view.begin(),
-                      jittered_uniform.projection_view.end(), packed.begin());
-            std::copy(jittered_uniform.model.begin(), jittered_uniform.model.end(),
+            std::copy(scene_uniform.projection_view.begin(),
+                      scene_uniform.projection_view.end(), packed.begin());
+            std::copy(scene_uniform.model.begin(), scene_uniform.model.end(),
                       packed.begin() + 16);
             SDL_PushGPUVertexUniformData(command, 0, packed.data(),
                                          sizeof(packed));
@@ -1996,26 +1793,6 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       if (diagnostic_intro_frame != nullptr)
         diagnostic_intro_frame->draw(command, pass);
       SDL_EndGPURenderPass(pass);
-
-      // Store the completed scene color before scale/presentation/UI.  The
-      // current renderer does not sample it yet; this is the real persistent
-      // history resource required before a temporal provider can be exposed.
-      if (temporal_frame) {
-        const SDL_GPUBlitInfo history_blit{
-            .source = {.texture = content_target,
-                       .w = content_width,
-                       .h = content_height},
-            .destination = {
-                .texture = temporal_history_targets
-                               .textures[temporal_frame->output_slot],
-                .w = content_width,
-                .h = content_height},
-            .load_op = SDL_GPU_LOADOP_DONT_CARE,
-            .flip_mode = SDL_FLIP_NONE,
-            .filter = SDL_GPU_FILTER_NEAREST,
-            .cycle = false};
-        SDL_BlitGPUTexture(command, &history_blit);
-      }
 
       if (content_target != presentation_target) {
         const SDL_GPUBlitInfo scale_blit{
@@ -2150,15 +1927,6 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       release_overlay_transfers();
       break;
     }
-    if (temporal_frame && !temporal_history_frame.commit()) {
-      result = {.success = false, .message = "temporal history frame commit failed"};
-      if (capture_transfer != nullptr)
-        SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
-      if (capture_texture != nullptr)
-        SDL_ReleaseGPUTexture(device, capture_texture);
-      release_overlay_transfers();
-      break;
-    }
     if (scene != nullptr && swapchain != nullptr &&
         !scene_history_frame.commit()) {
       result = {.success = false,
@@ -2237,8 +2005,6 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   gpu_intro.reset();
   release_overlay(device, overlay);
   release_startup_images(device, gpu_startup);
-  release_motion_vector_target(device, motion_vector_target);
-  release_temporal_history_targets(device, temporal_history_targets);
   release_render_scale_target(device, render_scale_target);
   release_scene(device, gpu);
   SDL_ReleaseWindowFromGPUDevice(device, window);

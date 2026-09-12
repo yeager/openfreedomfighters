@@ -40,8 +40,25 @@ jobs:
             --output-junit ctest-results.xml
           python3 -c 'import sys, xml.etree.ElementTree as ET; skipped=[case.attrib.get("name", "unnamed") for case in ET.parse("build/ctest-results.xml").iter("testcase") if case.find("skipped") is not None]; sys.exit("Skipped CTest cases: " + ", ".join(skipped) if skipped else 0)'
       - name: Package
+        shell: bash
         run: |
+          set -euo pipefail
           cmake --install build --prefix package
+          missing_data_root="$PWD/package/absent-game-data"
+          test ! -e "$missing_data_root"
+          missing_data_stdout="$PWD/missing-data.stdout"
+          missing_data_stderr="$PWD/missing-data.stderr"
+          status=0
+          SDL_VIDEODRIVER=dummy package/bin/openfreedomfighters \
+            --data "$missing_data_root" --locale en \
+            >"$missing_data_stdout" 2>"$missing_data_stderr" || status=$?
+          if [ "$status" -ne 3 ]; then
+            echo "installed missing-data launch exited with $status, expected 3" >&2
+            exit 1
+          fi
+          test ! -s "$missing_data_stdout"
+          test "$(tr -d '\r\n' < "$missing_data_stderr")" = \
+            "Game-data verification failed: game-data directory does not exist"
           cp README.md LICENSE THIRD_PARTY.md package/
           tar -czf OpenFreedomFighters-linux-x86_64.tar.gz -C package .
       - uses: actions/upload-artifact@v7
@@ -64,8 +81,25 @@ jobs:
           ninja -C build
           ctest --test-dir build -j4 --output-on-failure
       - name: Package
+        shell: bash
         run: |
+          set -euo pipefail
           cmake --install build --prefix package
+          missing_data_root="$PWD/package/absent-game-data"
+          test ! -e "$missing_data_root"
+          missing_data_stdout="$PWD/missing-data.stdout"
+          missing_data_stderr="$PWD/missing-data.stderr"
+          status=0
+          SDL_VIDEODRIVER=dummy package/bin/openfreedomfighters \
+            --data "$missing_data_root" --locale en \
+            >"$missing_data_stdout" 2>"$missing_data_stderr" || status=$?
+          if [ "$status" -ne 3 ]; then
+            echo "installed missing-data launch exited with $status, expected 3" >&2
+            exit 1
+          fi
+          test ! -s "$missing_data_stdout"
+          test "$(tr -d '\r\n' < "$missing_data_stderr")" = \
+            "Game-data verification failed: game-data directory does not exist"
           cp README.md LICENSE THIRD_PARTY.md package/
           tar -czf OpenFreedomFighters-macos.tar.gz -C package .
       - uses: actions/upload-artifact@v7
@@ -91,10 +125,21 @@ jobs:
       - name: Package
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           cmake --install build --config Release --prefix package
-          Copy-Item README.md, LICENSE, THIRD_PARTY.md package/
           $zlib = Get-ChildItem "${{ github.workspace }}/zlib-install/bin" -Filter '*.dll'
           if ($zlib) { Copy-Item $zlib.FullName package/bin/ }
+          $missingDataRoot = Join-Path (Get-Location) 'package/absent-game-data'
+          if (Test-Path -LiteralPath $missingDataRoot) { throw 'missing-data fixture root unexpectedly exists' }
+          $missingDataStdout = Join-Path (Get-Location) 'missing-data.stdout'
+          $missingDataStderr = Join-Path (Get-Location) 'missing-data.stderr'
+          & package/bin/openfreedomfighters.exe --data $missingDataRoot --locale en 1> $missingDataStdout 2> $missingDataStderr
+          $missingDataStatus = $LASTEXITCODE
+          if ($missingDataStatus -ne 3) { throw "installed missing-data launch exited with $missingDataStatus, expected 3" }
+          if ((Get-Item -LiteralPath $missingDataStdout).Length -ne 0) { throw 'installed missing-data launch wrote unexpected stdout' }
+          $missingDataMessage = [System.IO.File]::ReadAllText($missingDataStderr).TrimEnd("`r", "`n")
+          if ($missingDataMessage -cne 'Game-data verification failed: game-data directory does not exist') { throw "installed missing-data launch reported unexpected stderr: $missingDataMessage" }
+          Copy-Item README.md, LICENSE, THIRD_PARTY.md package/
           Compress-Archive -Path package/* -DestinationPath OpenFreedomFighters-windows-x64.zip
       - uses: actions/upload-artifact@v7
         with:

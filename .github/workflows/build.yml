@@ -111,6 +111,21 @@ jobs:
           project_version=$(sed -n 's/^project(OpenFreedomFighters VERSION \([^ ]*\) LANGUAGES .*)/\1/p' CMakeLists.txt)
           test -n "$project_version"
           test "$(install-check/bin/openfreedomfighters --version)" = "OpenFreedomFighters $project_version"
+          missing_data_root="$PWD/install-check/absent-game-data"
+          test ! -e "$missing_data_root"
+          missing_data_stdout="$PWD/missing-data.stdout"
+          missing_data_stderr="$PWD/missing-data.stderr"
+          status=0
+          SDL_VIDEODRIVER=dummy install-check/bin/openfreedomfighters \
+            --data "$missing_data_root" --locale en \
+            >"$missing_data_stdout" 2>"$missing_data_stderr" || status=$?
+          if [ "$status" -ne 3 ]; then
+            echo "installed missing-data launch exited with $status, expected 3" >&2
+            exit 1
+          fi
+          test ! -s "$missing_data_stdout"
+          test "$(tr -d '\r\n' < "$missing_data_stderr")" = \
+            "Game-data verification failed: game-data directory does not exist"
       - name: Run Python analysis-tool tests
         run: |
           python3 -m pip install --requirement requirements-analysis.txt
@@ -152,6 +167,21 @@ jobs:
           project_version=$(sed -n 's/^project(OpenFreedomFighters VERSION \([^ ]*\) LANGUAGES .*)/\1/p' CMakeLists.txt)
           test -n "$project_version"
           test "$(install-check/bin/openfreedomfighters --version)" = "OpenFreedomFighters $project_version"
+          missing_data_root="$PWD/install-check/absent-game-data"
+          test ! -e "$missing_data_root"
+          missing_data_stdout="$PWD/missing-data.stdout"
+          missing_data_stderr="$PWD/missing-data.stderr"
+          status=0
+          SDL_VIDEODRIVER=dummy install-check/bin/openfreedomfighters \
+            --data "$missing_data_root" --locale en \
+            >"$missing_data_stdout" 2>"$missing_data_stderr" || status=$?
+          if [ "$status" -ne 3 ]; then
+            echo "installed missing-data launch exited with $status, expected 3" >&2
+            exit 1
+          fi
+          test ! -s "$missing_data_stdout"
+          test "$(tr -d '\r\n' < "$missing_data_stderr")" = \
+            "Game-data verification failed: game-data directory does not exist"
       - name: Verify intro GPU rendering and presentation on Metal when available
         run: OFF_PICTURE_SHADER_TEST_DRIVER=metal ctest --test-dir build -R '^off_sdl_(picture_stage_shader|intro_renderer|intro_presentation)_tests$' -V
 
@@ -186,6 +216,16 @@ jobs:
           $versionOutput = & install-check/bin/openfreedomfighters.exe --version
           if ($LASTEXITCODE -ne 0) { throw "installed executable --version failed with exit code $LASTEXITCODE" }
           if ($versionOutput -ne "OpenFreedomFighters $projectVersion") { throw "installed executable reported unexpected version: $versionOutput" }
+          $missingDataRoot = Join-Path (Get-Location) 'install-check/absent-game-data'
+          if (Test-Path -LiteralPath $missingDataRoot) { throw 'missing-data fixture root unexpectedly exists' }
+          $missingDataStdout = Join-Path (Get-Location) 'missing-data.stdout'
+          $missingDataStderr = Join-Path (Get-Location) 'missing-data.stderr'
+          & install-check/bin/openfreedomfighters.exe --data $missingDataRoot --locale en 1> $missingDataStdout 2> $missingDataStderr
+          $missingDataStatus = $LASTEXITCODE
+          if ($missingDataStatus -ne 3) { throw "installed missing-data launch exited with $missingDataStatus, expected 3" }
+          if ((Get-Item -LiteralPath $missingDataStdout).Length -ne 0) { throw 'installed missing-data launch wrote unexpected stdout' }
+          $missingDataMessage = [System.IO.File]::ReadAllText($missingDataStderr).TrimEnd("`r", "`n")
+          if ($missingDataMessage -cne 'Game-data verification failed: game-data directory does not exist') { throw "installed missing-data launch reported unexpected stderr: $missingDataMessage" }
       - name: Verify intro GPU rendering and presentation on D3D12 when available
         shell: pwsh
         run: |

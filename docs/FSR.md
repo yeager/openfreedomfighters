@@ -3,8 +3,8 @@
 AMD FidelityFX Super Resolution (FSR) is the planned optional AMD
 super-resolution backend for Modern+. It is never required to run the game.
 The F10 graphics menu stores an FSR request, but the current renderer reports
-the capability as unavailable and deterministically falls back to portable
-temporal upscaling or native rendering.
+the capability as unavailable and deterministically uses the available
+spatial/native path. It does not expose a temporal fallback.
 
 ## Boundary
 
@@ -30,8 +30,9 @@ input, saves, replay hashes, or mission state.
    frame pacing, and safe fallback behavior on AMD and non-AMD hardware.
 5. Report the actual runtime version; never label a fallback path as FSR.
 
-Until these gates are complete, FSR intent is safely retained and the portable
-path stays available on Windows, Linux, Steam Deck, and macOS where supported.
+Until these gates are complete, FSR intent is safely retained and the spatial
+path stays available on Windows, Linux, Steam Deck, and macOS. A portable
+temporal path is a separate future deliverable, not a current fallback.
 
 ## Primary references
 

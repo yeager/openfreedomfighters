@@ -5,8 +5,8 @@
 Intel Xe Super Sampling Super Resolution (XeSS-SR) is the optional Intel
 counterpart to DLSS Super Resolution for Modern+. It is never required to run
 the game. The F10 graphics menu stores a XeSS request, but the current SDL-GPU
-renderer cannot activate it and resolves the request to portable temporal or
-native rendering instead.
+renderer cannot activate it and resolves the request to the available
+spatial/native path instead. It does not expose a temporal fallback.
 
 ## Required renderer boundary
 

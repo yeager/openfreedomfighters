@@ -15,7 +15,7 @@ or save-state results.
 | Widescreen and ultrawide | Corrected projection | Native | Native |
 | Presentation frame rate | Reference-compatible option | Unlocked where safe | Unlocked where safe |
 | Texture filtering | Reference path | Anisotropic and stable mip selection | Same, with replacement maps |
-| Anti-aliasing | Reference-compatible | Temporal or high-quality spatial AA | Same, plus optional DLSS 4.5 on supported RTX hardware; future FSR support remains separately capability-gated |
+| Anti-aliasing | Reference-compatible | Planned: temporal or high-quality spatial AA | Same, plus optional DLSS 4.5 on supported RTX hardware; future FSR support remains separately capability-gated |
 | Lighting and shadows | Reproduced original model | Higher-resolution dynamic path | Optional authored relighting |
 | Color output | SDR reference transform | SDR/HDR tone mapping | SDR/HDR tone mapping |
 | Effects | Reference particles and blending | Improved particles, water, glass, smoke, and explosions | Optional authored effects |
@@ -70,11 +70,17 @@ render the same material semantics even when their native graphics backends diff
 
 ## Temporal upscaling, DLSS, FSR, and XeSS
 
-Modern always retains a portable native-resolution and temporal anti-aliasing
-path. The renderer-facing temporal interface owns color, depth, motion vectors,
-exposure, jitter, reactive-mask, and HUD-less inputs; UI is composed afterward at
-output resolution. This contract allows quality-equivalent fallbacks on AMD,
-Intel, Apple, and Steam Deck hardware without affecting simulation state.
+The current SDL Modern path is spatial-only. It can render scene content at a
+fixed user-selected internal scale and linearly scale that result to the output;
+UI is composed at output resolution. It does not implement or expose temporal
+anti-aliasing, temporal reconstruction, dynamic resolution, or a portable
+temporal fallback/resolver.
+
+The planned renderer-facing temporal interface will own color, depth, motion
+vectors, exposure, jitter, reactive-mask, and HUD-less inputs. It will compose
+UI afterward at output resolution. That future contract is intended to support
+portable temporal and vendor backends without affecting simulation state; it is
+not an active fallback today.
 
 The runtime derives its available upscalers from completed renderer bindings,
 not configuration defaults, product names, or detected libraries. A binding must
@@ -93,26 +99,27 @@ behavior.
 Modern+ targets the documented DLSS 4.5 release as an optional NVIDIA RTX backend.
 The integration must use NVIDIA's official SDK and redistributable binaries, expose
 the supported quality presets, and report the loaded runtime version exactly.
-Capability checks choose between DLSS 4.5, the portable temporal path, or native
-rendering at runtime. Original mode does not enable DLSS by default. macOS and
-non-RTX devices use the equivalent portable controls and never lose a quality or
+When implemented, capability checks will choose between DLSS 4.5, a portable
+temporal path, or spatial/native rendering at runtime. Original mode will not
+enable DLSS by default. macOS and non-RTX devices must not lose a quality or
 resolution option merely because DLSS is unavailable.
 
 Intel XeSS-SR is the corresponding optional Intel super-resolution backend. Its
-F10 selection is retained as intent and resolves to portable temporal or native
-rendering until the active renderer can supply the native D3D12 or Vulkan command
-objects and temporal inputs required by Intel's SDK. It is not currently loaded
-or labeled as active. The [XeSS plan](XESS.md) records the supported API and
-packaging boundary.
+F10 selection is retained as intent and currently resolves to the available
+spatial/native path until the active renderer can supply the native D3D12 or
+Vulkan command objects and temporal inputs required by Intel's SDK. It is not
+currently loaded or labeled as active. The [XeSS plan](XESS.md) records the
+supported API and packaging boundary.
 
-AMD GPUs use the same native-resolution and portable temporal paths as every
-other supported adapter. The F10 menu can retain an FSR request, but resolves it
-to portable temporal or native rendering until a verified AMD adapter is loaded.
-FSR is never a substitute label for that path. A future optional FSR adapter may
+AMD GPUs use the same currently available spatial/native path as every other
+supported adapter. The F10 menu can retain an FSR request, but resolves it to
+that path until a verified AMD adapter is loaded. FSR is never a substitute label
+for that path. A future optional FSR adapter may
 use AMD's official SDK only after its supported APIs, platforms, redistribution
 terms, motion-vector and exposure requirements, and image-quality behavior are
-verified. Its absence must never remove native, temporal, resolution, or quality
-controls. The [FSR plan](FSR.md) owns that integration boundary.
+verified. Its absence must never remove resolution or quality controls. Temporal
+controls must remain unavailable until a real temporal resolver exists. The
+[FSR plan](FSR.md) owns that integration boundary.
 
 A future DLSS 5 backend is not a current deliverable. It may replace or supplement
 4.5 only after NVIDIA publishes official documentation, an SDK, platform support,

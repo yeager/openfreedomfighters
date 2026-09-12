@@ -15,8 +15,7 @@ platform support, compatible redistribution terms, and image-quality validation.
 
 ## Renderer contract
 
-The engine owns a vendor-neutral temporal-upscaler interface. Its frame input
-contains:
+The planned engine-owned vendor-neutral temporal-upscaler interface will accept:
 
 - jittered render-resolution color;
 - linear depth with the projection convention recorded explicitly;
@@ -27,19 +26,22 @@ contains:
 - camera reset, cut, resize, and history-invalidation flags; and
 - an output-resolution destination that is complete before UI composition.
 
-The interface is implemented by native-resolution, portable temporal, and DLSS
-adapters. A future FSR adapter may use the same contract only after its official
-SDK and platform requirements are validated. Simulation, input sampling, audio, saves, and replay state never depend
-on the selected adapter or on generated presentation frames.
+No temporal adapter or resolver is currently implemented or exposed. The SDL
+Modern path is spatial-only: fixed render scaling followed by linear output
+scaling. Native-resolution, portable temporal, and DLSS adapters are future
+implementations of this contract. A future FSR adapter may use the same contract
+only after its official SDK and platform requirements are validated. Simulation,
+input sampling, audio, saves, and replay state never depend on the selected
+adapter or on generated presentation frames.
 
 ## Platform and packaging policy
 
 At startup the renderer checks the active graphics API, GPU vendor and capability,
 driver requirements, SDK availability, and feature support. It exposes DLSS only
 when all checks succeed. Unsupported NVIDIA hardware, AMD, Intel, Apple, and Steam
-Deck devices retain the same internal-resolution controls through the portable
-path. The settings file stores intent rather than assuming that a previously used
-backend remains available.
+Deck devices retain the same internal-resolution controls through the current
+spatial path. The settings file stores intent rather than assuming that a
+previously used backend remains available.
 
 Only binaries that NVIDIA explicitly permits the project to redistribute may be
 packaged. Proprietary SDK source, developer credentials, sample assets, and
