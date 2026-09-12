@@ -128,13 +128,22 @@ bool replace(const std::filesystem::path &from,
 } // namespace
 GraphicsSettingsLoadResult
 load_graphics_settings(const std::filesystem::path &path) {
+  std::error_code status_error;
+  const auto status = std::filesystem::status(path, status_error);
+  if (status_error == std::errc::no_such_file_or_directory)
+    return {GraphicsSettingsLoadStatus::missing, {}};
+  if (status_error)
+    return {GraphicsSettingsLoadStatus::io_error, {}};
+  if (!std::filesystem::exists(status))
+    return {GraphicsSettingsLoadStatus::missing, {}};
+  // Opening a directory is platform-dependent: some standard-library
+  // implementations accept it and report an empty stream, while others fail
+  // immediately. Settings are a regular file on every supported platform.
+  if (!std::filesystem::is_regular_file(status))
+    return {GraphicsSettingsLoadStatus::io_error, {}};
   std::ifstream in(path, std::ios::binary);
   if (!in) {
-    std::error_code ec;
-    const bool exists = std::filesystem::exists(path, ec);
-    return {(!ec && !exists) ? GraphicsSettingsLoadStatus::missing
-                             : GraphicsSettingsLoadStatus::io_error,
-            {}};
+    return {GraphicsSettingsLoadStatus::io_error, {}};
   }
   std::string d(max_document + 1, '\0');
   in.read(d.data(), static_cast<std::streamsize>(d.size()));

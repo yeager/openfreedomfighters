@@ -74,14 +74,14 @@ int main() {
   const auto *profile_value = find_text(reference, "Modern");
   const auto *shadows = find_text(reference, "Shadows");
   const auto *action = find_text(reference, "Apply");
-  check(title != nullptr && near(title->x, 60.0F) && near(title->y, 120.0F) &&
-            profile != nullptr && near(profile->x, 60.0F) &&
-            near(profile->y, 150.0F) && profile_value != nullptr &&
-            near(profile_value->x, 400.0F) && near(profile_value->y, 150.0F) &&
-            shadows != nullptr && near(shadows->y, 258.0F) &&
-            action != nullptr && near(action->x, 60.0F) &&
+  check(title != nullptr && near(title->x, 190.0F) && near(title->y, 138.0F) &&
+            profile != nullptr && near(profile->x, 190.0F) &&
+            near(profile->y, 160.0F) && profile_value != nullptr &&
+            near(profile_value->x, 400.0F) && near(profile_value->y, 160.0F) &&
+            shadows != nullptr && near(shadows->y, 268.0F) &&
+            action != nullptr && near(action->x, 190.0F) &&
             near(action->y, 294.0F),
-        "16:9 uses project-authored menu anchors and seven-slot rhythm");
+        "16:9 uses source-free anchors measured from owned runtime observation");
   const auto swedish = off::ui::build_graphics_menu_draw_list(
       menu, {640, 480}, now, 1.0F, "sv-SE", "en-US");
   check(has_text(swedish, "GRAFIKINSTÄLLNINGAR") &&
@@ -154,8 +154,8 @@ int main() {
   const auto widescreen =
       off::ui::build_graphics_menu_draw_list(menu, {1280, 720}, now);
   const auto *wide_title = find_text(widescreen, "GRAPHICS SETTINGS");
-  check(wide_title != nullptr && near(wide_title->x, 120.0F) &&
-            near(wide_title->y, 240.0F),
+  check(wide_title != nullptr && near(wide_title->x, 380.0F) &&
+            near(wide_title->y, 276.0F),
         "widescreen fills an aspect-preserving 16:9 authored viewport");
   const auto first =
       off::ui::build_graphics_menu_draw_list(menu, {1280, 720}, now);
@@ -184,7 +184,7 @@ int main() {
   const auto *apply_text = find_text(apply_state, "Apply");
   const auto *back_text = find_text(back_state, "Back");
   check(apply_text != nullptr && back_text != nullptr &&
-            near(apply_text->x, 60.0F) && near(back_text->x, 240.0F) &&
+            near(apply_text->x, 190.0F) && near(back_text->x, 340.0F) &&
             near(apply_text->y, 294.0F) && near(back_text->y, 294.0F) &&
             apply_state.hit_targets[7].control == off::ui::UiControl::apply &&
             back_state.hit_targets[8].control == off::ui::UiControl::cancel &&

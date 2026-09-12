@@ -40,6 +40,12 @@ MovieControl factory. The surrounding base implementation is shared by other
 visual classes. It is therefore insufficient evidence for a public callback
 contract.
 
+A later private Ghidra xref reduction reached the same boundary: the class
+registration name is reachable through data, but that data path has no direct
+code reference from which a single phase-one callback can be identified. This
+is a negative result, not a fallback license to infer a callback. Dynamic,
+source-free lifecycle observation remains required.
+
 ## Required private observation
 
 Use an isolated, owned installation to record a source-free lifecycle trace

@@ -214,16 +214,17 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
   };
   out.rectangles.push_back({UiLayer::backdrop, {0, 0, width, height}, dim});
   out.rectangles.push_back({UiLayer::panel, panel_rect, panel});
-  // Project-authored 16:9 menu treatment. It preserves the observed broad
-  // cinematic composition without using retail backgrounds or UI pixels.
+  // Project-authored 16:9 menu treatment. Its position and narrow central
+  // band follow private runtime measurements; it does not reuse retail
+  // backgrounds, UI pixels, or text.
   out.rectangles.push_back(
-      {UiLayer::panel, reference_rect(0.0F, 88.0F, 640.0F, 184.0F),
+      {UiLayer::panel, reference_rect(0.0F, 80.0F, 640.0F, 128.0F),
        scene_strip});
   out.rectangles.push_back(
-      {UiLayer::panel, reference_rect(0.0F, 88.0F, 640.0F, 38.0F),
+      {UiLayer::panel, reference_rect(0.0F, 80.0F, 640.0F, 26.0F),
        scene_shadow});
   out.rectangles.push_back(
-      {UiLayer::panel, reference_rect(0.0F, 234.0F, 640.0F, 38.0F),
+      {UiLayer::panel, reference_rect(0.0F, 182.0F, 640.0F, 26.0F),
        scene_shadow});
 
   auto add_text = [&](UiLayer layer, float x, float y, std::string text,
@@ -248,7 +249,7 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
     }
     return out;
   };
-  if (!add_text(UiLayer::content, point_x(60.0F), point_y(120.0F),
+  if (!add_text(UiLayer::content, point_x(190.0F), point_y(138.0F),
                 localized(l10n::MessageId::graphics_settings, explicit_locale,
                           platform_locales))) {
     out.rectangles.clear();
@@ -266,16 +267,16 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
               .count();
       seconds = (milliseconds + 999) / 1000;
     }
-    add_text(UiLayer::modal, point_x(60.0F), point_y(150.0F),
+    add_text(UiLayer::modal, point_x(190.0F), point_y(160.0F),
              localized(l10n::MessageId::keep_display_settings, explicit_locale,
                        platform_locales));
     const auto countdown = l10n::f10_catalog().format_seconds(
         l10n::MessageId::reverting_in_seconds, static_cast<unsigned>(seconds),
         explicit_locale, platform_locales);
-    add_text(UiLayer::modal, point_x(60.0F), point_y(168.0F),
+    add_text(UiLayer::modal, point_x(190.0F), point_y(178.0F),
              countdown ? std::string{*countdown} : std::string{});
-    const UiRect keep = reference_rect(60.0F, 294.0F, 150.0F, 18.0F);
-    const UiRect revert = reference_rect(230.0F, 294.0F, 150.0F, 18.0F);
+    const UiRect keep = reference_rect(190.0F, 294.0F, 130.0F, 18.0F);
+    const UiRect revert = reference_rect(340.0F, 294.0F, 130.0F, 18.0F);
     out.hit_targets.push_back({keep, UiControl::keep, seconds > 0});
     out.hit_targets.push_back({revert, UiControl::revert, true});
     add_text(
@@ -289,7 +290,7 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
 
   if (menu.phase() == GraphicsMenuPhase::applying ||
       menu.phase() == GraphicsMenuPhase::reverting) {
-    add_text(UiLayer::modal, point_x(60.0F), point_y(150.0F),
+    add_text(UiLayer::modal, point_x(190.0F), point_y(160.0F),
              menu.phase() == GraphicsMenuPhase::applying
                  ? localized(l10n::MessageId::applying_settings,
                              explicit_locale, platform_locales)
@@ -324,22 +325,21 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
                             UiControl::shadows};
   static_assert(labels.size() == visible_option_slots);
   for (std::size_t i = 0; i < visible_option_slots; ++i) {
-    const float reference_y = 150.0F + static_cast<float>(i) * 18.0F;
+    const float reference_y = 160.0F + static_cast<float>(i) * 18.0F;
     // The broad pointer target is a portable accessibility policy. Retail
     // evidence supplies the anchors and rhythm, but not the final hit box.
     const UiRect bounds =
-        reference_rect(60.0F, reference_y - 2.0F, 520.0F, 18.0F);
+        reference_rect(190.0F, reference_y - 2.0F, 380.0F, 18.0F);
     out.hit_targets.push_back({bounds, controls[i], true});
     const bool selected = static_cast<std::size_t>(menu.selected_row()) == i;
     const UiColor row_color = selected ? white : muted;
-    add_text(UiLayer::content, point_x(60.0F), point_y(reference_y), labels[i],
+    add_text(UiLayer::content, point_x(190.0F), point_y(reference_y), labels[i],
              row_color);
     add_text(UiLayer::content, point_x(400.0F), point_y(reference_y),
              values[i], row_color);
   }
   // Project diagnostic extension: expose all actions for pointer access.
-  // Only the first anchor comes from retail layout evidence; these three
-  // simultaneously accessible controls are not a recovered retail layout.
+  // The simultaneous actions are not a recovered retail submenu layout.
   constexpr std::array actions{UiControl::apply, UiControl::cancel,
                                UiControl::defaults};
   constexpr std::array action_rows{GraphicsMenuRow::apply,
@@ -350,9 +350,9 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
       localized(l10n::MessageId::back, explicit_locale, platform_locales),
       localized(l10n::MessageId::defaults, explicit_locale, platform_locales)};
   for (std::size_t i = 0; i < actions.size(); ++i) {
-    const float x = 60.0F + static_cast<float>(i) * 180.0F;
+    const float x = 190.0F + static_cast<float>(i) * 150.0F;
     out.hit_targets.push_back(
-        {reference_rect(x, 292.0F, 160.0F, 18.0F), actions[i], true});
+        {reference_rect(x, 292.0F, 130.0F, 18.0F), actions[i], true});
     add_text(UiLayer::content, point_x(x), point_y(294.0F), action_labels[i],
              menu.selected_row() == action_rows[i] ? white : muted);
   }

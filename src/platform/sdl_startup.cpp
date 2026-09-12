@@ -51,15 +51,10 @@ StartupSplashOverlayLayout startup_splash_overlay_layout(int width,
 }
 
 std::filesystem::path application_deep_audit_cache_root() noexcept {
-  char *raw_path =
-      SDL_GetPrefPath("OpenFreedomFighters", "OpenFreedomFighters");
-  if (raw_path != nullptr && *raw_path != '\0') {
-    std::unique_ptr<char, decltype(&SDL_free)> path{raw_path, SDL_free};
-    return std::filesystem::path{path.get()} / "cache" / "deep-audit";
-  }
-  // Headless integrity checks do not initialize SDL's video subsystem. Keep a
-  // cache root in the native per-user cache location when SDL cannot provide
-  // one, so a successful deep audit is reusable by --verify-only and probes.
+  // This path is also used by headless integrity checks. SDL's preference-path
+  // implementation keeps process-global environment/TLS state on some
+  // platforms, which makes that otherwise short-lived check look like a leak
+  // to LeakSanitizer. Use the same native per-user cache policy directly.
 #if defined(_WIN32)
   if (const auto *local_app_data = std::getenv("LOCALAPPDATA");
       local_app_data && *local_app_data) {

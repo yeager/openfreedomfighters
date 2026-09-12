@@ -247,21 +247,15 @@ bidirectional and complex-script shaping, and recovered retail styling remain
 open. Mixed-script LTR labels use per-scalar retail-font fallback runs aligned
 to a shared baseline; this is not a substitute for shaping.
 
-Stage 4 has recovered the authored coordinate space, title and two-column
-anchors, row rhythm, and shared action anchor. A fail-closed startup extractor
-now identifies eight neutral row owners and binds each to one persistent
-one-group background plus two five-group chrome instances co-gated by the same
-visibility-state mask. This does not establish GPU draw scheduling. It
-preserves complete inclusive root-to-instance construction and local-transform
-chains without composing them. A private GPU screenshot against a verified
-owned install confirms the current Swedish F10 layout and retail-font path, but
-also confirms that these recovered startup picture instances are uploaded only:
-they are not yet submitted by the overlay draw list. No screenshot or retail
-pixels are retained in this repository.
-The current focus rectangle remains explicitly project-authored diagnostic UI;
-the two chrome siblings are not focused/normal alternatives. Retail draw order,
-GPU transform composition, motion, sound cues, and action behavior mapping are
-still incomplete.
+Stage 4 retains a source-backed startup coordinate model and neutral row-owner
+relations. It does not establish a retail F10 submenu, a GPU draw schedule, or
+the semantics of the recovered chrome. A private owned-runtime menu observation
+provides the narrow central-band and heading/option anchor used by the
+source-free F10 composition; its settings rows, second column, actions and
+focus are project-authored controls. The observation is not retained here, and
+no screenshot, retail text, or retail pixels are included in the repository.
+Retail draw order, GPU transform composition, motion, sound cues, typography,
+and action behavior mapping remain incomplete.
 
 The recovered visibility evaluator keeps exactly one of the duplicate final-slot
 rows authored-hidden. Initial state `0x01` exposes seven backgrounds and both
