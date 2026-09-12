@@ -89,6 +89,16 @@ struct GpuTemporalHistoryTargets {
   SDL_GPUTextureFormat format{SDL_GPU_TEXTUREFORMAT_INVALID};
 };
 
+// This is intentionally only storage plumbing.  No current pass attaches,
+// clears, samples, or otherwise exposes this texture: a future renderer must
+// first provide a real vector-writing pass and its matching consumer.
+struct GpuMotionVectorTarget {
+  SDL_GPUTexture *texture{nullptr};
+  Uint32 width{0};
+  Uint32 height{0};
+  SDL_GPUTextureFormat format{SDL_GPU_TEXTUREFORMAT_INVALID};
+};
+
 class TemporalHistoryFrameGuard {
 public:
   explicit TemporalHistoryFrameGuard(graphics::TemporalHistoryLifecycle &history)
@@ -207,6 +217,44 @@ void release_temporal_history_targets(SDL_GPUDevice *device,
     if (texture != nullptr)
       SDL_ReleaseGPUTexture(device, texture);
   targets = {};
+}
+
+void release_motion_vector_target(SDL_GPUDevice *device,
+                                  GpuMotionVectorTarget &target) {
+  if (target.texture != nullptr)
+    SDL_ReleaseGPUTexture(device, target.texture);
+  target = {};
+}
+
+[[nodiscard]] bool ensure_motion_vector_target(
+    SDL_GPUDevice *device, Uint32 width, Uint32 height,
+    SDL_GPUTextureFormat format, GpuMotionVectorTarget &target) {
+  if (width == 0 || height == 0 || format == SDL_GPU_TEXTUREFORMAT_INVALID)
+    return false;
+  if (target.texture != nullptr && target.width == width &&
+      target.height == height && target.format == format)
+    return true;
+  if (target.texture != nullptr) {
+    if (!SDL_WaitForGPUIdle(device))
+      return false;
+    release_motion_vector_target(device, target);
+  }
+  const SDL_GPUTextureCreateInfo info{
+      .type = SDL_GPU_TEXTURETYPE_2D,
+      .format = format,
+      .usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET,
+      .width = width,
+      .height = height,
+      .layer_count_or_depth = 1,
+      .num_levels = 1,
+      .sample_count = SDL_GPU_SAMPLECOUNT_1};
+  target.texture = SDL_CreateGPUTexture(device, &info);
+  if (target.texture == nullptr)
+    return false;
+  target.width = width;
+  target.height = height;
+  target.format = format;
+  return true;
 }
 
 [[nodiscard]] bool ensure_temporal_history_targets(
@@ -1394,6 +1442,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   Mode active_mode = mode;
   GpuRenderScaleTarget render_scale_target;
   GpuTemporalHistoryTargets temporal_history_targets;
+  GpuMotionVectorTarget motion_vector_target;
   graphics::TemporalHistoryLifecycle temporal_history;
   graphics::TemporalJitterProvider temporal_jitter;
   Mode temporal_history_mode = active_mode;
@@ -1682,6 +1731,19 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     std::optional<graphics::TemporalHistoryFrame> temporal_frame;
     if (active_mode == Mode::modern && swapchain != nullptr) {
       const auto format = SDL_GetGPUSwapchainTextureFormat(device, window);
+      // Motion vectors are provisioned from this acquired frame's internal
+      // extent.  They are deliberately not bound below until a pass can write
+      // genuine per-pixel motion.  R16G16_FLOAT holds the conventional XY
+      // vector pair without manufacturing vector data from scene transforms.
+      if (!ensure_motion_vector_target(device, content_width, content_height,
+                                       SDL_GPU_TEXTUREFORMAT_R16G16_FLOAT,
+                                       motion_vector_target)) {
+        result = failure("motion-vector target creation failed");
+        SDL_SubmitGPUCommandBuffer(command);
+        SDL_WaitForGPUIdle(device);
+        release_overlay_transfers();
+        break;
+      }
       if (!ensure_temporal_history_targets(device, content_width, content_height,
                                            format, temporal_history_targets)) {
         result = failure("temporal history target creation failed");
@@ -2039,6 +2101,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   gpu_intro.reset();
   release_overlay(device, overlay);
   release_startup_images(device, gpu_startup);
+  release_motion_vector_target(device, motion_vector_target);
   release_temporal_history_targets(device, temporal_history_targets);
   release_render_scale_target(device, render_scale_target);
   release_scene(device, gpu);
