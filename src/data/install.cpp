@@ -90,6 +90,14 @@ InstallVerification verify_install(const std::filesystem::path &root,
     const auto candidate = canonical_root / name;
     error.clear();
     const auto status = std::filesystem::symlink_status(candidate, error);
+    // The supported Windows filename has two accepted spellings.  On a
+    // case-sensitive host (Linux, Steam Deck, and many macOS volumes), the
+    // spelling that is not present reports ENOENT through the error_code
+    // overload.  That is an expected alternative-name miss, not an I/O error.
+    if (error == std::errc::no_such_file_or_directory ||
+        status.type() == std::filesystem::file_type::not_found) {
+      continue;
+    }
     if (error) {
       return failure(InstallError::io_error, root,
                      "could not inspect Freedom.Exe");

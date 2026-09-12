@@ -47,6 +47,12 @@ int main() {
     std::cout << "SKIP: symbolic-link fixture unavailable: " << error.message() << '\n';
   }
 
+  const auto single_spelling_root = work / "single-spelling";
+  write(single_spelling_root / "Freedom.Exe");
+  const auto single_spelling = off::data::verify_install(single_spelling_root);
+  check(single_spelling.error == off::data::InstallError::unsupported_executable_size,
+        "a missing alternate executable spelling is not an I/O failure");
+
   const auto case_root = work / "case-spellings";
   write(case_root / "Freedom.Exe");
   write(case_root / "Freedom.exe");
