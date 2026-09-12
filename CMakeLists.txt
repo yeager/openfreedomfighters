@@ -106,6 +106,7 @@ add_library(off_core
     src/graphics/render_assets.cpp
     src/graphics/render_preview.cpp
     src/graphics/render_scale.cpp
+    src/graphics/temporal_history.cpp
     src/graphics/scene_render.cpp
     src/graphics/scene_gpu_plan.cpp
     src/graphics/intro_renderer_relocation_prefix.cpp
@@ -633,6 +634,9 @@ if(BUILD_TESTING)
     add_executable(off_render_scale_tests tests/render_scale_tests.cpp)
     target_link_libraries(off_render_scale_tests PRIVATE off_core)
     add_test(NAME off_render_scale_tests COMMAND off_render_scale_tests)
+    add_executable(off_temporal_history_tests tests/temporal_history_tests.cpp)
+    target_link_libraries(off_temporal_history_tests PRIVATE off_core)
+    add_test(NAME off_temporal_history_tests COMMAND off_temporal_history_tests)
 
     add_executable(off_scene_archive_selection_tests
         tests/scene_archive_selection_tests.cpp)
