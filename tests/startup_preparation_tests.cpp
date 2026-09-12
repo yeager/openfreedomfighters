@@ -1,5 +1,6 @@
 #include "off/platform/startup_preparation.hpp"
 
+#include <array>
 #include <future>
 #include <iostream>
 #include <stdexcept>
@@ -50,6 +51,31 @@ int main() {
         "verification failure never starts asset preparation");
   check(stages == std::vector{StartupPreparationStage::verifying_game_data},
         "failed verification never reports asset preparation");
+  // Every verifier rejection, including an unsupported executable and an
+  // incomplete install, must stop at the same source-free boundary.  The SDL
+  // shell can then report the localized verifier failure without asking any
+  // game-data loader to open an asset.
+  constexpr std::array invalid_install_errors{
+      off::data::InstallError::missing_executable,
+      off::data::InstallError::unsupported_executable_hash,
+      off::data::InstallError::incomplete_game_data,
+      off::data::InstallError::io_error,
+  };
+  for (const auto error : invalid_install_errors) {
+    stages.clear();
+    result = prepare_startup_cpu(
+        [error] {
+          return off::data::InstallVerification{
+              .error = error, .message = "test invalid game data"};
+        },
+        prepare, cancelled,
+        [&](StartupPreparationStage stage) { stages.push_back(stage); });
+    check(result.outcome == StartupPreparationOutcome::verification_error &&
+              prepare_calls == 1,
+          "each invalid install result prevents game-asset preparation");
+    check(stages == std::vector{StartupPreparationStage::verifying_game_data},
+          "each invalid install result remains in the verifier stage");
+  }
   result = prepare_startup_cpu(
       []() -> off::data::InstallVerification {
         throw std::runtime_error("test verify failure");
