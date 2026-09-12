@@ -34,7 +34,9 @@ validator never creates target-specific information.
 
 Both input and output must be outside the repository, must differ, and the
 output must be new. The command refuses an existing output rather than
-overwriting it:
+overwriting it. It reads and creates the final entries with no-follow file
+descriptors, accepts only regular input files up to 64 KiB, and creates the
+canonical output mode `0600`:
 
 ```sh
 python3 tools/movie_control_observer_probe_plan.py \

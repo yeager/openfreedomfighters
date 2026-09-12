@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
+import stat
 import sys
 from typing import Any
 
@@ -19,6 +21,7 @@ from typing import Any
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent
 INPUT_FORMAT = "off.movie-control-observer-probe-plan.raw/v1"
 OUTPUT_FORMAT = "off.movie-control-observer-probe-plan/v1"
+MAX_PLAN_BYTES = 64 * 1024
 
 # These labels are observer-protocol positions, not retail identities, target
 # selectors, function names, or instructions to a debugger.
@@ -70,10 +73,51 @@ def validate_probe_plan(raw: Any) -> dict[str, Any]:
 
 
 def _outside_repository(path: pathlib.Path, label: str) -> pathlib.Path:
+    if path.is_symlink():
+        raise ValueError(f"{label} must not be a symlink")
     resolved = path.resolve()
     if resolved.is_relative_to(REPOSITORY_ROOT):
         raise ValueError(f"{label} must be outside the repository")
     return resolved
+
+
+def _read_private_json_no_follow(path: pathlib.Path, label: str) -> Any:
+    """Read the operator's final file entry without following a symlink."""
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    if no_follow is None:
+        raise ValueError(f"platform cannot safely read {label}")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | no_follow)
+    except OSError as error:
+        raise ValueError(f"{label} must be a regular private file") from error
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError(f"{label} must be a regular private file")
+        if metadata.st_size > MAX_PLAN_BYTES:
+            raise ValueError(f"{label} exceeds the probe-plan size limit")
+        with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as stream:
+            return json.load(stream)
+    finally:
+        os.close(descriptor)
+
+
+def _write_new_private_json_no_follow(path: pathlib.Path, record: dict[str, Any]) -> None:
+    """Create one private canonical plan without a replaceable output entry."""
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    if no_follow is None:
+        raise ValueError("platform cannot safely write probe plan")
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | no_follow,
+                             0o600)
+    except OSError as error:
+        raise ValueError("refusing to overwrite an existing private probe plan") from error
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", closefd=False) as stream:
+            json.dump(record, stream, indent=2)
+            stream.write("\n")
+    finally:
+        os.close(descriptor)
 
 
 def main() -> int:
@@ -88,11 +132,9 @@ def main() -> int:
         output_path = _outside_repository(args.output, "output")
         if input_path == output_path:
             raise ValueError("input and output paths must differ")
-        if output_path.exists():
-            raise ValueError("refusing to overwrite an existing private probe plan")
-        plan = validate_probe_plan(json.loads(input_path.read_text(encoding="utf-8")))
+        plan = validate_probe_plan(_read_private_json_no_follow(input_path, "input"))
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+        _write_new_private_json_no_follow(output_path, plan)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

@@ -92,6 +92,19 @@ class MovieControlObserverProbePlanTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             probe_plan._outside_repository(repository_file, "input")
 
+    def test_final_symlink_is_rejected_before_private_plan_resolution(self) -> None:
+        root = pathlib.Path(__file__).resolve().parents[1] / ".test-work"
+        root.mkdir(exist_ok=True)
+        target = root / "movie-control-plan-target.json"
+        link = root / "movie-control-plan-link.json"
+        target.write_text('{"retail":"must not be read"}', encoding="utf-8")
+        link.symlink_to(target.name)
+        with self.assertRaisesRegex(ValueError, "must not be a symlink"):
+            probe_plan._outside_repository(link, "input")
+        self.assertTrue(target.exists())
+        link.unlink()
+        target.unlink()
+
 
 if __name__ == "__main__":
     unittest.main()
