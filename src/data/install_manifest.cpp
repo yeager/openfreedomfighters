@@ -30,6 +30,28 @@ bool ignored_cache(std::string_view p) {
 bool safe(std::string_view p) {
   return is_safe_archive_path(p) && p.find('\\') == std::string_view::npos;
 }
+void validate_manifest(std::span<const ManifestFile> manifest) {
+  std::unordered_map<std::string, const ManifestFile*> expected;
+  for (const auto& entry : manifest) {
+    if (!safe(entry.path) || entry.sha256.size() != 64 ||
+        !std::all_of(entry.sha256.begin(), entry.sha256.end(), [](char c) {
+          return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+        }) || !expected.emplace(folded(entry.path), &entry).second)
+      throw std::runtime_error("invalid or duplicate file-manifest entry");
+    if (entry.role != ManifestFileRole::required_game &&
+        entry.role != ManifestFileRole::optional_soundtrack &&
+        entry.role != ManifestFileRole::optional_support)
+      throw std::runtime_error("invalid file-manifest role");
+  }
+  for (const auto& entry : manifest) {
+    const auto key = folded(entry.path);
+    for (auto slash = key.find('/'); slash != std::string::npos;
+         slash = key.find('/', slash + 1)) {
+      if (expected.contains(key.substr(0, slash)))
+        throw std::runtime_error("manifest file is also a parent directory");
+    }
+  }
+}
 struct Located {
   std::filesystem::path path;
   std::filesystem::file_status status;
@@ -62,6 +84,38 @@ bool regular_chain(const std::filesystem::path& root, const std::filesystem::pat
 
 std::span<const ManifestFile> supported_install_manifest() noexcept { return reference_files; }
 
+std::string verified_data_manifest_fingerprint(
+    std::span<const ManifestFile> manifest) {
+  validate_manifest(manifest);
+  struct RequiredEntry {
+    std::string path;
+    const ManifestFile* file;
+  };
+  std::vector<RequiredEntry> required;
+  required.reserve(manifest.size());
+  for (const auto& file : manifest) {
+    if (file.role == ManifestFileRole::required_game)
+      required.push_back({folded(file.path), &file});
+  }
+  if (required.empty())
+    throw std::runtime_error("verified-data fingerprint requires required game files");
+  std::ranges::sort(required, {}, &RequiredEntry::path);
+  std::string input{"openfreedomfighters-verified-data-manifest-v1\n"};
+  for (const auto& entry : required) {
+    input += entry.path;
+    input += ':';
+    input += std::to_string(entry.file->size);
+    input += ':';
+    input += entry.file->sha256;
+    input += '\n';
+  }
+  return crypto::to_hex(crypto::sha256(input));
+}
+
+std::string supported_data_manifest_fingerprint() {
+  return verified_data_manifest_fingerprint(supported_install_manifest());
+}
+
 bool ManifestVerification::required_ok() const noexcept {
   return !cancelled && std::none_of(files.begin(), files.end(), [](const auto& f) {
     return f.role == ManifestFileRole::required_game && f.status != ManifestFileStatus::verified;
@@ -71,23 +125,15 @@ bool ManifestVerification::required_ok() const noexcept {
 ManifestVerification verify_file_manifest(const std::filesystem::path& requested_root,
     std::span<const ManifestFile> manifest, const std::function<bool()>& cancelled,
     std::size_t hash_workers) {
+  validate_manifest(manifest);
   std::unordered_map<std::string, const ManifestFile*> expected;
-  for (const auto& entry : manifest) {
-    if (!safe(entry.path) || entry.sha256.size() != 64 ||
-        !std::all_of(entry.sha256.begin(), entry.sha256.end(), [](char c) {
-          return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
-        }) || !expected.emplace(folded(entry.path), &entry).second)
-      throw std::runtime_error("invalid or duplicate file-manifest entry");
-    if (entry.role != ManifestFileRole::required_game && entry.role != ManifestFileRole::optional_soundtrack &&
-        entry.role != ManifestFileRole::optional_support)
-      throw std::runtime_error("invalid file-manifest role");
-  }
+  for (const auto& entry : manifest)
+    expected.emplace(folded(entry.path), &entry);
   std::unordered_map<std::string, ManifestFileRole> ancestors;
   for (const auto& entry : manifest) {
     const auto key = folded(entry.path);
     for (auto slash = key.find('/'); slash != std::string::npos; slash = key.find('/', slash + 1)) {
       const auto parent = key.substr(0, slash);
-      if (expected.contains(parent)) throw std::runtime_error("manifest file is also a parent directory");
       auto [found, inserted] = ancestors.emplace(parent, entry.role);
       if (!inserted && (entry.role == ManifestFileRole::required_game ||
           (entry.role == ManifestFileRole::optional_soundtrack && found->second != ManifestFileRole::required_game)))

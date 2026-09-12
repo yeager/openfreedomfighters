@@ -61,6 +61,29 @@ int main() {
       {track_a, 5, music_hash, ManifestFileRole::optional_soundtrack},
       {track_b, 5, music_hash, ManifestFileRole::optional_soundtrack},
       {"support.txt", 7, support_hash, ManifestFileRole::optional_support}}};
+  {
+    const auto baseline = verified_data_manifest_fingerprint(manifest);
+    auto reordered = manifest;
+    std::swap(reordered[0], reordered[4]);
+    std::swap(reordered[1], reordered[3]);
+    check(baseline.size() == 64 && baseline == verified_data_manifest_fingerprint(reordered),
+          "verified-data fingerprint is a stable opaque ID independent of manifest order");
+    auto optional_changed = manifest;
+    optional_changed[2].sha256 = bank_hash;
+    check(baseline == verified_data_manifest_fingerprint(optional_changed),
+          "optional media does not change a required-data fingerprint");
+    auto required_changed = manifest;
+    required_changed[0].sha256 = bank_hash;
+    check(baseline != verified_data_manifest_fingerprint(required_changed),
+          "required data changes the verified-data fingerprint");
+    const std::array<ManifestFile, 1> no_required{{
+        {"support.txt", 7, support_hash, ManifestFileRole::optional_support}}};
+    rejects([&] { (void)verified_data_manifest_fingerprint(no_required); },
+            "fingerprint rejects a manifest without required game data");
+    check(supported_data_manifest_fingerprint() ==
+              verified_data_manifest_fingerprint(supported_install_manifest()),
+          "compiled supported manifest has the same fingerprint through both entry points");
+  }
   const auto fixture = [&](std::string_view name) {
     const auto root = work / name;
     write(root / "Scenes/payload.bin", "game-data");

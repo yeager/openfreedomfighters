@@ -43,6 +43,12 @@ boundary:
 | Mission state | unchanged, objective-advanced, failed, completed, loading, unknown |
 | HUD state | absent, stable, changed, hidden, unknown |
 
+Before the first row, an observer may record the opaque
+`verified_data_manifest_fingerprint` only after required data has passed the
+full manifest verifier. The fingerprint identifies the required-data manifest,
+not a mission, scene, asset, executable location, or successful handoff. It
+does not admit a first-mission implementation on its own.
+
 The observer may additionally retain private frame numbers, monotonic elapsed
 time, and input-event order. Public evidence may publish only non-identifying
 counts, repeat agreement, declared method version, data-manifest fingerprint,

@@ -34,6 +34,18 @@ struct ManifestVerification {
 // Fixed local reference snapshot, not an official Steam authenticity manifest.
 [[nodiscard]] std::span<const ManifestFile> supported_install_manifest() noexcept;
 
+// A content-free, versioned identifier for the required portion of a verified
+// install manifest.  It is suitable for private observation summaries: it
+// never reads an installation, emits a path, or incorporates optional media.
+// Invalid, ambiguous, or required-data-empty manifests are rejected.
+[[nodiscard]] std::string verified_data_manifest_fingerprint(
+    std::span<const ManifestFile> manifest);
+
+// The fingerprint for the compiled supported-install reference.  This is an
+// identifier for a data build, not proof that a particular directory has been
+// verified; callers must still run verify_file_manifest first.
+[[nodiscard]] std::string supported_data_manifest_fingerprint();
+
 // Full-byte hashes on every call; never enroll/rebaseline or trust timestamps.
 // Optional failures remain reports, not required-data failures. Unknown files
 // in Scenes reject; unknown OST files remain unverified optional sources. Saves,

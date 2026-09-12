@@ -46,6 +46,7 @@ InstallVerification failure(InstallError error,
       .root = root,
       .executable = {},
       .executable_sha256 = {},
+      .data_manifest_fingerprint = {},
       .message = std::move(message),
       .soundtrack_candidates = {},
       .optional_file_warnings = {},
@@ -140,6 +141,7 @@ InstallVerification verify_install(const std::filesystem::path &root,
   std::string archive_context;
   std::string member_context;
   std::string audit_identity;
+  std::string data_manifest_fingerprint;
   std::vector<std::filesystem::path> soundtrack_candidates;
   std::vector<std::string> optional_file_warnings;
   try {
@@ -156,6 +158,7 @@ InstallVerification verify_install(const std::filesystem::path &root,
           file.status != ManifestFileStatus::missing)
         optional_file_warnings.push_back(file.path + ": " + file.detail);
     }
+    data_manifest_fingerprint = supported_data_manifest_fingerprint();
     std::string audit_identity_input{"openfreedomfighters-deep-audit-v3\n"};
     audit_identity_input += supported_executable_sha256;
     for (const auto& file : supported_install_manifest()) {
@@ -820,6 +823,7 @@ InstallVerification verify_install(const std::filesystem::path &root,
       .root = root,
       .executable = executable,
       .executable_sha256 = digest,
+      .data_manifest_fingerprint = std::move(data_manifest_fingerprint),
       .message = "supported Steam installation verified",
       .soundtrack_candidates = std::move(soundtrack_candidates),
       .optional_file_warnings = std::move(optional_file_warnings),

@@ -1467,7 +1467,9 @@ int main(int argc, char **argv) {
     return 3;
   }
   std::cout << verification->message << '\n'
-            << "Mode: " << off::mode_name(mode) << '\n';
+            << "Mode: " << off::mode_name(mode) << '\n'
+            << "Verified data manifest: "
+            << verification->data_manifest_fingerprint << '\n';
   for (const auto &warning : verification->optional_file_warnings)
     std::cerr << "Optional file skipped: " << warning << '\n';
   std::cout << "Optional soundtrack: "

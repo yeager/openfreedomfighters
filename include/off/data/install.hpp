@@ -26,6 +26,10 @@ struct InstallVerification {
     std::filesystem::path root;
     std::filesystem::path executable;
     std::string executable_sha256;
+    // Present only after every required file and the deep structural audit
+    // pass. This is an opaque required-data manifest identifier, never a
+    // directory, mission, asset, or payload fingerprint.
+    std::string data_manifest_fingerprint;
     std::string message;
     // Hash-verified candidates only: decoder/cue suitability is not implied.
     std::vector<std::filesystem::path> soundtrack_candidates;
