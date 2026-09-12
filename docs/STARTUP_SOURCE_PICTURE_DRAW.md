@@ -51,3 +51,19 @@ The normal startup path remains deliberately disconnected until those producer
 boundaries are recovered.
 It is disconnected from normal startup until the original coordinator producer
 is recovered.
+
+## SDL GPU packet boundary
+
+`SdlStartupPictureFramePacket` is a subsequent, still-disconnected adapter for
+an already-admitted ordered `StartupGraphicsExpandedSubmission` span. It accepts
+an exact set of live texture handles (`resource_index`, catalog image index, and
+texture ID) and caller-supplied `StartupPictureRenderState`. Submission ordinals
+must be contiguous in the supplied order; missing, extra, duplicate, or unknown
+resource identities reject before any GPU work. It preserves one indexed draw
+per source submission and never batches across resource identities.
+
+`SdlStartupPictureExecutor` only prepares that immutable packet through the
+existing `SdlIntroRenderer`; its resulting frame draws into a caller-provided
+command buffer and active pass. Neither type chooses a root, state, camera,
+projection, viewport, scissor, blend/depth state, pass lifecycle, menu timing,
+swapchain target, or presentation. Normal startup does not instantiate it yet.

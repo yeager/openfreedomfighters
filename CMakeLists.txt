@@ -276,6 +276,7 @@ else()
 endif()
 add_library(off_sdl_intro_renderer STATIC
     src/platform/sdl_intro_renderer.cpp
+    src/platform/sdl_startup_picture_executor.cpp
     src/platform/intro_picture_submission.cpp
     src/platform/intro_preview_diagnostic.cpp
     src/platform/first_cut_picture_frame.cpp
@@ -482,6 +483,9 @@ if(BUILD_TESTING)
     target_link_libraries(off_sdl_intro_renderer_tests PRIVATE off_sdl_intro_renderer)
     add_test(NAME off_sdl_intro_renderer_tests COMMAND off_sdl_intro_renderer_tests)
     set_tests_properties(off_sdl_intro_renderer_tests PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
+    add_executable(off_sdl_startup_picture_executor_tests tests/sdl_startup_picture_executor_tests.cpp)
+    target_link_libraries(off_sdl_startup_picture_executor_tests PRIVATE off_sdl_intro_renderer)
+    add_test(NAME off_sdl_startup_picture_executor_tests COMMAND off_sdl_startup_picture_executor_tests)
     add_executable(off_intro_picture_submission_tests tests/intro_picture_submission_tests.cpp)
     target_link_libraries(off_intro_picture_submission_tests PRIVATE off_sdl_intro_renderer)
     add_test(NAME off_intro_picture_submission_tests COMMAND off_intro_picture_submission_tests)
