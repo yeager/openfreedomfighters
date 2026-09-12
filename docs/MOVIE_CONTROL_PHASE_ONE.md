@@ -54,3 +54,39 @@ The implementation may proceed only when that trace identifies one callback
 and all of its required effects. The resulting public tests must use authored
 fixtures or source-free recordings; normal startup remains fail-closed until
 then.
+
+## Private structural trace utility
+
+`tools/movie_control_phase_one_trace.py` is a deliberately narrow sanitizer for
+the output of a separately maintained private observer. It does **not** inspect
+or instrument the original executable itself. That observer must assign
+run-local callback ordinals and record only the fields above. Do not pass it
+debugger logs, memory dumps, disassembly, screenshots, or exported game data.
+
+The input and output paths are required to be outside this repository, and the
+output is never overwritten. The accepted raw JSON format has exactly one
+`format` value, `off.movie-control-phase-one.raw/v1`, and an `events` array.
+Each event has only the following structural fields:
+
+- increasing `dispatch_order`, `phase` (always `1`) and observer-local
+  `callback_ordinal`;
+- boolean relations to the constructed controller and owner, rather than raw
+  identities;
+- 32-bit pre/post component and owner masks;
+- before/after event membership; and
+- `success`/`failure` plus `entered`/`not_entered` external-service state.
+
+On the private observation host, create the raw record with the private
+instrument and then run:
+
+```sh
+python3 tools/movie_control_phase_one_trace.py \
+  PRIVATE_INPUT.json PRIVATE_OUTPUT.json
+```
+
+Review two fresh-process runs. A candidate is sufficient only if it ties the
+constructed component to one callback ordinal, gives its relative dispatch
+order, and accounts for every changed mask, event membership transition,
+external-service entry, and failure path. Keep both raw and sanitized records
+private; only a behavior specification and authored test fixture may be added
+to this repository after review.
