@@ -53,6 +53,30 @@ struct StartupSplashOverlayLayout {
 [[nodiscard]] StartupSplashOverlayLayout
 startup_splash_overlay_layout(int width, int height) noexcept;
 
+// Project-owned colours and bounds for the startup data-error backing panel.
+// SDL's native message box is intentionally still used for accessibility and
+// platform conventions, but this panel keeps the underlying startup surface
+// legible while that modal is open. Values contain no retail artwork or text.
+struct StartupRgb {
+  unsigned char red{};
+  unsigned char green{};
+  unsigned char blue{};
+};
+
+struct StartupDataErrorBackdropLayout {
+  int left{};
+  int top{};
+  int width{};
+  int height{};
+  StartupRgb panel{20, 27, 36};
+  StartupRgb border{205, 44, 38};
+};
+
+// A centred, in-bounds region behind the native data-error modal. Width and
+// height must be positive window-surface dimensions.
+[[nodiscard]] StartupDataErrorBackdropLayout
+startup_data_error_backdrop_layout(int width, int height) noexcept;
+
 // A platform-selected, application-owned cache location. Failure returns an
 // empty path and callers continue without a derived cache.
 [[nodiscard]] std::filesystem::path

@@ -50,6 +50,24 @@ StartupSplashOverlayLayout startup_splash_overlay_layout(int width,
           .baseline = height - margin - text_height};
 }
 
+StartupDataErrorBackdropLayout
+startup_data_error_backdrop_layout(int width, int height) noexcept {
+  // The window surface normally has positive dimensions. Keep this pure
+  // layout total for tests and for a transient zero-sized resize callback.
+  width = std::max(1, width);
+  height = std::max(1, height);
+  const int margin = std::max(1, std::min(width, height) / 24);
+  const int available_width = std::max(1, width - 2 * margin);
+  const int available_height = std::max(1, height - 2 * margin);
+  const int panel_width = std::min(available_width, std::max(1, width * 3 / 4));
+  const int panel_height =
+      std::min(available_height, std::max(1, height / 3));
+  return {.left = (width - panel_width) / 2,
+          .top = (height - panel_height) / 2,
+          .width = panel_width,
+          .height = panel_height};
+}
+
 std::filesystem::path application_deep_audit_cache_root() noexcept {
   // This path is also used by headless integrity checks. SDL's preference-path
   // implementation keeps process-global environment/TLS state on some
@@ -265,6 +283,35 @@ void draw_loading_surface(SDL_Window *window, std::string_view status) {
   static_cast<void>(SDL_UpdateWindowSurface(window));
 }
 
+void draw_data_error_backdrop(SDL_Window *window) {
+  SDL_Surface *target = SDL_GetWindowSurface(window);
+  if (target == nullptr || target->w <= 0 || target->h <= 0)
+    return;
+  const auto layout = startup_data_error_backdrop_layout(target->w, target->h);
+  const SDL_Rect panel{layout.left, layout.top, layout.width, layout.height};
+  const SDL_Color panel_colour{layout.panel.red, layout.panel.green,
+                               layout.panel.blue, 255};
+  const SDL_Color border_colour{layout.border.red, layout.border.green,
+                                layout.border.blue, 255};
+  static_cast<void>(SDL_FillSurfaceRect(
+      target, &panel, SDL_MapSurfaceRGB(target, panel_colour.r,
+                                        panel_colour.g, panel_colour.b)));
+  const Uint32 border_pixel = SDL_MapSurfaceRGB(
+      target, border_colour.r, border_colour.g, border_colour.b);
+  const int border_width = std::min(2, std::min(panel.w, panel.h));
+  const SDL_Rect top{panel.x, panel.y, panel.w, border_width};
+  const SDL_Rect bottom{panel.x, panel.y + panel.h - border_width, panel.w,
+                        border_width};
+  const SDL_Rect left{panel.x, panel.y, border_width, panel.h};
+  const SDL_Rect right{panel.x + panel.w - border_width, panel.y,
+                       border_width, panel.h};
+  static_cast<void>(SDL_FillSurfaceRect(target, &top, border_pixel));
+  static_cast<void>(SDL_FillSurfaceRect(target, &bottom, border_pixel));
+  static_cast<void>(SDL_FillSurfaceRect(target, &left, border_pixel));
+  static_cast<void>(SDL_FillSurfaceRect(target, &right, border_pixel));
+  static_cast<void>(SDL_UpdateWindowSurface(window));
+}
+
 [[nodiscard]] StartupPreflightResult
 run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
                                const std::function<void()> &prepare_assets,
@@ -391,6 +438,7 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
     // A late verification result may arrive after the loading surface replaced
     // the timed splash. Restore the artwork behind the error dialog.
     static_cast<void>(draw_splash(window.get(), image.get()));
+    draw_data_error_backdrop(window.get());
     if (!SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
                                   presentation.title.c_str(),
                                   result.message.c_str(), window.get())) {
@@ -416,6 +464,7 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
         platform_locales);
     result.message = presentation.dialog_text();
     static_cast<void>(draw_splash(window.get(), image.get()));
+    draw_data_error_backdrop(window.get());
     if (!SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
                                   presentation.title.c_str(),
                                   result.message.c_str(), window.get())) {
