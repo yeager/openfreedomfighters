@@ -1330,6 +1330,27 @@ int main() {
   check(rejected,
         "boot directory source rejects a BootMenu attachment on a non-window "
         "source");
+  rejected = false;
+  try {
+    auto malformed_boot_directory = boot_directory_gms_fixture();
+    // The fixture's attachment table has one entry at payload offset 436. Add
+    // a second, identically-labelled entry with a non-canonical parameter.
+    // The first entry remains valid, proving that the directory reader does
+    // not select a convenient occurrence from an ambiguous source.
+    set_u32(malformed_boot_directory, 9U + 432U, 2U);
+    set_u32(malformed_boot_directory, 9U + 444U, 460U);
+    set_u32(malformed_boot_directory, 9U + 448U,
+            std::bit_cast<std::uint32_t>(0.0F));
+    static_cast<void>(
+        off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
+            off::data::GmsImage::parse(off::data::PackedResource::parse(
+                std::move(malformed_boot_directory)))));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected,
+        "boot directory source rejects an additional malformed BootMenu "
+        "attachment instead of selecting the valid occurrence");
   const auto boot_package =
       std::make_shared<const off::runtime::StartupSceneLoadPackage>(package());
   const auto boot_scene = off::runtime::StartupBootSceneLease::live(lease(81U));

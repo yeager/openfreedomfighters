@@ -78,10 +78,12 @@ canonical_locale(std::string_view value) noexcept {
     if (left.size() != right.size())
       return false;
     for (std::size_t index{}; index < left.size(); ++index) {
-      const auto lower = left[index] >= 'A' && left[index] <= 'Z'
-                             ? static_cast<char>(left[index] - 'A' + 'a')
-                             : left[index];
-      if (lower != right[index])
+      const auto lower = [](char character) {
+        return character >= 'A' && character <= 'Z'
+                   ? static_cast<char>(character - 'A' + 'a')
+                   : character;
+      };
+      if (lower(left[index]) != lower(right[index]))
         return false;
     }
     return true;
@@ -125,10 +127,28 @@ canonical_locale(std::string_view value) noexcept {
   if (equal_ascii(language, "ko"))
     return "ko";
   if (equal_ascii(language, "zh")) {
-    if (value.find("Hant") != std::string_view::npos ||
-        value.find("TW") != std::string_view::npos ||
-        value.find("HK") != std::string_view::npos)
-      return std::nullopt;
+    // Treat script and region as complete canonical subtags.  A substring
+    // test here would turn an unrelated variant (for example, "twinkle")
+    // into a Traditional-Chinese request, while accepting an explicitly
+    // incompatible script would silently select the Simplified pack.
+    std::size_t begin = language_end;
+    while (begin != std::string_view::npos && begin < value.size()) {
+      ++begin;
+      const auto end = value.find('-', begin);
+      const auto subtag = value.substr(begin, end - begin);
+      if (subtag.empty())
+        return std::nullopt;
+      const auto is_alpha = std::ranges::all_of(subtag, [](char character) {
+        return (character >= 'A' && character <= 'Z') ||
+               (character >= 'a' && character <= 'z');
+      });
+      const bool is_script = subtag.size() == 4U && is_alpha;
+      if ((is_script && !equal_ascii(subtag, "Hans")) ||
+          equal_ascii(subtag, "Hant") || equal_ascii(subtag, "TW") ||
+          equal_ascii(subtag, "HK") || equal_ascii(subtag, "MO"))
+        return std::nullopt;
+      begin = end;
+    }
     return "zh-Hans";
   }
   return std::nullopt;

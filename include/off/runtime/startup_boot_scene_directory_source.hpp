@@ -62,10 +62,18 @@ public:
       for (std::size_t attachment = 0; attachment < entry.attachments.size();
            ++attachment) {
         if (gms.attachment_identifier(index, attachment) !=
-                boot_menu_identifier ||
+            boot_menu_identifier) {
+          continue;
+        }
+        // This boundary is keyed by the reviewed attachment itself, not by a
+        // best-effort search for one usable occurrence.  A second or malformed
+        // BootMenu-labelled attachment would make the source ambiguous, so it
+        // must not be silently ignored in favour of another record.
+        if (entry.source_type != ordinary_window_source_type ||
             !std::isfinite(entry.attachments[attachment].parameter) ||
             entry.attachments[attachment].parameter != 1.0F) {
-          continue;
+          throw std::runtime_error(
+              "startup boot directory has a non-canonical BootMenu attachment");
         }
         if (boot_owner) {
           throw std::runtime_error(

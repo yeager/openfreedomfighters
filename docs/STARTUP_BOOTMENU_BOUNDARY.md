@@ -47,6 +47,11 @@ proves the ordinary-window owner and exact `ZWINDOW_BootMenu` attachment exist
 in one scene transaction; it does not complete the owner reader, component
 reader, common initialization, or retained routing step.
 
+The directory gate is deliberately unambiguous: every source attachment named
+`ZWINDOW_BootMenu` must be the one ordinary-window attachment with finite
+parameter `1`. A duplicate or malformed same-named attachment rejects the
+startup source rather than allowing the reader to choose another occurrence.
+
 Private clean-room tracing has established that the LinkMenu state-one route
 first invokes a named `PressStart` action service, then releases the resolved
 action entry before it directly invokes LinkMenu's `STARTGAME` operation. The

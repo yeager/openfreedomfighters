@@ -138,6 +138,15 @@ int main() {
           "POSIX host locale spellings use the same preference normalization");
     check(resolver->resolve(one, "ZH-hANT", {}) == "Project text one",
           "Traditional Chinese never silently resolves to a Simplified pack");
+    check(resolver->resolve(one, "zh-Cyrl", {}) == "Project text one",
+          "an explicitly incompatible Chinese script never selects the "
+          "Simplified pack");
+    check(resolver->resolve(one, "zh-MO", {}) == "Project text one",
+          "a Traditional-Chinese region never selects the Simplified pack");
+    check(resolver->resolve(one, "zh-twinkle", {}) ==
+              "Simplified project text",
+          "an unrelated Chinese variant is not mistaken for a Traditional "
+          "region");
     write(root / "wrong-source.offl10n",
           pack(source.parser_identity, "source.synthetic.other", "sv", 0U, 3U,
                false, {{one, "X"}}));
