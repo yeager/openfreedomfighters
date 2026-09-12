@@ -8,7 +8,8 @@ std::optional<RetailLocalizationSession> RetailLocalizationSession::open(
     const std::filesystem::path &cache_root,
     const std::filesystem::path &local_packs_directory,
     std::string_view installation_identity, std::string_view parser_identity,
-    std::string_view source_set, const Extractor &extract) {
+    std::string_view source_set, const Extractor &extract,
+    const std::vector<ReviewedRetailLookupArtifact> &lookup_artifacts) {
   const auto enrollment = ensure_retail_localization_metadata(
       cache_root, installation_identity, parser_identity, source_set, extract);
   if (!enrollment.metadata)
@@ -20,6 +21,11 @@ std::optional<RetailLocalizationSession> RetailLocalizationSession::open(
   RetailLocalizationSession result;
   result.metadata_ = std::move(*enrollment.metadata);
   result.binding_ = *binding;
+  if (!lookup_artifacts.empty()) {
+    result.lookup_bindings_ = RetailLookupSiteBindings::admit(*binding, lookup_artifacts);
+    if (!result.lookup_bindings_)
+      return std::nullopt;
+  }
   result.cache_status_ = enrollment.status;
   result.retail_fallback_ =
       detail::load_private_retail_source_fallback(cache_root, result.metadata_);
@@ -31,15 +37,20 @@ std::optional<RetailLocalizationSession> RetailLocalizationSession::open(
   return result;
 }
 
-std::optional<std::string_view> RetailLocalizationSession::resolve_opaque_id(
-    std::string_view id, std::string_view explicit_locale,
+std::optional<std::string_view> RetailLocalizationSession::resolve_lookup_site(
+    std::string_view lookup_site, std::string_view explicit_locale,
     std::span<const std::string_view> platform_locales) const noexcept {
+  if (!lookup_bindings_)
+    return std::nullopt;
+  const auto id = lookup_bindings_->id_for_lookup_site(lookup_site);
+  if (!id)
+    return std::nullopt;
   if (!resolver_)
-    return retail_fallback_ ? retail_fallback_->find(id) : std::nullopt;
+    return retail_fallback_ ? retail_fallback_->find(*id) : std::nullopt;
   if (const auto translated =
-          resolver_->resolve(id, explicit_locale, platform_locales))
+          resolver_->resolve(*id, explicit_locale, platform_locales))
     return translated;
-  return retail_fallback_ ? retail_fallback_->find(id) : std::nullopt;
+  return retail_fallback_ ? retail_fallback_->find(*id) : std::nullopt;
 }
 
 } // namespace off::ui::l10n

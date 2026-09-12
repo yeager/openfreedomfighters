@@ -15,6 +15,7 @@ def event(**changes: object) -> dict[str, object]:
     value: dict[str, object] = {
         "observation_order": 1,
         "call_ordinal": 1,
+        "lookup_site": "site.fixture.lookup",
         "lookup_key_relation": "new",
         "catalog_ordinal": 17,
         "lookup_outcome": "resolved",

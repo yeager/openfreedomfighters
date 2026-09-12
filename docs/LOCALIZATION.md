@@ -105,8 +105,9 @@ text-cache identity.
 The cache does not establish the original runtime's key lookup, missing-key,
 or formatting behavior. Before a native presentation path can use the private
 catalog, observe that behavior in an isolated owned installation. The observer
-may emit only call order, observer-local call order, a same/new-key relation,
-an opaque catalog ordinal, resolved/missing/failure outcome, categorical result
+may emit only call order, observer-local call order, an observer-assigned opaque
+lookup-site label, a same/new-key relation, an opaque catalog ordinal,
+resolved/missing/failure outcome, categorical result
 kind, and categorical argument kinds. It must not emit lookup keys, source or
 formatted text, argument values, paths, addresses, offsets, symbols, bytes,
 assets, screenshots, or executable material.
@@ -121,12 +122,16 @@ python3 tools/retail_localization_lookup_trace.py \
   PRIVATE_INPUT.json PRIVATE_OUTPUT.json
 ```
 
-The output can establish a source-free behavior hypothesis for review. It does
-not expose a runtime key, identify a component, authorize a lookup
-implementation, or make Original presentation localized. A future integration
-still needs independent evidence that links each native lookup site to the
-correct private catalog ordinal and covers success, missing, failure, and
-formatting paths.
+The output can establish a source-free behavior hypothesis for review. Its
+opaque `lookup_site` label may be bound only after review to the resolved
+catalog ordinal in the enrolled source set. The runtime admits those reviewed
+bindings only when the ordinal is in that session's verified span; it resolves
+by admitted site and locale fallback, never by a caller-provided opaque ID.
+Unknown sites, malformed labels, conflicting observations, and out-of-span
+ordinals are rejected. This does not expose a runtime key, identify a
+component, authorize unobserved lookup behavior, or make Original presentation
+localized. Success, missing, failure, and formatting paths still require
+independent reviewed evidence before they can be presented.
 
 ## Clean-room delivery plan
 

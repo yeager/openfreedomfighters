@@ -2,7 +2,8 @@
 """Validate a private, source-free retail LOC lookup/formatting trace.
 
 An independently maintained observer of an owned original installation may
-record only structural lookup and formatting relations.  This utility does not
+record only structural lookup and formatting relations, including an
+observer-assigned opaque lookup-site label.  This utility does not
 open game data, executables, dumps, logs, screenshots, or assets.  In
 particular, a trace has no field for a lookup key, source text, formatted text,
 address, path, byte sequence, image, or captured argument value.
@@ -60,6 +61,14 @@ def _optional_ordinal(value: Any, label: str) -> int | None:
     return _natural(value, label, MAX_ORDINAL)
 
 
+def _lookup_site(value: Any) -> str:
+    if not isinstance(value, str) or not value or len(value) > 128:
+        raise ValueError("lookup_site must be a bounded opaque label")
+    if any(character not in "abcdefghijklmnopqrstuvwxyz0123456789._-" for character in value):
+        raise ValueError("lookup_site has an unsupported value")
+    return value
+
+
 def _argument_kinds(value: Any) -> list[str]:
     if not isinstance(value, list) or len(value) > MAX_ARGUMENTS:
         raise ValueError("format_argument_kinds must be a bounded array")
@@ -102,7 +111,7 @@ def sanitize_trace(raw: Any) -> dict[str, Any]:
         raise ValueError("trace must contain between one and 4096 events")
 
     fields = frozenset((
-        "observation_order", "call_ordinal", "lookup_key_relation",
+        "observation_order", "call_ordinal", "lookup_site", "lookup_key_relation",
         "catalog_ordinal", "lookup_outcome", "result_kind",
         "format_argument_kinds",
     ))
@@ -123,6 +132,7 @@ def sanitize_trace(raw: Any) -> dict[str, Any]:
         clean = {
             "observation_order": order,
             "call_ordinal": call,
+            "lookup_site": _lookup_site(event["lookup_site"]),
             "lookup_key_relation": relation,
             "catalog_ordinal": _optional_ordinal(event["catalog_ordinal"], "catalog_ordinal"),
             "lookup_outcome": _enum(event["lookup_outcome"], "lookup_outcome", _OUTCOMES),

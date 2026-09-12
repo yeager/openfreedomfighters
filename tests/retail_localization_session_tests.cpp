@@ -58,6 +58,11 @@ int main() {
     constexpr std::string_view parser{"parser.fixture.v1"};
     constexpr std::string_view source_set{"source.fixture.v1"};
     const auto opaque_one = make_retail_string_id(source_set, 1U);
+    const TranslationSourceBinding reviewed_binding{std::string{parser},
+                                                    std::string{source_set}, 0U, 2U};
+    const auto reviewed = ReviewedRetailLookupArtifact::reviewed(
+        reviewed_binding, {{"site.fixture.status", 1U}, {"site.fixture.partial", 0U}});
+    check(reviewed.has_value(), "authored source-free observation is reviewable");
     write(packs / "sv.offl10n",
           pack(parser, source_set, "sv", opaque_one, "Projektöversättning"));
 
@@ -68,25 +73,24 @@ int main() {
                                               {1U, "fixture source one"}};
     };
     const auto first = RetailLocalizationSession::open(
-        cache, packs, installation, parser, source_set, extract);
+        cache, packs, installation, parser, source_set, extract, {*reviewed});
     check(first && calls == 1U && first->has_local_resolver() &&
               first->metadata().ordinal_count == 2U &&
               first->cache_status() == RetailLocalizationCacheStatus::extracted &&
               first->local_pack_count() == 1U && first->has_private_fallback(),
           "session owns private enrollment and bounded local packs");
     const std::string_view locales[] = {"sv-SE"};
-    check(first->resolve_opaque_id(opaque_one, {}, locales) ==
+    check(first->resolve_lookup_site("site.fixture.status", {}, locales) ==
               "Projektöversättning",
-          "session resolves only an already-approved opaque ID");
-    check(first->resolve_opaque_id(make_retail_string_id(source_set, 0U),
+          "session resolves an admitted site using locale fallback");
+    check(first->resolve_lookup_site("site.fixture.partial",
                                    "sv", locales) == "fixture source zero",
           "partial authored packs fall back to the matching private cache");
-    check(!first->resolve_opaque_id(make_retail_string_id(source_set, 2U),
-                                    "sv", locales),
-          "session rejects IDs outside its canonical ordinal span");
+    check(!first->resolve_lookup_site("site.fixture.unobserved", "sv", locales),
+          "session rejects unobserved lookup sites");
 
     const auto second = RetailLocalizationSession::open(
-        cache, packs, installation, parser, source_set, extract);
+        cache, packs, installation, parser, source_set, extract, {*reviewed});
     check(second && calls == 1U &&
               second->cache_status() == RetailLocalizationCacheStatus::loaded &&
               second->local_pack_count() == 1U && second->has_private_fallback(),
@@ -94,12 +98,33 @@ int main() {
 
     const auto no_packs = RetailLocalizationSession::open(
         cache, root / "missing-packs", installation, parser, source_set,
-        extract);
+        extract, {*reviewed});
     check(no_packs && !no_packs->has_local_resolver() &&
               no_packs->local_pack_count() == 0U && no_packs->has_private_fallback() &&
-              no_packs->resolve_opaque_id(opaque_one, "sv", locales) ==
+              no_packs->resolve_lookup_site("site.fixture.status", "sv", locales) ==
                   "fixture source one",
           "missing optional packs retain the private fallback only");
+
+    const auto malformed = ReviewedRetailLookupArtifact::reviewed(
+        reviewed_binding, {{"invalid site", 1U}});
+    check(!malformed, "artifact rejects malformed opaque site labels");
+    const auto out_of_range = ReviewedRetailLookupArtifact::reviewed(
+        reviewed_binding, {{"site.fixture.bad", 2U}});
+    check(out_of_range && !RetailLocalizationSession::open(
+        cache, packs, installation, parser, source_set, extract, {*out_of_range}),
+        "session rejects observed ordinals outside its enrolled span");
+    const auto duplicate = ReviewedRetailLookupArtifact::reviewed(
+        reviewed_binding, {{"site.fixture.status", 1U}, {"site.fixture.status", 1U}});
+    check(duplicate && !RetailLocalizationSession::open(
+        cache, packs, installation, parser, source_set, extract, {*duplicate}),
+        "session rejects duplicate reviewed sites");
+    auto wrong_binding = reviewed_binding;
+    wrong_binding.source_set = "source.fixture.other";
+    const auto mismatched = ReviewedRetailLookupArtifact::reviewed(
+        wrong_binding, {{"site.fixture.other", 1U}});
+    check(mismatched && !RetailLocalizationSession::open(
+        cache, packs, installation, parser, source_set, extract, {*mismatched}),
+        "session rejects an artifact for another enrolled source binding");
 
     std::filesystem::remove_all(root, error);
     std::cout << "retail localization session tests passed\n";

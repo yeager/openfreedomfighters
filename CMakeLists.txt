@@ -197,6 +197,7 @@ add_library(off_core
     src/ui/text_layout.cpp
     src/ui/project_localization.cpp
     src/ui/retail_localization_cache.cpp
+    src/ui/retail_localization_lookup_binding.cpp
     src/ui/private_translation_pack.cpp
     src/ui/retail_localization_session.cpp
     src/ui/retail_ui_fonts.cpp

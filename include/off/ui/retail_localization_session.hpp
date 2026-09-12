@@ -1,5 +1,6 @@
 #pragma once
 
+#include "off/ui/retail_localization_lookup_binding.hpp"
 #include "off/ui/private_translation_pack.hpp"
 
 #include <filesystem>
@@ -28,7 +29,8 @@ public:
   open(const std::filesystem::path &cache_root,
        const std::filesystem::path &local_packs_directory,
        std::string_view installation_identity, std::string_view parser_identity,
-       std::string_view source_set, const Extractor &extract);
+       std::string_view source_set, const Extractor &extract,
+       const std::vector<ReviewedRetailLookupArtifact> &lookup_artifacts = {});
 
   [[nodiscard]] const RetailLocalizationMetadata &metadata() const noexcept {
     return metadata_;
@@ -52,10 +54,10 @@ public:
     return retail_fallback_.has_value();
   }
 
-  // The caller must already possess an approved opaque ID. This function does
-  // not inspect retail files, source text, or component state.
+  // Resolution is scoped to an admitted opaque lookup site. No caller can
+  // submit an opaque ID or resolve an unobserved site.
   [[nodiscard]] std::optional<std::string_view>
-  resolve_opaque_id(std::string_view id, std::string_view explicit_locale,
+  resolve_lookup_site(std::string_view lookup_site, std::string_view explicit_locale,
                     std::span<const std::string_view> platform_locales) const
       noexcept;
 
@@ -67,6 +69,7 @@ private:
   std::size_t local_pack_count_{};
   std::optional<PrivateTranslationResolver> resolver_;
   std::optional<RetailTranslationCatalog> retail_fallback_;
+  std::optional<RetailLookupSiteBindings> lookup_bindings_;
 };
 
 } // namespace off::ui::l10n
