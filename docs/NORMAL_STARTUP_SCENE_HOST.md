@@ -167,6 +167,15 @@ Consequently it cannot provide the required manager admission snapshot
 completion, and the canonical scene-clock sample) to
 `MovieControlFirstUpdate::dispatch_event16`.
 
+`MovieControlEvent16ManagerSnapshot` is the source-free adapter for these
+already-defined manager inputs: a stable retained-membership view, one live
+`ComponentRecord`, and one caller-provided frame clock/pause/filter sample. It
+checks the common-construction handle, ordinary admission bit, unique retained
+enrollment, and the manager's existing phase-one gate before exposing matching
+`MovieControlEvent16Services` callbacks. It is intentionally unbound in normal
+startup: it neither refreshes nor dispatches the manager nor supplies receiver
+operations, lifecycle services, or cutscene playback.
+
 Nor is there a concrete normal-host lifecycle table for the receiver. The
 existing `NormalIntroSceneHost` and its factory are an inert future-host model:
 they require caller-owned lifecycle callbacks and caller-provided first-cut

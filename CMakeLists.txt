@@ -119,6 +119,7 @@ add_library(off_core
     src/graphics/startup_graphics_asset.cpp
     src/graphics/intro_prepared_resources.cpp
     src/graphics/movie_control_first_cut_runtime_handoff.cpp
+    src/graphics/movie_control_event16_admission_snapshot.cpp
     src/graphics/intro_outer_loader_tail_readiness.cpp
     src/graphics/intro_runtime.cpp
     src/graphics/movie_control_host_evidence.cpp
@@ -396,6 +397,9 @@ if(BUILD_TESTING)
     set_tests_properties(off_sdl_intro_presentation_tests PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60)
     target_link_libraries(off_intro_controller_initialization_tests PRIVATE off_core)
     add_test(NAME off_intro_controller_initialization_tests COMMAND off_intro_controller_initialization_tests)
+    add_executable(off_movie_control_event16_admission_snapshot_tests tests/movie_control_event16_admission_snapshot_tests.cpp)
+    target_link_libraries(off_movie_control_event16_admission_snapshot_tests PRIVATE off_core)
+    add_test(NAME off_movie_control_event16_admission_snapshot_tests COMMAND off_movie_control_event16_admission_snapshot_tests)
     add_executable(off_sdl_intro_renderer_tests tests/sdl_intro_renderer_tests.cpp)
     target_link_libraries(off_sdl_intro_renderer_tests PRIVATE off_sdl_intro_renderer)
     add_test(NAME off_sdl_intro_renderer_tests COMMAND off_sdl_intro_renderer_tests)
