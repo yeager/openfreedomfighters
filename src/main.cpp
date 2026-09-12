@@ -1508,7 +1508,9 @@ int main(int argc, char **argv) {
               << "; logical backend retained, owner preparation and playback "
                  "not activated.\n";
   const auto runtime = off::platform::run_sdl_gpu_runtime(
-      startup_window, mode, scene ? &*scene : nullptr, *startup_graphics,
+      startup_window, mode, mode_specified,
+      off::platform::application_graphics_settings_path(),
+      scene ? &*scene : nullptr, *startup_graphics,
       ui_fonts, ui_textures, intro,
       intro_legal_picture_preflight ? &*intro_legal_picture_preflight : nullptr,
       frame_limit, show_graphics_menu,

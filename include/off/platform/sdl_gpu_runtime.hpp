@@ -29,6 +29,8 @@ struct RuntimeResult {
 // and intro are mutually exclusive. GPU ownership ends before this borrow ends.
 [[nodiscard]] RuntimeResult
 run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
+                    bool mode_explicitly_requested,
+                    const std::filesystem::path &graphics_settings_path,
                     const graphics::SceneGpuPlan *scene,
                     const graphics::StartupGraphicsAsset &startup_graphics,
                     const ui::RetailUiFontSet &ui_fonts,

@@ -2,6 +2,7 @@
 #include <array>
 #include <atomic>
 #include <charconv>
+#include <exception>
 #include <fstream>
 #include <string>
 #include <string_view>
@@ -213,6 +214,25 @@ load_graphics_settings(const std::filesystem::path &path) {
              ? GraphicsSettingsLoadResult{GraphicsSettingsLoadStatus::loaded, s}
              : GraphicsSettingsLoadResult{GraphicsSettingsLoadStatus::invalid,
                                           {}};
+}
+RequestedGraphicsSettings load_initial_graphics_settings(
+    const std::filesystem::path &path, Mode command_line_mode,
+    bool command_line_mode_explicit) noexcept {
+  RequestedGraphicsSettings selected;
+  if (!path.empty()) {
+    try {
+      const auto loaded = load_graphics_settings(path);
+      if (loaded.status == GraphicsSettingsLoadStatus::loaded &&
+          loaded.settings.has_value())
+        selected = *loaded.settings;
+    } catch (const std::exception &) {
+      // Preferences are optional. A filesystem exception must not make a
+      // verified game installation unstartable.
+    }
+  }
+  if (command_line_mode_explicit)
+    selected.profile = command_line_mode;
+  return selected;
 }
 bool save_graphics_settings(const std::filesystem::path &path,
                             const RequestedGraphicsSettings &s) {

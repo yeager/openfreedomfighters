@@ -86,6 +86,19 @@ std::filesystem::path application_deep_audit_cache_root() noexcept {
   return {};
 }
 
+std::filesystem::path application_graphics_settings_path() noexcept {
+  char *raw_path = SDL_GetPrefPath("OpenFreedomFighters", "OpenFreedomFighters");
+  if (raw_path == nullptr)
+    return {};
+  std::unique_ptr<char, decltype(&SDL_free)> path{raw_path, SDL_free};
+  if (*path == '\0')
+    return {};
+  const std::filesystem::path directory{path.get()};
+  if (!directory.is_absolute())
+    return {};
+  return directory / "graphics.settings";
+}
+
 namespace {
 
 constexpr int startup_width = 1280;

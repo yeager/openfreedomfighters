@@ -55,6 +55,16 @@ int main() {
   check(loaded.status == off::settings::GraphicsSettingsLoadStatus::loaded &&
             loaded.settings == value,
         "round trip every requested field");
+  const auto persisted_initial =
+      off::settings::load_initial_graphics_settings(path, off::Mode::original, false);
+  check(persisted_initial == value,
+        "valid stored settings supply the initial graphics request");
+  const auto command_line_initial =
+      off::settings::load_initial_graphics_settings(path, off::Mode::original, true);
+  check(command_line_initial.profile == off::Mode::original &&
+            command_line_initial.windowed_size == value.windowed_size &&
+            command_line_initial.upscaler == value.upscaler,
+        "an explicit command-line mode overrides only the saved profile");
   const auto serialized = read(path);
   check(serialized.find("fallback") == std::string::npos &&
             serialized.find("capabilit") == std::string::npos,
@@ -70,6 +80,9 @@ int main() {
         "reject unknown or incomplete documents");
   check(read(path) == malformed_before,
         "loading malformed data never overwrites it");
+  check(off::settings::load_initial_graphics_settings(
+            path, off::Mode::modern, false) == off::settings::RequestedGraphicsSettings{},
+        "malformed preferences fall back to the default request without repair");
   {
     std::ofstream unsupported(path, std::ios::binary | std::ios::trunc);
     unsupported << "off-graphics-settings=2\n";
@@ -82,6 +95,12 @@ int main() {
         "reject invalid settings before touching the file");
   check(read(path) == "off-graphics-settings=2\n",
         "failed save preserves existing data");
+  value.render_scale_percent = 125;
+  const auto absent_parent_path = root / "absent-parent" / "graphics.settings";
+  check(!off::settings::save_graphics_settings(absent_parent_path, value),
+        "do not create a fallback preferences directory when its parent is absent");
+  check(!std::filesystem::exists(absent_parent_path.parent_path()),
+        "failed save under an absent parent leaves no directory or partial file");
   {
     std::ofstream oversized(path, std::ios::binary | std::ios::trunc);
     oversized << std::string(4097, 'x');

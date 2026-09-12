@@ -26,6 +26,13 @@ struct GraphicsSettingsLoadResult {
 [[nodiscard]] GraphicsSettingsLoadResult
 load_graphics_settings(const std::filesystem::path &path);
 
+// Selects an initial requested configuration without mutating storage. Only a
+// validated stored document participates; an explicit command-line profile is
+// a one-launch override and takes precedence over the stored profile.
+[[nodiscard]] RequestedGraphicsSettings load_initial_graphics_settings(
+    const std::filesystem::path &path, Mode command_line_mode,
+    bool command_line_mode_explicit) noexcept;
+
 // Writes to a sibling temporary file and atomically replaces path only after a
 // complete, valid document has been written. A false result before replacement
 // leaves the prior path intact; a post-replacement directory-sync failure can

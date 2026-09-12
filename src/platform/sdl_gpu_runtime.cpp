@@ -8,6 +8,7 @@
 #include "off/platform/sdl_locale.hpp"
 #include "off/platform/sdl_menu_gamepad.hpp"
 #include "off/settings/upscaler_runtime.hpp"
+#include "off/settings/graphics_settings_store.hpp"
 #include "off/ui/graphics_menu_draw.hpp"
 #include "off/ui/graphics_menu_pointer.hpp"
 #include "off/ui/font_run_layout.hpp"
@@ -1315,6 +1316,8 @@ template<class Images>
 
 RuntimeResult
 run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
+                    bool mode_explicitly_requested,
+                    const std::filesystem::path &graphics_settings_path,
                     const graphics::SceneGpuPlan *scene,
                     const graphics::StartupGraphicsAsset &startup_graphics,
                     const ui::RetailUiFontSet &ui_fonts,
@@ -1446,8 +1449,11 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   capabilities = settings::negotiate_upscaler_runtime_capabilities(
       capabilities, {});
   ui::GraphicsMenuSession menu{capabilities};
-  settings::RequestedGraphicsSettings initial;
-  initial.profile = mode;
+  // A malformed or unavailable preferences file is never repaired here. The
+  // default request remains usable, while an explicit CLI profile is a
+  // one-launch override rather than a stored mutation.
+  const auto initial = settings::load_initial_graphics_settings(
+      graphics_settings_path, mode, mode_explicitly_requested);
   const auto initial_resolution =
       settings::resolve_graphics_settings(initial, capabilities);
   const auto initial_setup = settings::initialize_graphics_settings(
@@ -1606,6 +1612,9 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
               active_mode = proposal->effective.profile;
             if (acknowledged == ui::GraphicsMenuEffect::commit_requested) {
               active_mode = menu.confirmed_effective().profile;
+              if (!graphics_settings_path.empty())
+                static_cast<void>(settings::save_graphics_settings(
+                    graphics_settings_path, menu.confirmed_requested()));
             }
           }
         } else if (effect == ui::GraphicsMenuEffect::revert_requested) {
@@ -1626,6 +1635,9 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
             active_mode = menu.confirmed_effective().profile;
         } else if (effect == ui::GraphicsMenuEffect::commit_requested) {
           active_mode = menu.confirmed_effective().profile;
+          if (!graphics_settings_path.empty())
+            static_cast<void>(settings::save_graphics_settings(
+                graphics_settings_path, menu.confirmed_requested()));
         }
       }
     }
