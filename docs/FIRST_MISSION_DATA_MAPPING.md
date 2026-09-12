@@ -75,3 +75,28 @@ output is created exclusively with owner-only `0600` permissions. Review the
 bundle before adding any native behavior. The sanitized traces remain private;
 only an authored behavior specification and source-free test fixture may enter
 the repository.
+
+## Fresh isolated collection
+
+`tools/first_mission_observation_runner.py` is the optional private launcher
+for the three-run collection. It starts only an explicitly supplied private
+observer in literal `fresh-isolated` mode. It provides no installation path,
+process selector, attach mode, debugger expression, or target-discovery rule.
+The observer itself remains responsible for maintaining its private setup.
+
+The workspace must be a new private directory outside this repository. The
+observer may write exactly the two baseline and one experiment structural JSON
+records. The launcher validates them through the existing narrow schemas,
+requires the existing repeat-bundle relation, deletes all three raw records,
+and creates only sanitized records and one aggregate review bundle with `0600`
+permissions. It suppresses the observer's standard output and error, so raw
+material cannot leak through terminal or CI logs.
+
+```sh
+python3 tools/first_mission_observation_runner.py --execute \
+  --observer PRIVATE_OBSERVER --workspace PRIVATE_NEW_WORKSPACE
+```
+
+The launcher does not make the aggregate a runtime authorization. Keep the
+workspace and its output private; use the independent review step described
+below before admitting a native behavior contract.
