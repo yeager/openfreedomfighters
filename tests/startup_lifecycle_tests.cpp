@@ -11,6 +11,7 @@
 #include "off/runtime/startup_boot_scene_construction.hpp"
 #include "off/runtime/startup_boot_scene_directory_source.hpp"
 #include "off/runtime/startup_boot_scene_factory.hpp"
+#include "off/runtime/startup_boot_scene_registry.hpp"
 #include "off/runtime/startup_boot_scene_probe_host.hpp"
 #include "off/runtime/startup_scene_loader.hpp"
 #include "off/runtime/startup_scene_package_source.hpp"
@@ -1290,6 +1291,38 @@ int main() {
   const auto source_backed_boot_directory =
       off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
           source_backed_boot_inputs.gms());
+  static_assert(!std::is_copy_constructible_v<
+                off::runtime::StartupBootSceneRegistry>);
+  off::runtime::StartupBootSceneRegistryFactory boot_registry_factory;
+  auto boot_registry = boot_registry_factory.construct(
+      source_backed_boot_package, source_backed_boot_directory, boot_scene, 10U);
+  const auto registry_root = boot_registry.root();
+  const auto registry_boot_owner = boot_registry.boot_menu_owner();
+  const auto registry_boot_source =
+      source_backed_boot_directory.boot_owner_directory_index();
+  check(boot_registry.valid() && boot_registry.generation() == 10U &&
+            boot_registry.epoch() != 0U &&
+            boot_registry.nodes().size() ==
+                source_backed_boot_directory.hierarchy_scope().nodes.size() &&
+            boot_registry.contains(registry_root) &&
+            boot_registry.contains(registry_boot_owner) &&
+            registry_root != source_backed_boot_directory.hierarchy_scope()
+                                 .root_directory_index &&
+            registry_boot_owner != registry_boot_source &&
+            boot_registry.handle_for_source_directory(registry_boot_source) ==
+                registry_boot_owner &&
+            boot_registry.node(registry_root).parent == std::nullopt &&
+            boot_registry.node(registry_root).children_in_directory_order.size() == 1U &&
+            boot_registry.node(registry_root).children_in_directory_order.front() !=
+                registry_root &&
+            boot_registry.boot_menu_parameter() == 1.0F,
+        "source-backed startup registry retains exact hierarchy links with fresh native handles");
+  auto second_boot_registry = boot_registry_factory.construct(
+      source_backed_boot_package, source_backed_boot_directory, boot_scene, 11U);
+  check(second_boot_registry.valid() &&
+            second_boot_registry.root() != registry_root &&
+            second_boot_registry.boot_menu_owner() != registry_boot_owner,
+        "startup registry never reuses native handles across scene transactions");
   off::runtime::StartupBootSceneFactory boot_factory;
   auto factory_boot_token = boot_factory.construct(
       source_backed_boot_package, source_backed_boot_directory, boot_scene,

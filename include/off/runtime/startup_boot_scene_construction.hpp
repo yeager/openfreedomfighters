@@ -14,6 +14,7 @@ namespace off::runtime {
 
 class StartupBootMenuAdmission;
 class StartupBootSceneFactory;
+class StartupBootSceneRegistryFactory;
 
 // Evidence supplied by the completed FF-StartUp directory reader. This is not
 // a parser: callers must have checked the entire mapped directory first.
@@ -37,6 +38,7 @@ public:
 
 private:
   friend class StartupBootSceneConstruction;
+  friend class StartupBootSceneRegistryFactory;
   explicit StartupBootSceneLease(std::shared_ptr<const void> lifetime)
       : lifetime_(std::move(lifetime)) {}
   std::shared_ptr<const void> lifetime_;
