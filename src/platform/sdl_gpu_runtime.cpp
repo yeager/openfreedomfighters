@@ -1,5 +1,7 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/platform/runtime_presentation_settings.hpp"
+#include "off/graphics/intro_runtime.hpp"
+#include "off/graphics/normal_intro_scene_session.hpp"
 #include "off/graphics/scene_instance_history.hpp"
 #include "off/graphics/temporal_resolve_baseline.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
@@ -1347,7 +1349,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     const graphics::StartupGraphicsAsset &startup_graphics,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,
-                    graphics::IntroRuntime *intro,
+                    const graphics::NormalIntroSceneSession *intro_session,
                     const graphics::IntroPreviewSnapshot *intro_preview_diagnostic,
                     std::size_t frame_limit, bool show_graphics_menu,
                     const std::filesystem::path &screenshot_path,
@@ -1355,9 +1357,17 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     bool startup_graphics_scene_diagnostic) {
   if (ui_fonts.fonts.empty())
     return failure("retail UI font set is empty");
-  if ((scene != nullptr) == (intro != nullptr))
+  if ((scene != nullptr) == (intro_session != nullptr))
     return {.success = false,
-            .message = "Select exactly one retained intro host or diagnostic scene"};
+            .message = "Select exactly one retained intro session or diagnostic scene"};
+  if (intro_session != nullptr &&
+      intro_session->stage() != graphics::NormalIntroSceneSessionStage::reader_bracket_complete &&
+      intro_session->stage() != graphics::NormalIntroSceneSessionStage::outer_loader_tail_complete) {
+    return {.success = false,
+            .message = "Retained intro session has not reached its source-backed reader boundary"};
+  }
+  const graphics::IntroRuntime *const intro =
+      intro_session != nullptr ? std::addressof(intro_session->runtime()) : nullptr;
   try {
     if (scene)
       graphics::validate_scene_gpu_plan(*scene);

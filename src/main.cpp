@@ -452,6 +452,37 @@ void write_startup_route_cold_probe(const std::filesystem::path &root,
   return "unknown";
 }
 
+[[nodiscard]] std::string_view lifecycle_preflight_failure_label(
+    off::graphics::IntroLifecyclePreflightFailure failure) noexcept {
+  using Failure=off::graphics::IntroLifecyclePreflightFailure;
+  switch(failure) {
+  case Failure::none: return "complete";
+  case Failure::stage: return "stage-unavailable";
+  case Failure::reader_coverage: return "reader-coverage";
+  case Failure::component_coverage: return "component-coverage";
+  case Failure::owner_coverage: return "owner-coverage";
+  case Failure::live_mapping: return "live-mapping";
+  case Failure::unsupported: return "unsupported";
+  }
+  return "unknown";
+}
+
+void write_lifecycle_coverage_probe(
+    std::ostream& output, const off::graphics::IntroLifecyclePreflightReport& report) {
+  const auto write_population=[&output](std::string_view name, std::size_t required,
+                                        std::size_t covered) {
+    if(covered>required)
+      throw std::runtime_error("lifecycle coverage probe has inconsistent totals");
+    output << "lifecycle-coverage=" << name << " required=" << required
+           << " covered=" << covered << " uncovered=" << required-covered << '\n';
+  };
+  write_population("readers",report.expected_readers,report.covered_readers);
+  write_population("components",report.expected_components,report.covered_components);
+  write_population("owners",report.expected_owners,report.covered_owners);
+  output << "lifecycle-coverage-status="
+         << lifecycle_preflight_failure_label(report.failure) << '\n';
+}
+
 void write_reader_coverage_probe(std::ostream& output,
     const off::graphics::IntroDeferredReaderCoverageInventory& coverage) {
   constexpr std::size_t family_count=15U;
@@ -812,6 +843,7 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
             << command_component_delivery_attempts << '\n'
             ;
   write_reader_coverage_probe(std::cout,reader_coverage);
+  write_lifecycle_coverage_probe(std::cout,intro.preflight_global_lifecycle());
   std::cout << "matpos-deferred-records=" << matpos_dispatch.associated_records << '\n'
             << "matpos-terminal-first=" << matpos_dispatch.terminal_before_first_attachment_delimiter << '\n'
             << "matpos-attachment-first=" << matpos_dispatch.attachment_delimiter_precedes_terminal << '\n'
@@ -1306,7 +1338,6 @@ int main(int argc, char **argv) {
   std::optional<off::graphics::StartupGraphicsExpandedPlan>
       startup_graphics_cpu_plan;
   std::unique_ptr<off::graphics::NormalIntroSceneSession> intro_session;
-  off::graphics::IntroRuntime *intro{};
   std::optional<off::graphics::IntroPreviewSnapshot>
       intro_legal_picture_preflight;
   off::ui::RetailUiFontSet ui_fonts;
@@ -1377,27 +1408,26 @@ int main(int argc, char **argv) {
                     data_path / "Scenes" / "FF-Intro.ZIP"),
                 application, component_sequence, "FF-Intro.gms",
                 off::graphics::IntroSoundLoadPolicy::directory_construction);
-            intro = intro_runtime.get();
+            auto& intro = *intro_runtime;
             // Execute the actual fresh root stage. Authored source construction
             // and its loader tail are still required before fallback/view
             // admission.
-            intro->construct_root();
+            intro.construct_root();
             // The engine GPU runtime is created below, after CPU preflight. The
             // startup splash is a separate renderer. Reset load progress once
             // under the native staging policy, then construct the reviewed
             // directory prefix.
-            intro->begin_source_loading_without_engine_renderer();
-            intro->construct_first_authored_group();
-            intro->construct_window_language_groups_without_engine_renderer();
-            intro->construct_picture_component_prefix_without_engine_renderer();
-            intro->construct_authored_camera_without_engine_renderer();
-            intro->construct_second_window_picture_without_engine_renderer();
-            intro->construct_second_window_scope_without_engine_renderer();
-            intro->construct_following_visual_scope_without_engine_renderer();
-            intro->construct_room_animation_scope_without_engine_renderer();
-            intro
-                ->construct_lens_flare_animation_scope_without_engine_renderer();
-            intro->construct_remaining_directory_without_engine_renderer();
+            intro.begin_source_loading_without_engine_renderer();
+            intro.construct_first_authored_group();
+            intro.construct_window_language_groups_without_engine_renderer();
+            intro.construct_picture_component_prefix_without_engine_renderer();
+            intro.construct_authored_camera_without_engine_renderer();
+            intro.construct_second_window_picture_without_engine_renderer();
+            intro.construct_second_window_scope_without_engine_renderer();
+            intro.construct_following_visual_scope_without_engine_renderer();
+            intro.construct_room_animation_scope_without_engine_renderer();
+            intro.construct_lens_flare_animation_scope_without_engine_renderer();
+            intro.construct_remaining_directory_without_engine_renderer();
             // The reviewed cold-load reader bracket establishes source-backed
             // first-cut ownership and reference translation.  It deliberately
             // does not admit a global lifecycle, schedule an event, activate a
@@ -1413,16 +1443,16 @@ int main(int argc, char **argv) {
             // turn a loader receipt into an unobserved cutscene preview.
             if (diagnostic_intro_picture) {
               const auto legal_source =
-                  intro->resources()
+                  intro.resources()
                       .sources()
                       .local_source_for_authored_reference(
-                          intro->resources().member().references[1]);
+                          intro.resources().member().references[1]);
               if (!legal_source)
                 throw std::runtime_error(
                     "first-cut legal picture source is unavailable");
               intro_legal_picture_preflight.emplace(
                   off::graphics::build_intro_preview(
-                      *intro, *legal_source, {.width = 1280U, .height = 720U},
+                      intro, *legal_source, {.width = 1280U, .height = 720U},
                       off::graphics::IntroPreviewPolicy::
                           admitted_first_cut_legal_picture));
             }
@@ -1531,6 +1561,9 @@ int main(int argc, char **argv) {
   if (diagnostic_intro_picture)
     std::cout << "Intro picture diagnostic: source image data and source quad "
                  "geometry, generic fit projection; not cutscene playback.\n";
+  const auto* intro = intro_session
+                          ? std::addressof(intro_session->runtime())
+                          : nullptr;
   if (intro)
     std::cout << "Source-backed intro runtime retained: "
               << intro->pictures().size() << " picture definitions, "
@@ -1581,7 +1614,7 @@ int main(int argc, char **argv) {
       startup_window, mode, mode_specified,
       off::platform::application_graphics_settings_path(),
       scene ? &*scene : nullptr, *startup_graphics,
-      ui_fonts, ui_textures, intro,
+      ui_fonts, ui_textures, intro_session.get(),
       intro_legal_picture_preflight ? &*intro_legal_picture_preflight : nullptr,
       frame_limit, show_graphics_menu,
       screenshot_path, locale, diagnostic_startup_graphics);

@@ -42,6 +42,8 @@ The supported intro construction fixture contains 470 authored resources,
 383 attachments and 420 queued readers. These counts describe a population,
 not completion. Recompute reader coverage by family when implementing I1;
 older twelve-reader summaries are historical, not a current acceptance target.
+The required reader, owner, and component populations and their source-free
+reproduction route are maintained in the [I1 coverage matrix](INTRO_I1_COVERAGE_MATRIX.md).
 
 The current normal path is visible in [main.cpp](../src/main.cpp) and
 [sdl_gpu_runtime.cpp](../src/platform/sdl_gpu_runtime.cpp). It prepares a cold

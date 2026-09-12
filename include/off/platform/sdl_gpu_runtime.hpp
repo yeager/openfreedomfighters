@@ -2,7 +2,6 @@
 
 #include "off/graphics/scene_gpu_plan.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
-#include "off/graphics/intro_runtime.hpp"
 #include "off/graphics/startup_graphics_asset.hpp"
 #include "off/mode.hpp"
 #include "off/platform/sdl_startup.hpp"
@@ -13,6 +12,10 @@
 #include <filesystem>
 #include <string>
 #include <string_view>
+
+namespace off::graphics {
+class NormalIntroSceneSession;
+}
 
 namespace off::platform {
 
@@ -25,8 +28,11 @@ struct RuntimeResult {
 // this call returns; GPU resources are released before the window is destroyed.
 // A null scene is normal startup: no world uploads, depth target, diagnostic
 // projection or scene draws. Non-null opts into the separate diagnostic path.
-// Normal startup requires the one retained mutable intro host; diagnostic scene
-// and intro are mutually exclusive. GPU ownership ends before this borrow ends.
+// Normal startup requires the one manager-owned retained intro session;
+// diagnostic scene and intro session are mutually exclusive. GPU ownership
+// ends before this borrow ends. The renderer intentionally cannot receive a
+// detached IntroRuntime pointer: its image catalog is dispatched through the
+// session that owns the reader and first-cut lifetime.
 [[nodiscard]] RuntimeResult
 run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     bool mode_explicitly_requested,
@@ -35,7 +41,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     const graphics::StartupGraphicsAsset &startup_graphics,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,
-                    graphics::IntroRuntime *intro,
+                    const graphics::NormalIntroSceneSession *intro_session,
                     const graphics::IntroPreviewSnapshot *intro_preview_diagnostic,
                     std::size_t frame_limit = 0,
                     bool show_graphics_menu = false,
