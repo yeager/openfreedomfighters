@@ -16,6 +16,28 @@ void require_valid_unique(const std::vector<Identity>& identities,
       throw std::runtime_error(std::string("intro lifecycle requirements contain duplicate ") + description);
 }
 
+void require_live_reader(const IntroReaderAdmissionIdentity& identity) {
+  // A source-directory index may legitimately be zero. The other two fields
+  // are the recovered runtime resource and deferred-block boundary, however:
+  // permitting either sentinel would let a fabricated requirement become
+  // "covered" without a source-backed reader receipt.
+  if (identity.resource == 0 || identity.source_offset == 0)
+    throw std::runtime_error(
+        "intro lifecycle requirements contain an unbound reader identity");
+}
+
+void require_live_component(const IntroComponentAdmissionIdentity& identity) {
+  if (identity.component == 0)
+    throw std::runtime_error(
+        "intro lifecycle requirements contain an unbound component identity");
+}
+
+void require_live_owner(const IntroOwnerAdmissionIdentity& identity) {
+  if (identity.owner == 0)
+    throw std::runtime_error(
+        "intro lifecycle requirements contain an unbound owner identity");
+}
+
 template <class Identity>
 void cover(const std::vector<Identity>& requirements, std::vector<Identity>& covered,
            Identity identity, const char* description) {
@@ -34,6 +56,12 @@ IntroLifecycleAdmissionCoverageRegistry::IntroLifecycleAdmissionCoverageRegistry
   require_valid_unique(requirements_.readers, "reader");
   require_valid_unique(requirements_.components, "component");
   require_valid_unique(requirements_.owners, "owner");
+  for (const auto& identity : requirements_.readers)
+    require_live_reader(identity);
+  for (const auto& identity : requirements_.components)
+    require_live_component(identity);
+  for (const auto& identity : requirements_.owners)
+    require_live_owner(identity);
 }
 
 void IntroLifecycleAdmissionCoverageRegistry::cover_reader(

@@ -37,6 +37,26 @@ int main() {
       invalid.readers.push_back(invalid.readers.front());
       static_cast<void>(IntroLifecycleAdmissionCoverageRegistry{std::move(invalid)});
     });
+    rejects([] {
+      auto invalid = requirements();
+      invalid.readers[0].resource = 0;
+      static_cast<void>(IntroLifecycleAdmissionCoverageRegistry{std::move(invalid)});
+    });
+    rejects([] {
+      auto invalid = requirements();
+      invalid.readers[0].source_offset = 0;
+      static_cast<void>(IntroLifecycleAdmissionCoverageRegistry{std::move(invalid)});
+    });
+    rejects([] {
+      auto invalid = requirements();
+      invalid.components[0].component = 0;
+      static_cast<void>(IntroLifecycleAdmissionCoverageRegistry{std::move(invalid)});
+    });
+    rejects([] {
+      auto invalid = requirements();
+      invalid.owners[0].owner = 0;
+      static_cast<void>(IntroLifecycleAdmissionCoverageRegistry{std::move(invalid)});
+    });
 
     IntroLifecycleAdmissionCoverageRegistry registry{requirements()};
     const auto initial = registry.report();
