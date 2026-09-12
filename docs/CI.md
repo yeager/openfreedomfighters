@@ -37,6 +37,6 @@ working files remain in scope.
 
 ## Development-package workflow
 
-Tags matching `v*` and explicit manual dispatches build and test data-free binaries for Linux, macOS, and Windows. The requested version must exactly match the version in `CMakeLists.txt`. The workflow uploads the validated packages only as GitHub Actions artifacts; it has read-only repository permission and never creates, edits, or attaches files to a GitHub Release.
+Tags matching `v*` and explicit manual dispatches build and test data-free binaries for Linux x86-64, macOS x86-64 and arm64, and Windows x64. macOS archives are architecture-specific; the workflow does not label either one as universal. The requested version must exactly match the version in `CMakeLists.txt`. The workflow uploads the validated packages only as GitHub Actions artifacts; it has read-only repository permission and never creates, edits, or attaches files to a GitHub Release.
 
 These archives contain only independently authored code and permitted runtime dependencies, and still require a legally purchased supported installation at runtime. They are development artifacts, not public downloads or playable releases. A production publishing workflow must be introduced separately, protected, and gated by the signing, notarization, provenance, clean-install, and platform-qualification requirements in `RELEASE_ENGINEERING.md`.

@@ -68,7 +68,19 @@ jobs:
           if-no-files-found: error
 
   build-macos:
-    runs-on: macos-14
+    name: build-macos (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # Build packages on both supported native macOS architectures. A
+        # universal label would be misleading because each hosted runner emits
+        # one architecture-specific binary.
+        include:
+          - runner: macos-15-intel
+            architecture: x86_64
+          - runner: macos-14
+            architecture: arm64
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
@@ -101,11 +113,11 @@ jobs:
           test "$(tr -d '\r\n' < "$missing_data_stderr")" = \
             "Game-data verification failed: game-data directory does not exist"
           cp README.md LICENSE THIRD_PARTY.md package/
-          tar -czf OpenFreedomFighters-macos.tar.gz -C package .
+          tar -czf "OpenFreedomFighters-macos-${{ matrix.architecture }}.tar.gz" -C package .
       - uses: actions/upload-artifact@v7
         with:
-          name: macos
-          path: OpenFreedomFighters-macos.tar.gz
+          name: macos-${{ matrix.architecture }}
+          path: OpenFreedomFighters-macos-${{ matrix.architecture }}.tar.gz
           if-no-files-found: error
 
   build-windows:
@@ -171,10 +183,12 @@ jobs:
         run: |
           set -euo pipefail
           test -s artifacts/linux-x86_64/OpenFreedomFighters-linux-x86_64.tar.gz
-          test -s artifacts/macos/OpenFreedomFighters-macos.tar.gz
+          test -s artifacts/macos-x86_64/OpenFreedomFighters-macos-x86_64.tar.gz
+          test -s artifacts/macos-arm64/OpenFreedomFighters-macos-arm64.tar.gz
           test -s artifacts/windows-x64/OpenFreedomFighters-windows-x64.zip
           python3 tools/verify_release_package.py linux artifacts/linux-x86_64/OpenFreedomFighters-linux-x86_64.tar.gz
-          python3 tools/verify_release_package.py macos artifacts/macos/OpenFreedomFighters-macos.tar.gz
+          python3 tools/verify_release_package.py macos artifacts/macos-x86_64/OpenFreedomFighters-macos-x86_64.tar.gz
+          python3 tools/verify_release_package.py macos artifacts/macos-arm64/OpenFreedomFighters-macos-arm64.tar.gz
           python3 tools/verify_release_package.py windows artifacts/windows-x64/OpenFreedomFighters-windows-x64.zip
       - name: Scan repository with Gitleaks
         uses: ./.github/actions/gitleaks
