@@ -18,7 +18,12 @@ int main() {
   check(store.records().size()==3 && store.records()[0].type==1 && store.records()[0].entity.index==3 && store.records()[1].entity.index==9 && store.records()[2].type==2 && store.payload_bytes()==8, "canonical record order is independent of insertion order");
   store.upsert(1, {9,2}, replacement);
   check(store.records().size()==3 && std::ranges::equal(store.find(1,{9,2}), replacement) && store.payload_bytes()==7, "exact key upsert replaces payload deterministically");
-  const auto snapshot=store.export_snapshot(); ComponentStore restored; restored.import_snapshot(snapshot);
+  const auto snapshot=store.export_snapshot();
+  check(std::ranges::equal(std::span<const std::byte>(snapshot).first(28), bytes({
+      'O','F','F','C','M','P',0,0,
+      1,0,0,0, 4,3,2,1, 60,0,0,0, 83,0,0,0,0,0,0,0})),
+      "component snapshot header uses the established little-endian byte layout");
+  ComponentStore restored; restored.import_snapshot(snapshot);
   check(std::ranges::equal(restored.records(), store.records()) && restored.state_hash()==store.state_hash() && restored.export_snapshot()==snapshot, "component snapshot round trips canonical state");
   const auto before=restored.state_hash(); auto corrupt=snapshot; corrupt.back()^=std::byte{1}; bool rejected=false; try { restored.import_snapshot(corrupt); } catch(const std::invalid_argument &) { rejected=true; }
   check(rejected && restored.state_hash()==before, "invalid snapshot leaves destination unchanged");
