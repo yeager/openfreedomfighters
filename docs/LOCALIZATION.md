@@ -20,7 +20,14 @@ included only as labelled diagnostic detail. This keeps user-facing wording
 translatable without discarding the exact reason needed for support.
 
 The current catalog has no external catalog loader, plural/select support,
-bidirectional layout, shaping, font fallback, or locale-specific layout tests.
+bidirectional layout, shaping, or font fallback. CI does include a deliberately
+narrow F10 layout guard: every supported F10 locale is built at representative
+viewport sizes and checked against a deterministic 8-by-16 reference-cell
+footprint within its authored panel clip. This detects obvious command/layout
+overflow without claiming font measurement, shaping, or locale-specific layout
+correctness. A source-free pseudo-localizer can generate expanded stress text
+only from built-in project `MessageId` values; it accepts neither arbitrary
+text nor retail LOC input and preserves `{seconds}` verbatim.
 The countdown is the single constrained `{seconds}` project-authored pattern;
 other formatting contracts remain future work.
 

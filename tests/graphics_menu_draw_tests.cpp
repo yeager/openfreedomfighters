@@ -59,6 +59,7 @@ int main() {
     const auto list = off::ui::build_graphics_menu_draw_list(menu, size, now);
     check(list.status == off::ui::UiBuildStatus::ok &&
               off::ui::validate_graphics_menu_draw_list(list) &&
+              off::ui::validate_graphics_menu_text_layout(list) &&
               list.hit_targets.size() == 10 && has_text(list, "Modern") &&
               has_text(list, "Borderless desktop") &&
               has_text(list, "1920 x 1080") && has_text(list, "VSync") &&
@@ -98,13 +99,19 @@ int main() {
       "es-ES", "it-IT", "pt-BR", "pl-PL", "cs-CZ", "hu-HU", "ro-RO",
       "tr-TR", "ru-RU", "uk-UA", "ja-JP", "ko-KR", "zh-CN",
   }};
+  constexpr std::array<off::ui::UiExtent, 2> layout_viewports{{
+      {640, 360}, {3440, 1440},
+  }};
   for (const auto locale : f10_locale_tags) {
-    const auto localized_fsr = off::ui::build_graphics_menu_draw_list(
-        menu, {640, 360}, now, 1.0F, locale, "en-US");
-    check(localized_fsr.status == off::ui::UiBuildStatus::ok &&
-              has_text(localized_fsr, "FSR") &&
-              off::ui::validate_graphics_menu_draw_list(localized_fsr),
-          "FSR product naming is stable across every supported F10 locale");
+    for (const auto viewport : layout_viewports) {
+      const auto localized_fsr = off::ui::build_graphics_menu_draw_list(
+          menu, viewport, now, 1.0F, locale, "en-US");
+      check(localized_fsr.status == off::ui::UiBuildStatus::ok &&
+                has_text(localized_fsr, "FSR") &&
+                off::ui::validate_graphics_menu_draw_list(localized_fsr) &&
+                off::ui::validate_graphics_menu_text_layout(localized_fsr),
+            "every F10 locale stays within the authored panel at narrow and wide viewports");
+    }
   }
   menu.draft().upscaler = off::settings::Upscaler::xess;
   for (const auto locale : f10_locale_tags) {
@@ -112,7 +119,8 @@ int main() {
         menu, {640, 360}, now, 1.0F, locale, "en-US");
     check(localized_xess.status == off::ui::UiBuildStatus::ok &&
               has_text(localized_xess, "XeSS") &&
-              off::ui::validate_graphics_menu_draw_list(localized_xess),
+              off::ui::validate_graphics_menu_draw_list(localized_xess) &&
+              off::ui::validate_graphics_menu_text_layout(localized_xess),
           "XeSS product naming is stable across every supported F10 locale");
   }
   menu.draft().upscaler = off::settings::Upscaler::native;
@@ -218,6 +226,11 @@ int main() {
     opaque_pixels += alpha == 255 ? 1U : 0U;
   check(opaque_pixels > 1000 && atlas.alpha[80U * 128U + 120U] == 255,
         "generated Spleen glyphs and the solid UI texel are present");
+
+  auto overflowing_text = reference;
+  overflowing_text.texts.front().text.assign(100, 'W');
+  check(!off::ui::validate_graphics_menu_text_layout(overflowing_text),
+        "the deterministic layout oracle rejects text beyond its panel clip");
 
   auto textured = reference;
   textured.textures.push_back({off::ui::UiLayer::panel,

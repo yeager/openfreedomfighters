@@ -149,4 +149,11 @@ struct CatalogBuildResult {
 // complete game coverage.
 [[nodiscard]] const ProjectCatalog &f10_catalog();
 
+// Generates a deterministic stress representation from the built-in English
+// F10/startup catalog entry named by id.  This accepts an ID rather than text
+// so pseudo-localization cannot be used as a path to transform or extract
+// retail LOC content.  Formatting markers such as {seconds} are retained.
+[[nodiscard]] std::optional<std::string>
+pseudo_localized_f10_text(MessageId id);
+
 } // namespace off::ui::l10n

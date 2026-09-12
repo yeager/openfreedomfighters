@@ -43,6 +43,26 @@ bool normalized(const UiRect &rect) {
 
 bool valid_layer(UiLayer layer) { return layer <= UiLayer::modal; }
 
+std::optional<std::size_t> utf8_scalar_count(std::string_view value) noexcept {
+  std::size_t count = 0;
+  for (std::size_t index = 0; index < value.size();) {
+    const auto byte = static_cast<unsigned char>(value[index]);
+    const std::size_t continuation_count =
+        byte <= 0x7fU ? 0U : byte >= 0xc2U && byte <= 0xdfU ? 1U
+                       : byte >= 0xe0U && byte <= 0xefU   ? 2U
+                       : byte >= 0xf0U && byte <= 0xf4U   ? 3U
+                                                          : 4U;
+    if (continuation_count == 4U || index + continuation_count >= value.size())
+      return std::nullopt;
+    for (std::size_t offset = 1; offset <= continuation_count; ++offset)
+      if ((static_cast<unsigned char>(value[index + offset]) & 0xc0U) != 0x80U)
+        return std::nullopt;
+    index += continuation_count + 1U;
+    ++count;
+  }
+  return count;
+}
+
 std::string localized(l10n::MessageId id, std::string_view explicit_locale,
                       PlatformLocales platform_locales) {
   const auto text =
@@ -390,6 +410,27 @@ bool validate_graphics_menu_draw_list(
   }
   for (const auto &target : list.hit_targets) {
     if (!inside(target.bounds, list.target))
+      return false;
+  }
+  return true;
+}
+
+bool validate_graphics_menu_text_layout(
+    const GraphicsMenuDrawList &list) noexcept {
+  if (list.status != UiBuildStatus::ok)
+    return false;
+  for (const auto &command : list.texts) {
+    const auto scalars = utf8_scalar_count(command.text);
+    if (!scalars || command.x < command.clip.x || command.y < command.clip.y)
+      return false;
+    // Every built list uses the authored 640-unit panel as its clip.  Derive
+    // the physical cell size from that panel rather than from a platform font.
+    const float scale = command.clip.width / reference_width;
+    const float right = command.x + static_cast<float>(*scalars) * 8.0F * scale;
+    const float bottom = command.y + 16.0F * scale;
+    if (!std::isfinite(right) || !std::isfinite(bottom) ||
+        right > command.clip.x + command.clip.width ||
+        bottom > command.clip.y + command.clip.height)
       return false;
   }
   return true;

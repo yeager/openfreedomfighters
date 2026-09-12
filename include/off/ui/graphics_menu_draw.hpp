@@ -136,4 +136,11 @@ struct DiagnosticAsciiAtlas {
 [[nodiscard]] bool
 validate_graphics_menu_draw_list(const GraphicsMenuDrawList &list) noexcept;
 
+// Checks a deterministic, shaping-free text footprint for the project-authored
+// F10 draw list.  It uses an 8-by-16 reference cell scaled with the authored
+// 640-by-360 viewport.  This is a narrow overflow regression guard, not a
+// substitute for font shaping, fallback, or locale-specific text measurement.
+[[nodiscard]] bool
+validate_graphics_menu_text_layout(const GraphicsMenuDrawList &list) noexcept;
+
 } // namespace off::ui

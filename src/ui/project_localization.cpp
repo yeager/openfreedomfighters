@@ -275,4 +275,42 @@ const ProjectCatalog &f10_catalog() {
   return catalog;
 }
 
+std::optional<std::string> pseudo_localized_f10_text(MessageId id) {
+  const auto source = f10_catalog().resolve(id, "en", "en");
+  if (!source)
+    return std::nullopt;
+
+  // Keep the transformation intentionally simple and source-free: its only
+  // input is a known project catalog ID, and it has no filesystem or retail
+  // catalog dependency.  Doubling ASCII vowels creates predictable expansion
+  // while braces preserve the catalog's one formatting contract verbatim.
+  std::string result{"[!! "};
+  bool in_marker = false;
+  for (const char character : *source) {
+    if (character == '{')
+      in_marker = true;
+    if (in_marker) {
+      result.push_back(character);
+      if (character == '}')
+        in_marker = false;
+      continue;
+    }
+    switch (character) {
+    case 'a': result += "àà"; break;
+    case 'A': result += "ÀÀ"; break;
+    case 'e': result += "ëë"; break;
+    case 'E': result += "ËË"; break;
+    case 'i': result += "ïï"; break;
+    case 'I': result += "ÏÏ"; break;
+    case 'o': result += "ôô"; break;
+    case 'O': result += "ÔÔ"; break;
+    case 'u': result += "üü"; break;
+    case 'U': result += "ÜÜ"; break;
+    default: result.push_back(character); break;
+    }
+  }
+  result += " !!]";
+  return result;
+}
+
 } // namespace off::ui::l10n

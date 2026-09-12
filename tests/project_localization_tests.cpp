@@ -67,6 +67,16 @@ int main() {
         "invalid message IDs do not resolve");
   check(!catalog.format_seconds(MessageId::apply, 2, "en", "en"),
         "only the declared countdown pattern is formatted");
+  const auto pseudo_apply = pseudo_localized_f10_text(MessageId::apply);
+  check(pseudo_apply && *pseudo_apply == "[!! ÀÀpply !!]",
+        "pseudo-localization is deterministic for an authored F10 ID");
+  const auto pseudo_countdown =
+      pseudo_localized_f10_text(MessageId::reverting_in_seconds);
+  check(pseudo_countdown &&
+            pseudo_countdown->find("{seconds}") != std::string::npos,
+        "pseudo-localization retains the declared formatting marker");
+  check(!pseudo_localized_f10_text(static_cast<MessageId>(message_id_count)),
+        "pseudo-localization rejects IDs outside the authored F10 catalog");
 
   const off::data::InstallVerification missing_executable{
       .error = off::data::InstallError::missing_executable,
