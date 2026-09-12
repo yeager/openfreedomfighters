@@ -39,14 +39,16 @@ void MovieControlFirstCutRuntimeHandoff::require_live_relations() const {
   if (!movie || !movie_component || !sequence || !sequence_component ||
       !runtime_->first_cut_player_prepared_state())
     throw std::runtime_error("MovieControl first-cut handoff lacks reviewed runtime state");
+  const auto expected_player = runtime_->first_cut_player_initialization();
   if (movie_component->owner != movie->owner || movie_component->resource != movie->resource ||
       movie_component->component_index != movie->component_index ||
       sequence_component->owner != sequence->owner ||
       sequence_component->resource != sequence->resource ||
       sequence_component->component_index != sequence->component_index ||
-      player_->initialization().list_component() !=
-          runtime_->first_cut_player_initialization().list_component())
+      player_->initialization().list_component() != expected_player.list_component())
     throw std::runtime_error("MovieControl first-cut handoff reader relations changed");
+  if (!player_->initialization().has_same_descriptor_as(expected_player))
+    throw std::runtime_error("MovieControl first-cut handoff player descriptor changed");
   require_live_component(*runtime_, movie->component_index, movie->owner.value,
                          "ZGEOM_MovieControl");
   require_live_component(*runtime_, sequence->component_index, sequence->owner.value,

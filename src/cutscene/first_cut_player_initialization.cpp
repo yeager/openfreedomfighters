@@ -43,6 +43,30 @@ FirstCutPlayerInitialization::FirstCutPlayerInitialization(FirstCutPlayerDescrip
       !std::isfinite(sequence_.values[1]))
     throw std::runtime_error("first-cut player source requires finite values");
 }
+bool FirstCutPlayerInitialization::has_same_descriptor_as(
+    const FirstCutPlayerInitialization& other) const {
+  const auto same_command = [](const data::GmsIntroCutCommandSource& left,
+                               const data::GmsIntroCutCommandSource& right) {
+    return left.timeline_position == right.timeline_position &&
+           left.event_reference == right.event_reference &&
+           left.target_reference == right.target_reference &&
+           left.event_argument == right.event_argument &&
+           left.target_name == right.target_name;
+  };
+  return list_component_ == other.list_component_ &&
+         command_components_ == other.command_components_ &&
+         list_.sequence_reference == other.list_.sequence_reference &&
+         list_.settings_words == other.list_.settings_words &&
+         std::bit_cast<std::uint32_t>(list_.final_value) ==
+             std::bit_cast<std::uint32_t>(other.list_.final_value) &&
+         std::ranges::equal(list_.commands, other.list_.commands, same_command) &&
+         sequence_.references == other.sequence_.references &&
+         std::bit_cast<std::uint32_t>(sequence_.values[0]) ==
+             std::bit_cast<std::uint32_t>(other.sequence_.values[0]) &&
+         std::bit_cast<std::uint32_t>(sequence_.values[1]) ==
+             std::bit_cast<std::uint32_t>(other.sequence_.values[1]) &&
+         sequence_.authored_option == other.sequence_.authored_option;
+}
 void FirstCutPlayerInitialization::run_phase_one(const FirstCutPlayerPhaseOneServices& services) {
   if (phase_one_complete_ || phase_two_complete_ || running_ || failed_ || !services.invoke_command || !services.read_retained_source ||
       !services.register_list_events || !services.member_count || !services.write_queue_property)

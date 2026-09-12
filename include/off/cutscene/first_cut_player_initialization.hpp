@@ -88,8 +88,14 @@ public:
   [[nodiscard]] float derived_end() const noexcept { return derived_end_; }
   [[nodiscard]] std::optional<std::uint64_t> active_camera_list() const noexcept { return active_camera_list_; }
   [[nodiscard]] std::optional<std::uint64_t> cut_sequence_object() const noexcept { return cut_sequence_object_; }
+  // A lifecycle receiver may only be joined to the exact cold descriptor that
+  // was projected from the currently live runtime. Component indices alone
+  // are not an identity: a caller could otherwise substitute a different
+  // source payload with the same list component.
+  [[nodiscard]] bool has_same_descriptor_as(
+      const FirstCutPlayerInitialization& other) const;
 
-private:
+ private:
   data::GmsIntroFirstCutSource list_;
   data::GmsIntroCutSequenceSource sequence_;
   std::size_t list_component_{};

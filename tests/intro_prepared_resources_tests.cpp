@@ -1485,6 +1485,15 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
         auto session=host.first_cut_player_session();
         check(!session.initialization().phase_one_complete() && !session.receiver().open(),
               "first-cut session is projected from the same live reader state but remains cold");
+        const auto& prepared=*host.first_cut_player_prepared_state();
+        off::cutscene::FirstCutPlayerSession substituted_session({
+            .list_component=prepared.list_component_index,
+            .command_components={list_reader->component_indices[1],list_reader->component_indices[2],
+                                 list_reader->component_indices[3],list_reader->component_indices[4],
+                                 list_reader->component_indices[5]},
+            .list={},.sequence={}});
+        rejects([&] { static_cast<void>(
+            off::graphics::MovieControlFirstCutRuntimeHandoff::from_runtime(host, substituted_session)); });
         // The native bridge may only be formed from the checked live runtime;
         // its first successful receiver delivery is synchronous with the
         // admitted MovieControl update and is not a playback assertion.
