@@ -34,6 +34,13 @@ std::optional<std::uint8_t> album_ordinal(const std::filesystem::path& path) {
   return std::nullopt;
 }
 
+std::string album_identity(const std::filesystem::path& path) {
+  const auto identity = path.stem().string();
+  if (identity.empty())
+    throw std::invalid_argument("verified soundtrack candidate lacks an album identity");
+  return identity;
+}
+
 SoundtrackFormat format_for(const std::filesystem::path& path) {
   const auto extension = lower_extension(path);
   if (extension == ".flac") return SoundtrackFormat::flac;
@@ -50,14 +57,17 @@ SoundtrackCatalog SoundtrackCatalog::from_verified_candidates(
     const auto ordinal = album_ordinal(path);
     if (!ordinal)
       throw std::invalid_argument("verified soundtrack candidate lacks an album ordinal");
+    const auto identity = album_identity(path);
     const SoundtrackEdition edition{format_for(path), path};
     const auto track = std::ranges::find(catalog.tracks_, *ordinal,
                                          &SoundtrackTrack::album_ordinal);
     if (track == catalog.tracks_.end()) {
-      catalog.tracks_.push_back({*ordinal, edition, std::nullopt});
+      catalog.tracks_.push_back({*ordinal, identity, edition, std::nullopt});
       continue;
     }
     auto& target = *track;
+    if (target.album_identity != identity)
+      throw std::invalid_argument("verified soundtrack editions have conflicting album identities");
     if (target.preferred.format == edition.format ||
         (target.fallback && target.fallback->format == edition.format))
       throw std::invalid_argument("duplicate verified soundtrack edition");

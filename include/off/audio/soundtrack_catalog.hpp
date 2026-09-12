@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <optional>
 #include <span>
+#include <string>
 #include <vector>
 
 namespace off::audio {
@@ -19,6 +20,9 @@ struct SoundtrackEdition {
 
 struct SoundtrackTrack {
   std::uint8_t album_ordinal{};
+  // The exact file stem shared by the verified editions. It identifies an
+  // album entry only; it is not an original-game music-cue identifier.
+  std::string album_identity;
   SoundtrackEdition preferred;
   std::optional<SoundtrackEdition> fallback;
 };

@@ -42,6 +42,9 @@ int main() {
   const auto* first = catalog.find_album_track(1U);
   const auto* second = catalog.find_album_track(2U);
   check(first && second && !catalog.find_album_track(3U), "ordinal lookup is exact");
+  check(first->album_identity == "Artist - Game - 01 First" &&
+            second->album_identity == "Artist - Game - 02 Second",
+        "catalog retains an exact album identity for each edition pair");
   check(first->preferred.format == SoundtrackFormat::flac &&
             first->fallback && first->fallback->format == SoundtrackFormat::mp3,
         "FLAC is preferred with MP3 fallback");
@@ -55,6 +58,10 @@ int main() {
               std::vector{path("album/A - Game - 01 One.flac"),
                           path("album/B - Game - 01 Another.flac")})); },
           "ambiguous duplicate edition is rejected");
+  rejects([] { static_cast<void>(SoundtrackCatalog::from_verified_candidates(
+              std::vector{path("album/A - Game - 01 One.flac"),
+                          path("album/B - Game - 01 Another.mp3")})); },
+          "different titles cannot be paired only by ordinal");
   rejects([] { static_cast<void>(SoundtrackCatalog::from_verified_candidates(
               std::vector{path("album/A - Game - 01 One.ogg")})); },
           "unsupported format is rejected");
