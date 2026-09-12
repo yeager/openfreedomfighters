@@ -1,6 +1,7 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/graphics/render_scale.hpp"
 #include "off/graphics/temporal_history.hpp"
+#include "off/graphics/temporal_jitter.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
 #include "off/platform/intro_preview_diagnostic.hpp"
 #include "off/platform/sdl_locale.hpp"
@@ -1394,6 +1395,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   GpuRenderScaleTarget render_scale_target;
   GpuTemporalHistoryTargets temporal_history_targets;
   graphics::TemporalHistoryLifecycle temporal_history;
+  graphics::TemporalJitterProvider temporal_jitter;
   Mode temporal_history_mode = active_mode;
 
   RuntimeResult result{
@@ -1521,6 +1523,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     // extent happens to match.  Do this before acquiring a submission.
     if (active_mode != temporal_history_mode) {
       temporal_history.invalidate();
+      temporal_jitter.reset();
       temporal_history_mode = active_mode;
     }
     SDL_GPUCommandBuffer *command = SDL_AcquireGPUCommandBuffer(device);
@@ -1702,6 +1705,22 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         break;
       }
     }
+    // The diagnostic scene constructs a fresh local projection per draw, so it
+    // is a safe hook for Modern-only jitter. This remains only an input to the
+    // projection: no temporal resolve or upscaler is enabled by this binding.
+    std::optional<graphics::TemporalJitterSample> temporal_jitter_sample;
+    if (active_mode == Mode::modern && scene != nullptr) {
+      temporal_jitter_sample = temporal_jitter.next(
+          true, {swapchain_width, swapchain_height},
+          {content_width, content_height});
+      if (!temporal_jitter_sample) {
+        result = {.success = false, .message = "temporal jitter acquisition failed"};
+        SDL_SubmitGPUCommandBuffer(command);
+        SDL_WaitForGPUIdle(device);
+        release_overlay_transfers();
+        break;
+      }
+    }
     if (swapchain != nullptr) {
       const SDL_GPUColorTargetInfo target{
           .texture = content_target,
@@ -1767,10 +1786,17 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
           if (bound_instance != draw.instance_index) {
             const auto scene_uniform = graphics::make_scene_diagnostic_matrices(
                 *scene, draw.instance_index, content_width, content_height);
+            auto jittered_uniform = scene_uniform;
+            if (temporal_jitter_sample) {
+              jittered_uniform.projection_view[12] +=
+                  temporal_jitter_sample->internal_ndc_offset[0];
+              jittered_uniform.projection_view[13] +=
+                  temporal_jitter_sample->internal_ndc_offset[1];
+            }
             std::array<float, 32> packed{};
-            std::copy(scene_uniform.projection_view.begin(),
-                      scene_uniform.projection_view.end(), packed.begin());
-            std::copy(scene_uniform.model.begin(), scene_uniform.model.end(),
+            std::copy(jittered_uniform.projection_view.begin(),
+                      jittered_uniform.projection_view.end(), packed.begin());
+            std::copy(jittered_uniform.model.begin(), jittered_uniform.model.end(),
                       packed.begin() + 16);
             SDL_PushGPUVertexUniformData(command, 0, packed.data(),
                                          sizeof(packed));
