@@ -1,13 +1,43 @@
 #include "off/audio/soundtrack_playback.hpp"
 
+#include "off/crypto/sha256.hpp"
 #include "off/audio/soundtrack_stream.hpp"
 
 #include <algorithm>
+#include <filesystem>
 #include <limits>
 #include <stdexcept>
 #include <utility>
 
 namespace off::audio {
+namespace {
+
+constexpr std::uintmax_t maximum_encoded_audio_bytes = 64ULL * 1024ULL * 1024ULL;
+
+bool is_lower_sha256(const std::string& value) {
+  return value.size() == 64U &&
+         std::all_of(value.begin(), value.end(), [](const char character) {
+           return (character >= '0' && character <= '9') ||
+                  (character >= 'a' && character <= 'f');
+         });
+}
+
+void verify_edition_identity(const SoundtrackEdition& edition) {
+  if (!is_lower_sha256(edition.expected_sha256))
+    throw std::invalid_argument("soundtrack edition has no valid SHA-256 identity");
+  std::error_code error;
+  const auto status = std::filesystem::symlink_status(edition.path, error);
+  if (error || std::filesystem::is_symlink(status) ||
+      !std::filesystem::is_regular_file(status))
+    throw std::runtime_error("soundtrack edition is not a regular owned file");
+  const auto size = std::filesystem::file_size(edition.path, error);
+  if (error || size == 0U || size > maximum_encoded_audio_bytes)
+    throw std::runtime_error("soundtrack edition has an invalid encoded size");
+  if (crypto::to_hex(crypto::sha256_file(edition.path)) != edition.expected_sha256)
+    throw std::runtime_error("soundtrack edition no longer matches its verified identity");
+}
+
+}  // namespace
 
 struct SoundtrackPlayback::Active {
   SoundtrackStream stream;
@@ -38,6 +68,10 @@ SoundtrackPlayback::~SoundtrackPlayback() = default;
 
 void SoundtrackPlayback::start(const SoundtrackEdition& edition) {
   if (active_) throw std::runtime_error("soundtrack playback is already active");
+  // The catalog proves the edition's identity at installation verification, but
+  // a path can be replaced after that check and before a real device opens it.
+  // Revalidate the exact enrolled file at the last practical boundary.
+  verify_edition_identity(edition);
   auto stream = SoundtrackStream::open(edition.path);
   const auto& info = stream.info();
   const auto expected_encoding = edition.format == SoundtrackFormat::flac

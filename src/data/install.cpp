@@ -70,20 +70,26 @@ bool is_direct_regular_file(const std::filesystem::path& path,
 
 } // namespace
 
-InstallVerification verify_install(const std::filesystem::path &root,
+InstallVerification verify_install(const std::filesystem::path &requested_root,
                                   const std::function<bool()>& cancelled,
                                   const InstallVerificationOptions& options) {
   std::error_code error;
-  if (!std::filesystem::is_directory(root, error)) {
-    return failure(InstallError::missing_root, root,
+  if (!std::filesystem::is_directory(requested_root, error)) {
+    return failure(InstallError::missing_root, requested_root,
                    "game-data directory does not exist");
   }
 
-  const auto canonical_root = std::filesystem::canonical(root, error);
+  const auto canonical_root = std::filesystem::canonical(requested_root, error);
   if (error || !std::filesystem::is_directory(canonical_root, error)) {
-    return failure(InstallError::io_error, root,
+    return failure(InstallError::io_error, requested_root,
                    "could not resolve game-data directory");
   }
+  // Every post-resolution read must use this same directory object.  In
+  // particular, do not return to `requested_root`: a directory symlink may be
+  // repointed between the successful canonicalization and a later manifest or
+  // archive read.  The successful receipt also carries this stable spelling so
+  // downstream owned-data loaders inherit the same boundary.
+  const auto root = canonical_root;
 
   std::vector<std::filesystem::path> executable_spellings;
   for (const auto *name : {"Freedom.Exe", "Freedom.exe"}) {

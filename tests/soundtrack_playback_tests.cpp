@@ -1,6 +1,9 @@
 #include "off/audio/soundtrack_playback.hpp"
+#include "off/crypto/sha256.hpp"
 
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
@@ -59,7 +62,7 @@ int main(int argc, char** argv) {
         return std::make_unique<UnusedOutput>();
       });
   try {
-    player.start({off::audio::SoundtrackFormat::flac, "missing.flac"});
+    player.start({off::audio::SoundtrackFormat::flac, "missing.flac", std::string(64U, 'a')});
     check(false, "missing source must reject");
   } catch (const std::runtime_error&) {}
   check(opened == 0U && !player.status(), "decoder failure does not admit output");
@@ -68,6 +71,29 @@ int main(int argc, char** argv) {
   player.resume();
   player.stop();
   check(!player.status(), "idle control calls are harmless");
+  const auto replacement = std::filesystem::current_path() /
+      "OFF - Soundtrack - 01 Playback-Replacement.flac";
+  {
+    std::ofstream output(replacement, std::ios::binary | std::ios::trunc);
+    output << "not a soundtrack stream";
+  }
+  struct ReplacementCleanup final {
+    std::filesystem::path path;
+    ~ReplacementCleanup() { std::error_code error; std::filesystem::remove(path, error); }
+  } replacement_cleanup{replacement};
+  std::size_t replacement_output_opens{};
+  off::audio::SoundtrackPlayback replacement_player(
+      [&](std::uint32_t, std::size_t) {
+        ++replacement_output_opens;
+        return std::make_unique<UnusedOutput>();
+      });
+  try {
+    replacement_player.start({off::audio::SoundtrackFormat::flac, replacement,
+                              std::string(64U, 'b')});
+    check(false, "replaced soundtrack must reject");
+  } catch (const std::runtime_error&) {}
+  check(replacement_output_opens == 0U && !replacement_player.status(),
+        "changed soundtrack never reaches the output boundary");
   if (argc > 1) {
     auto capture = std::make_shared<Capture>();
     off::audio::SoundtrackPlayback playback(
@@ -76,7 +102,8 @@ int main(int argc, char** argv) {
           check(rate > 0U && bytes == 4096U, "source format and bounded queue are passed");
           return std::make_unique<RecordingOutput>(capture);
         }, {1024U, 256U});
-    playback.start({off::audio::SoundtrackFormat::flac, argv[1]});
+    const auto digest = off::crypto::to_hex(off::crypto::sha256_file(argv[1]));
+    playback.start({off::audio::SoundtrackFormat::flac, argv[1], digest});
     check(capture->frequency > 0U && capture->pan == 0 && capture->volume == 0,
           "output controls are applied before PCM");
     playback.pump();
