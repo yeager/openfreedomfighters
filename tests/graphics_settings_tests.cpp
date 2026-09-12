@@ -63,6 +63,42 @@ int main() {
             initial_apply_calls == 1,
         "surface a boot display-configuration failure after one apply attempt");
 
+  std::vector<off::settings::EffectiveGraphicsSettings> transaction_attempts;
+  auto alternative_effective = *resolution.effective;
+  alternative_effective.present_mode = off::settings::PresentMode::mailbox;
+  const auto successful_transaction =
+      off::settings::apply_graphics_transaction(
+          *resolution.effective, alternative_effective, [&](const auto &value) {
+            transaction_attempts.push_back(value);
+            return true;
+          });
+  check(successful_transaction == off::settings::GraphicsApplyTransaction::applied &&
+            transaction_attempts ==
+                std::vector<off::settings::EffectiveGraphicsSettings>{alternative_effective},
+        "a successful display apply does not perform an unnecessary rollback");
+  transaction_attempts.clear();
+  const auto transaction = off::settings::apply_graphics_transaction(
+      *resolution.effective, alternative_effective, [&](const auto &value) {
+        transaction_attempts.push_back(value);
+        return transaction_attempts.size() == 2;
+      });
+  check(transaction == off::settings::GraphicsApplyTransaction::restored_previous &&
+            transaction_attempts == std::vector<off::settings::EffectiveGraphicsSettings>{
+                                        alternative_effective, *resolution.effective},
+        "a failed display apply restores the complete prior effective state");
+  transaction_attempts.clear();
+  const auto unrecoverable_transaction =
+      off::settings::apply_graphics_transaction(
+          *resolution.effective, alternative_effective, [&](const auto &value) {
+            transaction_attempts.push_back(value);
+            return false;
+          });
+  check(unrecoverable_transaction ==
+                off::settings::GraphicsApplyTransaction::restore_failed &&
+            transaction_attempts == std::vector<off::settings::EffectiveGraphicsSettings>{
+                                        alternative_effective, *resolution.effective},
+        "a failed rollback remains visible to the runtime instead of fabricating recovery");
+
   auto unavailable = capabilities;
   unavailable.modern_profile = false;
   unavailable.borderless_desktop = false;

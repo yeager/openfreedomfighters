@@ -1588,12 +1588,18 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
           running = false;
         } else if (effect == ui::GraphicsMenuEffect::apply_requested) {
           if (const auto proposal = menu.request_apply()) {
-            const bool applied =
-                apply_graphics(device, window, proposal->effective);
-            if (!applied) {
-              static_cast<void>(
-                  apply_graphics(device, window, menu.confirmed_effective()));
+            const auto transaction = settings::apply_graphics_transaction(
+                menu.confirmed_effective(), proposal->effective,
+                [&](const settings::EffectiveGraphicsSettings &value) {
+                  return apply_graphics(device, window, value);
+                });
+            if (transaction == settings::GraphicsApplyTransaction::restore_failed) {
+              result = failure("graphics configuration recovery failed");
+              running = false;
+              break;
             }
+            const bool applied =
+                transaction == settings::GraphicsApplyTransaction::applied;
             const auto acknowledged =
                 menu.acknowledge_apply(applied, ui::GraphicsClock::now());
             if (applied)
@@ -1603,8 +1609,18 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
             }
           }
         } else if (effect == ui::GraphicsMenuEffect::revert_requested) {
+          const auto transaction = settings::apply_graphics_transaction(
+              menu.live_effective(), menu.confirmed_effective(),
+              [&](const settings::EffectiveGraphicsSettings &value) {
+                return apply_graphics(device, window, value);
+              });
+          if (transaction == settings::GraphicsApplyTransaction::restore_failed) {
+            result = failure("graphics configuration recovery failed");
+            running = false;
+            break;
+          }
           const bool restored =
-              apply_graphics(device, window, menu.confirmed_effective());
+              transaction == settings::GraphicsApplyTransaction::applied;
           static_cast<void>(menu.acknowledge_revert(restored));
           if (restored)
             active_mode = menu.confirmed_effective().profile;
@@ -1617,8 +1633,17 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       break;
     if (menu.tick(ui::GraphicsClock::now()) ==
         ui::GraphicsMenuEffect::revert_requested) {
+      const auto transaction = settings::apply_graphics_transaction(
+          menu.live_effective(), menu.confirmed_effective(),
+          [&](const settings::EffectiveGraphicsSettings &value) {
+            return apply_graphics(device, window, value);
+          });
+      if (transaction == settings::GraphicsApplyTransaction::restore_failed) {
+        result = failure("graphics configuration recovery failed");
+        break;
+      }
       const bool restored =
-          apply_graphics(device, window, menu.confirmed_effective());
+          transaction == settings::GraphicsApplyTransaction::applied;
       static_cast<void>(menu.acknowledge_revert(restored));
       if (restored)
         active_mode = menu.confirmed_effective().profile;

@@ -144,17 +144,18 @@ Apply uses a last-known-good transaction:
    and optional-runtime capabilities.
 3. Prepare all required resources before releasing the current working renderer.
 4. Switch atomically, or restore the complete previous effective state on any
-   failure.
+   failure. If that recovery fails, stop the graphics runtime rather than
+   continuing with an invented display state.
 5. Request confirmation for risky display changes, then persist only after the
    user keeps the result. A rejected or timed-out change is not persisted.
 
 Ordinary next-frame changes persist after successful application. Restart-bound
 changes persist the requested value with a clear `Restart required` state while
-the effective value continues to report the active renderer. Configuration is
-written atomically in the platform configuration directory. A malformed or
-incompatible file must be quarantined or ignored with a diagnostic and must not
-prevent startup; the last known-good configuration and conservative defaults are
-the recovery paths.
+the effective value continues to report the active renderer. When configuration
+persistence is introduced, it must write atomically in the platform
+configuration directory. A malformed or incompatible file must be quarantined
+or ignored with a diagnostic and must not prevent startup; the last known-good
+configuration and conservative defaults are the recovery paths.
 
 ## Platform and feature boundaries
 
@@ -214,6 +215,10 @@ confirmation deadline, explicit rollback acknowledgement, and commit only after
 success. It performs no SDL calls or persistence I/O. Modern+, DLSS intent,
 render scaling, upscaling, and shadow-quality rows are represented in the model;
 their real renderer implementations remain capability-gated and incomplete.
+The SDL runtime currently starts from the supplied mode and conservative model
+defaults; it does not load or write a graphics-settings file. Atomic platform
+configuration persistence and malformed-file recovery therefore remain Stage 5
+work, rather than a partially implemented restore path.
 
 Stage 2 now has a renderer-neutral, physical-pixel draw-list model with strict
 command, hit-target, and text-byte budgets. It emits the backdrop, centered

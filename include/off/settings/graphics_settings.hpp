@@ -111,6 +111,16 @@ enum class InitialGraphicsSetup : std::uint8_t {
   apply_failed,
 };
 
+// Applying a display setting may fail after the native backend has changed part
+// of its state.  Keep that recovery result distinct from an ordinary rejected
+// apply so callers never continue while claiming a known display state that
+// could not be restored.
+enum class GraphicsApplyTransaction : std::uint8_t {
+  applied,
+  restored_previous,
+  restore_failed,
+};
+
 [[nodiscard]] GraphicsResolution
 resolve_graphics_settings(const RequestedGraphicsSettings &requested,
                           const GraphicsCapabilities &capabilities);
@@ -120,6 +130,11 @@ resolve_graphics_settings(const RequestedGraphicsSettings &requested,
 // before any frame is acquired, and surface a backend failure to the caller.
 [[nodiscard]] InitialGraphicsSetup initialize_graphics_settings(
     const GraphicsResolution &resolution,
+    const std::function<bool(const EffectiveGraphicsSettings &)> &apply);
+
+[[nodiscard]] GraphicsApplyTransaction apply_graphics_transaction(
+    const EffectiveGraphicsSettings &before,
+    const EffectiveGraphicsSettings &after,
     const std::function<bool(const EffectiveGraphicsSettings &)> &apply);
 
 [[nodiscard]] bool

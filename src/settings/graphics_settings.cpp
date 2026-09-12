@@ -155,6 +155,17 @@ InitialGraphicsSetup initialize_graphics_settings(
   return InitialGraphicsSetup::ready;
 }
 
+GraphicsApplyTransaction apply_graphics_transaction(
+    const EffectiveGraphicsSettings &before,
+    const EffectiveGraphicsSettings &after,
+    const std::function<bool(const EffectiveGraphicsSettings &)> &apply) {
+  if (apply && apply(after))
+    return GraphicsApplyTransaction::applied;
+  if (apply && apply(before))
+    return GraphicsApplyTransaction::restored_previous;
+  return GraphicsApplyTransaction::restore_failed;
+}
+
 bool requires_display_confirmation(
     const EffectiveGraphicsSettings &before,
     const EffectiveGraphicsSettings &after) noexcept {
