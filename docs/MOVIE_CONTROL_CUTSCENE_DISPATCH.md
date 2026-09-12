@@ -65,3 +65,26 @@ only after that delivered source-bound handoff.
 Keep raw and sanitized observations private. Only a reviewed source-free
 behavior specification and authored tests may subsequently connect the runtime
 path.
+
+## Repeat-pair gate
+
+`tools/movie_control_cutscene_dispatch_repeat_pair.py` validates two already
+sanitized observations from fresh processes. It never accepts a raw observer
+record and revalidates both inputs through the narrow dispatcher schema. The
+two full structural traces must match exactly, including order, lifecycle
+phase, callback ordinal, construction relations, status masks, event gate,
+handoff/delivery/activation state, outcome, and external-service state. The
+trace must also reach one terminal boundary: either a started player or an
+explicit failed event, handoff, or activation boundary.
+
+Run this gate separately for the successful route and for each observed failure
+route. It establishes repeatability only; it does not turn an observation into
+a native integration contract or bypass normal startup's fail-closed gate.
+
+```sh
+python3 tools/movie_control_cutscene_dispatch_repeat_pair.py \
+  FIRST_SANITIZED.json SECOND_SANITIZED.json PAIR_RESULT.json
+```
+
+All three paths must be outside this repository, distinct, and the output must
+not already exist. Keep the pair result private with the two sanitized inputs.

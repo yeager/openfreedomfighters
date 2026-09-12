@@ -132,3 +132,32 @@ python3 tools/movie_control_phase_one_repeat_pair.py \
 
 All three paths must be outside this repository; `PAIR_RESULT.json` must not
 already exist. Keep the pair result private alongside its input observations.
+
+## Failure-path contract bundle
+
+The successful repeat pair does not establish failure behavior. Before a
+reviewer may write a behavior specification, capture one separate failing run
+with the same private observer and sanitize it with
+`movie_control_phase_one_trace.py`. The failure record must identify the same
+observer-local callback ordinal and dispatch order as the pair candidate, begin
+with the same component/owner status and event/ordinary-membership state, enter
+the global lifecycle, end that lifecycle with `failure`, and leave phase-one
+completion false. It must not also report a successful invocation of that
+constructed callback.
+
+`tools/movie_control_phase_one_contract_bundle.py` revalidates the repeat-pair
+result and sanitized failure trace, then writes one source-free structural
+bundle. It accepts no raw observations and no identifiers, addresses, offsets,
+symbols, strings, paths, game data, executable material, screenshots, or
+payload bytes. All paths must be distinct and outside this repository; the
+output must be new:
+
+```sh
+python3 tools/movie_control_phase_one_contract_bundle.py \
+  PAIR_RESULT.json FAILURE_SANITIZED.json CONTRACT_BUNDLE.json
+```
+
+The bundle retains the successful candidate and the observed failure relation
+only for private human review. It does not identify an implementation callback,
+does not establish service semantics beyond the recorded structural state, and
+does not authorize native phase-one code or normal startup.
