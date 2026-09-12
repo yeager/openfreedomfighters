@@ -67,36 +67,30 @@ Normal startup does not bind or invoke this callback yet. The future activation
 continuation must dispatch it once through the real global phase-two pass, not
 repeat it after that pass through a second controller helper.
 
-## Missing MovieControl host contract
+## MovieControl host evidence
 
 `NormalIntroSceneHost` is intentionally not constructed by normal startup.
-Its constructor requires a live MovieControl component handle, a live owner
-handle, and a signed `movie_delay`. The completed owner and component readers
-can prove the source-backed owner, component, event array, resource mapping,
-and reader receipts. They do not currently establish the delay consumed by
-`MovieControlFirstUpdate` when it derives its deadline. The delay must not be
-guessed from an event identifier, a source-directory offset, an authored
-option, or a frame rate.
+Its required delay is not an authored controller field: the reviewed global
+phase-two callback produces the fixed signed engine-clock delta `2048`, adds it
+with 32-bit wrapping arithmetic, and event 16 accepts only when `now >
+deadline`. The engine clock uses 1024 units per accumulated engine-time second,
+so the delta is nominally two engine-time seconds rather than a frame or
+wall-clock duration.
 
-The next bounded implementation is therefore a recovery contract, not a host
-wiring change:
+`MovieControlHostEvidence` is the narrow boundary between that fixed protocol
+fact and a future host. It accepts both independently checked reader receipts
+and a live runtime component handle, rejects mismatched owner, resource,
+directory, offset, component, zero-handle, and zero-offset values, then exposes
+the fixed delay. It does not inspect or reinterpret any authored option,
+identifier, destination, source-directory offset, or frame rate as a timeout.
+The `from_runtime` form additionally requires the complete ordinary reader
+bracket and both retained controller receipts.
 
-1. Recover and validate the delay's producer, unit, signedness, and overflow
-   behavior from private clean-room observation or disassembly evidence.
-2. Add a source-backed `MovieControlHostEvidence` value that contains the
-   already-proven owner/component identities plus the recovered delay, and
-   rejects mismatched reader receipts.
-3. Add a session factory that accepts that evidence and explicit production
-   lifecycle services, constructs `NormalIntroSceneHost`, and does not invoke
-   it during construction.
-4. Prove with a source-free recording-host test that a missing delay or any
-   missing lifecycle service produces no event dispatch, view admission,
-   picture submission, audio output, or SDL GPU call.
-
-Only after that contract exists may the normal path call the host's activation,
-event-16, camera-route, view-admission, and frame-assembly stages. This keeps
-the existing static preview useful for startup feedback without treating it as
-evidence of recovered gameplay behavior.
+This is not host wiring. It neither constructs `NormalIntroSceneHost`, enters
+lifecycle work, dispatches event 16, admits a view, submits a picture, creates
+audio, nor invokes SDL. A future session factory still needs explicit complete
+loader/lifecycle services and source-free negative tests for every absent
+service before normal startup can progress past its static preview.
 
 ## Required ordering
 

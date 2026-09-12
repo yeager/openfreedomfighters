@@ -117,6 +117,7 @@ add_library(off_core
     src/graphics/intro_prepared_resources.cpp
     src/graphics/intro_outer_loader_tail_readiness.cpp
     src/graphics/intro_runtime.cpp
+    src/graphics/movie_control_host_evidence.cpp
     src/graphics/normal_intro_scene_session.cpp
     src/graphics/intro_lifecycle_admission.cpp
     src/graphics/intro_preview_builder.cpp
@@ -472,6 +473,9 @@ if(BUILD_TESTING)
     add_executable(off_normal_intro_scene_host_tests tests/normal_intro_scene_host_tests.cpp)
     target_link_libraries(off_normal_intro_scene_host_tests PRIVATE off_core off_sdl_intro_renderer)
     add_test(NAME off_normal_intro_scene_host_tests COMMAND off_normal_intro_scene_host_tests)
+    add_executable(off_movie_control_host_evidence_tests tests/movie_control_host_evidence_tests.cpp)
+    target_link_libraries(off_movie_control_host_evidence_tests PRIVATE off_core)
+    add_test(NAME off_movie_control_host_evidence_tests COMMAND off_movie_control_host_evidence_tests)
     add_executable(off_scene_support_tests tests/scene_support_tests.cpp)
     target_link_libraries(off_scene_support_tests PRIVATE off_core)
     add_test(NAME off_scene_support_tests COMMAND off_scene_support_tests)
