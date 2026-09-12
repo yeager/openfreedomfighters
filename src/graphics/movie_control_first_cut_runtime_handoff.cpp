@@ -74,7 +74,15 @@ MovieControlEvent16Result MovieControlFirstCutRuntimeHandoff::deliver(
       throw std::runtime_error("MovieControl first-cut handoff sender relation changed");
     require_live_relations();
     player_->run_phase_one(phase_one);
+    // Phase-one services are host callbacks. They must not be able to leave
+    // the receiver continuing from a now-stale reader/component relation.
+    // Revalidate before any phase-two command registration becomes visible.
+    require_live_relations();
     player_->run_phase_two(phase_two);
+    // The group-state receiver immediately follows this callback in
+    // MovieControl. Do not report a completed lifecycle if a phase-two
+    // callback invalidated the source-backed relation in between.
+    require_live_relations();
     if (!player_->initialization().phase_one_complete() ||
         !player_->initialization().phase_two_complete() || !player_->receiver().closed())
       throw std::runtime_error("MovieControl first-cut handoff lifecycle did not complete");

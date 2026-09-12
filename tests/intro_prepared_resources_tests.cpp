@@ -1524,6 +1524,44 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
               group_after_lifecycle,
               "MovieControl delivers the checked first-cut lifecycle synchronously before its group receiver");
         rejects([&] { static_cast<void>(handoff.deliver(movie,{}, {}, {})); });
+        // A lifecycle service can be host-owned, so the handoff must prove its
+        // reader/component relation again before phase two registers commands.
+        // This is deliberately a live-state mutation rather than a synthetic
+        // source descriptor: the cold session may retain its descriptor while
+        // the runtime relation it was admitted from has become stale.
+        auto stale_session=host.first_cut_player_session();
+        auto stale_handoff=off::graphics::MovieControlFirstCutRuntimeHandoff::from_runtime(
+            host,stale_session);
+        off::graphics::MovieControlFirstUpdate stale_movie{
+            host.component_handle(host.controller_component_index()),
+            host.movie_controller_reader_state()->owner.value,1};
+        stale_movie.run_phase_two({[] { return false; }, [] {}, [](bool) {}, [] {},
+                                   [] { return 0; }, [] {}});
+        const auto controller_owner=host.components().at(
+            host.controller_component_index()).state().attached_owner;
+        rejects([&] {
+          static_cast<void>(stale_handoff.deliver(stale_movie,{
+              [] { return true; }, [] { return true; }, [] { return false; },
+              [] { return std::optional<std::uint64_t>{}; }, [] { return true; },
+              [] { return 2; }, [] {}, {}, [](std::uint64_t) {}},
+              {.invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},
+               .register_list_events=[] {}, .member_count=[] { return std::size_t{1}; },
+               .write_queue_property=[&](auto) {
+                 host.components().at(host.controller_component_index()).state().attached_owner=0U;
+               }},
+              {.invoke_command=[](auto,const auto&) {},
+               .read_scene_reference=[](std::string_view) -> std::optional<std::uint64_t> { return std::nullopt; },
+               .resolve_member=[](std::size_t) -> std::optional<std::uint64_t> { return std::nullopt; },
+               .request_member_info=[](std::uint64_t) -> std::optional<off::cutscene::FirstCutMemberInfo> { return std::nullopt; },
+               .member_name=[](std::uint64_t) { return std::string_view{}; },
+               .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> { return std::nullopt; }}));
+        });
+        check(stale_session.initialization().phase_one_complete() &&
+                  !stale_session.initialization().phase_two_complete() &&
+                  stale_session.receiver().open() && !stale_session.receiver().closed() &&
+                  stale_session.receiver().commands().empty(),
+              "stale handoff does not admit phase-two command registration");
+        host.components().at(host.controller_component_index()).state().attached_owner=controller_owner;
         auto lifecycle_session=host.first_cut_player_session();
         lifecycle_session.run_phase_one({.invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},
                                .register_list_events=[] {}, .member_count=[] { return std::size_t{1}; },
