@@ -52,6 +52,13 @@ public:
   [[nodiscard]] bool contains(std::uint64_t handle) const noexcept {
     return by_handle_.contains(handle);
   }
+  // Package identity is part of the checked transaction.  Later source-only
+  // readers must not pair this registry with a structurally similar GMS image.
+  [[nodiscard]] bool retains_checked_package(
+      const std::shared_ptr<const StartupSceneLoadPackage> &package) const
+      noexcept {
+    return package_ == package;
+  }
   [[nodiscard]] std::optional<std::uint64_t>
   handle_for_source_directory(std::size_t source_directory_index) const noexcept {
     const auto found = by_source_.find(source_directory_index);

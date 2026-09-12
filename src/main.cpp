@@ -32,6 +32,7 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/platform/sdl_startup.hpp"
 #include "off/runtime/startup_boot_scene_directory_source.hpp"
+#include "off/runtime/startup_boot_menu_component_envelope.hpp"
 #include "off/runtime/startup_boot_scene_probe_host.hpp"
 #include "off/runtime/startup_boot_scene_registry.hpp"
 #include "off/runtime/startloader_prepared_route.hpp"
@@ -1267,6 +1268,8 @@ int main(int argc, char **argv) {
   }};
   std::optional<off::graphics::SceneRenderAsset> startup_ui_scene_resources;
   std::optional<off::runtime::StartupBootSceneRegistry> startup_boot_registry;
+  std::optional<off::runtime::StartupBootMenuComponentEnvelope>
+      startup_boot_menu_envelope;
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
   std::optional<off::graphics::StartupGraphicsExpandedPlan>
       startup_graphics_cpu_plan;
@@ -1320,12 +1323,18 @@ int main(int argc, char **argv) {
                 off::runtime::StartupBootSceneLease::live(registry_lifetime);
             off::runtime::StartupBootSceneRegistryFactory registry_factory;
             startup_boot_registry.emplace(registry_factory.construct(
-                std::move(package), directory, registry_scene, 1U));
+                package, directory, registry_scene, 1U));
             if (!startup_boot_registry->valid() ||
                 startup_boot_registry->nodes().size() !=
                     directory.hierarchy_scope().nodes.size())
               throw std::runtime_error(
                   "startup hierarchy registry construction was incomplete");
+            off::runtime::StartupBootMenuComponentEnvelopeFactory envelope_factory;
+            startup_boot_menu_envelope.emplace(envelope_factory.construct(
+                std::move(package), directory, *startup_boot_registry));
+            if (!startup_boot_menu_envelope->valid())
+              throw std::runtime_error(
+                  "startup BootMenu source envelope construction was incomplete");
           }
             // Prepare authored first-cut resources without admitting a scene or
             // manufacturing lifecycle state. Keep ownership through the
@@ -1455,6 +1464,10 @@ int main(int argc, char **argv) {
     std::cout << "Source-backed startup hierarchy retained: "
               << startup_boot_registry->nodes().size()
               << " nodes; menu activation remains pending.\n";
+  if (startup_boot_menu_envelope)
+    std::cout << "Source-backed BootMenu deferred block retained: "
+              << startup_boot_menu_envelope->deferred_source_block().size()
+              << " bytes; reader admission remains pending.\n";
   if (diagnostic_startup_graphics)
     std::cout << "Startup graphics diagnostic: source images and source quad "
                  "geometry, generic fit projection; not a faithful menu.\n";

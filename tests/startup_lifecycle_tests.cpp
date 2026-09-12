@@ -8,6 +8,7 @@
 #include "off/runtime/startloader_prepared_route.hpp"
 #include "off/runtime/startup_active_window_root.hpp"
 #include "off/runtime/startup_boot_menu_admission.hpp"
+#include "off/runtime/startup_boot_menu_component_envelope.hpp"
 #include "off/runtime/startup_boot_scene_construction.hpp"
 #include "off/runtime/startup_boot_scene_directory_source.hpp"
 #include "off/runtime/startup_boot_scene_factory.hpp"
@@ -127,6 +128,10 @@ std::vector<std::byte> boot_directory_gms_fixture() {
   auto bytes = package_gms_fixture();
   constexpr std::size_t payload = 9U;
   set_u32(bytes, payload + 96U, 0x00100031U);
+  // Project-authored opaque deferred block for envelope-boundary tests. Its
+  // grammar is deliberately not modeled here.
+  set_u32(bytes, payload + 112U, 480U);
+  set_u32(bytes, payload + 480U, 4U);
   set_u32(bytes, payload + 436U, 460U);
   set_u32(bytes, payload + 440U, std::bit_cast<std::uint32_t>(1.0F));
   constexpr char identifier[] = "ZWINDOW_BootMenu";
@@ -1296,6 +1301,21 @@ int main() {
   off::runtime::StartupBootSceneRegistryFactory boot_registry_factory;
   auto boot_registry = boot_registry_factory.construct(
       source_backed_boot_package, source_backed_boot_directory, boot_scene, 10U);
+  static_assert(!std::is_copy_constructible_v<
+                off::runtime::StartupBootMenuComponentEnvelope>);
+  off::runtime::StartupBootMenuComponentEnvelopeFactory boot_envelope_factory;
+  auto boot_envelope = boot_envelope_factory.construct(
+      source_backed_boot_package, source_backed_boot_directory, boot_registry);
+  const auto expected_boot_deferred_source =
+      source_backed_boot_inputs.gms().deferred_source_block(
+          source_backed_boot_directory.boot_owner_directory_index());
+  check(boot_envelope.valid() &&
+            boot_envelope.owner_source_directory_index() ==
+                source_backed_boot_directory.boot_owner_directory_index() &&
+            boot_envelope.owner_handle() == boot_registry.boot_menu_owner() &&
+            std::ranges::equal(boot_envelope.deferred_source_block(),
+                               expected_boot_deferred_source),
+        "source-backed BootMenu envelope retains the exact checked deferred block");
   const auto registry_root = boot_registry.root();
   const auto registry_boot_owner = boot_registry.boot_menu_owner();
   const auto registry_boot_source =
@@ -1323,6 +1343,25 @@ int main() {
             second_boot_registry.root() != registry_root &&
             second_boot_registry.boot_menu_owner() != registry_boot_owner,
         "startup registry never reuses native handles across scene transactions");
+  const auto different_boot_package =
+      std::make_shared<const off::runtime::StartupSceneLoadPackage>(
+          off::runtime::StartupScenePackageSource::prepare_checked(
+              "FF-Startup", boot_factory_fixture));
+  const auto different_boot_directory =
+      off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
+          different_boot_package->factory_inputs()->gms());
+  const auto different_boot_registry = boot_registry_factory.construct(
+      different_boot_package, different_boot_directory, boot_scene, 12U);
+  rejected = false;
+  try {
+    static_cast<void>(boot_envelope_factory.construct(
+        source_backed_boot_package, source_backed_boot_directory,
+        different_boot_registry));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected,
+        "BootMenu envelope rejects a registry from another checked package transaction");
   off::runtime::StartupBootSceneFactory boot_factory;
   auto factory_boot_token = boot_factory.construct(
       source_backed_boot_package, source_backed_boot_directory, boot_scene,
