@@ -32,6 +32,14 @@ snapshot(const SceneRenderInstance &instance) noexcept {
           .map_position = instance.map_position};
 }
 
+[[nodiscard]] SceneInstanceTransformSnapshot
+snapshot(const SceneGpuInstance &instance) noexcept {
+  return {.source_basis = instance.source_basis,
+          .source_position = instance.source_position,
+          .map_orientation = instance.map_orientation,
+          .map_position = instance.map_position};
+}
+
 } // namespace
 
 std::vector<SceneInstanceSubmissionTransform>
@@ -41,6 +49,22 @@ make_initial_scene_instance_submission(std::span<const SceneRenderInstance> inst
   for (std::size_t index = 0; index < instances.size(); ++index)
     result.push_back({.identity = static_cast<std::uint64_t>(index) + 1U,
                       .current = snapshot(instances[index])});
+  validate(result);
+  return result;
+}
+
+std::vector<SceneInstanceSubmissionTransform>
+make_scene_gpu_instance_submission(std::span<const SceneGpuInstance> instances) {
+  std::vector<SceneInstanceSubmissionTransform> result;
+  result.reserve(instances.size());
+  for (const auto &instance : instances) {
+    // scene_instance_index originates in SceneRenderAsset's canonical order;
+    // retain it rather than using transient draw order as an identity.
+    result.push_back({.identity =
+                          static_cast<std::uint64_t>(instance.scene_instance_index) +
+                              1U,
+                      .current = snapshot(instance)});
+  }
   validate(result);
   return result;
 }

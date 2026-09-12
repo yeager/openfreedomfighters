@@ -1,6 +1,6 @@
 #pragma once
 
-#include "off/graphics/scene_render.hpp"
+#include "off/graphics/scene_gpu_plan.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -37,6 +37,12 @@ struct SceneInstanceSubmissionTransform {
 // of the GPU contract.
 [[nodiscard]] std::vector<SceneInstanceSubmissionTransform>
 make_initial_scene_instance_submission(std::span<const SceneRenderInstance> instances);
+
+// Uses the exact records retained by the submitted diagnostic GPU plan.  This
+// is history bookkeeping only; it neither composes transforms nor makes them
+// available to a vector or temporal backend.
+[[nodiscard]] std::vector<SceneInstanceSubmissionTransform>
+make_scene_gpu_instance_submission(std::span<const SceneGpuInstance> instances);
 
 // Keeps previous scene-instance transforms transactionally.  A future renderer
 // can consume current/previous snapshots to produce motion vectors, but this

@@ -1,5 +1,6 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/graphics/render_scale.hpp"
+#include "off/graphics/scene_instance_history.hpp"
 #include "off/graphics/temporal_history.hpp"
 #include "off/graphics/temporal_jitter.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
@@ -125,6 +126,37 @@ public:
 private:
   graphics::TemporalHistoryLifecycle &history_;
   std::optional<graphics::TemporalHistoryFrame> frame_;
+};
+
+class SceneInstanceHistorySubmissionGuard {
+public:
+  explicit SceneInstanceHistorySubmissionGuard(
+      graphics::SceneInstanceHistoryLifecycle &history)
+      : history_(history) {}
+  SceneInstanceHistorySubmissionGuard(const SceneInstanceHistorySubmissionGuard &) = delete;
+  SceneInstanceHistorySubmissionGuard &operator=(
+      const SceneInstanceHistorySubmissionGuard &) = delete;
+  ~SceneInstanceHistorySubmissionGuard() {
+    if (submission_)
+      history_.cancel_submission();
+  }
+
+  [[nodiscard]] bool begin(
+      std::span<const graphics::SceneInstanceSubmissionTransform> instances) {
+    submission_ = history_.begin_submission(instances);
+    return submission_.has_value();
+  }
+
+  [[nodiscard]] bool commit() noexcept {
+    if (!submission_ || !history_.commit_submission())
+      return false;
+    submission_.reset();
+    return true;
+  }
+
+private:
+  graphics::SceneInstanceHistoryLifecycle &history_;
+  std::optional<std::vector<graphics::SceneInstanceSubmissionTransform>> submission_;
 };
 
 struct OverlayBatch {
@@ -1446,6 +1478,29 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   graphics::TemporalHistoryLifecycle temporal_history;
   graphics::TemporalJitterProvider temporal_jitter;
   Mode temporal_history_mode = active_mode;
+  graphics::SceneInstanceHistoryLifecycle scene_instance_history;
+  std::vector<std::uint64_t> scene_instance_identities;
+  std::optional<std::array<Uint32, 2>> scene_history_extent;
+  if (scene != nullptr) {
+    const auto initial_submission =
+        graphics::make_scene_gpu_instance_submission(scene->instances);
+    scene_instance_identities.reserve(initial_submission.size());
+    for (const auto &instance : initial_submission)
+      scene_instance_identities.push_back(instance.identity);
+    if (!scene_instance_history.initialize(initial_submission)) {
+      const auto result = failure("scene instance history initialization failed");
+      release_motion_vector_target(device, motion_vector_target);
+      release_temporal_history_targets(device, temporal_history_targets);
+      release_render_scale_target(device, render_scale_target);
+      gpu_intro.reset();
+      release_startup_images(device, gpu_startup);
+      release_overlay(device, overlay);
+      release_scene(device, gpu);
+      SDL_ReleaseWindowFromGPUDevice(device, window);
+      SDL_DestroyGPUDevice(device);
+      return result;
+    }
+  }
 
   RuntimeResult result{
       .success = true,
@@ -1783,6 +1838,39 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         break;
       }
     }
+    SceneInstanceHistorySubmissionGuard scene_history_frame{
+        scene_instance_history};
+    if (scene != nullptr && swapchain != nullptr) {
+      const auto scene_submission =
+          graphics::make_scene_gpu_instance_submission(scene->instances);
+      std::vector<std::uint64_t> current_identities;
+      current_identities.reserve(scene_submission.size());
+      for (const auto &instance : scene_submission)
+        current_identities.push_back(instance.identity);
+      // A different source-plan instance set cannot share prior snapshots.
+      if (current_identities != scene_instance_identities) {
+        scene_instance_history.invalidate();
+        if (!scene_instance_history.initialize(scene_submission)) {
+          result = failure("scene instance history reinitialization failed");
+          SDL_SubmitGPUCommandBuffer(command);
+          SDL_WaitForGPUIdle(device);
+          release_overlay_transfers();
+          break;
+        }
+        scene_instance_identities = std::move(current_identities);
+      }
+      const std::array<Uint32, 2> current_extent{content_width, content_height};
+      if (scene_history_extent && *scene_history_extent != current_extent)
+        scene_instance_history.invalidate();
+      scene_history_extent = current_extent;
+      if (!scene_history_frame.begin(scene_submission)) {
+        result = failure("scene instance history frame acquisition failed");
+        SDL_SubmitGPUCommandBuffer(command);
+        SDL_WaitForGPUIdle(device);
+        release_overlay_transfers();
+        break;
+      }
+    }
     if (swapchain != nullptr) {
       const SDL_GPUColorTargetInfo target{
           .texture = content_target,
@@ -2027,6 +2115,17 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     }
     if (temporal_frame && !temporal_history_frame.commit()) {
       result = {.success = false, .message = "temporal history frame commit failed"};
+      if (capture_transfer != nullptr)
+        SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
+      if (capture_texture != nullptr)
+        SDL_ReleaseGPUTexture(device, capture_texture);
+      release_overlay_transfers();
+      break;
+    }
+    if (scene != nullptr && swapchain != nullptr &&
+        !scene_history_frame.commit()) {
+      result = {.success = false,
+                .message = "scene instance history frame commit failed"};
       if (capture_transfer != nullptr)
         SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
       if (capture_texture != nullptr)

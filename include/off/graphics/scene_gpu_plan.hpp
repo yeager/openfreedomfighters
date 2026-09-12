@@ -40,8 +40,12 @@ struct SceneGpuMesh {
 struct SceneGpuInstance {
   std::size_t scene_instance_index{0};
   std::size_t mesh_index{0};
+  // Retained verbatim for submission history.  The diagnostic renderer still
+  // uses only the source record and does not compose these transforms.
   std::array<float, 9> source_basis{};
   std::array<float, 3> source_position{};
+  std::array<float, 9> map_orientation{};
+  std::array<float, 3> map_position{};
 };
 
 struct SceneGpuDraw {

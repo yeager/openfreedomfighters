@@ -96,7 +96,11 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
         !std::ranges::all_of(
             instance.source_basis,
             [](float value) { return std::isfinite(value); }) ||
-        !finite(instance.source_position)) {
+        !finite(instance.source_position) ||
+        !std::ranges::all_of(
+            instance.map_orientation,
+            [](float value) { return std::isfinite(value); }) ||
+        !finite(instance.map_position)) {
       throw std::invalid_argument("scene GPU instance data is invalid");
     }
   }
@@ -246,6 +250,8 @@ SceneGpuPlan prepare_scene_gpu_plan(const SceneRenderAsset &asset) {
         .mesh_index = asset.instances[index].mesh_index,
         .source_basis = asset.instances[index].source_basis,
         .source_position = asset.instances[index].source_position,
+        .map_orientation = asset.instances[index].map_orientation,
+        .map_position = asset.instances[index].map_position,
     });
   }
   if (asset.instances.empty()) {

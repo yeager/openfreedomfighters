@@ -53,5 +53,21 @@ int main() {
   bool rejected{};
   try { static_cast<void>(history.begin_submission(duplicate)); } catch (...) { rejected = true; }
   check(rejected, "duplicate stable identities are rejected");
+
+  off::graphics::SceneGpuInstance planned_instance;
+  planned_instance.scene_instance_index = 4;
+  planned_instance.source_basis = {1,0,0,0,1,0,0,0,1};
+  planned_instance.source_position = {7,8,9};
+  planned_instance.map_orientation = {2,0,0,0,3,0,0,0,4};
+  planned_instance.map_position = {10,11,12};
+  const auto planned = off::graphics::make_scene_gpu_instance_submission(
+      {&planned_instance, 1});
+  check(planned.size() == 1 && planned.front().identity == 5 &&
+            planned.front().current.source_position ==
+                planned_instance.source_position &&
+            planned.front().current.map_orientation ==
+                planned_instance.map_orientation &&
+            planned.front().current.map_position == planned_instance.map_position,
+        "GPU plan history keeps canonical identity and authored records verbatim");
   return failures == 0 ? 0 : 1;
 }
