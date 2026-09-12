@@ -17,6 +17,7 @@ def event(**changes: object) -> dict[str, object]:
         "owner_input_form": "accepted_bounded", "component_input_form": "accepted_bounded",
         "terminal_rule": "required", "attachment_delimiter_rule": "required",
         "trailing_bytes_policy": "accepted_none_only", "destination_write": "owner_reader",
+        "reader_prerequisite": "preparation_before_owner_reader",
         "raw_value_preservation": "preserved", "ownership": "reader_local",
         "duplicate_reentry": "rejected_duplicate", "failure_rollback": "not_observed",
         "later_consumer": "none", "outcome": "success", "side_effect": "none",
@@ -41,6 +42,7 @@ class ParamAnimDeferredReaderObservationTests(unittest.TestCase):
     def test_rejected_input_cannot_claim_a_write_or_side_effect(self) -> None:
         rejected = event(owner_input_form="rejected_malformed", component_input_form="rejected_malformed",
                          terminal_rule="rejected_missing", destination_write="not_observed",
+                         reader_prerequisite="not_observed",
                          raw_value_preservation="not_observed", ownership="not_observed",
                          duplicate_reentry="not_observed", failure_rollback="no_write", outcome="failure")
         self.assertEqual(observation.sanitize_observation({"format": observation.INPUT_FORMAT, "events": [rejected]})["events"], [rejected])
@@ -52,6 +54,7 @@ class ParamAnimDeferredReaderObservationTests(unittest.TestCase):
             {"terminal_rule": "rejected_missing"},
             {"attachment_delimiter_rule": "rejected_duplicate"},
             {"trailing_bytes_policy": "rejected_present"},
+            {"reader_prerequisite": "not_observed"},
             {"raw_value_preservation": "not_observed"},
             {"ownership": "not_observed"},
             {"duplicate_reentry": "not_observed"},
@@ -63,6 +66,7 @@ class ParamAnimDeferredReaderObservationTests(unittest.TestCase):
 
     def test_enforces_lifecycle_stage_order_and_consumer_boundary(self) -> None:
         callback = event(observation_order=1, stage="later_callback", destination_write="not_observed",
+                         reader_prerequisite="not_observed",
                          raw_value_preservation="not_observed", ownership="not_observed",
                          duplicate_reentry="not_observed", later_consumer="later_callback")
         result = observation.sanitize_observation({"format": observation.INPUT_FORMAT, "events": [event(), callback]})
@@ -71,6 +75,16 @@ class ParamAnimDeferredReaderObservationTests(unittest.TestCase):
             observation.sanitize_observation({"format": observation.INPUT_FORMAT, "events": [callback, event(observation_order=2)]})
         with self.assertRaises(ValueError):
             observation.sanitize_observation({"format": observation.INPUT_FORMAT, "events": [event(later_consumer="later_callback")]})
+
+    def test_requires_the_full_deferred_reader_order_for_each_write_boundary(self) -> None:
+        component = event(stage="component_reader", destination_write="component_reader",
+                          reader_prerequisite="preparation_and_owner_reader_before_component_reader")
+        result = observation.sanitize_observation({"format": observation.INPUT_FORMAT, "events": [component]})
+        self.assertEqual(result["events"], [component])
+        with self.assertRaises(ValueError):
+            observation.sanitize_observation({"format": observation.INPUT_FORMAT, "events": [
+                event(stage="component_reader", destination_write="component_reader")
+            ]})
 
 
 if __name__ == "__main__":

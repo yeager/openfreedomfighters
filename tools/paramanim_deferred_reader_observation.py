@@ -32,6 +32,10 @@ _DELIMITERS = frozenset(("required", "rejected_missing", "rejected_duplicate",
                          "rejected_before_terminal"))
 _TRAILING = frozenset(("accepted_none_only", "rejected_present"))
 _WRITES = frozenset(("not_observed", "owner_reader", "component_reader"))
+_READER_PREREQUISITES = frozenset((
+    "not_observed", "preparation_before_owner_reader",
+    "preparation_and_owner_reader_before_component_reader",
+))
 _PRESERVATION = frozenset(("not_observed", "preserved", "rejected"))
 _OWNERSHIP = frozenset(("not_observed", "reader_local", "owner_local"))
 _REENTRY = frozenset(("not_observed", "rejected_duplicate", "idempotent"))
@@ -42,7 +46,7 @@ _SIDE_EFFECTS = frozenset(("none",))
 _FIELDS = frozenset((
     "observation_order", "stage", "owner_input_form", "component_input_form",
     "terminal_rule", "attachment_delimiter_rule", "trailing_bytes_policy",
-    "destination_write", "raw_value_preservation", "ownership",
+    "destination_write", "reader_prerequisite", "raw_value_preservation", "ownership",
     "duplicate_reentry", "failure_rollback", "later_consumer", "outcome",
     "side_effect",
 ))
@@ -80,11 +84,17 @@ def _validate(event: dict[str, Any]) -> None:
     if event["destination_write"] != "not_observed":
         if event["stage"] != event["destination_write"]:
             raise ValueError("destination write must occur at its declared reader boundary")
+        expected_prerequisite = (
+            "preparation_before_owner_reader" if event["destination_write"] == "owner_reader"
+            else "preparation_and_owner_reader_before_component_reader")
+        if event["reader_prerequisite"] != expected_prerequisite:
+            raise ValueError("a write requires its complete deferred-reader ordering evidence")
         if event["outcome"] != "success" or event["raw_value_preservation"] != "preserved":
             raise ValueError("a write requires successful raw-value preservation")
         if event["ownership"] == "not_observed" or event["duplicate_reentry"] == "not_observed":
             raise ValueError("a write requires ownership and re-entry evidence")
-    elif event["raw_value_preservation"] == "preserved" or event["ownership"] != "not_observed":
+    elif (event["reader_prerequisite"] != "not_observed" or
+          event["raw_value_preservation"] == "preserved" or event["ownership"] != "not_observed"):
         raise ValueError("state contract cannot be claimed without a write")
     if event["later_consumer"] == "later_callback":
         if event["stage"] != "later_callback" or event["outcome"] != "success":
@@ -126,6 +136,7 @@ def sanitize_observation(raw: Any) -> dict[str, Any]:
             "attachment_delimiter_rule": _enum(event["attachment_delimiter_rule"], "attachment_delimiter_rule", _DELIMITERS),
             "trailing_bytes_policy": _enum(event["trailing_bytes_policy"], "trailing_bytes_policy", _TRAILING),
             "destination_write": _enum(event["destination_write"], "destination_write", _WRITES),
+            "reader_prerequisite": _enum(event["reader_prerequisite"], "reader_prerequisite", _READER_PREREQUISITES),
             "raw_value_preservation": _enum(event["raw_value_preservation"], "raw_value_preservation", _PRESERVATION),
             "ownership": _enum(event["ownership"], "ownership", _OWNERSHIP),
             "duplicate_reentry": _enum(event["duplicate_reentry"], "duplicate_reentry", _REENTRY),

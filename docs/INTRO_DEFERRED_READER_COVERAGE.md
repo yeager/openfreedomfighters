@@ -62,7 +62,8 @@ Each bounded observation record carries only these categorical relations:
 - owner and component input form: `accepted_bounded`,
   `rejected_malformed`, or `rejected_unsupported`;
 - terminal rule, attachment-delimiter rule, and a no-trailing-bytes policy;
-- reader boundary for a destination write, raw-value preservation, local
+- reader boundary for a destination write, the required deferred-preparation
+  and owner-reader prerequisite ordering, raw-value preservation, local
   ownership, and duplicate/re-entry behavior;
 - rollback/no-write behavior, a possible later-callback consumer, outcome, and
   the required `none` side-effect category.
@@ -75,6 +76,11 @@ no side effect, and `no_write` rollback. A reported write must occur at the
 declared owner- or component-reader stage and include complete grammar,
 preservation, ownership, and re-entry evidence. A later consumer may be
 reported only at the later-callback stage.
+
+For a reported write, the schema also requires the complete prerequisite
+relation: deferred preparation precedes an owner-reader write; deferred
+preparation and the owner reader precede a component-reader write. This is a
+source-free ordering fact, not an inferred callback or activation rule.
 
 This schema records evidence for review; it neither admits a reader nor changes
 ParamAnim construction, lifecycle, rendering, activation, or playback.
