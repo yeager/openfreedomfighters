@@ -8,12 +8,13 @@ scene or mission request on that evidence.
 
 ## Current source-backed boundary
 
-The startup factory now has a scene-owned registry that materializes the
-checked `FF-StartUp` hierarchy with fresh native handles, exact parent/child
-links and the verified BootMenu attachment owner. It retains no selected root,
-node family, visibility, input, camera, draw record or transition state. The
-registry therefore closes the previous synthetic-only construction gap without
-authorizing a live menu, reader/initialization pass, or scene-manager request.
+Normal non-diagnostic startup now retains a scene-owned registry that
+materializes the checked `FF-StartUp` hierarchy with fresh native handles,
+exact parent/child links and the verified BootMenu attachment owner. It retains
+no selected root, node family, visibility, input, camera, draw record or
+transition state. The registry therefore closes the previous synthetic-only
+construction gap without authorizing a live menu, reader/initialization pass,
+or scene-manager request.
 
 ## Missing contract
 

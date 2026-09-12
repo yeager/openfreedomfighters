@@ -33,7 +33,7 @@ soundtrack files must never be required to launch.
 | Intro picture | A source-backed static legal picture drawn using a generic fit projection | Authored camera, live cut timing, animation and admitted scene draws |
 | Scene host | Checked ordering boundaries and a first-frame assembler | Connection to the scene session and a repeatable ordinary update/render loop |
 | Intro audio | Source-bank bindings, decoders, channel service and SDL output adapters | Scene-driven start, readiness, update, stop and audible normal playback |
-| Menu data | Checked FF-StartUp package, source hierarchy registry and BootMenu source discovery | Complete readers, menu activation and a concrete live scene factory |
+| Menu data | Checked FF-StartUp package, normal-startup retained source hierarchy registry and BootMenu source discovery | Complete readers, menu activation and a concrete live scene factory |
 | Menu drawing | A graphics-settings subset with six images and 77 draw groups | Full selected menu hierarchy, text, camera, state and ordered rendering |
 | Input/settings | Working project-authored F10 overlay, display transactions and UI locale selection | Authored main-menu actions, focus and final retail-style F10 integration |
 | Soundtrack | MP3/FLAC decoding and catalog/profiling tools | Verified per-cue replacement mapping and normal music playback |

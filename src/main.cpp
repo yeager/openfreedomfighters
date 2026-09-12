@@ -33,6 +33,7 @@
 #include "off/platform/sdl_startup.hpp"
 #include "off/runtime/startup_boot_scene_directory_source.hpp"
 #include "off/runtime/startup_boot_scene_probe_host.hpp"
+#include "off/runtime/startup_boot_scene_registry.hpp"
 #include "off/runtime/startloader_prepared_route.hpp"
 #include "off/runtime/movie_cut_loader_package_source.hpp"
 #include "off/runtime/movie_cut_main_package_source.hpp"
@@ -1265,6 +1266,7 @@ int main(int argc, char **argv) {
     return *time;
   }};
   std::optional<off::graphics::SceneRenderAsset> startup_ui_scene_resources;
+  std::optional<off::runtime::StartupBootSceneRegistry> startup_boot_registry;
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
   std::optional<off::graphics::StartupGraphicsExpandedPlan>
       startup_graphics_cpu_plan;
@@ -1296,8 +1298,35 @@ int main(int argc, char **argv) {
             application.reset_clock();
             // Retain exact UI-archive resources, not an original first-scene
             // selection or a guessed camera/world draw plan.
-            startup_ui_scene_resources.emplace(
-                off::graphics::load_startup_scene_render_asset(data_path));
+          startup_ui_scene_resources.emplace(
+              off::graphics::load_startup_scene_render_asset(data_path));
+          // Retain the complete checked startup hierarchy through the normal
+          // application lifetime. This is source-backed construction only:
+          // no component reader, active-root choice, input, camera, rendering
+          // or scene transition is admitted here.
+          if (!diagnostic_scene && !diagnostic_startup_graphics &&
+              !diagnostic_intro_picture) {
+            auto package = std::make_shared<const off::runtime::StartupSceneLoadPackage>(
+                off::runtime::StartupScenePackageSource::prepare_checked(
+                    "FF-Startup", data_path / "Scenes" / "FF-StartUp.ZIP"));
+            const auto directory =
+                off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
+                    package->factory_inputs()->gms());
+            // This owns only the native registry transaction. It is not a
+            // substitute for the unrecovered original scene-manager lease.
+            const auto registry_lifetime =
+                std::make_shared<const std::uint8_t>(0U);
+            const auto registry_scene =
+                off::runtime::StartupBootSceneLease::live(registry_lifetime);
+            off::runtime::StartupBootSceneRegistryFactory registry_factory;
+            startup_boot_registry.emplace(registry_factory.construct(
+                std::move(package), directory, registry_scene, 1U));
+            if (!startup_boot_registry->valid() ||
+                startup_boot_registry->nodes().size() !=
+                    directory.hierarchy_scope().nodes.size())
+              throw std::runtime_error(
+                  "startup hierarchy registry construction was incomplete");
+          }
             // Prepare authored first-cut resources without admitting a scene or
             // manufacturing lifecycle state. Keep ownership through the
             // runtime.
@@ -1422,6 +1451,10 @@ int main(int argc, char **argv) {
     std::cout << "Startup menu CPU plan: "
               << startup_graphics_cpu_plan->submissions().size()
               << " source-backed picture submissions; GPU submission pending.\n";
+  if (startup_boot_registry)
+    std::cout << "Source-backed startup hierarchy retained: "
+              << startup_boot_registry->nodes().size()
+              << " nodes; menu activation remains pending.\n";
   if (diagnostic_startup_graphics)
     std::cout << "Startup graphics diagnostic: source images and source quad "
                  "geometry, generic fit projection; not a faithful menu.\n";
