@@ -1427,19 +1427,25 @@ int main(int argc, char **argv) {
                 std::move(intro_runtime));
             intro_session->complete_postconstruction_reader_bracket(0U);
             intro_session->prepare_supported_first_cut_player();
-            const auto legal_source =
-                intro->resources()
-                    .sources()
-                    .local_source_for_authored_reference(
-                        intro->resources().member().references[1]);
-            if (!legal_source)
-              throw std::runtime_error(
-                  "first-cut legal picture source is unavailable");
-            intro_legal_picture_preflight.emplace(
-                off::graphics::build_intro_preview(
-                    *intro, *legal_source, {.width = 1280U, .height = 720U},
-                    off::graphics::IntroPreviewPolicy::
-                        admitted_first_cut_legal_picture));
+            // A retained intro runtime is not a cutscene admission.  The
+            // source-backed legal-picture frame is deliberately built only
+            // for the explicit diagnostic command; ordinary startup must not
+            // turn a loader receipt into an unobserved cutscene preview.
+            if (diagnostic_intro_picture) {
+              const auto legal_source =
+                  intro->resources()
+                      .sources()
+                      .local_source_for_authored_reference(
+                          intro->resources().member().references[1]);
+              if (!legal_source)
+                throw std::runtime_error(
+                    "first-cut legal picture source is unavailable");
+              intro_legal_picture_preflight.emplace(
+                  off::graphics::build_intro_preview(
+                      *intro, *legal_source, {.width = 1280U, .height = 720U},
+                      off::graphics::IntroPreviewPolicy::
+                          admitted_first_cut_legal_picture));
+            }
           }
           startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
               data_path / "Scenes" / "FF-StartUp.ZIP"));
