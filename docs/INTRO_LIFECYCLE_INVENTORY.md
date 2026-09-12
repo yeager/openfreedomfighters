@@ -85,6 +85,13 @@ The first reader families are the direct first-cut dependencies:
 3. `ZSNDOBJ_SoundExtend`, `ZSNDOBJ_SoundNotify`, and
    `ZSNDOBJ_SoundSegment`.
 
+`ZLIST_CutSequence` now also has a dedicated, source-free
+[player-lifecycle observation boundary](CUT_SEQUENCE_PLAYER_LIFECYCLE.md).
+It is distinct from the list and command traces: it records the outer
+phase-one/phase-two, member/reference sweep, receiver seal, activation and
+completion contract without exposing player content. It does not make the
+component runnable.
+
 This ordering closes the earliest incomplete reader families. The implemented
 MovieControl phase-two binding does not bypass them: the runtime still lacks a
 complete reader-backed owner/component population for the global passes.
