@@ -46,9 +46,11 @@ Use an isolated, owned installation to record a source-free lifecycle trace
 that correlates the constructed controller identity with its phase-one
 dispatch. The trace must report only structural metadata: dispatch order,
 phase number, component/owner identity relation, pre/post status masks,
-event-membership change, success/failure, and whether an external service was
-entered. It must not export game strings, assets, offsets, payload bytes,
-screenshots or executable material.
+event-membership change, ordinary-membership before/after, global-lifecycle
+entry/completion/outcome, phase-one completion, success/failure, and whether an
+external service was entered. It must not export identifiers, addresses,
+offsets, paths, game strings, assets, payload bytes, screenshots or executable
+material.
 
 The implementation may proceed only when that trace identifies one callback
 and all of its required effects. The resulting public tests must use authored
@@ -68,7 +70,7 @@ debugger logs, memory dumps, disassembly, screenshots, or exported game data.
 
 The input and output paths are required to be outside this repository, and the
 output is never overwritten. The accepted raw JSON format has exactly one
-`format` value, `off.movie-control-phase-one.raw/v1`, and an `events` array.
+`format` value, `off.movie-control-phase-one.raw/v2`, and an `events` array.
 Each event has only the following structural fields:
 
 - increasing `dispatch_order`, `phase` (always `1`) and observer-local
@@ -77,6 +79,9 @@ Each event has only the following structural fields:
   identities;
 - 32-bit pre/post component and owner masks;
 - before/after event membership; and
+- global-lifecycle entry and completion booleans with the categorical
+  `not_observed`/`success`/`failure` outcome;
+- before/after ordinary membership and phase-one completion; and
 - `success`/`failure` plus `entered`/`not_entered` external-service state.
 
 On the private observation host, create the raw record with the private
@@ -89,7 +94,8 @@ python3 tools/movie_control_phase_one_trace.py \
 
 Review two fresh-process runs. A candidate is sufficient only if it ties the
 constructed component to one callback ordinal, gives its relative dispatch
-order, and accounts for every changed mask, event membership transition,
+order, and accounts for every changed mask, event/ordinary-membership
+transition, global-lifecycle entry/completion outcome, phase-one completion,
 external-service entry, and failure path. Keep both raw and sanitized records
 private; only a behavior specification and authored test fixture may be added
 to this repository after review.

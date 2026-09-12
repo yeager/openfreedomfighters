@@ -18,14 +18,15 @@ from typing import Any
 
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent
-INPUT_FORMAT = "off.movie-control-phase-one.raw/v1"
-OUTPUT_FORMAT = "off.movie-control-phase-one/v1"
+INPUT_FORMAT = "off.movie-control-phase-one.raw/v2"
+OUTPUT_FORMAT = "off.movie-control-phase-one/v2"
 MAX_EVENTS = 4096
 MAX_CALLBACK_ORDINAL = 65535
 MASK_LIMIT = (1 << 32) - 1
 
 _OUTCOMES = frozenset(("success", "failure"))
 _EXTERNAL_SERVICES = frozenset(("not_entered", "entered"))
+_GLOBAL_LIFECYCLE_OUTCOMES = frozenset(("not_observed", "success", "failure"))
 
 
 def _require_exact_keys(record: dict[str, Any], expected: frozenset[str]) -> None:
@@ -43,6 +44,32 @@ def _boolean(value: Any, label: str) -> bool:
     if type(value) is not bool:
         raise ValueError(f"{label} must be boolean")
     return value
+
+
+def _enum(value: Any, label: str, allowed: frozenset[str]) -> str:
+    if value not in allowed:
+        raise ValueError(f"{label} has an unsupported value")
+    return value
+
+
+def _validate_relations(event: dict[str, Any]) -> None:
+    """Reject lifecycle claims that cannot describe one global pass."""
+    entered = event["global_lifecycle_entered"]
+    completed = event["global_lifecycle_completed"]
+    lifecycle_outcome = event["global_lifecycle_outcome"]
+    if not entered:
+        if completed or lifecycle_outcome != "not_observed":
+            raise ValueError("an unentered global lifecycle has no completion outcome")
+    elif lifecycle_outcome == "not_observed":
+        if completed:
+            raise ValueError("a completed global lifecycle requires an outcome")
+    elif lifecycle_outcome == "success":
+        if not completed:
+            raise ValueError("a successful global lifecycle must be complete")
+    elif completed:
+        raise ValueError("a failed global lifecycle cannot be complete")
+    if event["phase_one_completed"] and not entered:
+        raise ValueError("phase-one completion requires global lifecycle entry")
 
 
 def sanitize_trace(raw: Any) -> dict[str, Any]:
@@ -68,6 +95,9 @@ def sanitize_trace(raw: Any) -> dict[str, Any]:
         "owner_status_before", "owner_status_after",
         "event_member_before", "event_member_after", "outcome",
         "external_service",
+        "global_lifecycle_entered", "global_lifecycle_completed",
+        "global_lifecycle_outcome", "ordinary_member_before",
+        "ordinary_member_after", "phase_one_completed",
     ))
     sanitized: list[dict[str, Any]] = []
     prior_order = -1
@@ -101,7 +131,14 @@ def sanitize_trace(raw: Any) -> dict[str, Any]:
             "event_member_after": _boolean(event["event_member_after"], "event_member_after"),
             "outcome": outcome,
             "external_service": external,
+            "global_lifecycle_entered": _boolean(event["global_lifecycle_entered"], "global_lifecycle_entered"),
+            "global_lifecycle_completed": _boolean(event["global_lifecycle_completed"], "global_lifecycle_completed"),
+            "global_lifecycle_outcome": _enum(event["global_lifecycle_outcome"], "global_lifecycle_outcome", _GLOBAL_LIFECYCLE_OUTCOMES),
+            "ordinary_member_before": _boolean(event["ordinary_member_before"], "ordinary_member_before"),
+            "ordinary_member_after": _boolean(event["ordinary_member_after"], "ordinary_member_after"),
+            "phase_one_completed": _boolean(event["phase_one_completed"], "phase_one_completed"),
         }
+        _validate_relations(clean)
         sanitized.append(clean)
     return {"format": OUTPUT_FORMAT, "events": sanitized}
 
