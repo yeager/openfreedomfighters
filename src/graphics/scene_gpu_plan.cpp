@@ -46,6 +46,39 @@ void add_bounded(std::size_t &total, std::size_t value, std::size_t limit,
       value, [](float component) { return std::isfinite(component); });
 }
 
+[[nodiscard]] float source_diagnostic_draw_depth(
+    const SceneGpuPlan &plan, const SceneGpuDraw &draw) {
+  if (draw.instance_index >= plan.instances.size() ||
+      draw.mesh_index >= plan.meshes.size() ||
+      draw.mesh_index != plan.instances[draw.instance_index].mesh_index) {
+    throw std::invalid_argument("scene GPU draw reference is invalid");
+  }
+  const auto &mesh = plan.meshes[draw.mesh_index];
+  if (draw.index_count == 0U || draw.first_index > mesh.indices.size() ||
+      draw.index_count > mesh.indices.size() - draw.first_index) {
+    throw std::invalid_argument("scene GPU mesh draw range is invalid");
+  }
+  const auto depth_axis = plan.projection.depth_axis;
+  if (depth_axis >= 3U) {
+    throw std::invalid_argument("scene GPU diagnostic projection is invalid");
+  }
+  double sum = 0.0;
+  for (std::size_t offset = 0; offset < draw.index_count; ++offset) {
+    const auto vertex_index = mesh.indices[draw.first_index + offset];
+    if (vertex_index >= mesh.vertices.size()) {
+      throw std::invalid_argument("scene GPU mesh index is invalid");
+    }
+    sum += transform_scene_source_diagnostic_position(
+               plan.instances[draw.instance_index],
+               mesh.vertices[vertex_index].position)[depth_axis];
+  }
+  const auto mean = sum / static_cast<double>(draw.index_count);
+  if (!std::isfinite(mean) || std::abs(mean) > std::numeric_limits<float>::max()) {
+    throw std::invalid_argument("scene GPU draw depth is invalid");
+  }
+  return static_cast<float>(mean);
+}
+
 } // namespace
 
 void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
@@ -178,6 +211,7 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
     }
   }
   std::uint8_t previous_bucket = 0;
+  float previous_transparent_depth = std::numeric_limits<float>::infinity();
   for (const auto &draw : plan.draws) {
     if (draw.instance_index >= plan.instances.size() ||
         draw.mesh_index >= plan.meshes.size()) {
@@ -208,6 +242,21 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
          !draw.blend_enabled);
     if (bucket < previous_bucket || !policy_valid) {
       throw std::invalid_argument("scene GPU draw policy or order is invalid");
+    }
+    if (bucket == 1U) {
+      const auto expected_depth = source_diagnostic_draw_depth(plan, draw);
+      const auto tolerance =
+          std::numeric_limits<float>::epsilon() *
+          std::max({1.0F, std::abs(expected_depth),
+                    std::abs(draw.source_diagnostic_depth)}) *
+          8.0F;
+      if (!std::isfinite(draw.source_diagnostic_depth) ||
+          std::abs(draw.source_diagnostic_depth - expected_depth) > tolerance ||
+          draw.source_diagnostic_depth > previous_transparent_depth) {
+        throw std::invalid_argument(
+            "scene GPU transparent draw ordering is invalid");
+      }
+      previous_transparent_depth = draw.source_diagnostic_depth;
     }
     previous_bucket = bucket;
   }
@@ -421,6 +470,24 @@ std::array<float, 3> transform_scene_source_diagnostic_position(
   append_draws(VertexAlphaClass::opaque);
   append_draws(VertexAlphaClass::variable);
   append_draws(VertexAlphaClass::fully_transparent);
+  for (auto &draw : result.draws) {
+    if (draw.alpha_class == VertexAlphaClass::variable) {
+      draw.source_diagnostic_depth = source_diagnostic_draw_depth(result, draw);
+    }
+  }
+  const auto transparent_begin = std::find_if(
+      result.draws.begin(), result.draws.end(), [](const auto &draw) {
+        return draw.alpha_class == VertexAlphaClass::variable;
+      });
+  const auto transparent_end = std::find_if(
+      transparent_begin, result.draws.end(), [](const auto &draw) {
+        return draw.alpha_class == VertexAlphaClass::fully_transparent;
+      });
+  std::stable_sort(transparent_begin, transparent_end,
+                   [](const auto &left, const auto &right) {
+                     return left.source_diagnostic_depth >
+                            right.source_diagnostic_depth;
+                   });
   if (consumed_asset) {
     for (std::size_t index = 0; index < result.meshes.size(); ++index) {
       result.meshes[index].indices =

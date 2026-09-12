@@ -533,13 +533,28 @@ int main() {
             blended_plan.draws[0].depth_policy ==
                 off::graphics::SceneDepthPolicy::test_and_write &&
             !blended_plan.draws[0].blend_enabled &&
-            blended_plan.draws[1].instance_index == 0 &&
-            blended_plan.draws[2].instance_index == 1 &&
+            blended_plan.draws[1].instance_index == 1 &&
+            blended_plan.draws[2].instance_index == 0 &&
             blended_plan.draws[1].depth_policy ==
                 off::graphics::SceneDepthPolicy::test_only &&
-            blended_plan.draws[1].blend_enabled,
-        "order opaque draws before stable blended draws and disable their "
-        "depth writes");
+            blended_plan.draws[1].blend_enabled &&
+            blended_plan.draws[1].source_diagnostic_depth >=
+                blended_plan.draws[2].source_diagnostic_depth,
+        "order opaque draws before source-diagnostic back-to-front blended "
+        "draws and disable their depth writes");
+
+  auto unsorted_transparent_plan = blended_plan;
+  std::swap(unsorted_transparent_plan.draws[1],
+            unsorted_transparent_plan.draws[2]);
+  bool unsorted_transparency_rejected = false;
+  try {
+    off::graphics::validate_scene_gpu_plan(unsorted_transparent_plan);
+  } catch (const std::invalid_argument &) {
+    unsorted_transparency_rejected = true;
+  }
+  check(unsorted_transparency_rejected,
+        "reject a source-diagnostic transparent draw order that is not "
+        "back-to-front");
 
   auto invisible_scene_asset = scene_asset;
   invisible_scene_asset.meshes[1].alpha_class =

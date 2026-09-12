@@ -63,6 +63,12 @@ struct SceneGpuDraw {
   VertexAlphaClass alpha_class{VertexAlphaClass::opaque};
   SceneDepthPolicy depth_policy{SceneDepthPolicy::test_and_write};
   bool blend_enabled{false};
+  // Mean source-diagnostic depth across this draw's referenced vertices.
+  // It exists only to make generic, orthographic diagnostics deterministic:
+  // variable-alpha draws are submitted back-to-front relative to the
+  // source-only fit projection.  It is not an inferred original material,
+  // camera, or render-queue value.
+  float source_diagnostic_depth{0.0F};
   std::size_t first_index{0};
   std::size_t index_count{0};
 };
