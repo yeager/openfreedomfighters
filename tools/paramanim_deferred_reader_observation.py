@@ -101,6 +101,21 @@ def _validate(event: dict[str, Any]) -> None:
             raise ValueError("a later consumer requires a successful later-callback observation")
     if event["stage"] == "failure" and event["outcome"] != "failure":
         raise ValueError("failure stage requires failure outcome")
+    # A rollback is meaningful only after an accepted reader path has acquired
+    # state.  Rejected grammar must instead report the stricter no-write
+    # outcome above.  Keeping this distinction structural prevents a later
+    # admission review from treating a pre-mutation rejection as destination
+    # rollback evidence.
+    if event["failure_rollback"] == "rolled_back":
+        if (event["stage"] != "failure" or event["outcome"] != "failure" or
+                event["owner_input_form"] != "accepted_bounded" or
+                event["component_input_form"] != "accepted_bounded" or
+                event["destination_write"] != "not_observed" or
+                event["side_effect"] != "none"):
+            raise ValueError("rollback requires an accepted post-write failure without side effects")
+    elif (event["failure_rollback"] == "no_write" and
+          event["outcome"] != "failure"):
+        raise ValueError("no-write rollback requires a failed observation")
 
 
 def sanitize_observation(raw: Any) -> dict[str, Any]:

@@ -86,6 +86,27 @@ class ParamAnimDeferredReaderObservationTests(unittest.TestCase):
                 event(stage="component_reader", destination_write="component_reader")
             ]})
 
+    def test_rollback_requires_an_accepted_post_write_failure(self) -> None:
+        rollback = event(stage="failure", destination_write="not_observed",
+                         reader_prerequisite="not_observed",
+                         raw_value_preservation="not_observed", ownership="not_observed",
+                         duplicate_reentry="not_observed", failure_rollback="rolled_back",
+                         outcome="failure")
+        self.assertEqual(
+            observation.sanitize_observation(
+                {"format": observation.INPUT_FORMAT, "events": [rollback]})["events"], [rollback])
+        for changes in (
+            {"stage": "owner_reader"},
+            {"outcome": "success"},
+            {"owner_input_form": "rejected_malformed"},
+            {"destination_write": "owner_reader"},
+        ):
+            with self.subTest(changes=changes):
+                with self.assertRaises(ValueError):
+                    observation.sanitize_observation(
+                        {"format": observation.INPUT_FORMAT,
+                         "events": [rollback | changes]})
+
 
 if __name__ == "__main__":
     unittest.main()

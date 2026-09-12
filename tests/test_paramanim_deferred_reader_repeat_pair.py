@@ -27,10 +27,10 @@ def event(**changes: object) -> dict[str, object]:
     return value
 
 
-def rejected(order: int = 1) -> dict[str, object]:
+def rejected(order: int = 1, *, owner: str = "rejected_malformed",
+             component: str = "accepted_bounded") -> dict[str, object]:
     return event(observation_order=order, stage="failure",
-                 owner_input_form="rejected_malformed",
-                 component_input_form="rejected_malformed",
+                 owner_input_form=owner, component_input_form=component,
                  terminal_rule="rejected_missing", destination_write="not_observed",
                  reader_prerequisite="not_observed", raw_value_preservation="not_observed",
                  ownership="not_observed", duplicate_reentry="not_observed",
@@ -44,10 +44,28 @@ def preparation() -> dict[str, object]:
 
 
 def unsupported(order: int = 2) -> dict[str, object]:
-    return rejected(order).copy() | {
-        "owner_input_form": "rejected_unsupported",
-        "component_input_form": "rejected_unsupported",
-    }
+    return rejected(order, owner="rejected_unsupported")
+
+
+def component_malformed(order: int = 3) -> dict[str, object]:
+    return rejected(order, owner="accepted_bounded", component="rejected_malformed")
+
+
+def component_unsupported(order: int = 4) -> dict[str, object]:
+    return rejected(order, owner="accepted_bounded", component="rejected_unsupported")
+
+
+def rollback(order: int = 5) -> dict[str, object]:
+    return event(observation_order=order, stage="failure",
+                 destination_write="not_observed", reader_prerequisite="not_observed",
+                 raw_value_preservation="not_observed", ownership="not_observed",
+                 duplicate_reentry="not_observed", failure_rollback="rolled_back",
+                 outcome="failure")
+
+
+def complete() -> dict[str, object]:
+    return sanitized(preparation(), event(observation_order=1), rejected(2), unsupported(3),
+                     component_malformed(4), component_unsupported(5), rollback(6))
 
 
 def sanitized(*events: dict[str, object]) -> dict[str, object]:
@@ -56,20 +74,19 @@ def sanitized(*events: dict[str, object]) -> dict[str, object]:
 
 class ParamAnimDeferredReaderRepeatPairTests(unittest.TestCase):
     def test_accepts_identical_complete_contracts(self) -> None:
-        first = sanitized(preparation(), event(observation_order=1), rejected(2), unsupported(3))
-        result = repeat_pair.sanitize_repeat_pair(
-            first, sanitized(preparation(), event(observation_order=1), rejected(2), unsupported(3)))
+        first = complete()
+        result = repeat_pair.sanitize_repeat_pair(first, complete())
         self.assertEqual(result["format"], repeat_pair.OUTPUT_FORMAT)
         self.assertEqual(result["events"], first["events"])
 
     def test_rejects_changed_contract_or_unsanitized_input(self) -> None:
-        first = sanitized(preparation(), event(observation_order=1), rejected(2), unsupported(3))
+        first = complete()
         with self.assertRaises(ValueError):
             repeat_pair.sanitize_repeat_pair(
-                first, sanitized(preparation(), event(observation_order=1, ownership="owner_local"), rejected(2), unsupported(3)))
+                first, sanitized(preparation(), event(observation_order=1, ownership="owner_local"), rejected(2), unsupported(3), component_malformed(4), component_unsupported(5), rollback(6)))
         with self.assertRaises(ValueError):
             repeat_pair.sanitize_repeat_pair(
-                {"format": observation.INPUT_FORMAT, "events": [preparation(), event(observation_order=1), rejected(2), unsupported(3)]}, first)
+                {"format": observation.INPUT_FORMAT, "events": complete()["events"]}, first)
 
     def test_requires_one_write_and_negative_evidence(self) -> None:
         with self.assertRaises(ValueError):
@@ -85,12 +102,22 @@ class ParamAnimDeferredReaderRepeatPairTests(unittest.TestCase):
                                          reader_prerequisite="preparation_and_owner_reader_before_component_reader"),
                           rejected(3), unsupported(4)))
 
+    def test_requires_each_grammar_boundary_and_post_write_rollback(self) -> None:
+        partial = sanitized(preparation(), event(observation_order=1), rejected(2), unsupported(3),
+                            component_malformed(4), component_unsupported(5))
+        with self.assertRaises(ValueError):
+            repeat_pair.sanitize_repeat_pair(partial, partial)
+        missing_component = sanitized(preparation(), event(observation_order=1), rejected(2), unsupported(3),
+                                      rollback(4))
+        with self.assertRaises(ValueError):
+            repeat_pair.sanitize_repeat_pair(missing_component, missing_component)
+
     def test_rejects_retail_or_identity_fields_on_revalidation(self) -> None:
-        specimen = sanitized(preparation(), event(observation_order=1), rejected(2), unsupported(3))
+        specimen = complete()
         specimen["events"][0]["address"] = 1
         with self.assertRaises(ValueError):
             repeat_pair.sanitize_repeat_pair(
-                specimen, sanitized(preparation(), event(observation_order=1), rejected(2), unsupported(3)))
+                specimen, complete())
 
 
 if __name__ == "__main__":

@@ -90,12 +90,19 @@ ParamAnim construction, lifecycle, rendering, activation, or playback.
 Collect two fresh private observations, sanitize each one, then pass both to
 `tools/paramanim_deferred_reader_repeat_pair.py`. The gate accepts only an
 exact ordered match of the complete categorical transcript. It also requires
-exactly one observed reader write, a preceding successful deferred-preparation
-record, and both malformed and unsupported rejected-input observations. A
-component-reader write further requires a preceding successful owner-reader
-record. A later callback may appear only when the transcript explicitly
-declares it and must follow the write. Therefore a positive-looking write alone
-cannot nominate a reader.
+exactly one observed reader write and a preceding successful deferred-
+preparation record. It separately requires malformed and unsupported failures
+at each grammar boundary: malformed owner with accepted component, unsupported
+owner with accepted component, accepted owner with malformed component, and
+accepted owner with unsupported component. A component-reader write further
+requires a preceding successful owner-reader record.
+
+The same transcript must also contain a later accepted-input failure that
+reports `rolled_back`, after the one write; a rejected grammar record's
+`no_write` result is not destination rollback evidence. Every event in both
+matching traces must report `none` side effects. A later callback may appear
+only when the transcript explicitly declares it and must follow the write.
+Therefore a positive-looking write alone cannot nominate a reader.
 
 The tool cannot attest that a caller used separate processes, and it does not
 recover field layout, cardinality, or a source/object mapping. Those remain

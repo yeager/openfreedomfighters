@@ -50,12 +50,35 @@ def _has_complete_contract(events: list[dict[str, Any]]) -> bool:
             event["stage"] == "owner_reader" and event["outcome"] == "success"
             for event in events[:write_index]):
         return False
-    rejected_forms = {
-        form for event in events
-        for form in (event["owner_input_form"], event["component_input_form"])
-        if form in ("rejected_malformed", "rejected_unsupported")
+    # Each grammar boundary must be independently challenged.  Seeing only a
+    # rejected owner+component pair cannot establish whether a reader rejects
+    # the owner grammar, component grammar, or merely their combination.
+    expected_rejections = {
+        ("rejected_malformed", "accepted_bounded"),
+        ("rejected_unsupported", "accepted_bounded"),
+        ("accepted_bounded", "rejected_malformed"),
+        ("accepted_bounded", "rejected_unsupported"),
     }
-    if rejected_forms != {"rejected_malformed", "rejected_unsupported"}:
+    observed_rejections = {
+        (event["owner_input_form"], event["component_input_form"])
+        for event in events
+        if event["outcome"] == "failure"
+    }
+    if not expected_rejections.issubset(observed_rejections):
+        return False
+    # A positive write does not prove that its destination is recoverable on a
+    # later failure.  Require an accepted-input, post-write rollback record.
+    if not any(event["stage"] == "failure" and
+               event["owner_input_form"] == "accepted_bounded" and
+               event["component_input_form"] == "accepted_bounded" and
+               event["failure_rollback"] == "rolled_back" and
+               event["outcome"] == "failure"
+               for event in events[write_index + 1:]):
+        return False
+    # This explicit check is deliberately retained even though the current
+    # sanitizer admits only `none`: it makes the repeat gate fail closed if the
+    # schema is ever widened without an equivalent two-trace side-effect rule.
+    if any(event["side_effect"] != "none" for event in events):
         return False
     callback_indexes = [index for index, event in enumerate(events)
                         if event["stage"] == "later_callback"]
