@@ -101,7 +101,11 @@ for a portable installation.
   letterboxed menu composition and restrained text focus, informed by private
   observation without copying retail UI pixels or wording. Text follows the
   system locale and uses in-memory retail UI fonts when coverage is available,
-  including mixed-script LTR runs aligned to one baseline.
+  including mixed-script LTR runs aligned to one baseline. Confirmed requested
+  settings are saved in SDL's per-user application-preferences location when it
+  is available. An explicit `--mode` selects the profile for that launch; it
+  takes precedence over a saved profile without rewriting preferences at startup. See
+  [graphics-settings persistence](docs/GRAPHICS_SETTINGS_PERSISTENCE.md).
 - A separate geometry preview is available with `--diagnostic-scene`. It is not
   a loaded level or a gameplay demo.
 - Project-authored deterministic simulation replays have a versioned `OFRP`

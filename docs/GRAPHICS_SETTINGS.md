@@ -149,13 +149,18 @@ Apply uses a last-known-good transaction:
 5. Request confirmation for risky display changes, then persist only after the
    user keeps the result. A rejected or timed-out change is not persisted.
 
-Ordinary next-frame changes persist after successful application. Restart-bound
-changes persist the requested value with a clear `Restart required` state while
-the effective value continues to report the active renderer. When configuration
-persistence is introduced, it must write atomically in the platform
-configuration directory. A malformed or incompatible file must be quarantined
-or ignored with a diagnostic and must not prevent startup; the last known-good
-configuration and conservative defaults are the recovery paths.
+Confirmed requested settings are saved atomically in SDL's per-user application
+preferences directory. If SDL cannot provide an absolute preferences directory,
+the launch remains usable and persistence is disabled; there is no home-directory
+or environment-variable fallback. The preferences file stores requested intent,
+never resolved state, capability claims, or fallback reasons. A missing,
+malformed, incompatible, or unreadable file is ignored without being rewritten,
+so conservative defaults remain usable. An explicit `--mode` takes precedence
+over the stored profile for that launch and does not rewrite the file at startup.
+A later confirmed F10 change saves the resulting confirmed request. See
+[graphics-settings persistence](GRAPHICS_SETTINGS_PERSISTENCE.md) for the
+format and durability boundary. A save failure leaves the confirmed live
+configuration intact but cannot survive a relaunch.
 
 ## Platform and feature boundaries
 
@@ -202,8 +207,7 @@ snapshot.
 4. Recover behavior-only retail menu layout/style measurements and bind the
    overlay to menu fonts, interface art, control-state gating, and audio read from the
    verified installation at runtime.
-5. Gamepad lifecycle, atomic persistence in the platform configuration directory,
-   and a Unicode text backend for all supported localizations.
+5. Gamepad lifecycle and a Unicode text backend for all supported localizations.
 6. Enable advanced rows as their real Original/Modern/Modern+ renderer paths land.
 
 Stage 1 now has an initial implementation for Original/Modern profile selection,
@@ -215,10 +219,12 @@ confirmation deadline, explicit rollback acknowledgement, and commit only after
 success. It performs no SDL calls or persistence I/O. Modern+, DLSS intent,
 render scaling, upscaling, and shadow-quality rows are represented in the model;
 their real renderer implementations remain capability-gated and incomplete.
-The SDL runtime currently starts from the supplied mode and conservative model
-defaults; it does not load or write a graphics-settings file. Atomic platform
-configuration persistence and malformed-file recovery therefore remain Stage 5
-work, rather than a partially implemented restore path.
+The SDL runtime loads a valid requested-settings file from SDL's per-user
+preferences location before resolving and applying its initial configuration.
+It saves only after a confirmed F10 transaction. An explicit `--mode` overrides
+only the stored profile for that launch; a malformed or unavailable file falls
+back to conservative defaults without repair. The menu session remains pure and
+performs no file I/O itself.
 
 Stage 2 now has a renderer-neutral, physical-pixel draw-list model with strict
 command, hit-target, and text-byte budgets. It emits the backdrop, centered
@@ -235,9 +241,9 @@ provisional until the original font-role semantics are recovered. The implemente
 window mode, size,
 presentation mode, and Original/Modern profile apply transactionally through
 SDL, including the Keep/Revert timeout. Mouse clicks now share that dispatcher;
-persistence, bidirectional and complex-script shaping, and recovered retail
-styling remain open. Mixed-script LTR labels use per-scalar retail-font fallback
-runs aligned to a shared baseline; this is not a substitute for shaping.
+bidirectional and complex-script shaping, and recovered retail styling remain
+open. Mixed-script LTR labels use per-scalar retail-font fallback runs aligned
+to a shared baseline; this is not a substitute for shaping.
 
 Stage 4 has recovered the authored coordinate space, title and two-column
 anchors, row rhythm, and shared action anchor. A fail-closed startup extractor

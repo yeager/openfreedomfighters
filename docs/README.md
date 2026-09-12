@@ -77,6 +77,7 @@
 - [Architecture](ARCHITECTURE.md)
 - [Modern graphics specification](MODERN_GRAPHICS.md)
 - [F10 graphics-settings overlay](GRAPHICS_SETTINGS.md)
+- [Graphics-settings persistence](GRAPHICS_SETTINGS_PERSISTENCE.md)
 - [Retail font runtime contract](RETAIL_FONT_RUNTIME.md)
 - [Retail UI texture runtime contract](RETAIL_UI_TEXTURES.md)
 - [DLSS 4.5 integration plan](DLSS.md)
