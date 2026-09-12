@@ -366,7 +366,7 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
   try {
     verification_future = std::async(std::launch::async, [&] {
       return prepare_startup_cpu(
-          [&] {
+          [&]() {
             return data::verify_install(
                 data_path, [&] { return cancelled.load(); },
                 {.deep_audit_cache_root = application_deep_audit_cache_root()});
@@ -374,6 +374,11 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
           prepare_assets, cancelled,
           [&](StartupPreparationStage stage) {
             preparation_stage.store(stage);
+          },
+          [&]() {
+            return data::verify_install(
+                data_path, [&] { return cancelled.load(); },
+                {.deep_audit_cache_root = application_deep_audit_cache_root()});
           });
     });
   } catch (...) {

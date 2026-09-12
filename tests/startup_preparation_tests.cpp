@@ -37,6 +37,29 @@ int main() {
   check(stages == std::vector{StartupPreparationStage::verifying_game_data,
                               StartupPreparationStage::preparing_assets},
         "successful work reports the verifier then preparation boundary");
+  // Prepared source bytes are not admitted solely because an earlier scan
+  // passed. A handoff verifier catches a supported installation changing while
+  // the CPU loaders were reading it.
+  int handoff_verifies{};
+  int handoff_prepares{};
+  stages.clear();
+  result = prepare_startup_cpu(
+      verify, [&] { ++handoff_prepares; }, cancelled,
+      [&](StartupPreparationStage stage) { stages.push_back(stage); },
+      [&] {
+        ++handoff_verifies;
+        return off::data::InstallVerification{
+            .error = off::data::InstallError::incomplete_game_data,
+            .message = "test source changed during preparation"};
+      });
+  check(result.outcome == StartupPreparationOutcome::verification_error &&
+            handoff_verifies == 1 && handoff_prepares == 1 &&
+            result.message == "test source changed during preparation",
+        "failed handoff verification rejects prepared source state");
+  check(stages == std::vector{StartupPreparationStage::verifying_game_data,
+                              StartupPreparationStage::preparing_assets,
+                              StartupPreparationStage::verifying_game_data},
+        "handoff verification follows preparation before state admission");
   stages.clear();
   result = prepare_startup_cpu(
       [] {

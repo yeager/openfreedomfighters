@@ -36,10 +36,15 @@ struct StartupPreparationResult {
 // installation verifier; injection exists for unit tests, not ownership bypass.
 // Cancellation is cooperative between stages. An active parser is never killed.
 // Callback-owned output must not be read until this function has completed.
+// When supplied, reverify runs after CPU preparation and before any prepared
+// state is admitted to the caller. It closes the ordinary verify/read handoff:
+// source bytes parsed during preparation must still describe a supported
+// installation at the handoff boundary.
 [[nodiscard]] StartupPreparationResult
 prepare_startup_cpu(const std::function<data::InstallVerification()> &verify,
                     const std::function<void()> &prepare_assets,
                     const std::atomic_bool &cancelled,
-                    StartupPreparationStageObserver observe_stage = {});
+                    StartupPreparationStageObserver observe_stage = {},
+                    const std::function<data::InstallVerification()> &reverify = {});
 
 } // namespace off::platform
