@@ -935,30 +935,35 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
         state.priority=vert || mat || param?100U:center || external || cut || command || sound_segment?1U:0U;
         state.requested=center?1U:external || command?0x803U:mat?0x435U:cut?0x825U:cut_list?0x837U:grain || flare_lights?7U:flare?0x25U:param?0x15U:emitter?0x805U:scroll?0x815U:movie?0x37U:sound_extend?0x13U:sound_notify?0x11U:sound_segment?0x17U:define?0x205U:0x35U;
         if(scroll) {
-          auto& local=payload.scroll_texture.emplace();
+          auto& local=payload.scroll_texture.emplace(IntroConstructedPictureComponent::ScrollTextureState{});
           local.start_event=event_names_.declare("MSG_StartAnimation");
           local.stop_event=event_names_.declare("MSG_StopAnimation");
         }
         if(command) payload.command_text.emplace();
         if(movie) {
-          auto& local=payload.movie_control.emplace();
+          auto& local=payload.movie_control.emplace(IntroConstructedPictureComponent::MovieControlState{});
           constexpr std::array<std::string_view,7> names{
               "msg_SoundReady","CutSequence_End","CutSequence_Start","Activate","AddSubtitle","Msg_SayDialog","StopMovieCut"};
           for(std::size_t event=0;event<names.size();++event) local.events[event]=event_names_.declare(names[event]);
         }
-        if(sound_extend) payload.sound_extend.emplace().start_event=event_names_.declare("MSG_ANIMSOUNDSTART");
-        if(sound_notify) payload.sound_notify.emplace();
+        if(sound_extend)
+          payload.sound_extend.emplace(IntroConstructedPictureComponent::SoundExtendState{}).start_event=
+              event_names_.declare("MSG_ANIMSOUNDSTART");
+        if(sound_notify)
+          payload.sound_notify.emplace(IntroConstructedPictureComponent::SoundNotifyState{});
         if(sound_segment) {
-          auto& local=payload.sound_segment.emplace();
+          auto& local=payload.sound_segment.emplace(IntroConstructedPictureComponent::SoundSegmentState{});
           constexpr std::array<std::string_view,4> names{
               "MSG_SOUNDSEGMENTSTART","MSG_SOUNDSEGMENTSTOP","MSG_WRITESUBTITLE","SubTitlesClear"};
           for(std::size_t event=0;event<names.size();++event) local.events[event]=event_names_.declare(names[event]);
         }
-        if(define) payload.sound_define.emplace();
+        if(define)
+          payload.sound_define.emplace(IntroConstructedPictureComponent::SoundDefineState{});
         if(flare_control) components_.construct_and_destroy_temporary_common();
-        if(param) payload.param_animation.emplace();
+        if(param)
+          payload.param_animation.emplace(IntroConstructedPictureComponent::ParamAnimationStorage{});
         if(emitter) {
-          payload.particle_emitter.emplace();
+          payload.particle_emitter.emplace(IntroConstructedPictureComponent::ParticleEmitterStorage{});
           application_.set_particle_emitter_event(event_names_.declare("FrameCurrent"));
         }
         if(black || character || logo) {payload.fade_start=0;payload.fade_deadline=0;}
@@ -968,21 +973,21 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
         }
         if(external) {payload.target_name="";payload.script_reference=0;}
         if(vert || mat) {
-          payload.animation.emplace();
+          payload.animation.emplace(IntroAnimationConstructionState{});
           if(mat) {
-            payload.animation->mat.emplace();
+            payload.animation->mat.emplace(IntroMatPosAnimLocalState{});
             payload.animation->enabled_c=true;
             payload.animation->scalar=50;
             payload.animation->word_control=1;
             payload.animation->basis=engine_identity;
             payload.animation->transient_vector=std::array<float,3>{};
           } else {
-            payload.animation->vert.emplace();
+            payload.animation->vert.emplace(IntroVertAnimLocalState{});
             application_.set_vert_anim_event(event_names_.declare("Msg_RunWhenPaused"));
           }
         }
         if(cut_list) {
-          payload.cut_list.emplace();
+          payload.cut_list.emplace(IntroCutListConstructionState{});
           payload.commands.emplace();payload.auxiliary_list_a.emplace();payload.auxiliary_list_b.emplace();
           payload.list_sentinel=-1;
         }

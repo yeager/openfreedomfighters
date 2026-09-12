@@ -3,7 +3,9 @@
 This document defines the remaining Phase 1 cache and fuzzing work. It is a
 delivery contract, not an implementation claim. The current runtime reads the
 verified installation directly and public tests use independently authored
-fixtures; there is no derived-asset cache or dedicated fuzz-target suite yet.
+fixtures; there is no derived-asset cache. The LOC display-text parser has an
+opt-in, corpus-free libFuzzer target; the rest of the target matrix remains
+work to do.
 
 ## Security and data boundary
 
@@ -74,6 +76,32 @@ only a unit test that reaches it indirectly.
 | Render assets | texture catalogs/decoders, primitive catalogs/topology, and picture resources |
 | Audio | WHD metadata and PCM/IMA ADPCM/Vorbis dispatch with bounded output |
 | Cache | envelope/model readers and invalidation decisions |
+
+### Current public target: LOC display-text framing
+
+`off_loc_catalog_fuzzer` drives only
+`decode_loc_member_display_texts(std::span<const std::byte>)`. It has no file,
+network, cache, installation-discovery, logging, or explicit output path. Inputs above
+1 MiB are rejected by the harness before the parser, which makes campaigns
+bounded independently of libFuzzer's command-line defaults. The parser retains
+its own production limits for member, node, value, and aggregate bytes.
+
+Build it only in a dedicated Clang configuration; normal builds and CI never
+enable it:
+
+```sh
+cmake -S . -B build-fuzz -DOFF_BUILD_FUZZERS=ON -DBUILD_TESTING=ON \
+  -DCMAKE_CXX_COMPILER=clang++
+cmake --build build-fuzz --target off_loc_catalog_fuzzer
+ctest --test-dir build-fuzz --output-on-failure -R off_loc_catalog_fuzzer_smoke
+./build-fuzz/off_loc_catalog_fuzzer -max_len=1048576 -runs=100000
+```
+
+The smoke test has a fixed seed and finite 256-run budget. Long campaigns may
+use independently authored synthetic seeds only; do not point this target at a
+retail installation or add retail-derived corpus/crash files to version control.
+Review any libFuzzer crash artifact locally and reduce it to an independently
+authored reproducer before sharing it.
 
 Each target accepts one byte span, performs no filesystem or network access,
 uses deterministic limits, and treats a clean rejection as success. Stateful

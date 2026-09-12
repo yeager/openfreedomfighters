@@ -333,6 +333,55 @@ if(UNIX AND NOT APPLE)
             DESTINATION share/applications)
 endif()
 
+# Fuzzing is intentionally opt-in.  It needs a Clang toolchain with the
+# libFuzzer runtime and sanitizers, so it must not affect ordinary developer,
+# release, or CI configurations.
+option(OFF_BUILD_FUZZERS "Build opt-in libFuzzer parser targets" OFF)
+if(OFF_BUILD_FUZZERS)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR
+            "OFF_BUILD_FUZZERS requires Clang with libFuzzer support; select clang++ explicitly.")
+    endif()
+
+    # A normal compiler-flag probe supplies `main`, which conflicts with
+    # libFuzzer's own main.  Probe with the required callback instead so this
+    # verifies the complete compile-and-link combination.
+    include(CheckCXXSourceCompiles)
+    set(OFF_SAVED_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
+    set(CMAKE_REQUIRED_FLAGS
+        "${CMAKE_REQUIRED_FLAGS} -fsanitize=fuzzer,address,undefined")
+    check_cxx_source_compiles(
+        "extern \"C\" int LLVMFuzzerTestOneInput(const unsigned char*, unsigned long) { return 0; }"
+        OFF_HAS_LIBFUZZER_SANITIZERS)
+    set(CMAKE_REQUIRED_FLAGS "${OFF_SAVED_REQUIRED_FLAGS}")
+    if(NOT OFF_HAS_LIBFUZZER_SANITIZERS)
+        message(FATAL_ERROR
+            "The selected Clang toolchain does not provide libFuzzer, ASan, and UBSan together.")
+    endif()
+
+    # Instrument the shared parser implementation as well as the fuzzer
+    # driver.  fuzzer-no-link keeps libFuzzer's main/runtime out of off_core.
+    target_compile_options(off_core PRIVATE
+        -fsanitize=fuzzer-no-link,address,undefined
+        -fno-omit-frame-pointer)
+
+    add_executable(off_loc_catalog_fuzzer fuzz/loc_catalog_fuzzer.cpp)
+    target_link_libraries(off_loc_catalog_fuzzer PRIVATE off_core)
+    target_compile_options(off_loc_catalog_fuzzer PRIVATE
+        -fsanitize=fuzzer,address,undefined
+        -fno-omit-frame-pointer)
+    target_link_options(off_loc_catalog_fuzzer PRIVATE
+        -fsanitize=fuzzer,address,undefined)
+
+    if(BUILD_TESTING)
+        # This is deliberately a finite, deterministic harness smoke check;
+        # it is present only in explicit fuzz configurations.
+        add_test(NAME off_loc_catalog_fuzzer_smoke
+            COMMAND off_loc_catalog_fuzzer -runs=256 -max_len=65536 -seed=1)
+        set_tests_properties(off_loc_catalog_fuzzer_smoke PROPERTIES TIMEOUT 30)
+    endif()
+endif()
+
 if(BUILD_TESTING)
     add_executable(off_scene_event_names_tests tests/scene_event_names_tests.cpp)
     target_link_libraries(off_scene_event_names_tests PRIVATE off_core)
