@@ -1,6 +1,7 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/graphics/render_scale.hpp"
 #include "off/graphics/scene_instance_history.hpp"
+#include "off/graphics/temporal_resolve_baseline.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
 #include "off/platform/intro_preview_diagnostic.hpp"
 #include "off/platform/sdl_locale.hpp"
@@ -77,6 +78,21 @@ struct GpuRenderScaleTarget {
   Uint32 width{0};
   Uint32 height{0};
   SDL_GPUTextureFormat format{SDL_GPU_TEXTUREFORMAT_INVALID};
+};
+
+// Diagnostic-scene-only portable temporal baseline. It owns actual SDL GPU
+// surfaces and a two-sample resolve pass; it is not a vendor upscaler and is
+// never admitted for normal startup/world rendering.
+struct GpuTemporalResolveBaseline {
+  GpuRenderScaleTarget current;
+  std::array<GpuRenderScaleTarget, 2> history;
+  GpuRenderScaleTarget motion;
+  GpuRenderScaleTarget exposure;
+  GpuRenderScaleTarget reactive;
+  SDL_GPUBuffer *vertices{nullptr};
+  SDL_GPUSampler *sampler{nullptr};
+  SDL_GPUGraphicsPipeline *pipeline{nullptr};
+  graphics::TemporalResolveBaseline contract;
 };
 
 class SceneInstanceHistorySubmissionGuard {
@@ -380,6 +396,129 @@ create_shader(SDL_GPUDevice *device, const unsigned char *bytes,
   SDL_ReleaseGPUShader(device, fragment);
   SDL_ReleaseGPUShader(device, vertex);
   return result.pipeline != nullptr;
+}
+
+void release_temporal_resolve_baseline(SDL_GPUDevice *device,
+                                       GpuTemporalResolveBaseline &baseline) {
+  if (baseline.pipeline != nullptr)
+    SDL_ReleaseGPUGraphicsPipeline(device, baseline.pipeline);
+  if (baseline.sampler != nullptr)
+    SDL_ReleaseGPUSampler(device, baseline.sampler);
+  if (baseline.vertices != nullptr)
+    SDL_ReleaseGPUBuffer(device, baseline.vertices);
+  release_render_scale_target(device, baseline.reactive);
+  release_render_scale_target(device, baseline.exposure);
+  release_render_scale_target(device, baseline.motion);
+  for (auto &target : baseline.history)
+    release_render_scale_target(device, target);
+  release_render_scale_target(device, baseline.current);
+  baseline = {};
+}
+
+[[nodiscard]] bool create_temporal_resolve_pipeline(
+    SDL_GPUDevice *device, SDL_Window *window,
+    GpuTemporalResolveBaseline &baseline) {
+  const auto data = shader_bytes(device);
+  SDL_GPUShader *vertex = create_shader(device, data.vertex, data.vertex_size,
+                                        data.vertex_entrypoint, data.format,
+                                        SDL_GPU_SHADERSTAGE_VERTEX);
+  SDL_GPUShader *fragment = create_shader(
+      device, data.fragment, data.fragment_size, data.fragment_entrypoint,
+      data.format, SDL_GPU_SHADERSTAGE_FRAGMENT);
+  if (vertex == nullptr || fragment == nullptr) {
+    if (fragment != nullptr)
+      SDL_ReleaseGPUShader(device, fragment);
+    if (vertex != nullptr)
+      SDL_ReleaseGPUShader(device, vertex);
+    return false;
+  }
+  const SDL_GPUVertexBufferDescription description{
+      .slot = 0, .pitch = sizeof(PreviewVertex),
+      .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX, .instance_step_rate = 0};
+  const std::array attributes{
+      SDL_GPUVertexAttribute{.location = 0, .buffer_slot = 0,
+                              .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,
+                              .offset = offsetof(PreviewVertex, position)},
+      SDL_GPUVertexAttribute{.location = 1, .buffer_slot = 0,
+                              .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,
+                              .offset = offsetof(PreviewVertex, color)},
+      SDL_GPUVertexAttribute{.location = 2, .buffer_slot = 0,
+                              .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+                              .offset = offsetof(PreviewVertex, uv)}};
+  const SDL_GPUColorTargetDescription target{
+      .format = SDL_GetGPUSwapchainTextureFormat(device, window),
+      .blend_state = {.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+                      .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                      .color_blend_op = SDL_GPU_BLENDOP_ADD,
+                      .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE,
+                      .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+                      .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
+                      .enable_blend = true}};
+  const SDL_GPUGraphicsPipelineCreateInfo info{
+      .vertex_shader = vertex,
+      .fragment_shader = fragment,
+      .vertex_input_state = {.vertex_buffer_descriptions = &description,
+                             .num_vertex_buffers = 1,
+                             .vertex_attributes = attributes.data(),
+                             .num_vertex_attributes = static_cast<Uint32>(attributes.size())},
+      .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+      .rasterizer_state = {.fill_mode = SDL_GPU_FILLMODE_FILL,
+                           .cull_mode = SDL_GPU_CULLMODE_NONE,
+                           .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE},
+      .multisample_state = {.sample_count = SDL_GPU_SAMPLECOUNT_1},
+      .target_info = {.color_target_descriptions = &target,
+                      .num_color_targets = 1,
+                      .depth_stencil_format = SDL_GPU_TEXTUREFORMAT_INVALID,
+                      .has_depth_stencil_target = false}};
+  baseline.pipeline = SDL_CreateGPUGraphicsPipeline(device, &info);
+  SDL_ReleaseGPUShader(device, fragment);
+  SDL_ReleaseGPUShader(device, vertex);
+  return baseline.pipeline != nullptr;
+}
+
+[[nodiscard]] bool ensure_temporal_resolve_baseline(
+    SDL_GPUDevice *device, SDL_Window *window, Uint32 output_width,
+    Uint32 output_height, Uint32 internal_width, Uint32 internal_height,
+    SDL_GPUTextureFormat format, GpuTemporalResolveBaseline &baseline) {
+  if (output_width == 0 || output_height == 0 || internal_width == 0 ||
+      internal_height == 0 || format == SDL_GPU_TEXTUREFORMAT_INVALID)
+    return false;
+  const bool history_recreated = baseline.contract.configure(
+      {output_width, output_height, static_cast<std::uint32_t>(format)});
+  if (!ensure_render_scale_target(device, internal_width, internal_height,
+                                  format, baseline.current) ||
+      !ensure_render_scale_target(device, output_width, output_height, format,
+                                  baseline.history[0]) ||
+      !ensure_render_scale_target(device, output_width, output_height, format,
+                                  baseline.history[1]) ||
+      !ensure_render_scale_target(device, internal_width, internal_height,
+                                  format, baseline.motion) ||
+      !ensure_render_scale_target(device, internal_width, internal_height,
+                                  format, baseline.exposure) ||
+      !ensure_render_scale_target(device, internal_width, internal_height,
+                                  format, baseline.reactive))
+    return false;
+  if (history_recreated)
+    baseline.contract.invalidate();
+  if (baseline.vertices == nullptr) {
+    const SDL_GPUBufferCreateInfo info{.usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+                                       .size = static_cast<Uint32>(
+                                           sizeof(PreviewVertex) * 12U)};
+    baseline.vertices = SDL_CreateGPUBuffer(device, &info);
+  }
+  if (baseline.sampler == nullptr) {
+    const SDL_GPUSamplerCreateInfo info{
+        .min_filter = SDL_GPU_FILTER_LINEAR,
+        .mag_filter = SDL_GPU_FILTER_LINEAR,
+        .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+        .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+        .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+        .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE};
+    baseline.sampler = SDL_CreateGPUSampler(device, &info);
+  }
+  return baseline.vertices != nullptr && baseline.sampler != nullptr &&
+         (baseline.pipeline != nullptr ||
+          create_temporal_resolve_pipeline(device, window, baseline));
 }
 
 [[nodiscard]] bool create_overlay(SDL_GPUDevice *device, SDL_Window *window,
@@ -1357,6 +1496,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   }
   Mode active_mode = mode;
   GpuRenderScaleTarget render_scale_target;
+  GpuTemporalResolveBaseline temporal_baseline;
   graphics::SceneInstanceHistoryLifecycle scene_instance_history;
   std::vector<std::uint64_t> scene_instance_identities;
   std::optional<std::array<Uint32, 2>> scene_history_extent;
@@ -1627,6 +1767,27 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     }
     const Uint32 content_width = render_scale == 100U ? swapchain_width : scaled_extent->width;
     const Uint32 content_height = render_scale == 100U ? swapchain_height : scaled_extent->height;
+    // This path is intentionally limited to the explicit source-only
+    // diagnostic scene. Normal startup has no recovered world producer and
+    // must not allocate fabricated temporal inputs.
+    const bool temporal_diagnostic = scene != nullptr &&
+                                     active_mode == Mode::modern &&
+                                     presentation_target != nullptr;
+    if (temporal_diagnostic) {
+      const auto format = SDL_GetGPUSwapchainTextureFormat(device, window);
+      if (!ensure_temporal_resolve_baseline(
+              device, window, swapchain_width, swapchain_height, content_width,
+              content_height, format, temporal_baseline)) {
+        result = failure("portable temporal diagnostic resource creation failed");
+        SDL_SubmitGPUCommandBuffer(command);
+        if (capture_transfer != nullptr)
+          SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
+        if (capture_texture != nullptr)
+          SDL_ReleaseGPUTexture(device, capture_texture);
+        break;
+      }
+      content_target = temporal_baseline.current.texture;
+    }
     if (scene && swapchain != nullptr &&
         !ensure_scene_depth(device, content_width, content_height, gpu)) {
       result = failure("scene depth target creation failed");
@@ -1723,6 +1884,71 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         break;
       }
     }
+    std::optional<graphics::TemporalResolveInputs> temporal_inputs;
+    SDL_GPUTransferBuffer *temporal_vertex_transfer = nullptr;
+    if (temporal_diagnostic) {
+      const graphics::TemporalResolveResourceSet resources{
+          .color = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(
+              temporal_baseline.current.texture)),
+          .depth = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(gpu.depth)),
+          .motion_vectors = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(
+              temporal_baseline.motion.texture)),
+          .exposure = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(
+              temporal_baseline.exposure.texture)),
+          .reactive_mask = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(
+              temporal_baseline.reactive.texture)),
+          .hudless_color = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(
+              temporal_baseline.current.texture)),
+          .history = {static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(
+                          temporal_baseline.history[0].texture)),
+                      static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(
+                          temporal_baseline.history[1].texture))},
+          // A clear pass below writes this complete diagnostic producer set
+          // before the resolve pass consumes it.
+          .motion_vectors_written = true};
+      temporal_inputs = temporal_baseline.contract.begin_frame(
+          true, {swapchain_width, swapchain_height},
+          {content_width, content_height}, resources);
+      if (!temporal_inputs) {
+        result = {.success = false,
+                  .message = "portable temporal diagnostic input admission failed"};
+        SDL_SubmitGPUCommandBuffer(command);
+        release_overlay_transfers();
+        break;
+      }
+      constexpr std::array<PreviewVertex, 12> temporal_vertices{{
+          {{-1, 1, 0}, {1, 1, 1, 0.125F}, {0, 0}},
+          {{1, 1, 0}, {1, 1, 1, 0.125F}, {1, 0}},
+          {{1, -1, 0}, {1, 1, 1, 0.125F}, {1, 1}},
+          {{-1, 1, 0}, {1, 1, 1, 0.125F}, {0, 0}},
+          {{1, -1, 0}, {1, 1, 1, 0.125F}, {1, 1}},
+          {{-1, -1, 0}, {1, 1, 1, 0.125F}, {0, 1}},
+          {{-1, 1, 0}, {1, 1, 1, 0.875F}, {0, 0}},
+          {{1, 1, 0}, {1, 1, 1, 0.875F}, {1, 0}},
+          {{1, -1, 0}, {1, 1, 1, 0.875F}, {1, 1}},
+          {{-1, 1, 0}, {1, 1, 1, 0.875F}, {0, 0}},
+          {{1, -1, 0}, {1, 1, 1, 0.875F}, {1, 1}},
+          {{-1, -1, 0}, {1, 1, 1, 0.875F}, {0, 1}}}};
+      temporal_vertex_transfer = make_upload_transfer(
+          device, temporal_vertices.data(), static_cast<Uint32>(sizeof(temporal_vertices)));
+      SDL_GPUCopyPass *copy = temporal_vertex_transfer == nullptr
+                                  ? nullptr
+                                  : SDL_BeginGPUCopyPass(command);
+      if (copy == nullptr) {
+        if (temporal_vertex_transfer != nullptr)
+          SDL_ReleaseGPUTransferBuffer(device, temporal_vertex_transfer);
+        temporal_baseline.contract.cancel_submission();
+        result = failure("portable temporal diagnostic vertex upload failed");
+        SDL_SubmitGPUCommandBuffer(command);
+        release_overlay_transfers();
+        break;
+      }
+      const SDL_GPUTransferBufferLocation source{.transfer_buffer = temporal_vertex_transfer};
+      const SDL_GPUBufferRegion destination{.buffer = temporal_baseline.vertices,
+                                             .size = static_cast<Uint32>(sizeof(temporal_vertices))};
+      SDL_UploadToGPUBuffer(copy, &source, &destination, false);
+      SDL_EndGPUCopyPass(copy);
+    }
     if (swapchain != nullptr) {
       const SDL_GPUColorTargetInfo target{
           .texture = content_target,
@@ -1786,8 +2012,16 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
             bound_texture = texture;
           }
           if (bound_instance != draw.instance_index) {
-            const auto scene_uniform = graphics::make_scene_diagnostic_matrices(
+            auto scene_uniform = graphics::make_scene_diagnostic_matrices(
                 *scene, draw.instance_index, content_width, content_height);
+            if (temporal_inputs) {
+              // Matrices are row-major and the bundled vertex shader evaluates
+              // row vectors, so clip-space translation occupies row three.
+              scene_uniform.projection_view[12] +=
+                  temporal_inputs->jitter.internal_ndc_offset[0];
+              scene_uniform.projection_view[13] +=
+                  temporal_inputs->jitter.internal_ndc_offset[1];
+            }
             std::array<float, 32> packed{};
             std::copy(scene_uniform.projection_view.begin(),
                       scene_uniform.projection_view.end(), packed.begin());
@@ -1805,7 +2039,74 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         diagnostic_intro_frame->draw(command, pass);
       SDL_EndGPURenderPass(pass);
 
-      if (content_target != presentation_target) {
+      if (temporal_inputs) {
+        const std::array producer_targets{
+            SDL_GPUColorTargetInfo{.texture = temporal_baseline.motion.texture,
+                                   .clear_color = {0, 0, 0, 0},
+                                   .load_op = SDL_GPU_LOADOP_CLEAR,
+                                   .store_op = SDL_GPU_STOREOP_STORE},
+            SDL_GPUColorTargetInfo{.texture = temporal_baseline.exposure.texture,
+                                   .clear_color = {1, 1, 1, 1},
+                                   .load_op = SDL_GPU_LOADOP_CLEAR,
+                                   .store_op = SDL_GPU_STOREOP_STORE},
+            SDL_GPUColorTargetInfo{.texture = temporal_baseline.reactive.texture,
+                                   .clear_color = {0, 0, 0, 0},
+                                   .load_op = SDL_GPU_LOADOP_CLEAR,
+                                   .store_op = SDL_GPU_STOREOP_STORE}};
+        SDL_GPURenderPass *producer_pass = SDL_BeginGPURenderPass(
+            command, producer_targets.data(), static_cast<Uint32>(producer_targets.size()), nullptr);
+        if (producer_pass == nullptr) {
+          temporal_baseline.contract.cancel_submission();
+          result = failure("portable temporal diagnostic producer pass creation failed");
+          SDL_SubmitGPUCommandBuffer(command);
+          release_overlay_transfers();
+          break;
+        }
+        SDL_EndGPURenderPass(producer_pass);
+        const auto output_slot = temporal_inputs->history_frame.output_slot;
+        const SDL_GPUColorTargetInfo resolve_target{
+            .texture = temporal_baseline.history[output_slot].texture,
+            .clear_color = {0, 0, 0, 1},
+            .load_op = SDL_GPU_LOADOP_CLEAR,
+            .store_op = SDL_GPU_STOREOP_STORE};
+        SDL_GPURenderPass *resolve_pass =
+            SDL_BeginGPURenderPass(command, &resolve_target, 1, nullptr);
+        if (resolve_pass == nullptr) {
+          temporal_baseline.contract.cancel_submission();
+          result = failure("portable temporal diagnostic resolve-pass creation failed");
+          SDL_SubmitGPUCommandBuffer(command);
+          release_overlay_transfers();
+          break;
+        }
+        SDL_BindGPUGraphicsPipeline(resolve_pass, temporal_baseline.pipeline);
+        const SDL_GPUBufferBinding temporal_vertices{
+            .buffer = temporal_baseline.vertices, .offset = 0};
+        SDL_BindGPUVertexBuffers(resolve_pass, 0, &temporal_vertices, 1);
+        SDL_PushGPUVertexUniformData(command, 0, matrices.data(), sizeof(matrices));
+        if (temporal_inputs->history_frame.history_valid) {
+          const SDL_GPUTextureSamplerBinding history_binding{
+              .texture = temporal_baseline.history[temporal_inputs->history_frame.history_slot].texture,
+              .sampler = temporal_baseline.sampler};
+          SDL_BindGPUFragmentSamplers(resolve_pass, 0, &history_binding, 1);
+          SDL_DrawGPUPrimitives(resolve_pass, 6, 1, 0, 0);
+        }
+        const SDL_GPUTextureSamplerBinding current_binding{
+            .texture = temporal_baseline.current.texture,
+            .sampler = temporal_baseline.sampler};
+        SDL_BindGPUFragmentSamplers(resolve_pass, 0, &current_binding, 1);
+        SDL_DrawGPUPrimitives(resolve_pass, 6, 1, 6, 0);
+        SDL_EndGPURenderPass(resolve_pass);
+        const SDL_GPUBlitInfo resolve_blit{
+            .source = {.texture = temporal_baseline.history[output_slot].texture,
+                       .w = swapchain_width, .h = swapchain_height},
+            .destination = {.texture = presentation_target,
+                            .w = swapchain_width, .h = swapchain_height},
+            .load_op = SDL_GPU_LOADOP_DONT_CARE,
+            .flip_mode = SDL_FLIP_NONE,
+            .filter = SDL_GPU_FILTER_LINEAR,
+            .cycle = false};
+        SDL_BlitGPUTexture(command, &resolve_blit);
+      } else if (content_target != presentation_target) {
         const SDL_GPUBlitInfo scale_blit{
             .source = {.texture = content_target,
                        .w = content_width,
@@ -1930,7 +2231,23 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                    command)) != nullptr
             : SDL_SubmitGPUCommandBuffer(command);
     if (!submitted) {
+      if (temporal_inputs)
+        temporal_baseline.contract.cancel_submission();
       result = failure("SDL GPU command-buffer submission failed");
+      if (temporal_vertex_transfer != nullptr)
+        SDL_ReleaseGPUTransferBuffer(device, temporal_vertex_transfer);
+      if (capture_transfer != nullptr)
+        SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
+      if (capture_texture != nullptr)
+        SDL_ReleaseGPUTexture(device, capture_texture);
+      release_overlay_transfers();
+      break;
+    }
+    if (temporal_vertex_transfer != nullptr)
+      SDL_ReleaseGPUTransferBuffer(device, temporal_vertex_transfer);
+    if (temporal_inputs && !temporal_baseline.contract.commit_submission()) {
+      result = {.success = false,
+                .message = "portable temporal diagnostic submission commit failed"};
       if (capture_transfer != nullptr)
         SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
       if (capture_texture != nullptr)
@@ -2016,6 +2333,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   gpu_intro.reset();
   release_overlay(device, overlay);
   release_startup_images(device, gpu_startup);
+  release_temporal_resolve_baseline(device, temporal_baseline);
   release_render_scale_target(device, render_scale_target);
   release_scene(device, gpu);
   SDL_ReleaseWindowFromGPUDevice(device, window);

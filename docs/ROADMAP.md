@@ -301,7 +301,9 @@ Deck hardware, and macOS with no compatibility-critical divergence.
 - [ ] 20 locale packs and in-context review, including Swedish.
 - [ ] Modern graphics feature set, presets, accessibility, and performance budgets.
 - [ ] Optional Modern+ replacement-asset contract and curated HD content pipeline.
-- [ ] Portable temporal resolver, then optional Modern+ DLSS 4.5 backend with spatial/native fallback.
+- [ ] Record and validate the SDL GPU portable temporal resolve pass (the
+  source-free history/jitter/input submission coordinator exists); then optional
+  Modern+ DLSS 4.5 backend with spatial/native fallback.
 - [ ] Portable temporal resolver, then optional Modern+ AMD FSR backend with spatial/native fallback.
 - [ ] Portable temporal resolver, then optional Modern+ Intel XeSS-SR backend with spatial/native fallback.
 - [ ] Evaluate later DLSS generations only from published NVIDIA SDKs and documentation.

@@ -168,7 +168,7 @@ configuration intact but cannot survive a relaunch.
 | Feature | Windows | Linux / Steam Deck | macOS |
 |---|---|---|---|
 | F10 overlay and portable settings | Required | Required | Required |
-| Current renderer path | Spatial/native only; no temporal resolver | Spatial/native only; no temporal resolver | Spatial/native only; no temporal resolver |
+| Current renderer path | Spatial/native only; no exposed temporal resolver | Spatial/native only; no exposed temporal resolver | Spatial/native only; no exposed temporal resolver |
 | AMD GPU support | Spatial/native path | Spatial/native path | Spatial/native path where the active backend supports the adapter |
 | FSR Super Resolution | Request retained; active only with a verified AMD adapter | Request retained; active only with a verified official native stack | Request retained; no active adapter yet |
 | Modern+ replacement assets | Portable asset contract | Portable asset contract | Portable asset contract |

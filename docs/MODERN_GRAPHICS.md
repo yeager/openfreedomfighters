@@ -70,17 +70,23 @@ render the same material semantics even when their native graphics backends diff
 
 ## Temporal upscaling, DLSS, FSR, and XeSS
 
-The current SDL Modern path is spatial-only. It can render scene content at a
-fixed user-selected internal scale and linearly scale that result to the output;
-UI is composed at output resolution. It does not implement or expose temporal
-anti-aliasing, temporal reconstruction, dynamic resolution, or a portable
-temporal fallback/resolver.
+The current user-selectable SDL Modern path is spatial-only. It can render
+scene content at a fixed user-selected internal scale and linearly scale that
+result to the output; UI is composed at output resolution. It does not expose
+temporal anti-aliasing, temporal reconstruction, dynamic resolution, or a
+portable temporal fallback/resolver. A separate Modern diagnostic-scene path
+does execute a bounded portable temporal resolve pass to validate GPU resource
+and submission lifetime; it is not a gameplay renderer or an F10 capability.
 
-The planned renderer-facing temporal interface will own color, depth, motion
-vectors, exposure, jitter, reactive-mask, and HUD-less inputs. It will compose
-UI afterward at output resolution. That future contract is intended to support
-portable temporal and vendor backends without affecting simulation state; it is
-not an active fallback today.
+The renderer-facing temporal contract owns color, depth, motion vectors,
+exposure, jitter, reactive-mask, HUD-less inputs and ping-pong history. Its
+portable `TemporalResolveBaseline` coordinator rejects missing producer
+resources, unwritten motion vectors, invalid extents, overlapping submissions
+and discontinuities. A backend may mark that coordinator as submitted only
+after its actual resolve pass has been accepted for GPU submission. It will
+compose UI afterward at output resolution. The coordinator is not a filter,
+does not allocate API resources, and is not an active runtime fallback until a
+backend records that pass.
 
 The runtime derives its available upscalers from completed renderer bindings,
 not configuration defaults, product names, or detected libraries. A binding must

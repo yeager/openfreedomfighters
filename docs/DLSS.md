@@ -26,7 +26,7 @@ The planned engine-owned vendor-neutral temporal-upscaler interface will accept:
 - camera reset, cut, resize, and history-invalidation flags; and
 - an output-resolution destination that is complete before UI composition.
 
-No temporal adapter or resolver is currently implemented or exposed. The SDL
+No user-selectable temporal adapter or resolver is currently exposed. The SDL
 Modern path is spatial-only: fixed render scaling followed by linear output
 scaling. Native-resolution, portable temporal, and DLSS adapters are future
 implementations of this contract. A future FSR adapter may use the same contract
