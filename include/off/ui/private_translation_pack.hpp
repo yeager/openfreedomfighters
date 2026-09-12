@@ -58,6 +58,15 @@ private:
   std::vector<PrivateTranslationEntry> entries_;
 };
 
+// Loads only the fixed canonical locale filenames below `local_directory`.
+// It never enumerates that directory, so unrelated files cannot become input
+// merely by being placed next to a pack. A file whose declared locale does not
+// match its fixed filename is ignored. Invalid and absent files are optional.
+[[nodiscard]] std::vector<PrivateTranslationPack>
+load_canonical_local_translation_packs(
+    const std::filesystem::path &local_directory,
+    const TranslationSourceBinding &binding);
+
 // Explicit locale wins, followed by the platform preference list and English.
 // If a partial preferred pack has no requested ID, resolution continues to the
 // next preference. No retail lookup or source string enters this API.

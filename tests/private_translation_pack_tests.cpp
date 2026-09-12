@@ -86,6 +86,25 @@ int main() {
         PrivateTranslationPack::load_local(root, "english.offl10n", source);
     check(english && english->declared_complete(),
           "complete local pack covers exact canonical span");
+    write(root / "en.offl10n",
+          pack(source.parser_identity, source.source_set, "en", 0U, 3U, true,
+               {{"off.retail.source.synthetic.v1.0", "Project text zero"},
+                {one, "Project text one"},
+                {two, "Project text two"}}));
+    write(root / "sv.offl10n",
+          pack(source.parser_identity, source.source_set, "sv", 0U, 3U, false,
+               {{one, "Projekttext ett"}}));
+    write(root / "de.offl10n",
+          pack(source.parser_identity, source.source_set, "fr", 0U, 3U, false,
+               {{one, "Texte du projet"}}));
+    write(root / "rogue.offl10n",
+          pack(source.parser_identity, source.source_set, "fr", 0U, 3U, false,
+               {{one, "Texte du projet"}}));
+    const auto enrolled = load_canonical_local_translation_packs(root, source);
+    check(enrolled.size() == 2U && enrolled[0].locale() == "en" &&
+              enrolled[1].locale() == "sv",
+          "enrollment probes only canonical filenames and rejects filename "
+          "locale mismatches");
     TranslationSourceBinding wide{source.parser_identity,
                                   "source.synthetic.wide.v1", 0U, 12U};
     std::vector<Entry> wide_entries;

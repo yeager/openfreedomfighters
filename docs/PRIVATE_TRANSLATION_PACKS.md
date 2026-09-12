@@ -20,3 +20,20 @@ preference list, then English. A partial preferred pack may fall through for an
 untranslated ID. This boundary neither performs retail key lookup nor connects
 to UI rendering. A text-free ID does not determine copyright status: translated
 retail text remains local unless its provenance and licence permit publication.
+
+## Enrollment
+
+After a verified installation has produced private, text-free cache metadata,
+OpenFreedomFighters obtains SDL's per-user preferences location and probes only
+these direct filenames below `translation-packs/`:
+
+`en`, `sv`, `da`, `nb`, `fi`, `de`, `fr`, `es`, `it`, `pt-BR`, `pl`, `cs`,
+`hu`, `ro`, `tr`, `ru`, `uk`, `ja`, `ko`, and `zh-Hans` (each with the
+`.offl10n` suffix). It does not enumerate or recursively scan the directory.
+Missing, malformed, mismatched, symlinked, or wrongly named files are ignored
+without affecting startup. The declared pack locale must equal its canonical
+filename.
+
+Enrollment currently validates packs only. It builds neither an active resolver
+nor a UI lookup path, so no private pack text can alter the application until
+the native LOC lookup contract is independently recovered.

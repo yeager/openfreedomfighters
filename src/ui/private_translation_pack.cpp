@@ -1,6 +1,7 @@
 #include "off/ui/private_translation_pack.hpp"
 
 #include <algorithm>
+#include <array>
 #include <fstream>
 #include <limits>
 #include <ranges>
@@ -51,11 +52,12 @@ bool valid_utf8(std::string_view value) noexcept {
   }
   return true;
 }
+constexpr std::array<std::string_view, 20> canonical_pack_locales{
+    "en", "sv", "da", "nb", "fi", "de", "fr", "es", "it", "pt-BR",
+    "pl", "cs", "hu", "ro", "tr", "ru", "uk", "ja", "ko", "zh-Hans"};
 bool valid_locale(std::string_view locale) noexcept {
-  constexpr std::string_view supported[] = {
-      "en", "sv", "da", "nb", "fi", "de", "fr", "es", "it", "pt-BR",
-      "pl", "cs", "hu", "ro", "tr", "ru", "uk", "ja", "ko", "zh-Hans"};
-  return std::ranges::find(supported, locale) != std::end(supported);
+  return std::ranges::find(canonical_pack_locales, locale) !=
+         canonical_pack_locales.end();
 }
 std::optional<std::string_view>
 canonical_locale(std::string_view value) noexcept {
@@ -282,6 +284,22 @@ PrivateTranslationPack::load_local(const std::filesystem::path &local_directory,
       input.peek() != std::char_traits<char>::eof())
     return std::nullopt;
   return decode(bytes, binding);
+}
+std::vector<PrivateTranslationPack> load_canonical_local_translation_packs(
+    const std::filesystem::path &local_directory,
+    const TranslationSourceBinding &binding) {
+  std::vector<PrivateTranslationPack> accepted;
+  if (!valid_binding(binding) || !directory_non_link(local_directory))
+    return accepted;
+  accepted.reserve(canonical_pack_locales.size());
+  for (const auto locale : canonical_pack_locales) {
+    const auto filename = std::string{locale} + ".offl10n";
+    auto pack =
+        PrivateTranslationPack::load_local(local_directory, filename, binding);
+    if (pack && pack->locale() == locale)
+      accepted.push_back(std::move(*pack));
+  }
+  return accepted;
 }
 std::optional<std::string_view>
 PrivateTranslationPack::find(std::string_view id) const noexcept {

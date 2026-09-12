@@ -40,6 +40,7 @@
 #include "off/ui/retail_ui_fonts.hpp"
 #include "off/ui/retail_ui_textures.hpp"
 #include "off/ui/retail_localization_cache.hpp"
+#include "off/ui/private_translation_pack.hpp"
 
 #include <charconv>
 #include <algorithm>
@@ -958,10 +959,23 @@ void initialize_private_owned_localization_cache(
           return std::optional<std::vector<off::ui::l10n::RetailSourceString>>{
               std::move(strings)};
         });
-    // Intentionally no text, member name, ordinal, or cache path is reported.
-    // The cache is an extraction substrate only; original runtime lookup is
-    // still evidence-gated and consumes none of these values today.
-    static_cast<void>(result);
+    if (!result.metadata)
+      return;
+    const auto binding = off::ui::l10n::translation_source_binding(*result.metadata);
+    const auto packs_directory =
+        off::platform::application_translation_packs_directory();
+    if (!binding || packs_directory.empty())
+      return;
+    // Optional packs are accepted only after the private cache has established
+    // a real text-free binding for this verified installation. The vector is
+    // intentionally dormant: no resolver is built, no ID is resolved, and no
+    // UI path observes any pack content until native LOC lookup is recovered.
+    const auto dormant_packs =
+        off::ui::l10n::load_canonical_local_translation_packs(packs_directory,
+                                                               *binding);
+    static_cast<void>(dormant_packs);
+    // Intentionally no text, member name, ordinal, cache path, or pack result
+    // is reported. This remains an extraction/enrollment substrate only.
   } catch (const std::exception&) {
     // Localization extraction is optional until the native lookup contract is
     // recovered.  It must never weaken verified game-data startup.

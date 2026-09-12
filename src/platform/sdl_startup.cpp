@@ -34,8 +34,8 @@ void StartupWindowDeleter::operator()(SDL_Window *window) const noexcept {
 constexpr std::string_view splash_version = "v" OFF_VERSION;
 constexpr std::string_view splash_credit = "Daniel Nylander";
 
-StartupSplashOverlayLayout
-startup_splash_overlay_layout(int width, int height) noexcept {
+StartupSplashOverlayLayout startup_splash_overlay_layout(int width,
+                                                         int height) noexcept {
   const int scale = std::max(1, std::min(width / 640, height / 360));
   const int pixel_size = 2 * scale;
   const int margin = 18 * scale;
@@ -51,7 +51,8 @@ startup_splash_overlay_layout(int width, int height) noexcept {
 }
 
 std::filesystem::path application_deep_audit_cache_root() noexcept {
-  char* raw_path = SDL_GetPrefPath("OpenFreedomFighters", "OpenFreedomFighters");
+  char *raw_path =
+      SDL_GetPrefPath("OpenFreedomFighters", "OpenFreedomFighters");
   if (raw_path != nullptr && *raw_path != '\0') {
     std::unique_ptr<char, decltype(&SDL_free)> path{raw_path, SDL_free};
     return std::filesystem::path{path.get()} / "cache" / "deep-audit";
@@ -60,26 +61,28 @@ std::filesystem::path application_deep_audit_cache_root() noexcept {
   // cache root in the native per-user cache location when SDL cannot provide
   // one, so a successful deep audit is reusable by --verify-only and probes.
 #if defined(_WIN32)
-  if (const auto* local_app_data=std::getenv("LOCALAPPDATA"); local_app_data && *local_app_data) {
+  if (const auto *local_app_data = std::getenv("LOCALAPPDATA");
+      local_app_data && *local_app_data) {
     const std::filesystem::path base{local_app_data};
-    if(base.is_absolute())
+    if (base.is_absolute())
       return base / "OpenFreedomFighters" / "deep-audit";
   }
 #elif defined(__APPLE__)
-  if (const auto* home=std::getenv("HOME"); home && *home) {
+  if (const auto *home = std::getenv("HOME"); home && *home) {
     const std::filesystem::path base{home};
-    if(base.is_absolute())
+    if (base.is_absolute())
       return base / "Library" / "Caches" / "OpenFreedomFighters" / "deep-audit";
   }
 #else
-  if (const auto* xdg_cache=std::getenv("XDG_CACHE_HOME"); xdg_cache && *xdg_cache) {
+  if (const auto *xdg_cache = std::getenv("XDG_CACHE_HOME");
+      xdg_cache && *xdg_cache) {
     const std::filesystem::path base{xdg_cache};
-    if(base.is_absolute())
+    if (base.is_absolute())
       return base / "openfreedomfighters" / "deep-audit";
   }
-  if (const auto* home=std::getenv("HOME"); home && *home) {
+  if (const auto *home = std::getenv("HOME"); home && *home) {
     const std::filesystem::path base{home};
-    if(base.is_absolute())
+    if (base.is_absolute())
       return base / ".cache" / "openfreedomfighters" / "deep-audit";
   }
 #endif
@@ -87,7 +90,8 @@ std::filesystem::path application_deep_audit_cache_root() noexcept {
 }
 
 std::filesystem::path application_graphics_settings_path() noexcept {
-  char *raw_path = SDL_GetPrefPath("OpenFreedomFighters", "OpenFreedomFighters");
+  char *raw_path =
+      SDL_GetPrefPath("OpenFreedomFighters", "OpenFreedomFighters");
   if (raw_path == nullptr)
     return {};
   std::unique_ptr<char, decltype(&SDL_free)> path{raw_path, SDL_free};
@@ -97,6 +101,20 @@ std::filesystem::path application_graphics_settings_path() noexcept {
   if (!directory.is_absolute())
     return {};
   return directory / "graphics.settings";
+}
+
+std::filesystem::path application_translation_packs_directory() noexcept {
+  char *raw_path =
+      SDL_GetPrefPath("OpenFreedomFighters", "OpenFreedomFighters");
+  if (raw_path == nullptr)
+    return {};
+  std::unique_ptr<char, decltype(&SDL_free)> path{raw_path, SDL_free};
+  if (*path == '\0')
+    return {};
+  const std::filesystem::path directory{path.get()};
+  if (!directory.is_absolute())
+    return {};
+  return directory / "translation-packs";
 }
 
 namespace {
@@ -157,10 +175,12 @@ struct FontDeleter {
 [[nodiscard]] bool draw_splash_text(SDL_Surface *target, TTF_Font *font,
                                     std::string_view text, int left,
                                     int baseline, SDL_Color color) {
-  Surface rendered{TTF_RenderText_Blended(font, text.data(), text.size(), color)};
+  Surface rendered{
+      TTF_RenderText_Blended(font, text.data(), text.size(), color)};
   if (rendered == nullptr)
     return false;
-  const SDL_Rect destination{left, baseline - rendered->h, rendered->w, rendered->h};
+  const SDL_Rect destination{left, baseline - rendered->h, rendered->w,
+                             rendered->h};
   return SDL_BlitSurface(rendered.get(), nullptr, target, &destination);
 }
 
@@ -188,16 +208,17 @@ void draw_splash_overlays(SDL_Surface *target) {
     return;
   }
   const int credit_left = target->w - margin - credit_width;
-  static_cast<void>(draw_splash_text(target, font.get(), layout.version,
-                                     margin + shadow_offset,
-                                     target->h - margin + shadow_offset, shadow));
+  static_cast<void>(draw_splash_text(
+      target, font.get(), layout.version, margin + shadow_offset,
+      target->h - margin + shadow_offset, shadow));
   static_cast<void>(draw_splash_text(target, font.get(), layout.version, margin,
                                      target->h - margin, foreground));
+  static_cast<void>(draw_splash_text(
+      target, font.get(), layout.credit, credit_left + shadow_offset,
+      target->h - margin + shadow_offset, shadow));
   static_cast<void>(draw_splash_text(target, font.get(), layout.credit,
-                                     credit_left + shadow_offset,
-                                     target->h - margin + shadow_offset, shadow));
-  static_cast<void>(draw_splash_text(target, font.get(), layout.credit,
-                                     credit_left, target->h - margin, foreground));
+                                     credit_left, target->h - margin,
+                                     foreground));
   font.reset();
   TTF_Quit();
 }
@@ -225,20 +246,20 @@ void draw_loading_surface(SDL_Window *window, std::string_view status) {
   SDL_Surface *target = SDL_GetWindowSurface(window);
   if (target == nullptr)
     return;
-  static_cast<void>(SDL_FillSurfaceRect(
-      target, nullptr, SDL_MapSurfaceRGB(target, 10, 13, 18)));
+  static_cast<void>(SDL_FillSurfaceRect(target, nullptr,
+                                        SDL_MapSurfaceRGB(target, 10, 13, 18)));
   if (TTF_Init()) {
     const auto font_path_text = splash_font_path().u8string();
-    TTF_Font *font = TTF_OpenFont(
-        reinterpret_cast<const char *>(font_path_text.c_str()),
-        static_cast<float>(std::max(20, target->h / 25)));
+    TTF_Font *font =
+        TTF_OpenFont(reinterpret_cast<const char *>(font_path_text.c_str()),
+                     static_cast<float>(std::max(20, target->h / 25)));
     if (font != nullptr) {
       int text_width{};
-      if (TTF_GetStringSize(font, status.data(), status.size(),
-                            &text_width, nullptr)) {
-        static_cast<void>(draw_splash_text(
-            target, font, status, (target->w - text_width) / 2,
-            target->h / 2, SDL_Color{238, 238, 232, 255}));
+      if (TTF_GetStringSize(font, status.data(), status.size(), &text_width,
+                            nullptr)) {
+        static_cast<void>(
+            draw_splash_text(target, font, status, (target->w - text_width) / 2,
+                             target->h / 2, SDL_Color{238, 238, 232, 255}));
       }
       // SDL_ttf owns the backing FreeType library. Close the font while that
       // library is still alive, before TTF_Quit().
@@ -251,8 +272,8 @@ void draw_loading_surface(SDL_Window *window, std::string_view status) {
 
 [[nodiscard]] StartupPreflightResult
 run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
-                             const std::function<void()> &prepare_assets,
-                             std::string_view explicit_locale) {
+                               const std::function<void()> &prepare_assets,
+                               std::string_view explicit_locale) {
   if (!SDL_Init(SDL_INIT_VIDEO))
     return {.outcome = StartupPreflightOutcome::platform_error,
             .message =
@@ -291,10 +312,10 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
   std::atomic<StartupPreparationStage> preparation_stage{
       StartupPreparationStage::verifying_game_data};
   const auto loading_status = [&] {
-    const auto id = preparation_stage.load() ==
-                            StartupPreparationStage::preparing_assets
-                        ? ui::l10n::MessageId::preparing_startup
-                        : ui::l10n::MessageId::verifying_game_data;
+    const auto id =
+        preparation_stage.load() == StartupPreparationStage::preparing_assets
+            ? ui::l10n::MessageId::preparing_startup
+            : ui::l10n::MessageId::verifying_game_data;
     return ui::l10n::f10_catalog()
         .resolve(id, explicit_locale, platform_locales)
         .value_or("Preparing startup...");
@@ -302,17 +323,21 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
   std::future<StartupPreparationResult> verification_future;
   try {
     verification_future = std::async(std::launch::async, [&] {
-      return prepare_startup_cpu([&] { return data::verify_install(
-          data_path, [&] { return cancelled.load(); },
-          {.deep_audit_cache_root = application_deep_audit_cache_root()}); },
-                                 prepare_assets, cancelled,
-                                 [&](StartupPreparationStage stage) {
-                                   preparation_stage.store(stage);
-                                 });
+      return prepare_startup_cpu(
+          [&] {
+            return data::verify_install(
+                data_path, [&] { return cancelled.load(); },
+                {.deep_audit_cache_root = application_deep_audit_cache_root()});
+          },
+          prepare_assets, cancelled,
+          [&](StartupPreparationStage stage) {
+            preparation_stage.store(stage);
+          });
     });
   } catch (...) {
     return {.outcome = StartupPreflightOutcome::platform_error,
-            .message = "Could not start game-data verification and preparation"};
+            .message =
+                "Could not start game-data verification and preparation"};
   }
   bool loading_surface_presented = false;
   while (lifecycle.phase() != StartupPhase::ready &&
@@ -361,7 +386,8 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
       preparation.outcome == StartupPreparationOutcome::cancelled) {
     result.outcome = StartupPreflightOutcome::quit_requested;
     result.message = "Startup cancelled";
-  } else if (preparation.outcome == StartupPreparationOutcome::verification_error) {
+  } else if (preparation.outcome ==
+             StartupPreparationOutcome::verification_error) {
     result.outcome = StartupPreflightOutcome::data_error;
     const auto presentation = make_startup_data_error_presentation(
         preparation.verification, ui::l10n::f10_catalog(), explicit_locale,
@@ -378,10 +404,11 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
       // `result.message` remains returned for the CLI stderr fallback either
       // way.
       static_cast<void>(SDL_ShowSimpleMessageBox(
-          SDL_MESSAGEBOX_ERROR, presentation.title.c_str(), result.message.c_str(),
-          nullptr));
+          SDL_MESSAGEBOX_ERROR, presentation.title.c_str(),
+          result.message.c_str(), nullptr));
     }
-  } else if (preparation.outcome == StartupPreparationOutcome::preparation_error) {
+  } else if (preparation.outcome ==
+             StartupPreparationOutcome::preparation_error) {
     result.outcome = StartupPreflightOutcome::platform_error;
     result.message = preparation.message;
     static_cast<void>(draw_splash(window.get(), image.get()));
