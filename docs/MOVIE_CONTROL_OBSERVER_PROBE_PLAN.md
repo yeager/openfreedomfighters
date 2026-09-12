@@ -46,3 +46,35 @@ phase-one source-free trace process in
 [MovieControl phase-one recovery](MOVIE_CONTROL_PHASE_ONE.md). A validated
 plan neither identifies an observer target nor proves a callback relation,
 failure behavior, or any gameplay behavior.
+
+## Fresh-process collection runner
+
+`tools/movie_control_observation_runner.py` is an optional private wrapper for
+one explicitly requested observation. It does not include an observer,
+instrumentation, game path, process ID, attach selector, debugger expression,
+or target-discovery behavior. The separately maintained private observer is
+given only a canonical opaque plan and a new private workspace. It must create
+exactly the two expected structural records: phase-one and MovieControl-to-
+first-cut dispatch.
+
+The wrapper starts nothing unless `--execute` is present. It invokes the
+private observer with the literal `fresh-isolated` mode, uses no shell, hides
+observer stdout and stderr, and never forwards raw records to a terminal. It
+then validates both records through the strict source-free schemas, deletes the
+raw forms, and retains only their sanitized structural forms in the private
+workspace. An extra file, symlink, pre-existing workspace, malformed plan, or
+unsupported trace field fails collection.
+
+```sh
+python3 tools/movie_control_observation_runner.py --execute \
+  --observer PRIVATE_OBSERVER_EXECUTABLE \
+  --canonical-plan PRIVATE_CANONICAL_PLAN.json \
+  --workspace NEW_PRIVATE_WORKSPACE
+```
+
+The wrapper cannot prove what an external private observer did internally; it
+is a guardrail, not evidence that a real process was fresh or isolated. The
+operator must keep the observer and workspace private and must never attach to,
+stop, or otherwise alter a running original process. A completed collection is
+only candidate evidence for the separate phase-one and dispatch repeat/failure
+reviews; it does not enable native intro playback.
