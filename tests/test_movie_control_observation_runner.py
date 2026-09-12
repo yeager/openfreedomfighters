@@ -71,6 +71,22 @@ class MovieControlObservationRunnerTests(unittest.TestCase):
             child.unlink()
         root.rmdir()
 
+    def test_collection_rejects_a_raw_record_symlink_without_reading_its_target(self) -> None:
+        root = pathlib.Path(__file__).resolve().parents[1] / ".test-work" / "runner-symlink"
+        root.mkdir(parents=True, exist_ok=True)
+        target = root.parent / "runner-symlink-target.json"
+        target.write_text('{"retail":"must not be read"}', encoding="utf-8")
+        phase = root / runner.PHASE_ONE_RAW_NAME
+        phase.symlink_to(target.name)
+        (root / runner.DISPATCH_RAW_NAME).write_text("{}", encoding="utf-8")
+        with self.assertRaises(ValueError):
+            runner._collect(root)
+        self.assertTrue(target.exists())
+        self.assertFalse(phase.exists())
+        self.assertFalse((root / runner.DISPATCH_RAW_NAME).exists())
+        target.unlink()
+        root.rmdir()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,6 +20,7 @@ import argparse
 import json
 import os
 import pathlib
+import stat
 import subprocess
 import sys
 from typing import Any, Callable, Sequence
@@ -62,6 +63,31 @@ def _read_json(path: pathlib.Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _read_regular_json_no_follow(path: pathlib.Path) -> Any:
+    """Read one observer record without following a replacement symlink.
+
+    The observer runs out-of-process.  Checking ``Path.is_symlink()`` before a
+    normal ``read_text`` leaves a check/use gap in which a record could be
+    replaced.  A descriptor opened with ``O_NOFOLLOW`` is bound to the exact
+    directory entry that is validated and decoded below.
+    """
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    if no_follow is None:
+        raise ValueError("platform cannot safely read observer records")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | no_follow)
+    except OSError as error:
+        raise ValueError("observer records must be regular files") from error
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("observer records must be regular files")
+        with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as stream:
+            return json.load(stream)
+    finally:
+        os.close(descriptor)
+
+
 def _make_workspace(workspace: pathlib.Path) -> None:
     if workspace.exists():
         raise ValueError("private observation workspace must be new")
@@ -84,18 +110,15 @@ def _collect(workspace: pathlib.Path) -> tuple[dict[str, Any], dict[str, Any]]:
     try:
         if entries != _EXPECTED_FILES:
             raise ValueError("observer workspace must contain exactly the two structural records")
-        if any(path.is_symlink() or not path.is_file() for path in (phase_raw, dispatch_raw)):
-            raise ValueError("observer records must be regular files")
         # These strict schemas admit no free-form string, location, raw byte, or
         # identity fields.  We only persist the sanitized structural forms.
-        phase_clean = phase_one_trace.sanitize_trace(_read_json(phase_raw))
-        dispatch_clean = dispatch_trace.sanitize_trace(_read_json(dispatch_raw))
+        phase_clean = phase_one_trace.sanitize_trace(_read_regular_json_no_follow(phase_raw))
+        dispatch_clean = dispatch_trace.sanitize_trace(_read_regular_json_no_follow(dispatch_raw))
     finally:
         # A malformed or rejected raw record must not become a retained export
         # channel either. Leave only a private error state for the operator.
         for raw_path in (phase_raw, dispatch_raw):
-            if raw_path.exists() and raw_path.is_file() and not raw_path.is_symlink():
-                raw_path.unlink()
+            raw_path.unlink(missing_ok=True)
     (workspace / PHASE_ONE_SANITIZED_NAME).write_text(
         json.dumps(phase_clean, indent=2) + "\n", encoding="utf-8")
     (workspace / DISPATCH_SANITIZED_NAME).write_text(
