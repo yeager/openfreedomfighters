@@ -16,7 +16,10 @@ during loading and then incorrectly reports an active intro.
 
 Normal startup currently stops after preparing the cold first-cut command
 session. It does not call the session's loader-tail transition until those
-production services exist. The
+production services exist. It does present one static, source-backed legal
+picture after the project splash, but that frame uses the project's generic
+fit projection and is not host admission, a cut start, a camera view, or timed
+playback. The
 prepared scene now retains parser-validated, owned outer-loader source sections
 (named/global, renderer payload, associations, and sizing rows) for that later
 handoff; retaining them neither invokes a service nor advances the tail.
@@ -63,6 +66,37 @@ clock/audio state. Required input, property and renderer services remain externa
 Normal startup does not bind or invoke this callback yet. The future activation
 continuation must dispatch it once through the real global phase-two pass, not
 repeat it after that pass through a second controller helper.
+
+## Missing MovieControl host contract
+
+`NormalIntroSceneHost` is intentionally not constructed by normal startup.
+Its constructor requires a live MovieControl component handle, a live owner
+handle, and a signed `movie_delay`. The completed owner and component readers
+can prove the source-backed owner, component, event array, resource mapping,
+and reader receipts. They do not currently establish the delay consumed by
+`MovieControlFirstUpdate` when it derives its deadline. The delay must not be
+guessed from an event identifier, a source-directory offset, an authored
+option, or a frame rate.
+
+The next bounded implementation is therefore a recovery contract, not a host
+wiring change:
+
+1. Recover and validate the delay's producer, unit, signedness, and overflow
+   behavior from private clean-room observation or disassembly evidence.
+2. Add a source-backed `MovieControlHostEvidence` value that contains the
+   already-proven owner/component identities plus the recovered delay, and
+   rejects mismatched reader receipts.
+3. Add a session factory that accepts that evidence and explicit production
+   lifecycle services, constructs `NormalIntroSceneHost`, and does not invoke
+   it during construction.
+4. Prove with a source-free recording-host test that a missing delay or any
+   missing lifecycle service produces no event dispatch, view admission,
+   picture submission, audio output, or SDL GPU call.
+
+Only after that contract exists may the normal path call the host's activation,
+event-16, camera-route, view-admission, and frame-assembly stages. This keeps
+the existing static preview useful for startup feedback without treating it as
+evidence of recovered gameplay behavior.
 
 ## Required ordering
 
