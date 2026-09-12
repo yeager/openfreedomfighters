@@ -1,19 +1,23 @@
 # MovieControl-to-cutscene dispatcher recovery boundary
 
-Status: unsupported. The checked MovieControl reader and the cold first-cut
-player reader identify the two ends of a possible route, but do not prove that
-an admitted MovieControl event dispatches to that player, which receiver is
-used, or that the player starts.
+Status: behaviorally established at the private-observation boundary; native
+runtime integration remains unsupported. A reviewed clean-room contract now
+establishes the admitted controller route to the first-cut player, but it does
+not authorize connecting authored runtime models until the retained
+source-free trace has been independently reviewed.
 
 ## What is established
 
 - MovieControl's ordinary event-16 model requires phase-one completion and a
-  passed deadline before its disconnected preparation boundary.
-- The reviewed first-cut player can be constructed and cold-initialized with a
-  sealed private receiver.
+  passed deadline before preparation. The normal lifecycle route also records
+  whether phase two completed before that update.
+- A successful preparation delivers directly and synchronously from the
+  constructed MovieControl owner to the constructed first-cut sequence owner.
+- The reviewed first-cut player can receive that delivery, enter its initial
+  active state, and continue through its live receiver services.
 - `CutSequenceCoordinator` and `MovieControlFirstUpdate` are authored,
-  disconnected models. Their direct service calls are not evidence of the
-  original dispatcher and do not enable normal intro playback.
+  disconnected models. Their direct service calls remain non-evidence and do
+  not enable normal intro playback.
 
 ## Required private observation
 
@@ -24,7 +28,8 @@ admitted MovieControl event to the selected first-cut player. It must show:
 2. constructed MovieControl and sequence owner/component relations;
 3. that the delivery sender is the MovieControl owner and the target is the
    constructed sequence owner, without exporting either identity;
-4. delivery outcome, first player-activation outcome, all component/owner
+4. whether a delivered handoff is synchronous, delivery outcome, first
+   player-activation outcome, all component/owner
    status transitions, and external-service entry; and
 5. the phase-one-completion relation used by the admitted event.
 
@@ -49,12 +54,13 @@ python3 tools/movie_control_cutscene_dispatch_trace.py PRIVATE_INPUT.json PRIVAT
 The accepted raw format is `off.movie-control-cutscene-dispatch.raw/v1`. Each
 event has a strictly increasing observer-local order, non-decreasing phase
 (`event16`, `handoff`, `player_activation`, `completion`, or `failure`), local
-callback ordinal, four construction relations, phase-one relation, 32-bit
-status masks, event gate, sender/target relations, categorical handoff and
-activation states, outcome, and external-service entry. A player start is
-accepted only after a successful delivered handoff from an admitted,
-phase-one-complete constructed MovieControl relation to the constructed
-sequence-owner relation.
+callback ordinal, four construction relations, phase-one and phase-two
+relations, 32-bit status masks, event gate, sender/target relations,
+categorical handoff, delivery-mode and activation states, outcome, and
+external-service entry. A synchronous delivery is accepted only for a
+successful delivered handoff from an admitted, source-bound MovieControl
+relation to the constructed sequence-owner relation. A player start is accepted
+only after that delivered source-bound handoff.
 
 Keep raw and sanitized observations private. Only a reviewed source-free
 behavior specification and authored tests may subsequently connect the runtime

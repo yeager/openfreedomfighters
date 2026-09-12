@@ -28,6 +28,7 @@ _PHASES = ("event16", "handoff", "player_activation", "completion", "failure")
 _PHASE_RANK = {phase: rank for rank, phase in enumerate(_PHASES)}
 _EVENT16_GATES = frozenset(("not_entered", "waiting", "admitted", "failed"))
 _HANDOFFS = frozenset(("not_attempted", "attempted", "delivered", "failed"))
+_DELIVERY_MODES = frozenset(("not_observed", "synchronous"))
 _PLAYER_ACTIVATIONS = frozenset(("not_entered", "not_started", "started", "failed"))
 _OUTCOMES = frozenset(("success", "failure"))
 _EXTERNAL_SERVICES = frozenset(("not_entered", "entered"))
@@ -62,6 +63,7 @@ def _validate(event: dict[str, Any]) -> None:
     handoff = event["handoff"]
     activation = event["player_activation"]
     movie_ready = event["movie_phase_one_completed"]
+    delivery_mode = event["delivery_mode"]
     source_bound = (event["movie_component_is_constructed"] and
                     event["movie_owner_is_constructed_owner"] and
                     event["sequence_component_is_constructed"] and
@@ -83,6 +85,11 @@ def _validate(event: dict[str, Any]) -> None:
             raise ValueError("cutscene handoff requires admitted source-bound MovieControl and player relations")
     if handoff == "delivered" and event["outcome"] != "success":
         raise ValueError("delivered cutscene handoff requires success")
+    if delivery_mode == "synchronous":
+        if handoff != "delivered" or not source_bound or not target_bound:
+            raise ValueError("synchronous delivery requires a delivered source-bound handoff")
+    if handoff != "delivered" and delivery_mode != "not_observed":
+        raise ValueError("delivery mode requires a delivered handoff")
     if activation == "started":
         if phase not in ("player_activation", "completion", "failure"):
             raise ValueError("started player requires its activation or a later phase")
@@ -109,9 +116,11 @@ def sanitize_trace(raw: Any) -> dict[str, Any]:
         "observation_order", "phase", "callback_ordinal",
         "movie_component_is_constructed", "movie_owner_is_constructed_owner",
         "sequence_component_is_constructed", "sequence_owner_is_constructed_owner",
-        "movie_phase_one_completed", "component_status_before", "component_status_after",
+        "movie_phase_one_completed", "movie_phase_two_completed",
+        "component_status_before", "component_status_after",
         "owner_status_before", "owner_status_after", "event16_gate",
         "handoff_sender_is_movie_owner", "handoff_target_is_sequence_owner", "handoff",
+        "delivery_mode",
         "player_activation", "outcome", "external_service",
     ))
     clean_events: list[dict[str, Any]] = []
@@ -139,6 +148,7 @@ def sanitize_trace(raw: Any) -> dict[str, Any]:
             "sequence_component_is_constructed": _boolean(event["sequence_component_is_constructed"], "sequence_component_is_constructed"),
             "sequence_owner_is_constructed_owner": _boolean(event["sequence_owner_is_constructed_owner"], "sequence_owner_is_constructed_owner"),
             "movie_phase_one_completed": _boolean(event["movie_phase_one_completed"], "movie_phase_one_completed"),
+            "movie_phase_two_completed": _boolean(event["movie_phase_two_completed"], "movie_phase_two_completed"),
             "component_status_before": _natural(event["component_status_before"], "component_status_before", MASK_LIMIT),
             "component_status_after": _natural(event["component_status_after"], "component_status_after", MASK_LIMIT),
             "owner_status_before": _natural(event["owner_status_before"], "owner_status_before", MASK_LIMIT),
@@ -147,6 +157,7 @@ def sanitize_trace(raw: Any) -> dict[str, Any]:
             "handoff_sender_is_movie_owner": _boolean(event["handoff_sender_is_movie_owner"], "handoff_sender_is_movie_owner"),
             "handoff_target_is_sequence_owner": _boolean(event["handoff_target_is_sequence_owner"], "handoff_target_is_sequence_owner"),
             "handoff": _enum(event["handoff"], "handoff", _HANDOFFS),
+            "delivery_mode": _enum(event["delivery_mode"], "delivery_mode", _DELIVERY_MODES),
             "player_activation": _enum(event["player_activation"], "player_activation", _PLAYER_ACTIVATIONS),
             "outcome": _enum(event["outcome"], "outcome", _OUTCOMES),
             "external_service": _enum(event["external_service"], "external_service", _EXTERNAL_SERVICES),
