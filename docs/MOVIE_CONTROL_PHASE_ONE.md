@@ -161,3 +161,24 @@ The bundle retains the successful candidate and the observed failure relation
 only for private human review. It does not identify an implementation callback,
 does not establish service semantics beyond the recorded structural state, and
 does not authorize native phase-one code or normal startup.
+
+## Candidate-matrix preparation
+
+Before runtime tracing, a private Ghidra reduction may narrow global
+phase-one dispatcher candidates using the real source-backed MovieControl
+owner/component relation. The address-to-slot mapping and all raw observer
+output stay private. `tools/movie_control_phase_one_candidate_matrix.py`
+accepts only the resulting aggregate record: whether the target relation and
+static mapping were verified, candidate and observed counts, and whether
+exactly one candidate was observed. It rejects identities, names, source
+types, addresses, offsets, paths, strings, bytes, and executable material.
+
+```sh
+python3 tools/movie_control_phase_one_candidate_matrix.py \
+  PRIVATE_MATRIX_INPUT.json PRIVATE_MATRIX_OUTPUT.json
+```
+
+Both paths must be outside this repository and the output must be new. A
+unique result is preparation for two real process traces; it still requires the
+phase-one sanitizer, repeat-pair gate, failure bundle, and human review before
+any runtime integration.
