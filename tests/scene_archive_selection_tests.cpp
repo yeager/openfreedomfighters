@@ -290,6 +290,17 @@ int main() {
               "diagnostic scene archive is unavailable",
           "explicit diagnostic archive rejects symlink escape");
   }
+  const auto external_directory = external_root / "nested";
+  std::filesystem::create_directories(external_directory, error);
+  write_zip(external_directory / "ordinary.ZIP", complete_members(true));
+  const auto linked_directory = explicit_root / "Scenes" / "nested-link";
+  std::filesystem::create_directory_symlink(external_directory, linked_directory,
+                                            error);
+  if (!error) {
+    check(owned_selection_error(explicit_root, "nested-link/ordinary.ZIP") ==
+              "diagnostic scene archive is unavailable",
+          "explicit diagnostic archive rejects a symlinked parent directory");
+  }
 
   std::filesystem::remove_all(work, error);
   return failures == 0 ? 0 : 1;

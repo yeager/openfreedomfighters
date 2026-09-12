@@ -645,11 +645,28 @@ SceneRenderAsset load_owned_diagnostic_scene_render_asset(
     if (component == "..")
       throw std::runtime_error("diagnostic scene archive path is invalid");
   }
-  const auto archive_path = install_root / "Scenes" / relative_archive_path;
   std::error_code error;
+  // A final-file symlink check is not enough: an otherwise ordinary ZIP can
+  // still be reached through a symlinked parent below Scenes.  The explicit
+  // diagnostic path is a source-owned archive selector, so its complete
+  // resolved path must remain identical to the lexical path below the real
+  // Scenes directory before the ZIP snapshot is opened.
+  const auto scenes_root = install_root / "Scenes";
+  const auto scenes_status = std::filesystem::symlink_status(scenes_root, error);
+  if (error || std::filesystem::is_symlink(scenes_status) ||
+      !std::filesystem::is_directory(scenes_status))
+    throw std::runtime_error("diagnostic scene archive is unavailable");
+  const auto canonical_scenes_root = std::filesystem::canonical(scenes_root, error);
+  if (error)
+    throw std::runtime_error("diagnostic scene archive is unavailable");
+  const auto archive_path =
+      canonical_scenes_root / relative_archive_path.lexically_normal();
   const auto status = std::filesystem::symlink_status(archive_path, error);
   if (error || std::filesystem::is_symlink(status) ||
       !std::filesystem::is_regular_file(status))
+    throw std::runtime_error("diagnostic scene archive is unavailable");
+  const auto canonical_archive = std::filesystem::canonical(archive_path, error);
+  if (error || canonical_archive != archive_path.lexically_normal())
     throw std::runtime_error("diagnostic scene archive is unavailable");
   return load_scene_render_asset(archive_path);
 }
