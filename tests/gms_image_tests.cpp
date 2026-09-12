@@ -16,6 +16,7 @@
 #include "off/data/keys_backing_evaluator.hpp"
 #include "off/data/matpos_pose_evaluator.hpp"
 #include "off/data/matpos_deferred_component_reader.hpp"
+#include "off/data/matpos_owner_child_selector.hpp"
 #include "off/data/vert_anim_deferred_component_reader.hpp"
 #include "off/data/lens_flare_deferred_reader.hpp"
 #include "off/data/keys_property_materializer.hpp"
@@ -52,7 +53,7 @@ class TestOwnerComponentProvider final : public off::runtime::OwnerComponentProv
 public:
     [[nodiscard]] const void* find_child_exact(std::array<char, 4> key) const noexcept override {
         ++queries;
-        return live && key == std::array<char, 4>{'K', 'E', 'Y', 'S'} ? &keys_child : nullptr;
+        return live && key == off::data::matpos_owner_child_selector ? &keys_child : nullptr;
     }
 
     mutable std::size_t queries{};
@@ -1431,7 +1432,7 @@ int main() {
             requested, input,
             [&](std::uint64_t owner, std::array<char, 4> key)
                 -> std::optional<ComponentReaderKeysChild> {
-                resolved = owner == requested.owner && key == std::array<char, 4>{'K', 'E', 'Y', 'S'};
+                resolved = owner == requested.owner && key == off::data::matpos_owner_child_selector;
                 return std::nullopt;
             },
             [&](const ComponentReaderInput&, std::uint64_t) { called = true; });
@@ -1485,7 +1486,7 @@ int main() {
             write_word(bytes, 4U, 0x80000040U);
             write_word(bytes, 8U, 64U);
             write_word(bytes, 12U, 1U);
-            write_word(bytes, 16U, 0x5359454bU);
+            write_word(bytes, 16U, off::data::matpos_owner_child_selector_word);
             write_word(bytes, 20U, 48U);
             return bytes;
         };
@@ -1494,7 +1495,7 @@ int main() {
         const OwnerAuxiliaryPropertyBlock property{0x42U, 0x120U, bytes};
         const auto keys = OwnerBufKeysProfileParser::parse(property);
         check(keys.buf_auxiliary_offset == property.buf_auxiliary_offset &&
-                  keys.name == std::array<char, 4>{'K', 'E', 'Y', 'S'} &&
+                  keys.name == off::data::matpos_owner_child_selector &&
                   keys.declared_extent == 48U && keys.bytes.data() == bytes.data() + 16U &&
                   keys.bytes.size() == 48U,
               "owner BUF KEYS profile exposes only the exact bounded child view");
@@ -1564,7 +1565,7 @@ int main() {
 
         std::array<std::byte, 64> property_bytes{};
         const OwnerAuxiliaryPropertyBlock property{0x42U, 0x120U, property_bytes};
-        const OwnerAuxiliaryPropertyChild keys{0x120U, {'K', 'E', 'Y', 'S'}, 48U,
+        const OwnerAuxiliaryPropertyChild keys{0x120U, off::data::matpos_owner_child_selector, 48U,
                                                std::span(property_bytes).subspan(16U, 48U)};
         const std::array children{keys};
         const auto materialized = KeysPropertyMaterializer::materialize(
@@ -1591,7 +1592,7 @@ int main() {
             static_cast<void>(KeysPropertyMaterializer::materialize(property, children_without_keys, {}));
         }, "KEYS materializer rejects a missing KEYS child");
         check_rejected([&] {
-            const OwnerAuxiliaryPropertyChild malformed{0x120U, {'K', 'E', 'Y', 'S'}, 47U,
+            const OwnerAuxiliaryPropertyChild malformed{0x120U, off::data::matpos_owner_child_selector, 47U,
                                                          std::span(property_bytes).subspan(16U, 47U)};
             const std::array malformed_children{malformed};
             static_cast<void>(KeysPropertyMaterializer::materialize(property, malformed_children, {}));
@@ -1601,7 +1602,7 @@ int main() {
             property, children,
             [](const OwnerAuxiliaryPropertyBlock&, const OwnerAuxiliaryPropertyChild&)
                 -> std::optional<SceneLifetimeKeysChildMapping> {
-                return SceneLifetimeKeysChildMapping{0x42U, 0x120U, {'K', 'E', 'Y', 'S'}, 48U, 0U};
+                return SceneLifetimeKeysChildMapping{0x42U, 0x120U, off::data::matpos_owner_child_selector, 48U, 0U};
             });
         check(!no_mapping && !stale_mapping,
               "KEYS materializer never synthesizes a child handle without a valid scene-lifetime mapping");
@@ -1628,7 +1629,7 @@ int main() {
             write_word(bytes, 4U, 0x80000040U);
             write_word(bytes, 8U, 64U);
             write_word(bytes, 12U, 1U);
-            write_word(bytes, 16U, 0x5359454bU);
+            write_word(bytes, 16U, off::data::matpos_owner_child_selector_word);
             write_word(bytes, 20U, 48U);
             return bytes;
         };
@@ -1657,7 +1658,7 @@ int main() {
 
         const auto second_child = OwnerBufKeysProfileParser::parse(second);
         check(!registry.resolve(first, second_child) &&
-                  !registry.resolve_required_keys(0x44U, {'K', 'E', 'Y', 'S'}),
+                  !registry.resolve_required_keys(0x44U, off::data::matpos_owner_child_selector),
               "scene KEYS registry rejects cross-owner and missing-owner lookups");
 
         first_bytes[0] = std::byte{1};
@@ -1704,7 +1705,7 @@ int main() {
         };
         const auto supported_child = [&] {
             std::array<std::byte, 48> bytes{};
-            write_word(bytes, 0U, 0x5359454bU);
+            write_word(bytes, 0U, off::data::matpos_owner_child_selector_word);
             write_word(bytes, 4U, 48U);
             write_word(bytes, 8U, 5U);
             write_word(bytes, 12U, static_cast<std::uint32_t>(-2));
@@ -1720,7 +1721,7 @@ int main() {
         };
 
         auto bytes = supported_child();
-        const OwnerAuxiliaryPropertyChild child{0x120U, {'K', 'E', 'Y', 'S'}, 48U, bytes};
+        const OwnerAuxiliaryPropertyChild child{0x120U, off::data::matpos_owner_child_selector, 48U, bytes};
         const MaterializedOwnerKeysChild materialized{0x42U, 0x120U, 0x700U};
         bool request_seen = false;
         const auto bound = KeysDescriptorRangeBinder::bind(
@@ -1745,21 +1746,21 @@ int main() {
             auto malformed = bytes;
             write_word(malformed, 16U, static_cast<std::uint32_t>(-3));
             static_cast<void>(KeysDescriptorRangeBinder::bind(
-                materialized, {0x120U, {'K', 'E', 'Y', 'S'}, 48U, malformed},
+                materialized, {0x120U, off::data::matpos_owner_child_selector, 48U, malformed},
                 [](const KeysDescriptorBackingRequest&) { return true; }));
         }, "KEYS descriptor rejects reversed signed inclusive bounds");
         check_rejected([&] {
             auto malformed = bytes;
             write_word(malformed, 8U, 4U);
             static_cast<void>(KeysDescriptorRangeBinder::bind(
-                materialized, {0x120U, {'K', 'E', 'Y', 'S'}, 48U, malformed},
+                materialized, {0x120U, off::data::matpos_owner_child_selector, 48U, malformed},
                 [](const KeysDescriptorBackingRequest&) { return true; }));
         }, "KEYS descriptor rejects an inclusive range beyond its count-like word");
         check_rejected([&] {
             auto malformed = bytes;
             write_word(malformed, 20U, 0x7f800000U);
             static_cast<void>(KeysDescriptorRangeBinder::bind(
-                materialized, {0x120U, {'K', 'E', 'Y', 'S'}, 48U, malformed},
+                materialized, {0x120U, off::data::matpos_owner_child_selector, 48U, malformed},
                 [](const KeysDescriptorBackingRequest&) { return true; }));
         }, "KEYS descriptor rejects non-finite spacing or rate");
     }

@@ -3,6 +3,7 @@
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_renderer_resource_envelope.hpp"
 #include "off/graphics/intro_runtime.hpp"
+#include "off/data/matpos_owner_child_selector.hpp"
 #include "off/cutscene/first_cut_command_session.hpp"
 #include "off/graphics/normal_intro_scene_session.hpp"
 #include "off/graphics/intro_accepted_picture_registry.hpp"
@@ -105,7 +106,7 @@ std::size_t keys_property(Bytes& names) {
     names.resize(property+96);
     set(names,property,0U);set(names,property+4,0x80000040U);
     set(names,property+8,64U);set(names,property+12,1U);
-    set(names,property+16,0x5359454bU);set(names,property+20,48U);
+    set(names,property+16,off::data::matpos_owner_child_selector_word);set(names,property+20,48U);
     // Synthetic KEYS descriptors deliberately point into the same retained
     // names/BUF allocation. This supplies only bounded read-only evaluator
     // coverage; it is not authored game data or a pose fixture.
@@ -1012,7 +1013,7 @@ static OFF_NOINLINE void check_complete_runtime_post_directory(
           mat_pos=mat_pos || host.resources().sources().attachment_identifier(row,slot)=="ZGEOM_MatPosAnim";
         if(!mat_pos) continue;
         ++mat_pos_owners;
-        const auto resolved=keys_registry->resolve_required_keys(host.source_handle(row).value,{'K','E','Y','S'});
+        const auto resolved=keys_registry->resolve_required_keys(host.source_handle(row).value,off::data::matpos_owner_child_selector);
         check(resolved && resolved->opaque_handle==expected_keys_handle++ &&
               resolved->owner==host.source_handle(row).value,
               "scene KEYS preparation assigns opaque local handles through canonical MatPos owners");

@@ -15,7 +15,7 @@ inventory to select implementation work.
 | `ZGEOM_MovieControl` | None | Concrete factory callback, exact reader/resource binding and canonical controller state | Phase one, full global admission, live services, event 16 and cut dependencies |
 | `ZGEOM_Center` | Legal-picture owner/component provenance and position/cache seam | None | Global admission, position service and event delivery |
 | `ZWINPIC_FadeToBlack` | Three source-bound first-cut callbacks update canonical size/cache state | Not requested by the supported first-cut factory | Live dimension/invalidation services, owner/global admission, material/color path and event delivery |
-| `ZGEOM_MatPosAnim` | KEYS preparation seam | None | Existing-state provider, events and special-owner behavior |
+| `ZGEOM_MatPosAnim` | Closed owner-local KEYS gate and exact deferred reader | None | Existing-state provider, events and special-owner behavior |
 | `ZLIST_CutSequence`, `ZLIST_CutSequenceList`, `ZLIST_CutSequenceCommand` | Owner/component provenance and timeline/source sub-boundaries | None | Player registration, dispatch and completion timing |
 | `ZSNDOBJ_SoundExtend`, `ZSNDOBJ_SoundNotify`, `ZSNDOBJ_SoundSegment`, `ZGEOM_ZSetZDefine` | Typed data and owner-side sub-boundaries | None | Output/channel admission and readiness producer |
 | `ZCHAROBJ_CharFader`, `ZWINPIC_LogoFade` | None | None | Reader and event/mode behavior |

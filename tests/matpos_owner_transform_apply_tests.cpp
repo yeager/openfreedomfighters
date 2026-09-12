@@ -1,4 +1,5 @@
 #include "off/runtime/matpos_owner_transform_apply.hpp"
+#include "off/data/matpos_owner_child_selector.hpp"
 
 #include <array>
 #include <cmath>
@@ -35,7 +36,7 @@ struct Provider final : runtime::MatPosOwnerTransformProvider {
     [[nodiscard]] const void* find_child_exact(std::array<char, 4> key) const noexcept override {
         auto* self = const_cast<Provider*>(this);
         ++self->queries;
-        return key == std::array<char, 4>{'K', 'E', 'Y', 'S'} ? child : nullptr;
+        return key == off::data::matpos_owner_child_selector ? child : nullptr;
     }
 
     void apply_matpos_local_transform(const std::array<float, 9>& basis,

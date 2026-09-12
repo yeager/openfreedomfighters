@@ -20,6 +20,9 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
     throw std::runtime_error(
         "normal intro scene reader bracket is unavailable");
   try {
+    // Required owner-local lookup preparation for the supported MatPos reader.
+    // This deliberately does not prepare key backing or enter phase one.
+    runtime_->prepare_scene_lifetime_keys_registry();
     runtime_->run_postconstruction_reader_bracket(
         saved,
         {.external_loader_service = [this](std::uint64_t value) {

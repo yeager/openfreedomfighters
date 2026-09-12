@@ -6,6 +6,7 @@
 #include <atomic>
 #include <chrono>
 #include <fstream>
+#include <limits>
 #include <random>
 #include <ranges>
 
@@ -54,6 +55,26 @@ bool valid_source_text(std::string_view value) noexcept {
 }
 bool valid_translation_text(std::string_view value) noexcept {
   return !value.empty() && valid_source_text(value);
+}
+bool valid_canonical_id(std::string_view id, std::string_view source_set,
+                        std::uint64_t record_count) noexcept {
+  if (!valid_identifier(source_set) || source_set.size() > 96U ||
+      record_count == 0U)
+    return false;
+  const auto prefix = "off.retail." + std::string{source_set} + ".";
+  if (!id.starts_with(prefix)) return false;
+  const auto ordinal = id.substr(prefix.size());
+  if (ordinal.empty() || (ordinal.size() > 1U && ordinal.front() == '0'))
+    return false;
+  std::uint64_t value{};
+  for (const auto character : ordinal) {
+    if (character < '0' || character > '9') return false;
+    const auto digit = static_cast<std::uint64_t>(character - '0');
+    if (value > (std::numeric_limits<std::uint64_t>::max() - digit) / 10U)
+      return false;
+    value = value * 10U + digit;
+  }
+  return value < record_count;
 }
 bool valid_snapshot(const RetailLocalizationSnapshot& snapshot) noexcept {
   if (snapshot.installation_identity.size() > 128U || snapshot.parser_identity.size() > 128U ||
@@ -175,6 +196,26 @@ std::optional<RetailTranslationCatalog> RetailTranslationCatalog::build(std::vec
   std::ranges::sort(entries, {}, &RetailTranslationEntry::id);
   if (std::ranges::adjacent_find(entries, {}, &RetailTranslationEntry::id) != entries.end()) return std::nullopt;
   RetailTranslationCatalog result; result.entries_ = std::move(entries); return result;
+}
+std::optional<RetailTranslationCatalog>
+RetailTranslationCatalog::build_for_source_set(
+    std::string_view source_set, std::uint64_t record_count,
+    std::vector<RetailTranslationEntry> entries) {
+  if (!valid_identifier(source_set) || source_set.size() > 96U ||
+      record_count == 0U || entries.empty())
+    return std::nullopt;
+  for (const auto& entry : entries) {
+    if (!valid_canonical_id(entry.id, source_set, record_count) ||
+        !valid_translation_text(entry.text))
+      return std::nullopt;
+  }
+  std::ranges::sort(entries, {}, &RetailTranslationEntry::id);
+  if (std::ranges::adjacent_find(entries, {},
+                                 &RetailTranslationEntry::id) != entries.end())
+    return std::nullopt;
+  RetailTranslationCatalog result;
+  result.entries_ = std::move(entries);
+  return result;
 }
 std::optional<std::string_view> RetailTranslationCatalog::find(std::string_view id) const noexcept {
   const auto found = std::ranges::lower_bound(entries_, id, {}, &RetailTranslationEntry::id);

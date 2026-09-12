@@ -1,5 +1,7 @@
 #pragma once
 
+#include "off/data/matpos_owner_child_selector.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -64,7 +66,7 @@ public:
         if (child.buf_auxiliary_offset != property.buf_auxiliary_offset) {
             fail("owner auxiliary child does not join its source BUF offset");
         }
-        if (child.name != keys_name) {
+        if (child.name != matpos_owner_child_selector) {
             fail("owner auxiliary property child is not KEYS");
         }
         if (child.declared_extent != keys_extent || child.bytes.size() != keys_extent) {
@@ -92,7 +94,6 @@ public:
     }
 
 private:
-    static constexpr std::array<char, 4> keys_name{'K', 'E', 'Y', 'S'};
     static constexpr std::size_t keys_extent = 48U;
 
     static void validate_property(const OwnerAuxiliaryPropertyBlock& property) {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "off/data/matpos_owner_child_selector.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -64,7 +66,7 @@ public:
             return ComponentReaderInvocationResult::absent;
         }
 
-        const auto child = resolve_keys_child(identity.owner, required_key);
+        const auto child = resolve_keys_child(identity.owner, matpos_owner_child_selector);
         if (!child) {
             return ComponentReaderInvocationResult::absent;
         }
@@ -82,7 +84,6 @@ public:
         return ComponentReaderInvocationResult::invoked;
     }
 private:
-    static constexpr std::array<char, 4> required_key{'K', 'E', 'Y', 'S'};
 };
 
 } // namespace off::data

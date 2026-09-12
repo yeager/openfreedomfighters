@@ -11,9 +11,9 @@ owners. Each exposes one or more attachment delimiters before its owner
 terminator (249 delimiters in total). The recovered reader is limited to the
 205 ordinary-geometry candidates with exactly one `ZGEOM_MatPosAnim` attachment
 in slot zero and one complete 98- or 103-byte source record. It additionally
-requires the existing supported owner-local `KEYS` profile. The current owned
-cold probe finds no candidate that satisfies that complete gate, so it
-deliberately applies none; every other MatPos owner remains outside this reader
+requires the existing supported owner-local `KEYS` profile. The normal reader
+bracket prepares that registry before admission; the current owned cold probe
+accepts 29 candidates. Every other MatPos owner remains outside this reader
 boundary.
 
 The reader requires the existing owner-local `KEYS` child before it decodes

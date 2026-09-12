@@ -3,6 +3,7 @@
 #include "off/data/basic_group_deferred_reader_shape.hpp"
 #include "off/data/basic_group_deferred_reader.hpp"
 #include "off/data/matpos_deferred_component_reader.hpp"
+#include "off/data/matpos_owner_child_selector.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
 #include "off/data/first_cut_owner_reader.hpp"
 #include <algorithm>
@@ -1928,6 +1929,9 @@ IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() c
     if(lens_flare_deferred_reader_states_.contains(work.source_directory_index) ||
        supports_lens_flare_deferred_reader(work))
       return IntroDeferredReaderFamily::lens_flare_component;
+    if(matpos_deferred_reader_states_.contains(work.source_directory_index) ||
+       supports_matpos_deferred_reader(work))
+      return IntroDeferredReaderFamily::matpos_component;
     if(vert_anim_deferred_reader_states_.contains(work.source_directory_index))
       return IntroDeferredReaderFamily::vert_anim_component;
     if(work.source_directory_index==resources_.window_index())
@@ -3449,7 +3453,7 @@ bool IntroRuntime::supports_matpos_deferred_reader(
         !associated_resource_owner(work.resource) || *associated_resource_owner(work.resource) != owner ||
         !object || object->owner != owner || object->resource != work.resource ||
         !scene_lifetime_keys_registry_ ||
-        !scene_lifetime_keys_registry_->resolve_required_keys(owner.value, {'K','E','Y','S'}))
+        !scene_lifetime_keys_registry_->resolve_required_keys(owner.value, data::matpos_owner_child_selector))
       return false;
     const auto component_index = components.front();
     const auto& component = components_.at(component_index);
@@ -3501,7 +3505,7 @@ void IntroRuntime::apply_supported_matpos_deferred_reader(
       !associated_resource_owner(work.resource) || *associated_resource_owner(work.resource) != owner ||
       !object || object->owner != owner || object->resource != work.resource ||
       !scene_lifetime_keys_registry_ ||
-      !scene_lifetime_keys_registry_->resolve_required_keys(owner.value, {'K','E','Y','S'}))
+      !scene_lifetime_keys_registry_->resolve_required_keys(owner.value, data::matpos_owner_child_selector))
     throw std::runtime_error("MatPos deferred reader source gate is unsupported");
   const auto component_index = components.front();
   const auto& component = components_.at(component_index);

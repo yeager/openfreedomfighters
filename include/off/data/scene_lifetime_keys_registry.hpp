@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/data/component_reader_context.hpp"
+#include "off/data/matpos_owner_child_selector.hpp"
 #include "off/data/owner_buf_keys_profile.hpp"
 
 #include <algorithm>
@@ -52,7 +53,7 @@ public:
             const OwnerAuxiliaryPropertyBlock canonical{
                 entry.owner, entry.buf_auxiliary_offset, entry.property_bytes};
             const auto child = OwnerBufKeysProfileParser::parse(canonical);
-            if (child.name != keys_name || child.declared_extent != keys_extent) {
+            if (child.name != matpos_owner_child_selector || child.declared_extent != keys_extent) {
                 fail("scene KEYS registry received an unsupported canonical child");
             }
             staged.push_back(std::move(entry));
@@ -83,7 +84,7 @@ public:
         const OwnerAuxiliaryPropertyBlock& property,
         const OwnerAuxiliaryPropertyChild& child) const noexcept {
         if (property.owner == 0U || property.buf_auxiliary_offset == 0U || property.bytes.empty() ||
-            child.name != keys_name || child.declared_extent != keys_extent ||
+            child.name != matpos_owner_child_selector || child.declared_extent != keys_extent ||
             child.buf_auxiliary_offset != property.buf_auxiliary_offset) {
             return std::nullopt;
         }
@@ -95,12 +96,12 @@ public:
             return std::nullopt;
         }
         return SceneLifetimeKeysChildMapping{entry->owner, entry->buf_auxiliary_offset,
-                                             keys_name, keys_extent, entry->opaque_handle};
+                                             matpos_owner_child_selector, keys_extent, entry->opaque_handle};
     }
 
     [[nodiscard]] std::optional<ComponentReaderKeysChild> resolve_required_keys(
         std::uint64_t owner, std::array<char, 4> key) const noexcept {
-        if (owner == 0U || key != keys_name) {
+        if (owner == 0U || key != matpos_owner_child_selector) {
             return std::nullopt;
         }
 
@@ -173,7 +174,6 @@ private:
 
     [[noreturn]] static void fail(const char* message) { throw std::runtime_error(message); }
 
-    static constexpr std::array<char, 4> keys_name{'K', 'E', 'Y', 'S'};
     static constexpr std::size_t keys_extent = 48U;
     std::vector<Entry> entries_{};
 };

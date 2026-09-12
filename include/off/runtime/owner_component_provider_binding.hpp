@@ -1,5 +1,7 @@
 #pragma once
 
+#include "off/data/matpos_owner_child_selector.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -41,7 +43,7 @@ public:
     // Each request reaches the currently-bound provider.  In particular, a
     // prior result cannot remain usable after invalidation or provider teardown.
     [[nodiscard]] const void* find_required_keys_child() const noexcept {
-        return provider_ == nullptr ? nullptr : provider_->find_child_exact(keys_name);
+        return provider_ == nullptr ? nullptr : provider_->find_child_exact(data::matpos_owner_child_selector);
     }
 
 private:
@@ -49,7 +51,6 @@ private:
 
     void invalidate_from_provider(OwnerComponentProviderBindings& bindings) noexcept;
 
-    static constexpr std::array<char, 4> keys_name{'K', 'E', 'Y', 'S'};
     OwnerComponentProvider* provider_{};
     OwnerComponentProviderBindings* bindings_{};
     bool invalidated_{};

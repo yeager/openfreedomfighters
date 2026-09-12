@@ -39,6 +39,13 @@ class RetailTranslationCatalog final {
 public:
   [[nodiscard]] static std::optional<RetailTranslationCatalog>
   build(std::vector<RetailTranslationEntry> entries);
+  // Use this for a translation pack associated with a private extracted
+  // catalog. The input contains its text-free source-set identity and record
+  // count only; it does not accept English source text. Every entry must name
+  // one canonical ID in that exact source set and ordinal range.
+  [[nodiscard]] static std::optional<RetailTranslationCatalog>
+  build_for_source_set(std::string_view source_set, std::uint64_t record_count,
+                       std::vector<RetailTranslationEntry> entries);
   [[nodiscard]] std::optional<std::string_view>
   find(std::string_view id) const noexcept;
 private:

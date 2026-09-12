@@ -333,7 +333,7 @@ enum class IntroDeferredReaderFamily : std::uint8_t {
   first_cut_sequence, first_cut_list, first_cut_legal_picture,
   external_cut_commands, first_cut_fade_picture, first_cut_camera,
   basic_group_owner, following_visual_owner, vert_anim_component,
-  lens_flare_component,
+  lens_flare_component, matpos_component,
 };
 enum class IntroDeferredReaderImplementationState : std::uint8_t {
   unimplemented, implemented_not_applied, applied,

@@ -71,19 +71,20 @@ high-bit and continuation markers, never payload bytes. The probe never emits va
 source identities, offsets, handles, or payload bytes. The owned intro has one 98-byte single-MatPos form
 (89 records) and three distinct 103-byte framing forms (2, 85, and 29 records).
 Their differing framing profiles prove that a type-wide base-object reader would
-be unsound. The recovered MatPos reader has a further owner-local `KEYS` gate;
-the current owned probe finds no form that clears its complete admission
-predicate, so none is applied.
+be unsound. The recovered MatPos reader has a further owner-local `KEYS` gate.
+After preparing the native-order owner-child registry before the ordinary
+reader bracket, the current owned probe admits 29 exact records; all other
+forms remain outside its narrow contract.
 
-The current owned-data probe records 420 queued readers: 75 applied, five
-recognized-but-not-admitted following-visual owner forms, and 340
+The current owned-data probe records 420 queued readers: 109 recognized, 104
+applied, five recognized-but-not-admitted following-visual owner forms, and 311
 unclassified. The 19 admitted attachment-free Group readers, 19 admitted
-VertAnim reader forms, and 25 admitted LensFlare reader forms are included in
-the applied count.
-Of the unclassified work, 51 records have no attachments and 289 have
-attachments; 258 of those attachment-bearing blocks expose a delimiter before
-their terminal marker, while 31 are outside the narrow classifier. The 258
-recognized shapes contain 335 delimiter events, with at most four in one block.
+VertAnim reader forms, 25 admitted LensFlare reader forms, and 29 admitted
+MatPos reader forms are included in the applied count.
+Of the unclassified work, 51 records have no attachments and 260 have
+attachments; 229 of those attachment-bearing blocks expose a delimiter before
+their terminal marker, while 31 are outside the narrow classifier. The 229
+recognized shapes contain 306 delimiter events, with at most four in one block.
 This does not authorize a generic attachment dispatcher. The next candidate
 needs an exact owner/attachment partition, payload contract, and failure
 behavior before it can enter the normal reader bracket.
@@ -119,13 +120,13 @@ commits the five Picture controls, the opaque picture-resource key, and six
 LensFlare-local values as one bounded receipt. It does not submit a flare,
 register an event, or run a lifecycle callback. All other Picture/LensFlare
 forms remain unclassified.
-MatPosAnim has a strict, currently unapplied deferred-reader path: the
+MatPosAnim has a strict deferred-reader path: the
 supported intro has 227 associated deferred records, all with an attachment
 delimiter before the owner terminal (249 delimiters in total). The reader only
 considers the independently recovered 98/103-byte ordinary-geometry forms and
 requires a supported owner-local `KEYS` profile before parsing. The current
-owned probe finds no record that clears the full gate. Its separate
-persistence/restore object stream is documented in [MatPosAnim recovery](MATPOS_ANIMATION.md).
+owned probe admits 29 forms after atomically preparing that owner-local lookup
+registry. Its separate persistence/restore object stream is documented in [MatPosAnim recovery](MATPOS_ANIMATION.md).
 Phase one instead initializes from existing state and runtime providers;
 neither route activates animation nor the intro.
 The conditional DefaultCam factory now constructs its real PreviewCamera and

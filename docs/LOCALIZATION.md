@@ -66,6 +66,14 @@ itself make a derivative translation copyright-free, so translated retail text
 also remains private unless its contributor has a documented right to publish
 it.
 
+The ID-only catalog API is bound to the private extraction's source-set
+identity and contiguous ordinal range. It receives neither English text nor
+retail lookup keys: `source_set`, record count, opaque ID, and independently
+authored translation are sufficient. That makes catalog matching deterministic
+and prevents a pack for one verified source set from silently applying to
+another. It is a technical boundary, not a copyright-safe harbor; publication
+still depends on the provenance and licence of every translated string.
+
 The legacy `LOC` scanner is not this decoder; it remains an isolated raw-run
 inventory. The decoder verifies complete member framing and UTF-8 source
 fields, derives its source set from normalized logical member IDs and

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/data/keys_property_materializer.hpp"
+#include "off/data/matpos_owner_child_selector.hpp"
 
 #include <array>
 #include <bit>
@@ -80,10 +81,8 @@ public:
     }
 
 private:
-    static constexpr std::array<char, 4> keys_name{'K', 'E', 'Y', 'S'};
     static constexpr std::size_t keys_extent = 48U;
     static constexpr std::size_t descriptor_word_offset = 8U;
-    static constexpr std::uint32_t keys_fourcc = 0x5359454bU;
 
     static void validate_identity(const MaterializedOwnerKeysChild& materialized,
                                   const OwnerAuxiliaryPropertyChild& child) {
@@ -92,11 +91,11 @@ private:
             fail("KEYS descriptor requires a materialized live owner and backing handle");
         }
         if (child.buf_auxiliary_offset != materialized.buf_auxiliary_offset ||
-            child.name != keys_name || child.declared_extent != keys_extent ||
+            child.name != matpos_owner_child_selector || child.declared_extent != keys_extent ||
             child.bytes.size() != keys_extent) {
             fail("KEYS descriptor requires the supported materialized child identity");
         }
-        if (read_u32(child.bytes, 0U) != keys_fourcc ||
+        if (read_u32(child.bytes, 0U) != matpos_owner_child_selector_word ||
             read_u32(child.bytes, sizeof(std::uint32_t)) != keys_extent) {
             fail("KEYS descriptor requires its fixed child header");
         }

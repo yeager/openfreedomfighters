@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/data/keys_property_materializer.hpp"
+#include "off/data/matpos_owner_child_selector.hpp"
 
 #include <array>
 #include <cstddef>
@@ -39,22 +40,20 @@ public:
         if (read_u32(words, 8U) != outer_extent || read_u32(words, 12U) != 1U) {
             fail("owner BUF KEYS profile requires its observed outer header");
         }
-        if (read_u32(words, child_offset) != keys_fourcc ||
+        if (read_u32(words, child_offset) != matpos_owner_child_selector_word ||
             read_u32(words, child_offset + sizeof(std::uint32_t)) != child_extent) {
             fail("owner BUF KEYS profile requires its exact inclusive KEYS child");
         }
 
         return OwnerAuxiliaryPropertyChild{
             .buf_auxiliary_offset = property.buf_auxiliary_offset,
-            .name = {'K', 'E', 'Y', 'S'},
+            .name = matpos_owner_child_selector,
             .declared_extent = child_extent,
             .bytes = property.bytes.subspan(child_offset, child_extent),
         };
     }
 
 private:
-    static constexpr std::uint32_t keys_fourcc = 0x5359454bU;
-
     [[nodiscard]] static std::uint32_t read_u32(std::span<const std::byte> bytes,
                                                 std::size_t offset) noexcept {
         return static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(bytes[offset])) |

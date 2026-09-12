@@ -76,12 +76,32 @@ int main() {
           "private source cache preserves intentionally blank records and their ordinals");
     check(make_retail_string_id("ff.loc.startup.v1", 9U) == "off.retail.ff.loc.startup.v1.9",
           "opaque ID is stable and contains no source text");
+    check(make_retail_string_id("ff.loc.startup.v1", 0U) ==
+              "off.retail.ff.loc.startup.v1.0" &&
+              make_retail_string_id("ff.loc.startup.v1", 1U) ==
+              "off.retail.ff.loc.startup.v1.1",
+          "canonical extraction order produces the same IDs on every run");
     const auto translations = RetailTranslationCatalog::build({
         {"off.retail.ff.loc.startup.v1.0", "Independently authored translation"},
         {"off.retail.ff.loc.startup.v1.1", "Another independently authored translation"}});
     check(translations && translations->find("off.retail.ff.loc.startup.v1.1") &&
               !translations->find("off.retail.ff.loc.startup.v1.2"),
           "translation catalog resolves IDs without retaining source text");
+    const auto bound_translations = RetailTranslationCatalog::build_for_source_set(
+        "ff.loc.startup.v1", 2U,
+        {{"off.retail.ff.loc.startup.v1.0", "Independently authored translation"},
+         {"off.retail.ff.loc.startup.v1.1", "Another independently authored translation"}});
+    check(bound_translations &&
+              bound_translations->find("off.retail.ff.loc.startup.v1.0"),
+          "ID-only translations bind to the extracted source set and ordinal range");
+    check(!RetailTranslationCatalog::build_for_source_set(
+              "ff.loc.startup.v1", 2U,
+              {{"off.retail.ff.loc.startup.v1.2", "Out-of-range translation"}}),
+          "ID-only translations reject an ordinal absent from the private extraction");
+    check(!RetailTranslationCatalog::build_for_source_set(
+              "ff.loc.startup.v1", 2U,
+              {{"off.retail.ff.loc.startup.v01", "Noncanonical ordinal"}}),
+          "ID-only translations reject noncanonical ordinal spellings");
     const auto invalid_utf8 = RetailTranslationCatalog::build({
         {"off.retail.ff.loc.startup.v1.0", std::string{"bad\xc3", 4}}});
     check(!invalid_utf8, "translation catalog rejects invalid UTF-8 rather than guessing an encoding");
