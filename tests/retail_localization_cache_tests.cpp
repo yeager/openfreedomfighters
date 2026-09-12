@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <span>
 #include <stdexcept>
@@ -82,6 +83,32 @@ int main() {
               first.metadata->first_ordinal == 0U &&
               first.metadata->ordinal_count == 2U,
           "cache outcomes expose canonical source metadata only");
+    std::filesystem::path primary_cache;
+    for (const auto &entry : std::filesystem::recursive_directory_iterator(root)) {
+      if (entry.is_regular_file() && entry.path().extension() == ".bin") {
+        primary_cache = entry.path();
+        break;
+      }
+    }
+    check(!primary_cache.empty(), "private enrollment writes a cache file");
+    {
+      std::fstream cache(primary_cache, std::ios::binary | std::ios::in |
+                                      std::ios::out);
+      char original{};
+      cache.seekg(-1, std::ios::end);
+      cache.read(&original, 1);
+      cache.seekp(-1, std::ios::end);
+      const char replacement{static_cast<char>(
+          static_cast<unsigned char>(original) ^ static_cast<unsigned char>(1U))};
+      cache.write(&replacement, 1);
+    }
+    const auto repaired = ensure_retail_localization_metadata(
+        root, "install-test-v1", "loc-parser-v1", "ff.loc.startup.v1", extract);
+    check(repaired.status == RetailLocalizationCacheStatus::extracted &&
+              repaired.metadata && extraction_calls == 2U &&
+              *repaired.metadata == *first.metadata,
+          "a structurally plausible but tampered private cache is rejected and "
+          "re-enrolled deterministically");
     const auto blank_source = ensure_retail_localization_metadata(
         root, "install-test-v1", "loc-parser-v1", "ff.loc.blank.v1", [] {
           return std::optional<std::vector<RetailSourceString>>{

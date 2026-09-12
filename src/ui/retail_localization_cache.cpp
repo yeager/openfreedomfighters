@@ -24,7 +24,9 @@ struct RetailLocalizationSnapshot final {
   bool operator==(const RetailLocalizationSnapshot &) const = default;
 };
 
-constexpr std::string_view magic{"OFF-RETAIL-L10N\0\1", 17};
+// The version is part of the integrity boundary: old, unchecked cache files
+// are deliberately treated as misses and enrolled again from verified input.
+constexpr std::string_view magic{"OFF-RETAIL-L10N\0\2", 17};
 constexpr std::size_t maximum_strings = 1'000'000U;
 constexpr std::size_t maximum_text_bytes = 1U << 20U;
 constexpr std::size_t maximum_catalog_bytes = 128U << 20U;
@@ -182,11 +184,24 @@ std::string encode(const RetailLocalizationSnapshot &snapshot) {
     append_u64(out, string.ordinal);
     append_blob(out, string.english);
   }
+  const auto digest = crypto::sha256(out);
+  for (const auto byte : digest)
+    out.push_back(static_cast<char>(byte));
   return out;
 }
 std::optional<RetailLocalizationSnapshot> decode(std::string_view input) {
-  if (!input.starts_with(magic))
+  constexpr auto digest_bytes = crypto::Sha256Digest{}.size();
+  if (input.size() < magic.size() + digest_bytes || !input.starts_with(magic))
     return std::nullopt;
+  const auto payload = input.substr(0U, input.size() - digest_bytes);
+  const auto digest = crypto::sha256(payload);
+  if (!std::equal(digest.begin(), digest.end(),
+                  input.end() - static_cast<std::ptrdiff_t>(digest_bytes),
+                  [](std::uint8_t expected, char actual) {
+                    return expected == static_cast<unsigned char>(actual);
+                  }))
+    return std::nullopt;
+  input = payload;
   std::size_t cursor = magic.size();
   auto installation = read_blob(input, cursor, 128U);
   auto parser = read_blob(input, cursor, 128U);
