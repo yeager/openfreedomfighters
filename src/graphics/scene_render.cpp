@@ -547,7 +547,18 @@ load_scene_render_asset(const std::filesystem::path &archive_path) {
 
 SceneRenderAsset
 load_startup_scene_render_asset(const std::filesystem::path &install_root) {
-  return load_scene_render_asset(install_root / "Scenes" / "FF-StartUp.ZIP");
+  // This convenience path is used by the normal startup ownership chain.  It
+  // must not silently follow a replacement symlink when called outside the
+  // broader installation verifier; unlike the generic archive loader, its
+  // identity is fixed by the checked retail layout.
+  const auto archive_path = install_root / "Scenes" / "FF-StartUp.ZIP";
+  std::error_code error;
+  const auto status = std::filesystem::symlink_status(archive_path, error);
+  if (error || std::filesystem::is_symlink(status) ||
+      !std::filesystem::is_regular_file(status)) {
+    throw std::runtime_error("startup scene archive is unavailable");
+  }
+  return load_scene_render_asset(archive_path);
 }
 
 SceneRenderAsset

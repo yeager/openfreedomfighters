@@ -196,6 +196,23 @@ int main() {
             selection_error(startup_root) != startup_error,
         "exact UI archive loading does not use alphabetical diagnostic selection");
 
+  const auto startup_link_root = work / "startup-link";
+  std::filesystem::create_directories(startup_link_root / "Scenes");
+  std::filesystem::create_symlink(
+      startup_root / "Scenes" / "FF-StartUp.ZIP",
+      startup_link_root / "Scenes" / "FF-StartUp.ZIP", error);
+  if (!error) {
+    std::string startup_link_error;
+    try {
+      static_cast<void>(
+          off::graphics::load_startup_scene_render_asset(startup_link_root));
+    } catch (const std::exception &failure) {
+      startup_link_error = failure.what();
+    }
+    check(startup_link_error == "startup scene archive is unavailable",
+          "fixed startup archive refuses a symlinked replacement");
+  }
+
   const auto symlink_root = work / "symlink";
   const auto external_root = work / "external";
   std::filesystem::create_directories(symlink_root / "Scenes");

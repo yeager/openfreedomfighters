@@ -50,7 +50,11 @@ faithful original rendering.
 It requires the paired PRM, TEX, and GMS resources plus both RMC and RMI layers,
 preserves RMC before RMI in the map-layer order, and returns an asset with no
 references into archive or parser storage. `load_startup_scene_render_asset`
-retains the explicit startup-scene convenience path.
+retains the explicit startup-scene convenience path. Because that path is part
+of normal startup ownership, it accepts only a regular, non-symlink archive at
+the fixed checked location; a replacement link is rejected without exposing a
+local path. The generic loader remains intentionally unrestricted for callers
+that have already established their own archive ownership boundary.
 
 The current diagnostic runtime uses
 `load_diagnostic_scene_render_asset`. It enumerates non-symlink ZIP files
