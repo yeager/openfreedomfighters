@@ -1,5 +1,6 @@
 #include "off/audio/soundtrack_stream.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -34,9 +35,19 @@ int main(int argc, char** argv) {
     const auto frames = stream.read_frames(buffer);
     check(frames > 0U && frames <= 257U, "bounded read returns actual PCM frames");
     std::uint64_t decoded_frames = frames;
-    while (!stream.ended()) decoded_frames += stream.read_frames(buffer);
+    while (decoded_frames < info.total_frames) {
+      // The final request is exact.  A stream must report completion as soon
+      // as it returns its advertised final frame, not on a later empty read.
+      const auto request = static_cast<std::size_t>(std::min<std::uint64_t>(
+          257U, info.total_frames - decoded_frames));
+      buffer.resize(request * info.channels);
+      const auto next = stream.read_frames(buffer);
+      check(next > 0U && next <= request, "stream produces remaining PCM frames");
+      decoded_frames += next;
+    }
     check(decoded_frames == info.total_frames,
           "streaming decoder reaches exactly its advertised frame count");
+    check(stream.ended(), "stream ends with its advertised final frame");
     std::vector<std::int16_t> oversized(
         (off::audio::SoundtrackStream::maximum_read_frames + 1U) * info.channels);
     rejects([&] { static_cast<void>(stream.read_frames(oversized)); },

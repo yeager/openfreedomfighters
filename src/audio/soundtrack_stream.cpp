@@ -94,11 +94,14 @@ const SoundtrackStreamInfo& SoundtrackStream::info() const noexcept {
 }
 
 std::size_t SoundtrackStream::read_frames(std::span<std::int16_t> output) {
-  if (impl_->finished) return 0;
   const auto channels = impl_->stream_info.channels;
   if (output.empty() || output.size() % channels != 0U ||
       output.size() / channels > maximum_read_frames)
     throw std::invalid_argument("soundtrack stream read buffer is invalid");
+  // Preserve the input-size contract even after EOF.  This prevents a caller
+  // from using a completed stream to bypass the same bounded-buffer checks
+  // that protect every decoding call.
+  if (impl_->finished) return 0;
   const auto requested = output.size() / channels;
   const auto read = impl_->stream_info.encoding == Encoding::flac
       ? drflac_read_pcm_frames_s16(impl_->flac, requested, output.data())
@@ -107,10 +110,13 @@ std::size_t SoundtrackStream::read_frames(std::span<std::int16_t> output) {
   if (read > remaining)
     throw std::runtime_error("soundtrack stream exceeded its advertised frame count");
   impl_->frames_read += read;
-  if (read < requested) {
-    if (impl_->frames_read != impl_->stream_info.total_frames)
-      throw std::runtime_error("soundtrack stream ended before its advertised frame count");
+  // A decoder may satisfy a request exactly on its final PCM frame.  Mark that
+  // state here instead of waiting for a speculative extra read: the playback
+  // transport needs to flush promptly after submitting the final buffer.
+  if (impl_->frames_read == impl_->stream_info.total_frames) {
     impl_->finished = true;
+  } else if (read < requested) {
+    throw std::runtime_error("soundtrack stream ended before its advertised frame count");
   }
   return static_cast<std::size_t>(read);
 }
