@@ -113,11 +113,16 @@ void write_zip(
 std::vector<std::pair<std::string, std::string>>
 complete_members(bool duplicate_primitive = false) {
   std::vector<std::pair<std::string, std::string>> members{
+      {"synthetic/bundle.ZGF", "z"},
+      {"synthetic/support.SUP", "s"},
       {"synthetic/mesh.PRM", "p"},
       {"synthetic/image.TEX", "t"},
       {"synthetic/object.GMS", "g"},
       {"synthetic/map.RMC", "c"},
-      {"synthetic/instance.RMI", "i"}};
+      {"synthetic/instance.RMI", "i"},
+      {"synthetic/sound.SND", "n"},
+      {"synthetic/octree.OCT", "o"},
+      {"synthetic/parameters.SGP", "q"}};
   if (duplicate_primitive) {
     members.emplace_back("synthetic/duplicate.prm", "d");
   }
@@ -166,7 +171,7 @@ int main() {
   write_zip(ordering_root / "Scenes" / "ALPHA.zIp", complete_members(true));
   const auto ordering_error = selection_error(ordering_root);
   check(ordering_error ==
-            "scene archive contains duplicate scene-resource members",
+            "scene archive does not contain every required resource exactly once",
         "select case-insensitive ZIP candidates in stable path order");
   check(ordering_error.find("ALPHA") == std::string::npos &&
             ordering_error.find(work.string()) == std::string::npos,
@@ -182,6 +187,26 @@ int main() {
             malformed_error.find("candidate") == std::string::npos,
         "fail closed on a malformed structurally complete archive");
 
+  const auto duplicate_optional_root = work / "duplicate-optional";
+  std::filesystem::create_directories(duplicate_optional_root / "Scenes");
+  auto duplicate_optional = complete_members();
+  duplicate_optional.emplace_back("synthetic/one.LOC", "a");
+  duplicate_optional.emplace_back("synthetic/two.loc", "b");
+  write_zip(duplicate_optional_root / "Scenes" / "candidate.ZIP",
+            duplicate_optional);
+  check(selection_error(duplicate_optional_root) ==
+            "scene archive has duplicate optional resources",
+        "reject duplicate optional scene resources before parsing payloads");
+
+  const auto unknown_family_root = work / "unknown-family";
+  std::filesystem::create_directories(unknown_family_root / "Scenes");
+  auto unknown_family = complete_members();
+  unknown_family.emplace_back("synthetic/unknown.BIN", "x");
+  write_zip(unknown_family_root / "Scenes" / "candidate.ZIP", unknown_family);
+  check(selection_error(unknown_family_root) ==
+            "scene archive has an unknown resource family",
+        "reject scene archives outside the observed campaign resource family");
+
   const auto startup_root = work / "exact-startup";
   std::filesystem::create_directories(startup_root / "Scenes");
   write_zip(startup_root / "Scenes" / "ALPHA.ZIP", complete_members());
@@ -192,7 +217,8 @@ int main() {
   } catch (const std::exception &failure) {
     startup_error = failure.what();
   }
-  check(startup_error == "scene archive contains duplicate scene-resource members" &&
+  check(startup_error ==
+                "scene archive does not contain every required resource exactly once" &&
             selection_error(startup_root) != startup_error,
         "exact UI archive loading does not use alphabetical diagnostic selection");
 

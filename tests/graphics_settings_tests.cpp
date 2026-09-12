@@ -152,6 +152,28 @@ int main() {
             rejected_boot_recovery.resolution.error ==
                 off::settings::GraphicsValidationError::window_size_above_maximum,
         "refuse to invent a startup extent for contradictory backend bounds");
+  auto handheld_defaults = capabilities;
+  handheld_defaults.original_profile = false;
+  handheld_defaults.minimum_windowed_size = {1920, 1080};
+  handheld_defaults.maximum_windowed_size = {1920, 1080};
+  const auto safe_handheld_defaults =
+      off::settings::make_safe_default_graphics_settings(handheld_defaults);
+  const auto resolved_safe_handheld_defaults = safe_handheld_defaults
+      ? off::settings::resolve_graphics_settings(*safe_handheld_defaults,
+                                                  handheld_defaults)
+      : off::settings::GraphicsResolution{};
+  check(safe_handheld_defaults &&
+            safe_handheld_defaults->profile == off::Mode::modern &&
+            safe_handheld_defaults->windowed_size ==
+                off::settings::WindowSize{1920, 1080} &&
+            safe_handheld_defaults->upscaler == off::settings::Upscaler::native &&
+            resolved_safe_handheld_defaults.effective.has_value(),
+        "derive an immediately applicable portable Defaults preset without "
+        "enabling vendor upscalers");
+  auto incoherent_defaults = handheld_defaults;
+  incoherent_defaults.minimum_windowed_size = {2560, 1440};
+  check(!off::settings::make_safe_default_graphics_settings(incoherent_defaults),
+        "refuse a Defaults preset for contradictory native bounds");
   initial_apply_calls = 0;
   check(off::settings::initialize_graphics_settings(
             invalid_resolution,
@@ -346,10 +368,10 @@ int main() {
   menu.draft().shadow_quality = off::settings::ShadowQuality::ultra;
   static_cast<void>(
       menu.handle_key(off::ui::GraphicsMenuKey::enter, true, false));
-  check(menu.draft() == off::settings::RequestedGraphicsSettings{} &&
+  check(menu.draft() == *off::settings::make_safe_default_graphics_settings(capabilities) &&
             menu.confirmed_requested() == baseline &&
             menu.phase() == off::ui::GraphicsMenuPhase::editing,
-        "Defaults resets only the draft and waits for Apply");
+        "Defaults resets only the draft to a safe preset and waits for Apply");
   check(menu.handle_key(off::ui::GraphicsMenuKey::escape, true, false) ==
                 off::ui::GraphicsMenuEffect::closed &&
             menu.confirmed_requested() == baseline,
@@ -439,6 +461,23 @@ int main() {
         off::ui::GraphicsMenuKey::right, true, false));
   check(provider_menu.draft().upscaler == off::settings::Upscaler::fsr,
         "Modern Plus exposes every negotiated provider in selector order");
+
+  off::ui::GraphicsMenuSession handheld_menu{handheld_defaults};
+  static_cast<void>(
+      handheld_menu.handle_key(off::ui::GraphicsMenuKey::f10, true, false));
+  handheld_menu.draft() = requested;
+  check(handheld_menu.select_row(off::ui::GraphicsMenuRow::defaults),
+        "focus Defaults on a constrained native display");
+  static_cast<void>(
+      handheld_menu.handle_key(off::ui::GraphicsMenuKey::enter, true, false));
+  const auto handheld_proposal = handheld_menu.request_apply();
+  check(handheld_proposal &&
+            handheld_proposal->requested.windowed_size ==
+                off::settings::WindowSize{1920, 1080} &&
+            handheld_proposal->effective.upscaler ==
+                off::settings::Upscaler::native,
+        "F10 Defaults recovers a constrained display with an applicable "
+        "native-only preset");
 
   return failures == 0 ? 0 : 1;
 }

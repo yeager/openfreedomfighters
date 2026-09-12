@@ -2,6 +2,15 @@ cmake_minimum_required(VERSION 3.25)
 
 project(OpenFreedomFighters VERSION 0.1.0 LANGUAGES C CXX)
 
+# The native release matrix is deliberately 64-bit only: x86-64 on Windows,
+# Linux, and Steam Deck, plus arm64/x86-64 on macOS.  Refuse a 32-bit
+# configure before resolving or downloading dependencies so a mixed-architecture
+# prefix cannot produce a misleading later linker failure.
+if(CMAKE_SIZEOF_VOID_P LESS 8)
+    message(FATAL_ERROR
+        "OpenFreedomFighters requires a 64-bit target; configure an x86-64 or arm64 toolchain.")
+endif()
+
 include(CTest)
 include(FetchContent)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")

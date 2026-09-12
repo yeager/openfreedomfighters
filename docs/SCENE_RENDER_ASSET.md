@@ -56,6 +56,16 @@ the fixed checked location; a replacement link is rejected without exposing a
 local path. The generic loader remains intentionally unrestricted for callers
 that have already established their own archive ownership boundary.
 
+Before any renderer-facing parser runs, the generic loader also admits only the
+observed campaign package family: exactly one each of `ZGF`, `SUP`, `GMS`,
+`TEX`, `PRM`, `RMC`, `RMI`, `SND`, `OCT`, and `SGP`; at most one each of `BUF`,
+`LOC`, and `ANM`; and no other member family. It parses the required `ZGF` and
+`SUP` inputs even though their runtime semantics are not yet part of the
+diagnostic renderer. A nonempty GMS image requires exactly one BUF resource,
+which is validated before an asset is returned; an empty image must not supply
+one. This is source ownership and integrity checking, not a recovered scene
+manager, campaign route, camera, or gameplay activation.
+
 The current diagnostic runtime uses
 `load_diagnostic_scene_render_asset`. It enumerates non-symlink ZIP files
 below the installation's scene directory, applies a case-independent relative

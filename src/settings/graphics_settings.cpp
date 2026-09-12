@@ -163,6 +163,36 @@ resolve_graphics_settings(const RequestedGraphicsSettings &requested,
   return {.effective = std::move(effective), .error = std::nullopt};
 }
 
+std::optional<RequestedGraphicsSettings>
+make_safe_default_graphics_settings(const GraphicsCapabilities &capabilities) {
+  // A contradictory native extent is not recoverable by an interactive
+  // preset.  Returning no value keeps callers from presenting a Defaults
+  // action which can never be applied.
+  if (capabilities.minimum_windowed_size.width == 0 ||
+      capabilities.minimum_windowed_size.height == 0 ||
+      capabilities.minimum_windowed_size.width >
+          capabilities.maximum_windowed_size.width ||
+      capabilities.minimum_windowed_size.height >
+          capabilities.maximum_windowed_size.height ||
+      (!capabilities.original_profile && !capabilities.modern_profile)) {
+    return std::nullopt;
+  }
+
+  RequestedGraphicsSettings safe;
+  safe.profile = capabilities.original_profile ? Mode::original : Mode::modern;
+  safe.windowed_size = {
+      std::clamp(safe.windowed_size.width,
+                 capabilities.minimum_windowed_size.width,
+                 capabilities.maximum_windowed_size.width),
+      std::clamp(safe.windowed_size.height,
+                 capabilities.minimum_windowed_size.height,
+                 capabilities.maximum_windowed_size.height)};
+  const auto resolved = resolve_graphics_settings(safe, capabilities);
+  if (!resolved.effective)
+    return std::nullopt;
+  return safe;
+}
+
 InitialGraphicsResolution resolve_initial_graphics_settings(
     const RequestedGraphicsSettings &requested,
     const GraphicsCapabilities &capabilities) {

@@ -1,7 +1,9 @@
 #include "off/graphics/scene_render.hpp"
 
 #include "off/data/packed_resource.hpp"
+#include "off/data/scene_support.hpp"
 #include "off/data/zip_archive.hpp"
+#include "off/data/zgf_bundle.hpp"
 
 #include <algorithm>
 #include <array>
@@ -26,8 +28,15 @@ constexpr std::size_t maximum_scene_rgba_bytes = 1024U * 1024U * 1024U;
 constexpr std::size_t maximum_scene_texture_mips = 16;
 constexpr std::size_t maximum_scene_archives = 4096;
 constexpr std::size_t maximum_scene_directory_entries = 1024;
-constexpr std::array required_scene_extensions{".prm", ".tex", ".gms", ".rmc",
-                                               ".rmi"};
+// The supported retail corpus contains exactly one of each core resource in
+// every scene package.  BUF and LOC are absent only from the two empty GMS
+// packages; ANM is an optional authored resource.  Keep this at the archive
+// boundary so a diagnostic renderer cannot accidentally treat a partial ZIP as
+// a campaign-scene source.
+constexpr std::array required_scene_extensions{
+    ".zgf", ".sup", ".gms", ".tex", ".prm",
+    ".rmc", ".rmi", ".snd", ".oct", ".sgp"};
+constexpr std::array optional_scene_extensions{".buf", ".loc", ".anm"};
 constexpr std::uint32_t zgroup_source_type = 0x00100001U;
 
 [[nodiscard]] bool fits_rgba8_extent(std::uint32_t width,
@@ -88,7 +97,8 @@ unique_member_with_extension(const data::ZipArchive &archive,
   return *match;
 }
 
-[[nodiscard]] bool is_complete_scene_archive(const data::ZipArchive &archive) {
+[[nodiscard]] std::array<std::size_t, required_scene_extensions.size()>
+required_scene_member_counts(const data::ZipArchive &archive) {
   std::array<std::size_t, required_scene_extensions.size()> counts{};
   for (const auto &entry : archive.entries()) {
     const auto dot = entry.name.find_last_of('.');
@@ -101,20 +111,73 @@ unique_member_with_extension(const data::ZipArchive &archive,
           std::distance(required_scene_extensions.begin(), found))];
     }
   }
+  return counts;
+}
+
+[[nodiscard]] bool has_complete_scene_archive_family(
+    const data::ZipArchive &archive) {
+  const auto counts = required_scene_member_counts(archive);
   return std::ranges::all_of(counts,
-                             [](std::size_t count) { return count != 0; });
+                             [](std::size_t count) { return count != 0U; });
+}
+
+void validate_scene_archive_family(const data::ZipArchive &archive) {
+  const auto counts = required_scene_member_counts(archive);
+  if (!std::ranges::all_of(counts,
+                           [](std::size_t count) { return count == 1U; })) {
+    throw std::runtime_error(
+        "scene archive does not contain every required resource exactly once");
+  }
+
+  std::array<std::size_t, optional_scene_extensions.size()> optional_counts{};
+  for (const auto &entry : archive.entries()) {
+    const auto dot = entry.name.find_last_of('.');
+    if (dot == std::string::npos) {
+      throw std::runtime_error("scene archive has an unknown resource family");
+    }
+    const auto extension = lowercase(entry.name.substr(dot));
+    if (std::ranges::find(required_scene_extensions, extension) !=
+        required_scene_extensions.end()) {
+      continue;
+    }
+    const auto optional =
+        std::ranges::find(optional_scene_extensions, extension);
+    if (optional == optional_scene_extensions.end()) {
+      throw std::runtime_error("scene archive has an unknown resource family");
+    }
+    auto &count = optional_counts[static_cast<std::size_t>(
+        std::distance(optional_scene_extensions.begin(), optional))];
+    if (++count != 1U) {
+      throw std::runtime_error("scene archive has duplicate optional resources");
+    }
+  }
 }
 
 [[nodiscard]] SceneRenderAsset
 build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
-  const data::ZipEntry *animation{};
-  for (const auto &entry : archive.entries()) {
-    const auto dot = entry.name.find_last_of('.');
-    if (dot == std::string::npos || lowercase(entry.name.substr(dot)) != ".anm")
-      continue;
-    if (animation)
-      throw std::runtime_error("scene archive has invalid animation resource");
-    animation = &entry;
+  validate_scene_archive_family(archive);
+  const auto *animation = [&]() -> const data::ZipEntry * {
+    const data::ZipEntry *match = nullptr;
+    for (const auto &entry : archive.entries()) {
+      const auto dot = entry.name.find_last_of('.');
+      if (dot == std::string::npos ||
+          lowercase(entry.name.substr(dot)) != ".anm")
+        continue;
+      match = &entry;
+      break;
+    }
+    return match;
+  }();
+  // ZGF and SUP are mandatory scene-package members even though this source-
+  // only renderer does not yet consume their runtime semantics. Parsing them
+  // here establishes that every admitted campaign archive has the same checked
+  // ownership boundary as the startup package.
+  static_cast<void>(data::ZgfBundle::parse(data::PackedResource::parse(
+      archive.read(unique_member_with_extension(archive, ".zgf")))));
+  const auto support = data::SceneSupport::parse(
+      archive.read(unique_member_with_extension(archive, ".sup")));
+  if (support.dependencies().empty()) {
+    throw std::runtime_error("scene archive support has no dependencies");
   }
   const auto primitive_bytes =
       archive.read(unique_member_with_extension(archive, ".prm"));
@@ -131,6 +194,25 @@ build_scene_render_asset_from_archive(const data::ZipArchive &archive) {
   const auto textures = data::TextureCatalog::parse(texture_bytes);
   const auto objects =
       data::GmsImage::parse(data::PackedResource::parse(object_bytes));
+  const auto *buf = [&]() -> const data::ZipEntry * {
+    for (const auto &entry : archive.entries()) {
+      const auto dot = entry.name.find_last_of('.');
+      if (dot != std::string::npos &&
+          lowercase(entry.name.substr(dot)) == ".buf")
+        return &entry;
+    }
+    return nullptr;
+  }();
+  if (objects.directory().empty()) {
+    if (buf != nullptr) {
+      throw std::runtime_error(
+          "empty scene GMS image unexpectedly has a BUF resource");
+    }
+  } else if (buf == nullptr) {
+    throw std::runtime_error("scene GMS object sources have no BUF resource");
+  } else {
+    objects.validate_buf(archive.read(*buf));
+  }
   const auto rmc = data::RenderMap::parse(rmc_bytes);
   const auto rmi = data::RenderMap::parse(rmi_bytes);
   const std::array maps{
@@ -616,7 +698,7 @@ load_diagnostic_scene_render_asset(const std::filesystem::path &install_root) {
   });
   for (const auto &path : candidates) {
     const auto archive = data::ZipArchive::open(path);
-    if (!is_complete_scene_archive(archive))
+    if (!has_complete_scene_archive_family(archive))
       continue;
     auto asset = build_scene_render_asset_from_archive(archive);
     if (!asset.instances.empty())

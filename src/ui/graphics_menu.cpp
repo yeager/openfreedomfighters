@@ -26,6 +26,13 @@ requested_from_effective(const settings::EffectiveGraphicsSettings &value) {
 GraphicsMenuSession::GraphicsMenuSession(
     settings::GraphicsCapabilities capabilities)
     : capabilities_(capabilities) {
+  const auto safe_defaults =
+      settings::make_safe_default_graphics_settings(capabilities_);
+  if (!safe_defaults) {
+    throw std::invalid_argument(
+        "graphics menu capabilities cannot produce safe defaults");
+  }
+  confirmed_requested_ = *safe_defaults;
   const auto resolved =
       settings::resolve_graphics_settings(confirmed_requested_, capabilities_);
   if (!resolved.effective.has_value()) {
@@ -126,7 +133,11 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
       return cancel_or_revert();
     }
     if (selected_row_ == GraphicsMenuRow::defaults) {
-      draft_ = settings::RequestedGraphicsSettings{};
+      // Defaults must be immediately applicable on the current display. A
+      // zero-configuration request can be outside a handheld or external
+      // display's bounds, so construct this project-owned recovery preset
+      // from the backend capabilities instead.
+      draft_ = *settings::make_safe_default_graphics_settings(capabilities_);
       validation_error_.reset();
       return GraphicsMenuEffect::none;
     }

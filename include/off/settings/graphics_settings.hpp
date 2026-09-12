@@ -138,6 +138,14 @@ enum class GraphicsApplyTransaction : std::uint8_t {
 resolve_graphics_settings(const RequestedGraphicsSettings &requested,
                           const GraphicsCapabilities &capabilities);
 
+// Produce an interactive recovery preset from the native backend's current
+// limits.  Unlike a value-initialized request, this is guaranteed to resolve
+// when the capabilities expose at least one coherent profile and windowed
+// extent.  It deliberately selects the portable native path: vendor
+// upscalers remain opt-in and require a bound runtime implementation.
+[[nodiscard]] std::optional<RequestedGraphicsSettings>
+make_safe_default_graphics_settings(const GraphicsCapabilities &capabilities);
+
 [[nodiscard]] InitialGraphicsResolution
 resolve_initial_graphics_settings(const RequestedGraphicsSettings &requested,
                                   const GraphicsCapabilities &capabilities);
