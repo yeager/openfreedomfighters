@@ -89,4 +89,8 @@ private:
 
 [[nodiscard]] std::unique_ptr<NormalIntroSceneSession>
 make_normal_intro_scene_session(std::unique_ptr<IntroRuntime> runtime);
+// Use this ownership form when retaining lifecycle adapters beyond the caller's
+// immediate loader scope. It is still inert until an explicit host activation.
+[[nodiscard]] std::shared_ptr<NormalIntroSceneSession>
+make_shared_normal_intro_scene_session(std::unique_ptr<IntroRuntime> runtime);
 } // namespace off::graphics

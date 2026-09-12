@@ -187,4 +187,8 @@ std::unique_ptr<NormalIntroSceneSession>
 make_normal_intro_scene_session(std::unique_ptr<IntroRuntime> runtime) {
   return std::make_unique<NormalIntroSceneSession>(std::move(runtime));
 }
+std::shared_ptr<NormalIntroSceneSession>
+make_shared_normal_intro_scene_session(std::unique_ptr<IntroRuntime> runtime) {
+  return std::make_shared<NormalIntroSceneSession>(std::move(runtime));
+}
 } // namespace off::graphics

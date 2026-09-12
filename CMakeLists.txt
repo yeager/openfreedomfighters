@@ -119,6 +119,7 @@ add_library(off_core
     src/graphics/intro_runtime.cpp
     src/graphics/movie_control_host_evidence.cpp
     src/graphics/normal_intro_scene_session.cpp
+    src/graphics/normal_intro_scene_lifecycle_services.cpp
     src/graphics/intro_lifecycle_admission.cpp
     src/graphics/intro_preview_builder.cpp
     src/graphics/intro_controller_initialization.cpp
