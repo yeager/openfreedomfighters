@@ -5,9 +5,11 @@
 
 #include <cstdlib>
 #include <algorithm>
+#include <cstddef>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <vector>
 
 namespace {
 void check(bool condition, const char *message) {
@@ -21,6 +23,22 @@ off::simulation::InputSnapshot input(std::uint64_t tick) {
   off::simulation::InputSnapshot result;
   result.tick = tick;
   return result;
+}
+
+void write_u64_le(std::vector<std::byte> &bytes, std::size_t offset,
+                  std::uint64_t value) {
+  for (std::size_t index = 0; index < sizeof(value); ++index) {
+    bytes[offset + index] = static_cast<std::byte>(value & 0xffU);
+    value >>= 8U;
+  }
+}
+
+void refresh_snapshot_checksum(std::vector<std::byte> &bytes) {
+  off::crypto::Sha256 hasher;
+  hasher.update({bytes.data() + 64, bytes.size() - 64});
+  const auto digest = hasher.finish();
+  for (std::size_t index = 0; index < digest.size(); ++index)
+    bytes[32 + index] = static_cast<std::byte>(digest[index]);
 }
 } // namespace
 
@@ -283,6 +301,26 @@ int main() {
     check(rejected && restored.state_hash() == restored_hash,
           "every snapshot truncation is rejected atomically");
   }
+
+  auto terminal_snapshot = SimulationWorld{}.export_snapshot();
+  // Payload: four u32 limits followed by tick, sequence, then last-input tick.
+  write_u64_le(terminal_snapshot, 64 + 16,
+               std::numeric_limits<std::uint64_t>::max());
+  write_u64_le(terminal_snapshot, 64 + 16 + 8 + 8,
+               std::numeric_limits<std::uint64_t>::max());
+  refresh_snapshot_checksum(terminal_snapshot);
+  SimulationWorld terminal;
+  terminal.import_snapshot(terminal_snapshot);
+  const auto terminal_hash = terminal.state_hash();
+  rejected = false;
+  try {
+    static_cast<void>(terminal.step(input(0)));
+  } catch (const std::overflow_error &) {
+    rejected = true;
+  }
+  check(rejected && terminal.tick() == std::numeric_limits<std::uint64_t>::max() &&
+            terminal.state_hash() == terminal_hash,
+        "reject exhausted simulation clocks before tick arithmetic can wrap");
 
   SimulationWorld bounded({8, 2, 4, 4});
   for (std::size_t index = 0; index < 4; ++index)

@@ -154,6 +154,10 @@ void SimulationWorld::detach_command_capture(WorldCommandCapture& capture) noexc
 void SimulationWorld::invalidate_command_capture() noexcept { if(command_capture_) { auto* capture=command_capture_; command_capture_=nullptr; capture->invalidate_from_world(); } }
 
 WorldStepResult SimulationWorld::step(const InputSnapshot &input) {
+  // Tick is a strictly monotonic part of the authoritative world clock. Do
+  // not let unsigned wrap turn a terminal snapshot into a fresh tick zero.
+  if (tick_ == std::numeric_limits<std::uint64_t>::max())
+    throw std::overflow_error("simulation tick is exhausted");
   if (input.tick != tick_ + 1)
     throw std::invalid_argument("simulation input tick is not consecutive");
   WorldStepResult result;
