@@ -89,6 +89,35 @@ python3 tools/movie_control_cutscene_dispatch_repeat_pair.py \
 All three paths must be outside this repository, distinct, and the output must
 not already exist. Keep the pair result private with the two sanitized inputs.
 
+## End-to-end lifecycle review gate
+
+The handoff contract alone does not prove that the selected player completes
+its own lifecycle. Before any native MovieControl-to-player connection can be
+considered, collect two identical successful player-lifecycle observations and
+one separately failing player observation using the source-free
+`cut_sequence_player_lifecycle_trace.py` format. The successful traces must
+cover phase one, phase two, sealed-receiver activation, and completion; the
+failure must begin at the same activation preconditions and must not complete.
+
+`tools/movie_control_cutscene_lifecycle_contract_bundle.py` joins those three
+player records with the already reviewed phase-one and dispatch bundles. It
+revalidates every input, requires one shared observer-local callback ordinal
+across phase one, handoff, activation and completion, rejects a mismatching or
+nonrepeatable route, and emits only categorical structural relations. It never
+accepts raw records or identifiers, addresses, paths, strings, timing values,
+assets, screenshots, or bytes. The output remains private and review-only:
+
+```sh
+python3 tools/movie_control_cutscene_lifecycle_contract_bundle.py \
+  PHASE_ONE_CONTRACT.json DISPATCH_CONTRACT.json \
+  PLAYER_SUCCESS_FIRST.json PLAYER_SUCCESS_SECOND.json PLAYER_FAILURE.json \
+  PRIVATE_LIFECYCLE_BUNDLE.json
+```
+
+This gate is evidence collection, not an admission switch. Normal startup
+remains fail-closed until an independent review has translated the retained
+source-free contract into a tested native behavior specification.
+
 ## Success/failure contract bundle
 
 `tools/movie_control_cutscene_dispatch_contract_bundle.py` joins one repeated
