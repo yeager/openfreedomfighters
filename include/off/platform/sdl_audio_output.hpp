@@ -26,7 +26,9 @@ struct SdlAudioCapabilities {
   bool nonzero_pan = false;
 };
 
-// A real, initially paused signed-16 stereo output. Each instance owns a separate
+// A real, initially paused signed-16 stereo output. `sample_rate` is installed
+// as the initial source frequency, so submitted PCM has the expected duration
+// even before a later legacy frequency command. Each instance owns a separate
 // SDL logical playback device, mixed by SDL with other instances. Construct and
 // use on the manager thread; destroy all instances before global SDL_Quit().
 // Errors throw std::runtime_error (invalid inputs: std::invalid_argument).

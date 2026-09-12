@@ -31,7 +31,7 @@ struct SdlAudioOutput::Impl {
 
 SdlAudioOutput::SdlAudioOutput(std::uint32_t sample_rate,
                              std::size_t max_queued_bytes) {
-  if (!sample_rate || sample_rate > static_cast<std::uint32_t>(std::numeric_limits<int>::max()))
+  if (sample_rate < 100U || sample_rate > 100'000U)
     throw std::invalid_argument("SDL audio output: invalid sample rate");
   if (max_queued_bytes < 4 || max_queued_bytes % 4 != 0 ||
       max_queued_bytes > static_cast<std::size_t>(std::numeric_limits<int>::max()))
@@ -59,6 +59,11 @@ SdlAudioOutput::SdlAudioOutput(std::uint32_t sample_rate,
   p->stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK,
                                       &format, nullptr, nullptr);
   if (!p->stream) unavailable("open SDL stereo playback stream");
+  // The factory's sample rate is the PCM source rate, not merely admission
+  // metadata. Establish it before any submission so a caller cannot
+  // accidentally play native-rate PCM at the 10 kHz logical transport rate.
+  if (!SDL_SetAudioStreamFrequencyRatio(p->stream, frequency_ratio_for(sample_rate)))
+    fail("set initial SDL audio playback frequency");
   impl_ = std::move(p);
 }
 

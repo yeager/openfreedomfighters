@@ -91,6 +91,8 @@ int main(int argc, char** argv) {
     rejects_without_unavailable([] { (void)Output::frequency_ratio_for(100001); });
     verify_logical_rate_composition();
     rejects_without_unavailable([] { off::platform::SdlAudioOutput output(0); });
+    rejects_without_unavailable([] { off::platform::SdlAudioOutput output(99); });
+    rejects_without_unavailable([] { off::platform::SdlAudioOutput output(100001); });
     rejects_without_unavailable([] { off::platform::SdlAudioOutput output(44100, 3); });
     if (argc == 2 && std::string_view(argv[1]) == "--reject-dummy") {
       require(SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "dummy"), "set synthetic rejection driver");
