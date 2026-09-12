@@ -230,6 +230,46 @@ int main() {
                 container_map.object.primary_geometry_reference,
         "expand a mapped ZROOM through authored hierarchy without composing "
         "transforms");
+
+  auto cyclic_container_hierarchy = container_hierarchy;
+  cyclic_container_hierarchy[1].children_in_directory_order = {0};
+  bool cyclic_container_hierarchy_rejected = false;
+  try {
+    static_cast<void>(off::graphics::build_scene_render_asset(
+        primitives, textures, container_sources, cyclic_container_hierarchy,
+        container_maps));
+  } catch (const std::runtime_error &) {
+    cyclic_container_hierarchy_rejected = true;
+  }
+  check(cyclic_container_hierarchy_rejected,
+        "reject a cyclic owned scene-container hierarchy before traversal");
+
+  auto shared_container_hierarchy = container_hierarchy;
+  shared_container_hierarchy[0].children_in_directory_order = {1, 1};
+  bool shared_container_hierarchy_rejected = false;
+  try {
+    static_cast<void>(off::graphics::build_scene_render_asset(
+        primitives, textures, container_sources, shared_container_hierarchy,
+        container_maps));
+  } catch (const std::runtime_error &) {
+    shared_container_hierarchy_rejected = true;
+  }
+  check(shared_container_hierarchy_rejected,
+        "reject a repeated owned scene-container descendant before traversal");
+
+  auto wrong_parent_container_hierarchy = container_hierarchy;
+  wrong_parent_container_hierarchy[1].parent_directory_index = std::nullopt;
+  bool wrong_parent_container_hierarchy_rejected = false;
+  try {
+    static_cast<void>(off::graphics::build_scene_render_asset(
+        primitives, textures, container_sources,
+        wrong_parent_container_hierarchy, container_maps));
+  } catch (const std::runtime_error &) {
+    wrong_parent_container_hierarchy_rejected = true;
+  }
+  check(wrong_parent_container_hierarchy_rejected,
+        "reject an owned scene-container child with a wrong parent link");
+
   auto invalid_scene_primitives = scene_primitives;
   invalid_scene_primitives[1].batches[0].indices[1] = 2;
   bool invalid_scene_index_rejected = false;

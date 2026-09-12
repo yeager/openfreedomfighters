@@ -59,11 +59,26 @@ public:
     return sections_;
   }
 
+  // ANM section and component meanings have not been recovered.  The parser
+  // nevertheless owns the exact, validated source bytes so a future reader
+  // can consume a bounded component without reopening an archive or relying
+  // on a transient decompression buffer.  These accessors expose no inferred
+  // track, clock, or binding semantics.
+  [[nodiscard]] std::span<const std::byte> bytes() const noexcept {
+    return bytes_;
+  }
+  [[nodiscard]] std::span<const std::byte>
+  section_payload(std::size_t section_index) const;
+  [[nodiscard]] std::span<const std::byte>
+  section_component(std::size_t section_index,
+                    std::size_t component_index) const;
+
 private:
   AnimationImageHeader header_{};
   std::vector<AnimationReferenceTable> reference_tables_;
   std::vector<AnimationDescriptor> descriptors_;
   std::vector<OpaqueAnimationSection> sections_;
+  std::vector<std::byte> bytes_;
 };
 
 } // namespace off::data

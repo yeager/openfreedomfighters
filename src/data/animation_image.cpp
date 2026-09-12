@@ -204,7 +204,37 @@ AnimationImage AnimationImage::parse(std::span<const std::byte> bytes) {
   if (cursor != bytes.size() + 4U)
     throw std::runtime_error(
         "animation opaque sections do not consume the file");
+  // Keep the original bytes only after every range above has been validated.
+  // This gives later, still-unrecovered readers a stable CPU source without
+  // turning the envelope parser into an animation player.
+  result.bytes_.assign(bytes.begin(), bytes.end());
   return result;
+}
+
+std::span<const std::byte>
+AnimationImage::section_payload(std::size_t section_index) const {
+  if (section_index >= sections_.size())
+    throw std::out_of_range("animation section index is invalid");
+  const auto range = sections_[section_index].payload;
+  if (range.offset > bytes_.size() ||
+      range.byte_size > bytes_.size() - range.offset)
+    throw std::runtime_error("animation section range is invalid");
+  return std::span<const std::byte>{bytes_}.subspan(range.offset,
+                                                    range.byte_size);
+}
+
+std::span<const std::byte>
+AnimationImage::section_component(std::size_t section_index,
+                                  std::size_t component_index) const {
+  if (section_index >= sections_.size() ||
+      component_index >= sections_[section_index].components.size())
+    throw std::out_of_range("animation component index is invalid");
+  const auto range = sections_[section_index].components[component_index];
+  if (range.offset > bytes_.size() ||
+      range.byte_size > bytes_.size() - range.offset)
+    throw std::runtime_error("animation component range is invalid");
+  return std::span<const std::byte>{bytes_}.subspan(range.offset,
+                                                    range.byte_size);
 }
 
 } // namespace off::data

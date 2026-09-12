@@ -64,6 +64,13 @@ int main() {
         "locale matching accepts language case");
   check(catalog.resolve(MessageId::back, "", "sv_SE.UTF-8") == "Tillbaka",
         "common platform locale spellings resolve by language");
+  check(catalog.resolve(MessageId::apply, "sv--SE", "en-US") == "Apply",
+        "a malformed explicit locale cannot take priority by language prefix");
+  constexpr std::array<std::string_view, 2> malformed_first_platform{{
+      "sv--SE", "sv-SE"}};
+  check(catalog.resolve(MessageId::apply, "", malformed_first_platform) ==
+            "Tillämpa",
+        "a malformed host preference is skipped before later valid locales");
   check(catalog.format_seconds(MessageId::reverting_in_seconds, 12, "sv",
                                "en") == "Återställer om 12 sekunder",
         "UTF-8 catalog text survives formatted output");

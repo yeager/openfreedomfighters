@@ -1,5 +1,7 @@
 #include "off/ui/project_localization.hpp"
 
+#include "off/platform/locale_preferences.hpp"
+
 #include <algorithm>
 #include <array>
 #include <stdexcept>
@@ -49,6 +51,15 @@ bool valid_utf8(std::string_view value) noexcept {
 }
 
 std::optional<Locale> locale_from_tag(std::string_view tag) noexcept {
+  // Keep the project-owned catalog on the same input boundary as private
+  // translation packs. In particular, a malformed explicit --locale must not
+  // gain priority merely because its first two bytes resemble a supported
+  // language. POSIX spellings are normalized here too, so every UI surface
+  // observes the same locale preference.
+  const auto canonical = platform::canonical_host_locale_tag(tag);
+  if (!canonical)
+    return std::nullopt;
+  tag = *canonical;
   const auto language_end = tag.find_first_of("-_.");
   const auto language = tag.substr(0, language_end);
   if (language.size() == 2 && (language[0] == 'e' || language[0] == 'E') &&

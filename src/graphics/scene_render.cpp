@@ -171,10 +171,20 @@ expand_container_resolution(const SceneGeometryResolution &root,
           "scene geometry reference resolves to duplicate PRM indexes");
   }
   std::vector<SceneGeometryResolution> result;
-  std::function<void(std::size_t)> visit = [&](std::size_t index) {
+  // GmsImage::parse already validates the authored hierarchy.  This public
+  // builder also accepts an owned hierarchy directly, so retain that boundary
+  // here rather than trusting a caller not to introduce a cycle or share a
+  // descendant between containers.
+  std::vector<std::uint8_t> visit_state(hierarchy.size());
+  visit_state[root_index] = 1U;
+  std::function<void(std::size_t, std::size_t)> visit =
+      [&](std::size_t index, std::size_t parent_index) {
     if (index >= hierarchy.size() || index >= sources.size() ||
-        hierarchy[index].directory_index != index)
+        hierarchy[index].directory_index != index ||
+        hierarchy[index].parent_directory_index != parent_index ||
+        visit_state[index] != 0U)
       throw std::runtime_error("scene container hierarchy is inconsistent");
+    visit_state[index] = 1U;
     const auto &source = sources[index];
     if (source.primitive_reference.has_value()) {
       auto child = root;
@@ -195,10 +205,11 @@ expand_container_resolution(const SceneGeometryResolution &root,
       result.push_back(std::move(child));
     }
     for (const auto child : hierarchy[index].children_in_directory_order)
-      visit(child);
+      visit(child, index);
+    visit_state[index] = 2U;
   };
   for (const auto child : hierarchy[root_index].children_in_directory_order)
-    visit(child);
+    visit(child, root_index);
   return result;
 }
 

@@ -103,6 +103,25 @@ int main(int argc, char **argv) {
             image.sections().back().preceding_tag == 5U &&
             image.sections().back().payload.byte_size == 72U,
         "retain all eight tagged opaque animation sections");
+  const auto source = std::span<const std::byte>{bytes};
+  check(std::ranges::equal(image.bytes(), source) &&
+            std::ranges::equal(image.section_payload(0U),
+                               source.subspan(104U, 0U)) &&
+            std::ranges::equal(image.section_component(0U, 0U),
+                               source.subspan(104U, 0U)) &&
+            std::ranges::equal(image.section_payload(7U),
+                               source.subspan(160U, 72U)),
+        "retain bounded source-backed animation section bytes");
+  try {
+    static_cast<void>(image.section_payload(8U));
+    check(false, "reject out-of-range animation section access");
+  } catch (const std::out_of_range &) {
+  }
+  try {
+    static_cast<void>(image.section_component(7U, 1U));
+    check(false, "reject out-of-range animation component access");
+  } catch (const std::out_of_range &) {
+  }
   check_rejected([](auto &value) { set_u32(value, 0, 0); },
                  "reject wrong animation signature");
   check_rejected([](auto &value) { set_u32(value, 4, 60U); },
