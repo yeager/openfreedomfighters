@@ -20,6 +20,10 @@ production services exist. It retains the source-backed legal-picture data but
 does not render it on the normal path; the project's generic-fit projection is
 limited to the explicit diagnostic command. Neither path is host admission, a
 cut start, a camera view, or timed playback. The
+checked MovieControl-to-first-cut receiver remains available after a successful
+loader tail, because the tail precedes the later lifecycle and event-16 route.
+It remains cold: retaining that receiver does not activate a cut or authorize
+any lifecycle callback.
 prepared scene now retains parser-validated, owned outer-loader source sections
 (named/global, renderer payload, associations, and sizing rows) for that later
 handoff; retaining them neither invokes a service nor advances the tail.

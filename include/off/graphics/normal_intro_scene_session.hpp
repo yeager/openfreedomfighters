@@ -66,7 +66,9 @@ public:
     return first_cut_player_ ? std::addressof(*first_cut_player_) : nullptr;
   }
   // Produces the narrow MovieControl receiver only after the reader-owned
-  // runtime and its cold first-cut session coexist. It does not dispatch it.
+  // runtime and its cold first-cut session coexist. The receiver remains
+  // available after the checked loader tail, which precedes later lifecycle
+  // and event-16 admission. It does not dispatch it.
   [[nodiscard]] MovieControlFirstCutRuntimeHandoff make_first_cut_handoff();
   [[nodiscard]] cutscene::FirstCutClockedCommandRunner *first_cut_command_runner() noexcept {
     return first_cut_command_runner_.get();

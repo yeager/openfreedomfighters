@@ -141,7 +141,12 @@ void NormalIntroSceneSession::prepare_supported_first_cut_player() {
 }
 
 MovieControlFirstCutRuntimeHandoff NormalIntroSceneSession::make_first_cut_handoff() {
-  if (stage_ != NormalIntroSceneSessionStage::reader_bracket_complete ||
+  // The first-cut receiver remains cold across the loader tail. That tail is
+  // required before the later global lifecycle and event-16 route, so
+  // invalidating the checked receiver merely because the tail completed would
+  // make the recovered ordering impossible to assemble.
+  if ((stage_ != NormalIntroSceneSessionStage::reader_bracket_complete &&
+       stage_ != NormalIntroSceneSessionStage::outer_loader_tail_complete) ||
       !first_cut_player_)
     throw std::runtime_error("normal intro scene first-cut handoff is unavailable");
   return MovieControlFirstCutRuntimeHandoff::from_runtime(*runtime_, *first_cut_player_);
