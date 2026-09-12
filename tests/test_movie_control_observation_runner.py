@@ -29,7 +29,7 @@ class MovieControlObservationRunnerTests(unittest.TestCase):
     def test_launch_uses_no_shell_or_attach_selector(self) -> None:
         with mock.patch.object(runner, "_validate_observer_path", return_value=pathlib.Path("/private/observer")), \
              mock.patch.object(runner, "_outside_repository", side_effect=lambda value, _label: value), \
-             mock.patch.object(runner, "_read_json", return_value={"format": probe_plan.OUTPUT_FORMAT, "probes": [
+             mock.patch.object(runner, "_read_regular_json_path_no_follow", return_value={"format": probe_plan.OUTPUT_FORMAT, "probes": [
                  {"slot": slot, "point": point}
                  for slot, point in enumerate(probe_plan.PROTOCOL_POINTS)
              ]}), \
@@ -109,6 +109,30 @@ class MovieControlObservationRunnerTests(unittest.TestCase):
             runner._collect(workspace)
         workspace.unlink()
         target.rmdir()
+
+    def test_runner_rejects_final_plan_symlink_before_resolving_it(self) -> None:
+        parent = pathlib.Path(__file__).resolve().parents[1] / ".test-work"
+        target = parent / "runner-plan-target.json"
+        link = parent / "runner-plan-link.json"
+        target.write_text('{"retail":"must not be read"}', encoding="utf-8")
+        link.symlink_to(target.name)
+        with self.assertRaisesRegex(ValueError, "canonical plan must not be a symlink"):
+            runner._outside_repository(link, "canonical plan")
+        self.assertTrue(target.exists())
+        link.unlink()
+        target.unlink()
+
+    def test_plan_reader_rejects_a_final_symlink_without_reading_the_target(self) -> None:
+        parent = pathlib.Path(__file__).resolve().parents[1] / ".test-work"
+        target = parent / "runner-plan-reader-target.json"
+        link = parent / "runner-plan-reader-link.json"
+        target.write_text('{"retail":"must not be read"}', encoding="utf-8")
+        link.symlink_to(target.name)
+        with self.assertRaisesRegex(ValueError, "canonical plan must be a regular private file"):
+            runner._read_regular_json_path_no_follow(link, "canonical plan")
+        self.assertTrue(target.exists())
+        link.unlink()
+        target.unlink()
 
 
 if __name__ == "__main__":

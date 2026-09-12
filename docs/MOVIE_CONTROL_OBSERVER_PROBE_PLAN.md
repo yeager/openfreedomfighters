@@ -62,7 +62,9 @@ private observer with the literal `fresh-isolated` mode, uses no shell, hides
 observer stdout and stderr, and never forwards raw records to a terminal. It
 then validates both records through the strict source-free schemas, deletes the
 raw forms, and retains only their sanitized structural forms in the private
-workspace. An extra file, symlink, pre-existing workspace, malformed plan, or
+workspace. The supplied observer and canonical-plan entries must be regular,
+non-symlinked files; the plan is read through a no-follow descriptor. An extra
+file, symlink, pre-existing workspace, malformed plan, or
 unsupported trace field fails collection.
 
 ```sh

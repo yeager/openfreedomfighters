@@ -75,6 +75,12 @@ int main() {
         "data error border remains distinguishable against its backing panel");
   check(SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "dummy"), "select dummy video");
   check(SDL_Init(SDL_INIT_VIDEO), "initialize video without a display");
+  const auto cache_root =
+      off::platform::application_deep_audit_cache_root();
+  check(!cache_root.empty() && cache_root.is_absolute() &&
+            cache_root.filename() == "deep-audit" &&
+            cache_root.parent_path().is_absolute(),
+        "deep-audit cache uses an absolute application-owned location");
   {
     StartupWindow empty;
   }

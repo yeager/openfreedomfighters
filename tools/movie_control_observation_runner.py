@@ -43,6 +43,12 @@ MAX_RAW_RECORD_BYTES = 8 * 1024 * 1024
 
 
 def _outside_repository(path: pathlib.Path, label: str) -> pathlib.Path:
+    # ``Path.resolve`` deliberately follows a final symlink.  Checking for a
+    # symlink after resolving would therefore validate the target rather than
+    # the operator-supplied entry.  Do this check first so a plan or observer
+    # cannot silently cross a private-file boundary through a final symlink.
+    if path.is_symlink():
+        raise ValueError(f"{label} must not be a symlink")
     resolved = path.resolve()
     if resolved.is_relative_to(REPOSITORY_ROOT):
         raise ValueError(f"{label} must be outside the repository")
@@ -63,8 +69,32 @@ def _canonical_probe_plan(raw: Any) -> dict[str, Any]:
     })
 
 
-def _read_json(path: pathlib.Path) -> Any:
-    return json.loads(path.read_text(encoding="utf-8"))
+def _read_regular_json_path_no_follow(path: pathlib.Path, label: str) -> Any:
+    """Read one private protocol file from its supplied entry, not its target.
+
+    The canonical plan is data supplied by an operator and is intentionally
+    tiny and opaque.  It still must not be read through a final symlink or
+    swapped between validation and decoding.  ``O_NOFOLLOW`` binds the read to
+    that final entry; ``fstat`` rejects devices, directories, and FIFOs before
+    JSON parsing.
+    """
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    if no_follow is None:
+        raise ValueError(f"platform cannot safely read {label}")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | no_follow)
+    except OSError as error:
+        raise ValueError(f"{label} must be a regular private file") from error
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError(f"{label} must be a regular private file")
+        if metadata.st_size > MAX_RAW_RECORD_BYTES:
+            raise ValueError(f"{label} exceeds the structural size limit")
+        with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as stream:
+            return json.load(stream)
+    finally:
+        os.close(descriptor)
 
 
 def _read_regular_json_no_follow(directory: int, name: str) -> Any:
@@ -186,9 +216,9 @@ def execute_observation(
     observer_path = _validate_observer_path(observer)
     plan_path = _outside_repository(canonical_plan, "canonical plan")
     workspace_path = _outside_repository(workspace, "workspace")
-    if not plan_path.is_file() or plan_path.is_symlink():
+    if not plan_path.is_file():
         raise ValueError("canonical plan must be a regular private file")
-    _canonical_probe_plan(_read_json(plan_path))
+    _canonical_probe_plan(_read_regular_json_path_no_follow(plan_path, "canonical plan"))
     _make_workspace(workspace_path)
     command: Sequence[str] = (
         str(observer_path), "--mode", "fresh-isolated", "--probe-plan", str(plan_path),

@@ -67,10 +67,25 @@ startup_data_error_backdrop_layout(int width, int height) noexcept {
 }
 
 std::filesystem::path application_deep_audit_cache_root() noexcept {
-  // This path is also used by headless integrity checks. SDL's preference-path
-  // implementation keeps process-global environment/TLS state on some
-  // platforms, which makes that otherwise short-lived check look like a leak
-  // to LeakSanitizer. Use the same native per-user cache policy directly.
+  // Prefer SDL's platform-owned application location.  This is important for
+  // sandboxed macOS and Steam/Linux installations, where HOME or the XDG
+  // variables may describe a host location that the process is not permitted
+  // to write.  SDL allocates this result, so retain it only long enough to
+  // validate and copy the path.
+  char *raw_path =
+      SDL_GetPrefPath("OpenFreedomFighters", "OpenFreedomFighters");
+  if (raw_path != nullptr) {
+    std::unique_ptr<char, decltype(&SDL_free)> path{raw_path, SDL_free};
+    if (*path != '\0') {
+      const std::filesystem::path directory{path.get()};
+      if (directory.is_absolute())
+        return directory / "deep-audit";
+    }
+  }
+
+  // Headless integrity tools may run where SDL cannot provide preferences.
+  // Keep the fallback platform-specific and reject relative environment
+  // values rather than creating a cache beside the game or current directory.
 #if defined(_WIN32)
   if (const auto *local_app_data = std::getenv("LOCALAPPDATA");
       local_app_data && *local_app_data) {
