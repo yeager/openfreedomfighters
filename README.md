@@ -166,8 +166,9 @@ text.
 ### Required
 
 Build from source needs a C++23 compiler, CMake 3.25 or newer, and development
-files for zlib, libogg, libvorbis, and FreeType. `libvorbisenc` is required too:
-the test suite uses it to create independent Ogg/Vorbis fixtures. Ninja is the
+files for zlib, libogg, libvorbisfile, and FreeType. `libvorbisenc` is optional:
+when present, CTest additionally builds independent synthetic Ogg/Vorbis fixture
+tests; its absence does not prevent a native runtime build. Ninja is the
 recommended generator, but any CMake generator can be used. Git is only needed
 to obtain the source tree; it is not consulted by CMake.
 
@@ -175,7 +176,7 @@ to obtain the source tree; it is not consulted by CMake.
 |---|---|
 | Ubuntu/Debian | `build-essential cmake ninja-build pkg-config zlib1g-dev libvorbis-dev libasound2-dev libfreetype-dev libgl-dev libegl-dev libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev libdecor-0-dev libdbus-1-dev libibus-1.0-dev libsamplerate0-dev libpulse-dev` |
 | macOS | Xcode Command Line Tools, then `brew install cmake ninja zlib libvorbis freetype` |
-| Windows | Visual Studio 2022 with **Desktop development with C++**, a current Windows SDK, CMake, and either Ninja or the Visual Studio generator. Provide zlib, FreeType, libogg, and libvorbis (including `vorbisfile` and `vorbisenc`) through `CMAKE_PREFIX_PATH`. The pinned source-build recipe used by CI is [`.github/actions/windows-dependencies/action.yml`](.github/actions/windows-dependencies/action.yml). |
+| Windows | Visual Studio 2022 with **Desktop development with C++**, a current Windows SDK, CMake, and either Ninja or the Visual Studio generator. Provide zlib, FreeType, libogg, and libvorbis (including `vorbisfile`; `vorbisenc` enables the additional synthetic fixture tests) through `CMAKE_PREFIX_PATH`. The pinned source-build recipe used by CI is [`.github/actions/windows-dependencies/action.yml`](.github/actions/windows-dependencies/action.yml). |
 
 SDL3 is the only graphics/window/input dependency. CMake uses an installed SDL
 3.2+ package when available; otherwise it downloads checksum-pinned SDL 3.4.10
