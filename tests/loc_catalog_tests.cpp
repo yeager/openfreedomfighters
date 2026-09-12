@@ -1,4 +1,5 @@
 #include "off/data/loc_catalog.hpp"
+#include "off/crypto/sha256.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -107,6 +108,19 @@ int main() {
         {std::byte{'k'}, std::byte{}}, scalar_node("synthetic.ok", "Project authored")});
     check(!off::data::decode_loc_member_display_texts(incomplete),
           "named nodes without a complete record are rejected");
+
+    off::crypto::Sha256 member_hasher;
+    member_hasher.update(member);
+    const auto member_digest = off::crypto::to_hex(member_hasher.finish());
+    check(off::data::loc_member_content_digest_matches(member, member_digest),
+          "member digest verifies the exact bytes discovered for a source set");
+    auto changed_member = member;
+    changed_member.back() = std::byte{'!'};
+    check(!off::data::loc_member_content_digest_matches(changed_member,
+                                                        member_digest),
+          "member mutation between discovery and decode is rejected");
+    check(!off::data::loc_member_content_digest_matches(member, "not-a-digest"),
+          "malformed expected digest cannot match an owned member");
 
     std::cout << "LOC catalog tests passed\n";
   } catch (const std::exception& error) {

@@ -264,6 +264,15 @@ decode_loc_member_display_texts(std::span<const std::byte> bytes) {
   return Decoder{bytes}.decode();
 }
 
+bool loc_member_content_digest_matches(std::span<const std::byte> bytes,
+                                       std::string_view expected_digest) {
+  // SHA-256's canonical hexadecimal representation has a fixed length.  Do
+  // this inexpensive check before constructing a digest for malformed input.
+  if (expected_digest.size() != 64U)
+    return false;
+  return bytes_sha256(bytes) == expected_digest;
+}
+
 std::optional<OwnedLocCatalog>
 extract_verified_owned_loc_catalog(const std::filesystem::path& root) {
   const auto members = discover_members(root);
@@ -283,6 +292,11 @@ extract_verified_owned_loc_catalog(const std::filesystem::path& root) {
     std::vector<std::byte> bytes;
     try { bytes = archive.read(*found); }
     catch (const std::exception&) { return std::nullopt; }
+    // `members` was discovered in a separate archive-read phase.  Do not bind
+    // values decoded after an installation mutation to that earlier source-set
+    // identity: doing so would make opaque IDs non-reproducible.
+    if (!loc_member_content_digest_matches(bytes, member.content_sha256))
+      return std::nullopt;
     const auto decoded = decode_loc_member_display_texts(bytes);
     if (!decoded || decoded->values.size() > maximum_values - result.values.size()) return std::nullopt;
     std::size_t addition{};

@@ -25,6 +25,13 @@ struct LocMemberDisplayText final {
 [[nodiscard]] std::optional<LocMemberDisplayText>
 decode_loc_member_display_texts(std::span<const std::byte> bytes);
 
+// Checks an already-recorded opaque member digest against bytes just read from
+// the owned installation.  It exposes neither a digest nor decoded text.  The
+// catalog extractor uses it to reject a member that changes between discovery
+// (which establishes the source-set identity) and its later decode pass.
+[[nodiscard]] bool loc_member_content_digest_matches(
+    std::span<const std::byte> bytes, std::string_view expected_digest);
+
 struct OwnedLocCatalog final {
   // An opaque, text-free identity derived from the ordered normalized logical
   // member IDs, complete member-content digests, and parser revision.
