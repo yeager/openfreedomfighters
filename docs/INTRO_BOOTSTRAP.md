@@ -203,7 +203,7 @@ establish the original scene's activation history.
 
 ## Current startup verification
 
-All 87 local tests pass. Independent fixtures cover scope restoration, canonical
+The current local suite has 141 CTest cases. Independent fixtures cover scope restoration, canonical
 owner/resource links, hidden versus visible component enrollment, retained class
 counters and scheduling, and ordered event declarations with duplicate names.
 Injected event collisions and clock failures verify that partial construction
