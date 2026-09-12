@@ -2,6 +2,18 @@
 
 namespace off::platform {
 
+namespace {
+constexpr Sint16 menu_stick_threshold = 16000;
+
+[[nodiscard]] std::int8_t stick_direction(Sint16 value) noexcept {
+  if (value <= -menu_stick_threshold)
+    return -1;
+  if (value >= menu_stick_threshold)
+    return 1;
+  return 0;
+}
+} // namespace
+
 SdlMenuGamepad::SdlMenuGamepad(SDL_WindowID window_id, bool focused)
     : window_id_(window_id), focused_(focused), focus_epoch_(SDL_GetTicksNS()) {
   select_available();
@@ -16,6 +28,15 @@ void SdlMenuGamepad::snapshot_buttons() {
     for (std::size_t button = 0; button < held_.size(); ++button)
       held_[button] = SDL_GetGamepadButton(
           gamepad_, static_cast<SDL_GamepadButton>(button));
+}
+void SdlMenuGamepad::snapshot_axes() {
+  left_stick_.fill(0);
+  if (!gamepad_)
+    return;
+  left_stick_[0] = stick_direction(
+      SDL_GetGamepadAxis(gamepad_, SDL_GAMEPAD_AXIS_LEFTX));
+  left_stick_[1] = stick_direction(
+      SDL_GetGamepadAxis(gamepad_, SDL_GAMEPAD_AXIS_LEFTY));
 }
 void SdlMenuGamepad::select_available(SDL_JoystickID excluded) {
   if (gamepad_)
@@ -34,6 +55,7 @@ void SdlMenuGamepad::select_available(SDL_JoystickID excluded) {
   }
   SDL_free(ids);
   snapshot_buttons();
+  snapshot_axes();
 }
 std::optional<ui::GraphicsMenuKey>
 SdlMenuGamepad::handle_event(const SDL_Event &event, bool menu_visible) {
@@ -43,6 +65,7 @@ SdlMenuGamepad::handle_event(const SDL_Event &event, bool menu_visible) {
     focused_ = event.type == SDL_EVENT_WINDOW_FOCUS_GAINED;
     focus_epoch_ = SDL_GetTicksNS();
     snapshot_buttons();
+    snapshot_axes();
     return std::nullopt;
   }
   if (event.type == SDL_EVENT_GAMEPAD_REMOVED &&
@@ -57,6 +80,28 @@ SdlMenuGamepad::handle_event(const SDL_Event &event, bool menu_visible) {
   if (event.type == SDL_EVENT_GAMEPAD_ADDED) {
     select_available();
     return std::nullopt;
+  }
+  if (event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION) {
+    if (!gamepad_ || !SDL_GamepadConnected(gamepad_) ||
+        event.gaxis.which != active_id_ || !focused_ ||
+        event.gaxis.timestamp <= focus_epoch_ ||
+        (event.gaxis.axis != SDL_GAMEPAD_AXIS_LEFTX &&
+         event.gaxis.axis != SDL_GAMEPAD_AXIS_LEFTY))
+      return std::nullopt;
+    const std::size_t axis = event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX ? 0U : 1U;
+    const auto direction = stick_direction(event.gaxis.value);
+    if (direction == left_stick_[axis])
+      return std::nullopt;
+    left_stick_[axis] = direction;
+    // Keep the baseline current while the overlay is hidden. A stick already
+    // held for gameplay cannot navigate the menu just opened with Start.
+    if (!menu_visible || direction == 0)
+      return std::nullopt;
+    if (axis == 0U)
+      return direction < 0 ? ui::GraphicsMenuKey::left
+                           : ui::GraphicsMenuKey::right;
+    return direction < 0 ? ui::GraphicsMenuKey::up
+                         : ui::GraphicsMenuKey::down;
   }
   if ((event.type != SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
        event.type != SDL_EVENT_GAMEPAD_BUTTON_UP) ||

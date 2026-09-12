@@ -26,6 +26,9 @@ struct VirtualPad {
     description.name = name;
     description.nbuttons = SDL_GAMEPAD_BUTTON_COUNT;
     description.button_mask = (Uint32{1} << SDL_GAMEPAD_BUTTON_COUNT) - 1;
+    description.naxes = 2;
+    description.axis_mask = (Uint32{1} << SDL_GAMEPAD_AXIS_LEFTX) |
+                            (Uint32{1} << SDL_GAMEPAD_AXIS_LEFTY);
     id = SDL_AttachVirtualJoystick(&description);
     if (id)
       joystick = SDL_OpenJoystick(id);
@@ -74,6 +77,14 @@ std::vector<Key> edge(off::platform::SdlMenuGamepad &input, VirtualPad &pad,
   SDL_Delay(1);
   check(SDL_SetJoystickVirtualButton(pad.joystick, button, down),
         "set actual virtual gamepad button");
+  SDL_UpdateJoysticks();
+  return drain(input, visible);
+}
+std::vector<Key> stick(off::platform::SdlMenuGamepad &input, VirtualPad &pad,
+                       SDL_GamepadAxis axis, Sint16 value, bool visible) {
+  SDL_Delay(1);
+  check(SDL_SetJoystickVirtualAxis(pad.joystick, axis, value),
+        "set actual virtual gamepad axis");
   SDL_UpdateJoysticks();
   return drain(input, visible);
 }
@@ -144,6 +155,19 @@ int run() {
   check(edge(input, first, SDL_GAMEPAD_BUTTON_DPAD_DOWN, true, false).empty(),
         "hidden menu ignores dpad");
   static_cast<void>(edge(input, first, SDL_GAMEPAD_BUTTON_DPAD_DOWN, false, false));
+  check(stick(input, first, SDL_GAMEPAD_AXIS_LEFTX, -20000, false).empty(),
+        "hidden menu baselines held left stick");
+  static_cast<void>(stick(input, first, SDL_GAMEPAD_AXIS_LEFTX, 0, false));
+  expect(stick(input, first, SDL_GAMEPAD_AXIS_LEFTY, -20000, true), Key::up,
+         "left stick up navigates visible menu");
+  check(stick(input, first, SDL_GAMEPAD_AXIS_LEFTY, -28000, true).empty(),
+        "left stick does not repeat while held");
+  static_cast<void>(stick(input, first, SDL_GAMEPAD_AXIS_LEFTY, 0, true));
+  expect(stick(input, first, SDL_GAMEPAD_AXIS_LEFTX, 20000, true), Key::right,
+         "left stick right navigates visible menu");
+  expect(stick(input, first, SDL_GAMEPAD_AXIS_LEFTX, -20000, true), Key::left,
+         "left stick direction reversal is a new edge");
+  static_cast<void>(stick(input, first, SDL_GAMEPAD_AXIS_LEFTX, 0, true));
   check(!input.handle_event(button_event(0, SDL_GAMEPAD_BUTTON_START, true), false),
         "unknown controller cannot toggle menu");
   auto invalid = button_event(first.id, SDL_GAMEPAD_BUTTON_START, true);

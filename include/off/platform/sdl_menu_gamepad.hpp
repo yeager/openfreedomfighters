@@ -3,6 +3,7 @@
 #include "off/ui/graphics_menu.hpp"
 #include <SDL3/SDL.h>
 #include <array>
+#include <cstdint>
 #include <optional>
 
 namespace off::platform {
@@ -22,12 +23,16 @@ public:
 private:
   void select_available(SDL_JoystickID excluded = 0);
   void snapshot_buttons();
+  void snapshot_axes();
   SDL_WindowID window_id_;
   bool focused_;
   SDL_Gamepad *gamepad_{};
   SDL_JoystickID active_id_{};
   Uint64 focus_epoch_{};
   std::array<bool, SDL_GAMEPAD_BUTTON_COUNT> held_{};
+  // -1, 0, or 1 for the left stick's horizontal and vertical directions.
+  // This is menu-only state; it never becomes a gameplay control mapping.
+  std::array<std::int8_t, 2> left_stick_{};
 };
 
 } // namespace off::platform
