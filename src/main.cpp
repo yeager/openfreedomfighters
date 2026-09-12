@@ -835,7 +835,10 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
        entry.state==off::graphics::IntroDeferredReaderImplementationState::unimplemented)
       unimplemented_source_types.insert(entry.source_type);
   }
-  std::map<std::string,std::size_t> deferred_signatures;
+  // Keep this diagnostic aggregate-only: the source class number is already
+  // emitted above, and pairing it with framing (rather than owner identity or
+  // payload) lets recovery choose one concrete reader family safely.
+  std::map<std::pair<std::uint32_t,std::string>,std::size_t> deferred_signatures;
   for(const auto& work:intro.deferred_reader_work()) {
     const auto& source=intro.resources().sources().directory().at(work.source_directory_index);
     if(!unimplemented_source_types.contains(source.source_type)) continue;
@@ -860,10 +863,11 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
           std::to_string(profile.value_kinds[4U])+","+
           std::to_string(profile.value_kinds[5U]);
     } catch(const std::exception&) { signature+=" malformed-dispatch"; }
-    ++deferred_signatures[std::move(signature)];
+    ++deferred_signatures[{source.source_type,std::move(signature)}];
   }
-  for(const auto& [signature,count]:deferred_signatures)
-    std::cout << "reader-signature=" << signature << " count=" << count << '\n';
+  for(const auto& [key,count]:deferred_signatures)
+    std::cout << "reader-signature-source-type=0x" << std::hex << key.first << std::dec
+              << ' ' << key.second << " count=" << count << '\n';
   std::cout << "outer-loader-tail=native-services-required\n"
             << "outer-loader-named-global-bytes=" << tail_readiness.named_global_bytes << '\n'
             << "outer-loader-named-global-native-supported="
