@@ -895,12 +895,21 @@ if(BUILD_TESTING)
             NAME "off_intro_prepared_resources_${OFF_INTRO_PREPARED_RESOURCES_TEST_GROUP}_tests"
             COMMAND off_intro_prepared_resources_tests
                     "${OFF_INTRO_PREPARED_RESOURCES_TEST_GROUP}")
+        # These variants intentionally exercise distinct lifecycle boundaries,
+        # but share one fixture executable and its configured work root. Keep
+        # CTest from starting two copies at once, so a cold-load fixture can
+        # never observe files being replaced by a concurrent lifecycle variant.
+        set_tests_properties(
+            "off_intro_prepared_resources_${OFF_INTRO_PREPARED_RESOURCES_TEST_GROUP}_tests"
+            PROPERTIES RESOURCE_LOCK off_intro_prepared_resources_fixture)
     endforeach()
     # The adapter's authored live-manager regression is kept in the prepared
     # runtime fixture, which is the only fixture that can form a checked typed
     # MovieControl-to-player handoff without retail data.
     add_test(NAME off_movie_control_first_cut_scene_frame_adapter_tests
         COMMAND off_intro_prepared_resources_tests prepared-runtime-scopes)
+    set_tests_properties(off_movie_control_first_cut_scene_frame_adapter_tests
+        PROPERTIES RESOURCE_LOCK off_intro_prepared_resources_fixture)
 
     add_executable(off_intro_named_global_references_tests
         tests/intro_named_global_references_tests.cpp)
