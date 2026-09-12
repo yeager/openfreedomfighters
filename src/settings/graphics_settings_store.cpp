@@ -125,11 +125,25 @@ bool replace(const std::filesystem::path &from,
   return ok;
 #endif
 }
+
+// Preferences are optional, but they must not become an implicit file-reading
+// or file-replacement primitive.  Do not follow a leaf symlink when loading,
+// and do not replace one when saving.  In particular this keeps a copied or
+// redirected settings path from silently selecting settings from another
+// profile on a shared or portable installation.
+bool regular_file_or_missing(const std::filesystem::path &path) {
+  std::error_code ec;
+  const auto status = std::filesystem::symlink_status(path, ec);
+  if (ec == std::errc::no_such_file_or_directory ||
+      status.type() == std::filesystem::file_type::not_found)
+    return true;
+  return !ec && std::filesystem::is_regular_file(status);
+}
 } // namespace
 GraphicsSettingsLoadResult
 load_graphics_settings(const std::filesystem::path &path) {
   std::error_code status_error;
-  const auto status = std::filesystem::status(path, status_error);
+  const auto status = std::filesystem::symlink_status(path, status_error);
   if (status_error == std::errc::no_such_file_or_directory)
     return {GraphicsSettingsLoadStatus::missing, {}};
   if (status_error)
@@ -245,7 +259,7 @@ RequestedGraphicsSettings load_initial_graphics_settings(
 }
 bool save_graphics_settings(const std::filesystem::path &path,
                             const RequestedGraphicsSettings &s) {
-  if (!valid(s) || path.empty())
+  if (!valid(s) || path.empty() || !regular_file_or_missing(path))
     return false;
   std::filesystem::path tmp;
   if (!create_temp(path, serialize(s), tmp))

@@ -34,6 +34,30 @@ int main() {
   check(off::settings::load_graphics_settings(root).status ==
             off::settings::GraphicsSettingsLoadStatus::io_error,
         "report an unreadable directory as an I/O failure");
+#ifndef _WIN32
+  {
+    const auto target = root / "linked-settings-target";
+    const auto linked = root / "linked.settings";
+    {
+      std::ofstream output(target, std::ios::binary);
+      output << "do not follow settings links";
+    }
+    std::error_code link_error;
+    std::filesystem::create_symlink(target.filename(), linked, link_error);
+    check(!link_error,
+          "create a leaf link for settings-link integrity coverage");
+    if (!link_error) {
+      check(off::settings::load_graphics_settings(linked).status ==
+                off::settings::GraphicsSettingsLoadStatus::io_error,
+            "never follow a linked settings document while loading");
+      check(!off::settings::save_graphics_settings(
+                linked, off::settings::RequestedGraphicsSettings{}),
+            "never replace a linked settings document while saving");
+      check(read(target) == "do not follow settings links",
+            "linked settings operations leave the link target untouched");
+    }
+  }
+#endif
   {
     std::ofstream collision(root / "graphics.settings.tmp-0", std::ios::binary);
     collision << "do not replace";
