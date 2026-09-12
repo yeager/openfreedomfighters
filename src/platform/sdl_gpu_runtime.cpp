@@ -1135,8 +1135,11 @@ template<class Images>
 [[nodiscard]] bool upload_scene(SDL_GPUDevice *device, SDL_Window *window,
                                 const graphics::SceneGpuPlan &source,
                                 GpuScene &result) {
-  result.meshes.resize(source.meshes.size());
-  result.textures.resize(source.textures.size());
+  // Stage every raw GPU handle locally. A failed upload must not leave a
+  // partially initialized caller-owned output object behind.
+  GpuScene staged;
+  staged.meshes.resize(source.meshes.size());
+  staged.textures.resize(source.textures.size());
   std::vector<BufferUpload> buffers;
   std::vector<TextureUpload> textures;
   auto release_transfers = [&]() {
@@ -1147,6 +1150,14 @@ template<class Images>
       if (upload.transfer != nullptr)
         SDL_ReleaseGPUTransferBuffer(device, upload.transfer);
   };
+  const auto fail_upload = [&]() {
+    release_transfers();
+    release_scene(device, staged);
+    return false;
+  };
+  // Vector growth and CPU-side copies can still throw while raw SDL handles
+  // are staged. Preserve the same transactional guarantee for those failures.
+  try {
   for (std::size_t index = 0; index < source.meshes.size(); ++index) {
     const auto &mesh = source.meshes[index];
     const auto vertex_bytes = mesh.vertices.size() * sizeof(mesh.vertices[0]);
@@ -1154,8 +1165,7 @@ template<class Images>
     if (vertex_bytes == 0 || index_bytes == 0 ||
         vertex_bytes > std::numeric_limits<Uint32>::max() ||
         index_bytes > std::numeric_limits<Uint32>::max()) {
-      release_transfers();
-      return false;
+      return fail_upload();
     }
     const SDL_GPUBufferCreateInfo vertex_info{
         .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
@@ -1163,7 +1173,7 @@ template<class Images>
     const SDL_GPUBufferCreateInfo index_info{
         .usage = SDL_GPU_BUFFERUSAGE_INDEX,
         .size = static_cast<Uint32>(index_bytes)};
-    auto &gpu_mesh = result.meshes[index];
+    auto &gpu_mesh = staged.meshes[index];
     gpu_mesh.vertex_buffer = SDL_CreateGPUBuffer(device, &vertex_info);
     gpu_mesh.index_buffer = SDL_CreateGPUBuffer(device, &index_info);
     auto *vertex_transfer = make_upload_transfer(
@@ -1176,8 +1186,7 @@ template<class Images>
         SDL_ReleaseGPUTransferBuffer(device, vertex_transfer);
       if (index_transfer != nullptr)
         SDL_ReleaseGPUTransferBuffer(device, index_transfer);
-      release_transfers();
-      return false;
+      return fail_upload();
     }
     buffers.push_back({vertex_transfer, gpu_mesh.vertex_buffer,
                        static_cast<Uint32>(vertex_bytes)});
@@ -1220,17 +1229,15 @@ template<class Images>
   };
   for (std::size_t index = 0; index < source.textures.size(); ++index) {
     const auto &texture = source.textures[index];
-    if (!create_texture(texture, result.textures[index])) {
-      release_transfers();
-      return false;
+    if (!create_texture(texture, staged.textures[index])) {
+      return fail_upload();
     }
   }
   constexpr std::array<std::uint8_t, 4> white{255, 255, 255, 255};
   const graphics::SceneGpuTexture white_texture{
       .mips = {{.width = 1, .height = 1, .rgba8 = {white.begin(), white.end()}}}};
-  if (!create_texture(white_texture, result.white_texture)) {
-    release_transfers();
-    return false;
+  if (!create_texture(white_texture, staged.white_texture)) {
+    return fail_upload();
   }
   const SDL_GPUSamplerCreateInfo sampler_info{
       .min_filter = SDL_GPU_FILTER_LINEAR,
@@ -1239,20 +1246,19 @@ template<class Images>
       .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
       .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
       .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT};
-  result.sampler = SDL_CreateGPUSampler(device, &sampler_info);
-  result.triangle_opaque = create_scene_pipeline(
+  staged.sampler = SDL_CreateGPUSampler(device, &sampler_info);
+  staged.triangle_opaque = create_scene_pipeline(
       device, window, graphics::PrimitiveTopology::triangle_strip, false);
-  result.triangle_blended = create_scene_pipeline(
+  staged.triangle_blended = create_scene_pipeline(
       device, window, graphics::PrimitiveTopology::triangle_strip, true);
-  result.line_opaque = create_scene_pipeline(
+  staged.line_opaque = create_scene_pipeline(
       device, window, graphics::PrimitiveTopology::line_list, false);
-  result.line_blended = create_scene_pipeline(
+  staged.line_blended = create_scene_pipeline(
       device, window, graphics::PrimitiveTopology::line_list, true);
-  if (result.sampler == nullptr || result.triangle_opaque == nullptr ||
-      result.triangle_blended == nullptr || result.line_opaque == nullptr ||
-      result.line_blended == nullptr) {
-    release_transfers();
-    return false;
+  if (staged.sampler == nullptr || staged.triangle_opaque == nullptr ||
+      staged.triangle_blended == nullptr || staged.line_opaque == nullptr ||
+      staged.line_blended == nullptr) {
+    return fail_upload();
   }
 
   SDL_GPUCommandBuffer *command = SDL_AcquireGPUCommandBuffer(device);
@@ -1261,8 +1267,7 @@ template<class Images>
   if (copy == nullptr) {
     if (command != nullptr)
       SDL_CancelGPUCommandBuffer(command);
-    release_transfers();
-    return false;
+    return fail_upload();
   }
   for (const auto &upload : buffers) {
     const SDL_GPUTransferBufferLocation from{.transfer_buffer =
@@ -1285,7 +1290,18 @@ template<class Images>
   const bool uploaded =
       SDL_SubmitGPUCommandBuffer(command) && SDL_WaitForGPUIdle(device);
   release_transfers();
-  return uploaded;
+  if (!uploaded) {
+    release_scene(device, staged);
+    return false;
+  }
+  release_scene(device, result);
+  result = std::move(staged);
+  return true;
+  } catch (...) {
+    release_transfers();
+    release_scene(device, staged);
+    throw;
+  }
 }
 
 [[nodiscard]] bool ensure_scene_depth(SDL_GPUDevice *device, Uint32 width,
