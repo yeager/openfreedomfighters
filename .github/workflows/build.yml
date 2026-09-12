@@ -108,6 +108,9 @@ jobs:
           test -f install-check/bin/assets/openfreedomfighters-splash.bmp
           test -f install-check/bin/assets/Rajdhani-SemiBold.ttf
           test -f install-check/share/applications/openfreedomfighters.desktop
+          project_version=$(sed -n 's/^project(OpenFreedomFighters VERSION \([^ ]*\) LANGUAGES .*)/\1/p' CMakeLists.txt)
+          test -n "$project_version"
+          test "$(install-check/bin/openfreedomfighters --version)" = "OpenFreedomFighters $project_version"
       - name: Run Python analysis-tool tests
         run: |
           python3 -m pip install --requirement requirements-analysis.txt
@@ -146,6 +149,9 @@ jobs:
           test -x install-check/bin/openfreedomfighters
           test -f install-check/bin/assets/openfreedomfighters-splash.bmp
           test -f install-check/bin/assets/Rajdhani-SemiBold.ttf
+          project_version=$(sed -n 's/^project(OpenFreedomFighters VERSION \([^ ]*\) LANGUAGES .*)/\1/p' CMakeLists.txt)
+          test -n "$project_version"
+          test "$(install-check/bin/openfreedomfighters --version)" = "OpenFreedomFighters $project_version"
       - name: Verify intro GPU rendering and presentation on Metal when available
         run: OFF_PICTURE_SHADER_TEST_DRIVER=metal ctest --test-dir build -R '^off_sdl_(picture_stage_shader|intro_renderer|intro_presentation)_tests$' -V
 
@@ -174,6 +180,12 @@ jobs:
           if (!(Test-Path install-check/bin/openfreedomfighters.exe)) { throw 'installed executable is missing' }
           if (!(Test-Path install-check/bin/assets/openfreedomfighters-splash.bmp)) { throw 'installed splash asset is missing' }
           if (!(Test-Path install-check/bin/assets/Rajdhani-SemiBold.ttf)) { throw 'installed font asset is missing' }
+          $env:PATH = "${{ github.workspace }}/zlib-install/bin;$env:PATH"
+          $projectVersion = (Select-String -Path CMakeLists.txt -Pattern '^project\(OpenFreedomFighters VERSION ([^ ]+) LANGUAGES ' | ForEach-Object { $_.Matches[0].Groups[1].Value })
+          if ([string]::IsNullOrWhiteSpace($projectVersion)) { throw 'CMake project version is missing' }
+          $versionOutput = & install-check/bin/openfreedomfighters.exe --version
+          if ($LASTEXITCODE -ne 0) { throw "installed executable --version failed with exit code $LASTEXITCODE" }
+          if ($versionOutput -ne "OpenFreedomFighters $projectVersion") { throw "installed executable reported unexpected version: $versionOutput" }
       - name: Verify intro GPU rendering and presentation on D3D12 when available
         shell: pwsh
         run: |
