@@ -2,6 +2,10 @@
 
 #include "retail_localization_cache_private.hpp"
 
+#include <iterator>
+
+#include <iterator>
+
 namespace off::ui::l10n {
 
 std::optional<RetailLocalizationSession> RetailLocalizationSession::open(
@@ -9,7 +13,8 @@ std::optional<RetailLocalizationSession> RetailLocalizationSession::open(
     const std::filesystem::path &local_packs_directory,
     std::string_view installation_identity, std::string_view parser_identity,
     std::string_view source_set, const Extractor &extract,
-    const std::vector<ReviewedRetailLookupArtifact> &lookup_artifacts) {
+    const std::vector<ReviewedRetailLookupArtifact> &lookup_artifacts,
+    const LookupArtifactLoader &load_lookup_artifacts) {
   const auto enrollment = ensure_retail_localization_metadata(
       cache_root, installation_identity, parser_identity, source_set, extract);
   if (!enrollment.metadata)
@@ -21,8 +26,16 @@ std::optional<RetailLocalizationSession> RetailLocalizationSession::open(
   RetailLocalizationSession result;
   result.metadata_ = std::move(*enrollment.metadata);
   result.binding_ = *binding;
-  if (!lookup_artifacts.empty()) {
-    result.lookup_bindings_ = RetailLookupSiteBindings::admit(*binding, lookup_artifacts);
+  std::vector<ReviewedRetailLookupArtifact> admitted_artifacts = lookup_artifacts;
+  if (load_lookup_artifacts) {
+    auto local_artifacts = load_lookup_artifacts(*binding);
+    admitted_artifacts.insert(admitted_artifacts.end(),
+                              std::make_move_iterator(local_artifacts.begin()),
+                              std::make_move_iterator(local_artifacts.end()));
+  }
+  if (!admitted_artifacts.empty()) {
+    result.lookup_bindings_ =
+        RetailLookupSiteBindings::admit(*binding, admitted_artifacts);
     if (!result.lookup_bindings_)
       return std::nullopt;
   }

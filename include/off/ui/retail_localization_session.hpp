@@ -21,6 +21,8 @@ class RetailLocalizationSession final {
 public:
   using Extractor =
       std::function<std::optional<std::vector<RetailSourceString>>()>;
+  using LookupArtifactLoader = std::function<
+      std::vector<ReviewedRetailLookupArtifact>(const TranslationSourceBinding &)>;
 
   // Opens a session only after the private cache has accepted the supplied
   // recovered extractor. Local packs remain optional: a successful session
@@ -30,7 +32,8 @@ public:
        const std::filesystem::path &local_packs_directory,
        std::string_view installation_identity, std::string_view parser_identity,
        std::string_view source_set, const Extractor &extract,
-       const std::vector<ReviewedRetailLookupArtifact> &lookup_artifacts = {});
+       const std::vector<ReviewedRetailLookupArtifact> &lookup_artifacts = {},
+       const LookupArtifactLoader &load_lookup_artifacts = {});
 
   [[nodiscard]] const RetailLocalizationMetadata &metadata() const noexcept {
     return metadata_;

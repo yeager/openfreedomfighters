@@ -43,6 +43,7 @@
 #include "off/ui/retail_ui_fonts.hpp"
 #include "off/ui/retail_ui_textures.hpp"
 #include "off/ui/retail_localization_session.hpp"
+#include "off/ui/reviewed_retail_lookup_artifact.hpp"
 
 #include <charconv>
 #include <algorithm>
@@ -956,6 +957,8 @@ initialize_private_owned_localization_session(
     const auto installation_identity = "steam-pc-" + verification.executable_sha256;
     const auto packs_directory =
         off::platform::application_translation_packs_directory();
+    const auto lookup_directory =
+        off::platform::application_reviewed_retail_lookup_directory();
     if (packs_directory.empty()) return std::nullopt;
     return off::ui::l10n::RetailLocalizationSession::open(
         cache_root, packs_directory, installation_identity,
@@ -972,6 +975,10 @@ initialize_private_owned_localization_session(
           }
           return std::optional<std::vector<off::ui::l10n::RetailSourceString>>{
               std::move(strings)};
+        }, {}, [lookup_directory](
+                      const off::ui::l10n::TranslationSourceBinding &binding) {
+          return off::ui::l10n::load_local_reviewed_retail_lookup_artifacts(
+              lookup_directory, binding);
         });
   } catch (const std::exception&) {
     // Localization extraction is optional until the native lookup contract is

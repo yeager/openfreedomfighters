@@ -96,6 +96,12 @@ application_graphics_settings_path() noexcept;
 [[nodiscard]] std::filesystem::path
 application_translation_packs_directory() noexcept;
 
+// Returns the SDL-owned per-user directory used for one optional, text-free
+// reviewed retail lookup artifact. It is deliberately separate from authored
+// translation packs and unavailable locations disable lookup admission.
+[[nodiscard]] std::filesystem::path
+application_reviewed_retail_lookup_directory() noexcept;
+
 // Returns the SDL-owned per-user directory reserved for portable,
 // project-authored campaign saves. This only names the durable-storage
 // boundary; it does not create a directory, choose a campaign, or create a

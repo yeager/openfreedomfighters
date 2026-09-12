@@ -39,3 +39,20 @@ been validated. For an already-approved opaque ID, a matching local translation
 has precedence and a missing translation falls back to the matching cached
 English record. It still has no UI key lookup path, so it cannot alter retail
 presentation until that native lookup contract is independently recovered.
+
+## Reviewed retail lookup artifact
+
+An independently reviewed native lookup contract may be placed locally as the
+single binary file `reviewed-retail-lookup.offlookup` below the application
+preferences directory `reviewed-retail-lookup/`. The loader never scans the
+directory and accepts only a direct regular, non-symlink file. The format is
+versioned and bounded; it carries parser identity, source-set identity, exact
+ordinal span, and opaque reviewed-site-to-ordinal observations. It contains no
+retail text, key, component name, address, or game path.
+
+The loader validates the complete source binding against the private enrollment
+metadata before constructing an artifact. Invalid, absent, symlinked, oversized,
+trailing, malformed, or mismatched records produce no bindings and do not affect
+startup. A successfully loaded artifact is admitted only by the existing
+source-span and duplicate-site checks, then a UI caller can resolve an observed
+opaque site through the private catalog or an optional local translation pack.

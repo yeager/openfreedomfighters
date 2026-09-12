@@ -89,6 +89,21 @@ int main() {
     check(!first->resolve_lookup_site("site.fixture.unobserved", "sv", locales),
           "session rejects unobserved lookup sites");
 
+    unsigned lookup_loader_calls{};
+    const auto callback_loaded = RetailLocalizationSession::open(
+        cache, packs, installation, parser, source_set, extract, {},
+        [&](const TranslationSourceBinding &binding) {
+          ++lookup_loader_calls;
+          check(binding == reviewed_binding,
+                "lookup loader receives enrolled source binding");
+          return std::vector<ReviewedRetailLookupArtifact>{*reviewed};
+        });
+    check(callback_loaded && lookup_loader_calls == 1U &&
+              callback_loaded->resolve_lookup_site("site.fixture.status", "sv",
+                                                   locales) ==
+                  "Projektöversättning",
+          "session admits local reviewed artifacts after private enrollment");
+
     const auto second = RetailLocalizationSession::open(
         cache, packs, installation, parser, source_set, extract, {*reviewed});
     check(second && calls == 1U &&
