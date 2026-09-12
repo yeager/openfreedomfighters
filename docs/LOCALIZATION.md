@@ -41,7 +41,15 @@ Original and the rest of the game do not yet meet this target set.
 
 The list balances the original market, Nordic coverage, broad PC/Steam audiences, and script/layout diversity. It can change after font licensing and community-maintainer review.
 
-Translation catalogs are keyed by stable semantic IDs. Original retail strings are read at runtime from the user's data where technically possible and are never committed. New Swedish and other translations require independently contributed text with an explicit license grant. CI checks missing keys, placeholders, accelerator collisions, and pseudo-localized UI overflow.
+Translation catalogs are keyed by stable semantic IDs. The current catalog
+builder rejects missing or duplicate IDs, empty entries, invalid locale or
+message IDs, and invalid UTF-8; tests also cover every built-in message in
+each of the 20 F10 locales and the locale fallback order. Original retail
+strings are read at runtime from the user's data where technically possible
+and are never committed. New Swedish and other translations require
+independently contributed text with an explicit license grant. Placeholder
+compatibility, accelerator-collision, pseudo-localization, and UI-overflow
+checks remain planned work, not current CI guarantees.
 
 ## Private retail-text extraction
 
