@@ -54,8 +54,12 @@ between reader-local state and global lifecycle completion.
 
 `tools/paramanim_deferred_reader_observation.py` is the only repository-side
 format for collecting the missing evidence. It accepts a private JSON file and
-produces a new private JSON file; both paths must be outside the repository and
-the output is never overwritten. It does not inspect executable or asset data.
+produces a new private JSON file; both paths must be outside the repository,
+their parent directories must already exist and be real directories, and the
+output is created once rather than overwritten. The tool binds file operations
+to descriptor-opened parents and rejects final symlinks, special files, and
+oversized input before JSON decoding. It does not inspect executable or asset
+data.
 
 Each bounded observation record carries only these categorical relations:
 

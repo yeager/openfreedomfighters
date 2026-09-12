@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
+import stat
 import sys
 from typing import Any
 
@@ -21,6 +23,10 @@ REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent
 INPUT_FORMAT = "off.paramanim-deferred-reader-observation.raw/v1"
 OUTPUT_FORMAT = "off.paramanim-deferred-reader-observation/v1"
 MAX_EVENTS = 64
+# The accepted schema is at most 64 small categorical records.  Keep the
+# private-input channel comfortably bounded before JSON decoding; this tool is
+# not a generic file importer.
+MAX_OBSERVATION_BYTES = 128 * 1024
 
 _STAGES = ("deferred_preparation", "owner_reader", "component_reader",
            "later_callback", "failure")
@@ -166,10 +172,75 @@ def sanitize_observation(raw: Any) -> dict[str, Any]:
 
 
 def _outside_repository(path: pathlib.Path, label: str) -> pathlib.Path:
+    if path.is_symlink():
+        raise ValueError(f"{label} must not be a symlink")
     resolved = path.resolve()
     if resolved.is_relative_to(REPOSITORY_ROOT):
         raise ValueError(f"{label} must be outside the repository")
     return resolved
+
+
+def _open_parent_no_follow(path: pathlib.Path, label: str) -> tuple[int, str]:
+    """Bind a protocol path to its existing parent directory entry.
+
+    The observer's records are intentionally private, but a check followed by
+    ``read_text`` or ``write_text`` would still allow a final symlink or parent
+    pathname replacement.  Use an open directory descriptor and relative
+    entries so the read/write is bound to the reviewed private directory.
+    """
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    directory = getattr(os, "O_DIRECTORY", None)
+    if no_follow is None or directory is None:
+        raise ValueError(f"platform cannot safely open {label}")
+    parent = path.parent
+    try:
+        descriptor = os.open(parent, os.O_RDONLY | directory | no_follow)
+    except OSError as error:
+        raise ValueError(f"{label} parent must be an existing real directory") from error
+    if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+        os.close(descriptor)
+        raise ValueError(f"{label} parent must be an existing real directory")
+    return descriptor, path.name
+
+
+def _read_private_json(path: pathlib.Path, label: str) -> object:
+    directory, name = _open_parent_no_follow(path, label)
+    no_follow = getattr(os, "O_NOFOLLOW")
+    try:
+        try:
+            descriptor = os.open(name, os.O_RDONLY | os.O_NONBLOCK | no_follow,
+                                 dir_fd=directory)
+        except OSError as error:
+            raise ValueError(f"{label} must be a regular private file") from error
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_OBSERVATION_BYTES:
+                raise ValueError(f"{label} must be a bounded regular private file")
+            with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as stream:
+                return json.load(stream)
+        finally:
+            os.close(descriptor)
+    finally:
+        os.close(directory)
+
+
+def _write_new_private_json(path: pathlib.Path, record: object, label: str) -> None:
+    directory, name = _open_parent_no_follow(path, label)
+    no_follow = getattr(os, "O_NOFOLLOW")
+    try:
+        try:
+            descriptor = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | no_follow,
+                                 0o600, dir_fd=directory)
+        except OSError as error:
+            raise ValueError(f"refusing to overwrite {label}") from error
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8", closefd=False) as stream:
+                json.dump(record, stream, indent=2)
+                stream.write("\n")
+        finally:
+            os.close(descriptor)
+    finally:
+        os.close(directory)
 
 
 def main() -> int:
@@ -182,11 +253,8 @@ def main() -> int:
         output_path = _outside_repository(args.output, "output")
         if input_path == output_path:
             raise ValueError("input and output paths must differ")
-        if output_path.exists():
-            raise ValueError("refusing to overwrite an existing private observation")
-        sanitized = sanitize_observation(json.loads(input_path.read_text(encoding="utf-8")))
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(sanitized, indent=2) + "\n", encoding="utf-8")
+        sanitized = sanitize_observation(_read_private_json(input_path, "input"))
+        _write_new_private_json(output_path, sanitized, "private observation")
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

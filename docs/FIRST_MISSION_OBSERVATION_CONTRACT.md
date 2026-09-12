@@ -102,3 +102,6 @@ with:
 The complete private trace stays outside the repository. This bundle is enough
 to assess whether a proposed bounded system follows measured behavior without
 turning the repository into a redistribution channel.
+
+For the static candidate-package map and the corresponding one-run structural
+sanitizer, see [first-mission data and routing boundary](FIRST_MISSION_DATA_MAPPING.md).

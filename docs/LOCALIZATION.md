@@ -100,6 +100,34 @@ retail key/component to an ID. Original key lookup, formatting, and game-text
 presentation remain unrecovered. The optional soundtrack is not part of the
 text-cache identity.
 
+## Private lookup and formatting observation
+
+The cache does not establish the original runtime's key lookup, missing-key,
+or formatting behavior. Before a native presentation path can use the private
+catalog, observe that behavior in an isolated owned installation. The observer
+may emit only call order, observer-local call order, a same/new-key relation,
+an opaque catalog ordinal, resolved/missing/failure outcome, categorical result
+kind, and categorical argument kinds. It must not emit lookup keys, source or
+formatted text, argument values, paths, addresses, offsets, symbols, bytes,
+assets, screenshots, or executable material.
+
+`tools/retail_localization_lookup_trace.py` validates and redacts that limited
+record. Its input and output must both be outside this repository in existing,
+non-symlink directories. It descriptor-binds both files, accepts only a bounded
+regular input, and creates the output once rather than overwriting it:
+
+```sh
+python3 tools/retail_localization_lookup_trace.py \
+  PRIVATE_INPUT.json PRIVATE_OUTPUT.json
+```
+
+The output can establish a source-free behavior hypothesis for review. It does
+not expose a runtime key, identify a component, authorize a lookup
+implementation, or make Original presentation localized. A future integration
+still needs independent evidence that links each native lookup site to the
+correct private catalog ordinal and covers success, missing, failure, and
+formatting paths.
+
 ## Clean-room delivery plan
 
 1. Recover only non-expressive format and lookup behavior for retail LOC data.

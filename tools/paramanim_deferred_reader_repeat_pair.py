@@ -123,14 +123,11 @@ def main() -> int:
         output_path = _outside_repository(args.output, "output")
         if len({first_path, second_path, output_path}) != 3:
             raise ValueError("inputs and output paths must differ")
-        if output_path.exists():
-            raise ValueError("refusing to overwrite an existing private observation")
         result = sanitize_repeat_pair(
-            json.loads(first_path.read_text(encoding="utf-8")),
-            json.loads(second_path.read_text(encoding="utf-8")),
+            observation._read_private_json(first_path, "first input"),
+            observation._read_private_json(second_path, "second input"),
         )
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        observation._write_new_private_json(output_path, result, "private observation")
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
