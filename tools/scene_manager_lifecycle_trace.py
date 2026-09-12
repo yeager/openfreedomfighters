@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import pathlib
+import stat
 import sys
 from typing import Any
 
@@ -16,6 +18,8 @@ INPUT_FORMAT = "off.scene-manager-lifecycle.raw/v1"
 OUTPUT_FORMAT = "off.scene-manager-lifecycle/v1"
 MAX_EVENTS = 256
 MAX_CALLBACK_ORDINAL = 65535
+MAX_PRIVATE_RECORD_BYTES = 8 * 1024 * 1024
+REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent
 PHASES = ("entry", "previous_scene", "stage", "global_lifecycle", "component_phase_one", "camera_route", "commit", "completion", "failure")
 RANK = {value: index for index, value in enumerate(PHASES)}
 VALUES = {
@@ -91,12 +95,91 @@ def sanitize_trace(raw: Any) -> dict[str, Any]:
         _validate(current); clean.append(current); prior_order, prior_phase = order, RANK[phase]
     return {"format": OUTPUT_FORMAT, "events": clean}
 
+
+def _outside_repository(path: pathlib.Path, label: str) -> pathlib.Path:
+    """Resolve a private path while rejecting every symlink path component."""
+    absolute = pathlib.Path(os.path.abspath(path))
+    current = pathlib.Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current /= part
+        try:
+            metadata = os.lstat(current)
+        except FileNotFoundError:
+            break
+        if stat.S_ISLNK(metadata.st_mode):
+            raise ValueError(f"{label} must not contain a symlink")
+    resolved = absolute.resolve()
+    if resolved.is_relative_to(REPOSITORY_ROOT):
+        raise ValueError(f"{label} must be outside the repository")
+    return resolved
+
+
+def _open_parent_no_follow(path: pathlib.Path, label: str) -> tuple[int, str]:
+    """Open the resolved immediate parent without allowing a final symlink hop."""
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    directory = getattr(os, "O_DIRECTORY", None)
+    if no_follow is None or directory is None:
+        raise ValueError(f"platform cannot safely open {label}")
+    try:
+        descriptor = os.open(path.parent, os.O_RDONLY | directory | no_follow)
+    except OSError as error:
+        raise ValueError(f"{label} parent must be an existing real directory") from error
+    if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+        os.close(descriptor)
+        raise ValueError(f"{label} parent must be an existing real directory")
+    return descriptor, path.name
+
+
+def _read_private_json_no_follow(path: pathlib.Path, label: str) -> Any:
+    """Read one bounded regular private input without following its final entry."""
+    directory, name = _open_parent_no_follow(path, label)
+    try:
+        try:
+            descriptor = os.open(name, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW,
+                                 dir_fd=directory)
+        except OSError as error:
+            raise ValueError(f"{label} must be a bounded regular private file") from error
+        try:
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_PRIVATE_RECORD_BYTES:
+                raise ValueError(f"{label} must be a bounded regular private file")
+            with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as stream:
+                return json.load(stream)
+        finally:
+            os.close(descriptor)
+    finally:
+        os.close(directory)
+
+
+def _write_new_private_json_no_follow(path: pathlib.Path, record: dict[str, Any]) -> None:
+    """Create one owner-only output without following or replacing an entry."""
+    directory, name = _open_parent_no_follow(path, "output")
+    try:
+        try:
+            descriptor = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                                 0o600, dir_fd=directory)
+        except OSError as error:
+            raise ValueError("refusing to overwrite private output") from error
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8", closefd=False) as stream:
+                json.dump(record, stream, indent=2)
+                stream.write("\n")
+        finally:
+            os.close(descriptor)
+    finally:
+        os.close(directory)
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("input", type=pathlib.Path); parser.add_argument("output", type=pathlib.Path); args = parser.parse_args()
     try:
-        if args.output.exists() or args.input.resolve() == args.output.resolve(): raise ValueError("refusing to overwrite output")
-        result = sanitize_trace(json.loads(args.input.read_text(encoding="utf-8")))
-        args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        input_path = _outside_repository(args.input, "input")
+        output_path = _outside_repository(args.output, "output")
+        if input_path == output_path:
+            raise ValueError("input and output paths must differ")
+        if output_path.exists():
+            raise ValueError("refusing to overwrite an existing private trace")
+        result = sanitize_trace(_read_private_json_no_follow(input_path, "input"))
+        _write_new_private_json_no_follow(output_path, result)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: {error}", file=sys.stderr); return 1
     print(f"wrote {len(result['events'])} source-free scene lifecycle records"); return 0
