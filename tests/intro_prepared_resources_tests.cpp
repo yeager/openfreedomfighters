@@ -1523,7 +1523,7 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
         auto adapter=off::graphics::MovieControlFirstCutSceneFrameAdapter::bind(
             movie,std::move(handoff));
         bool group_after_lifecycle{};
-        check(adapter.run_frame({frame_manager,movie_component,movie_handle,2,false,{}}, {
+        const auto frame_result=adapter.run_frame({frame_manager,movie_component,movie_handle,2,false,{}}, {
                 {.prepare_sequence_resources=[] {}, .send_cut_sequence_start={},
                  .send_group_state_requests=[&](std::uint64_t) { group_after_lifecycle=true; }},
                 {.invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},
@@ -1534,13 +1534,17 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                  .resolve_member=[](std::size_t) -> std::optional<std::uint64_t> { return std::nullopt; },
                  .request_member_info=[](std::uint64_t) -> std::optional<off::cutscene::FirstCutMemberInfo> { return std::nullopt; },
                  .member_name=[](std::uint64_t) { return std::string_view{}; },
-                 .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> { return std::nullopt; }}}) ==
-              off::graphics::MovieControlEvent16Result::activated &&
-              session.initialization().phase_two_complete() && session.receiver().closed() &&
-              group_after_lifecycle && adapter.delivered(),
-              "scene-frame adapter delivers the checked first-cut lifecycle only after event-16 admission");
-        rejects([&] { static_cast<void>(adapter.run_frame(
-            {frame_manager,movie_component,movie_handle,2,false,{}}, {})); });
+                 .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> { return std::nullopt; }}});
+        check(frame_result ==
+              off::graphics::MovieControlEvent16Result::phase_one_incomplete &&
+              !session.initialization().phase_one_complete() &&
+              !session.initialization().phase_two_complete() && !session.receiver().open() &&
+              !session.receiver().closed() && !group_after_lifecycle && !adapter.delivered(),
+              "scene-frame adapter keeps the first-cut lifecycle cold before observed MovieControl phase-one completion");
+        check(adapter.run_frame({frame_manager,movie_component,movie_handle,2,false,{}}, {}) ==
+                  off::graphics::MovieControlEvent16Result::phase_one_incomplete &&
+                  !adapter.delivered(),
+              "pre-phase-one event-16 frames do not require delivery services or exhaust the adapter");
         // A lifecycle service can be host-owned, so the handoff must prove its
         // reader/component relation again before phase two registers commands.
         // This is deliberately a live-state mutation rather than a synthetic
