@@ -1,5 +1,6 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
 #include "off/graphics/render_scale.hpp"
+#include "off/graphics/temporal_history.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
 #include "off/platform/intro_preview_diagnostic.hpp"
 #include "off/platform/sdl_locale.hpp"
@@ -75,6 +76,44 @@ struct GpuRenderScaleTarget {
   Uint32 width{0};
   Uint32 height{0};
   SDL_GPUTextureFormat format{SDL_GPU_TEXTUREFORMAT_INVALID};
+};
+
+// These are deliberately separate from the presentation and render-scale
+// targets.  They retain the completed Modern content frame for a future
+// temporal resolve, but are not sampled by the current renderer.
+struct GpuTemporalHistoryTargets {
+  std::array<SDL_GPUTexture *, 2> textures{nullptr, nullptr};
+  Uint32 width{0};
+  Uint32 height{0};
+  SDL_GPUTextureFormat format{SDL_GPU_TEXTUREFORMAT_INVALID};
+};
+
+class TemporalHistoryFrameGuard {
+public:
+  explicit TemporalHistoryFrameGuard(graphics::TemporalHistoryLifecycle &history)
+      : history_(history) {}
+  TemporalHistoryFrameGuard(const TemporalHistoryFrameGuard &) = delete;
+  TemporalHistoryFrameGuard &operator=(const TemporalHistoryFrameGuard &) = delete;
+  ~TemporalHistoryFrameGuard() {
+    if (frame_)
+      history_.cancel_frame();
+  }
+
+  [[nodiscard]] std::optional<graphics::TemporalHistoryFrame> begin() {
+    frame_ = history_.begin_frame();
+    return frame_;
+  }
+
+  [[nodiscard]] bool commit() {
+    if (!frame_ || !history_.commit_frame())
+      return false;
+    frame_.reset();
+    return true;
+  }
+
+private:
+  graphics::TemporalHistoryLifecycle &history_;
+  std::optional<graphics::TemporalHistoryFrame> frame_;
 };
 
 struct OverlayBatch {
@@ -159,6 +198,51 @@ void release_render_scale_target(SDL_GPUDevice *device,
   if (target.texture != nullptr)
     SDL_ReleaseGPUTexture(device, target.texture);
   target = {};
+}
+
+void release_temporal_history_targets(SDL_GPUDevice *device,
+                                      GpuTemporalHistoryTargets &targets) {
+  for (auto *texture : targets.textures)
+    if (texture != nullptr)
+      SDL_ReleaseGPUTexture(device, texture);
+  targets = {};
+}
+
+[[nodiscard]] bool ensure_temporal_history_targets(
+    SDL_GPUDevice *device, Uint32 width, Uint32 height,
+    SDL_GPUTextureFormat format, GpuTemporalHistoryTargets &targets) {
+  if (width == 0 || height == 0 || format == SDL_GPU_TEXTUREFORMAT_INVALID)
+    return false;
+  if (targets.textures[0] != nullptr && targets.textures[1] != nullptr &&
+      targets.width == width && targets.height == height &&
+      targets.format == format)
+    return true;
+  if (targets.textures[0] != nullptr || targets.textures[1] != nullptr) {
+    if (!SDL_WaitForGPUIdle(device))
+      return false;
+    release_temporal_history_targets(device, targets);
+  }
+  const SDL_GPUTextureCreateInfo info{
+      .type = SDL_GPU_TEXTURETYPE_2D,
+      .format = format,
+      .usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
+               SDL_GPU_TEXTUREUSAGE_SAMPLER,
+      .width = width,
+      .height = height,
+      .layer_count_or_depth = 1,
+      .num_levels = 1,
+      .sample_count = SDL_GPU_SAMPLECOUNT_1};
+  for (auto &texture : targets.textures) {
+    texture = SDL_CreateGPUTexture(device, &info);
+    if (texture == nullptr) {
+      release_temporal_history_targets(device, targets);
+      return false;
+    }
+  }
+  targets.width = width;
+  targets.height = height;
+  targets.format = format;
+  return true;
 }
 
 [[nodiscard]] bool ensure_render_scale_target(
@@ -1308,6 +1392,9 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   }
   Mode active_mode = mode;
   GpuRenderScaleTarget render_scale_target;
+  GpuTemporalHistoryTargets temporal_history_targets;
+  graphics::TemporalHistoryLifecycle temporal_history;
+  Mode temporal_history_mode = active_mode;
 
   RuntimeResult result{
       .success = true,
@@ -1429,6 +1516,12 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       static_cast<void>(menu.acknowledge_revert(restored));
       if (restored)
         active_mode = menu.confirmed_effective().profile;
+    }
+    // A profile transition is a temporal discontinuity even when its current
+    // extent happens to match.  Do this before acquiring a submission.
+    if (active_mode != temporal_history_mode) {
+      temporal_history.invalidate();
+      temporal_history_mode = active_mode;
     }
     SDL_GPUCommandBuffer *command = SDL_AcquireGPUCommandBuffer(device);
     SDL_GPUTexture *swapchain = nullptr;
@@ -1582,6 +1675,33 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         break;
       }
     }
+    TemporalHistoryFrameGuard temporal_history_frame{temporal_history};
+    std::optional<graphics::TemporalHistoryFrame> temporal_frame;
+    if (active_mode == Mode::modern && swapchain != nullptr) {
+      const auto format = SDL_GetGPUSwapchainTextureFormat(device, window);
+      if (!ensure_temporal_history_targets(device, content_width, content_height,
+                                           format, temporal_history_targets)) {
+        result = failure("temporal history target creation failed");
+        SDL_SubmitGPUCommandBuffer(command);
+        SDL_WaitForGPUIdle(device);
+        release_overlay_transfers();
+        break;
+      }
+      const graphics::TemporalHistoryTarget descriptor{
+          .width = content_width,
+          .height = content_height,
+          .format = static_cast<std::uint32_t>(format)};
+      static_cast<void>(temporal_history.configure(descriptor));
+      temporal_frame = temporal_history_frame.begin();
+      if (!temporal_frame) {
+        result = {.success = false,
+                  .message = "temporal history frame acquisition failed"};
+        SDL_SubmitGPUCommandBuffer(command);
+        SDL_WaitForGPUIdle(device);
+        release_overlay_transfers();
+        break;
+      }
+    }
     if (swapchain != nullptr) {
       const SDL_GPUColorTargetInfo target{
           .texture = content_target,
@@ -1663,6 +1783,26 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       if (diagnostic_intro_frame != nullptr)
         diagnostic_intro_frame->draw(command, pass);
       SDL_EndGPURenderPass(pass);
+
+      // Store the completed scene color before scale/presentation/UI.  The
+      // current renderer does not sample it yet; this is the real persistent
+      // history resource required before a temporal provider can be exposed.
+      if (temporal_frame) {
+        const SDL_GPUBlitInfo history_blit{
+            .source = {.texture = content_target,
+                       .w = content_width,
+                       .h = content_height},
+            .destination = {
+                .texture = temporal_history_targets
+                               .textures[temporal_frame->output_slot],
+                .w = content_width,
+                .h = content_height},
+            .load_op = SDL_GPU_LOADOP_DONT_CARE,
+            .flip_mode = SDL_FLIP_NONE,
+            .filter = SDL_GPU_FILTER_NEAREST,
+            .cycle = false};
+        SDL_BlitGPUTexture(command, &history_blit);
+      }
 
       if (content_target != presentation_target) {
         const SDL_GPUBlitInfo scale_blit{
@@ -1797,6 +1937,15 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       release_overlay_transfers();
       break;
     }
+    if (temporal_frame && !temporal_history_frame.commit()) {
+      result = {.success = false, .message = "temporal history frame commit failed"};
+      if (capture_transfer != nullptr)
+        SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
+      if (capture_texture != nullptr)
+        SDL_ReleaseGPUTexture(device, capture_texture);
+      release_overlay_transfers();
+      break;
+    }
     if (capture_fence != nullptr) {
       SDL_GPUFence *fences[]{capture_fence};
       if (!SDL_WaitForGPUFences(device, true, fences, 1)) {
@@ -1864,6 +2013,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   gpu_intro.reset();
   release_overlay(device, overlay);
   release_startup_images(device, gpu_startup);
+  release_temporal_history_targets(device, temporal_history_targets);
   release_render_scale_target(device, render_scale_target);
   release_scene(device, gpu);
   SDL_ReleaseWindowFromGPUDevice(device, window);
