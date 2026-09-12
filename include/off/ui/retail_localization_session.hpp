@@ -39,6 +39,18 @@ public:
   [[nodiscard]] bool has_local_resolver() const noexcept {
     return resolver_.has_value();
   }
+  // This exposes only enrollment state, never the private source strings.
+  // `loaded` means an identity-matching private snapshot was reused;
+  // `extracted` means this process admitted and stored a fresh snapshot.
+  [[nodiscard]] RetailLocalizationCacheStatus cache_status() const noexcept {
+    return cache_status_;
+  }
+  [[nodiscard]] std::size_t local_pack_count() const noexcept {
+    return local_pack_count_;
+  }
+  [[nodiscard]] bool has_private_fallback() const noexcept {
+    return retail_fallback_.has_value();
+  }
 
   // The caller must already possess an approved opaque ID. This function does
   // not inspect retail files, source text, or component state.
@@ -50,6 +62,9 @@ public:
 private:
   RetailLocalizationMetadata metadata_;
   TranslationSourceBinding binding_;
+  RetailLocalizationCacheStatus cache_status_{
+      RetailLocalizationCacheStatus::unavailable};
+  std::size_t local_pack_count_{};
   std::optional<PrivateTranslationResolver> resolver_;
   std::optional<RetailTranslationCatalog> retail_fallback_;
 };

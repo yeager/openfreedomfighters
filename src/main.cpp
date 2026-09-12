@@ -1496,6 +1496,19 @@ int main(int argc, char **argv) {
   // runtime. No retail key/component lookup calls this session yet.
   const auto retail_localization_session =
       initialize_private_owned_localization_session(*verification);
+  if (retail_localization_session) {
+    const auto enrollment = retail_localization_session->cache_status() ==
+                                    off::ui::l10n::RetailLocalizationCacheStatus::loaded
+                                ? "reused"
+                                : "extracted";
+    std::cout << "Retail localization: private catalog " << enrollment << " ("
+              << retail_localization_session->metadata().ordinal_count
+              << " stable IDs); "
+              << retail_localization_session->local_pack_count()
+              << " local pack(s); native lookup mapping pending.\n";
+  } else {
+    std::cout << "Retail localization: unavailable; native lookup mapping pending.\n";
+  }
   if (scene_summary) {
     const auto &summary = *scene_summary;
     std::cout << "Diagnostic scene geometry: " << summary.local_primitive

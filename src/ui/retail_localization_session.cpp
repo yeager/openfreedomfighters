@@ -20,10 +20,12 @@ std::optional<RetailLocalizationSession> RetailLocalizationSession::open(
   RetailLocalizationSession result;
   result.metadata_ = std::move(*enrollment.metadata);
   result.binding_ = *binding;
+  result.cache_status_ = enrollment.status;
   result.retail_fallback_ =
       detail::load_private_retail_source_fallback(cache_root, result.metadata_);
   const auto packs =
       load_canonical_local_translation_packs(local_packs_directory, *binding);
+  result.local_pack_count_ = packs.size();
   if (!packs.empty())
     result.resolver_ = PrivateTranslationResolver::build(*binding, packs);
   return result;

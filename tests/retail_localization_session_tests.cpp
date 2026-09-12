@@ -70,7 +70,9 @@ int main() {
     const auto first = RetailLocalizationSession::open(
         cache, packs, installation, parser, source_set, extract);
     check(first && calls == 1U && first->has_local_resolver() &&
-              first->metadata().ordinal_count == 2U,
+              first->metadata().ordinal_count == 2U &&
+              first->cache_status() == RetailLocalizationCacheStatus::extracted &&
+              first->local_pack_count() == 1U && first->has_private_fallback(),
           "session owns private enrollment and bounded local packs");
     const std::string_view locales[] = {"sv-SE"};
     check(first->resolve_opaque_id(opaque_one, {}, locales) ==
@@ -85,13 +87,16 @@ int main() {
 
     const auto second = RetailLocalizationSession::open(
         cache, packs, installation, parser, source_set, extract);
-    check(second && calls == 1U,
+    check(second && calls == 1U &&
+              second->cache_status() == RetailLocalizationCacheStatus::loaded &&
+              second->local_pack_count() == 1U && second->has_private_fallback(),
           "matching session reuses private cache without source extraction");
 
     const auto no_packs = RetailLocalizationSession::open(
         cache, root / "missing-packs", installation, parser, source_set,
         extract);
     check(no_packs && !no_packs->has_local_resolver() &&
+              no_packs->local_pack_count() == 0U && no_packs->has_private_fallback() &&
               no_packs->resolve_opaque_id(opaque_one, "sv", locales) ==
                   "fixture source one",
           "missing optional packs retain the private fallback only");
