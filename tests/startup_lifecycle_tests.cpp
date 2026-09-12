@@ -626,7 +626,7 @@ int main() {
   std::vector<std::pair<std::string, std::vector<std::byte>>> main_members{
       {main_member(".ZGF"), package_zgf_fixture()},
       {main_member(".SUP"), package_support_fixture()},
-      {main_member(".BUF"), {std::byte{1}}},
+      {main_member(".BUF"), package_buf_fixture()},
       {main_member(".GMS"), package_gms_fixture()},
       {main_member(".TEX"), {std::byte{2}}},
       {main_member(".SND"), {std::byte{3}}},
@@ -643,6 +643,20 @@ int main() {
   check(main_package.cut_identifier() == main_cut_identifier &&
             main_package.package_identifier() == main_package_identifier,
         "MovieCut main package retains caller-selected identifiers");
+
+  auto malformed_main_members = main_members;
+  malformed_main_members[2].second = {std::byte{1}};
+  write_package_zip(movie_cut_main_archive, malformed_main_members);
+  bool rejected_main_buf = false;
+  try {
+    static_cast<void>(off::runtime::MovieCutMainPackageSource::prepare_checked(
+        movie_cut_root, main_cut_identifier, main_package_identifier));
+  } catch (const std::runtime_error &) {
+    rejected_main_buf = true;
+  }
+  check(rejected_main_buf,
+        "MovieCut main package rejects a GMS-incompatible BUF resource");
+  write_package_zip(movie_cut_main_archive, main_members);
 
   main_members.emplace_back(main_member(".ANM"),
                             std::vector<std::byte>{std::byte{10}});

@@ -58,20 +58,26 @@ exactly the two expected structural records: phase-one and MovieControl-to-
 first-cut dispatch.
 
 The wrapper starts nothing unless `--execute` is present. It invokes the
-private observer with the literal `fresh-isolated` mode, uses no shell, hides
-observer stdout and stderr, and never forwards raw records to a terminal. It
-then validates both records through the strict source-free schemas, deletes the
-raw forms, and retains only their sanitized structural forms in the private
-workspace. The supplied observer and canonical-plan entries must be regular,
-non-symlinked files; the plan is read through a no-follow descriptor. An extra
-file, symlink, pre-existing workspace, malformed plan, or
-unsupported trace field fails collection.
+private observer with the literal `fresh-isolated` mode, uses no shell, has a
+five-minute bounded deadline by default (configurable from 1 to 1800 seconds),
+hides observer stdout and stderr, and never forwards raw records to a terminal.
+It then validates both records through the strict source-free schemas and
+requires their one completed constructed phase-one callback and admitted
+MovieControl route to share the same observer-local callback ordinal. It deletes
+the raw forms and retains only their sanitized structural forms in the private
+workspace. The same raw-record cleanup runs after observer failure, timeout, or
+schema/relation rejection. The supplied observer and canonical-plan entries
+must be regular, non-symlinked files; the plan is read through a no-follow
+descriptor. An extra file, symlink, pre-existing workspace, malformed plan,
+unsupported trace field, ambiguous phase-one candidate, or unmatched dispatch
+relation fails collection.
 
 ```sh
 python3 tools/movie_control_observation_runner.py --execute \
   --observer PRIVATE_OBSERVER_EXECUTABLE \
   --canonical-plan PRIVATE_CANONICAL_PLAN.json \
-  --workspace NEW_PRIVATE_WORKSPACE
+  --workspace NEW_PRIVATE_WORKSPACE \
+  --timeout-seconds 300
 ```
 
 The wrapper cannot prove what an external private observer did internally; it

@@ -211,7 +211,7 @@ int main() {
             advanced_fallback.effective->fallbacks[0].reason ==
                 off::settings::FallbackReason::modern_plus_unavailable &&
             advanced_fallback.effective->fallbacks[1].reason ==
-                off::settings::FallbackReason::dlss_upscaler_unavailable &&
+                off::settings::FallbackReason::modern_plus_upscaler_required &&
             advanced_fallback.effective->fallbacks[2].reason ==
                 off::settings::FallbackReason::mailbox_unavailable,
         "preserve Modern+ intent while resolving portable advanced fallbacks");
@@ -225,8 +225,8 @@ int main() {
                 off::settings::Upscaler::temporal &&
             xess_fallback.effective->fallbacks.size() == 3 &&
             xess_fallback.effective->fallbacks[1].reason ==
-                off::settings::FallbackReason::xess_upscaler_unavailable,
-        "fall back from unavailable XeSS to portable temporal upscaling");
+                off::settings::FallbackReason::modern_plus_upscaler_required,
+        "fall back from a rejected Modern+ XeSS request to portable temporal upscaling");
 
   advanced.upscaler = off::settings::Upscaler::fsr;
   const auto fsr_fallback =
@@ -236,17 +236,36 @@ int main() {
                 off::settings::Upscaler::temporal &&
             fsr_fallback.effective->fallbacks.size() == 3 &&
             fsr_fallback.effective->fallbacks[1].reason ==
-                off::settings::FallbackReason::fsr_upscaler_unavailable,
-        "fall back from unavailable FSR to portable temporal upscaling");
+                off::settings::FallbackReason::modern_plus_upscaler_required,
+        "fall back from a rejected Modern+ FSR request to portable temporal upscaling");
 
   auto fsr_available = portable;
+  fsr_available.modern_plus = true;
   fsr_available.fsr_upscaler = true;
   const auto fsr_enabled =
       off::settings::resolve_graphics_settings(advanced, fsr_available);
   check(fsr_enabled.effective.has_value() &&
             fsr_enabled.effective->upscaler == off::settings::Upscaler::fsr &&
-            fsr_enabled.effective->fallbacks.size() == 2,
+            fsr_enabled.effective->fallbacks.size() == 1,
         "preserve an FSR request only when the runtime reports a loaded adapter");
+
+  // Capability objects can arrive from a platform bridge.  Reject a
+  // contradictory bridge result instead of interpreting its provider bit as
+  // permission to bypass the Modern+ admission boundary.
+  auto contradictory_fsr = fsr_available;
+  contradictory_fsr.modern_plus = false;
+  const auto contradictory_fallback =
+      off::settings::resolve_graphics_settings(advanced, contradictory_fsr);
+  check(contradictory_fallback.effective.has_value() &&
+            !contradictory_fallback.effective->modern_plus &&
+            contradictory_fallback.effective->upscaler ==
+                off::settings::Upscaler::temporal &&
+            contradictory_fallback.effective->fallbacks.size() == 3 &&
+            contradictory_fallback.effective->fallbacks[0].reason ==
+                off::settings::FallbackReason::modern_plus_unavailable &&
+            contradictory_fallback.effective->fallbacks[1].reason ==
+                off::settings::FallbackReason::modern_plus_upscaler_required,
+        "a provider claim cannot bypass rejected Modern+ admission");
 
   // A capability object may cross process boundaries in a future native
   // backend.  Even a complete vendor claim must not turn a plain Modern

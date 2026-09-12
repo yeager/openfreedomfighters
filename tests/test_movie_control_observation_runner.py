@@ -12,7 +12,44 @@ from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "tools"))
 import movie_control_observation_runner as runner  # noqa: E402
+import movie_control_cutscene_dispatch_trace as dispatch_trace  # noqa: E402
 import movie_control_observer_probe_plan as probe_plan  # noqa: E402
+import movie_control_phase_one_trace as phase_one_trace  # noqa: E402
+
+
+def phase_one_event(**changes: object) -> dict[str, object]:
+    value: dict[str, object] = {
+        "dispatch_order": 4, "phase": 1, "callback_ordinal": 3,
+        "component_is_constructed": True, "owner_is_constructed_owner": True,
+        "component_status_before": 0, "component_status_after": 4,
+        "owner_status_before": 0, "owner_status_after": 4,
+        "event_member_before": False, "event_member_after": True,
+        "outcome": "success", "external_service": "entered",
+        "global_lifecycle_entered": True, "global_lifecycle_completed": True,
+        "global_lifecycle_outcome": "success", "ordinary_member_before": False,
+        "ordinary_member_after": True, "phase_one_completed": True,
+    }
+    value.update(changes)
+    return value
+
+
+def dispatch_event(**changes: object) -> dict[str, object]:
+    value: dict[str, object] = {
+        "observation_order": 0, "phase": "player_activation", "callback_ordinal": 3,
+        "movie_component_is_constructed": True,
+        "movie_owner_is_constructed_owner": True,
+        "sequence_component_is_constructed": True,
+        "sequence_owner_is_constructed_owner": True,
+        "movie_phase_one_completed": True, "movie_phase_two_completed": True,
+        "component_status_before": 4, "component_status_after": 4,
+        "owner_status_before": 0, "owner_status_after": 0,
+        "event16_gate": "admitted", "handoff_sender_is_movie_owner": True,
+        "handoff_target_is_sequence_owner": True, "handoff": "delivered",
+        "delivery_mode": "synchronous", "player_activation": "started",
+        "outcome": "success", "external_service": "entered",
+    }
+    value.update(changes)
+    return value
 
 
 class MovieControlObservationRunnerTests(unittest.TestCase):
@@ -50,6 +87,44 @@ class MovieControlObservationRunnerTests(unittest.TestCase):
         self.assertFalse(kwargs["shell"])
         self.assertEqual(kwargs["stdout"], subprocess.DEVNULL)
         self.assertEqual(kwargs["stderr"], subprocess.DEVNULL)
+        self.assertEqual(kwargs["timeout"], runner.DEFAULT_TIMEOUT_SECONDS)
+
+    def test_collected_records_must_share_one_completed_callback_relation(self) -> None:
+        phase = phase_one_trace.sanitize_trace({
+            "format": phase_one_trace.INPUT_FORMAT, "events": [phase_one_event()],
+        })
+        dispatch = dispatch_trace.sanitize_trace({
+            "format": dispatch_trace.INPUT_FORMAT, "events": [dispatch_event()],
+        })
+        runner._validate_trace_relation(phase, dispatch)
+        mismatched = dispatch_trace.sanitize_trace({
+            "format": dispatch_trace.INPUT_FORMAT,
+            "events": [dispatch_event(callback_ordinal=4)],
+        })
+        with self.assertRaisesRegex(ValueError, "not tied"):
+            runner._validate_trace_relation(phase, mismatched)
+
+    def test_collection_rejects_unanchored_or_ambiguous_phase_one_records(self) -> None:
+        dispatch = dispatch_trace.sanitize_trace({
+            "format": dispatch_trace.INPUT_FORMAT, "events": [dispatch_event()],
+        })
+        failed = phase_one_trace.sanitize_trace({
+            "format": phase_one_trace.INPUT_FORMAT,
+            "events": [phase_one_event(
+                outcome="failure", phase_one_completed=False,
+                global_lifecycle_completed=False, global_lifecycle_outcome="failure",
+            )],
+        })
+        with self.assertRaisesRegex(ValueError, "exactly one"):
+            runner._validate_trace_relation(failed, dispatch)
+
+    def test_invalid_observer_deadline_is_rejected_before_start(self) -> None:
+        with self.assertRaisesRegex(ValueError, "timeout"):
+            runner.execute_observation(
+                observer=pathlib.Path("/private/observer"),
+                canonical_plan=pathlib.Path("/private/plan.json"),
+                workspace=pathlib.Path("/private/run"), timeout_seconds=0,
+            )
 
     def test_collection_rejects_extra_or_content_bearing_records(self) -> None:
         # Schema validation itself is covered by the dedicated trace tests; the
@@ -85,6 +160,20 @@ class MovieControlObservationRunnerTests(unittest.TestCase):
         self.assertFalse(phase.exists())
         self.assertFalse((root / runner.DISPATCH_RAW_NAME).exists())
         target.unlink()
+        root.rmdir()
+
+    def test_failed_observer_cleanup_removes_only_protocol_raw_records(self) -> None:
+        root = pathlib.Path(__file__).resolve().parents[1] / ".test-work" / "runner-failure-cleanup"
+        root.mkdir(parents=True, exist_ok=True)
+        (root / runner.PHASE_ONE_RAW_NAME).write_text("{}", encoding="utf-8")
+        (root / runner.DISPATCH_RAW_NAME).write_text("{}", encoding="utf-8")
+        marker = root / "operator-note"
+        marker.write_text("keep", encoding="utf-8")
+        runner._discard_raw_records(root)
+        self.assertFalse((root / runner.PHASE_ONE_RAW_NAME).exists())
+        self.assertFalse((root / runner.DISPATCH_RAW_NAME).exists())
+        self.assertTrue(marker.exists())
+        marker.unlink()
         root.rmdir()
 
     def test_collection_rejects_an_oversized_regular_record_before_json_decode(self) -> None:

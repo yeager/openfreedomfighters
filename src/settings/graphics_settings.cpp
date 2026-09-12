@@ -111,7 +111,11 @@ resolve_graphics_settings(const RequestedGraphicsSettings &requested,
     // can also be resolved by tools, tests, and a restored preferences file.
     // Keep this second boundary so a stale or malformed capability object can
     // never activate a vendor path from the plain Modern profile.
-    if (vendor_upscaler(effective.upscaler) && !requested.modern_plus) {
+    // Resolve against the effective profile, not just user intent.  A stale
+    // capability payload could otherwise say that a provider is bound while
+    // simultaneously rejecting Modern+.  That must remain a portable
+    // fallback, never an accidental vendor activation.
+    if (vendor_upscaler(effective.upscaler) && !effective.modern_plus) {
       effective.upscaler = capabilities.temporal_upscaler ? Upscaler::temporal
                                                           : Upscaler::native;
       effective.fallbacks.push_back(

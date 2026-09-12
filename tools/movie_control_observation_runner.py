@@ -40,6 +40,8 @@ _EXPECTED_FILES = frozenset((PHASE_ONE_RAW_NAME, DISPATCH_RAW_NAME))
 # generous for their maximum 4096-event form, while preventing an observer
 # workspace from being used as an unbounded JSON parsing or disk-read channel.
 MAX_RAW_RECORD_BYTES = 8 * 1024 * 1024
+DEFAULT_TIMEOUT_SECONDS = 300
+MAX_TIMEOUT_SECONDS = 1800
 
 
 def _outside_repository(path: pathlib.Path, label: str) -> pathlib.Path:
@@ -174,6 +176,70 @@ def _write_sanitized_json(directory: int, name: str, record: dict[str, Any]) -> 
         os.close(descriptor)
 
 
+def _discard_raw_records(workspace: pathlib.Path) -> None:
+    """Best-effort removal of protocol raw records after an observer failure.
+
+    The workspace is created by this wrapper.  It is still reopened through a
+    no-follow directory descriptor here: an external observer must not be able
+    to redirect cleanup by replacing the workspace pathname.  Unknown entries
+    are left alone for the private operator to diagnose, but the two only
+    names that may contain observer output are never retained by this tool.
+    """
+    try:
+        descriptor = _open_workspace_no_follow(workspace)
+    except ValueError:
+        return
+    try:
+        for raw_name in (PHASE_ONE_RAW_NAME, DISPATCH_RAW_NAME):
+            try:
+                os.unlink(raw_name, dir_fd=descriptor)
+            except FileNotFoundError:
+                pass
+    finally:
+        os.close(descriptor)
+
+
+def _phase_one_success_callbacks(phase_trace: dict[str, Any]) -> set[int]:
+    """Return only completed constructed phase-one callback ordinals."""
+    return {
+        event["callback_ordinal"]
+        for event in phase_trace["events"]
+        if event["component_is_constructed"]
+        and event["owner_is_constructed_owner"]
+        and event["global_lifecycle_entered"]
+        and event["global_lifecycle_completed"]
+        and event["global_lifecycle_outcome"] == "success"
+        and event["phase_one_completed"]
+        and event["outcome"] == "success"
+    }
+
+
+def _validate_trace_relation(
+    phase_trace: dict[str, Any], dispatch_trace_record: dict[str, Any],
+) -> None:
+    """Require the collected dispatch route to be tied to phase-one evidence.
+
+    The two schemas deliberately share just an observer-local callback
+    ordinal.  It is enough to bind the source-free records while avoiding any
+    process/object identity, address, or executable detail.  A collection
+    without an admitted constructed MovieControl route is not actionable
+    observation evidence and must not leave a misleading pair of files.
+    """
+    successful_callbacks = _phase_one_success_callbacks(phase_trace)
+    admitted_callbacks = {
+        event["callback_ordinal"]
+        for event in dispatch_trace_record["events"]
+        if event["event16_gate"] == "admitted"
+        and event["movie_component_is_constructed"]
+        and event["movie_owner_is_constructed_owner"]
+        and event["movie_phase_one_completed"]
+    }
+    if len(successful_callbacks) != 1:
+        raise ValueError("phase-one record must contain exactly one completed constructed callback")
+    if admitted_callbacks != successful_callbacks:
+        raise ValueError("dispatch record is not tied to the completed phase-one callback")
+
+
 def _collect(workspace: pathlib.Path) -> tuple[dict[str, Any], dict[str, Any]]:
     workspace_descriptor = _open_workspace_no_follow(workspace)
     try:
@@ -187,6 +253,7 @@ def _collect(workspace: pathlib.Path) -> tuple[dict[str, Any], dict[str, Any]]:
                 _read_regular_json_no_follow(workspace_descriptor, PHASE_ONE_RAW_NAME))
             dispatch_clean = dispatch_trace.sanitize_trace(
                 _read_regular_json_no_follow(workspace_descriptor, DISPATCH_RAW_NAME))
+            _validate_trace_relation(phase_clean, dispatch_clean)
         finally:
             # A malformed or rejected raw record must not become a retained export
             # channel either. Leave only a private error state for the operator.
@@ -204,6 +271,7 @@ def _collect(workspace: pathlib.Path) -> tuple[dict[str, Any], dict[str, Any]]:
 
 def execute_observation(
     *, observer: pathlib.Path, canonical_plan: pathlib.Path, workspace: pathlib.Path,
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
     run: Callable[..., subprocess.CompletedProcess[Any]] = subprocess.run,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Start an external fresh-process observer and retain only safe records.
@@ -213,6 +281,8 @@ def execute_observation(
     inside that observer remains an operator responsibility and is not claimed
     as public evidence by this wrapper.
     """
+    if type(timeout_seconds) is not int or not 1 <= timeout_seconds <= MAX_TIMEOUT_SECONDS:
+        raise ValueError("observer timeout must be between 1 and 1800 seconds")
     observer_path = _validate_observer_path(observer)
     plan_path = _outside_repository(canonical_plan, "canonical plan")
     workspace_path = _outside_repository(workspace, "workspace")
@@ -227,10 +297,16 @@ def execute_observation(
     )
     try:
         run(command, check=True, stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=False)
-    except subprocess.CalledProcessError as error:
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=False,
+            timeout=timeout_seconds)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        _discard_raw_records(workspace_path)
         raise ValueError("private observer did not complete") from error
-    return _collect(workspace_path)
+    try:
+        return _collect(workspace_path)
+    except (OSError, ValueError, json.JSONDecodeError):
+        _discard_raw_records(workspace_path)
+        raise
 
 
 def main() -> int:
@@ -243,6 +319,8 @@ def main() -> int:
                         help="private canonical opaque probe plan")
     parser.add_argument("--workspace", type=pathlib.Path,
                         help="new private directory for this one observation")
+    parser.add_argument("--timeout-seconds", type=int, default=DEFAULT_TIMEOUT_SECONDS,
+                        help="private observer deadline (1-1800; default: 300)")
     args = parser.parse_args()
     if not args.execute:
         parser.error("refusing to run an observer without --execute")
@@ -250,7 +328,8 @@ def main() -> int:
         parser.error("--observer, --canonical-plan, and --workspace are required with --execute")
     try:
         phase_clean, dispatch_clean = execute_observation(
-            observer=args.observer, canonical_plan=args.canonical_plan, workspace=args.workspace)
+            observer=args.observer, canonical_plan=args.canonical_plan,
+            workspace=args.workspace, timeout_seconds=args.timeout_seconds)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

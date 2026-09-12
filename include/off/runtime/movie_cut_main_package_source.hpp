@@ -167,13 +167,21 @@ public:
     owner->gms_bytes = owner->archive.read(gms_member);
     owner->gms = data::GmsImage::parse(
         data::PackedResource::parse(owner->gms_bytes));
+    // A MovieCut main package carries the same paired GMS/BUF source boundary
+    // as the verified scene archives.  Keep the bytes opaque after this
+    // structural cross-check, but do not let a malformed auxiliary block pass
+    // preparation merely because no MovieCut runtime reader is admitted yet.
+    auto buf_bytes = owner->archive.read(exact_member(".BUF"));
+    owner->gms.validate_buf(buf_bytes);
     owner->support_bytes = owner->archive.read(support_member);
     owner->support = data::SceneSupport::parse(owner->support_bytes);
     if (owner->support.dependencies().empty()) {
       throw std::runtime_error("MovieCut main package support has no dependencies");
     }
+    owner->raw_sources.push_back(std::move(buf_bytes));
     for (const auto extension : required_extensions) {
-      if (extension != ".ZGF" && extension != ".GMS" && extension != ".SUP") {
+      if (extension != ".ZGF" && extension != ".GMS" && extension != ".SUP" &&
+          extension != ".BUF") {
         owner->raw_sources.push_back(owner->archive.read(exact_member(extension)));
       }
     }
