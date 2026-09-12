@@ -1399,6 +1399,24 @@ int main() {
   check(rejected,
         "boot directory source rejects an additional malformed BootMenu "
         "attachment instead of selecting the valid occurrence");
+  rejected = false;
+  try {
+    auto nonwindow_boot_attachment = boot_directory_gms_fixture();
+    // The second source record is not an ordinary window.  Pointing it at the
+    // existing canonical-named attachment must still make the source
+    // ambiguous: a BootMenu identifier on a non-window record cannot be
+    // silently skipped in favour of the ordinary-window occurrence.
+    set_u32(nonwindow_boot_attachment, 9U + 356U, 432U);
+    static_cast<void>(
+        off::runtime::StartupBootSceneDirectorySource::from_checked_gms(
+            off::data::GmsImage::parse(off::data::PackedResource::parse(
+                std::move(nonwindow_boot_attachment)))));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected,
+        "boot directory source rejects a BootMenu attachment on a non-window "
+        "record instead of selecting the ordinary-window occurrence");
   const auto boot_package =
       std::make_shared<const off::runtime::StartupSceneLoadPackage>(package());
   const auto boot_scene = off::runtime::StartupBootSceneLease::live(lease(81U));

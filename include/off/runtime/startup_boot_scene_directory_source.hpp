@@ -56,9 +56,6 @@ public:
       parents.push_back(node.parent_directory_index);
 
       const auto &entry = directory[index];
-      if (entry.source_type != ordinary_window_source_type) {
-        continue;
-      }
       for (std::size_t attachment = 0; attachment < entry.attachments.size();
            ++attachment) {
         if (gms.attachment_identifier(index, attachment) !=
