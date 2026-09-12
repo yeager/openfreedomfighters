@@ -1,9 +1,11 @@
 #pragma once
 
 #include "off/graphics/startup_graphics_expanded_plan.hpp"
+#include "off/graphics/startup_graphics_asset.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
 
 #include <array>
+#include <utility>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -19,6 +21,28 @@ struct StartupPictureTextureHandle final {
   std::size_t resource_index{};
   std::size_t catalog_image_index{};
   std::uint32_t texture_id{};
+};
+
+// Owns the startup-only renderer and its six GPU images.  It deliberately
+// cannot be fed generic intro images: construction preserves and checks the
+// full catalog-index/texture-id identity supplied by StartupGraphicsAsset.
+class SdlStartupPictureTextureRegistry final {
+public:
+  SdlStartupPictureTextureRegistry(SDL_GPUDevice* device,
+                                   const graphics::StartupGraphicsAsset& asset);
+  ~SdlStartupPictureTextureRegistry();
+  SdlStartupPictureTextureRegistry(const SdlStartupPictureTextureRegistry&) = delete;
+  SdlStartupPictureTextureRegistry& operator=(const SdlStartupPictureTextureRegistry&) = delete;
+  [[nodiscard]] std::size_t image_count() const noexcept;
+  // CPU-only identity guard, exposed for focused admission tests.
+  [[nodiscard]] static bool has_valid_asset_identities(
+      std::span<const graphics::StartupGraphicsImage> images) noexcept;
+
+private:
+  friend class SdlStartupPictureExecutor;
+  void verify(std::span<const StartupPictureTextureHandle> handles) const;
+  std::vector<std::pair<std::size_t, std::uint32_t>> identities_;
+  std::unique_ptr<SdlIntroRenderer> renderer_;
 };
 
 // Deliberately caller-owned.  This packet neither derives nor changes a pass,
@@ -39,6 +63,7 @@ class SdlStartupPictureFramePacket final {
 public:
   [[nodiscard]] static SdlStartupPictureFramePacket assemble(
       std::span<const graphics::StartupGraphicsExpandedSubmission> submissions,
+      std::span<const graphics::StartupGraphicsPreparedResource> resources,
       std::span<const StartupPictureTextureHandle> textures,
       const StartupPictureRenderState& state);
   [[nodiscard]] std::span<const SdlIntroDraw> draws() const noexcept {
@@ -51,6 +76,8 @@ public:
 private:
   std::vector<graphics::ExpandedPictureBatch> batches_;
   std::vector<SdlIntroDraw> draws_;
+  std::vector<StartupPictureTextureHandle> texture_handles_;
+  friend class SdlStartupPictureExecutor;
 };
 
 // Prepared use of a caller command buffer.  It does not begin/end a pass,
@@ -78,12 +105,15 @@ class SdlStartupPictureExecutor final {
 public:
   explicit SdlStartupPictureExecutor(const SdlIntroRenderer& renderer)
       : renderer_(renderer) {}
+  explicit SdlStartupPictureExecutor(const SdlStartupPictureTextureRegistry& registry)
+      : renderer_(*registry.renderer_), registry_(&registry) {}
   [[nodiscard]] SdlStartupPictureFrame prepare(
       SDL_GPUCommandBuffer* command,
       const SdlStartupPictureFramePacket& packet) const;
 
 private:
   const SdlIntroRenderer& renderer_;
+  const SdlStartupPictureTextureRegistry* registry_{nullptr};
 };
 
 } // namespace off::platform

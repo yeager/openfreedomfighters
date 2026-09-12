@@ -5,6 +5,7 @@
 #include "off/graphics/scene_instance_history.hpp"
 #include "off/graphics/temporal_resolve_baseline.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
+#include "off/platform/sdl_startup_picture_executor.hpp"
 #include "off/platform/intro_preview_diagnostic.hpp"
 #include "off/platform/sdl_locale.hpp"
 #include "off/platform/sdl_menu_gamepad.hpp"
@@ -148,16 +149,6 @@ struct GpuUiTexture {
   SDL_GPUTexture *texture{nullptr};
 };
 
-struct GpuStartupImage {
-  std::size_t catalog_image_index{};
-  std::uint32_t texture_id{};
-  SDL_GPUTexture *texture{nullptr};
-};
-
-struct GpuStartupImages {
-  std::vector<GpuStartupImage> images;
-};
-
 struct GpuOverlayFont {
   SDL_IOStream *stream{nullptr};
   TTF_Font *font{nullptr};
@@ -267,14 +258,6 @@ void release_overlay(SDL_GPUDevice *device, GpuOverlay &overlay) {
   if (overlay.vertex_buffer != nullptr)
     SDL_ReleaseGPUBuffer(device, overlay.vertex_buffer);
   overlay = {};
-}
-
-void release_startup_images(SDL_GPUDevice *device,
-                            GpuStartupImages &startup) {
-  for (const auto &image : startup.images)
-    if (image.texture != nullptr)
-      SDL_ReleaseGPUTexture(device, image.texture);
-  startup = {};
 }
 
 struct ShaderBytes {
@@ -1044,97 +1027,6 @@ upload_overlay_retail_textures(SDL_GPUDevice *device,
   return uploaded;
 }
 
-template<class Images>
-[[nodiscard]] bool upload_picture_images(
-    SDL_GPUDevice *device, const Images &images, std::size_t byte_budget,
-    GpuStartupImages &result) {
-  if (images.empty())
-    return false;
-
-  std::size_t aggregate_bytes = 0;
-  std::vector<TextureUpload> uploads;
-  uploads.reserve(images.size());
-  result.images.reserve(images.size());
-  const auto release_transfers = [&]() {
-    for (const auto &upload : uploads)
-      if (upload.transfer != nullptr)
-        SDL_ReleaseGPUTransferBuffer(device, upload.transfer);
-  };
-
-  for (std::size_t index = 0; index < images.size(); ++index) {
-    const auto &image = images[index];
-    for (std::size_t previous = 0; previous < index; ++previous) {
-      if (images[previous].catalog_image_index == image.catalog_image_index ||
-          images[previous].texture_id == image.texture_id) {
-        release_transfers();
-        return false;
-      }
-    }
-    const auto width = image.mip_zero.width;
-    const auto height = image.mip_zero.height;
-    const auto byte_count = static_cast<std::uint64_t>(width) * height * 4U;
-    if (width == 0 || height == 0 || byte_count == 0 ||
-        byte_count > std::numeric_limits<Uint32>::max() ||
-        byte_count > byte_budget ||
-        aggregate_bytes > byte_budget -
-                              static_cast<std::size_t>(byte_count) ||
-        image.mip_zero.pixels.size() != byte_count) {
-      release_transfers();
-      return false;
-    }
-    aggregate_bytes += static_cast<std::size_t>(byte_count);
-
-    const SDL_GPUTextureCreateInfo info{
-        .type = SDL_GPU_TEXTURETYPE_2D,
-        .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
-        .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
-        .width = width,
-        .height = height,
-        .layer_count_or_depth = 1,
-        .num_levels = 1,
-        .sample_count = SDL_GPU_SAMPLECOUNT_1};
-    auto *texture = SDL_CreateGPUTexture(device, &info);
-    if (texture == nullptr) {
-      release_transfers();
-      return false;
-    }
-    result.images.push_back(
-        {image.catalog_image_index, image.texture_id, texture});
-    auto *transfer = make_upload_transfer(
-        device, image.mip_zero.pixels.data(), static_cast<Uint32>(byte_count));
-    if (transfer == nullptr) {
-      release_transfers();
-      return false;
-    }
-    uploads.push_back({transfer, texture, width, height});
-  }
-
-  SDL_GPUCommandBuffer *command = SDL_AcquireGPUCommandBuffer(device);
-  SDL_GPUCopyPass *copy =
-      command == nullptr ? nullptr : SDL_BeginGPUCopyPass(command);
-  if (copy == nullptr) {
-    if (command != nullptr)
-      SDL_CancelGPUCommandBuffer(command);
-    release_transfers();
-    return false;
-  }
-  for (const auto &upload : uploads) {
-    const SDL_GPUTextureTransferInfo from{.transfer_buffer = upload.transfer,
-                                          .pixels_per_row = upload.width,
-                                          .rows_per_layer = upload.height};
-    const SDL_GPUTextureRegion to{.texture = upload.texture,
-                                  .w = upload.width,
-                                  .h = upload.height,
-                                  .d = 1};
-    SDL_UploadToGPUTexture(copy, &from, &to, false);
-  }
-  SDL_EndGPUCopyPass(copy);
-  const bool uploaded =
-      SDL_SubmitGPUCommandBuffer(command) && SDL_WaitForGPUIdle(device);
-  release_transfers();
-  return uploaded;
-}
-
 [[nodiscard]] bool upload_scene(SDL_GPUDevice *device, SDL_Window *window,
                                 const graphics::SceneGpuPlan &source,
                                 GpuScene &result) {
@@ -1433,12 +1325,12 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     SDL_DestroyGPUDevice(device);
     return result;
   }
-  GpuStartupImages gpu_startup;
-  if (startup_graphics.images().size() != graphics::startup_graphics_image_count ||
-      !upload_picture_images(device, startup_graphics.images(),
-          graphics::startup_graphics_decoded_byte_budget, gpu_startup)) {
-    const auto result = failure("startup graphics image GPU upload failed");
-    release_startup_images(device, gpu_startup);
+  std::unique_ptr<SdlStartupPictureTextureRegistry> startup_textures;
+  try {
+    startup_textures = std::make_unique<SdlStartupPictureTextureRegistry>(
+        device, startup_graphics);
+  } catch (const std::exception& error) {
+    const RuntimeResult result{false, std::string("startup graphics image GPU upload failed: ") + error.what()};
     release_overlay(device, overlay);
     release_scene(device, gpu);
     SDL_ReleaseWindowFromGPUDevice(device, window);
@@ -1455,7 +1347,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       gpu_intro = std::make_unique<SdlIntroRenderer>(device, intro->resources().images());
   } catch (const std::exception& error) {
     const RuntimeResult result{false, std::string("intro renderer initialization failed: ") + error.what()};
-    release_startup_images(device, gpu_startup);
+    startup_textures.reset();
     release_overlay(device, overlay);
     release_scene(device, gpu);
     SDL_ReleaseWindowFromGPUDevice(device, window);
@@ -1465,7 +1357,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   if (intro_preview_diagnostic != nullptr && gpu_intro == nullptr) {
     const RuntimeResult result{false,
         "intro diagnostic requires retained intro image resources"};
-    release_startup_images(device, gpu_startup);
+    startup_textures.reset();
     release_overlay(device, overlay);
     release_scene(device, gpu);
     SDL_ReleaseWindowFromGPUDevice(device, window);
@@ -1510,7 +1402,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                                     ? "initial graphics configuration failed"
                                     : "initial graphics configuration is invalid");
     gpu_intro.reset();
-    release_startup_images(device, gpu_startup);
+    startup_textures.reset();
     release_overlay(device, overlay);
     release_scene(device, gpu);
     SDL_ReleaseWindowFromGPUDevice(device, window);
@@ -1536,7 +1428,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       const auto result = failure("scene instance history initialization failed");
       release_render_scale_target(device, render_scale_target);
       gpu_intro.reset();
-      release_startup_images(device, gpu_startup);
+      startup_textures.reset();
       release_overlay(device, overlay);
       release_scene(device, gpu);
       SDL_ReleaseWindowFromGPUDevice(device, window);
@@ -1556,7 +1448,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                      std::to_string(scene->draws.size()) + " draws; "
                : " (authored startup resources loaded; world rendering "
                  "pending; ") +
-          std::to_string(gpu_startup.images.size()) +
+          std::to_string(startup_textures->image_count()) +
           (startup_graphics_scene_diagnostic
                ? " startup graphics images represented by the diagnostic scene; "
                : " startup graphics images uploaded, not rendered; ") +
@@ -2394,7 +2286,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     result.message += " (source-backed intro picture rendered with generic fit projection; playback pending)";
   gpu_intro.reset();
   release_overlay(device, overlay);
-  release_startup_images(device, gpu_startup);
+  startup_textures.reset();
   release_temporal_resolve_baseline(device, temporal_baseline);
   release_render_scale_target(device, render_scale_target);
   release_scene(device, gpu);

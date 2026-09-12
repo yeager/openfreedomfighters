@@ -54,12 +54,20 @@ is recovered.
 
 ## SDL GPU packet boundary
 
+`SdlStartupPictureTextureRegistry` owns one `SdlIntroRenderer` upload of the
+six `StartupGraphicsAsset` images for the device lifetime. It accepts no generic
+intro image set: each source image's catalog index and texture ID is retained as
+one identity and later packet handles must match an admitted prepared resource
+by that complete pair.
+
 `SdlStartupPictureFramePacket` is a subsequent, still-disconnected adapter for
 an already-admitted ordered `StartupGraphicsExpandedSubmission` span. It accepts
 an exact set of live texture handles (`resource_index`, catalog image index, and
 texture ID) and caller-supplied `StartupPictureRenderState`. Submission ordinals
 must be contiguous in the supplied order; missing, extra, duplicate, or unknown
-resource identities reject before any GPU work. It preserves one indexed draw
+resource identities reject before any GPU work. It also rejects a handle whose
+catalog index or texture ID does not equal the prepared resource addressed by
+the submission. It preserves one indexed draw
 per source submission and never batches across resource identities.
 
 `SdlStartupPictureExecutor` only prepares that immutable packet through the
