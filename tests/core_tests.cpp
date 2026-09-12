@@ -203,6 +203,53 @@ void test_zip_reader() {
     }
     check(crc_rejected, "reject corrupted ZIP payload by CRC");
 
+    const auto local_reference_path = work / "central-local-reference.zip";
+    write_test_zip(local_reference_path, corrupt_name, "synthetic-payload", 0, false);
+    const auto central_offset = static_cast<std::streamoff>(30 + corrupt_name.size() +
+                                                             std::string_view{"synthetic-payload"}.size());
+    {
+        std::fstream corrupt(local_reference_path, std::ios::binary | std::ios::in | std::ios::out);
+        corrupt.seekp(central_offset + 42);
+        const std::array<char, 4> offset_bytes{
+            static_cast<char>(central_offset & 0xff),
+            static_cast<char>((central_offset >> 8) & 0xff),
+            static_cast<char>((central_offset >> 16) & 0xff),
+            static_cast<char>((central_offset >> 24) & 0xff),
+        };
+        corrupt.write(offset_bytes.data(), static_cast<std::streamsize>(offset_bytes.size()));
+    }
+    bool central_local_reference_rejected = false;
+    try {
+        static_cast<void>(off::data::ZipArchive::open(local_reference_path));
+    } catch (const std::runtime_error&) {
+        central_local_reference_rejected = true;
+    }
+    check(central_local_reference_rejected,
+          "reject a central member whose local header points into the central directory");
+
+    const auto central_data_overlap_path = work / "central-data-overlap.zip";
+    write_test_zip(central_data_overlap_path, corrupt_name, "synthetic-payload", 0, false);
+    {
+        std::fstream corrupt(central_data_overlap_path, std::ios::binary | std::ios::in | std::ios::out);
+        corrupt.seekp(central_offset + 20);
+        const auto oversized = static_cast<std::uint32_t>(std::string_view{"synthetic-payload"}.size() + 1);
+        const std::array<char, 4> size_bytes{
+            static_cast<char>(oversized & 0xff),
+            static_cast<char>((oversized >> 8) & 0xff),
+            static_cast<char>((oversized >> 16) & 0xff),
+            static_cast<char>((oversized >> 24) & 0xff),
+        };
+        corrupt.write(size_bytes.data(), static_cast<std::streamsize>(size_bytes.size()));
+    }
+    bool central_data_overlap_rejected = false;
+    try {
+        static_cast<void>(off::data::ZipArchive::open(central_data_overlap_path));
+    } catch (const std::runtime_error&) {
+        central_data_overlap_rejected = true;
+    }
+    check(central_data_overlap_rejected,
+          "reject a central member whose compressed data overlaps the central directory");
+
     const auto base_path = work / "base.zip";
     const auto override_path = work / "override.zip";
     const auto loose_path = work / "loose";

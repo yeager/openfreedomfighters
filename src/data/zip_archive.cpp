@@ -64,6 +64,67 @@ constexpr std::uint64_t maximum_total_size = 1024ULL * 1024ULL * 1024ULL;
     return bytes;
 }
 
+// Central-directory fields identify the exact local record we will later
+// inflate.  Validate that reference while the directory boundary is known:
+// otherwise a malformed package can make a member borrow central-directory or
+// footer bytes as compressed input.  That is both ambiguous across ZIP readers
+// and an unsafe basis for loading retail resources.
+void validate_local_record(
+    const ByteReader& reader,
+    std::size_t central_offset,
+    std::string_view central_name,
+    std::uint16_t central_flags,
+    std::uint16_t central_method,
+    std::uint32_t central_crc,
+    std::uint32_t central_compressed_size,
+    std::uint32_t central_uncompressed_size,
+    std::uint32_t local_header_offset
+) {
+    constexpr std::size_t fixed_local_header_size = 30;
+    const auto local = static_cast<std::size_t>(local_header_offset);
+    if (local >= central_offset ||
+        fixed_local_header_size > central_offset - local) {
+        throw std::runtime_error("ZIP local header lies outside the file-data area");
+    }
+    if (reader.u32(local) != local_signature) {
+        throw std::runtime_error("invalid ZIP local-header signature");
+    }
+    const auto local_flags = reader.u16(local + 6);
+    const auto local_method = reader.u16(local + 8);
+    const auto local_crc = reader.u32(local + 14);
+    const auto local_compressed_size = reader.u32(local + 18);
+    const auto local_uncompressed_size = reader.u32(local + 22);
+    const auto name_size = reader.u16(local + 26);
+    const auto extra_size = reader.u16(local + 28);
+    if (local_flags != central_flags || local_method != central_method) {
+        throw std::runtime_error("ZIP local and central headers disagree");
+    }
+    const auto variable_size = static_cast<std::size_t>(name_size) + extra_size;
+    const auto variable_offset = local + fixed_local_header_size;
+    if (variable_size > central_offset - variable_offset) {
+        throw std::runtime_error("ZIP local header exceeds the file-data area");
+    }
+    const auto local_name_bytes = reader.slice(variable_offset, name_size);
+    const std::string_view local_name(
+        reinterpret_cast<const char*>(local_name_bytes.data()), local_name_bytes.size());
+    if (normalized(local_name) != normalized(central_name)) {
+        throw std::runtime_error("ZIP local and central filenames disagree");
+    }
+    const auto data_offset = variable_offset + variable_size;
+    if (central_compressed_size > central_offset - data_offset) {
+        throw std::runtime_error("ZIP member data exceeds the file-data area");
+    }
+    // With no data descriptor, ZIP requires both headers to describe exactly
+    // the same bytes.  Descriptor-based members retain their permitted zeroed
+    // local size fields, while their payload range is still bounded above.
+    if ((central_flags & 0x0008U) == 0U &&
+        (local_crc != central_crc ||
+         local_compressed_size != central_compressed_size ||
+         local_uncompressed_size != central_uncompressed_size)) {
+        throw std::runtime_error("ZIP local and central sizes disagree");
+    }
+}
+
 }  // namespace
 
 bool is_safe_archive_path(std::string_view name) noexcept {
@@ -169,6 +230,9 @@ ZipArchive ZipArchive::open(const std::filesystem::path& path) {
         if (method != 0 && method != 8) {
             throw std::runtime_error("unsupported ZIP compression method");
         }
+        validate_local_record(
+            reader, central_offset, name, flags, method, crc, compressed_size,
+            uncompressed_size, local_offset);
         if (directory) {
             if (method != 0 || compressed_size != 0 || uncompressed_size != 0) {
                 throw std::runtime_error("ZIP directory entry contains file data");
