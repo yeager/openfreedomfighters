@@ -87,6 +87,29 @@ class MovieControlObservationRunnerTests(unittest.TestCase):
         target.unlink()
         root.rmdir()
 
+    def test_collection_rejects_an_oversized_regular_record_before_json_decode(self) -> None:
+        root = pathlib.Path(__file__).resolve().parents[1] / ".test-work" / "runner-oversized"
+        root.mkdir(parents=True, exist_ok=True)
+        phase = root / runner.PHASE_ONE_RAW_NAME
+        phase.write_bytes(b" " * (runner.MAX_RAW_RECORD_BYTES + 1))
+        (root / runner.DISPATCH_RAW_NAME).write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "size limit"):
+            runner._collect(root)
+        self.assertFalse(phase.exists())
+        self.assertFalse((root / runner.DISPATCH_RAW_NAME).exists())
+        root.rmdir()
+
+    def test_collection_refuses_a_workspace_symlink(self) -> None:
+        parent = pathlib.Path(__file__).resolve().parents[1] / ".test-work"
+        target = parent / "runner-workspace-target"
+        workspace = parent / "runner-workspace-link"
+        target.mkdir(parents=True, exist_ok=True)
+        workspace.symlink_to(target.name, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "real directory"):
+            runner._collect(workspace)
+        workspace.unlink()
+        target.rmdir()
+
 
 if __name__ == "__main__":
     unittest.main()

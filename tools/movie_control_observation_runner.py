@@ -36,6 +36,10 @@ DISPATCH_RAW_NAME = "cutscene-dispatch.raw.json"
 PHASE_ONE_SANITIZED_NAME = "phase-one.sanitized.json"
 DISPATCH_SANITIZED_NAME = "cutscene-dispatch.sanitized.json"
 _EXPECTED_FILES = frozenset((PHASE_ONE_RAW_NAME, DISPATCH_RAW_NAME))
+# Both schemas are small, bounded structural records.  This is deliberately
+# generous for their maximum 4096-event form, while preventing an observer
+# workspace from being used as an unbounded JSON parsing or disk-read channel.
+MAX_RAW_RECORD_BYTES = 8 * 1024 * 1024
 
 
 def _outside_repository(path: pathlib.Path, label: str) -> pathlib.Path:
@@ -63,25 +67,30 @@ def _read_json(path: pathlib.Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _read_regular_json_no_follow(path: pathlib.Path) -> Any:
+def _read_regular_json_no_follow(directory: int, name: str) -> Any:
     """Read one observer record without following a replacement symlink.
 
     The observer runs out-of-process.  Checking ``Path.is_symlink()`` before a
     normal ``read_text`` leaves a check/use gap in which a record could be
-    replaced.  A descriptor opened with ``O_NOFOLLOW`` is bound to the exact
-    directory entry that is validated and decoded below.
+    replaced.  A descriptor opened relative to the already-opened workspace,
+    with ``O_NOFOLLOW``, is bound to the exact directory entry that is
+    validated and decoded below.  This also avoids following a replacement of
+    the workspace pathname after collection has begun.
     """
     no_follow = getattr(os, "O_NOFOLLOW", None)
     if no_follow is None:
         raise ValueError("platform cannot safely read observer records")
     try:
-        descriptor = os.open(path, os.O_RDONLY | no_follow)
+        descriptor = os.open(name, os.O_RDONLY | os.O_NONBLOCK | no_follow,
+                             dir_fd=directory)
     except OSError as error:
         raise ValueError("observer records must be regular files") from error
     try:
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode):
             raise ValueError("observer records must be regular files")
+        if metadata.st_size > MAX_RAW_RECORD_BYTES:
+            raise ValueError("observer records exceed the structural size limit")
         with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as stream:
             return json.load(stream)
     finally:
@@ -103,27 +112,64 @@ def _validate_observer_path(observer: pathlib.Path) -> pathlib.Path:
     return resolved
 
 
-def _collect(workspace: pathlib.Path) -> tuple[dict[str, Any], dict[str, Any]]:
-    entries = frozenset(entry.name for entry in workspace.iterdir())
-    phase_raw = workspace / PHASE_ONE_RAW_NAME
-    dispatch_raw = workspace / DISPATCH_RAW_NAME
+def _open_workspace_no_follow(workspace: pathlib.Path) -> int:
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    directory = getattr(os, "O_DIRECTORY", None)
+    if no_follow is None or directory is None:
+        raise ValueError("platform cannot safely open observer workspaces")
     try:
-        if entries != _EXPECTED_FILES:
-            raise ValueError("observer workspace must contain exactly the two structural records")
-        # These strict schemas admit no free-form string, location, raw byte, or
-        # identity fields.  We only persist the sanitized structural forms.
-        phase_clean = phase_one_trace.sanitize_trace(_read_regular_json_no_follow(phase_raw))
-        dispatch_clean = dispatch_trace.sanitize_trace(_read_regular_json_no_follow(dispatch_raw))
+        descriptor = os.open(workspace, os.O_RDONLY | directory | no_follow)
+    except OSError as error:
+        raise ValueError("private observation workspace must be a real directory") from error
+    if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+        os.close(descriptor)
+        raise ValueError("private observation workspace must be a real directory")
+    return descriptor
+
+
+def _write_sanitized_json(directory: int, name: str, record: dict[str, Any]) -> None:
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    if no_follow is None:
+        raise ValueError("platform cannot safely write observer records")
+    try:
+        descriptor = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | no_follow,
+                             0o600, dir_fd=directory)
+    except OSError as error:
+        raise ValueError("refusing to overwrite observer output") from error
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", closefd=False) as stream:
+            json.dump(record, stream, indent=2)
+            stream.write("\n")
     finally:
-        # A malformed or rejected raw record must not become a retained export
-        # channel either. Leave only a private error state for the operator.
-        for raw_path in (phase_raw, dispatch_raw):
-            raw_path.unlink(missing_ok=True)
-    (workspace / PHASE_ONE_SANITIZED_NAME).write_text(
-        json.dumps(phase_clean, indent=2) + "\n", encoding="utf-8")
-    (workspace / DISPATCH_SANITIZED_NAME).write_text(
-        json.dumps(dispatch_clean, indent=2) + "\n", encoding="utf-8")
-    return phase_clean, dispatch_clean
+        os.close(descriptor)
+
+
+def _collect(workspace: pathlib.Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    workspace_descriptor = _open_workspace_no_follow(workspace)
+    try:
+        entries = frozenset(os.listdir(workspace_descriptor))
+        try:
+            if entries != _EXPECTED_FILES:
+                raise ValueError("observer workspace must contain exactly the two structural records")
+            # These strict schemas admit no free-form string, location, raw byte, or
+            # identity fields.  We only persist the sanitized structural forms.
+            phase_clean = phase_one_trace.sanitize_trace(
+                _read_regular_json_no_follow(workspace_descriptor, PHASE_ONE_RAW_NAME))
+            dispatch_clean = dispatch_trace.sanitize_trace(
+                _read_regular_json_no_follow(workspace_descriptor, DISPATCH_RAW_NAME))
+        finally:
+            # A malformed or rejected raw record must not become a retained export
+            # channel either. Leave only a private error state for the operator.
+            for raw_name in (PHASE_ONE_RAW_NAME, DISPATCH_RAW_NAME):
+                try:
+                    os.unlink(raw_name, dir_fd=workspace_descriptor)
+                except FileNotFoundError:
+                    pass
+        _write_sanitized_json(workspace_descriptor, PHASE_ONE_SANITIZED_NAME, phase_clean)
+        _write_sanitized_json(workspace_descriptor, DISPATCH_SANITIZED_NAME, dispatch_clean)
+        return phase_clean, dispatch_clean
+    finally:
+        os.close(workspace_descriptor)
 
 
 def execute_observation(
