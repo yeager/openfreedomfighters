@@ -29,6 +29,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
@@ -413,6 +414,24 @@ int main() {
   }
   check(rejected_package,
         "package source rejects a duplicate selected GMS family");
+  auto mixed_identity_members = startup_package_members();
+  for (auto &[name, contents] : mixed_identity_members) {
+    if (name == "SCENES/FF-StartUp.SND") {
+      name = "SCENES/other.SND";
+      break;
+    }
+  }
+  write_package_zip(package_fixture, mixed_identity_members);
+  rejected_package = false;
+  try {
+    static_cast<void>(off::runtime::StartupScenePackageSource::prepare_checked(
+        "FF-Startup", package_fixture));
+  } catch (const std::runtime_error &error) {
+    rejected_package = std::string_view(error.what()) ==
+                       "scene archive resources do not share one source identity";
+  }
+  check(rejected_package,
+        "package source rejects a split catalog identity before typed parsing");
   auto bad_buf_members = startup_package_members();
   for (auto &[name, contents] : bad_buf_members) {
     if (name == "SCENES/FF-StartUp.BUF") {
@@ -892,6 +911,23 @@ int main() {
             transitions.targets().size() == 1U,
         "post-request updates retain native empty-target behavior without "
         "loading a scene");
+
+  off::runtime::SceneTransitionQueue saturated_count_queue;
+  saturated_count_queue.retain_scene_entry(13U);
+  saturated_count_queue.set_current_scene(13U);
+  off::runtime::LoadScreenTransition saturated_count_transition(
+      source, std::numeric_limits<std::uint32_t>::max(), false);
+  check(saturated_count_transition.ordinary_update(saturated_count_queue) &&
+            saturated_count_transition.update_count() ==
+                std::numeric_limits<std::uint32_t>::max() &&
+            saturated_count_queue.pending() &&
+            saturated_count_queue.entries().size() == 1U &&
+            saturated_count_queue.entries().front().removal_requested &&
+            !saturated_count_queue.current_scene().has_value() &&
+            saturated_count_queue.targets() ==
+                std::vector<std::string>{"FF-Startup"},
+        "a saturated recovered LoadScreen counter still performs its known "
+        "handoff");
 
   off::runtime::SceneTransitionQueue slash_queue;
   check(slash_queue.request_target("Scenes/FF-StartUp") &&

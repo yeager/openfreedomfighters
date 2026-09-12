@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -111,6 +112,34 @@ public:
     return true;
   }
 
+  // The LoadScreen component's clear-plus-target request is one logical
+  // handoff. Stage the only allocating operation before retiring the current
+  // scene so an allocation failure cannot leave an orphaned clear request.
+  // Empty targets retain the observed clear-only behavior.
+  [[nodiscard]] bool request_clear_then_target(std::string_view target) {
+    if (target.empty()) {
+      request_clear();
+      return false;
+    }
+    std::string normalized(target);
+    for (auto& character : normalized) {
+      if (character == '/') {
+        character = '\\';
+      }
+    }
+    auto staged_targets = targets_;
+    staged_targets.push_back(std::move(normalized));
+
+    for (auto& entry : entries_) {
+      entry.removal_requested = true;
+    }
+    current_scene_.reset();
+    targets_ = std::move(staged_targets);
+    pending_ = true;
+    ++clear_requests_;
+    return true;
+  }
+
   [[nodiscard]] const std::vector<DeferredSceneEntry>& entries() const noexcept {
     return entries_;
   }
@@ -208,12 +237,16 @@ public:
       one_time_setup();
       one_time_setup_pending_ = false;
     }
-    ++update_count_;
+    // A recovered counter may already be at its maximum. Saturate rather than
+    // wrapping it back below the third-update gate and delaying a known
+    // request by three arbitrary frames.
+    if (update_count_ != std::numeric_limits<std::uint32_t>::max()) {
+      ++update_count_;
+    }
     if (update_count_ < 3U) {
       return false;
     }
-    queue.request_clear();
-    const bool retained = queue.request_target(target_);
+    const bool retained = queue.request_clear_then_target(target_);
     target_.clear();
     return retained;
   }

@@ -184,6 +184,7 @@ add_library(off_core
     src/settings/upscaler_runtime.cpp
     src/simulation/fixed_step.cpp
     src/simulation/component_store.cpp
+    src/simulation/component_world.cpp
     src/simulation/input.cpp
     src/simulation/replay.cpp
     src/simulation/save_store.cpp
@@ -943,6 +944,9 @@ if(BUILD_TESTING)
     add_executable(off_simulation_component_store_tests tests/simulation_component_store_tests.cpp)
     target_link_libraries(off_simulation_component_store_tests PRIVATE off_core)
     add_test(NAME off_simulation_component_store_tests COMMAND off_simulation_component_store_tests)
+    add_executable(off_simulation_component_world_tests tests/simulation_component_world_tests.cpp)
+    target_link_libraries(off_simulation_component_world_tests PRIVATE off_core)
+    add_test(NAME off_simulation_component_world_tests COMMAND off_simulation_component_world_tests)
 
     add_executable(off_simulation_save_store_tests tests/simulation_save_store_tests.cpp)
     target_link_libraries(off_simulation_save_store_tests PRIVATE off_core)

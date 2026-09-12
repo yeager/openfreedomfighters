@@ -2,6 +2,7 @@
 
 #include "off/data/gms_image.hpp"
 #include "off/data/packed_resource.hpp"
+#include "off/data/scene_resource_catalog.hpp"
 #include "off/data/scene_support.hpp"
 #include "off/data/zgf_bundle.hpp"
 #include "off/data/zip_archive.hpp"
@@ -35,20 +36,12 @@ inline void require_regular_startup_archive(
   }
 }
 
-[[nodiscard]] inline const data::ZipEntry &startup_exact_member(
-    const data::ZipArchive &archive, std::string_view expected_name) {
-  const auto count = static_cast<std::size_t>(std::count_if(
-      archive.entries().begin(), archive.entries().end(),
-      [&](const data::ZipEntry &entry) { return entry.name == expected_name; }));
-  const auto *selected = archive.find(expected_name);
-  if (count != 1U || selected == nullptr) {
-    throw std::runtime_error("startup scene archive has invalid required members");
-  }
-  return *selected;
-}
-
 struct StartupScenePackageSourceOwner final {
   data::ZipArchive archive;
+  // The catalog is the package-level proof that every retained member belongs
+  // to one checked scene identity.  Keep it with the archive snapshot so
+  // subsequent typed reads cannot fall back to ad-hoc filename selection.
+  data::SceneResourceCatalog catalog;
   std::vector<std::byte> zgf_source;
   data::ZgfBundle zgf;
   std::vector<std::byte> gms_source;
@@ -79,27 +72,52 @@ public:
 
     detail::require_regular_startup_archive(archive_path);
 
+    auto archive = data::ZipArchive::open(archive_path);
+    auto catalog = data::SceneResourceCatalog::from_archive(archive);
     auto owner = std::make_shared<detail::StartupScenePackageSourceOwner>(
         detail::StartupScenePackageSourceOwner{
-            .archive = data::ZipArchive::open(archive_path)});
-    constexpr std::string_view extensions[] = {
-        ".ZGF", ".SUP", ".BUF", ".GMS", ".TEX", ".SND",
-        ".LOC", ".OCT", ".SGP", ".RMC", ".RMI", ".PRM"};
+            .archive = std::move(archive), .catalog = std::move(catalog)});
+    struct ExpectedMember final {
+      data::SceneResourceKind kind;
+      std::string_view extension;
+      bool required;
+    };
+    constexpr ExpectedMember members[] = {
+        {data::SceneResourceKind::zgf, ".ZGF", true},
+        {data::SceneResourceKind::sup, ".SUP", true},
+        {data::SceneResourceKind::buf, ".BUF", false},
+        {data::SceneResourceKind::gms, ".GMS", true},
+        {data::SceneResourceKind::tex, ".TEX", true},
+        {data::SceneResourceKind::snd, ".SND", true},
+        {data::SceneResourceKind::loc, ".LOC", false},
+        {data::SceneResourceKind::oct, ".OCT", true},
+        {data::SceneResourceKind::sgp, ".SGP", true},
+        {data::SceneResourceKind::rmc, ".RMC", true},
+        {data::SceneResourceKind::rmi, ".RMI", true},
+        {data::SceneResourceKind::prm, ".PRM", true},
+    };
     constexpr std::string_view prefix = "SCENES/FF-StartUp";
-    if (owner->archive.entries().size() != std::size(extensions)) {
+    if (owner->archive.entries().size() != std::size(members)) {
       throw std::runtime_error("startup scene archive has non-canonical members");
     }
-    const auto member = [&](std::string_view extension) -> const data::ZipEntry & {
-      return detail::startup_exact_member(owner->archive,
-                                          std::string(prefix) + std::string(extension));
+    const auto member = [&](const ExpectedMember expected)
+        -> const data::ZipEntry & {
+      const auto *selected = expected.required
+                                 ? std::addressof(owner->catalog.member(expected.kind))
+                                 : owner->catalog.optional_member(expected.kind);
+      if (selected == nullptr ||
+          selected->name != std::string(prefix) + std::string(expected.extension)) {
+        throw std::runtime_error("startup scene archive has invalid required members");
+      }
+      return *selected;
     };
-    for (const auto extension : extensions) {
-      static_cast<void>(member(extension));
+    for (const auto expected : members) {
+      static_cast<void>(member(expected));
     }
-    const auto &zgf_member = member(".ZGF");
-    const auto &gms_member = member(".GMS");
-    const auto &support_member = member(".SUP");
-    const auto &buf_member = member(".BUF");
+    const auto &zgf_member = member(members[0]);
+    const auto &support_member = member(members[1]);
+    const auto &buf_member = member(members[2]);
+    const auto &gms_member = member(members[3]);
 
     owner->zgf_source = owner->archive.read(zgf_member);
     owner->zgf = data::ZgfBundle::parse(
@@ -115,10 +133,12 @@ public:
     }
     owner->buf_source = owner->archive.read(buf_member);
     owner->gms.validate_buf(owner->buf_source);
-    for (const auto extension : extensions) {
-      if (extension != ".ZGF" && extension != ".GMS" &&
-          extension != ".SUP" && extension != ".BUF") {
-        owner->raw_sources.push_back(owner->archive.read(member(extension)));
+    for (const auto expected : members) {
+      if (expected.kind != data::SceneResourceKind::zgf &&
+          expected.kind != data::SceneResourceKind::gms &&
+          expected.kind != data::SceneResourceKind::sup &&
+          expected.kind != data::SceneResourceKind::buf) {
+        owner->raw_sources.push_back(owner->archive.read(member(expected)));
       }
     }
 
