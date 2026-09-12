@@ -60,6 +60,13 @@ std::string lowercase(std::string value) {
   return value;
 }
 
+bool is_direct_regular_file(const std::filesystem::path& path,
+                            std::error_code& error) {
+  const auto status = std::filesystem::symlink_status(path, error);
+  return !error && !std::filesystem::is_symlink(status) &&
+         std::filesystem::is_regular_file(status);
+}
+
 } // namespace
 
 InstallVerification verify_install(const std::filesystem::path &root,
@@ -71,17 +78,40 @@ InstallVerification verify_install(const std::filesystem::path &root,
                    "game-data directory does not exist");
   }
 
-  std::filesystem::path executable;
-  for (const auto *name : {"Freedom.Exe", "Freedom.exe"}) {
-    const auto candidate = root / name;
-    if (std::filesystem::is_regular_file(candidate, error)) {
-      executable = candidate;
-      break;
-    }
+  const auto canonical_root = std::filesystem::canonical(root, error);
+  if (error || !std::filesystem::is_directory(canonical_root, error)) {
+    return failure(InstallError::io_error, root,
+                   "could not resolve game-data directory");
   }
-  if (executable.empty()) {
+
+  std::vector<std::filesystem::path> executable_spellings;
+  for (const auto *name : {"Freedom.Exe", "Freedom.exe"}) {
+    const auto candidate = canonical_root / name;
+    error.clear();
+    const auto status = std::filesystem::symlink_status(candidate, error);
+    if (error) {
+      return failure(InstallError::io_error, root,
+                     "could not inspect Freedom.Exe");
+    }
+    if (!std::filesystem::exists(status)) continue;
+    if (!is_direct_regular_file(candidate, error)) {
+      return failure(InstallError::io_error, root,
+                     "Freedom.Exe must be a regular file, not a link");
+    }
+    executable_spellings.push_back(candidate);
+  }
+  if (executable_spellings.empty()) {
     return failure(InstallError::missing_executable, root,
                    "Freedom.Exe was not found");
+  }
+  const auto& executable = executable_spellings.front();
+  for (std::size_t index = 1; index < executable_spellings.size(); ++index) {
+    const auto& spelling = executable_spellings[index];
+    error.clear();
+    if (!std::filesystem::equivalent(executable, spelling, error) || error) {
+      return failure(InstallError::io_error, root,
+                     "ambiguous Freedom.Exe spellings");
+    }
   }
   const auto size = std::filesystem::file_size(executable, error);
   if (error) {

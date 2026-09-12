@@ -454,6 +454,12 @@ if(BUILD_TESTING)
         OFF_MANIFEST_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/install-manifest-test-work")
     add_test(NAME off_install_manifest_tests COMMAND off_install_manifest_tests)
 
+    add_executable(off_install_executable_path_tests tests/install_executable_path_tests.cpp)
+    target_link_libraries(off_install_executable_path_tests PRIVATE off_core)
+    target_compile_definitions(off_install_executable_path_tests PRIVATE
+        OFF_EXECUTABLE_PATH_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/install-executable-path-test-work")
+    add_test(NAME off_install_executable_path_tests COMMAND off_install_executable_path_tests)
+
     add_executable(off_install_audit_cache_tests tests/install_audit_cache_tests.cpp)
     target_link_libraries(off_install_audit_cache_tests PRIVATE off_core)
     target_compile_definitions(off_install_audit_cache_tests PRIVATE
