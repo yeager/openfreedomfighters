@@ -430,6 +430,40 @@ int main() {
   }
   check(rejected_package,
         "package source rejects a BUF that cannot satisfy paired GMS references");
+
+  const auto package_directory =
+      std::filesystem::current_path() / "off-startup-scene-package-directory";
+  std::filesystem::remove_all(package_directory, package_error);
+  std::filesystem::create_directory(package_directory, package_error);
+  rejected_package = false;
+  try {
+    static_cast<void>(off::runtime::StartupScenePackageSource::prepare_checked(
+        "FF-Startup", package_directory));
+  } catch (const std::runtime_error &error) {
+    rejected_package =
+        std::string_view(error.what()) == "startup scene archive source is unavailable";
+  }
+  check(rejected_package,
+        "package source rejects a directory before attempting ZIP parsing");
+  std::filesystem::remove_all(package_directory, package_error);
+
+  const auto package_link =
+      std::filesystem::current_path() / "off-startup-scene-package-link.zip";
+  write_package_zip(package_fixture, startup_package_members());
+  std::filesystem::create_symlink(package_fixture, package_link, package_error);
+  if (!package_error) {
+    rejected_package = false;
+    try {
+      static_cast<void>(off::runtime::StartupScenePackageSource::prepare_checked(
+          "FF-Startup", package_link));
+    } catch (const std::runtime_error &error) {
+      rejected_package = std::string_view(error.what()) ==
+                         "startup scene archive source is unavailable";
+    }
+    check(rejected_package,
+          "package source refuses a symlinked archive replacement");
+    std::filesystem::remove(package_link, package_error);
+  }
   std::filesystem::remove(package_fixture, package_error);
   if (const auto *retail_data_root = std::getenv("OFF_STARTUP_PACKAGE_DATA_ROOT");
       retail_data_root != nullptr && *retail_data_root != '\0') {

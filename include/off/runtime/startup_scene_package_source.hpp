@@ -19,6 +19,22 @@
 namespace off::runtime {
 namespace detail {
 
+// This loader receives a path after installation verification.  Keep the
+// source boundary fail-closed as well: a later package preparation must not
+// silently follow a replacement symlink or accept a directory as an archive.
+// ZipArchive owns an in-memory snapshot after this check; this guard only
+// admits the filesystem object selected for that snapshot and exposes no path
+// detail to callers.
+inline void require_regular_startup_archive(
+    const std::filesystem::path &archive_path) {
+  std::error_code error;
+  const auto status = std::filesystem::symlink_status(archive_path, error);
+  if (error || std::filesystem::is_symlink(status) ||
+      !std::filesystem::is_regular_file(status)) {
+    throw std::runtime_error("startup scene archive source is unavailable");
+  }
+}
+
 [[nodiscard]] inline const data::ZipEntry &startup_exact_member(
     const data::ZipArchive &archive, std::string_view expected_name) {
   const auto count = static_cast<std::size_t>(std::count_if(
@@ -60,6 +76,8 @@ public:
       throw std::runtime_error(
           "startup scene package has an unsupported target");
     }
+
+    detail::require_regular_startup_archive(archive_path);
 
     auto owner = std::make_shared<detail::StartupScenePackageSourceOwner>(
         detail::StartupScenePackageSourceOwner{
