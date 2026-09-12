@@ -128,6 +128,47 @@ public:
 private:
   friend class StartupSceneLoader;
 
+  // Loader callbacks are intentionally given no queue reference, but a host
+  // integration can still capture one. Keep a private checkpoint so a
+  // candidate factory cannot smuggle a second request, retire entries, or
+  // otherwise change the request it is meant to satisfy. The loader restores
+  // this exact state before rejecting that candidate.
+  struct Checkpoint {
+    std::vector<DeferredSceneEntry> entries;
+    std::vector<std::string> targets;
+    std::optional<std::uint64_t> current_scene;
+    bool pending{};
+    std::uint32_t clear_requests{};
+  };
+
+  [[nodiscard]] Checkpoint checkpoint() const {
+    return {entries_, targets_, current_scene_, pending_, clear_requests_};
+  }
+
+  [[nodiscard]] bool matches(const Checkpoint& checkpoint) const noexcept {
+    if (current_scene_ != checkpoint.current_scene || pending_ != checkpoint.pending ||
+        clear_requests_ != checkpoint.clear_requests || targets_ != checkpoint.targets ||
+        entries_.size() != checkpoint.entries.size()) {
+      return false;
+    }
+    for (std::size_t index = 0; index < entries_.size(); ++index) {
+      if (entries_[index].identity != checkpoint.entries[index].identity ||
+          entries_[index].removal_requested !=
+              checkpoint.entries[index].removal_requested) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void restore(Checkpoint checkpoint) noexcept {
+    entries_ = std::move(checkpoint.entries);
+    targets_ = std::move(checkpoint.targets);
+    current_scene_ = checkpoint.current_scene;
+    pending_ = checkpoint.pending;
+    clear_requests_ = checkpoint.clear_requests;
+  }
+
   void commit_supported_transition() noexcept {
     entries_.erase(std::remove_if(entries_.begin(), entries_.end(),
                                   [](const DeferredSceneEntry& entry) {

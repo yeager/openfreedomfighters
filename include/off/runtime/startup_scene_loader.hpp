@@ -178,6 +178,7 @@ public:
     if (!queue.pending_) return StartupSceneLoaderResult::no_pending;
 
     active_ = true;
+    const auto queue_checkpoint = queue.checkpoint();
     try {
       if (queue.targets_.size() != 1U || queue.targets_.front() != "FF-Startup" ||
           !services.prepare_complete_checked_package ||
@@ -187,12 +188,18 @@ public:
       }
 
       auto package = services.prepare_complete_checked_package(queue.targets_.front());
-      if (!package.has_value()) {
+      if (!package.has_value() || !queue.matches(queue_checkpoint)) {
+        if (!queue.matches(queue_checkpoint)) {
+          queue.restore(queue_checkpoint);
+        }
         active_ = false;
         return StartupSceneLoaderResult::rejected;
       }
       auto scene = services.construct_live_scene(*package);
-      if (!scene.has_value()) {
+      if (!scene.has_value() || !queue.matches(queue_checkpoint)) {
+        if (!queue.matches(queue_checkpoint)) {
+          queue.restore(queue_checkpoint);
+        }
         active_ = false;
         return StartupSceneLoaderResult::rejected;
       }
@@ -205,6 +212,9 @@ public:
       active_ = false;
       return StartupSceneLoaderResult::committed;
     } catch (...) {
+      if (!queue.matches(queue_checkpoint)) {
+        queue.restore(queue_checkpoint);
+      }
       active_ = false;
       throw;
     }

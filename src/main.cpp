@@ -1062,6 +1062,31 @@ int main(int argc, char **argv) {
     std::cerr << "Select only one diagnostic renderer.\n";
     return 2;
   }
+  const bool diagnostic_renderer_requested =
+      diagnostic_scene || diagnostic_startup_graphics ||
+      diagnostic_intro_picture;
+  const unsigned probe_count =
+      static_cast<unsigned>(probe_startup_boot) +
+      static_cast<unsigned>(probe_startup_boot_profile) +
+      static_cast<unsigned>(probe_startup_route_cold) +
+      static_cast<unsigned>(probe_soundtrack) +
+      static_cast<unsigned>(probe_localization) +
+      static_cast<unsigned>(probe_movie_cuts) +
+      static_cast<unsigned>(probe_first_cut_cold) +
+      static_cast<unsigned>(probe_first_cut_initialization) +
+      static_cast<unsigned>(probe_intro_renderer_payload) +
+      static_cast<unsigned>(probe_intro_named_global);
+  if (probe_count > 1U) {
+    std::cerr << "Select only one source probe.\n";
+    return 2;
+  }
+  if (verify_only && diagnostic_renderer_requested) {
+    // --verify-only has no SDL preflight or render assets.  More importantly,
+    // accepting a diagnostic renderer here would make its explicit source-only
+    // presentation look like a normal verification path.
+    std::cerr << "A diagnostic renderer cannot be combined with verify-only mode.\n";
+    return 2;
+  }
   if (!screenshot_path.empty() && screenshot_path.extension() != ".bmp") {
     std::cerr << "Screenshot output must use the .bmp extension.\n";
     return 2;
@@ -1070,58 +1095,12 @@ int main(int argc, char **argv) {
     std::cerr << "A screenshot cannot be captured in verify-only mode.\n";
     return 2;
   }
-  if ((probe_startup_boot || probe_startup_boot_profile || probe_startup_route_cold) &&
-      (verify_only || diagnostic_scene || diagnostic_startup_graphics ||
-       diagnostic_intro_picture || frame_limit != 0U || show_graphics_menu ||
-       !screenshot_path.empty() || !locale.empty() || probe_soundtrack ||
-       probe_localization || probe_movie_cuts || probe_first_cut_cold ||
-       probe_first_cut_initialization || probe_intro_renderer_payload ||
-       probe_intro_named_global || mode_specified ||
-       static_cast<unsigned>(probe_startup_boot) +
-               static_cast<unsigned>(probe_startup_boot_profile) +
-               static_cast<unsigned>(probe_startup_route_cold) >
-           1U)) {
-    std::cerr
-        << "Startup probes cannot be combined with runtime options.\n";
+  if (probe_count != 0U &&
+      (verify_only || diagnostic_renderer_requested || frame_limit != 0U ||
+       show_graphics_menu || !screenshot_path.empty() || !locale.empty() ||
+       mode_specified)) {
+    std::cerr << "Source probes cannot be combined with runtime options.\n";
     usage(std::cerr);
-    return 2;
-  }
-  if (probe_soundtrack &&
-      (verify_only || probe_startup_boot || probe_startup_route_cold || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
-       show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified ||
-       probe_localization || probe_movie_cuts || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
-    std::cerr << "Soundtrack probe cannot be combined with runtime options.\n";
-    usage(std::cerr);
-    return 2;
-  }
-  if (probe_localization &&
-      (verify_only || probe_startup_boot || probe_startup_route_cold || probe_soundtrack || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
-       show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified ||
-       probe_movie_cuts || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
-    std::cerr << "Localization probe cannot be combined with runtime options.\n";
-    usage(std::cerr);
-    return 2;
-  }
-  if (probe_movie_cuts &&
-      (verify_only || probe_startup_boot || probe_startup_route_cold || probe_soundtrack || probe_localization || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
-       show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified ||
-       probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
-    std::cerr << "MovieCut probe cannot be combined with runtime options.\n";
-    usage(std::cerr);
-    return 2;
-  }
-  if ((probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global) &&
-      (verify_only || probe_startup_boot || probe_startup_route_cold || probe_soundtrack || probe_localization || probe_movie_cuts || diagnostic_scene || diagnostic_intro_picture || frame_limit != 0U ||
-       show_graphics_menu || !screenshot_path.empty() || !locale.empty() || mode_specified)) {
-    std::cerr << "First-cut probes cannot be combined with runtime options.\n";
-    usage(std::cerr);
-    return 2;
-  }
-  if (static_cast<unsigned>(probe_first_cut_cold) +
-          static_cast<unsigned>(probe_first_cut_initialization) +
-          static_cast<unsigned>(probe_intro_renderer_payload) +
-          static_cast<unsigned>(probe_intro_named_global) > 1U) {
-    std::cerr << "Select only one intro probe.\n";
     return 2;
   }
   if (!screenshot_path.empty()) {

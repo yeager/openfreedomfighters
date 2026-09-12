@@ -1088,6 +1088,84 @@ int main() {
             startup_state.current_scene()->identity() == 71U,
         "factory failure cannot retire the prior scene or request");
 
+  const auto retained_entries = failed_load_queue.entries();
+  const auto retained_targets = failed_load_queue.targets();
+  const auto retained_current_scene = failed_load_queue.current_scene();
+  const auto retained_clear_requests = failed_load_queue.clear_requests();
+  const off::runtime::StartupSceneLoaderServices mutating_prepare{
+      .prepare_complete_checked_package = [&](std::string_view)
+          -> std::optional<off::runtime::StartupSceneLoadPackage> {
+        failed_load_queue.request_clear();
+        static_cast<void>(failed_load_queue.request_target("OtherScene"));
+        return package();
+      },
+      .construct_live_scene = [](const off::runtime::StartupSceneLoadPackage &)
+          -> std::optional<off::runtime::StartupLiveScene> { std::abort(); },
+  };
+  check(loader.consume(failed_load_queue, startup_state, mutating_prepare) ==
+                off::runtime::StartupSceneLoaderResult::rejected &&
+            failed_load_queue.pending() &&
+            failed_load_queue.entries().size() == retained_entries.size() &&
+            failed_load_queue.entries().front().identity ==
+                retained_entries.front().identity &&
+            failed_load_queue.entries().front().removal_requested ==
+                retained_entries.front().removal_requested &&
+            failed_load_queue.targets() == retained_targets &&
+            failed_load_queue.current_scene() == retained_current_scene &&
+            failed_load_queue.clear_requests() == retained_clear_requests &&
+            startup_state.current_scene()->identity() == 71U,
+        "a mutating package callback is rolled back before its candidate is rejected");
+
+  const off::runtime::StartupSceneLoaderServices mutating_factory{
+      .prepare_complete_checked_package = [&](std::string_view)
+          -> std::optional<off::runtime::StartupSceneLoadPackage> {
+        return package();
+      },
+      .construct_live_scene = [&](const off::runtime::StartupSceneLoadPackage &)
+          -> std::optional<off::runtime::StartupLiveScene> {
+        failed_load_queue.retain_scene_entry(999U);
+        failed_load_queue.set_current_scene(999U);
+        return off::runtime::StartupLiveScene::from_factory(999U, lease(999U));
+      },
+  };
+  check(loader.consume(failed_load_queue, startup_state, mutating_factory) ==
+                off::runtime::StartupSceneLoaderResult::rejected &&
+            failed_load_queue.pending() &&
+            failed_load_queue.entries().size() == retained_entries.size() &&
+            failed_load_queue.entries().front().identity ==
+                retained_entries.front().identity &&
+            failed_load_queue.entries().front().removal_requested ==
+                retained_entries.front().removal_requested &&
+            failed_load_queue.targets() == retained_targets &&
+            failed_load_queue.current_scene() == retained_current_scene &&
+            failed_load_queue.clear_requests() == retained_clear_requests &&
+            startup_state.current_scene()->identity() == 71U,
+        "a mutating factory callback cannot commit a scene against a changed request");
+
+  bool mutating_prepare_threw = false;
+  try {
+    static_cast<void>(loader.consume(
+        failed_load_queue, startup_state,
+        {.prepare_complete_checked_package = [&](std::string_view)
+             -> std::optional<off::runtime::StartupSceneLoadPackage> {
+           static_cast<void>(failed_load_queue.request_target("OtherScene"));
+           throw std::runtime_error("mutating package failed");
+         },
+         .construct_live_scene = [](const off::runtime::StartupSceneLoadPackage &)
+             -> std::optional<off::runtime::StartupLiveScene> {
+           return std::nullopt;
+         }}));
+  } catch (const std::runtime_error &) {
+    mutating_prepare_threw = true;
+  }
+  check(mutating_prepare_threw && !loader.active() &&
+            failed_load_queue.entries().size() == retained_entries.size() &&
+            failed_load_queue.targets() == retained_targets &&
+            failed_load_queue.current_scene() == retained_current_scene &&
+            failed_load_queue.clear_requests() == retained_clear_requests &&
+            startup_state.current_scene()->identity() == 71U,
+        "a throwing mutating callback restores the request before propagating");
+
   const off::runtime::StartupSceneLoaderServices throwing_factory{
       .prepare_complete_checked_package = [&](std::string_view)
           -> std::optional<off::runtime::StartupSceneLoadPackage> {
