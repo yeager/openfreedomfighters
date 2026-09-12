@@ -1,5 +1,7 @@
 #include "off/ui/private_translation_pack.hpp"
 
+#include "off/platform/locale_preferences.hpp"
+
 #include <algorithm>
 #include <array>
 #include <fstream>
@@ -61,7 +63,16 @@ bool valid_locale(std::string_view locale) noexcept {
 }
 std::optional<std::string_view>
 canonical_locale(std::string_view value) noexcept {
-  const auto language_end = value.find_first_of("-_.");
+  // SDL reports well-formed BCP-47 components on supported platforms, but an
+  // explicit command-line locale and other host providers are less uniform.
+  // Normalize once through the shared host parser before making a supported
+  // pack decision. In particular, a differently cased Traditional Chinese
+  // tag must never be mistaken for Simplified Chinese.
+  const auto normalized = platform::canonical_host_locale_tag(value);
+  if (!normalized)
+    return std::nullopt;
+  value = *normalized;
+  const auto language_end = value.find('-');
   const auto language = value.substr(0, language_end);
   const auto equal_ascii = [](std::string_view left, std::string_view right) {
     if (left.size() != right.size())
@@ -115,11 +126,8 @@ canonical_locale(std::string_view value) noexcept {
     return "ko";
   if (equal_ascii(language, "zh")) {
     if (value.find("Hant") != std::string_view::npos ||
-        value.find("hant") != std::string_view::npos ||
         value.find("TW") != std::string_view::npos ||
-        value.find("tw") != std::string_view::npos ||
-        value.find("HK") != std::string_view::npos ||
-        value.find("hk") != std::string_view::npos)
+        value.find("HK") != std::string_view::npos)
       return std::nullopt;
     return "zh-Hans";
   }

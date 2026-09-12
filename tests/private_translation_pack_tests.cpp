@@ -86,6 +86,13 @@ int main() {
         PrivateTranslationPack::load_local(root, "english.offl10n", source);
     check(english && english->declared_complete(),
           "complete local pack covers exact canonical span");
+    write(root / "simplified-chinese.offl10n",
+          pack(source.parser_identity, source.source_set, "zh-Hans", 0U,
+               3U, false, {{one, "Simplified project text"}}));
+    const auto simplified_chinese = PrivateTranslationPack::load_local(
+        root, "simplified-chinese.offl10n", source);
+    check(simplified_chinese.has_value(),
+          "Simplified Chinese pack uses its canonical locale tag");
     write(root / "en.offl10n",
           pack(source.parser_identity, source.source_set, "en", 0U, 3U, true,
                {{"off.retail.source.synthetic.v1.0", "Project text zero"},
@@ -117,8 +124,8 @@ int main() {
               .has_value(),
           "complete packs validate ordinal coverage rather than lexical ID "
           "order");
-    const auto resolver =
-        PrivateTranslationResolver::build(source, {*swedish, *english});
+    const auto resolver = PrivateTranslationResolver::build(
+        source, {*swedish, *english, *simplified_chinese});
     const std::string_view platform[] = {"de-DE", "sv-SE"};
     check(resolver &&
               resolver->resolve(one, "sv-SE", platform) == "Projekttext ett",
@@ -127,6 +134,10 @@ int main() {
           "partial explicit pack falls through to English");
     check(resolver->resolve(one, "zz", platform) == "Projekttext ett",
           "system locale is used after unavailable explicit locale");
+    check(resolver->resolve(one, "sv_SE.UTF-8", {}) == "Projekttext ett",
+          "POSIX host locale spellings use the same preference normalization");
+    check(resolver->resolve(one, "ZH-hANT", {}) == "Project text one",
+          "Traditional Chinese never silently resolves to a Simplified pack");
     write(root / "wrong-source.offl10n",
           pack(source.parser_identity, "source.synthetic.other", "sv", 0U, 3U,
                false, {{one, "X"}}));
