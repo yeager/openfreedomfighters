@@ -1,4 +1,5 @@
 #include "off/ui/retail_ui_fonts.hpp"
+#include "off/ui/text_layout.hpp"
 
 #include "off/data/packed_resource.hpp"
 #include "off/data/zgf_bundle.hpp"
@@ -153,20 +154,35 @@ std::optional<std::size_t> select_font_for_utf8(const RetailUiFontSet &fonts, st
 
 std::optional<std::vector<RetailUiFontRun>> select_font_runs_for_utf8(
     const RetailUiFontSet &fonts, std::string_view text) noexcept {
+  const auto boundary = make_text_layout_boundary(text);
+  if (!boundary)
+    return std::nullopt;
   std::vector<RetailUiFontRun> result;
-  for(std::size_t offset=0;offset<text.size();) {
-    const auto begin=offset;
-    std::uint32_t scalar{};
-    if(!next_utf8(text,offset,scalar)) return std::nullopt;
+  for (const auto &cluster : boundary->clusters) {
+    const auto begin = cluster.byte_offset;
+    const auto end = begin + cluster.byte_length;
+    std::size_t offset = begin;
+    std::vector<std::uint32_t> scalars;
+    scalars.reserve(cluster.scalar_count);
+    while (offset < end) {
+      std::uint32_t scalar{};
+      if (!next_utf8(text, offset, scalar) || offset > end)
+        return std::nullopt;
+      scalars.push_back(scalar);
+    }
+    if (offset != end || scalars.size() != cluster.scalar_count)
+      return std::nullopt;
     const auto selected=std::ranges::find_if(fonts.fonts,[&](const auto& font) {
-      return font_has(font.sfnt,scalar);
+      return std::ranges::all_of(scalars, [&](const auto scalar) {
+        return font_has(font.sfnt, scalar);
+      });
     });
     if(selected==fonts.fonts.end()) return std::nullopt;
     const auto font_index=static_cast<std::size_t>(selected-fonts.fonts.begin());
     if(!result.empty() && result.back().font_index==font_index &&
         result.back().byte_offset+result.back().byte_length==begin) {
-      result.back().byte_length=offset-result.back().byte_offset;
-    } else result.push_back({font_index,begin,offset-begin});
+      result.back().byte_length=end-result.back().byte_offset;
+    } else result.push_back({font_index,begin,cluster.byte_length});
   }
   return result;
 }

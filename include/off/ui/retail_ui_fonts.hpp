@@ -40,9 +40,11 @@ load_retail_ui_fonts(const std::filesystem::path &startup_archive);
 select_font_for_utf8(const RetailUiFontSet &fonts, std::string_view text) noexcept;
 
 // Splits independently authored UTF-8 text into the smallest contiguous runs
-// selected by first covering font. Missing/invalid scalar coverage rejects the
-// whole request. This does not perform shaping, kerning, bidi reordering, or
-// draw layout.
+// selected by first covering font. Input is first admitted through TextLayout;
+// every recognized text cluster is assigned to exactly one font, so fallback
+// can never split a combining, Hangul, CRLF, supported emoji-ZWJ, or regional-
+// indicator cluster. Missing/invalid coverage rejects the whole request. This
+// does not perform shaping, kerning, bidi reordering, or draw layout.
 [[nodiscard]] std::optional<std::vector<RetailUiFontRun>>
 select_font_runs_for_utf8(const RetailUiFontSet &fonts, std::string_view text) noexcept;
 

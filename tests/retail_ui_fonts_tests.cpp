@@ -254,6 +254,21 @@ int main() {
         "font fallback splits mixed-script UTF-8 into contiguous covering font runs");
   check(!off::ui::select_font_runs_for_utf8(coverage, std::string_view{"\xc3\x28",2}),
         "font fallback rejects malformed UTF-8 before selecting any run");
+  const off::ui::RetailUiFontSet split_cluster_coverage{{
+      {cmap12_sfnt(0x20U, 0x7eU)},
+      {cmap12_sfnt(0x0300U, 0x036fU)}}};
+  check(!off::ui::select_font_runs_for_utf8(split_cluster_coverage, "e\xCC\x81"),
+        "font fallback rejects a cluster whose scalar coverage is split across fonts");
+  const off::ui::RetailUiFontSet cluster_coverage{{
+      {cmap12_sfnt(0x20U, 0x7eU)},
+      {cmap12_sfnt(0x0300U, 0x036fU)},
+      {cmap12_sfnt(0x20U, 0x036fU)}}};
+  const auto intact_cluster =
+      off::ui::select_font_runs_for_utf8(cluster_coverage, "e\xCC\x81x");
+  check(intact_cluster && *intact_cluster ==
+              std::vector<off::ui::RetailUiFontRun>{{2U, 0U, 3U},
+                                                     {0U, 3U, 1U}},
+        "font fallback assigns a recognized combining cluster to one font run");
   const std::array<off::ui::FontRunRasterMetrics, 2> layout_metrics{{{20, 22, 16}, {30, 28, 21}}};
   const auto placements = off::ui::layout_ltr_font_runs(
       12.0F, 40.0F, layout_metrics);
