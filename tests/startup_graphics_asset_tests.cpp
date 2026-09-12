@@ -8,6 +8,7 @@
 #include "off/graphics/startup_graphics_transform_chain.hpp"
 #include "off/graphics/startup_source_picture_draw_admission.hpp"
 #include "off/graphics/startup_picture_pass_admission.hpp"
+#include "off/platform/sdl_startup_picture_executor.hpp"
 
 #include <bit>
 #include <algorithm>
@@ -471,7 +472,9 @@ int main(int argc, char **argv) {
         },
         [&] { trace.push_back("preselect"); return true; },
         [&](auto, auto) { trace.push_back("texture"); return true; },
-        [&](std::span<const off::graphics::StartupGraphicsExpandedSubmission> draws) {
+        [&](std::span<const off::graphics::StartupGraphicsExpandedSubmission> draws,
+            std::span<const off::graphics::StartupGraphicsPreparedResource> resources) {
+          check(resources.size() == 6, "ordered source hook receives prepared resource identities");
           trace.push_back("ordered:" + std::to_string(draws.size())); return true;
         },
         [&](const auto &, const auto &, auto pass) {
@@ -531,6 +534,83 @@ int main(int argc, char **argv) {
     check(pass_result.prepared_picture_count == 21 &&
               pass_result.submitted_group_count == 77,
           "conditional picture pass delegates only after matching live root/view/context admission");
+
+    // This stays CPU-only: the ordered hook turns the already-resident
+    // source-boundary values into an immutable SDL packet, but never prepares
+    // a GPU frame or receives a command buffer.
+    off::platform::StartupPictureRenderState packet_state{};
+    packet_state.projection = {1, 0, 0, 0, 0, 1, 0, 0,
+                               0, 0, 1, 0, 23, 29, 0, 1};
+    packet_state.viewport = {5, 7, 80, 60, 0, 1};
+    packet_state.scissor = {5, 7, 80, 60};
+    packet_state.packed_texture_factor = 0xa1b2c3d4U;
+    std::vector<std::string> packet_trace;
+    std::vector<off::platform::StartupPictureTextureHandle> resident_handles;
+    std::optional<off::platform::SdlStartupPictureFramePacket> packet;
+    const off::graphics::StartupSourcePictureBackendHooks packet_hooks{
+        [&] { packet_trace.push_back("device"); return true; },
+        [&] { packet_trace.push_back("state"); return true; },
+        [&](const auto&, const auto&, auto) { packet_trace.push_back("record"); return true; },
+        [&] { packet_trace.push_back("preselect"); return true; },
+        [&](std::size_t resource_index, std::uint32_t texture_id) {
+          packet_trace.push_back("resident");
+          const auto& resource = prepared.resources().at(resource_index);
+          if (resource.texture_id != texture_id) return false;
+          resident_handles.push_back(
+              {resource_index, resource.catalog_image_index, texture_id});
+          return true;
+        },
+        [&](std::span<const off::graphics::StartupGraphicsExpandedSubmission> draws,
+            std::span<const off::graphics::StartupGraphicsPreparedResource> resources) {
+          packet_trace.push_back("ordered");
+          packet.emplace(off::platform::SdlStartupPictureFramePacket::assemble(
+              draws, resources, resident_handles, packet_state));
+          return true;
+        },
+        [&](const auto&, const auto&, auto) { packet_trace.push_back("submit"); return true; }};
+    const auto packet_result = pass_admission.submit(
+        scene, active_root, camera_view, pass, source, 1.0F, asset, 0x01U, packet_hooks);
+    check(packet_result.submitted_group_count == 77 && packet &&
+              packet_trace[23] == "preselect" && packet_trace[29] == "resident" &&
+              packet_trace[30] == "ordered" && packet_trace[31] == "submit" &&
+              packet->indexed_draw_count() == 77 &&
+              packet->draws().front().projection == packet_state.projection &&
+              packet->draws().front().viewport.x == packet_state.viewport.x &&
+              packet->draws().front().scissor.w == packet_state.scissor.w &&
+              packet->draws().front().packed_texture_factor == packet_state.packed_texture_factor,
+          "pass admission supplies resident resource identities to a CPU-only SDL packet hook unchanged");
+
+    const auto rejects_packet_handles = [&](auto mutate, const char* message) {
+      auto rejected_handles = resident_handles;
+      rejected_handles.resize(prepared.resources().size());
+      mutate(rejected_handles);
+      std::size_t submits{};
+      off::graphics::StartupSourcePictureBackendHooks rejecting_hooks = packet_hooks;
+      rejecting_hooks.ordered_draw_admitted =
+          [&](std::span<const off::graphics::StartupGraphicsExpandedSubmission> draws,
+              std::span<const off::graphics::StartupGraphicsPreparedResource> resources) {
+            try {
+              static_cast<void>(off::platform::SdlStartupPictureFramePacket::assemble(
+                  draws, resources, rejected_handles, packet_state));
+            } catch (const std::runtime_error&) { return false; }
+            return true;
+          };
+      rejecting_hooks.submit = [&](const auto&, const auto&, auto) { ++submits; return true; };
+      bool rejected = false;
+      try { static_cast<void>(pass_admission.submit(
+          scene, active_root, camera_view, pass, source, 1.0F, asset, 0x01U, rejecting_hooks)); }
+      catch (const std::runtime_error&) { rejected = true; }
+      check(rejected && submits == 0, message);
+    };
+    rejects_packet_handles([](auto& handles) { handles.pop_back(); },
+                           "missing resident packet handle rejects before any source submit");
+    rejects_packet_handles([](auto& handles) {
+      handles.push_back({99, 99, 99});
+    }, "extra resident packet handle rejects before any source submit");
+    rejects_packet_handles([](auto& handles) {
+      std::swap(handles[0].catalog_image_index, handles[1].catalog_image_index);
+      std::swap(handles[0].texture_id, handles[1].texture_id);
+    }, "swapped resident packet identities reject before any source submit");
     auto wrong_view = camera_view;
     wrong_view.view_identity = 4001;
     bool view_rejected = false;

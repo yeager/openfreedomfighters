@@ -81,10 +81,34 @@ int main() {
   const std::array duplicate_resource{
       textures[0], platform::StartupPictureTextureHandle{2, 92, 702}};
   rejects([&] { static_cast<void>(platform::SdlStartupPictureFramePacket::assemble(submissions, resources, duplicate_resource, state)); });
-  const std::array duplicate_texture{
+  // Resource slots are the packet keys. Two separately admitted resources can
+  // intentionally alias the same catalog image/GPU texture pair.
+  const std::array aliased_submissions{submission(0, 2, 17), submission(1, 4, 19)};
+  const std::array aliased_textures{
       platform::StartupPictureTextureHandle{2, 91, 701},
-      platform::StartupPictureTextureHandle{4, 91, 702}};
-  rejects([&] { static_cast<void>(platform::SdlStartupPictureFramePacket::assemble(submissions, resources, duplicate_texture, state)); });
+      platform::StartupPictureTextureHandle{4, 91, 701}};
+  const std::array aliased_resources{
+      graphics::StartupGraphicsPreparedResource{2, 91, 701, 1, 1},
+      graphics::StartupGraphicsPreparedResource{4, 91, 701, 1, 1}};
+  const auto aliased_packet = platform::SdlStartupPictureFramePacket::assemble(
+      aliased_submissions, aliased_resources, aliased_textures, state);
+  check(aliased_packet.indexed_draw_count() == 2 &&
+            aliased_packet.draws()[0].catalog_image_index == 91 &&
+            aliased_packet.draws()[1].catalog_image_index == 91,
+        "packet permits distinct resource handles sharing one exact texture identity");
+  const std::array zero_submissions{submission(0, 0, 17)};
+  const std::array zero_textures{platform::StartupPictureTextureHandle{0, 0, 0}};
+  const std::array zero_resources{
+      graphics::StartupGraphicsPreparedResource{0, 0, 0, 1, 1}};
+  const auto zero_packet = platform::SdlStartupPictureFramePacket::assemble(
+      zero_submissions, zero_resources, zero_textures, state);
+  check(zero_packet.indexed_draw_count() == 1,
+        "zero-valued source texture identity is valid");
+  const std::array duplicate_prepared_resources{
+      graphics::StartupGraphicsPreparedResource{2, 91, 701, 1, 1},
+      graphics::StartupGraphicsPreparedResource{2, 33, 402, 1, 1}};
+  rejects([&] { static_cast<void>(platform::SdlStartupPictureFramePacket::assemble(
+      submissions, duplicate_prepared_resources, textures, state)); });
   const std::array extra{
       textures[0], textures[1], platform::StartupPictureTextureHandle{8, 88, 808}};
   rejects([&] { static_cast<void>(platform::SdlStartupPictureFramePacket::assemble(submissions, resources, extra, state)); });

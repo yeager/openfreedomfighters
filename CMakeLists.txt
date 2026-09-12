@@ -828,7 +828,7 @@ if(BUILD_TESTING)
 
     add_executable(off_startup_graphics_asset_tests
         tests/startup_graphics_asset_tests.cpp)
-    target_link_libraries(off_startup_graphics_asset_tests PRIVATE off_core)
+    target_link_libraries(off_startup_graphics_asset_tests PRIVATE off_core off_sdl_intro_renderer)
     target_compile_definitions(off_startup_graphics_asset_tests PRIVATE
         OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/startup-graphics-asset-work")
     add_test(NAME off_startup_graphics_asset_tests

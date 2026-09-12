@@ -13,8 +13,6 @@ bool SdlStartupPictureTextureRegistry::has_valid_asset_identities(
   if (images.size() != graphics::startup_graphics_image_count)
     return false;
   for (std::size_t index = 0; index < images.size(); ++index) {
-    if (images[index].texture_id == 0U)
-      return false;
     for (std::size_t prior = 0; prior < index; ++prior)
       if (images[prior].catalog_image_index == images[index].catalog_image_index ||
           images[prior].texture_id == images[index].texture_id)
@@ -64,16 +62,20 @@ SdlStartupPictureFramePacket SdlStartupPictureFramePacket::assemble(
   std::unordered_map<std::size_t, StartupPictureTextureHandle> handles;
   handles.reserve(textures.size());
   for (const auto& handle : textures) {
-    if (handle.texture_id == 0U ||
-        !handles.emplace(handle.resource_index, handle).second)
+    if (!handles.emplace(handle.resource_index, handle).second)
       throw std::runtime_error("startup picture packet has duplicate or invalid texture identity");
-    for (const auto& prior : textures) {
-      if (&prior == &handle) break;
-      if (prior.catalog_image_index == handle.catalog_image_index ||
-          prior.texture_id == handle.texture_id)
-        throw std::runtime_error("startup picture packet has duplicate texture identity");
-    }
   }
+
+  // A resource slot, rather than its image pair, is the binding identity at
+  // this boundary. Distinct prepared resources may legitimately point to the
+  // same catalog image and GPU texture; only a second or conflicting mapping
+  // for the *same* resource slot is ambiguous.
+  std::unordered_map<std::size_t, const graphics::StartupGraphicsPreparedResource*>
+      prepared_resources;
+  prepared_resources.reserve(resources.size());
+  for (const auto& resource : resources)
+    if (!prepared_resources.emplace(resource.resource_index, &resource).second)
+      throw std::runtime_error("startup picture packet has ambiguous prepared resource identity");
 
   SdlStartupPictureFramePacket result;
   result.batches_.reserve(submissions.size());
@@ -86,15 +88,11 @@ SdlStartupPictureFramePacket SdlStartupPictureFramePacket::assemble(
     const auto found = handles.find(submission.resource_index);
     if (found == handles.end())
       throw std::runtime_error("startup picture packet submission resource is unknown");
-    const auto resource = std::find_if(resources.begin(), resources.end(),
-        [&](const auto& candidate) { return candidate.resource_index == submission.resource_index; });
-    if (resource == resources.end() ||
-        resource->catalog_image_index != found->second.catalog_image_index ||
-        resource->texture_id != found->second.texture_id)
+    const auto resource = prepared_resources.find(submission.resource_index);
+    if (resource == prepared_resources.end() ||
+        resource->second->catalog_image_index != found->second.catalog_image_index ||
+        resource->second->texture_id != found->second.texture_id)
       throw std::runtime_error("startup picture packet resource texture identity mismatches admission");
-    if (std::find_if(std::next(resource), resources.end(),
-        [&](const auto& candidate) { return candidate.resource_index == submission.resource_index; }) != resources.end())
-      throw std::runtime_error("startup picture packet has ambiguous prepared resource identity");
     used.insert(submission.resource_index);
     result.texture_handles_.push_back(found->second);
     graphics::ExpandedPictureBatch batch;

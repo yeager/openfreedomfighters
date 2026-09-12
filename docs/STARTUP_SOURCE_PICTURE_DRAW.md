@@ -17,6 +17,12 @@ preselection, texture residency, ordered-draw admission, then one submission
 for every expanded source group. Any absent service or failed stage submits no
 later work.
 
+The ordered-draw hook receives both the expanded submissions and the exact
+prepared-resource span, only after every `(resource_index, texture_id)`
+residency check has succeeded. This lets a downstream packet boundary retain
+the admission's resource-to-texture identity rather than reconstituting it from
+draws. A rejected packet admission therefore reaches no source submit.
+
 The boundary deliberately does not select a startup root, infer visibility,
 create a camera or viewport, infer material/sampler/blend state, bind input, or
 claim presentation. A portable 640x480 viewport remains a separate project
@@ -61,13 +67,16 @@ one identity and later packet handles must match an admitted prepared resource
 by that complete pair.
 
 `SdlStartupPictureFramePacket` is a subsequent, still-disconnected adapter for
-an already-admitted ordered `StartupGraphicsExpandedSubmission` span. It accepts
+an already-admitted ordered `StartupGraphicsExpandedSubmission` span together
+with its exact `StartupGraphicsPreparedResource` identities. It accepts
 an exact set of live texture handles (`resource_index`, catalog image index, and
 texture ID) and caller-supplied `StartupPictureRenderState`. Submission ordinals
-must be contiguous in the supplied order; missing, extra, duplicate, or unknown
-resource identities reject before any GPU work. It also rejects a handle whose
-catalog index or texture ID does not equal the prepared resource addressed by
-the submission. It preserves one indexed draw
+must be contiguous in the supplied order; missing, extra, duplicate-resource,
+or unknown resource identities reject before any GPU work. A resource handle's
+catalog index and texture ID must exactly equal its prepared resource. Distinct
+resource handles may intentionally share the same complete catalog-image/
+texture-ID pair, so that pair is not itself treated as a uniqueness key. It
+preserves one indexed draw
 per source submission and never batches across resource identities.
 
 `SdlStartupPictureExecutor` only prepares that immutable packet through the

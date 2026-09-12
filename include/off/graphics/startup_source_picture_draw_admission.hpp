@@ -59,9 +59,12 @@ struct StartupSourcePictureBackendHooks {
   std::function<bool()> preselection_complete;
   std::function<bool(std::size_t resource_index, std::uint32_t texture_id)>
       texture_resident;
-  // The complete source-backed ordered batch is supplied after all record
-  // preparations and preselection. The hook owns state/key ordering policy.
-  std::function<bool(std::span<const StartupGraphicsExpandedSubmission>)>
+  // The complete source-backed ordered batch and its exact prepared-resource
+  // identity table are supplied after all record preparations, preselection,
+  // and residency checks. The hook owns state/key ordering policy, but must
+  // not rediscover a resource mapping from a submission alone.
+  std::function<bool(std::span<const StartupGraphicsExpandedSubmission>,
+                     std::span<const StartupGraphicsPreparedResource>)>
       ordered_draw_admitted;
   std::function<bool(const StartupGraphicsExpandedSubmission&,
                      const StartupPictureOwnerView&,
@@ -135,7 +138,7 @@ public:
     for (const auto& resource : expanded.resources())
       if (!hooks.texture_resident(resource.resource_index, resource.texture_id))
         throw std::runtime_error("startup source picture texture is unavailable");
-    if (!hooks.ordered_draw_admitted(expanded.submissions()))
+    if (!hooks.ordered_draw_admitted(expanded.submissions(), expanded.resources()))
       throw std::runtime_error("startup source picture ordered draw was rejected");
     for (const auto& submission : expanded.submissions()) {
       const auto found = owner_views.find(submission.picture_directory_index);
