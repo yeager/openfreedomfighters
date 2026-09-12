@@ -19,8 +19,11 @@ or scene-manager request.
 That same checked package transaction also retains the exact, header-inclusive
 BootMenu deferred source block under its package lease. The envelope validates
 the exact parsed GMS identity and the registry's owner mapping before copying
-the opaque block. It does not parse the block, instantiate the component, run a
-reader, or admit focus, input, rendering, initialization, or a transition.
+the opaque block. It profiles the already-validated four-byte block header's
+body for generic compact-value framing only; payload values, strings, owner
+fields, attachment identities and component semantics remain unread. It does
+not instantiate the component, run a reader, or admit focus, input, rendering,
+initialization, or a transition.
 
 ## Missing contract
 

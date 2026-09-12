@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/runtime/startup_boot_scene_registry.hpp"
+#include "off/runtime/startup_boot_menu_deferred_profile.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -40,22 +41,29 @@ public:
   [[nodiscard]] std::span<const std::byte> deferred_source_block() const noexcept {
     return deferred_source_block_;
   }
+  [[nodiscard]] const StartupBootMenuDeferredProfile &deferred_profile() const
+      noexcept {
+    return deferred_profile_;
+  }
 
 private:
   friend class StartupBootMenuComponentEnvelopeFactory;
   StartupBootMenuComponentEnvelope(
       std::shared_ptr<const StartupSceneLoadPackage> package,
       std::size_t owner_source_directory_index, std::uint64_t owner_handle,
-      std::vector<std::byte> deferred_source_block)
+      std::vector<std::byte> deferred_source_block,
+      StartupBootMenuDeferredProfile deferred_profile)
       : package_(std::move(package)),
         owner_source_directory_index_(owner_source_directory_index),
         owner_handle_(owner_handle),
-        deferred_source_block_(std::move(deferred_source_block)) {}
+        deferred_source_block_(std::move(deferred_source_block)),
+        deferred_profile_(std::move(deferred_profile)) {}
 
   std::shared_ptr<const StartupSceneLoadPackage> package_;
   std::size_t owner_source_directory_index_{};
   std::uint64_t owner_handle_{};
   std::vector<std::byte> deferred_source_block_;
+  StartupBootMenuDeferredProfile deferred_profile_{};
 };
 
 class StartupBootMenuComponentEnvelopeFactory final {
@@ -85,9 +93,11 @@ public:
     if (source_block.empty()) {
       throw std::runtime_error("startup BootMenu deferred source block is empty");
     }
+    const auto deferred_profile =
+        StartupBootMenuDeferredProfiler::profile(source_block);
     return StartupBootMenuComponentEnvelope(
         std::move(package), owner_source, *owner_handle,
-        {source_block.begin(), source_block.end()});
+        {source_block.begin(), source_block.end()}, deferred_profile);
   }
 };
 

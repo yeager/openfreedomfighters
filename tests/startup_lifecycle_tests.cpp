@@ -9,6 +9,7 @@
 #include "off/runtime/startup_active_window_root.hpp"
 #include "off/runtime/startup_boot_menu_admission.hpp"
 #include "off/runtime/startup_boot_menu_component_envelope.hpp"
+#include "off/runtime/startup_boot_menu_deferred_profile.hpp"
 #include "off/runtime/startup_boot_scene_construction.hpp"
 #include "off/runtime/startup_boot_scene_directory_source.hpp"
 #include "off/runtime/startup_boot_scene_factory.hpp"
@@ -128,10 +129,11 @@ std::vector<std::byte> boot_directory_gms_fixture() {
   auto bytes = package_gms_fixture();
   constexpr std::size_t payload = 9U;
   set_u32(bytes, payload + 96U, 0x00100031U);
-  // Project-authored opaque deferred block for envelope-boundary tests. Its
-  // grammar is deliberately not modeled here.
+  // Project-authored framing-only deferred block for envelope-boundary tests.
+  // Its values and component grammar are deliberately not modeled here.
   set_u32(bytes, payload + 112U, 480U);
-  set_u32(bytes, payload + 480U, 4U);
+  set_u32(bytes, payload + 480U, 5U);
+  bytes[payload + 484U] = std::byte{0xff};
   set_u32(bytes, payload + 436U, 460U);
   set_u32(bytes, payload + 440U, std::bit_cast<std::uint32_t>(1.0F));
   constexpr char identifier[] = "ZWINDOW_BootMenu";
@@ -1316,6 +1318,43 @@ int main() {
             std::ranges::equal(boot_envelope.deferred_source_block(),
                                expected_boot_deferred_source),
         "source-backed BootMenu envelope retains the exact checked deferred block");
+  check(boot_envelope.deferred_profile().body_bytes == 1U &&
+            boot_envelope.deferred_profile().framing.encoded_values == 0U &&
+            boot_envelope.deferred_profile().framing.attachment_delimiters ==
+                0U &&
+            boot_envelope.deferred_profile().framing.framing_notation == "!",
+        "BootMenu envelope profiles only the validated deferred-block framing");
+  const std::array<std::byte, 5> header_only_boot_block{
+      std::byte{4}, std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0}};
+  const std::array<std::byte, 5> malformed_boot_block{
+      std::byte{5}, std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0}};
+  const std::array<std::byte, 6> framing_changed_boot_block{
+      std::byte{6}, std::byte{0}, std::byte{0}, std::byte{0}, std::byte{6},
+      std::byte{0xff}};
+  rejected = false;
+  try {
+    static_cast<void>(off::runtime::StartupBootMenuDeferredProfiler::profile(
+        header_only_boot_block));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected, "BootMenu deferred profile rejects a header-only block");
+  rejected = false;
+  try {
+    static_cast<void>(off::runtime::StartupBootMenuDeferredProfiler::profile(
+        malformed_boot_block));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected, "BootMenu deferred profile rejects malformed body framing");
+  const auto framing_changed_profile =
+      off::runtime::StartupBootMenuDeferredProfiler::profile(
+          framing_changed_boot_block);
+  check(framing_changed_profile.body_bytes == 2U &&
+            framing_changed_profile.framing.attachment_delimiters == 1U &&
+            framing_changed_profile.framing.framing_notation == "|!" &&
+            framing_changed_profile != boot_envelope.deferred_profile(),
+        "BootMenu deferred profile distinguishes a framing-only change");
   const auto registry_root = boot_registry.root();
   const auto registry_boot_owner = boot_registry.boot_menu_owner();
   const auto registry_boot_source =
