@@ -249,7 +249,8 @@ add_library(off_sdl_intro_renderer STATIC
     src/platform/intro_picture_submission.cpp
     src/platform/intro_preview_diagnostic.cpp
     src/platform/first_cut_picture_frame.cpp
-    src/graphics/normal_intro_scene_host.cpp)
+    src/graphics/normal_intro_scene_host.cpp
+    src/graphics/normal_intro_scene_host_factory.cpp)
 add_library(off_sdl_intro_presentation STATIC src/platform/sdl_intro_presentation.cpp)
 target_link_libraries(off_sdl_intro_presentation PUBLIC off_sdl_picture_clear)
 if(MSVC)
@@ -473,6 +474,9 @@ if(BUILD_TESTING)
     add_executable(off_normal_intro_scene_host_tests tests/normal_intro_scene_host_tests.cpp)
     target_link_libraries(off_normal_intro_scene_host_tests PRIVATE off_core off_sdl_intro_renderer)
     add_test(NAME off_normal_intro_scene_host_tests COMMAND off_normal_intro_scene_host_tests)
+    add_executable(off_normal_intro_scene_host_factory_tests tests/normal_intro_scene_host_factory_tests.cpp)
+    target_link_libraries(off_normal_intro_scene_host_factory_tests PRIVATE off_core off_sdl_intro_renderer)
+    add_test(NAME off_normal_intro_scene_host_factory_tests COMMAND off_normal_intro_scene_host_factory_tests)
     add_executable(off_movie_control_host_evidence_tests tests/movie_control_host_evidence_tests.cpp)
     target_link_libraries(off_movie_control_host_evidence_tests PRIVATE off_core)
     add_test(NAME off_movie_control_host_evidence_tests COMMAND off_movie_control_host_evidence_tests)
