@@ -277,6 +277,11 @@ menu transition.
   directory ordinals plus a content-free hierarchy fingerprint; it creates no
   scene or runtime service. See
   [STARTUP_BOOT_SCENE_PROBE.md](docs/STARTUP_BOOT_SCENE_PROBE.md).
+- `--probe-startup-boot-profile` is a separate opt-in, no-window diagnostic
+  for the checked BootMenu deferred envelope. It emits only aggregate framing
+  counts and a framing-tag digest; it does not emit source values, bytes,
+  strings, handles, ordinals, or a framing notation. See
+  [STARTUP_BOOT_SCENE_PROBE.md](docs/STARTUP_BOOT_SCENE_PROBE.md).
 - `--probe-startup-route-cold` validates the complete owned-data StartLoader
   handoff through the checked FF-StartUp package and its BootMenu directory
   source. It runs only the recovered three-update deferred route and reports

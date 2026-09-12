@@ -10,6 +10,7 @@
 #include "off/runtime/startup_boot_menu_admission.hpp"
 #include "off/runtime/startup_boot_menu_component_envelope.hpp"
 #include "off/runtime/startup_boot_menu_deferred_profile.hpp"
+#include "off/runtime/startup_boot_menu_profile_probe.hpp"
 #include "off/runtime/startup_boot_scene_construction.hpp"
 #include "off/runtime/startup_boot_scene_directory_source.hpp"
 #include "off/runtime/startup_boot_scene_factory.hpp"
@@ -1324,6 +1325,17 @@ int main() {
                 0U &&
             boot_envelope.deferred_profile().framing.framing_notation == "!",
         "BootMenu envelope profiles only the validated deferred-block framing");
+  const auto boot_profile_probe =
+      off::runtime::StartupBootMenuProfileProbe::summarize(boot_envelope);
+  check(boot_profile_probe.deferred_body_bytes == 1U &&
+            boot_profile_probe.encoded_values == 0U &&
+            boot_profile_probe.attachment_delimiters == 0U &&
+            boot_profile_probe.continuation_values == 0U &&
+            boot_profile_probe.framing_tag_digest ==
+                boot_envelope.deferred_profile().framing.framing_digest &&
+            std::ranges::all_of(boot_profile_probe.value_kind_counts,
+                                [](std::size_t count) { return count == 0U; }),
+        "BootMenu profile probe emits aggregate framing evidence only");
   const std::array<std::byte, 5> header_only_boot_block{
       std::byte{4}, std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0}};
   const std::array<std::byte, 5> malformed_boot_block{

@@ -38,3 +38,21 @@ each call's ordinal. It never prints synthetic IDs, archive contents, strings
 from game data, source types, payload hashes, or an allocator identity.
 Runtime flags such as `--mode`, `--locale`, `--frame-limit`,
 `--screenshot`, and `--diagnostic-scene` are rejected for this diagnostic.
+
+## Envelope profile diagnostic
+
+`openfreedomfighters --probe-startup-boot-profile` is a separate opt-in,
+no-window diagnostic for the checked BootMenu deferred envelope. It constructs
+the checked package, directory source, source-backed registry and envelope,
+then reports only aggregate framing fields: body size, per-kind counts,
+delimiter and continuation counts, and a digest over framing tags. It does not
+print a directory ordinal, runtime handle, archive byte, decoded value,
+identifier, string, source type, payload hash, or framing notation.
+
+```sh
+./build/openfreedomfighters --probe-startup-boot-profile --data /path/to/FreedomFighters
+```
+
+The profile probe is incompatible with every other probe and all normal or
+renderer options. It creates no SDL state, window, scene, input target,
+renderer state, or transition.
