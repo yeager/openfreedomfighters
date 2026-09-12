@@ -284,16 +284,28 @@ int main() {
   check(menu.select_row(off::ui::GraphicsMenuRow::upscaler),
         "allow the active F10 session to focus the upscaler row");
   menu.draft().upscaler = off::settings::Upscaler::native;
-  for (int step = 0; step < 3; ++step)
-    static_cast<void>(
-        menu.handle_key(off::ui::GraphicsMenuKey::right, true, false));
-  check(menu.draft().upscaler == off::settings::Upscaler::fsr,
-        "cycle from Native through Temporal and DLSS to FSR");
-  for (int step = 0; step < 2; ++step)
-    static_cast<void>(
-        menu.handle_key(off::ui::GraphicsMenuKey::right, true, false));
+  static_cast<void>(
+      menu.handle_key(off::ui::GraphicsMenuKey::right, true, false));
   check(menu.draft().upscaler == off::settings::Upscaler::native,
-        "wrap the upscaler selector after FSR and XeSS");
+        "Original never exposes an unavailable upscaler choice");
+  menu.draft().profile = off::Mode::modern;
+  menu.draft().modern_plus = false;
+  static_cast<void>(
+      menu.handle_key(off::ui::GraphicsMenuKey::right, true, false));
+  check(menu.draft().upscaler == off::settings::Upscaler::temporal,
+        "plain Modern exposes its available temporal provider");
+  static_cast<void>(
+      menu.handle_key(off::ui::GraphicsMenuKey::right, true, false));
+  check(menu.draft().upscaler == off::settings::Upscaler::native,
+        "F10 skips unavailable vendor provider names instead of accepting a "
+        "request that would immediately fall back");
+  check(menu.select_row(off::ui::GraphicsMenuRow::present_mode),
+        "focus Present Mode for availability filtering");
+  menu.draft().present_mode = off::settings::PresentMode::vsync;
+  static_cast<void>(
+      menu.handle_key(off::ui::GraphicsMenuKey::right, true, false));
+  check(menu.draft().present_mode == off::settings::PresentMode::vsync,
+        "F10 skips unsupported present modes rather than displaying them");
   check(menu.select_row(off::ui::GraphicsMenuRow::profile),
         "return focus to Profile before testing top-of-menu wrapping");
   static_cast<void>(
@@ -355,8 +367,51 @@ int main() {
         "commit requested and effective settings only after confirmation");
 
   check(menu.handle_key(off::ui::GraphicsMenuKey::escape, true, false) ==
-            off::ui::GraphicsMenuEffect::quit_requested,
+                off::ui::GraphicsMenuEffect::quit_requested,
         "retain Escape-to-quit only while the graphics menu is closed");
+
+  off::ui::GraphicsMenuSession restored_menu{capabilities};
+  const auto stored_advanced = off::settings::RequestedGraphicsSettings{
+      .profile = off::Mode::modern,
+      .window_mode = off::settings::WindowMode::windowed,
+      .windowed_size = {1280, 720},
+      .present_mode = off::settings::PresentMode::mailbox,
+      .modern_plus = true,
+      .render_scale_percent = 100,
+      .upscaler = off::settings::Upscaler::dlss,
+      .shadow_quality = off::settings::ShadowQuality::high,
+  };
+  const auto restored =
+      off::settings::resolve_graphics_settings(stored_advanced, capabilities);
+  check(restored.effective.has_value(), "resolve stale stored graphics intent");
+  if (restored.effective) {
+    restored_menu.set_confirmed(stored_advanced, *restored.effective);
+    static_cast<void>(restored_menu.handle_key(off::ui::GraphicsMenuKey::f10,
+                                                true, false));
+    check(restored_menu.draft().present_mode ==
+                  restored.effective->present_mode &&
+              restored_menu.draft().upscaler == restored.effective->upscaler &&
+              restored_menu.draft().modern_plus == restored.effective->modern_plus,
+          "F10 opens stale stored preferences at their active native values");
+  }
+
+  auto provider_capabilities = capabilities;
+  provider_capabilities.dlss_upscaler = true;
+  provider_capabilities.fsr_upscaler = true;
+  provider_capabilities.xess_upscaler = true;
+  off::ui::GraphicsMenuSession provider_menu{provider_capabilities};
+  static_cast<void>(
+      provider_menu.handle_key(off::ui::GraphicsMenuKey::f10, true, false));
+  provider_menu.draft().profile = off::Mode::modern;
+  provider_menu.draft().modern_plus = true;
+  provider_menu.draft().upscaler = off::settings::Upscaler::native;
+  check(provider_menu.select_row(off::ui::GraphicsMenuRow::upscaler),
+        "focus the provider selector with complete runtime capabilities");
+  for (int step = 0; step < 3; ++step)
+    static_cast<void>(provider_menu.handle_key(
+        off::ui::GraphicsMenuKey::right, true, false));
+  check(provider_menu.draft().upscaler == off::settings::Upscaler::fsr,
+        "Modern Plus exposes every negotiated provider in selector order");
 
   return failures == 0 ? 0 : 1;
 }

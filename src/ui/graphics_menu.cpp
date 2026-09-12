@@ -5,6 +5,23 @@
 #include <utility>
 
 namespace off::ui {
+namespace {
+
+[[nodiscard]] settings::RequestedGraphicsSettings
+requested_from_effective(const settings::EffectiveGraphicsSettings &value) {
+  return {
+      .profile = value.profile,
+      .window_mode = value.window_mode,
+      .windowed_size = value.windowed_size,
+      .present_mode = value.present_mode,
+      .modern_plus = value.modern_plus,
+      .render_scale_percent = value.render_scale_percent,
+      .upscaler = value.upscaler,
+      .shadow_quality = value.shadow_quality,
+  };
+}
+
+} // namespace
 
 GraphicsMenuSession::GraphicsMenuSession(
     settings::GraphicsCapabilities capabilities)
@@ -54,7 +71,11 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
   }
   if (key == GraphicsMenuKey::f10) {
     if (phase_ == GraphicsMenuPhase::closed) {
-      draft_ = confirmed_requested_;
+      // Stored requests may predate the active backend or name an unavailable
+      // provider. F10 is an availability-aware editor, so begin from what the
+      // native renderer actually uses rather than displaying a value that an
+      // immediate Apply would silently fall back from.
+      draft_ = requested_from_effective(confirmed_effective_);
       validation_error_.reset();
       selected_row_ = GraphicsMenuRow::profile;
       phase_ = GraphicsMenuPhase::editing;
@@ -118,16 +139,35 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
   case GraphicsMenuRow::profile: {
     unsigned value =
         draft_.profile == Mode::original ? 0U : (draft_.modern_plus ? 2U : 1U);
-    value = forward ? (value + 1U) % 3U : (value + 2U) % 3U;
-    draft_.profile = value == 0U ? Mode::original : Mode::modern;
-    draft_.modern_plus = value == 2U;
+    for (unsigned attempt = 0; attempt < 3U; ++attempt) {
+      value = forward ? (value + 1U) % 3U : (value + 2U) % 3U;
+      auto candidate = draft_;
+      candidate.profile = value == 0U ? Mode::original : Mode::modern;
+      candidate.modern_plus = value == 2U;
+      const auto resolved =
+          settings::resolve_graphics_settings(candidate, capabilities_);
+      if (resolved.effective && resolved.effective->profile == candidate.profile &&
+          resolved.effective->modern_plus == candidate.modern_plus) {
+        draft_ = requested_from_effective(*resolved.effective);
+        break;
+      }
+    }
     break;
   }
-  case GraphicsMenuRow::window_mode:
-    draft_.window_mode = draft_.window_mode == settings::WindowMode::windowed
-                             ? settings::WindowMode::borderless_desktop
-                             : settings::WindowMode::windowed;
+  case GraphicsMenuRow::window_mode: {
+    auto candidate = draft_;
+    candidate.window_mode =
+        candidate.window_mode == settings::WindowMode::windowed
+            ? settings::WindowMode::borderless_desktop
+            : settings::WindowMode::windowed;
+    const auto resolved =
+        settings::resolve_graphics_settings(candidate, capabilities_);
+    if (resolved.effective &&
+        resolved.effective->window_mode == candidate.window_mode) {
+      draft_ = requested_from_effective(*resolved.effective);
+    }
     break;
+  }
   case GraphicsMenuRow::window_size: {
     constexpr std::array sizes{
         settings::WindowSize{1280, 720}, settings::WindowSize{1920, 1080},
@@ -145,8 +185,18 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
   }
   case GraphicsMenuRow::present_mode: {
     auto value = static_cast<unsigned>(draft_.present_mode);
-    value = forward ? (value + 1U) % 3U : (value + 2U) % 3U;
-    draft_.present_mode = static_cast<settings::PresentMode>(value);
+    for (unsigned attempt = 0; attempt < 3U; ++attempt) {
+      value = forward ? (value + 1U) % 3U : (value + 2U) % 3U;
+      auto candidate = draft_;
+      candidate.present_mode = static_cast<settings::PresentMode>(value);
+      const auto resolved =
+          settings::resolve_graphics_settings(candidate, capabilities_);
+      if (resolved.effective &&
+          resolved.effective->present_mode == candidate.present_mode) {
+        draft_ = requested_from_effective(*resolved.effective);
+        break;
+      }
+    }
     break;
   }
   case GraphicsMenuRow::render_scale: {
@@ -163,8 +213,18 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
   }
   case GraphicsMenuRow::upscaler: {
     auto value = static_cast<unsigned>(draft_.upscaler);
-    value = forward ? (value + 1U) % 5U : (value + 4U) % 5U;
-    draft_.upscaler = static_cast<settings::Upscaler>(value);
+    for (unsigned attempt = 0; attempt < 5U; ++attempt) {
+      value = forward ? (value + 1U) % 5U : (value + 4U) % 5U;
+      auto candidate = draft_;
+      candidate.upscaler = static_cast<settings::Upscaler>(value);
+      const auto resolved =
+          settings::resolve_graphics_settings(candidate, capabilities_);
+      if (resolved.effective &&
+          resolved.effective->upscaler == candidate.upscaler) {
+        draft_ = requested_from_effective(*resolved.effective);
+        break;
+      }
+    }
     break;
   }
   case GraphicsMenuRow::shadows: {
