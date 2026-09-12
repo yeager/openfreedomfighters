@@ -99,3 +99,31 @@ transition, global-lifecycle entry/completion outcome, phase-one completion,
 external-service entry, and failure path. Keep both raw and sanitized records
 private; only a behavior specification and authored test fixture may be added
 to this repository after review.
+
+## Repeat-pair gate
+
+`tools/movie_control_phase_one_repeat_pair.py` is the second private gate. It
+accepts two already-sanitized outputs from the phase-one utility and writes one
+new source-free result outside the repository. It never accepts raw observer
+records and revalidates both input schemas before comparing them.
+
+Each run must contain exactly one candidate with a constructed component and
+its constructed owner, a completed successful global lifecycle, successful
+phase-one completion, and a successful callback outcome. The two candidates
+must agree exactly on the observer-local callback ordinal and dispatch order,
+as well as every retained structural effect: component and owner status masks,
+event and ordinary membership transitions, and external-service state. A
+missing, incomplete, ambiguous, or mismatched candidate is rejected. This is
+evidence for further review only; it does not authorize a native callback or
+remove the normal-startup fail-closed gate.
+
+On the private observation host, after producing two distinct sanitized files,
+run:
+
+```sh
+python3 tools/movie_control_phase_one_repeat_pair.py \
+  FIRST_SANITIZED.json SECOND_SANITIZED.json PAIR_RESULT.json
+```
+
+All three paths must be outside this repository; `PAIR_RESULT.json` must not
+already exist. Keep the pair result private alongside its input observations.

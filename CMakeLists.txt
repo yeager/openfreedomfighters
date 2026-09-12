@@ -812,6 +812,28 @@ if(BUILD_TESTING)
     target_compile_definitions(off_startup_window_tests PRIVATE OFF_VERSION="${PROJECT_VERSION}")
     add_test(NAME off_startup_window_tests COMMAND off_startup_window_tests)
 
+    add_executable(off_native_startup_preflight_smoke_tests
+        tests/native_startup_preflight_smoke_tests.cpp src/platform/sdl_startup.cpp)
+    target_link_libraries(off_native_startup_preflight_smoke_tests PRIVATE off_core ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf)
+    target_compile_definitions(off_native_startup_preflight_smoke_tests PRIVATE
+        OFF_VERSION="${PROJECT_VERSION}"
+        OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/native-startup-preflight-smoke-work")
+    add_custom_command(TARGET off_native_startup_preflight_smoke_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:off_native_startup_preflight_smoke_tests>/assets"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/branding/openfreedomfighters-splash.bmp"
+                "$<TARGET_FILE_DIR:off_native_startup_preflight_smoke_tests>/assets/openfreedomfighters-splash.bmp"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/Rajdhani-SemiBold.ttf"
+                "$<TARGET_FILE_DIR:off_native_startup_preflight_smoke_tests>/assets/Rajdhani-SemiBold.ttf"
+        VERBATIM)
+    add_test(NAME off_native_startup_preflight_smoke_tests
+             COMMAND off_native_startup_preflight_smoke_tests)
+    set_tests_properties(off_native_startup_preflight_smoke_tests PROPERTIES
+        ENVIRONMENT "SDL_VIDEODRIVER=dummy"
+        TIMEOUT 15)
+
     add_executable(off_sdl_menu_gamepad_tests
         tests/sdl_menu_gamepad_tests.cpp src/platform/sdl_menu_gamepad.cpp)
     target_link_libraries(off_sdl_menu_gamepad_tests PRIVATE off_core ${OFF_SDL3_TARGET})
