@@ -179,6 +179,7 @@ add_library(off_core
     src/ui/graphics_menu_draw.cpp
     src/ui/graphics_menu_pointer.cpp
     src/ui/font_run_layout.cpp
+    src/ui/text_layout.cpp
     src/ui/project_localization.cpp
     src/ui/retail_localization_cache.cpp
     src/ui/private_translation_pack.cpp
@@ -867,6 +868,10 @@ if(BUILD_TESTING)
     target_compile_definitions(off_retail_ui_fonts_tests PRIVATE
         OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/retail-ui-fonts-work")
     add_test(NAME off_retail_ui_fonts_tests COMMAND off_retail_ui_fonts_tests)
+
+    add_executable(off_text_layout_tests tests/text_layout_tests.cpp)
+    target_link_libraries(off_text_layout_tests PRIVATE off_core)
+    add_test(NAME off_text_layout_tests COMMAND off_text_layout_tests)
 
     add_executable(off_retail_ui_textures_tests tests/retail_ui_textures_tests.cpp)
     target_link_libraries(off_retail_ui_textures_tests PRIVATE off_core)
