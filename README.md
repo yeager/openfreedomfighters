@@ -156,8 +156,10 @@ implemented or exposed. HD asset support is not implemented. See [Modern graphic
 Project-authored UI strings already select the system locale across 20 locales,
 including Swedish. Complete game-text localization, shaping and full retail-font
 coverage remain planned. After a verified normal start, a private local cache
-can extract supported English LOC source records under opaque stable IDs; it
-does not enable retail-text lookup or publish game text.
+extracts supported English LOC source records under opaque stable IDs. A private
+runtime session chooses a matching local translation pack by system locale and
+falls back to that cache; it does not enable retail-text lookup or publish game
+text.
 
 ## Build and run
 

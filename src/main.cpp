@@ -41,8 +41,7 @@
 #include "off/runtime/startup_scene_package_source.hpp"
 #include "off/ui/retail_ui_fonts.hpp"
 #include "off/ui/retail_ui_textures.hpp"
-#include "off/ui/retail_localization_cache.hpp"
-#include "off/ui/private_translation_pack.hpp"
+#include "off/ui/retail_localization_session.hpp"
 
 #include <charconv>
 #include <algorithm>
@@ -891,17 +890,22 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
   return std::filesystem::path{home} / ".openfreedomfighters";
 }
 
-void initialize_private_owned_localization_cache(
+[[nodiscard]] std::optional<off::ui::l10n::RetailLocalizationSession>
+initialize_private_owned_localization_session(
     const off::data::InstallVerification& verification) noexcept {
   try {
     const auto cache_root = off::platform::application_deep_audit_cache_root();
-    if (cache_root.empty()) return;
+    if (cache_root.empty()) return std::nullopt;
     const auto source_set = off::data::verified_owned_loc_source_set(verification.root);
-    if (!source_set) return;
+    if (!source_set) return std::nullopt;
     const auto installation_identity = "steam-pc-" + verification.executable_sha256;
-    const auto result = off::ui::l10n::ensure_retail_localization_metadata(
-        cache_root, installation_identity, off::data::loc_catalog_parser_identity,
-        *source_set, [root = verification.root, expected_source_set = *source_set] {
+    const auto packs_directory =
+        off::platform::application_translation_packs_directory();
+    if (packs_directory.empty()) return std::nullopt;
+    return off::ui::l10n::RetailLocalizationSession::open(
+        cache_root, packs_directory, installation_identity,
+        off::data::loc_catalog_parser_identity, *source_set,
+        [root = verification.root, expected_source_set = *source_set] {
           const auto catalog = off::data::extract_verified_owned_loc_catalog(root);
           if (!catalog || catalog->source_set != expected_source_set) {
             return std::optional<std::vector<off::ui::l10n::RetailSourceString>>{};
@@ -914,27 +918,11 @@ void initialize_private_owned_localization_cache(
           return std::optional<std::vector<off::ui::l10n::RetailSourceString>>{
               std::move(strings)};
         });
-    if (!result.metadata)
-      return;
-    const auto binding = off::ui::l10n::translation_source_binding(*result.metadata);
-    const auto packs_directory =
-        off::platform::application_translation_packs_directory();
-    if (!binding || packs_directory.empty())
-      return;
-    // Optional packs are accepted only after the private cache has established
-    // a real text-free binding for this verified installation. The vector is
-    // intentionally dormant: no resolver is built, no ID is resolved, and no
-    // UI path observes any pack content until native LOC lookup is recovered.
-    const auto dormant_packs =
-        off::ui::l10n::load_canonical_local_translation_packs(packs_directory,
-                                                               *binding);
-    static_cast<void>(dormant_packs);
-    // Intentionally no text, member name, ordinal, cache path, or pack result
-    // is reported. This remains an extraction/enrollment substrate only.
   } catch (const std::exception&) {
     // Localization extraction is optional until the native lookup contract is
     // recovered.  It must never weaken verified game-data startup.
   }
+  return std::nullopt;
 }
 
 } // namespace
@@ -1439,7 +1427,10 @@ int main(int argc, char **argv) {
   if (verify_only) {
     return 0;
   }
-  initialize_private_owned_localization_cache(*verification);
+  // Own the optional text-free enrollment for the lifetime of the native
+  // runtime. No retail key/component lookup calls this session yet.
+  const auto retail_localization_session =
+      initialize_private_owned_localization_session(*verification);
   if (scene_summary) {
     const auto &summary = *scene_summary;
     std::cout << "Diagnostic scene geometry: " << summary.local_primitive

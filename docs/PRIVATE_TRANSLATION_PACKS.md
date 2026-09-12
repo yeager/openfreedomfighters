@@ -34,6 +34,8 @@ Missing, malformed, mismatched, symlinked, or wrongly named files are ignored
 without affecting startup. The declared pack locale must equal its canonical
 filename.
 
-Enrollment currently validates packs only. It builds neither an active resolver
-nor a UI lookup path, so no private pack text can alter the application until
-the native LOC lookup contract is independently recovered.
+Enrollment builds a private resolver after the cache and source binding have
+been validated. For an already-approved opaque ID, a matching local translation
+has precedence and a missing translation falls back to the matching cached
+English record. It still has no UI key lookup path, so it cannot alter retail
+presentation until that native lookup contract is independently recovered.

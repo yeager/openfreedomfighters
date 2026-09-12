@@ -181,6 +181,7 @@ add_library(off_core
     src/ui/project_localization.cpp
     src/ui/retail_localization_cache.cpp
     src/ui/private_translation_pack.cpp
+    src/ui/retail_localization_session.cpp
     src/ui/retail_ui_fonts.cpp
     src/ui/retail_ui_textures.cpp
 )
@@ -699,6 +700,14 @@ if(BUILD_TESTING)
     target_compile_definitions(off_private_translation_pack_tests PRIVATE
         OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/private-translation-pack-test-work")
     add_test(NAME off_private_translation_pack_tests COMMAND off_private_translation_pack_tests)
+
+    add_executable(off_retail_localization_session_tests
+        tests/retail_localization_session_tests.cpp)
+    target_link_libraries(off_retail_localization_session_tests PRIVATE off_core)
+    target_compile_definitions(off_retail_localization_session_tests PRIVATE
+        OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/retail-localization-session-test-work")
+    add_test(NAME off_retail_localization_session_tests
+        COMMAND off_retail_localization_session_tests)
 
     add_executable(off_graphics_menu_pointer_tests tests/graphics_menu_pointer_tests.cpp)
     target_link_libraries(off_graphics_menu_pointer_tests PRIVATE off_core)

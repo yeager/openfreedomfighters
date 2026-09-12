@@ -92,10 +92,13 @@ still depends on the provenance and licence of every translated string.
 The legacy `LOC` scanner is not this decoder; it remains an isolated raw-run
 inventory. The decoder verifies complete member framing and UTF-8 source
 fields, derives its source set from normalized logical member IDs and
-text-free complete-member digests, and drives
-only the private cache. It does not implement original key lookup, language
-selection, formatting, or game-text presentation. The optional soundtrack is
-not part of the text-cache identity.
+text-free complete-member digests, and drives a private runtime session. That
+session accepts only an already-approved opaque ID, selects a matching local
+translation pack by locale, and otherwise returns the matching cached English
+record. It cannot enumerate source records, inspect retail files, or map a
+retail key/component to an ID. Original key lookup, formatting, and game-text
+presentation remain unrecovered. The optional soundtrack is not part of the
+text-cache identity.
 
 ## Clean-room delivery plan
 

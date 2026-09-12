@@ -1,5 +1,7 @@
 #include "off/ui/retail_localization_cache.hpp"
 
+#include "retail_localization_cache_private.hpp"
+
 #include "off/crypto/sha256.hpp"
 
 #include <algorithm>
@@ -410,4 +412,40 @@ RetailLocalizationCacheResult ensure_retail_localization_metadata(
   return {.status = RetailLocalizationCacheStatus::extracted,
           .metadata = *metadata};
 }
+
+namespace detail {
+std::optional<RetailTranslationCatalog> load_private_retail_source_fallback(
+    const std::filesystem::path &root,
+    const RetailLocalizationMetadata &metadata) {
+  if (root.empty() || !valid_identifier(metadata.installation_identity) ||
+      !valid_identifier(metadata.parser_identity) ||
+      !valid_identifier(metadata.source_set) || metadata.first_ordinal != 0U ||
+      metadata.ordinal_count == 0U)
+    return std::nullopt;
+  const auto snapshot = load(cache_path(root, metadata.installation_identity,
+                                        metadata.parser_identity,
+                                        metadata.source_set));
+  if (!snapshot || snapshot->installation_identity != metadata.installation_identity ||
+      snapshot->parser_identity != metadata.parser_identity ||
+      snapshot->source_set != metadata.source_set)
+    return std::nullopt;
+  const auto snapshot_metadata = metadata_from_snapshot(*snapshot);
+  if (!snapshot_metadata || *snapshot_metadata != metadata)
+    return std::nullopt;
+
+  std::vector<RetailTranslationEntry> entries;
+  entries.reserve(snapshot->strings.size());
+  for (const auto &source : snapshot->strings) {
+    // Empty source records are valid cache data but have no usable fallback.
+    if (!source.english.empty())
+      entries.push_back(
+          {make_retail_string_id(metadata.source_set, source.ordinal),
+           source.english});
+  }
+  if (entries.empty())
+    return std::nullopt;
+  return RetailTranslationCatalog::build_for_source_set(
+      metadata.source_set, metadata.ordinal_count, std::move(entries));
+}
+} // namespace detail
 } // namespace off::ui::l10n
