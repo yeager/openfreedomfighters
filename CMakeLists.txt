@@ -478,6 +478,11 @@ if(BUILD_TESTING)
     add_executable(off_normal_intro_scene_host_factory_tests tests/normal_intro_scene_host_factory_tests.cpp)
     target_link_libraries(off_normal_intro_scene_host_factory_tests PRIVATE off_core off_sdl_intro_renderer)
     add_test(NAME off_normal_intro_scene_host_factory_tests COMMAND off_normal_intro_scene_host_factory_tests)
+    add_executable(off_normal_intro_scene_host_frame_bridge_tests
+        tests/normal_intro_scene_host_frame_bridge_tests.cpp)
+    target_link_libraries(off_normal_intro_scene_host_frame_bridge_tests PRIVATE off_core off_sdl_intro_renderer)
+    add_test(NAME off_normal_intro_scene_host_frame_bridge_tests
+        COMMAND off_normal_intro_scene_host_frame_bridge_tests)
     add_executable(off_movie_control_host_evidence_tests tests/movie_control_host_evidence_tests.cpp)
     target_link_libraries(off_movie_control_host_evidence_tests PRIVATE off_core)
     add_test(NAME off_movie_control_host_evidence_tests COMMAND off_movie_control_host_evidence_tests)
