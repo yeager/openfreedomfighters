@@ -11,19 +11,22 @@
 namespace off::platform {
 
 // This is deliberately independent of SDL and of the verifier. The verifier's
-// stable error enum selects the user-facing explanation, while its raw message
-// is retained separately for support and terminal diagnostics.
+// stable error enum selects both the user-facing explanation and a support
+// code.  A verifier diagnostic is intentionally not copied into the popup:
+// filesystem and parser diagnostics can contain a machine-local path or a
+// retail resource name.  Callers that need it for a terminal diagnostic retain
+// InstallVerification separately.
 struct StartupDataErrorPresentation {
   std::string title;
   std::string summary;
   std::string relaunch_hint;
   std::string technical_details_label;
-  std::string technical_message;
+  std::string support_code;
 
   [[nodiscard]] std::string dialog_text() const {
     std::string result = summary + "\n\n" + relaunch_hint;
-    if (!technical_message.empty())
-      result += "\n\n" + technical_details_label + ": " + technical_message;
+    if (!support_code.empty())
+      result += "\n\n" + technical_details_label + ": " + support_code;
     return result;
   }
 };
@@ -56,6 +59,29 @@ startup_data_error_message_id(data::InstallError error) noexcept {
   return MessageId::game_data_verification_failed;
 }
 
+// Stable, project-authored support identifiers. These do not encode a path,
+// manifest member, hash, or other retail-data detail.
+[[nodiscard]] inline std::string_view
+startup_data_error_support_code(data::InstallError error) noexcept {
+  using data::InstallError;
+  switch (error) {
+  case InstallError::missing_root:
+    return "OFF-DATA-01";
+  case InstallError::missing_executable:
+    return "OFF-DATA-02";
+  case InstallError::unsupported_executable_size:
+  case InstallError::unsupported_executable_hash:
+    return "OFF-DATA-03";
+  case InstallError::incomplete_game_data:
+    return "OFF-DATA-04";
+  case InstallError::io_error:
+    return "OFF-DATA-05";
+  case InstallError::none:
+    return "OFF-DATA-00";
+  }
+  return "OFF-DATA-00";
+}
+
 [[nodiscard]] inline StartupDataErrorPresentation
 make_startup_data_error_presentation(
     const data::InstallVerification &verification,
@@ -80,7 +106,8 @@ make_startup_data_error_presentation(
           .relaunch_hint = text(ui::l10n::MessageId::relaunch_with_data_path),
           .technical_details_label =
               text(ui::l10n::MessageId::technical_details),
-          .technical_message = verification.message};
+          .support_code = std::string{startup_data_error_support_code(
+              verification.error)}};
 }
 
 } // namespace off::platform

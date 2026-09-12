@@ -404,14 +404,23 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
     }
   } else if (preparation.outcome ==
              StartupPreparationOutcome::preparation_error) {
-    result.outcome = StartupPreflightOutcome::platform_error;
-    result.message = preparation.message;
+    // Verification already passed, but parsing the checked source set did not.
+    // Present this through the same localized, path-free data-error surface.
+    // `preparation.message` can originate from filesystem/parser exceptions,
+    // so it is not exposed through either the popup or this public result.
+    result.outcome = StartupPreflightOutcome::data_error;
+    auto display_verification = result.verification;
+    display_verification.error = data::InstallError::io_error;
+    const auto presentation = make_startup_data_error_presentation(
+        display_verification, ui::l10n::f10_catalog(), explicit_locale,
+        platform_locales);
+    result.message = presentation.dialog_text();
     static_cast<void>(draw_splash(window.get(), image.get()));
     if (!SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
-                                  "Startup data loading failed",
+                                  presentation.title.c_str(),
                                   result.message.c_str(), window.get())) {
       static_cast<void>(SDL_ShowSimpleMessageBox(
-          SDL_MESSAGEBOX_ERROR, "Startup data loading failed",
+          SDL_MESSAGEBOX_ERROR, presentation.title.c_str(),
           result.message.c_str(), nullptr));
     }
   } else {

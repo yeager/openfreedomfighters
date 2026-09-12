@@ -44,9 +44,10 @@ int main() {
         "missing root preserves verifier diagnostic path");
   check(result.verification.message == "game-data directory does not exist",
         "missing root preserves verifier diagnostic message");
-  check(result.message.find("game-data directory does not exist") !=
-            std::string::npos,
-        "startup dialog result includes technical diagnostic");
+  check(result.message.find("game-data directory does not exist") ==
+            std::string::npos &&
+            result.message.find("OFF-DATA-01") != std::string::npos,
+        "startup dialog is path-free and carries a stable support code");
   check(!prepared_assets,
         "asset preparation is not called after data verification fails");
   check(!result.window, "failed preflight hands no window to the runtime");

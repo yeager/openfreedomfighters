@@ -88,11 +88,13 @@ int main() {
   check(startup_error.summary ==
             "Freedom.Exe saknas i den valda speldata-mappen.",
         "stable install error selects a localized explanation");
-  check(startup_error.technical_message == "exact verifier diagnostic",
-        "raw verifier diagnostic remains separate from localized UI text");
-  check(startup_error.dialog_text().find("exact verifier diagnostic") !=
+  check(startup_error.support_code == "OFF-DATA-02",
+        "stable install error selects a path-free support code");
+  check(startup_error.dialog_text().find("exact verifier diagnostic") ==
             std::string::npos,
-        "dialog composition retains the raw technical diagnostic");
+        "popup never exposes a raw verifier diagnostic");
+  check(startup_error.dialog_text().find("OFF-DATA-02") != std::string::npos,
+        "dialog composition retains its support code");
   check(off::platform::startup_data_error_message_id(
             off::data::InstallError::unsupported_executable_hash) ==
             MessageId::game_executable_unsupported,
@@ -101,6 +103,20 @@ int main() {
             off::data::InstallError::none) ==
             MessageId::game_data_verification_failed,
         "unexpected verification result has a safe presentation mapping");
+  check(off::platform::startup_data_error_support_code(
+            off::data::InstallError::missing_root) == "OFF-DATA-01" &&
+            off::platform::startup_data_error_support_code(
+                off::data::InstallError::unsupported_executable_size) ==
+                "OFF-DATA-03" &&
+            off::platform::startup_data_error_support_code(
+                off::data::InstallError::unsupported_executable_hash) ==
+                "OFF-DATA-03" &&
+            off::platform::startup_data_error_support_code(
+                off::data::InstallError::incomplete_game_data) ==
+                "OFF-DATA-04" &&
+            off::platform::startup_data_error_support_code(
+                off::data::InstallError::io_error) == "OFF-DATA-05",
+        "all verifier states have a stable path-free support code");
 
   const std::array<CatalogEntry, 1> incomplete{{
       {Locale::english, MessageId::apply, "Apply"},
