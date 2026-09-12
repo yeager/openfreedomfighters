@@ -16,8 +16,10 @@ translate_menu_keyboard_event(const SDL_Event &event, SDL_WindowID window_id,
   case SDLK_ESCAPE:
     return ui::GraphicsMenuKey::escape;
   case SDLK_UP:
+  case SDLK_PAGEUP:
     return ui::GraphicsMenuKey::up;
   case SDLK_DOWN:
+  case SDLK_PAGEDOWN:
     return ui::GraphicsMenuKey::down;
   case SDLK_LEFT:
     return ui::GraphicsMenuKey::left;

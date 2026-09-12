@@ -96,7 +96,9 @@ for a portable installation.
   it must admit lifecycle, the first cut, camera/view, drawing and audio in one
   ordinary-frame order. Its reader-stage session is connected; later lifecycle
   and rendering stages are not implemented yet.
-- F10 opens a working graphics-settings panel. Its 50--200% render-scale row
+- F10 opens a working graphics-settings panel. It also supports Page Up/Page
+  Down on a keyboard and left/right shoulder buttons on a controller for
+  previous/next row navigation. Its 50--200% render-scale row
   uses an internal GPU target and full-resolution UI composition. It uses a project-authored,
   letterboxed menu composition and restrained text focus, informed by private
   observation without copying retail UI pixels or wording. Text follows the
@@ -252,7 +254,9 @@ use `openfreedomfighters.exe`. Replace `original` with `modern` to select the
 other profile. Pass `--data /path/to/FreedomFighters` when the owned install is
 not in the default location.
 
-F10 toggles settings. Close the window to exit. For development:
+F10 toggles settings. In the panel, Page Up/Page Down and controller shoulder
+buttons move between rows; D-pad, left stick, arrows, and pointer controls also
+work. Close the window to exit. For development:
 
 - `--frame-limit N` exits after a bounded number of rendered frames.
 - `--show-graphics-menu` opens settings immediately.

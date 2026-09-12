@@ -43,28 +43,42 @@ PictureStageShaderUniforms pack_picture_stage_uniforms(
            static_cast<float>((factor >> 24U) & 255U) / 255.0F}};
 }
 
+std::optional<PictureStageShaderSource>
+select_picture_stage_fragment_shader(SDL_GPUShaderFormat formats) {
+  if ((formats & SDL_GPU_SHADERFORMAT_DXIL) != 0) {
+    return PictureStageShaderSource{generated::picture_stage_dxil,
+                                    sizeof(generated::picture_stage_dxil),
+                                    "main", SDL_GPU_SHADERFORMAT_DXIL};
+  }
+  // SDL's native Metal backend consumes MSL. Prefer it over SPIR-V whenever
+  // both are reported so this stage stays aligned with the bundled vertex
+  // shader and does not rely on an optional translation layer.
+  if ((formats & SDL_GPU_SHADERFORMAT_MSL) != 0) {
+    return PictureStageShaderSource{
+        reinterpret_cast<const Uint8*>(generated::picture_stage_msl),
+        sizeof(generated::picture_stage_msl) - 1, "main0",
+        SDL_GPU_SHADERFORMAT_MSL};
+  }
+  if ((formats & SDL_GPU_SHADERFORMAT_SPIRV) != 0) {
+    return PictureStageShaderSource{generated::picture_stage_spirv,
+                                    sizeof(generated::picture_stage_spirv),
+                                    "main", SDL_GPU_SHADERFORMAT_SPIRV};
+  }
+  return std::nullopt;
+}
+
 SDL_GPUShader* create_picture_stage_fragment_shader(SDL_GPUDevice* device) {
   if (!device) throw std::runtime_error("picture stage shader requires a live GPU device");
   SDL_GPUShaderCreateInfo info{};
-  const auto formats = SDL_GetGPUShaderFormats(device);
-  if (formats & SDL_GPU_SHADERFORMAT_DXIL) {
-    info.code = generated::picture_stage_dxil;
-    info.code_size = sizeof(generated::picture_stage_dxil);
-    info.format = SDL_GPU_SHADERFORMAT_DXIL;
-    info.entrypoint = "main";
-  } else if (formats & SDL_GPU_SHADERFORMAT_SPIRV) {
-    info.code = generated::picture_stage_spirv;
-    info.code_size = sizeof(generated::picture_stage_spirv);
-    info.format = SDL_GPU_SHADERFORMAT_SPIRV;
-    info.entrypoint = "main";
-  } else if (formats & SDL_GPU_SHADERFORMAT_MSL) {
-    info.code = reinterpret_cast<const Uint8*>(generated::picture_stage_msl);
-    info.code_size = sizeof(generated::picture_stage_msl) - 1;
-    info.format = SDL_GPU_SHADERFORMAT_MSL;
-    info.entrypoint = "main0";
-  } else {
+  const auto source = select_picture_stage_fragment_shader(
+      SDL_GetGPUShaderFormats(device));
+  if (!source.has_value()) {
     throw std::runtime_error("picture stage shader requires DXIL, SPIR-V or MSL");
   }
+  info.code = source->code;
+  info.code_size = source->code_size;
+  info.format = source->format;
+  info.entrypoint = source->entrypoint;
   info.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
   info.num_samplers = 1;
   info.num_uniform_buffers = 1;

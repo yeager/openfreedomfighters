@@ -17,6 +17,16 @@ constexpr float depth_span = 0.9F;
 constexpr float minimum_extent = 1.0e-6F;
 constexpr std::size_t maximum_gpu_draws = 4'000'000;
 constexpr std::size_t maximum_gpu_texture_mips = 16;
+constexpr std::size_t maximum_gpu_vertices = 16'000'000;
+constexpr std::size_t maximum_gpu_indices = 32'000'000;
+constexpr std::size_t maximum_gpu_rgba_bytes = 1024U * 1024U * 1024U;
+
+void add_bounded(std::size_t &total, std::size_t value, std::size_t limit,
+                 const char *message) {
+  if (value > limit - total)
+    throw std::invalid_argument(message);
+  total += value;
+}
 
 [[nodiscard]] bool fits_rgba8_extent(std::uint32_t width,
                                      std::uint32_t height) {
@@ -42,6 +52,9 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
   if (!plan.source_only_diagnostic || plan.draws.size() > maximum_gpu_draws) {
     throw std::invalid_argument("scene GPU plan has an invalid contract");
   }
+  std::size_t total_rgba_bytes = 0;
+  std::size_t total_vertices = 0;
+  std::size_t total_indices = 0;
   for (const auto &texture : plan.textures) {
     if (texture.mips.empty() || texture.mips.size() > maximum_gpu_texture_mips)
       throw std::invalid_argument("scene GPU texture mip chain is invalid");
@@ -54,6 +67,8 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
               static_cast<std::size_t>(mip.width) * mip.height * 4U) {
         throw std::invalid_argument("scene GPU texture mip storage is inconsistent");
       }
+      add_bounded(total_rgba_bytes, mip.rgba8.size(), maximum_gpu_rgba_bytes,
+                  "scene GPU plan exceeds decoded texture budget");
       expected_width = std::max(1U, expected_width / 2U);
       expected_height = std::max(1U, expected_height / 2U);
     }
@@ -64,6 +79,10 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
          *mesh.texture_index >= plan.textures.size())) {
       throw std::invalid_argument("scene GPU mesh resources are incomplete");
     }
+    add_bounded(total_vertices, mesh.vertices.size(), maximum_gpu_vertices,
+                "scene GPU plan exceeds vertex budget");
+    add_bounded(total_indices, mesh.indices.size(), maximum_gpu_indices,
+                "scene GPU plan exceeds index budget");
     for (const auto &vertex : mesh.vertices) {
       if (!finite(vertex.position) ||
           !std::ranges::all_of(vertex.color,
@@ -219,17 +238,27 @@ std::array<float, 3> transform_scene_source_diagnostic_position(
   return result;
 }
 
-SceneGpuPlan prepare_scene_gpu_plan(const SceneRenderAsset &asset) {
+[[nodiscard]] SceneGpuPlan prepare_scene_gpu_plan_impl(
+    const SceneRenderAsset &asset, SceneRenderAsset *consumed_asset) {
   validate_scene_render_asset(asset);
   SceneGpuPlan result;
   result.textures.reserve(asset.textures.size());
-  for (const auto &texture : asset.textures) {
+  for (std::size_t texture_index = 0; texture_index < asset.textures.size();
+       ++texture_index) {
+    const auto &texture = asset.textures[texture_index];
     SceneGpuTexture gpu_texture;
     gpu_texture.mips.reserve(texture.mips.size());
-    for (const auto &mip : texture.mips) {
+    for (std::size_t mip_index = 0; mip_index < texture.mips.size();
+         ++mip_index) {
+      const auto &mip = texture.mips[mip_index];
       gpu_texture.mips.push_back({.width = mip.width,
                                   .height = mip.height,
-                                  .rgba8 = mip.pixels});
+                                  .rgba8 = consumed_asset
+                                               ? std::move(consumed_asset->textures
+                                                               [texture_index]
+                                                                   .mips[mip_index]
+                                                                   .pixels)
+                                               : mip.pixels});
     }
     result.textures.push_back(std::move(gpu_texture));
   }
@@ -239,8 +268,10 @@ SceneGpuPlan prepare_scene_gpu_plan(const SceneRenderAsset &asset) {
         .topology = mesh.topology,
         .alpha_class = mesh.alpha_class,
         .vertices = {},
-        .indices = mesh.indices,
-        .draws = mesh.draws,
+        .indices = consumed_asset ? std::vector<std::uint16_t>{}
+                                  : mesh.indices,
+        .draws = consumed_asset ? std::vector<PrimitiveDrawRange>{}
+                                : mesh.draws,
         .texture_index = mesh.texture_index,
     };
     gpu_mesh.vertices.reserve(mesh.vertices.size());
@@ -268,7 +299,22 @@ SceneGpuPlan prepare_scene_gpu_plan(const SceneRenderAsset &asset) {
     });
   }
   if (asset.instances.empty()) {
+    if (consumed_asset) {
+      for (std::size_t index = 0; index < result.meshes.size(); ++index) {
+        result.meshes[index].indices =
+            std::move(consumed_asset->meshes[index].indices);
+        result.meshes[index].draws =
+            std::move(consumed_asset->meshes[index].draws);
+      }
+    }
     validate_scene_gpu_plan(result);
+    if (consumed_asset) {
+      consumed_asset->animation.reset();
+      consumed_asset->textures.clear();
+      consumed_asset->meshes.clear();
+      consumed_asset->instances.clear();
+      consumed_asset->resolutions.clear();
+    }
     return result;
   }
 
@@ -375,8 +421,34 @@ SceneGpuPlan prepare_scene_gpu_plan(const SceneRenderAsset &asset) {
   append_draws(VertexAlphaClass::opaque);
   append_draws(VertexAlphaClass::variable);
   append_draws(VertexAlphaClass::fully_transparent);
+  if (consumed_asset) {
+    for (std::size_t index = 0; index < result.meshes.size(); ++index) {
+      result.meshes[index].indices =
+          std::move(consumed_asset->meshes[index].indices);
+      result.meshes[index].draws =
+          std::move(consumed_asset->meshes[index].draws);
+    }
+  }
   validate_scene_gpu_plan(result);
+  if (consumed_asset) {
+    // The plan has copied normalized vertices and instance transforms, while
+    // matching byte vectors have been transferred.  No parser-owned source
+    // buffers remain live after this one-way submission boundary.
+    consumed_asset->animation.reset();
+    consumed_asset->textures.clear();
+    consumed_asset->meshes.clear();
+    consumed_asset->instances.clear();
+    consumed_asset->resolutions.clear();
+  }
   return result;
+}
+
+SceneGpuPlan prepare_scene_gpu_plan(const SceneRenderAsset &asset) {
+  return prepare_scene_gpu_plan_impl(asset, nullptr);
+}
+
+SceneGpuPlan prepare_scene_gpu_plan(SceneRenderAsset &&asset) {
+  return prepare_scene_gpu_plan_impl(asset, &asset);
 }
 
 SceneDiagnosticUniform

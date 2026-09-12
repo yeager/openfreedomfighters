@@ -130,8 +130,10 @@ SdlMenuGamepad::handle_event(const SDL_Event &event, bool menu_visible) {
     return std::nullopt;
   switch (event.gbutton.button) {
   case SDL_GAMEPAD_BUTTON_DPAD_UP:
+  case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:
     return ui::GraphicsMenuKey::up;
   case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+  case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:
     return ui::GraphicsMenuKey::down;
   case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
     return ui::GraphicsMenuKey::left;

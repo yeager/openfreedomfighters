@@ -110,6 +110,13 @@ struct SceneDiagnosticMatrices {
 [[nodiscard]] SceneGpuPlan
 prepare_scene_gpu_plan(const SceneRenderAsset &asset);
 
+// Transfers decoded scene buffers into the diagnostic GPU plan where their
+// representation is already identical, then releases the source asset. This
+// is for one-way diagnostic submission only; callers that still need source
+// resolution metadata must use the borrowing overload above.
+[[nodiscard]] SceneGpuPlan
+prepare_scene_gpu_plan(SceneRenderAsset &&asset);
+
 void validate_scene_gpu_plan(const SceneGpuPlan &plan);
 
 [[nodiscard]] SceneDiagnosticUniform

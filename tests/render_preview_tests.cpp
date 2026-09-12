@@ -348,6 +348,23 @@ int main() {
   }
   check(valid_gpu_plan_accepted,
         "accept an independently validated owning GPU plan");
+  auto consumed_scene_asset = scene_asset;
+  const auto consumed_gpu_plan =
+      off::graphics::prepare_scene_gpu_plan(std::move(consumed_scene_asset));
+  check(consumed_gpu_plan.textures.size() == gpu_plan.textures.size() &&
+            consumed_gpu_plan.meshes.size() == gpu_plan.meshes.size() &&
+            consumed_gpu_plan.instances.size() == gpu_plan.instances.size() &&
+            consumed_gpu_plan.draws.size() == gpu_plan.draws.size() &&
+            consumed_gpu_plan.textures[0].mips[0].rgba8 ==
+                gpu_plan.textures[0].mips[0].rgba8 &&
+            consumed_gpu_plan.meshes[0].indices == gpu_plan.meshes[0].indices &&
+            consumed_gpu_plan.meshes[0].draws[0].index_count ==
+                gpu_plan.meshes[0].draws[0].index_count &&
+            !consumed_scene_asset.animation && consumed_scene_asset.textures.empty() &&
+            consumed_scene_asset.meshes.empty() &&
+            consumed_scene_asset.instances.empty() &&
+            consumed_scene_asset.resolutions.empty(),
+        "transfer diagnostic scene ownership without retaining source buffers");
   auto invalid_gpu_mip_plan = gpu_plan;
   invalid_gpu_mip_plan.textures[0].mips[1].height = 2;
   bool invalid_gpu_mip_chain_rejected = false;

@@ -150,6 +150,8 @@ int run() {
            {SDL_GAMEPAD_BUTTON_DPAD_DOWN, Key::down},
            {SDL_GAMEPAD_BUTTON_DPAD_LEFT, Key::left},
            {SDL_GAMEPAD_BUTTON_DPAD_RIGHT, Key::right},
+           {SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, Key::up},
+           {SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, Key::down},
            {SDL_GAMEPAD_BUTTON_SOUTH, Key::enter},
            {SDL_GAMEPAD_BUTTON_EAST, Key::escape}}) {
     expect(edge(input, first, button, true, true), key, "visible menu button mapping");

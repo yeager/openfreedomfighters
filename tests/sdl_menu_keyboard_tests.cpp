@@ -36,6 +36,10 @@ int main() {
          "focused runtime F10 opens the overlay");
   expect(key_event(runtime_window, SDLK_KP_ENTER), runtime_window, true,
          Key::enter, "keypad Enter is available to the focused overlay");
+  expect(key_event(runtime_window, SDLK_PAGEUP), runtime_window, true, Key::up,
+         "Page Up provides an alternate previous-row control");
+  expect(key_event(runtime_window, SDLK_PAGEDOWN), runtime_window, true,
+         Key::down, "Page Down provides an alternate next-row control");
   expect(key_event(runtime_window, SDLK_SPACE, false), runtime_window, true,
          Key::space, "key releases retain their mapping for symmetric routing");
   expect(key_event(foreign_window, SDLK_F10), runtime_window, true, std::nullopt,

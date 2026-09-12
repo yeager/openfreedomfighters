@@ -1325,7 +1325,8 @@ int main(int argc, char **argv) {
                           data_path);
             scene_summary.emplace(
                 off::graphics::summarize_scene_render_resolutions(asset));
-            scene.emplace(off::graphics::prepare_scene_gpu_plan(asset));
+            scene.emplace(
+                off::graphics::prepare_scene_gpu_plan(std::move(asset)));
           } else if (!diagnostic_startup_graphics) {
             // Supported normal (non-restore) cold-load boundary, before
             // resources. Native monotonic samples are an explicit CRT

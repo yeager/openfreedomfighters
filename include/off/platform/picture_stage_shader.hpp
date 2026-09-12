@@ -3,6 +3,9 @@
 #include "off/graphics/picture_draw_reset.hpp"
 #include <SDL3/SDL.h>
 
+#include <cstddef>
+#include <optional>
+
 namespace off::platform {
 
 // std140 fragment uniform block, slot zero. This is only stage-zero evaluation;
@@ -12,6 +15,20 @@ struct alignas(16) PictureStageShaderUniforms {
   std::array<std::uint32_t, 4> alpha;
   std::array<float, 4> texture_factor;
 };
+
+// Selection is kept separate from device creation so every pipeline using the
+// bundled stage shader can make the same backend choice. In particular, a
+// backend advertising both portable SPIR-V and native MSL must use MSL: the
+// matching SDL_ttf vertex shader does so as well.
+struct PictureStageShaderSource {
+  const Uint8* code;
+  std::size_t code_size;
+  const char* entrypoint;
+  SDL_GPUShaderFormat format;
+};
+
+[[nodiscard]] std::optional<PictureStageShaderSource>
+select_picture_stage_fragment_shader(SDL_GPUShaderFormat supported_formats);
 
 // Inputs are resolved live state, not optional material requests. RGB DISABLE
 // returns diffuse; alpha DISABLE with active RGB rejects because the public
