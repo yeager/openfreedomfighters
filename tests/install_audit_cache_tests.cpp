@@ -33,6 +33,17 @@ int main() {
         "a complete stored entry is a cache hit");
   check(!off::data::install_audit_cache_hit(root, "different-identity"),
         "entries cannot be reused for another identity");
+  constexpr std::string_view traversal_identity =
+      "../../outside-cache-record";
+  off::data::store_install_audit_cache(root, traversal_identity);
+  check(!off::data::install_audit_cache_hit(root, traversal_identity) &&
+            !std::filesystem::exists(root.parent_path() / "outside-cache-record.ok"),
+        "non-SHA cache identities cannot escape the application cache root");
+  constexpr std::string_view upper_case_identity =
+      "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+  off::data::store_install_audit_cache(root, upper_case_identity);
+  check(!off::data::install_audit_cache_hit(root, upper_case_identity),
+        "cache identity spelling is canonical and cannot create a second key");
   const auto record = root / (std::string{identity} + ".ok");
   write(record, "truncated");
   check(!off::data::install_audit_cache_hit(root, identity),

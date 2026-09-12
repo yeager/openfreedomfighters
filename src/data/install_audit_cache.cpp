@@ -1,5 +1,6 @@
 #include "off/data/install_audit_cache.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <string>
 
@@ -7,6 +8,17 @@ namespace off::data {
 namespace {
 
 constexpr std::string_view record_prefix = "OFF-INSTALL-AUDIT-CACHE\n1\n";
+
+// The cache is keyed exclusively by the installation SHA-256 constructed in
+// install.cpp.  Keep that boundary here too: this public helper must not turn
+// an arbitrary caller-provided string into a path below the cache root.
+bool valid_identity(std::string_view identity) noexcept {
+  return identity.size() == 64 &&
+         std::all_of(identity.begin(), identity.end(), [](unsigned char value) {
+           return (value >= '0' && value <= '9') ||
+                  (value >= 'a' && value <= 'f');
+         });
+}
 
 std::string record_contents(std::string_view identity) {
   return std::string{record_prefix} + std::string{identity} + "\n";
@@ -36,7 +48,7 @@ bool directory_non_link(const std::filesystem::path& path) noexcept {
 bool install_audit_cache_hit(const std::filesystem::path& root,
                              std::string_view identity) noexcept {
   try {
-    if (root.empty())
+    if (root.empty() || !valid_identity(identity))
       return false;
     const auto record = record_path(root, identity);
     if (!regular_non_link(record))
@@ -58,7 +70,7 @@ bool install_audit_cache_hit(const std::filesystem::path& root,
 void store_install_audit_cache(const std::filesystem::path& root,
                                std::string_view identity) noexcept {
   try {
-    if (root.empty())
+    if (root.empty() || !valid_identity(identity))
       return;
     std::error_code error;
     std::filesystem::create_directories(root, error);
