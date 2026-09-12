@@ -12,6 +12,9 @@
 
 namespace off::runtime {
 
+class StartupBootMenuAdmission;
+class StartupBootSceneFactory;
+
 // Evidence supplied by the completed FF-StartUp directory reader. This is not
 // a parser: callers must have checked the entire mapped directory first.
 struct StartupBootSceneDirectoryProof {
@@ -73,19 +76,26 @@ public:
 
 private:
   friend class StartupBootSceneConstruction;
+  friend class StartupBootMenuAdmission;
   StartupBootControllerToken(
       std::shared_ptr<const StartupSceneLoadPackage> package,
       std::shared_ptr<const void> scene_lifetime, std::uint64_t owner,
-      std::uint64_t component, std::uint64_t factory_generation)
+      std::uint64_t component, std::uint64_t factory_generation,
+      bool source_backed_factory)
       : package_(std::move(package)),
         scene_lifetime_(std::move(scene_lifetime)), owner_(owner),
-        component_(component), factory_generation_(factory_generation) {}
+        component_(component), factory_generation_(factory_generation),
+        source_backed_factory_(source_backed_factory) {}
 
   std::shared_ptr<const StartupSceneLoadPackage> package_;
   std::shared_ptr<const void> scene_lifetime_;
   std::uint64_t owner_{};
   std::uint64_t component_{};
   std::uint64_t factory_generation_{};
+  // Only StartupBootSceneFactory may attest that the construction used the
+  // exact checked package/GMS directory pair. Reader admission consumes this
+  // internal provenance; generic construction remains a structural test hook.
+  bool source_backed_factory_{};
 };
 
 class StartupBootSceneConstruction final {
@@ -96,6 +106,30 @@ public:
             const StartupBootSceneDirectoryProof &proof,
             std::uint64_t factory_generation,
             const StartupBootSceneConstructionServices &services) const {
+    return construct_impl(std::move(package), scene, proof, factory_generation,
+                          services, false);
+  }
+
+private:
+  friend class StartupBootSceneFactory;
+
+  [[nodiscard]] StartupBootControllerToken
+  construct_source_backed(std::shared_ptr<const StartupSceneLoadPackage> package,
+                          const StartupBootSceneLease &scene,
+                          const StartupBootSceneDirectoryProof &proof,
+                          std::uint64_t factory_generation,
+                          const StartupBootSceneConstructionServices &services) const {
+    return construct_impl(std::move(package), scene, proof, factory_generation,
+                          services, true);
+  }
+
+  [[nodiscard]] StartupBootControllerToken
+  construct_impl(std::shared_ptr<const StartupSceneLoadPackage> package,
+                 const StartupBootSceneLease &scene,
+                 const StartupBootSceneDirectoryProof &proof,
+                 std::uint64_t factory_generation,
+                 const StartupBootSceneConstructionServices &services,
+                 bool source_backed_factory) const {
     if (!package || !scene.lifetime_ || factory_generation == 0U ||
         !proof.complete_directory_mapping ||
         !proof.canonical_ordinary_window_source ||
@@ -124,7 +158,8 @@ public:
           "Startup boot scene factory produced no live BootMenu component");
     }
     return StartupBootControllerToken(std::move(package), scene.lifetime_,
-                                      owner, component, factory_generation);
+                                      owner, component, factory_generation,
+                                      source_backed_factory);
   }
 };
 

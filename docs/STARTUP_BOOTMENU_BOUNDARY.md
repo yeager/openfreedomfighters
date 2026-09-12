@@ -20,7 +20,10 @@ depth is 7. These are aggregate structural observations for the supported
 digital build, not allocator identities, serialized indexes, or rendering
 coordinates.
 
-`read_component()` first verifies the live owner/component and registry,
+`read_component()` first requires a construction token attested by
+`StartupBootSceneFactory`: the token must have passed the exact checked
+package/GMS directory pairing, rather than merely satisfying the structural
+construction hooks. It then verifies the live owner/component and registry,
 resolves and retains one opaque registry identity, then invokes the common
 window-component reader. It produces a move-only reader-complete token.
 `initialize_component()` consumes that token, runs common window

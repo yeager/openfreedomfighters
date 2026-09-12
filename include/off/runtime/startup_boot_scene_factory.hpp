@@ -31,9 +31,9 @@ public:
       throw std::runtime_error(
           "Startup boot scene factory source and package GMS differ");
     }
-    return construction_.construct(std::move(package), scene,
-                                   directory_source.proof(),
-                                   factory_generation, services);
+    return construction_.construct_source_backed(
+        std::move(package), scene, directory_source.proof(),
+        factory_generation, services);
   }
 
 private:

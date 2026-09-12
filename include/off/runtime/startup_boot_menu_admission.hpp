@@ -79,7 +79,8 @@ public:
     if (busy_ || failed_ || reader_complete_ || initialized_) {
       throw std::runtime_error("Startup boot-menu reader is unavailable");
     }
-    if (!construction.valid() || first_lookup_key == 0U ||
+    if (!construction.valid() || !construction.source_backed_factory_ ||
+        first_lookup_key == 0U ||
         !services.event_registry_live || !services.resolve_identity ||
         !services.live_window_owner || !services.live_boot_menu_component ||
         !services.common_component_reader) {

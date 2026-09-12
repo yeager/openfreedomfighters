@@ -1298,6 +1298,11 @@ int main() {
             factory_boot_token.factory_generation() == 10U,
         "boot factory delegates only a source-backed package with matching "
         "checked GMS evidence");
+  const auto source_backed_boot_token = [&](std::uint64_t generation) {
+    return boot_factory.construct(source_backed_boot_package,
+                                  source_backed_boot_directory, boot_scene,
+                                  generation, boot_construction_services);
+  };
 
   const auto probe_result =
       off::runtime::SyntheticStartupBootSceneProbeHost::observe(
@@ -1706,8 +1711,22 @@ int main() {
             return owner == 81U && component == 82U;
           },
   };
+  off::runtime::StartupBootMenuAdmission generic_construction_admission;
+  rejected = false;
+  try {
+    static_cast<void>(generic_construction_admission.read_component(
+        std::move(boot_token), 101U, reader_services));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected && generic_construction_admission.failed() &&
+            !generic_construction_admission.reader_complete(),
+        "boot-menu reader rejects construction not attested by the checked "
+        "source-backed factory");
+
   auto reader_token =
-      boot_menu.read_component(std::move(boot_token), 101U, reader_services);
+      boot_menu.read_component(source_backed_boot_token(9U), 101U,
+                               reader_services);
   check(boot_menu.reader_complete() && !boot_menu.initialized() &&
             !boot_menu.failed() && reader_token.valid() &&
             resolve_calls == 1U && boot_menu.reader_id() == 31U &&
@@ -1760,9 +1779,7 @@ int main() {
         "lookup, and retained routing in order");
 
   off::runtime::StartupBootMenuAdmission missing_registry;
-  auto missing_token =
-      boot_construction.construct(boot_package, boot_scene, boot_directory, 10U,
-                                  boot_construction_services);
+  auto missing_token = source_backed_boot_token(10U);
   auto unavailable_registry_services = reader_services;
   unavailable_registry_services.event_registry_live = [] { return false; };
   rejected = false;
@@ -1780,9 +1797,7 @@ int main() {
         "registry is absent");
 
   off::runtime::StartupBootMenuAdmission routing_failure;
-  auto routing_token =
-      boot_construction.construct(boot_package, boot_scene, boot_directory, 11U,
-                                  boot_construction_services);
+  auto routing_token = source_backed_boot_token(11U);
   auto routing_reader = routing_failure.read_component(std::move(routing_token),
                                                        101U, reader_services);
   auto failed_routing_services = initialization_services;
@@ -1806,8 +1821,7 @@ int main() {
   // first identity storage precedes the common reader; common initialization
   // precedes the second resolve; and the success latch follows retained routing.
   const auto new_boot_token = [&] {
-    return boot_construction.construct(boot_package, boot_scene, boot_directory,
-                                       20U, boot_construction_services);
+    return source_backed_boot_token(20U);
   };
 
   off::runtime::StartupBootMenuAdmission store_before_common;
