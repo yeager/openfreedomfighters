@@ -380,18 +380,63 @@ DecodedAudio decode_stream(
     }
 }
 
-DecodedAudio decode_bank_stream(
-    const data::AudioStreamRecord& record,
-    std::span<const std::byte> encoded
-) {
+void validate_bank_stream_metadata(const data::AudioStreamRecord& record) {
     if (record.sample_rate == 0 || record.sample_rate > 384'000 ||
         (record.channels != 1 && record.channels != 2) ||
-        record.sample_value_count == 0 ||
-        record.sample_value_count % record.channels != 0 ||
+        record.encoded_size == 0 || record.encoded_size > maximum_encoded_audio_bytes ||
+        record.sample_value_count == 0 || record.sample_value_count % record.channels != 0 ||
         std::uint64_t(record.sample_value_count) * 2 != record.decoded_byte_count ||
         record.sample_value_count > maximum_decoded_sample_values) {
         throw std::runtime_error("invalid meaningful WHD audio counts or sample layout");
     }
+
+    switch (record.format_flags & ~global_bank_flag) {
+        case pcm_format:
+            if (record.bits_per_sample != 16 ||
+                record.block_align != record.channels * 2 ||
+                record.samples_per_block != 1 ||
+                record.encoded_size % record.block_align != 0) {
+                throw std::runtime_error("unsupported PCM stream layout");
+            }
+            return;
+        case ima_adpcm_format: {
+            if (record.bits_per_sample != 4 ||
+                record.block_align < record.channels * 4 ||
+                record.encoded_size % record.block_align != 0) {
+                throw std::runtime_error("unsupported IMA ADPCM stream layout");
+            }
+            const auto header_bytes = record.channels * 4;
+            const auto data_bytes = record.block_align - header_bytes;
+            if ((record.channels == 2 && data_bytes % 8 != 0) ||
+                (record.channels == 1 &&
+                 data_bytes > (std::numeric_limits<std::uint32_t>::max() - 1) / 2)) {
+                throw std::runtime_error("invalid IMA ADPCM block alignment");
+            }
+            const auto calculated_samples_per_block = record.channels == 1
+                ? 1U + data_bytes * 2U
+                : 1U + data_bytes;
+            if (record.samples_per_block != calculated_samples_per_block) {
+                throw std::runtime_error("IMA ADPCM samples-per-block value is inconsistent");
+            }
+            return;
+        }
+        case vorbis_format:
+            if (record.bits_per_sample != 16 ||
+                record.block_align != record.channels * 2 ||
+                record.samples_per_block != 1) {
+                throw std::runtime_error("unsupported Vorbis output layout");
+            }
+            return;
+        default:
+            throw std::runtime_error("unsupported audio encoding");
+    }
+}
+
+DecodedAudio decode_bank_stream(
+    const data::AudioStreamRecord& record,
+    std::span<const std::byte> encoded
+) {
+    validate_bank_stream_metadata(record);
     auto decoded = decode_stream(record, encoded);
     const auto meaningful = static_cast<std::size_t>(record.sample_value_count);
     if (decoded.encoding == Encoding::ima_adpcm) {

@@ -316,6 +316,26 @@ void test_zip_reader() {
     check(!vfs.contains("Scenes/Shared.ZGF"), "remove paths with their mount");
     vfs.clear();
 
+    const auto archive_link = work / "archive-link.zip";
+    std::error_code archive_link_error;
+    std::filesystem::create_symlink(base_path, archive_link, archive_link_error);
+    if (!archive_link_error) {
+        off::data::ArchiveVfs symlinked_archive;
+        bool symlinked_archive_rejected = false;
+        try {
+            static_cast<void>(symlinked_archive.mount_archive(archive_link));
+        } catch (const std::runtime_error& error) {
+            symlinked_archive_rejected =
+                std::string_view(error.what()) == "could not open VFS archive mount";
+        }
+        check(symlinked_archive_rejected && symlinked_archive.mount_count() == 0,
+              "reject a symlinked archive without publishing a VFS mount");
+        std::filesystem::remove(archive_link, archive_link_error);
+    } else {
+        std::cout << "SKIP: unavailable archive symlink fixture: "
+                  << archive_link_error.message() << '\n';
+    }
+
     const auto excluded_root = work / "excluded-loose";
     std::filesystem::create_directories(excluded_root / "SoundTrack");
     std::filesystem::create_directories(excluded_root / "Scenes/SoundTrack");

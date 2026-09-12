@@ -1,4 +1,5 @@
 #include "off/audio/intro_audio_stream.hpp"
+#include "off/audio/decode.hpp"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -29,13 +30,8 @@ struct IntroAudioStream::Impl {
   IntroAudioPcm pcm;
 
   Impl(data::AudioStreamRecord r,data::VfsFileReader f):record(r),reader(std::move(f)) {
-    if ((r.format_flags&~0x80000000U)!=0x1000 || r.bits_per_sample!=16 ||
-        (r.channels!=1 && r.channels!=2) || r.block_align!=2*r.channels ||
-        r.samples_per_block!=1 || !r.sample_rate || r.sample_rate>384000 ||
-        !r.sample_value_count || r.sample_value_count%r.channels ||
-        std::uint64_t(r.sample_value_count)*2!=r.decoded_byte_count ||
-        r.sample_value_count>64U*1024U*1024U || !r.encoded_size ||
-        r.encoded_size>64U*1024U*1024U || r.data_offset>reader.size() ||
+    validate_bank_stream_metadata(r);
+    if ((r.format_flags&~0x80000000U)!=0x1000 || r.data_offset>reader.size() ||
         r.encoded_size>reader.size()-r.data_offset)
       throw std::runtime_error("Unsupported or out-of-range intro Vorbis stream");
   }

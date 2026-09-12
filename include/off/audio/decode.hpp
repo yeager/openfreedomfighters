@@ -34,6 +34,12 @@ struct DecodedAudio {
     std::span<const std::byte> encoded
 );
 
+// Validate the native output contract described by a WHD record before a
+// selected stream is decoded or incrementally opened. This validates format,
+// meaningful output counts and codec block layout, but deliberately does not
+// read payload bytes or infer a cue, lifetime, or playback decision.
+void validate_bank_stream_metadata(const data::AudioStreamRecord& record);
+
 // Selected bank record decoding: validates the WHD meaningful 16-bit output
 // counts separately from physical codec length. PCM/Vorbis must match exactly;
 // IMA may contain final-block padding, which is removed only after proving that

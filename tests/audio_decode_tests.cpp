@@ -233,6 +233,41 @@ int main() {
     }
     check(unknown_rejected, "reject an unverified encoding family");
 
+    auto valid_pcm_metadata = record(1, 8, 1, 2, 1);
+    valid_pcm_metadata.sample_value_count = 4;
+    valid_pcm_metadata.decoded_byte_count = 8;
+    off::audio::validate_bank_stream_metadata(valid_pcm_metadata);
+    auto valid_ima_metadata = record(0x11, 8, 1, 8, 9);
+    valid_ima_metadata.sample_value_count = 5;
+    valid_ima_metadata.decoded_byte_count = 10;
+    off::audio::validate_bank_stream_metadata(valid_ima_metadata);
+    auto valid_vorbis_metadata = vorbis_record;
+    valid_vorbis_metadata.sample_value_count = 512;
+    valid_vorbis_metadata.decoded_byte_count = 1'024;
+    off::audio::validate_bank_stream_metadata(valid_vorbis_metadata);
+    const auto rejects_metadata = [&](const off::data::AudioStreamRecord& metadata,
+                                      const char* message) {
+        bool rejected = false;
+        try { off::audio::validate_bank_stream_metadata(metadata); }
+        catch (const std::runtime_error&) { rejected = true; }
+        check(rejected, message);
+    };
+    auto malformed_pcm = record(1, 8, 1, 2, 1);
+    malformed_pcm.sample_value_count = 4;
+    malformed_pcm.decoded_byte_count = 8;
+    malformed_pcm.block_align = 3;
+    rejects_metadata(malformed_pcm, "shared metadata gate rejects malformed PCM layout");
+    auto malformed_ima = record(0x11, 8, 1, 8, 9);
+    malformed_ima.sample_value_count = 5;
+    malformed_ima.decoded_byte_count = 10;
+    malformed_ima.samples_per_block = 8;
+    rejects_metadata(malformed_ima, "shared metadata gate rejects malformed IMA layout");
+    auto malformed_vorbis = vorbis_record;
+    malformed_vorbis.sample_value_count = 512;
+    malformed_vorbis.decoded_byte_count = 1'024;
+    malformed_vorbis.block_align = 3;
+    rejects_metadata(malformed_vorbis, "shared metadata gate rejects malformed Vorbis layout");
+
     const auto rejects_bank = [&](const off::data::AudioStreamRecord& metadata,
                                   std::span<const std::byte> bytes, const char* message) {
         bool rejected = false;

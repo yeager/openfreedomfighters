@@ -225,6 +225,7 @@ InstallVerification verify_install(const std::filesystem::path &root,
           installation_vfs.open_stream(local_bank.generic_string());
       header.validate_payload_ranges(local_stream.size(), global_stream.size());
       for (const auto &record : header.records()) {
+        audio::validate_bank_stream_metadata(record);
         const auto format = record.format_flags & 0x7fffffffU;
         const auto needs_reference =
             (format == 1 && !decoded_pcm_reference) ||

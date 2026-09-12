@@ -82,6 +82,16 @@ constexpr std::uintmax_t maximum_directory_size = 1024ULL * 1024ULL * 1024ULL;
 }  // namespace
 
 ArchiveVfs::MountId ArchiveVfs::mount_archive(const std::filesystem::path& archive) {
+    // An archive mount is an owned in-memory ZIP snapshot, but the filesystem
+    // object admitted to create that snapshot must still be a direct regular
+    // file.  In particular, do not let a scene/package mount silently follow a
+    // symlink supplied after installation verification.
+    std::error_code error;
+    const auto status = std::filesystem::symlink_status(archive, error);
+    if (error || std::filesystem::is_symlink(status) ||
+        !std::filesystem::is_regular_file(status)) {
+        throw std::runtime_error("could not open VFS archive mount");
+    }
     Mount mount;
     mount.id = next_mount_id_++;
     mount.archive = ZipArchive::open(archive);
