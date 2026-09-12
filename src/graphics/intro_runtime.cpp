@@ -1,5 +1,6 @@
 #include "off/graphics/intro_runtime.hpp"
 #include "off/data/deferred_attachment_dispatch_shape.hpp"
+#include "off/data/deferred_compact_block_profile.hpp"
 #include "off/data/basic_group_deferred_reader_shape.hpp"
 #include "off/data/basic_group_deferred_reader.hpp"
 #include "off/data/matpos_deferred_component_reader.hpp"
@@ -11,6 +12,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -2024,6 +2026,67 @@ IntroMatPosDeferredDispatchInventory IntroRuntime::matpos_deferred_dispatch_inve
     else
       ++result.attachment_delimiter_precedes_terminal;
   }
+  return result;
+}
+
+IntroParamAnimDeferredDispatchInventory
+IntroRuntime::paramanim_deferred_dispatch_inventory() const {
+  IntroParamAnimDeferredDispatchInventory result;
+  if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete)
+    return result;
+  const auto& sources = resources_.sources();
+  const auto& directory = sources.directory();
+  for (std::size_t row = 0; row < directory.size(); ++row) {
+    const auto& source = directory[row];
+    std::size_t param_animation_attachments{};
+    for (std::size_t slot = 0; slot < source.attachments.size(); ++slot) {
+      if (sources.attachment_identifier(row, slot) == "ZGEOM_ParamAnim")
+        ++param_animation_attachments;
+    }
+    if (param_animation_attachments == 0U)
+      continue;
+    ++result.attachment_owners;
+    result.attachment_instances += param_animation_attachments;
+    if (source.deferred_source_offset == 0U)
+      continue;
+    const auto matching_work = std::ranges::count_if(
+        deferred_reader_work_, [row](const IntroDeferredReaderWork& work) {
+          return work.source_directory_index == row;
+        });
+    if (matching_work != 1U)
+      throw std::runtime_error(
+          "ParamAnim structural inventory requires exactly one queued owner reader");
+    const auto block = sources.deferred_source_block(row);
+    if (block.size() <= sizeof(std::uint32_t))
+      throw std::runtime_error("ParamAnim structural inventory requires a bounded block body");
+    const auto profile = data::DeferredCompactBlockProfiler::profile(
+        block.subspan(sizeof(std::uint32_t)));
+    ++result.owners_with_deferred_blocks;
+    IntroParamAnimDeferredShape shape{
+        .block_bytes = block.size(),
+        .attachment_count = source.attachments.size(),
+        .attachment_delimiters = profile.attachment_delimiters,
+        .tag_classes = profile.value_kinds,
+        .framing_digest = profile.framing_digest,
+        .count = 1U};
+    const auto existing = std::ranges::find_if(
+        result.shapes, [&shape](const IntroParamAnimDeferredShape& candidate) {
+          return candidate.block_bytes == shape.block_bytes &&
+                 candidate.attachment_count == shape.attachment_count &&
+                 candidate.attachment_delimiters == shape.attachment_delimiters &&
+                 candidate.tag_classes == shape.tag_classes &&
+                 candidate.framing_digest == shape.framing_digest;
+        });
+    if (existing == result.shapes.end())
+      result.shapes.push_back(shape);
+    else
+      ++existing->count;
+  }
+  std::ranges::sort(result.shapes, {}, [](const IntroParamAnimDeferredShape& shape) {
+    return std::tuple{shape.block_bytes, shape.attachment_count,
+                      shape.attachment_delimiters, shape.tag_classes,
+                      shape.framing_digest};
+  });
   return result;
 }
 

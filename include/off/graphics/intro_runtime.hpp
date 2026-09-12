@@ -31,8 +31,11 @@
 #include "off/graphics/center_picture_position.hpp"
 #include "off/graphics/fade_picture_size.hpp"
 #include "off/cutscene/picture_activation_prefix.hpp"
+#include <array>
+#include <cstdint>
 #include <map>
 #include <memory>
+#include <vector>
 
 namespace off::graphics {
 
@@ -366,6 +369,26 @@ struct IntroMatPosDeferredDispatchInventory {
   std::size_t terminal_before_first_attachment_delimiter{};
   std::size_t attachment_delimiter_precedes_terminal{};
   std::size_t attachment_delimiters{};
+};
+// Aggregate-only structural inventory for owners that carry the ParamAnim
+// attachment.  It deliberately retains no owner identity, source offset,
+// attachment parameter, decoded value, string, or source bytes.  The digest
+// is over compact framing tags only, so it can distinguish reviewed shapes
+// without becoming a fingerprint of authored payload data.
+struct IntroParamAnimDeferredShape {
+  std::size_t block_bytes{};
+  std::size_t attachment_count{};
+  std::size_t attachment_delimiters{};
+  std::array<std::size_t, 6> tag_classes{};
+  std::uint64_t framing_digest{};
+  std::size_t count{};
+  [[nodiscard]] bool operator==(const IntroParamAnimDeferredShape&) const = default;
+};
+struct IntroParamAnimDeferredDispatchInventory {
+  std::size_t attachment_owners{};
+  std::size_t attachment_instances{};
+  std::size_t owners_with_deferred_blocks{};
+  std::vector<IntroParamAnimDeferredShape> shapes;
 };
 // Live values are owned by the real lifecycle caller. This adapter must never
 // derive them from archived source flags or prepared picture positions.
@@ -974,6 +997,9 @@ public:
   // Read-only structural audit of authored MatPosAnim deferred blocks. It is
   // deliberately separate from deferred_reader_work_ and lifecycle admission.
   [[nodiscard]] IntroMatPosDeferredDispatchInventory matpos_deferred_dispatch_inventory() const;
+  // Structural research aid only. This neither invokes ParamAnim behavior nor
+  // changes deferred-reader admission.
+  [[nodiscard]] IntroParamAnimDeferredDispatchInventory paramanim_deferred_dispatch_inventory() const;
   // Explicit first-cut activation bridge. It is disconnected from normal
   // startup and does not create a view, submit a draw or dispatch cut events.
   [[nodiscard]] FirstCutLegalPictureActivationResult activate_first_cut_legal_picture(

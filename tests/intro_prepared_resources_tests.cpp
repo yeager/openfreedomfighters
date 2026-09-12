@@ -1025,6 +1025,16 @@ static OFF_NOINLINE void check_complete_runtime_post_directory(
                 mat_pos_dispatch.attachment_delimiter_precedes_terminal &&
                 mat_pos_dispatch.associated_records>0,
             "MatPos deferred audit retains only aggregate terminal-versus-delimiter observations");
+      const auto paramanim_dispatch=host.paramanim_deferred_dispatch_inventory();
+      check(paramanim_dispatch.attachment_owners==11U &&
+                paramanim_dispatch.attachment_instances==11U &&
+                paramanim_dispatch.owners_with_deferred_blocks==11U &&
+                paramanim_dispatch.shapes.size()==1U &&
+                paramanim_dispatch.shapes.front().count==11U &&
+                paramanim_dispatch.shapes.front().block_bytes>sizeof(std::uint32_t) &&
+                paramanim_dispatch.shapes.front().attachment_count==1U &&
+                paramanim_dispatch.shapes.front().attachment_delimiters==1U,
+            "synthetic ParamAnim owners produce one aggregate-only bounded deferred shape");
       rejects([&]{host.prepare_scene_lifetime_keys_registry();});
       host.prepare_scene_lifetime_keys_backing();
       const auto* keys_backing=host.scene_lifetime_keys_backing();
