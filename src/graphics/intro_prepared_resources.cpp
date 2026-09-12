@@ -2,6 +2,7 @@
 
 #include "off/data/zip_archive.hpp"
 #include "off/data/archive_vfs.hpp"
+#include "off/data/scene_package_family.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -270,18 +271,34 @@ IntroPreparedResources build_intro_prepared_resources(
 
 IntroPreparedResources
 load_intro_prepared_resources(const std::filesystem::path &intro_archive) {
-  const auto archive = data::ZipArchive::open(intro_archive);
-  const auto &gms = unique_member(archive, ".gms");
-  const auto &buf = unique_member(archive, ".buf");
-  const auto &prm = unique_member(archive, ".prm");
-  const auto &tex = unique_member(archive, ".tex");
-  const auto &snd = unique_member(archive, ".snd");
+  std::vector<std::byte> gms_bytes;
+  std::vector<std::byte> names;
+  std::vector<std::byte> primitives;
+  std::vector<std::byte> texture_bytes;
+  std::vector<std::byte> sound_definitions;
+  // The normal launcher path names the canonical archive.  Require its full
+  // thirteen-member identity before passing any of its bytes to an intro
+  // reader.  The generic helper remains available for narrow parser fixtures
+  // and is not an admission path for a live scene.
+  if (intro_archive.filename() == "FF-Intro.ZIP") {
+    const auto family = data::ScenePackageFamily::open_complete_checked(
+        intro_archive, "FF-Intro");
+    gms_bytes = family.read(data::SceneResourceKind::gms);
+    names = family.read(data::SceneResourceKind::buf);
+    primitives = family.read(data::SceneResourceKind::prm);
+    texture_bytes = family.read(data::SceneResourceKind::tex);
+    sound_definitions = family.read(data::SceneResourceKind::snd);
+  } else {
+    const auto archive = data::ZipArchive::open(intro_archive);
+    gms_bytes = archive.read(unique_member(archive, ".gms"));
+    names = archive.read(unique_member(archive, ".buf"));
+    primitives = archive.read(unique_member(archive, ".prm"));
+    texture_bytes = archive.read(unique_member(archive, ".tex"));
+    sound_definitions = archive.read(unique_member(archive, ".snd"));
+  }
   auto sources =
-      data::GmsImage::parse(data::PackedResource::parse(archive.read(gms)));
-  const auto names = archive.read(buf);
-  const auto primitives = archive.read(prm);
-  const auto textures = data::TextureCatalog::parse(archive.read(tex));
-  const auto sound_definitions=archive.read(snd);
+      data::GmsImage::parse(data::PackedResource::parse(gms_bytes));
+  const auto textures = data::TextureCatalog::parse(texture_bytes);
   auto result=build_intro_prepared_resources(std::move(sources), names, primitives,
                                             textures,intro_decoded_byte_budget,sound_definitions);
   if(!result.sounds_.empty()) {

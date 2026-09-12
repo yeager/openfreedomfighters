@@ -1,5 +1,6 @@
 #include "off/graphics/startup_picture_pass_admission.hpp"
 #include "off/data/packed_resource.hpp"
+#include "off/data/scene_package_family.hpp"
 #include "off/data/zip_archive.hpp"
 #include "off/platform/startup_lifecycle.hpp"
 #include "off/runtime/movie_cut_loader_package_source.hpp"
@@ -361,6 +362,39 @@ int main() {
             !source_package.factory_inputs()->gms().directory().empty() &&
             source_package.factory_inputs()->buf().size() == 512U,
         "source package exposes only its checked typed ZGF/GMS/BUF factory inputs");
+  auto complete_family_members = startup_package_members();
+  complete_family_members.emplace_back("SCENES/FF-C03A.ANM",
+                                       std::vector<std::byte>{std::byte{9}});
+  for (auto &[name, contents] : complete_family_members) {
+    const auto found = name.find("FF-StartUp");
+    if (found != std::string::npos) name.replace(found, 10U, "FF-C03A");
+  }
+  const auto complete_family_fixture =
+      std::filesystem::current_path() / "off-complete-scene-family.zip";
+  write_package_zip(complete_family_fixture, complete_family_members);
+  const auto complete_family = off::data::ScenePackageFamily::open_complete_checked(
+      complete_family_fixture, "FF-C03A");
+  check(complete_family.member_count() == 13U &&
+            complete_family.read(off::data::SceneResourceKind::anm).size() == 1U,
+        "complete scene family retains all thirteen C03A resource roles");
+  auto split_complete_family = complete_family_members;
+  split_complete_family.back().first = "SCENES/FF-Intro.ANM";
+  write_package_zip(complete_family_fixture, split_complete_family);
+  rejected_package = false;
+  try {
+    static_cast<void>(off::data::ScenePackageFamily::open_complete_checked(
+        complete_family_fixture, "FF-C03A"));
+  } catch (const std::runtime_error &) {
+    rejected_package = true;
+  }
+  check(rejected_package,
+        "complete scene family rejects a mixed C03A and intro resource identity");
+  const auto retained_animation =
+      complete_family.read(off::data::SceneResourceKind::anm);
+  check(retained_animation.size() == 1U &&
+            retained_animation.front() == std::byte{9},
+        "complete scene family reads its retained ZIP snapshot after replacement");
+  std::filesystem::remove(complete_family_fixture, package_error);
   std::optional<off::runtime::StartupSceneFactoryInputs> retained_factory_inputs;
   {
     auto lifetime_package =

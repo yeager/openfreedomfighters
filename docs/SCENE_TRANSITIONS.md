@@ -95,6 +95,19 @@ opaque under a package lease for a later factory. It is not an archive search
 policy, does not interpret those companion formats, and does not construct a
 scene.
 
+## Complete shared scene-family admission
+
+`ScenePackageFamily::open_complete_checked` is the source-only admission
+boundary for the observed thirteen-member `FF-Intro` and `FF-C03A` families.
+It rejects symlinked or non-regular archive inputs, requires exactly the ten
+core resources plus `BUF`, `LOC`, and `ANM`, and checks that every member is in
+the canonical `Scenes/<expected-stem>` family before exposing any member bytes.
+It owns the ZIP snapshot, so callers cannot retain an entry borrowed from a
+later-replaced archive. It does not parse member formats or construct, activate,
+render, or transition a scene. The normal canonical `FF-Intro.ZIP` reader uses
+this boundary before its existing typed readers; other parser fixtures remain
+explicitly non-admission helpers.
+
 After that validation, the source-backed package also offers an immutable
 `StartupSceneFactoryInputs` value for a future factory: parsed ZGF, parsed GMS,
 and the paired BUF bytes. Its typed leases retain all three inputs after the

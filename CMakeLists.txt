@@ -115,6 +115,7 @@ add_library(off_core
     src/data/primitive_catalog.cpp
     src/data/render_map.cpp
     src/data/scene_resource_catalog.cpp
+    src/data/scene_package_family.cpp
     src/data/scene_support.cpp
     src/data/texture_catalog.cpp
     src/data/vfs_file_view.cpp
