@@ -64,15 +64,22 @@ This is deterministic infrastructure for future save and replay envelopes. It
 is not a retail-save format, does not contain presentation or game assets, and
 does not make the project compatible with the original game's serialization.
 
-## Planned durable save store
+## Durable project save store
 
-The future project save store will wrap this snapshot in a separate versioned
-envelope and retain two same-directory generations. Loading will validate both
-copies into staged worlds, choose only an unambiguously newest valid generation,
-and leave files untouched. Saving will write and flush an exclusive sibling
-temporary before replacing only the older copy. Corrupt, truncated, mismatched,
-or ambiguous equal-generation files must fail without mutating the destination.
-This is portable project persistence, not retail-save import.
+`ProjectSaveStore` wraps a portable world snapshot in a separate versioned
+envelope and retains two same-directory generations. The envelope binds the
+project-authored campaign ID and verified required-data manifest fingerprint,
+then protects the payload with SHA-256. Loading reads regular generation files
+through no-follow handles, validates both copies into staged worlds, chooses
+only an unambiguously newest valid generation, and leaves the destination
+unchanged on every failure. A damaged newest copy can therefore recover the
+older valid generation; equal valid generation numbers are rejected as
+ambiguous.
+
+Saving writes and flushes an exclusively-created sibling temporary before
+atomically replacing only the invalid or older generation. Symlink leaves,
+invalid identities, exhausted generations, and I/O failures are rejected. This
+is portable project persistence, not retail-save import.
 
 The required ordered command-capture boundary for future replay is specified in
 [Simulation replay](SIMULATION_REPLAY.md).

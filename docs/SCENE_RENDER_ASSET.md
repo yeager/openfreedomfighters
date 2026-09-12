@@ -134,9 +134,9 @@ local non-primitive references; independent maxima need not occur in one scene.
 ## Current boundary
 
 This model prepares the complete set of currently understood direct local scene
-primitives, but the SDL GPU runtime still draws a single diagnostic preview.
-Uploading the scene asset, applying evidenced transform composition, reconstructing
-materials, selecting the scene camera, adding depth, and resolving indirect or
+primitives, and the SDL GPU runtime uploads and submits every retained
+source-only diagnostic draw. Applying evidenced transform composition,
+reconstructing materials, selecting the scene camera, and resolving indirect or
 non-primitive GMS sources are later milestones. Modern and Modern+ render paths
 must consume the same instance identity and gameplay snapshot as Original mode.
 The current source-only diagnostic transform is a presentation convention, not a
