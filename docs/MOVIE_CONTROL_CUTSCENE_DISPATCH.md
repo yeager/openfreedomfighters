@@ -66,6 +66,21 @@ Keep raw and sanitized observations private. Only a reviewed source-free
 behavior specification and authored tests may subsequently connect the runtime
 path.
 
+## Disconnected frame adapter
+
+`MovieControlFirstCutSceneFrameAdapter` is a narrow, unwired assembly boundary
+for a later reviewed scene owner. For one caller-supplied frame it captures a
+stable `MovieControlEvent16ManagerSnapshot`, binds its direct services to an
+already checked `MovieControlFirstCutRuntimeHandoff`, and supplies the existing
+first-cut phase-one and phase-two services. It does not traverse the ordinary
+manager, schedule work, sample a clock, select a camera, start audio, create a
+view, render, or present.
+
+A skipped or waiting event leaves the retained first-cut player cold. The
+handoff is delivered only when `MovieControlFirstUpdate` returns `activated`;
+the adapter is then exhausted. The adapter is not connected to normal startup,
+so this tested assembly seam does not make the normal intro playable.
+
 ## Repeat-pair gate
 
 `tools/movie_control_cutscene_dispatch_repeat_pair.py` validates two already

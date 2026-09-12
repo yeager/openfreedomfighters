@@ -122,6 +122,7 @@ public:
   void run_phase_two(const MovieControlPhaseTwoServices& services);
   [[nodiscard]] MovieControlEvent16Result dispatch_event16(
       const MovieControlEvent16Services& services);
+  [[nodiscard]] std::uint64_t component_handle() const noexcept { return component_handle_; }
   [[nodiscard]] std::int32_t deadline() const noexcept { return deadline_; }
   [[nodiscard]] bool deadline_assigned() const noexcept { return deadline_assigned_; }
   [[nodiscard]] bool phase_two_callback_returned() const noexcept { return phase_two_returned_; }

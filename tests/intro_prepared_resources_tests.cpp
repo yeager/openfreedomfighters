@@ -6,6 +6,7 @@
 #include "off/data/matpos_owner_child_selector.hpp"
 #include "off/cutscene/first_cut_command_session.hpp"
 #include "off/graphics/normal_intro_scene_session.hpp"
+#include "off/graphics/movie_control_first_cut_scene_frame_adapter.hpp"
 #include "off/graphics/intro_accepted_picture_registry.hpp"
 #include "off/graphics/intro_first_cut_accepted_picture_registry.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
@@ -1503,13 +1504,28 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
             host.movie_controller_reader_state()->owner.value,1};
         movie.run_phase_two({[] { return false; }, [] {}, [](bool) {}, [] {},
                              [] { return 0; }, [] {}});
+        // The ordinary manager is supplied by the frame owner.  This isolated
+        // test binds the exact live MovieControl component into a stable
+        // manager so the adapter can capture its real admission state without
+        // traversing or dispatching that manager.
+        off::runtime::OrdinarySortingState frame_sorting;
+        const auto movie_handle=movie.component_handle();
+        auto& movie_component=host.components().at(host.controller_component_index());
+        off::runtime::OrdinaryComponentManager frame_manager{frame_sorting, {
+            [&](std::uint64_t handle) -> off::runtime::ComponentRecord* {
+              return handle==movie_handle ? &movie_component : nullptr;
+            },
+            [](std::uint64_t owner) -> std::optional<off::runtime::OrdinaryOwner> {
+              return off::runtime::OrdinaryOwner{owner, 0U};
+            }, {}}};
+        frame_manager.enqueue(movie_handle);
+        frame_manager.refresh();
+        auto adapter=off::graphics::MovieControlFirstCutSceneFrameAdapter::bind(
+            movie,std::move(handoff));
         bool group_after_lifecycle{};
-        check(handoff.deliver(movie,{
-                [] { return true; }, [] { return true; }, [] { return false; },
-                [] { return std::optional<std::uint64_t>{}; }, [] { return true; },
-                [] { return 2; }, [] {}, {}, [&](std::uint64_t) {
-                  group_after_lifecycle=true;
-                }},
+        check(adapter.run_frame({frame_manager,movie_component,movie_handle,2,false,{}}, {
+                {.prepare_sequence_resources=[] {}, .send_cut_sequence_start={},
+                 .send_group_state_requests=[&](std::uint64_t) { group_after_lifecycle=true; }},
                 {.invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},
                  .register_list_events=[] {}, .member_count=[] { return std::size_t{1}; },
                  .write_queue_property=[](auto) {}},
@@ -1518,12 +1534,13 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                  .resolve_member=[](std::size_t) -> std::optional<std::uint64_t> { return std::nullopt; },
                  .request_member_info=[](std::uint64_t) -> std::optional<off::cutscene::FirstCutMemberInfo> { return std::nullopt; },
                  .member_name=[](std::uint64_t) { return std::string_view{}; },
-                 .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> { return std::nullopt; }}) ==
+                 .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> { return std::nullopt; }}}) ==
               off::graphics::MovieControlEvent16Result::activated &&
               session.initialization().phase_two_complete() && session.receiver().closed() &&
-              group_after_lifecycle,
-              "MovieControl delivers the checked first-cut lifecycle synchronously before its group receiver");
-        rejects([&] { static_cast<void>(handoff.deliver(movie,{}, {}, {})); });
+              group_after_lifecycle && adapter.delivered(),
+              "scene-frame adapter delivers the checked first-cut lifecycle only after event-16 admission");
+        rejects([&] { static_cast<void>(adapter.run_frame(
+            {frame_manager,movie_component,movie_handle,2,false,{}}, {})); });
         // A lifecycle service can be host-owned, so the handoff must prove its
         // reader/component relation again before phase two registers commands.
         // This is deliberately a live-state mutation rather than a synthetic

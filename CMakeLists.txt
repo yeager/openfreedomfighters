@@ -133,10 +133,12 @@ add_library(off_core
     src/graphics/startup_graphics_asset.cpp
     src/graphics/intro_prepared_resources.cpp
     src/graphics/movie_control_first_cut_runtime_handoff.cpp
+    src/graphics/movie_control_first_cut_scene_frame_adapter.cpp
     src/graphics/movie_control_event16_admission_snapshot.cpp
     src/graphics/intro_outer_loader_tail_readiness.cpp
     src/graphics/intro_runtime.cpp
     src/graphics/movie_control_host_evidence.cpp
+    src/graphics/reviewed_movie_control_lifecycle_contract.cpp
     src/graphics/normal_intro_scene_session.cpp
     src/graphics/normal_intro_scene_lifecycle_services.cpp
     src/graphics/intro_lifecycle_admission.cpp
@@ -593,6 +595,13 @@ if(BUILD_TESTING)
     add_executable(off_movie_control_host_evidence_tests tests/movie_control_host_evidence_tests.cpp)
     target_link_libraries(off_movie_control_host_evidence_tests PRIVATE off_core)
     add_test(NAME off_movie_control_host_evidence_tests COMMAND off_movie_control_host_evidence_tests)
+    add_executable(off_reviewed_movie_control_lifecycle_contract_tests
+        tests/reviewed_movie_control_lifecycle_contract_tests.cpp)
+    target_link_libraries(off_reviewed_movie_control_lifecycle_contract_tests PRIVATE off_core)
+    target_compile_definitions(off_reviewed_movie_control_lifecycle_contract_tests PRIVATE
+        OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/reviewed-movie-control-lifecycle-contract-test-work")
+    add_test(NAME off_reviewed_movie_control_lifecycle_contract_tests
+        COMMAND off_reviewed_movie_control_lifecycle_contract_tests)
     add_executable(off_scene_support_tests tests/scene_support_tests.cpp)
     target_link_libraries(off_scene_support_tests PRIVATE off_core)
     add_test(NAME off_scene_support_tests COMMAND off_scene_support_tests)
@@ -870,6 +879,11 @@ if(BUILD_TESTING)
             COMMAND off_intro_prepared_resources_tests
                     "${OFF_INTRO_PREPARED_RESOURCES_TEST_GROUP}")
     endforeach()
+    # The adapter's authored live-manager regression is kept in the prepared
+    # runtime fixture, which is the only fixture that can form a checked typed
+    # MovieControl-to-player handoff without retail data.
+    add_test(NAME off_movie_control_first_cut_scene_frame_adapter_tests
+        COMMAND off_intro_prepared_resources_tests prepared-runtime-scopes)
 
     add_executable(off_intro_named_global_references_tests
         tests/intro_named_global_references_tests.cpp)
