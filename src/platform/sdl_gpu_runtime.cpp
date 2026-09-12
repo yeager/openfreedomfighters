@@ -2313,6 +2313,11 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     if (frame_limit != 0 && frames >= frame_limit)
       running = false;
   }
+  // A requested capture is part of the invocation contract.  For example, a
+  // close event can end a bounded run before its final eligible frame.  Do not
+  // report that run as successful when it produced no requested artifact.
+  if (result.success && !screenshot_captured)
+    result = failure("screenshot was not captured");
   SDL_WaitForGPUIdle(device);
   if (result.success && intro)
     result.message += " (" + std::to_string(gpu_intro->image_count()) +
