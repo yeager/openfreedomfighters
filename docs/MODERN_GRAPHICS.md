@@ -76,6 +76,14 @@ exposure, jitter, reactive-mask, and HUD-less inputs; UI is composed afterward a
 output resolution. This contract allows quality-equivalent fallbacks on AMD,
 Intel, Apple, and Steam Deck hardware without affecting simulation state.
 
+The runtime derives its available upscalers from completed renderer bindings,
+not configuration defaults, product names, or detected libraries. A binding must
+identify and version its runtime, have a compatible native device, accept the
+complete temporal input set, and own a real frame-submission callback. Ambiguous
+or incomplete bindings fail closed. The current SDL GPU renderer has no such
+binding, so its F10 choices resolve to native rendering rather than claiming a
+portable temporal or vendor backend is active.
+
 The existing F10 render-scale control is already portable: scene content renders
 to a 50--200% internal SDL GPU target and is linearly scaled to the output,
 while UI remains at output resolution. It is a fixed user-selected scale, not

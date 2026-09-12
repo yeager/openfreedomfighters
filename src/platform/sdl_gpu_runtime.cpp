@@ -4,6 +4,7 @@
 #include "off/platform/intro_preview_diagnostic.hpp"
 #include "off/platform/sdl_locale.hpp"
 #include "off/platform/sdl_menu_gamepad.hpp"
+#include "off/settings/upscaler_runtime.hpp"
 #include "off/ui/graphics_menu_draw.hpp"
 #include "off/ui/graphics_menu_pointer.hpp"
 #include "off/ui/font_run_layout.hpp"
@@ -1274,6 +1275,11 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       device, window, SDL_GPU_PRESENTMODE_MAILBOX);
   capabilities.immediate_present = SDL_WindowSupportsGPUPresentMode(
       device, window, SDL_GPU_PRESENTMODE_IMMEDIATE);
+  // SDL GPU currently owns fixed render scaling only. Do not advertise a
+  // temporal or vendor upscaler until this renderer has completed an actual
+  // native submission binding for it.
+  capabilities = settings::negotiate_upscaler_runtime_capabilities(
+      capabilities, {});
   ui::GraphicsMenuSession menu{capabilities};
   settings::RequestedGraphicsSettings initial;
   initial.profile = mode;

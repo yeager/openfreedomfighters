@@ -161,6 +161,7 @@ add_library(off_core
     src/platform/startup_lifecycle.cpp
     src/platform/startup_preparation.cpp
     src/settings/graphics_settings.cpp
+    src/settings/upscaler_runtime.cpp
     src/simulation/fixed_step.cpp
     src/simulation/input.cpp
     src/simulation/replay.cpp
@@ -648,6 +649,10 @@ if(BUILD_TESTING)
     add_executable(off_graphics_settings_tests tests/graphics_settings_tests.cpp)
     target_link_libraries(off_graphics_settings_tests PRIVATE off_core)
     add_test(NAME off_graphics_settings_tests COMMAND off_graphics_settings_tests)
+
+    add_executable(off_upscaler_runtime_tests tests/upscaler_runtime_tests.cpp)
+    target_link_libraries(off_upscaler_runtime_tests PRIVATE off_core)
+    add_test(NAME off_upscaler_runtime_tests COMMAND off_upscaler_runtime_tests)
 
     add_executable(off_graphics_menu_draw_tests tests/graphics_menu_draw_tests.cpp)
     target_link_libraries(off_graphics_menu_draw_tests PRIVATE off_core)
