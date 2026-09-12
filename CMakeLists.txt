@@ -118,6 +118,7 @@ add_library(off_core
     src/graphics/intro_renderer_resource_relations.cpp
     src/graphics/startup_graphics_asset.cpp
     src/graphics/intro_prepared_resources.cpp
+    src/graphics/movie_control_first_cut_runtime_handoff.cpp
     src/graphics/intro_outer_loader_tail_readiness.cpp
     src/graphics/intro_runtime.cpp
     src/graphics/movie_control_host_evidence.cpp

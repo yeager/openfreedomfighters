@@ -140,6 +140,13 @@ void NormalIntroSceneSession::prepare_supported_first_cut_player() {
   }
 }
 
+MovieControlFirstCutRuntimeHandoff NormalIntroSceneSession::make_first_cut_handoff() {
+  if (stage_ != NormalIntroSceneSessionStage::reader_bracket_complete ||
+      !first_cut_player_)
+    throw std::runtime_error("normal intro scene first-cut handoff is unavailable");
+  return MovieControlFirstCutRuntimeHandoff::from_runtime(*runtime_, *first_cut_player_);
+}
+
 void NormalIntroSceneSession::prepare_first_cut_command_runner(
     float derived_end, runtime::IntroLiveTargetRegistry::DispatchServices dispatch) {
   if (stage_ != NormalIntroSceneSessionStage::reader_bracket_complete ||

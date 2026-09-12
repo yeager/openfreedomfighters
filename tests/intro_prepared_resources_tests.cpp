@@ -1482,17 +1482,48 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
         auto session=host.first_cut_player_session();
         check(!session.initialization().phase_one_complete() && !session.receiver().open(),
               "first-cut session is projected from the same live reader state but remains cold");
-        session.run_phase_one({.invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},
+        // The native bridge may only be formed from the checked live runtime;
+        // its first successful receiver delivery is synchronous with the
+        // admitted MovieControl update and is not a playback assertion.
+        auto handoff=off::graphics::MovieControlFirstCutRuntimeHandoff::from_runtime(host,session);
+        off::graphics::MovieControlFirstUpdate movie{
+            host.component_handle(host.controller_component_index()),
+            host.movie_controller_reader_state()->owner.value,1};
+        movie.run_phase_two({[] { return false; }, [] {}, [](bool) {}, [] {},
+                             [] { return 0; }, [] {}});
+        bool group_after_lifecycle{};
+        check(handoff.deliver(movie,{
+                [] { return true; }, [] { return true; }, [] { return false; },
+                [] { return std::optional<std::uint64_t>{}; }, [] { return true; },
+                [] { return 2; }, [] {}, {}, [&](std::uint64_t) {
+                  group_after_lifecycle=true;
+                }},
+                {.invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},
+                 .register_list_events=[] {}, .member_count=[] { return std::size_t{1}; },
+                 .write_queue_property=[](auto) {}},
+                {.invoke_command=[](auto,const auto&) {},
+                 .read_scene_reference=[](std::string_view) -> std::optional<std::uint64_t> { return std::nullopt; },
+                 .resolve_member=[](std::size_t) -> std::optional<std::uint64_t> { return std::nullopt; },
+                 .request_member_info=[](std::uint64_t) -> std::optional<off::cutscene::FirstCutMemberInfo> { return std::nullopt; },
+                 .member_name=[](std::uint64_t) { return std::string_view{}; },
+                 .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> { return std::nullopt; }}) ==
+              off::graphics::MovieControlEvent16Result::activated &&
+              session.initialization().phase_two_complete() && session.receiver().closed() &&
+              group_after_lifecycle,
+              "MovieControl delivers the checked first-cut lifecycle synchronously before its group receiver");
+        rejects([&] { static_cast<void>(handoff.deliver(movie,{}, {}, {})); });
+        auto lifecycle_session=host.first_cut_player_session();
+        lifecycle_session.run_phase_one({.invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},
                                .register_list_events=[] {}, .member_count=[] { return std::size_t{1}; },
                                .write_queue_property=[](auto) {}});
-        session.run_phase_two({
+        lifecycle_session.run_phase_two({
             .invoke_command=[](auto,const auto&) {},
             .read_scene_reference=[](std::string_view) -> std::optional<std::uint64_t> { return std::nullopt; },
             .resolve_member=[](std::size_t) -> std::optional<std::uint64_t> { return std::nullopt; },
             .request_member_info=[](std::uint64_t) -> std::optional<off::cutscene::FirstCutMemberInfo> { return std::nullopt; },
             .member_name=[](std::uint64_t) { return std::string_view{}; },
             .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> { return std::nullopt; }});
-        check(session.initialization().phase_two_complete() && session.receiver().closed(),
+        check(lifecycle_session.initialization().phase_two_complete() && lifecycle_session.receiver().closed(),
               "first-cut session binds its receiver internally without scheduling playback");
         initialization.run_phase_one({
             .invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},

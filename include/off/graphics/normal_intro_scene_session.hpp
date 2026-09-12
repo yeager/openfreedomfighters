@@ -3,6 +3,7 @@
 #include "off/cutscene/first_cut_player_initialization.hpp"
 #include "off/cutscene/first_cut_clocked_command_runner.hpp"
 #include "off/graphics/intro_outer_loader_tail_readiness.hpp"
+#include "off/graphics/movie_control_first_cut_runtime_handoff.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -64,6 +65,9 @@ public:
   [[nodiscard]] cutscene::FirstCutPlayerSession *first_cut_player() noexcept {
     return first_cut_player_ ? std::addressof(*first_cut_player_) : nullptr;
   }
+  // Produces the narrow MovieControl receiver only after the reader-owned
+  // runtime and its cold first-cut session coexist. It does not dispatch it.
+  [[nodiscard]] MovieControlFirstCutRuntimeHandoff make_first_cut_handoff();
   [[nodiscard]] cutscene::FirstCutClockedCommandRunner *first_cut_command_runner() noexcept {
     return first_cut_command_runner_.get();
   }
