@@ -95,6 +95,10 @@ int main() {
         "a supported platform locale follows an unavailable explicit locale");
   check(catalog.resolve(MessageId::apply, "zh-Hant", "en-US") == "Apply",
         "a Traditional Chinese request does not select the Simplified catalog");
+  check(catalog.resolve(MessageId::apply, "zh-Latn", "sv-SE") == "Tillämpa",
+        "an incompatible explicit Chinese script falls through to the platform locale");
+  check(catalog.resolve(MessageId::apply, "zh-twinkle", "en-US") == "应用",
+        "an unrelated Chinese variant does not look like a Traditional region");
   check(!catalog.resolve(static_cast<MessageId>(message_id_count), "en", "en"),
         "invalid message IDs do not resolve");
   check(!catalog.format_seconds(MessageId::apply, 2, "en", "en"),
@@ -127,6 +131,11 @@ int main() {
         "popup never exposes a raw verifier diagnostic");
   check(startup_error.dialog_text().find("OFF-DATA-02") != std::string::npos,
         "dialog composition retains its support code");
+  const auto unsupported_chinese_startup_error =
+      off::platform::make_startup_data_error_presentation(
+          missing_executable, catalog, "zh-Cyrl", "sv-SE");
+  check(unsupported_chinese_startup_error.title == "Speldata krävs",
+        "startup error does not mislabel an unsupported Chinese script");
   check(off::platform::startup_data_error_message_id(
             off::data::InstallError::unsupported_executable_hash) ==
             MessageId::game_executable_unsupported,

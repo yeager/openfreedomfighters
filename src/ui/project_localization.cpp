@@ -1,5 +1,6 @@
 #include "off/ui/project_localization.hpp"
 
+#include <algorithm>
 #include <array>
 #include <stdexcept>
 #include <utility>
@@ -86,31 +87,46 @@ std::optional<Locale> locale_from_tag(std::string_view tag) noexcept {
   }
   if (language.size() == 2 && (language[0] == 'z' || language[0] == 'Z') &&
       (language[1] == 'h' || language[1] == 'H')) {
-    // Do not silently substitute Simplified Chinese for a locale that
-    // explicitly requests a Traditional script.
-    const auto has_case_insensitive = [&](std::string_view needle) {
-      if (tag.size() < needle.size())
-        return false;
-      for (std::size_t start = 0; start + needle.size() <= tag.size(); ++start) {
-        bool matches = true;
-        for (std::size_t i = 0; i < needle.size(); ++i) {
-          const auto character = tag[start + i];
+    // Do not silently substitute Simplified Chinese for an explicitly
+    // incompatible script or Traditional region. Match whole BCP-47/POSIX
+    // subtags only: a substring check would incorrectly treat unrelated
+    // variants such as "zh-twinkle" as a Traditional-Chinese request.
+    std::size_t begin = language_end;
+    while (begin != std::string_view::npos && begin < tag.size()) {
+      ++begin;
+      const auto end = tag.find_first_of("-_.", begin);
+      const auto subtag = tag.substr(begin, end - begin);
+      if (subtag.empty())
+        return std::nullopt;
+      const auto equals_ascii = [&](std::string_view expected) {
+        if (subtag.size() != expected.size())
+          return false;
+        for (std::size_t i = 0; i < expected.size(); ++i) {
+          const auto character = subtag[i];
           const auto lower = character >= 'A' && character <= 'Z'
                                  ? static_cast<char>(character - 'A' + 'a')
                                  : character;
-          if (lower != needle[i]) {
-            matches = false;
-            break;
-          }
+          if (lower != expected[i])
+            return false;
         }
-        if (matches)
-          return true;
+        return true;
+      };
+      const bool is_script = subtag.size() == 4U &&
+          std::all_of(subtag.begin(), subtag.end(), [](char character) {
+            return (character >= 'A' && character <= 'Z') ||
+                   (character >= 'a' && character <= 'z');
+          });
+      if (is_script) {
+        if (!equals_ascii("hans"))
+          return std::nullopt;
       }
-      return false;
-    };
-    if (has_case_insensitive("hant") || has_case_insensitive("tw") ||
-        has_case_insensitive("hk"))
-      return std::nullopt;
+      if (equals_ascii("hant") || equals_ascii("tw") ||
+          equals_ascii("hk") || equals_ascii("mo"))
+        return std::nullopt;
+      begin = end;
+    }
+    // A valid explicit Hans script and the ordinary zh/zh-CN forms use the
+    // only Chinese catalog currently supplied by the project.
     return Locale::simplified_chinese;
   }
   return std::nullopt;
