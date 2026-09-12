@@ -28,7 +28,9 @@ namespace {
 
 [[nodiscard]] bool complete(const UpscalerRuntimeBinding &binding) noexcept {
   return provider_backend(binding.backend) && binding.native_device_ready &&
-         binding.temporal_inputs_ready && binding.submit_bound &&
+         binding.temporal_inputs_ready && binding.output_target_ready &&
+         binding.ui_composed_after_resolve &&
+         binding.history_invalidation_bound && binding.submit_bound &&
          !binding.runtime_name.empty() && !binding.runtime_version.empty();
 }
 

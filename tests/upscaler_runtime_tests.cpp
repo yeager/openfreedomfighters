@@ -17,6 +17,9 @@ off::settings::UpscalerRuntimeBinding complete(
   return {.backend = backend,
           .native_device_ready = true,
           .temporal_inputs_ready = true,
+          .output_target_ready = true,
+          .ui_composed_after_resolve = true,
+          .history_invalidation_bound = true,
           .submit_bound = true,
           .runtime_name = "test-runtime",
           .runtime_version = "1.0"};
@@ -76,5 +79,30 @@ int main() {
       negotiate_upscaler_runtime_capabilities(base, bad_identity);
   check(!bad_identity_result.temporal_upscaler,
         "an unnamed or unversioned runtime is never reported as active");
+
+  auto missing_output = complete(Upscaler::dlss);
+  missing_output.output_target_ready = false;
+  const std::array incomplete_output{missing_output};
+  const auto missing_output_result =
+      negotiate_upscaler_runtime_capabilities(base, incomplete_output);
+  check(!missing_output_result.dlss_upscaler,
+        "a provider without an output target is never exposed");
+
+  auto scales_ui = complete(Upscaler::fsr);
+  scales_ui.ui_composed_after_resolve = false;
+  const std::array incomplete_ui_order{scales_ui};
+  const auto incomplete_ui_order_result =
+      negotiate_upscaler_runtime_capabilities(base, incomplete_ui_order);
+  check(!incomplete_ui_order_result.fsr_upscaler,
+        "a provider that can scale UI or subtitles is never exposed");
+
+  auto stale_history = complete(Upscaler::xess);
+  stale_history.history_invalidation_bound = false;
+  const std::array incomplete_history_lifecycle{stale_history};
+  const auto incomplete_history_lifecycle_result =
+      negotiate_upscaler_runtime_capabilities(base,
+                                              incomplete_history_lifecycle);
+  check(!incomplete_history_lifecycle_result.xess_upscaler,
+        "a provider without cut and resize history invalidation is never exposed");
   return failures == 0 ? 0 : 1;
 }
