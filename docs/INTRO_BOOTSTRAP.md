@@ -62,16 +62,14 @@ validated terminal-versus-attachment-delimiter shape, retaining an explicit
 unknown bucket for formats outside that narrow classifier. These are aggregate
 investigation counts, not a claim that a deferred attachment reader exists.
 
-For unimplemented-reader work, the cold probe also emits a privacy-safe
-compact framing profile: bounded byte count, attachment count,
-delimiter count, encoded-value count, continuation count, and counts by generic
-value framing class. An order-sensitive digest and an abstract type sequence
-cover framing tags only; the sequence retains each low-six-bit tag class plus
-high-bit and continuation markers, never payload bytes. The probe never emits values,
-source identities, offsets, handles, or payload bytes. The owned intro has one 98-byte single-MatPos form
-(89 records) and three distinct 103-byte framing forms (2, 85, and 29 records).
-Their differing framing profiles prove that a type-wide base-object reader would
-be unsound. The recovered MatPos reader has a further owner-local `KEYS` gate.
+Candidate-specific inventories may emit a privacy-safe compact framing profile:
+bounded byte count, attachment count, delimiter count, and framing-tag
+statistics. They never emit a source type, value, source identity, offset,
+handle, or payload byte. The prior MatPos investigation found one 98-byte
+single-MatPos form (89 records) and three distinct 103-byte framing forms (2,
+85, and 29 records). Their differing framing profiles prove that a type-wide
+base-object reader would be unsound. The recovered MatPos reader has a further
+owner-local `KEYS` gate.
 After preparing the native-order owner-child registry before the ordinary
 reader bracket, the current owned probe admits 29 exact records; all other
 forms remain outside its narrow contract.

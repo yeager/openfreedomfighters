@@ -54,7 +54,6 @@
 #include <iostream>
 #include <limits>
 #include <memory>
-#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -464,13 +463,6 @@ void write_reader_coverage_probe(std::ostream& output,
              << " count=" << counts[family][state] << '\n';
     }
   }
-  for(const auto& entry:coverage.entries) {
-    if(entry.family!=off::graphics::IntroDeferredReaderFamily::unclassified ||
-       entry.state!=off::graphics::IntroDeferredReaderImplementationState::unimplemented)
-      continue;
-    output << "reader-unimplemented-source-type=0x" << std::hex << entry.source_type
-           << std::dec << " count=" << entry.count << '\n';
-  }
 }
 
 int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initialization,
@@ -830,45 +822,6 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
   }
   std::cout
             << "outer-loader-source-inputs=verified\n";
-  std::set<std::uint32_t> unimplemented_source_types;
-  for(const auto& entry:reader_coverage.entries) {
-    if(entry.family==off::graphics::IntroDeferredReaderFamily::unclassified &&
-       entry.state==off::graphics::IntroDeferredReaderImplementationState::unimplemented)
-      unimplemented_source_types.insert(entry.source_type);
-  }
-  // Keep this diagnostic aggregate-only: the source class number is already
-  // emitted above, and pairing it with framing (rather than owner identity or
-  // payload) lets recovery choose one concrete reader family safely.
-  std::map<std::pair<std::uint32_t,std::string>,std::size_t> deferred_signatures;
-  for(const auto& work:intro.deferred_reader_work()) {
-    const auto& source=intro.resources().sources().directory().at(work.source_directory_index);
-    if(!unimplemented_source_types.contains(source.source_type)) continue;
-    const auto block=intro.resources().sources().deferred_source_block(work.source_directory_index);
-    std::string signature="bytes="+std::to_string(block.size())+
-        " attachment-count="+std::to_string(source.attachments.size());
-    try {
-      const auto observation=off::data::DeferredAttachmentDispatchClassifier::observe(
-          block.subspan(sizeof(std::uint32_t)));
-      signature+=" delimiters="+std::to_string(observation.delimiter_count);
-      signature+=observation.shape==off::data::DeferredAttachmentDispatchShape::terminal_before_first_attachment_delimiter ?
-          " terminal-first" : " attachment-first";
-      const auto profile=off::data::DeferredCompactBlockProfiler::profile(
-          block.subspan(sizeof(std::uint32_t)));
-      signature+=" values="+std::to_string(profile.encoded_values)+
-          " continued="+std::to_string(profile.continuation_values)+
-          " framing="+std::to_string(profile.framing_digest)+
-          " notation="+profile.framing_notation+
-          " kinds="+std::to_string(profile.value_kinds[1U])+","+
-          std::to_string(profile.value_kinds[2U])+","+
-          std::to_string(profile.value_kinds[3U])+","+
-          std::to_string(profile.value_kinds[4U])+","+
-          std::to_string(profile.value_kinds[5U]);
-    } catch(const std::exception&) { signature+=" malformed-dispatch"; }
-    ++deferred_signatures[{source.source_type,std::move(signature)}];
-  }
-  for(const auto& [key,count]:deferred_signatures)
-    std::cout << "reader-signature-source-type=0x" << std::hex << key.first << std::dec
-              << ' ' << key.second << " count=" << count << '\n';
   std::cout << "outer-loader-tail=native-services-required\n"
             << "outer-loader-named-global-bytes=" << tail_readiness.named_global_bytes << '\n'
             << "outer-loader-named-global-native-supported="
