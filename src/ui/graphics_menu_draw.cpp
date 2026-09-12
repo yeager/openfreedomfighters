@@ -1,6 +1,7 @@
 #include "off/ui/graphics_menu_draw.hpp"
 #include "off/ui/detail/spleen_ascii_rows.hpp"
 #include "off/ui/project_localization.hpp"
+#include "off/ui/text_layout.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -42,26 +43,6 @@ bool normalized(const UiRect &rect) {
 }
 
 bool valid_layer(UiLayer layer) { return layer <= UiLayer::modal; }
-
-std::optional<std::size_t> utf8_scalar_count(std::string_view value) noexcept {
-  std::size_t count = 0;
-  for (std::size_t index = 0; index < value.size();) {
-    const auto byte = static_cast<unsigned char>(value[index]);
-    const std::size_t continuation_count =
-        byte <= 0x7fU ? 0U : byte >= 0xc2U && byte <= 0xdfU ? 1U
-                       : byte >= 0xe0U && byte <= 0xefU   ? 2U
-                       : byte >= 0xf0U && byte <= 0xf4U   ? 3U
-                                                          : 4U;
-    if (continuation_count == 4U || index + continuation_count >= value.size())
-      return std::nullopt;
-    for (std::size_t offset = 1; offset <= continuation_count; ++offset)
-      if ((static_cast<unsigned char>(value[index + offset]) & 0xc0U) != 0x80U)
-        return std::nullopt;
-    index += continuation_count + 1U;
-    ++count;
-  }
-  return count;
-}
 
 std::string localized(l10n::MessageId id, std::string_view explicit_locale,
                       PlatformLocales platform_locales) {
@@ -237,15 +218,25 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
       out.status = UiBuildStatus::capacity_exceeded;
       return false;
     }
+    // Project-authored F10 strings enter the renderer only after strict UTF-8
+    // validation and bounded cluster segmentation. The renderer uses the same
+    // boundary for per-font fallback, keeping a recognized cluster intact.
+    if (!make_text_layout_boundary(text)) {
+      out.status = UiBuildStatus::invalid_text;
+      return false;
+    }
     out.texts.push_back({layer, panel_rect, x, y, color, std::move(text)});
     return true;
   };
   auto finish = [&]() {
-    if (!validate_graphics_menu_draw_list(out)) {
+    if (out.status != UiBuildStatus::ok || !validate_graphics_menu_draw_list(out)) {
+      const auto status = out.status == UiBuildStatus::ok
+                              ? UiBuildStatus::capacity_exceeded
+                              : out.status;
       out = {};
       out.target = target;
       out.ui_scale = scale;
-      out.status = UiBuildStatus::capacity_exceeded;
+      out.status = status;
     }
     return out;
   };
@@ -402,7 +393,8 @@ bool validate_graphics_menu_draw_list(
   }
   for (const auto &command : list.texts) {
     if (!valid_layer(command.layer) || !inside(command.clip, list.target) ||
-        !std::isfinite(command.x) || !std::isfinite(command.y))
+        !std::isfinite(command.x) || !std::isfinite(command.y) ||
+        !make_text_layout_boundary(command.text))
       return false;
     bytes += command.text.size();
     if (bytes > maximum_ui_text_bytes)
@@ -420,13 +412,16 @@ bool validate_graphics_menu_text_layout(
   if (list.status != UiBuildStatus::ok)
     return false;
   for (const auto &command : list.texts) {
-    const auto scalars = utf8_scalar_count(command.text);
-    if (!scalars || command.x < command.clip.x || command.y < command.clip.y)
+    const auto boundary = make_text_layout_boundary(command.text);
+    if (!boundary || command.x < command.clip.x || command.y < command.clip.y)
       return false;
+    std::size_t scalar_count = 0;
+    for (const auto &cluster : boundary->clusters)
+      scalar_count += cluster.scalar_count;
     // Every built list uses the authored 640-unit panel as its clip.  Derive
     // the physical cell size from that panel rather than from a platform font.
     const float scale = command.clip.width / reference_width;
-    const float right = command.x + static_cast<float>(*scalars) * 8.0F * scale;
+    const float right = command.x + static_cast<float>(scalar_count) * 8.0F * scale;
     const float bottom = command.y + 16.0F * scale;
     if (!std::isfinite(right) || !std::isfinite(bottom) ||
         right > command.clip.x + command.clip.width ||

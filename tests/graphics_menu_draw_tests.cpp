@@ -232,6 +232,12 @@ int main() {
   check(!off::ui::validate_graphics_menu_text_layout(overflowing_text),
         "the deterministic layout oracle rejects text beyond its panel clip");
 
+  auto malformed_text = reference;
+  malformed_text.texts.front().text = std::string{"\xc0\x80", 2};
+  check(!off::ui::validate_graphics_menu_draw_list(malformed_text) &&
+            !off::ui::validate_graphics_menu_text_layout(malformed_text),
+        "F10 draw validation rejects overlong UTF-8 through TextLayout admission");
+
   auto textured = reference;
   textured.textures.push_back({off::ui::UiLayer::panel,
                                off::ui::RetailUiTextureRole::black_fill_top,

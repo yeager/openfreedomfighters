@@ -91,6 +91,7 @@ enum class UiBuildStatus : std::uint8_t {
   ok,
   invalid_viewport,
   invalid_scale,
+  invalid_text,
   capacity_exceeded
 };
 
