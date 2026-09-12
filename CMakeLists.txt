@@ -168,6 +168,7 @@ add_library(off_core
     src/graphics/renderer_frame_pass.cpp
     src/platform/startup_lifecycle.cpp
     src/platform/startup_preparation.cpp
+    src/platform/locale_preferences.cpp
     src/settings/graphics_settings.cpp
     src/settings/graphics_settings_store.cpp
     src/settings/upscaler_runtime.cpp

@@ -1,8 +1,11 @@
 #pragma once
 
+#include "off/platform/locale_preferences.hpp"
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_locale.h>
 
+#include <span>
 #include <string>
 #include <vector>
 
@@ -17,8 +20,8 @@ namespace off::platform {
     SDL_free(locales);
     return {};
   }
-  std::vector<std::string> result;
-  result.reserve(static_cast<std::size_t>(count));
+  std::vector<std::string> raw;
+  raw.reserve(static_cast<std::size_t>(count));
   for (int index = 0; index < count; ++index) {
     const auto *locale = locales[index];
     if (locale == nullptr || locale->language == nullptr || locale->language[0] == '\0')
@@ -28,10 +31,14 @@ namespace off::platform {
       tag += '-';
       tag += locale->country;
     }
-    result.push_back(std::move(tag));
+    raw.push_back(std::move(tag));
   }
   SDL_free(locales);
-  return result;
+  std::vector<std::string_view> views;
+  views.reserve(raw.size());
+  for (const auto &locale : raw)
+    views.push_back(locale);
+  return canonical_host_locale_preferences(views);
 }
 
 [[nodiscard]] inline std::string preferred_system_locale() {

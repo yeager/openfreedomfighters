@@ -1,4 +1,5 @@
 #include "off/ui/project_localization.hpp"
+#include "off/platform/locale_preferences.hpp"
 #include "off/platform/startup_data_error_presentation.hpp"
 
 #include <array>
@@ -15,6 +16,22 @@ void check(bool condition, const char *message) {
 } // namespace
 
 int main() {
+  using off::platform::canonical_host_locale_preferences;
+  using off::platform::canonical_host_locale_tag;
+  check(canonical_host_locale_tag("sv_SE.UTF-8") == "sv-SE",
+        "POSIX host spelling is canonicalized before locale selection");
+  check(canonical_host_locale_tag("zh_hans_cn") == "zh-Hans-CN",
+        "script and region casing are canonicalized deterministically");
+  check(!canonical_host_locale_tag("sv--SE") &&
+            !canonical_host_locale_tag("sv\x01SE") &&
+            !canonical_host_locale_tag("C"),
+        "malformed and non-language host values are rejected");
+  constexpr std::array<std::string_view, 5> host_values{{
+      "sv_SE.UTF-8", "SV-se", "bad--tag", "en_US", "sv-SE"}};
+  const auto host_preferences = canonical_host_locale_preferences(host_values);
+  check(host_preferences.size() == 2U && host_preferences[0] == "sv-SE" &&
+            host_preferences[1] == "en-US",
+        "host preference order is preserved after malformed values and duplicates are removed");
   using namespace off::ui::l10n;
   const auto &catalog = f10_catalog();
   check(catalog.resolve(MessageId::apply, "sv-SE", "en-US") == "Tillämpa",
