@@ -120,6 +120,8 @@ surrounding loader or owner services. MovieControl phase one remains unsupported
 phase-two tests do not fill that gap. The ordinary
 dispatcher exists, but most admitted concrete callbacks are still missing.
 The component-pass API does not perform those surrounding loader operations.
+See [MOVIE_CONTROL_PHASE_ONE.md](MOVIE_CONTROL_PHASE_ONE.md) for the bounded
+missing contract and the required source-free observation.
 
 The intro sound owners are a real dependency: their initialization reads retained
 sound records. A missing output backend does not justify empty sound callbacks.
