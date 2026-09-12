@@ -47,11 +47,16 @@ int main() {
   check(overlay.version == std::string_view{"v" OFF_VERSION},
         "splash version comes from the build release version");
   check(overlay.credit == "Daniel Nylander", "splash carries the project credit");
-  check(overlay.pixel_size == 4, "splash overlay scales for 1280x720");
-  check(overlay.version_left == 36 && overlay.baseline == 656,
+  check(overlay.font_point_size == 26 && overlay.margin == 18,
+        "splash overlay selects its shared font and margin policy");
+  check(overlay.version_left == 18 && overlay.baseline == 702,
         "version is placed at the lower-left splash margin");
-  check(overlay.credit_left == 884 && overlay.baseline == 656,
-        "credit is placed at the lower-right splash margin");
+  check(overlay.baseline == 720 - overlay.margin,
+        "both overlay baselines use the actual lower margin");
+  const auto tiny_overlay = off::platform::startup_splash_overlay_layout(0, 0);
+  check(tiny_overlay.margin == 1 && tiny_overlay.font_point_size == 18 &&
+            tiny_overlay.version_left == 1 && tiny_overlay.baseline == 0,
+        "splash layout remains defined during a transient zero-sized resize");
   const auto error_backdrop =
       off::platform::startup_data_error_backdrop_layout(1280, 720);
   check(error_backdrop.left == 160 && error_backdrop.top == 240 &&

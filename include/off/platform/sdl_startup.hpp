@@ -37,14 +37,15 @@ struct StartupPreflightResult {
 
 // Immutable layout for the project-owned startup artwork metadata. The text is
 // supplied by the build's release version, rather than by a runtime setting.
-// Coordinates name the foreground glyph origin; the shadow is drawn one scale
-// unit down and right of the same origin.
+// Coordinates name the foreground glyph origin; the shadow is drawn down and
+// right of the same origin. `baseline` is the renderer's lower text anchor,
+// rather than the top edge of a guessed bitmap font cell.
 struct StartupSplashOverlayLayout {
   std::string_view version;
   std::string_view credit;
-  int pixel_size{};
+  int font_point_size{};
+  int margin{};
   int version_left{};
-  int credit_left{};
   int baseline{};
 };
 

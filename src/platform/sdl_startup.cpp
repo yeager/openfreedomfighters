@@ -34,20 +34,18 @@ void StartupWindowDeleter::operator()(SDL_Window *window) const noexcept {
 constexpr std::string_view splash_version = "v" OFF_VERSION;
 constexpr std::string_view splash_credit = "Daniel Nylander";
 
-StartupSplashOverlayLayout startup_splash_overlay_layout(int width,
-                                                         int height) noexcept {
-  const int scale = std::max(1, std::min(width / 640, height / 360));
-  const int pixel_size = 2 * scale;
-  const int margin = 18 * scale;
-  const int text_height = 7 * pixel_size;
-  const int credit_width =
-      static_cast<int>(splash_credit.size()) * 6 * pixel_size;
+StartupSplashOverlayLayout startup_splash_overlay_layout(int, int height) noexcept {
+  // Keep this pure contract exactly aligned with draw_splash_overlays(). Text
+  // width belongs to SDL_ttf because it is font- and platform-version
+  // dependent; only the stable anchors are represented here.
+  height = std::max(1, height);
+  const int margin = std::min(height, std::max(18, height / 40));
   return {.version = splash_version,
           .credit = splash_credit,
-          .pixel_size = pixel_size,
+          .font_point_size = std::max(18, height / 27),
+          .margin = margin,
           .version_left = margin,
-          .credit_left = width - margin - credit_width,
-          .baseline = height - margin - text_height};
+          .baseline = height - margin};
 }
 
 StartupDataErrorBackdropLayout
@@ -163,19 +161,27 @@ struct SurfaceDeleter {
 using Window = std::unique_ptr<SDL_Window, WindowDeleter>;
 using Surface = std::unique_ptr<SDL_Surface, SurfaceDeleter>;
 
-[[nodiscard]] std::filesystem::path splash_path() {
+[[nodiscard]] std::filesystem::path startup_asset_path(std::string_view name) {
+  // SDL owns and caches the base-path string; copy it into a path before the
+  // next platform call rather than treating it like SDL_GetPrefPath() storage.
   const char *base = SDL_GetBasePath();
   if (base == nullptr || *base == '\0')
     return {};
-  return std::filesystem::path{base} / "assets" /
-         "openfreedomfighters-splash.bmp";
+  const std::filesystem::path base_path{base};
+  // SDL documents an absolute base path. Require it so a malformed platform
+  // return value never redirects a startup asset lookup through the caller's
+  // working directory.
+  if (!base_path.is_absolute())
+    return {};
+  return base_path / "assets" / std::filesystem::path{name};
+}
+
+[[nodiscard]] std::filesystem::path splash_path() {
+  return startup_asset_path("openfreedomfighters-splash.bmp");
 }
 
 [[nodiscard]] std::filesystem::path splash_font_path() {
-  const char *base = SDL_GetBasePath();
-  if (base == nullptr || *base == '\0')
-    return {};
-  return std::filesystem::path{base} / "assets" / "Rajdhani-SemiBold.ttf";
+  return startup_asset_path("Rajdhani-SemiBold.ttf");
 }
 
 struct FontDeleter {
@@ -204,7 +210,7 @@ void draw_splash_overlays(SDL_Surface *target) {
   const auto font_path_text = splash_font_path().u8string();
   std::unique_ptr<TTF_Font, FontDeleter> font{
       TTF_OpenFont(reinterpret_cast<const char *>(font_path_text.c_str()),
-                   static_cast<float>(std::max(18, target->h / 27)))};
+                   static_cast<float>(layout.font_point_size))};
   if (font == nullptr) {
     TTF_Quit();
     return;
@@ -212,7 +218,7 @@ void draw_splash_overlays(SDL_Surface *target) {
   const SDL_Color shadow{0, 0, 0, 220};
   const SDL_Color foreground{238, 238, 232, 255};
   constexpr int shadow_offset = 2;
-  const int margin = std::max(18, target->h / 40);
+  const int margin = layout.margin;
   int credit_width = 0;
   if (!TTF_GetStringSize(font.get(), layout.credit.data(), layout.credit.size(),
                          &credit_width, nullptr)) {
@@ -222,15 +228,17 @@ void draw_splash_overlays(SDL_Surface *target) {
   }
   const int credit_left = target->w - margin - credit_width;
   static_cast<void>(draw_splash_text(
-      target, font.get(), layout.version, margin + shadow_offset,
-      target->h - margin + shadow_offset, shadow));
-  static_cast<void>(draw_splash_text(target, font.get(), layout.version, margin,
-                                     target->h - margin, foreground));
+      target, font.get(), layout.version,
+      layout.version_left + shadow_offset, layout.baseline + shadow_offset,
+      shadow));
+  static_cast<void>(draw_splash_text(target, font.get(), layout.version,
+                                     layout.version_left, layout.baseline,
+                                     foreground));
   static_cast<void>(draw_splash_text(
       target, font.get(), layout.credit, credit_left + shadow_offset,
-      target->h - margin + shadow_offset, shadow));
+      layout.baseline + shadow_offset, shadow));
   static_cast<void>(draw_splash_text(target, font.get(), layout.credit,
-                                     credit_left, target->h - margin,
+                                     credit_left, layout.baseline,
                                      foreground));
   font.reset();
   TTF_Quit();
