@@ -113,7 +113,12 @@ std::string verified_data_manifest_fingerprint(
 }
 
 std::string supported_data_manifest_fingerprint() {
-  return verified_data_manifest_fingerprint(supported_install_manifest());
+  // The compiled reference is immutable for the lifetime of this process.
+  // Cache only this content-free derived identifier; installation bytes are
+  // still fully read and hashed by verify_file_manifest on every startup.
+  static const std::string fingerprint =
+      verified_data_manifest_fingerprint(supported_install_manifest());
+  return fingerprint;
 }
 
 bool ManifestVerification::required_ok() const noexcept {

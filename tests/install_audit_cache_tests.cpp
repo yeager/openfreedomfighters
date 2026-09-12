@@ -31,6 +31,17 @@ int main() {
   off::data::store_install_audit_cache(root, identity);
   check(off::data::install_audit_cache_hit(root, identity),
         "a complete stored entry is a cache hit");
+  const auto linked_root = root.parent_path() / "linked-cache-root";
+  std::error_code link_error;
+  std::filesystem::create_directory_symlink(root, linked_root, link_error);
+  if (!link_error) {
+    check(!off::data::install_audit_cache_hit(linked_root, identity),
+          "a cache record behind a symlinked root is never reused");
+    off::data::store_install_audit_cache(linked_root, identity);
+    check(!off::data::install_audit_cache_hit(linked_root, identity),
+          "a symlinked cache root cannot write a reusable certificate");
+    std::filesystem::remove(linked_root, link_error);
+  }
   check(!off::data::install_audit_cache_hit(root, "different-identity"),
         "entries cannot be reused for another identity");
   constexpr std::string_view traversal_identity =

@@ -10,6 +10,8 @@
 #include "off/graphics/texture_decode.hpp"
 
 #include <filesystem>
+#include <functional>
+#include <memory>
 #include <utility>
 
 namespace off::graphics {
@@ -43,6 +45,10 @@ struct IntroPreparedSound {
 // Encoded bank ownership only, not a backend sound record or playback handle.
 class IntroPreparedAudio final {
 public:
+  // Retains only the source-validated bank views and the authored SND links
+  // admitted by this prepared scene.  It does not issue I/O, allocate an
+  // output, or infer a cue, event, or readiness transition.
+  using SourceResolver = std::function<audio::IntroAudioStreamSource(std::uint32_t)>;
   IntroPreparedAudio(std::span<const IntroPreparedSound> sounds,
       data::AudioBankHeader header, data::VfsFileView local, data::VfsFileView global);
   [[nodiscard]] const data::AudioBankHeader& header() const noexcept { return header_; }
@@ -57,7 +63,12 @@ public:
   // Resolve a command's real WHD link, not its position in the prepared list.
   // Returns a retained reader; does not issue I/O or admit playback.
   [[nodiscard]] audio::IntroAudioStreamSource open_source_for_sound_link(std::uint32_t link) const;
+  // The returned resolver owns a snapshot of the validated source-bank views,
+  // so a later playback service cannot retain a dangling reference to this
+  // prepared scene. It still accepts only an SND link owned by this scene.
+  [[nodiscard]] SourceResolver source_resolver() const;
 private:
+  struct RetainedSources;
   data::AudioBankHeader header_;
   data::VfsFileView local_, global_;
   std::vector<std::optional<std::size_t>> records_;

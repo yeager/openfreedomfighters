@@ -159,18 +159,14 @@ InstallVerification verify_install(const std::filesystem::path &root,
         optional_file_warnings.push_back(file.path + ": " + file.detail);
     }
     data_manifest_fingerprint = supported_data_manifest_fingerprint();
-    std::string audit_identity_input{"openfreedomfighters-deep-audit-v3\n"};
+    // The cache only skips structural parsing after the immutable required
+    // corpus has been hashed in full above.  Bind its key to the canonical
+    // manifest identity rather than reproducing a second, order-dependent
+    // manifest serialization here.
+    std::string audit_identity_input{"openfreedomfighters-deep-audit-v4\n"};
     audit_identity_input += supported_executable_sha256;
-    for (const auto& file : supported_install_manifest()) {
-      if (file.role != ManifestFileRole::required_game)
-        continue;
-      audit_identity_input += '\n';
-      audit_identity_input += file.path;
-      audit_identity_input += ':';
-      audit_identity_input += std::to_string(file.size);
-      audit_identity_input += ':';
-      audit_identity_input += file.sha256;
-    }
+    audit_identity_input += '\n';
+    audit_identity_input += data_manifest_fingerprint;
     audit_identity = crypto::to_hex(crypto::sha256(audit_identity_input));
     const bool deep_audit_required =
         !install_audit_cache_hit(options.deep_audit_cache_root, audit_identity);

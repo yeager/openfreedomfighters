@@ -50,6 +50,11 @@ bool install_audit_cache_hit(const std::filesystem::path& root,
   try {
     if (root.empty() || !valid_identity(identity))
       return false;
+    // A cache root is application-owned.  Do not let a symlinked root turn a
+    // valid record outside that ownership boundary into a reusable audit
+    // certificate.  A miss merely reruns the already-required deep audit.
+    if (!directory_non_link(root))
+      return false;
     const auto record = record_path(root, identity);
     if (!regular_non_link(record))
       return false;

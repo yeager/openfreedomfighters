@@ -902,6 +902,10 @@ if(BUILD_TESTING)
     target_link_libraries(off_sdl_menu_keyboard_tests PRIVATE off_core ${OFF_SDL3_TARGET})
     add_test(NAME off_sdl_menu_keyboard_tests COMMAND off_sdl_menu_keyboard_tests)
 
+    add_executable(off_sdl_swapchain_frame_tests tests/sdl_swapchain_frame_tests.cpp)
+    target_link_libraries(off_sdl_swapchain_frame_tests PRIVATE off_core)
+    add_test(NAME off_sdl_swapchain_frame_tests COMMAND off_sdl_swapchain_frame_tests)
+
     add_executable(off_retail_ui_fonts_tests tests/retail_ui_fonts_tests.cpp)
     target_link_libraries(off_retail_ui_fonts_tests PRIVATE off_core)
     target_compile_definitions(off_retail_ui_fonts_tests PRIVATE

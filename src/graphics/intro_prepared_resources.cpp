@@ -11,6 +11,18 @@
 namespace off::graphics {
 namespace {
 
+[[nodiscard]] std::optional<std::size_t> prepared_record_index(
+    const data::AudioBankHeader &header,
+    std::span<const std::optional<std::size_t>> prepared_records,
+    std::uint32_t link) {
+  const auto index=header.record_index_for_sound_link(link);
+  if(!index)
+    throw std::runtime_error("Intro stereo command has no WHD source");
+  if(std::find(prepared_records.begin(),prepared_records.end(),index)==prepared_records.end())
+    throw std::runtime_error("Intro stereo command does not belong to this prepared scene");
+  return index;
+}
+
 const data::ZipEntry &unique_member(const data::ZipArchive &archive,
                                     std::string_view extension) {
   const data::ZipEntry *found = nullptr;
@@ -44,6 +56,12 @@ std::size_t required_source(const data::GmsImage &sources,
 }
 
 } // namespace
+
+struct IntroPreparedAudio::RetainedSources final {
+  data::AudioBankHeader header;
+  data::VfsFileView local,global;
+  std::vector<std::optional<std::size_t>> records;
+};
 
 IntroPreparedAudio::IntroPreparedAudio(std::span<const IntroPreparedSound> sounds,
     data::AudioBankHeader header,data::VfsFileView local,data::VfsFileView global)
@@ -79,11 +97,23 @@ audio::IntroAudioStream IntroPreparedAudio::open_stream(std::size_t sound_index)
 }
 
 audio::IntroAudioStreamSource IntroPreparedAudio::open_source_for_sound_link(std::uint32_t link) const {
-  const auto index=header_.record_index_for_sound_link(link);
-  if(!index) throw std::runtime_error("Intro stereo command has no WHD source");
+  const auto index=prepared_record_index(header_,records_,link);
   const auto record=header_.records()[*index];
   if(!record.data_offset) throw std::runtime_error("Intro stereo command has no encoded-data offset");
   return {record,(record.uses_global_bank()?global_:local_).open_reader()};
+}
+
+IntroPreparedAudio::SourceResolver IntroPreparedAudio::source_resolver() const {
+  auto sources=std::make_shared<RetainedSources>(
+      RetainedSources{header_,local_,global_,records_});
+  return [sources=std::move(sources)](std::uint32_t link) {
+    const auto index=prepared_record_index(sources->header,sources->records,link);
+    const auto record=sources->header.records()[*index];
+    if(!record.data_offset)
+      throw std::runtime_error("Intro stereo command has no encoded-data offset");
+    return audio::IntroAudioStreamSource{
+        record,(record.uses_global_bank()?sources->global:sources->local).open_reader()};
+  };
 }
 
 IntroPreparedResources build_intro_prepared_resources(

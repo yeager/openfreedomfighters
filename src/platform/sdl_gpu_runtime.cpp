@@ -7,6 +7,7 @@
 #include "off/platform/sdl_locale.hpp"
 #include "off/platform/sdl_menu_gamepad.hpp"
 #include "off/platform/sdl_menu_keyboard.hpp"
+#include "off/platform/sdl_swapchain_frame.hpp"
 #include "off/settings/upscaler_runtime.hpp"
 #include "off/settings/graphics_settings_store.hpp"
 #include "off/ui/graphics_menu_draw.hpp"
@@ -1692,6 +1693,29 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         SDL_CancelGPUCommandBuffer(command);
       break;
     }
+    // SDL reports a minimized or otherwise non-drawable window as a successful
+    // acquire with no swapchain texture. Submit the empty command buffer and
+    // wait for a drawable image; treating it as a zero-sized frame can create
+    // invalid targets and lets a bounded screenshot run finish spuriously.
+    switch (classify_sdl_swapchain_frame(
+        swapchain, swapchain_width, swapchain_height)) {
+    case SdlSwapchainFrameStatus::temporarily_unavailable:
+      if (!SDL_SubmitGPUCommandBuffer(command)) {
+        result = failure("SDL GPU empty-frame submission failed");
+        break;
+      }
+      SDL_Delay(10);
+      continue;
+    case SdlSwapchainFrameStatus::invalid_extent:
+      result = {.success = false,
+                .message = "SDL GPU acquired an invalid swapchain extent"};
+      SDL_SubmitGPUCommandBuffer(command);
+      break;
+    case SdlSwapchainFrameStatus::drawable:
+      break;
+    }
+    if (!result.success)
+      break;
     SDL_GPUTexture *capture_texture = nullptr;
     SDL_GPUTransferBuffer *capture_transfer = nullptr;
     Uint32 capture_row_pitch = 0;

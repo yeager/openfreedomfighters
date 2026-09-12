@@ -4532,6 +4532,20 @@ static OFF_NOINLINE void test_default_camera_and_archive_lifecycle() {
               with_audio.audio()->record_indices()[0]==1 &&
               with_audio.audio()->read_encoded(0)==Bytes(8,std::byte{0x5a}),
               "normal archive loader follows odd SND resource link into the correct global bank range");
+        const auto source_resolver=with_audio.audio()->source_resolver();
+        const auto source=source_resolver(0x41U);
+        check(source.record.data_offset==7 && source.reader.size()==global_bytes.size(),
+              "retained scene-local resolver opens only the authored global-bank source");
+        rejects([&] { (void)source_resolver(16U); });
+        rejects([&] { (void)with_audio.audio()->open_source_for_sound_link(16U); });
+        check(with_audio.audio()->open_source_for_sound_link(0x40U).reader.size()==global_bytes.size(),
+              "direct source opening also rejects WHD records absent from prepared SND owners");
+        const auto retained_source_resolver=[&] {
+          const auto temporary=off::graphics::load_intro_prepared_resources(sound_path);
+          return temporary.audio()->source_resolver();
+        }();
+        check(retained_source_resolver(0x40U).reader.size()==global_bytes.size(),
+              "retained resolver owns its source-bank views after prepared scene destruction");
         check(with_audio.sounds()[0].definition.duration==12.375F &&
               with_audio.audio()->header().records()[1].sample_rate==22050,
               "authored duration remains independent of WHD counts and sample rate");
