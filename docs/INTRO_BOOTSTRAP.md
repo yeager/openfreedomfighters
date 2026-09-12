@@ -487,7 +487,9 @@ the first cut. The activation update then returns without also running the
 ordinary active-controller update. Equality with the deadline does not activate.
 
 The deadline assignment belongs to the controller's global phase-two callback,
-after the complete reverse-construction phase-one pass. It registers the input
+after a future recovered complete reverse-construction phase-one pass. See
+[MovieControl phase-one recovery](MOVIE_CONTROL_PHASE_ONE.md): that pass is not
+implemented or admitted by normal startup. Phase two registers the input
 action map when an input manager exists, selects CRT clock mode without sampling
 or resetting time, runs the global audio-volume helper, then stores the live
 scene clock plus 2048 with 32-bit wrapping addition. Global audio properties are

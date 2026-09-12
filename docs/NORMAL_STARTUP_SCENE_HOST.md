@@ -100,9 +100,11 @@ source-directory construction has completed. It performs
 the following stages exactly once, with real services at every boundary:
 
 1. The session runs the post-construction reader bracket and outer loader tail.
-   The host then continues at global lifecycle, including the concrete
-   MovieControl phase-two callback; it must not replay either loader stage or
-   initialize the controller again afterward.
+   A future recovered global lifecycle then runs the complete MovieControl
+   phase-one pass and verifies its effects before the concrete phase-two
+   callback. It must not replay either loader stage or initialize the
+   controller again afterward. Phase one is currently unsupported; see
+   [MovieControl phase-one recovery](MOVIE_CONTROL_PHASE_ONE.md).
 2. On a later ordinary frame, run the reviewed MovieControl event-16 update.
    It must be strictly past the phase-two deadline.
 3. Route the selected first-cut camera and pass the live camera/view evidence
@@ -185,7 +187,8 @@ the global component lifecycle. Supplying any of those from the cold loader
 path would invent an event tick, service readiness, or target resolution.
 
 The smallest remaining real host boundary is therefore one admitted ordinary
-scene-frame service that, after the existing global lifecycle has completed,
+scene-frame service that, after the future recovered phase-one/global lifecycle
+has completed,
 can expose the live MovieControl component's event-16 manager inputs and the
 already-bound first-cut phase-one/phase-two lifecycle services. That service
 must pass its actual scene clock sample and actual component/filter/pause state

@@ -1,7 +1,6 @@
 # Intro and main-menu implementation plan
 
-Source review: 2026-09-11, baseline `017bdfe` plus the renderer-relation and
-MovieControl binding changes described below. This is an implementation
+Source review: 2026-09-12. This is an implementation
 plan, not a report of completed playback. The milestones below are all open;
 the existing splash and individual tested components are inputs to them.
 
@@ -400,9 +399,8 @@ relation container, and MovieControl's canonical factory phase-two binding.
 I1 remains open. Normal startup still does not run the loader tail, bind these
 live services or dispatch the global lifecycle.
 
-The current 127-test Linux x86-64 suite passes with software Vulkan. All 14
-targeted controller/resource/relation tests also pass ASan/UBSan with leak
-detection. A separate
+The current remote Linux verification passes 141 C++ tests and 79 Python tests;
+the platform CI remains the cross-platform release gate. A separate
 owned-data run constructs all 470 resources, runs the ordinary reader bracket
 with partial reader coverage and resolves the relation lists through canonical
 resource mapping: 157 assigned selectors, 313 unassigned resources, 97 empty
