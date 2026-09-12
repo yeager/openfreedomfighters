@@ -174,6 +174,10 @@ tests; its absence does not prevent a native runtime build. Ninja is the
 recommended generator, but any CMake generator can be used. Git is only needed
 to obtain the source tree; it is not consulted by CMake.
 
+The configured native target must be x86-64 on Windows, Linux, or Steam Deck;
+macOS accepts arm64 and x86-64 (including an explicit universal pair). CMake
+rejects other architectures before it resolves dependencies.
+
 | Platform | Toolchain and direct dependencies |
 |---|---|
 | Ubuntu/Debian | `build-essential cmake ninja-build pkg-config zlib1g-dev libvorbis-dev libasound2-dev libfreetype-dev libgl-dev libegl-dev libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev libdecor-0-dev libdbus-1-dev libibus-1.0-dev libsamplerate0-dev libpulse-dev` |

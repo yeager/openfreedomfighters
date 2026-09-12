@@ -2,14 +2,21 @@ cmake_minimum_required(VERSION 3.25)
 
 project(OpenFreedomFighters VERSION 0.1.0 LANGUAGES C CXX)
 
-# The native release matrix is deliberately 64-bit only: x86-64 on Windows,
-# Linux, and Steam Deck, plus arm64/x86-64 on macOS.  Refuse a 32-bit
-# configure before resolving or downloading dependencies so a mixed-architecture
-# prefix cannot produce a misleading later linker failure.
-if(CMAKE_SIZEOF_VOID_P LESS 8)
-    message(FATAL_ERROR
-        "OpenFreedomFighters requires a 64-bit target; configure an x86-64 or arm64 toolchain.")
+# The native release matrix is deliberately narrow: x86-64 on Windows, Linux,
+# and Steam Deck, plus arm64/x86-64 on macOS. Refuse unsupported targets before
+# resolving or downloading dependencies so a mismatched prefix cannot produce a
+# misleading linker failure. Visual Studio's selected platform is more precise
+# than its host processor when cross-configuring.
+include(cmake/ValidateNativeTarget.cmake)
+set(OFF_TARGET_PROCESSOR "${CMAKE_SYSTEM_PROCESSOR}")
+if(WIN32 AND NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "")
+    set(OFF_TARGET_PROCESSOR "${CMAKE_GENERATOR_PLATFORM}")
 endif()
+off_validate_native_target(
+    "${CMAKE_SYSTEM_NAME}"
+    "${OFF_TARGET_PROCESSOR}"
+    "${CMAKE_OSX_ARCHITECTURES}"
+    "${CMAKE_SIZEOF_VOID_P}")
 
 include(CTest)
 include(FetchContent)
