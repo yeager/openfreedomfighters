@@ -88,3 +88,20 @@ python3 tools/movie_control_cutscene_dispatch_repeat_pair.py \
 
 All three paths must be outside this repository, distinct, and the output must
 not already exist. Keep the pair result private with the two sanitized inputs.
+
+## Success/failure contract bundle
+
+`tools/movie_control_cutscene_dispatch_contract_bundle.py` joins one repeated
+successful dispatch observation with one separately sanitized failure trace.
+It revalidates both inputs and accepts exactly one constructed, admitted,
+source-bound synchronous delivery that starts the first-cut player, plus one
+constructed source-bound failed boundary of the same callback with the same
+phase-completion and pre-status preconditions.
+It rejects duplicate or mismatched routes, raw inputs, extra fields, and a
+successful matching route in the failure trace. The private output is new and
+outside the repository; it remains review-only.
+
+```sh
+python3 tools/movie_control_cutscene_dispatch_contract_bundle.py \
+  SUCCESS_REPEAT_PAIR.json SANITIZED_FAILURE.json PRIVATE_BUNDLE.json
+```

@@ -41,7 +41,8 @@ public:
     auto encoded = static_cast<Unsigned>(value);
     for (std::size_t i = 0; i < sizeof(encoded); ++i) {
       bytes_.push_back(static_cast<std::byte>(encoded & 0xffU));
-      encoded >>= 8U;
+      if constexpr (sizeof(Unsigned) > 1)
+        encoded >>= 8U;
     }
   }
   void bytes(std::span<const std::byte> value) {
