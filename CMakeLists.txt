@@ -139,6 +139,7 @@ add_library(off_core
     src/graphics/intro_runtime.cpp
     src/graphics/movie_control_host_evidence.cpp
     src/graphics/reviewed_movie_control_lifecycle_contract.cpp
+    src/graphics/reviewed_startup_coordinator_pass_contract.cpp
     src/graphics/normal_intro_scene_session.cpp
     src/graphics/normal_intro_scene_lifecycle_services.cpp
     src/graphics/intro_lifecycle_admission.cpp
@@ -602,6 +603,13 @@ if(BUILD_TESTING)
         OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/reviewed-movie-control-lifecycle-contract-test-work")
     add_test(NAME off_reviewed_movie_control_lifecycle_contract_tests
         COMMAND off_reviewed_movie_control_lifecycle_contract_tests)
+    add_executable(off_reviewed_startup_coordinator_pass_contract_tests
+        tests/reviewed_startup_coordinator_pass_contract_tests.cpp)
+    target_link_libraries(off_reviewed_startup_coordinator_pass_contract_tests PRIVATE off_core)
+    target_compile_definitions(off_reviewed_startup_coordinator_pass_contract_tests PRIVATE
+        OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/reviewed-startup-coordinator-pass-contract-test-work")
+    add_test(NAME off_reviewed_startup_coordinator_pass_contract_tests
+        COMMAND off_reviewed_startup_coordinator_pass_contract_tests)
     add_executable(off_scene_support_tests tests/scene_support_tests.cpp)
     target_link_libraries(off_scene_support_tests PRIVATE off_core)
     add_test(NAME off_scene_support_tests COMMAND off_scene_support_tests)
