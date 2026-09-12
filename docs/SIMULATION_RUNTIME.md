@@ -64,5 +64,15 @@ This is deterministic infrastructure for future save and replay envelopes. It
 is not a retail-save format, does not contain presentation or game assets, and
 does not make the project compatible with the original game's serialization.
 
+## Planned durable save store
+
+The future project save store will wrap this snapshot in a separate versioned
+envelope and retain two same-directory generations. Loading will validate both
+copies into staged worlds, choose only an unambiguously newest valid generation,
+and leave files untouched. Saving will write and flush an exclusive sibling
+temporary before replacing only the older copy. Corrupt, truncated, mismatched,
+or ambiguous equal-generation files must fail without mutating the destination.
+This is portable project persistence, not retail-save import.
+
 The required ordered command-capture boundary for future replay is specified in
 [Simulation replay](SIMULATION_REPLAY.md).
