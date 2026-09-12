@@ -56,3 +56,25 @@ trailing, malformed, or mismatched records produce no bindings and do not affect
 startup. A successfully loaded artifact is admitted only by the existing
 source-span and duplicate-site checks, then a UI caller can resolve an observed
 opaque site through the private catalog or an optional local translation pack.
+
+### Private artifact import
+
+`tools/import_reviewed_retail_lookup_artifact.py` is an operator-side importer,
+not a game-data parser. It accepts one already-sanitized
+`off.retail-localization-lookup/v1` JSON trace and writes one new
+`reviewed-retail-lookup.offlookup` binary record. Every path must be outside the
+repository, must not be a symlink, and the output is created once with private
+permissions; the tool never overwrites it.
+
+The importer requires an explicit parser identity, source-set identity, and
+ordinal count, or a separate fixed-schema, source-free binding manifest. The
+manifest format is `off.reviewed-retail-lookup-binding/v1` and has exactly
+`parser_identity`, `source_set`, `first_ordinal` (always zero), and
+`ordinal_count`. It contains no game path, binary identity, text, key, address,
+or asset data.
+
+Only distinct resolved `catalog-value` events without formatting are imported.
+Duplicate opaque sites, duplicate opaque ordinals, malformed labels, unresolved
+or formatted events, and ordinals outside the declared span are rejected. This
+keeps the generated record compatible with the runtime artifact loader while
+preventing a trace from becoming a broad lookup or formatting channel.
