@@ -149,3 +149,39 @@ activate the scene. The following end-to-end checks remain required:
 This host is intentionally not implemented by merely constructing the SDL audio
 adapter. Audio requires the same lifecycle and ordinary-frame admission that
 establishes the first-cut renderer view.
+
+## Current MovieControl handoff boundary
+
+The runtime now has a narrow, source-checked
+`MovieControlFirstCutRuntimeHandoff`, but normal startup must not bind it yet.
+The prerequisite is not merely the cold `FirstCutPlayerSession`: normal startup
+does construct the retained `IntroRuntime`, completes its reader bracket, and
+prepares that player. It deliberately stops there.
+
+There is no real MovieControl event-16 tick in the normal host path. The only
+ordinary-frame entry point, `IntroRuntime::run_ordinary_components`, supplies a
+direct event-16 callback exclusively for the live `ZCAMERA_PreviewCamera`.
+It rejects every other ordinary component, including `ZGEOM_MovieControl`.
+Consequently it cannot provide the required manager admission snapshot
+(`component_is_live`, event-16 enrollment, pause/filter state, phase-one
+completion, and the canonical scene-clock sample) to
+`MovieControlFirstUpdate::dispatch_event16`.
+
+Nor is there a concrete normal-host lifecycle table for the receiver. The
+existing `NormalIntroSceneHost` and its factory are an inert future-host model:
+they require caller-owned lifecycle callbacks and caller-provided first-cut
+phase-one/phase-two services. The normal executable does not create that host,
+does not bind the MovieControl phase-two external services, and does not enter
+the global component lifecycle. Supplying any of those from the cold loader
+path would invent an event tick, service readiness, or target resolution.
+
+The smallest remaining real host boundary is therefore one admitted ordinary
+scene-frame service that, after the existing global lifecycle has completed,
+can expose the live MovieControl component's event-16 manager inputs and the
+already-bound first-cut phase-one/phase-two lifecycle services. That service
+must pass its actual scene clock sample and actual component/filter/pause state
+to the handoff, retain the `NormalIntroSceneSession` for the synchronous call,
+and reject absent services before delivery. Only once that boundary exists may
+normal startup construct `MovieControlFirstCutRuntimeHandoff` and call
+`deliver`; it must still make no claim about camera routing, view admission,
+picture submission, audio, or playback.
