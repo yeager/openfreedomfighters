@@ -103,5 +103,21 @@ The complete private trace stays outside the repository. This bundle is enough
 to assess whether a proposed bounded system follows measured behavior without
 turning the repository into a redistribution channel.
 
+## Disconnected input-to-intent boundary
+
+`FirstMissionInputIntentAdapter` is the first native consumer permitted by this
+gate. It remains disconnected from SDL, application startup, scenes, player
+creation, camera, rendering, and `SimulationWorld`. A local reviewed-contract
+loader must implement `FirstMissionInputIntentContract` and expose an admitted
+single opaque action/outcome binding. The adapter accepts that exact action once
+and returns only its opaque observed outcome; it rejects a missing, withdrawn,
+or changed contract and returns no intent for every other action.
+
+Neither value has a public semantic name, physical key, controller button,
+retail string, asset identifier, numeric game constant, or gameplay effect.
+The adapter is therefore not a control mapping, locomotion system, or playable
+mission path. A later evidence-backed layer must separately establish those
+meanings and their ordering before it may consume this intent.
+
 For the static candidate-package map and the corresponding one-run structural
 sanitizer, see [first-mission data and routing boundary](FIRST_MISSION_DATA_MAPPING.md).

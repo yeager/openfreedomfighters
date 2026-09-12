@@ -140,6 +140,7 @@ add_library(off_core
     src/graphics/movie_control_host_evidence.cpp
     src/graphics/reviewed_movie_control_lifecycle_contract.cpp
     src/graphics/reviewed_startup_coordinator_pass_contract.cpp
+    src/gameplay/reviewed_first_mission_evidence_contract.cpp
     src/graphics/normal_intro_scene_session.cpp
     src/graphics/normal_intro_scene_lifecycle_services.cpp
     src/graphics/intro_lifecycle_admission.cpp
@@ -190,6 +191,7 @@ add_library(off_core
     src/simulation/component_store.cpp
     src/simulation/component_world.cpp
     src/simulation/input.cpp
+    src/simulation/first_mission_input_intent_adapter.cpp
     src/simulation/replay.cpp
     src/simulation/save_store.cpp
     src/simulation/world.cpp
@@ -610,6 +612,13 @@ if(BUILD_TESTING)
         OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/reviewed-startup-coordinator-pass-contract-test-work")
     add_test(NAME off_reviewed_startup_coordinator_pass_contract_tests
         COMMAND off_reviewed_startup_coordinator_pass_contract_tests)
+    add_executable(off_reviewed_first_mission_evidence_contract_tests
+        tests/reviewed_first_mission_evidence_contract_tests.cpp)
+    target_link_libraries(off_reviewed_first_mission_evidence_contract_tests PRIVATE off_core)
+    target_compile_definitions(off_reviewed_first_mission_evidence_contract_tests PRIVATE
+        OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/reviewed-first-mission-evidence-contract-test-work")
+    add_test(NAME off_reviewed_first_mission_evidence_contract_tests
+        COMMAND off_reviewed_first_mission_evidence_contract_tests)
     add_executable(off_scene_support_tests tests/scene_support_tests.cpp)
     target_link_libraries(off_scene_support_tests PRIVATE off_core)
     add_test(NAME off_scene_support_tests COMMAND off_scene_support_tests)
@@ -1026,6 +1035,12 @@ if(BUILD_TESTING)
     add_executable(off_simulation_runtime_tests tests/simulation_runtime_tests.cpp)
     target_link_libraries(off_simulation_runtime_tests PRIVATE off_core)
     add_test(NAME off_simulation_runtime_tests COMMAND off_simulation_runtime_tests)
+
+    add_executable(off_first_mission_input_intent_adapter_tests
+        tests/first_mission_input_intent_adapter_tests.cpp)
+    target_link_libraries(off_first_mission_input_intent_adapter_tests PRIVATE off_core)
+    add_test(NAME off_first_mission_input_intent_adapter_tests
+        COMMAND off_first_mission_input_intent_adapter_tests)
 
     add_executable(off_simulation_world_tests tests/simulation_world_tests.cpp)
     target_link_libraries(off_simulation_world_tests PRIVATE off_core)
