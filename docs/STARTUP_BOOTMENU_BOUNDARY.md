@@ -28,7 +28,13 @@ resolves and retains one opaque registry identity, then invokes the common
 window-component reader. It produces a move-only reader-complete token.
 `initialize_component()` consumes that token, runs common window
 initialization, resolves a second opaque registry identity, routes the retained
-object with that second result, and only then reports `initialized()`.
+object with that second result, and only then reports `initialized()`. On that
+success edge it returns a move-only `StartupBootMenuInitializationReceipt`.
+The receipt retains the checked construction transaction and is valid only
+after both opaque identities and retained routing succeeded. There is no
+receipt for a missing service, dead owner/component, failed common
+initialization, unresolved second identity, or failed routing; each failure
+latches the admission closed.
 
 This is not input admission. The first resolved identity is opaque; it is not a
 key, controller button, action-map entry, or proof that the native component

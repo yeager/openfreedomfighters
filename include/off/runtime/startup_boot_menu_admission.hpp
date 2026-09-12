@@ -45,6 +45,45 @@ private:
   std::uint16_t reader_id_{};
 };
 
+// Move-only proof that the source-backed BootMenu component completed the
+// recovered initialization boundary. Keeping the construction token here
+// keeps the checked FF-StartUp scene transaction alive for any later,
+// independently recovered boundary. It carries no menu behavior or input
+// authority.
+class StartupBootMenuInitializationReceipt final {
+public:
+  StartupBootMenuInitializationReceipt(
+      const StartupBootMenuInitializationReceipt &) = delete;
+  StartupBootMenuInitializationReceipt &
+  operator=(const StartupBootMenuInitializationReceipt &) = delete;
+  StartupBootMenuInitializationReceipt(
+      StartupBootMenuInitializationReceipt &&) noexcept = default;
+  StartupBootMenuInitializationReceipt &
+  operator=(StartupBootMenuInitializationReceipt &&) noexcept = default;
+
+  [[nodiscard]] bool valid() const noexcept {
+    return construction_.valid() && reader_id_ != 0U && routing_id_ != 0U;
+  }
+  [[nodiscard]] std::uint64_t owner() const noexcept {
+    return construction_.owner();
+  }
+  [[nodiscard]] std::uint64_t component() const noexcept {
+    return construction_.component();
+  }
+
+private:
+  friend class StartupBootMenuAdmission;
+  StartupBootMenuInitializationReceipt(StartupBootControllerToken construction,
+                                       std::uint16_t reader_id,
+                                       std::uint16_t routing_id)
+      : construction_(std::move(construction)), reader_id_(reader_id),
+        routing_id_(routing_id) {}
+
+  StartupBootControllerToken construction_;
+  std::uint16_t reader_id_{};
+  std::uint16_t routing_id_{};
+};
+
 struct StartupBootMenuReaderServices {
   std::function<bool()> event_registry_live;
   // Resolves a caller-owned opaque native registry key. It is not a platform
@@ -117,9 +156,10 @@ public:
     }
   }
 
-  void initialize_component(StartupBootMenuReaderToken reader_complete,
-                            std::uint64_t second_lookup_key,
-                            const StartupBootMenuInitializationServices &services) {
+  [[nodiscard]] StartupBootMenuInitializationReceipt
+  initialize_component(StartupBootMenuReaderToken reader_complete,
+                       std::uint64_t second_lookup_key,
+                       const StartupBootMenuInitializationServices &services) {
     if (busy_ || failed_ || !reader_complete_ || initialized_ ||
         !reader_complete.valid() || reader_complete.admission_ != this ||
         reader_complete.reader_id_ != reader_id_) {
@@ -158,6 +198,9 @@ public:
       }
       routing_id_ = *routing;
       initialized_ = true;
+      busy_ = false;
+      return StartupBootMenuInitializationReceipt(
+          std::move(reader_complete.construction_), reader_id_, routing_id_);
     } catch (...) {
       reader_id_ = 0U;
       routing_id_ = 0U;
@@ -165,7 +208,6 @@ public:
       busy_ = false;
       throw;
     }
-    busy_ = false;
   }
 
   [[nodiscard]] bool reader_complete() const noexcept {

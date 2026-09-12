@@ -1691,6 +1691,8 @@ int main() {
 
   static_assert(
       !std::is_copy_constructible_v<off::runtime::StartupBootMenuReaderToken>);
+  static_assert(!std::is_copy_constructible_v<
+                off::runtime::StartupBootMenuInitializationReceipt>);
   off::runtime::StartupBootMenuAdmission boot_menu;
   std::uint32_t resolve_calls{};
   std::vector<std::string> lifecycle_order;
@@ -1766,12 +1768,15 @@ int main() {
                 return true;
               },
       };
-  boot_menu.initialize_component(std::move(reader_token), 102U,
-                                 initialization_services);
+  auto initialization_receipt = boot_menu.initialize_component(
+      std::move(reader_token), 102U, initialization_services);
   check(boot_menu.initialized() && !boot_menu.failed() && resolve_calls == 2U &&
             initialized_owner == 81U && initialized_component == 82U &&
             initialized_route == 32U && boot_menu.reader_id() == 31U &&
             boot_menu.routing_id() == 32U && lifecycle_order.size() == 4U &&
+            initialization_receipt.valid() &&
+            initialization_receipt.owner() == 81U &&
+            initialization_receipt.component() == 82U &&
             lifecycle_order[1] == "common-initialization" &&
             lifecycle_order[2] == "second-lookup" &&
             lifecycle_order[3] == "retained-route",
@@ -1805,8 +1810,8 @@ int main() {
       [](std::uint64_t, std::uint64_t, std::uint16_t) { return false; };
   rejected = false;
   try {
-    routing_failure.initialize_component(std::move(routing_reader), 102U,
-                                         failed_routing_services);
+    static_cast<void>(routing_failure.initialize_component(
+        std::move(routing_reader), 102U, failed_routing_services));
   } catch (const std::runtime_error &) {
     rejected = true;
   }
@@ -1858,10 +1863,10 @@ int main() {
       [](std::uint64_t, std::uint64_t, std::uint16_t route) {
         return route == 52U;
       };
-  equality_allowed.initialize_component(std::move(equality_reader_token), 203U,
-                                        equality_initialization_services);
+  auto equality_receipt = equality_allowed.initialize_component(
+      std::move(equality_reader_token), 203U, equality_initialization_services);
   check(equality_allowed.initialized() && equality_allowed.reader_id() == 52U &&
-            equality_allowed.routing_id() == 52U,
+            equality_allowed.routing_id() == 52U && equality_receipt.valid(),
         "boot-menu permits equal opaque reader and routing identities");
 
   off::runtime::StartupBootMenuAdmission latch_after_route;
@@ -1884,10 +1889,10 @@ int main() {
                                     latch_after_route.routing_id() == 0U;
         return true;
       };
-  latch_after_route.initialize_component(std::move(latch_reader_token), 205U,
-                                         latch_initialization_services);
+  auto latch_receipt = latch_after_route.initialize_component(
+      std::move(latch_reader_token), 205U, latch_initialization_services);
   check(unlatch_seen_during_route && latch_after_route.initialized() &&
-            latch_after_route.routing_id() == 62U,
+            latch_after_route.routing_id() == 62U && latch_receipt.valid(),
         "boot-menu success latch is set only after retained routing succeeds");
 
   off::runtime::StartupBootMenuAdmission reader_failure_order;
@@ -1936,9 +1941,9 @@ int main() {
       };
   rejected = false;
   try {
-    common_initialization_failure.initialize_component(
+    static_cast<void>(common_initialization_failure.initialize_component(
         std::move(common_failure_reader), 207U,
-        failed_common_initialization_services);
+        failed_common_initialization_services));
   } catch (const std::runtime_error &) {
     rejected = true;
   }
@@ -1969,8 +1974,8 @@ int main() {
       };
   rejected = false;
   try {
-    second_resolve_failure.initialize_component(
-        std::move(second_resolve_reader), 208U, failed_second_resolve_services);
+    static_cast<void>(second_resolve_failure.initialize_component(
+        std::move(second_resolve_reader), 208U, failed_second_resolve_services));
   } catch (const std::runtime_error &) {
     rejected = true;
   }
