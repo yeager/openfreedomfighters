@@ -33,6 +33,10 @@ int main(int argc, char** argv) {
     std::vector<std::int16_t> buffer(info.channels * 257U);
     const auto frames = stream.read_frames(buffer);
     check(frames > 0U && frames <= 257U, "bounded read returns actual PCM frames");
+    std::uint64_t decoded_frames = frames;
+    while (!stream.ended()) decoded_frames += stream.read_frames(buffer);
+    check(decoded_frames == info.total_frames,
+          "streaming decoder reaches exactly its advertised frame count");
     std::vector<std::int16_t> oversized(
         (off::audio::SoundtrackStream::maximum_read_frames + 1U) * info.channels);
     rejects([&] { static_cast<void>(stream.read_frames(oversized)); },

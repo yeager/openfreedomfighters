@@ -39,6 +39,7 @@ struct SoundtrackStream::Impl {
   drmp3 mp3{};
   bool mp3_open{};
   bool finished{};
+  std::uint64_t frames_read{};
 
   ~Impl() {
     if (flac) drflac_close(flac);
@@ -102,7 +103,15 @@ std::size_t SoundtrackStream::read_frames(std::span<std::int16_t> output) {
   const auto read = impl_->stream_info.encoding == Encoding::flac
       ? drflac_read_pcm_frames_s16(impl_->flac, requested, output.data())
       : drmp3_read_pcm_frames_s16(&impl_->mp3, requested, output.data());
-  if (read < requested) impl_->finished = true;
+  const auto remaining = impl_->stream_info.total_frames - impl_->frames_read;
+  if (read > remaining)
+    throw std::runtime_error("soundtrack stream exceeded its advertised frame count");
+  impl_->frames_read += read;
+  if (read < requested) {
+    if (impl_->frames_read != impl_->stream_info.total_frames)
+      throw std::runtime_error("soundtrack stream ended before its advertised frame count");
+    impl_->finished = true;
+  }
   return static_cast<std::size_t>(read);
 }
 
