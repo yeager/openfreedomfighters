@@ -20,6 +20,16 @@ struct RuntimePresentationSettings {
                          const RuntimePresentationSettings &) = default;
 };
 
+// Modern+ is an implementation capability, not a profile label.  A platform
+// renderer must clear it until it has bound the enhanced presentation path it
+// intends to use.  Vendor provider bits are Modern+-only as well, so clearing
+// the profile capability keeps stale discovery/configuration claims out of F10
+// before settings resolution.
+[[nodiscard]] settings::GraphicsCapabilities
+negotiate_runtime_presentation_capabilities(
+    settings::GraphicsCapabilities base,
+    bool modern_plus_presentation_ready) noexcept;
+
 // Fails closed if an invalid extent, scale, or unbound upscaler reaches the
 // renderer.  This makes the actual frame plan derive from the F10 effective
 // state rather than a command-line profile or an unverified backend claim.

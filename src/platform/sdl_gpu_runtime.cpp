@@ -1437,6 +1437,11 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       device, window, SDL_GPU_PRESENTMODE_MAILBOX);
   capabilities.immediate_present = SDL_WindowSupportsGPUPresentMode(
       device, window, SDL_GPU_PRESENTMODE_IMMEDIATE);
+  // No enhanced Modern+ presentation path is bound in this SDL GPU runtime
+  // yet.  Keep the profile and its vendor options unavailable rather than
+  // accepting a setting that would render through the plain native path.
+  capabilities = negotiate_runtime_presentation_capabilities(capabilities,
+                                                               false);
   // SDL GPU currently owns fixed render scaling only. Do not advertise a
   // temporal or vendor upscaler until this renderer has completed an actual
   // native submission binding for it.
@@ -2253,12 +2258,21 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
               static_cast<int>(capture_row_pitch));
           auto temporary_path = screenshot_path;
           temporary_path += ".part";
+          std::error_code remove_error;
+          std::filesystem::remove(temporary_path, remove_error);
+          if (remove_error) {
+            result = {.success = false,
+                      .message = "screenshot temporary-file cleanup failed: " +
+                                 remove_error.message()};
+          }
           const auto utf8_path = temporary_path.u8string();
-          if (surface == nullptr ||
-              !SDL_SaveBMP(surface,
-                           reinterpret_cast<const char *>(utf8_path.c_str()))) {
+          if (result.success &&
+              (surface == nullptr ||
+               !SDL_SaveBMP(surface,
+                            reinterpret_cast<const char *>(utf8_path.c_str())))) {
             result = failure("screenshot BMP save failed");
-          } else {
+          }
+          if (result.success) {
             std::error_code rename_error;
             std::filesystem::rename(temporary_path, screenshot_path,
                                     rename_error);
@@ -2271,6 +2285,10 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
               screenshot_captured = true;
               result.message += " (screenshot saved)";
             }
+          }
+          if (!result.success) {
+            std::error_code cleanup_error;
+            std::filesystem::remove(temporary_path, cleanup_error);
           }
           if (surface != nullptr)
             SDL_DestroySurface(surface);

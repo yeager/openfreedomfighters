@@ -1104,10 +1104,10 @@ int main(int argc, char **argv) {
     return 2;
   }
   if (!screenshot_path.empty()) {
-    auto temporary = screenshot_path;
-    temporary += ".part";
-    if (std::filesystem::exists(screenshot_path) ||
-        std::filesystem::exists(temporary)) {
+    // A prior interrupted capture may leave only its private .part file. The
+    // runtime deletes that temporary name before beginning a new atomic
+    // capture; never overwrite a completed screenshot.
+    if (std::filesystem::exists(screenshot_path)) {
       std::cerr
           << "Screenshot output already exists; refusing to overwrite it.\n";
       return 2;

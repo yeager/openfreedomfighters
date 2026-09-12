@@ -19,9 +19,26 @@ int main() {
   using off::Mode;
   using off::graphics::RenderScaleExtent;
   using off::platform::RuntimePresentationSettings;
+  using off::platform::negotiate_runtime_presentation_capabilities;
   using off::platform::resolve_runtime_presentation_settings;
   using off::settings::EffectiveGraphicsSettings;
   using off::settings::Upscaler;
+
+  off::settings::GraphicsCapabilities advertised{};
+  advertised.modern_plus = true;
+  advertised.dlss_upscaler = true;
+  advertised.fsr_upscaler = true;
+  advertised.xess_upscaler = true;
+  const auto plain_runtime = negotiate_runtime_presentation_capabilities(
+      advertised, false);
+  check(!plain_runtime.modern_plus && !plain_runtime.dlss_upscaler &&
+            !plain_runtime.fsr_upscaler && !plain_runtime.xess_upscaler,
+        "an SDL runtime without Modern+ submission cannot advertise its profile or providers");
+  const auto enhanced_runtime = negotiate_runtime_presentation_capabilities(
+      advertised, true);
+  check(enhanced_runtime.modern_plus && enhanced_runtime.dlss_upscaler &&
+            enhanced_runtime.fsr_upscaler && enhanced_runtime.xess_upscaler,
+        "a bound enhanced presentation path preserves provider negotiation inputs");
 
   EffectiveGraphicsSettings modern{};
   modern.profile = Mode::modern;

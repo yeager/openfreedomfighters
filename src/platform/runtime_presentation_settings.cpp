@@ -2,6 +2,18 @@
 
 namespace off::platform {
 
+settings::GraphicsCapabilities negotiate_runtime_presentation_capabilities(
+    settings::GraphicsCapabilities base,
+    bool modern_plus_presentation_ready) noexcept {
+  if (modern_plus_presentation_ready)
+    return base;
+  base.modern_plus = false;
+  base.dlss_upscaler = false;
+  base.fsr_upscaler = false;
+  base.xess_upscaler = false;
+  return base;
+}
+
 std::optional<RuntimePresentationSettings> resolve_runtime_presentation_settings(
     const settings::EffectiveGraphicsSettings &effective,
     graphics::RenderScaleExtent output_extent) noexcept {
