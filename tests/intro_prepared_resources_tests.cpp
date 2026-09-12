@@ -880,6 +880,9 @@ static OFF_NOINLINE void test_prepared_runtime_scopes() {
                 snapshot.draw.source_index==1 && !snapshot.draw.draw_plan.groups().empty() &&
                 snapshot.images.size()==1 && !snapshot.images[0].mip_zero.pixels.empty(),
             "intro preview snapshots an exact retained picture and its image");
+      rejects([&]{(void)off::graphics::build_intro_preview(
+          host,1,{1280,720},
+          off::graphics::IntroPreviewPolicy::admitted_first_cut_legal_picture);});
       rejects([&]{(void)off::graphics::build_intro_preview(host,1,{0,720});});
       rejects([&]{(void)off::graphics::build_intro_preview(host,0,{1280,720});});
       rejects([&]{(void)off::graphics::build_intro_preview(host,999,{1280,720});});

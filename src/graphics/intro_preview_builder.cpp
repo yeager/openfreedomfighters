@@ -30,7 +30,8 @@ IntroPreviewSnapshot build_intro_preview(const IntroRuntime &runtime,
                                          std::size_t source_index,
                                          IntroPreviewTarget target,
                                          IntroPreviewPolicy policy) {
-  if (policy != IntroPreviewPolicy::exact_source_picture)
+  if (policy != IntroPreviewPolicy::exact_source_picture &&
+      policy != IntroPreviewPolicy::admitted_first_cut_legal_picture)
     throw std::runtime_error("intro preview policy is unsupported");
   if (target.width == 0 || target.height == 0)
     throw std::runtime_error("intro preview target dimensions are invalid");
@@ -40,6 +41,22 @@ IntroPreviewSnapshot build_intro_preview(const IntroRuntime &runtime,
     throw std::runtime_error("intro preview source is unknown");
   if (directory[source_index].source_type != picture_source_type)
     throw std::runtime_error("intro preview source is not a supported picture");
+
+  if (policy == IntroPreviewPolicy::admitted_first_cut_legal_picture) {
+    const auto *owner_receipt = runtime.legal_picture_reader_state();
+    const auto *component_receipt =
+        runtime.legal_picture_component_reader_state();
+    if (!owner_receipt || !component_receipt ||
+        component_receipt->source_directory_index != source_index ||
+        owner_receipt->owner != runtime.source_handle(source_index) ||
+        component_receipt->owner != owner_receipt->owner ||
+        component_receipt->resource != owner_receipt->resource ||
+        component_receipt->component_index != owner_receipt->component_index ||
+        component_receipt->picture_asset_reference !=
+            owner_receipt->picture_asset_reference)
+      throw std::runtime_error(
+          "intro preview first-cut legal-picture admission is unavailable");
+  }
 
   const auto &picture = runtime.picture_for_source(source_index);
   const auto plan = picture.draw_plan();

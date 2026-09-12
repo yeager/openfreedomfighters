@@ -18,9 +18,14 @@ struct IntroPreviewTarget {
   std::uint32_t height{};
 };
 
-// Only the exact retained authored-picture route is supported.  There is no
-// generic source-class fallback and no synthesized image policy.
-enum class IntroPreviewPolicy : std::uint8_t { exact_source_picture };
+// Only exact retained authored-picture routes are supported.  The stricter
+// first-cut form requires the ordinary reader bracket's owner and component
+// receipts to identify this same source.  Neither form has a generic
+// source-class fallback or a synthesized image policy.
+enum class IntroPreviewPolicy : std::uint8_t {
+  exact_source_picture,
+  admitted_first_cut_legal_picture,
+};
 
 struct IntroPreviewDraw {
   std::size_t source_index{};
@@ -38,9 +43,10 @@ struct IntroPreviewSnapshot {
 // its current draw plan.  It intentionally does not select a camera, derive a
 // transform, submit a draw, or make the cut active.
 //
-// Unknown/non-picture source rows, zero destination dimensions, unsupported
-// policies, empty plans, duplicate image identities, and missing/invalid
-// referenced images throw std::runtime_error before returning a snapshot.
+// Unknown/non-picture source rows, absent required first-cut reader receipts,
+// zero destination dimensions, unsupported policies, empty plans, duplicate
+// image identities, and missing/invalid referenced images throw
+// std::runtime_error before returning a snapshot.
 [[nodiscard]] IntroPreviewSnapshot build_intro_preview(
     const IntroRuntime &runtime, std::size_t source_index,
     IntroPreviewTarget target,

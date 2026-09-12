@@ -1379,7 +1379,9 @@ int main(int argc, char **argv) {
                   "first-cut legal picture source is unavailable");
             intro_legal_picture_preflight.emplace(
                 off::graphics::build_intro_preview(
-                    *intro, *legal_source, {.width = 1280U, .height = 720U}));
+                    *intro, *legal_source, {.width = 1280U, .height = 720U},
+                    off::graphics::IntroPreviewPolicy::
+                        admitted_first_cut_legal_picture));
           }
           startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
               data_path / "Scenes" / "FF-StartUp.ZIP"));
