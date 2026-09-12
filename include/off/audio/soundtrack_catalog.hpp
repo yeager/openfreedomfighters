@@ -1,5 +1,7 @@
 #pragma once
 
+#include "off/data/install.hpp"
+
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -16,6 +18,9 @@ enum class SoundtrackFormat { flac, mp3 };
 struct SoundtrackEdition {
   SoundtrackFormat format{};
   std::filesystem::path path;
+  // Immutable install-manifest identity. It is required again at the cue
+  // admission boundary, rather than trusting a path after startup.
+  std::string expected_sha256;
 };
 
 struct SoundtrackTrack {
@@ -32,7 +37,7 @@ class SoundtrackCatalog final {
   // Input must be InstallVerification::soundtrack_candidates. This does not
   // open, decode, map, or play the files; it only groups their album editions.
   [[nodiscard]] static SoundtrackCatalog from_verified_candidates(
-      std::span<const std::filesystem::path> candidates);
+      std::span<const data::VerifiedSoundtrackCandidate> candidates);
 
   [[nodiscard]] const SoundtrackTrack* find_album_track(
       std::uint8_t album_ordinal) const noexcept;

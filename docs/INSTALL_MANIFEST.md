@@ -67,17 +67,26 @@ mapping and required timing/loop behavior are known. Prefer FLAC, then a usable
 MP3 version, otherwise the game's original music. Missing or unusable album
 tracks must never disable original music or create a startup requirement.
 
+`SoundtrackCueResolver` is the local admission boundary for a future reviewed
+mapping. A mapping supplies only an opaque cue token, album ordinal, edition
+format, and the complete expected SHA-256 of that exact enrolled file. It is
+accepted only when all four values match a catalog edition; resolution hashes
+the file again and rejects symlinks, unreadable files, changed bytes, absent
+tokens, and every mismatch. Each rejection selects the game-audio path. The
+repository contains no cue bindings, titles, filenames, samples, timing, or
+retail text, and this resolver does not start playback.
+
 **Current implementation:** startup exposes hash-verified soundtrack candidates
 and reports optional failures. The candidate catalog groups album editions by
 their filename ordinal, preferring FLAC and retaining MP3 as a fallback; an
 album ordinal is not a game-cue mapping. A bounded sequential file stream can
 read local FLAC and MP3 PCM in caller-provided chunks. A separate bounded
 one-track transport can submit those chunks to a real SDL stereo output device, but is not
-connected to a game-cue resolver. A bounded standalone decoder accepts local
+connected to the cue resolver or an audio lifecycle. A bounded standalone decoder accepts local
 FLAC and MP3 files and produces 16-bit PCM after validating file size, channels,
-sample rate, decoded length and complete input read. It is not connected to a
-cue resolver or audio lifecycle. There is still no verified cue mapping,
-soundtrack substitution, or audible fallback. Hash verification and successful
+sample rate, decoded length and complete input read. It is not connected to an
+audio lifecycle. There is still no shipped verified cue mapping, soundtrack
+substitution, or audible fallback. Hash verification and successful
 decode are not playback-suitability tests.
 
 Private comparison currently finds title-only correspondences for Main Title

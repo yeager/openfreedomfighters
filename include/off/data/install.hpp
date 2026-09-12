@@ -21,6 +21,13 @@ enum class InstallError {
     io_error,
 };
 
+// This is an enrolled optional file identity, not a cue identity.  The digest
+// comes from the immutable install manifest after a complete hash check.
+struct VerifiedSoundtrackCandidate {
+    std::filesystem::path path;
+    std::string expected_sha256;
+};
+
 struct InstallVerification {
     InstallError error{InstallError::none};
     std::filesystem::path root;
@@ -32,7 +39,7 @@ struct InstallVerification {
     std::string data_manifest_fingerprint;
     std::string message;
     // Hash-verified candidates only: decoder/cue suitability is not implied.
-    std::vector<std::filesystem::path> soundtrack_candidates;
+    std::vector<VerifiedSoundtrackCandidate> soundtrack_candidates;
     std::vector<std::string> optional_file_warnings;
 
     [[nodiscard]] explicit operator bool() const noexcept {

@@ -150,18 +150,31 @@ InstallVerification verify_install(const std::filesystem::path &root,
   std::string member_context;
   std::string audit_identity;
   std::string data_manifest_fingerprint;
-  std::vector<std::filesystem::path> soundtrack_candidates;
+  std::vector<VerifiedSoundtrackCandidate> soundtrack_candidates;
   std::vector<std::string> optional_file_warnings;
   try {
     const auto inventory = verify_file_manifest(root, supported_install_manifest(), cancelled);
     if (inventory.cancelled)
       return failure(InstallError::io_error, root, "game-data verification cancelled");
+    const auto manifest = supported_install_manifest();
     for (const auto& file : inventory.files) {
       if (file.role == ManifestFileRole::required_game && file.status != ManifestFileStatus::verified)
         return failure(InstallError::incomplete_game_data, root,
                        file.path + ": " + file.detail);
-      if (file.role == ManifestFileRole::optional_soundtrack && file.status == ManifestFileStatus::verified)
-        soundtrack_candidates.push_back(file.actual_path);
+      if (file.role == ManifestFileRole::optional_soundtrack &&
+          file.status == ManifestFileStatus::verified) {
+        const auto expected = std::ranges::find_if(
+            manifest, [&file](const ManifestFile& entry) {
+              return entry.role == ManifestFileRole::optional_soundtrack &&
+                     entry.path == file.path;
+            });
+        if (expected == manifest.end())
+          return failure(InstallError::incomplete_game_data, root,
+                         "verified soundtrack file is absent from manifest");
+        soundtrack_candidates.push_back(
+            {.path = file.actual_path,
+             .expected_sha256 = std::string(expected->sha256)});
+      }
       if (file.role != ManifestFileRole::required_game && file.status != ManifestFileStatus::verified &&
           file.status != ManifestFileStatus::missing)
         optional_file_warnings.push_back(file.path + ": " + file.detail);

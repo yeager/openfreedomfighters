@@ -79,6 +79,7 @@ add_library(off_core
     src/audio/stereo_stream_playback.cpp
     src/audio/intro_audio_stream.cpp
     src/audio/soundtrack_catalog.cpp
+    src/audio/soundtrack_cue_resolver.cpp
     src/audio/soundtrack_decode.cpp
     src/audio/soundtrack_playback.cpp
     src/audio/soundtrack_stream.cpp
@@ -563,6 +564,9 @@ if(BUILD_TESTING)
     add_executable(off_soundtrack_catalog_tests tests/soundtrack_catalog_tests.cpp)
     target_link_libraries(off_soundtrack_catalog_tests PRIVATE off_core)
     add_test(NAME off_soundtrack_catalog_tests COMMAND off_soundtrack_catalog_tests)
+    add_executable(off_soundtrack_cue_resolver_tests tests/soundtrack_cue_resolver_tests.cpp)
+    target_link_libraries(off_soundtrack_cue_resolver_tests PRIVATE off_core)
+    add_test(NAME off_soundtrack_cue_resolver_tests COMMAND off_soundtrack_cue_resolver_tests)
     add_executable(off_duration_comparison_tests tests/duration_comparison_tests.cpp)
     target_link_libraries(off_duration_comparison_tests PRIVATE off_core)
     add_test(NAME off_duration_comparison_tests COMMAND off_duration_comparison_tests)

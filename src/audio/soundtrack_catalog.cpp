@@ -51,14 +51,23 @@ SoundtrackFormat format_for(const std::filesystem::path& path) {
 }  // namespace
 
 SoundtrackCatalog SoundtrackCatalog::from_verified_candidates(
-    std::span<const std::filesystem::path> candidates) {
+    std::span<const data::VerifiedSoundtrackCandidate> candidates) {
   SoundtrackCatalog catalog;
-  for (const auto& path : candidates) {
+  for (const auto& candidate : candidates) {
+    const auto& path = candidate.path;
     const auto ordinal = album_ordinal(path);
     if (!ordinal)
       throw std::invalid_argument("verified soundtrack candidate lacks an album ordinal");
     const auto identity = album_identity(path);
-    const SoundtrackEdition edition{format_for(path), path};
+    if (candidate.expected_sha256.size() != 64U ||
+        !std::all_of(candidate.expected_sha256.begin(),
+                     candidate.expected_sha256.end(), [](const char value) {
+                       return (value >= '0' && value <= '9') ||
+                              (value >= 'a' && value <= 'f');
+                     }))
+      throw std::invalid_argument("verified soundtrack candidate lacks a SHA-256 identity");
+    const SoundtrackEdition edition{format_for(path), path,
+                                    candidate.expected_sha256};
     const auto track = std::ranges::find(catalog.tracks_, *ordinal,
                                          &SoundtrackTrack::album_ordinal);
     if (track == catalog.tracks_.end()) {
