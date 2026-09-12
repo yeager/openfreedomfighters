@@ -4,6 +4,7 @@
 
 #include <array>
 #include <iostream>
+#include <vector>
 
 namespace {
 int failures = 0;
@@ -34,6 +35,20 @@ int main() {
         "host preference order is preserved after malformed values and duplicates are removed");
   using namespace off::ui::l10n;
   const auto &catalog = f10_catalog();
+  std::vector<std::string_view> canonical_host_views;
+  canonical_host_views.reserve(host_preferences.size());
+  for (const auto &locale : host_preferences)
+    canonical_host_views.push_back(locale);
+  check(catalog.resolve(MessageId::apply, "xx-XX", canonical_host_views) ==
+            "Tillämpa",
+        "startup and F10 catalog input honors the canonical first host preference");
+  const off::data::InstallVerification host_locale_missing_executable{
+      .error = off::data::InstallError::missing_executable};
+  const auto host_locale_startup_error =
+      off::platform::make_startup_data_error_presentation(
+          host_locale_missing_executable, catalog, "xx-XX", canonical_host_views);
+  check(host_locale_startup_error.title == "Speldata krävs",
+        "startup error presentation uses the same canonical host preference list");
   check(catalog.resolve(MessageId::apply, "sv-SE", "en-US") == "Tillämpa",
         "explicit supported locale wins");
   check(catalog.resolve(MessageId::apply, "xx-XX", "sv-SE") == "Tillämpa",

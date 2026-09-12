@@ -1,9 +1,12 @@
+#include "off/platform/locale_preferences.hpp"
 #include "off/ui/graphics_menu_draw.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <iostream>
+#include <vector>
 
 namespace {
 int failures = 0;
@@ -130,6 +133,19 @@ int main() {
             !has_text(platform_swedish, "Back") && has_text(reference, "Apply"),
         "unsupported explicit locale falls through to platform then English "
         "default");
+  constexpr std::array<std::string_view, 4> raw_host_preferences{{
+      "bad--tag", "SV_se.UTF-8", "en_US", "sv-SE"}};
+  const auto canonical_host_preferences =
+      off::platform::canonical_host_locale_preferences(raw_host_preferences);
+  std::vector<std::string_view> canonical_host_views;
+  canonical_host_views.reserve(canonical_host_preferences.size());
+  for (const auto &locale : canonical_host_preferences)
+    canonical_host_views.push_back(locale);
+  const auto runtime_platform_swedish = off::ui::build_graphics_menu_draw_list(
+      menu, {640, 480}, now, 1.0F, "xx-XX", canonical_host_views);
+  check(has_text(runtime_platform_swedish, "GRAFIKINSTÄLLNINGAR") &&
+            has_text(runtime_platform_swedish, "Tillämpa"),
+        "F10 consumes the canonicalized host locale list used by the SDL runtime");
   constexpr std::array<std::string_view, 2> ordered_platform_locales{{"xx-XX", "sv-SE"}};
   const auto ordered_platform_swedish = off::ui::build_graphics_menu_draw_list(
       menu, {640, 480}, now, 1.0F, "", ordered_platform_locales);
