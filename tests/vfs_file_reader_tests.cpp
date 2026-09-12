@@ -63,6 +63,33 @@ int main() {
     std::filesystem::remove(path);
     rejects([&] { (void)view.open_reader(); });
     std::filesystem::remove(moved_path);
+    {
+      const auto parent_root=work/"parent-chain";
+      const auto nested=parent_root/"nested";
+      const auto retained=parent_root/"retained-nested";
+      const auto outside=work/"parent-chain-outside";
+      std::filesystem::remove_all(parent_root);
+      std::filesystem::remove_all(outside);
+      std::filesystem::create_directories(nested);
+      std::filesystem::create_directories(outside);
+      write(nested/"source.bin",32,'s');
+      write(outside/"source.bin",32,'e');
+      off::data::ArchiveVfs guarded_vfs;
+      static_cast<void>(guarded_vfs.mount_directory(parent_root));
+      std::error_code error;
+      std::filesystem::rename(nested,retained,error);
+      if (!error) {
+        std::filesystem::create_directory_symlink(outside,nested,error);
+      }
+      if (!error) {
+        rejects([&] { static_cast<void>(guarded_vfs.read("nested/source.bin")); });
+        rejects([&] { static_cast<void>(guarded_vfs.open_stream("nested/source.bin")); });
+      } else {
+        std::cout<<"Interior symlink replacement test unavailable: "<<error.message()<<'\n';
+      }
+      std::filesystem::remove_all(parent_root);
+      std::filesystem::remove_all(outside);
+    }
     const auto short_path=work/"short-read.bin";
     write(short_path,256,'d');
     off::data::ArchiveVfs short_vfs;

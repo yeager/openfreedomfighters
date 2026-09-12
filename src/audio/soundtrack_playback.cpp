@@ -40,6 +40,13 @@ void SoundtrackPlayback::start(const SoundtrackEdition& edition) {
   if (active_) throw std::runtime_error("soundtrack playback is already active");
   auto stream = SoundtrackStream::open(edition.path);
   const auto& info = stream.info();
+  const auto expected_encoding = edition.format == SoundtrackFormat::flac
+      ? Encoding::flac : Encoding::mp3;
+  // The catalog records the edition selected by the caller.  Recheck that
+  // contract at the decoder boundary so a stale or substituted path cannot
+  // silently play a different edition under the wrong label.
+  if (info.encoding != expected_encoding)
+    throw std::runtime_error("soundtrack edition format does not match its decoded stream");
   if (info.sample_rate < 100U || info.sample_rate > 100'000U)
     throw std::runtime_error("soundtrack sample rate is unsupported by the output");
   const auto queue_bytes = limits_.queue_frames * 4U;

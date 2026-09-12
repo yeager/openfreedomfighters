@@ -22,11 +22,43 @@ constexpr std::uintmax_t maximum_directory_size = 1024ULL * 1024ULL * 1024ULL;
     return result;
 }
 
-[[nodiscard]] std::vector<std::byte> read_loose_file(const std::filesystem::path& path) {
+[[nodiscard]] bool regular_non_link_chain(const std::filesystem::path& root,
+                                          const std::filesystem::path& path) {
     std::error_code error;
-    const auto status = std::filesystem::symlink_status(path, error);
-    if (error || !std::filesystem::is_regular_file(status) || std::filesystem::is_symlink(status)) {
-        throw std::runtime_error("loose VFS entry is no longer a regular file");
+    const auto root_status = std::filesystem::symlink_status(root, error);
+    if (error || std::filesystem::is_symlink(root_status) ||
+        !std::filesystem::is_directory(root_status)) {
+        return false;
+    }
+    const auto relative = path.lexically_relative(root);
+    if (relative.empty() || relative == "." || relative.is_absolute()) {
+        return false;
+    }
+    auto current = root;
+    for (const auto& part : relative) {
+        if (part == "..") {
+            return false;
+        }
+        current /= part;
+        const auto status = std::filesystem::symlink_status(current, error);
+        if (error || std::filesystem::is_symlink(status)) {
+            return false;
+        }
+        if (current == path) {
+            return std::filesystem::is_regular_file(status);
+        }
+        if (!std::filesystem::is_directory(status)) {
+            return false;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] std::vector<std::byte> read_loose_file(
+    const std::filesystem::path& root, const std::filesystem::path& path) {
+    std::error_code error;
+    if (!regular_non_link_chain(root, path)) {
+        throw std::runtime_error("loose VFS entry is no longer a regular file with safe parent directories");
     }
     const auto size = std::filesystem::file_size(path, error);
     if (error || size > maximum_loose_file_size ||
@@ -153,7 +185,7 @@ std::vector<std::byte> ArchiveVfs::read(std::string_view path) const {
     for (auto mount = mounts_.rbegin(); mount != mounts_.rend(); ++mount) {
         if (const auto loose = mount->loose_files.find(wanted);
             loose != mount->loose_files.end()) {
-            return read_loose_file(loose->second);
+            return read_loose_file(mount->directory, loose->second);
         }
         if (mount->archive.has_value()) {
             if (const auto* entry = mount->archive->find(path); entry != nullptr) {
@@ -173,6 +205,9 @@ VfsFileView ArchiveVfs::open_stream(std::string_view path) const {
         if (const auto loose = mount->loose_files.find(wanted);
             loose != mount->loose_files.end()) {
             std::error_code error;
+            if (!regular_non_link_chain(mount->directory, loose->second)) {
+                throw std::runtime_error("streaming VFS source is no longer a regular file with safe parent directories");
+            }
             const auto size = std::filesystem::file_size(loose->second, error);
             if (error || size > maximum_loose_file_size) {
                 throw std::runtime_error("streaming VFS source is unavailable");

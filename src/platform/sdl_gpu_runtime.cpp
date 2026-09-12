@@ -284,10 +284,15 @@ struct ShaderBytes {
   SDL_GPUShaderFormat format;
 };
 
-[[nodiscard]] ShaderBytes shader_bytes(SDL_GPUDevice *device) {
+// A device can be created for a headless or incomplete backend while exposing
+// no shader representation that this executable embeds. Do not manufacture a
+// SPIR-V choice in that case: it would turn a capability mismatch into an
+// opaque shader-creation failure (and can select the wrong representation on
+// a native Metal or D3D backend).
+[[nodiscard]] std::optional<ShaderBytes> shader_bytes(SDL_GPUDevice *device) {
   const auto formats = SDL_GetGPUShaderFormats(device);
   if ((formats & SDL_GPU_SHADERFORMAT_DXIL) != 0) {
-    return {shader_vert_dxil,
+    return ShaderBytes{shader_vert_dxil,
             shader_vert_dxil_len,
             shader_frag_dxil,
             shader_frag_dxil_len,
@@ -296,7 +301,7 @@ struct ShaderBytes {
             SDL_GPU_SHADERFORMAT_DXIL};
   }
   if ((formats & SDL_GPU_SHADERFORMAT_MSL) != 0) {
-    return {shader_vert_msl,
+    return ShaderBytes{shader_vert_msl,
             shader_vert_msl_len,
             shader_frag_msl,
             shader_frag_msl_len,
@@ -304,13 +309,16 @@ struct ShaderBytes {
             "main0",
             SDL_GPU_SHADERFORMAT_MSL};
   }
-  return {shader_vert_spv,
-          shader_vert_spv_len,
-          shader_frag_spv,
-          shader_frag_spv_len,
-          "main",
-          "main",
-          SDL_GPU_SHADERFORMAT_SPIRV};
+  if ((formats & SDL_GPU_SHADERFORMAT_SPIRV) != 0) {
+    return ShaderBytes{shader_vert_spv,
+                       shader_vert_spv_len,
+                       shader_frag_spv,
+                       shader_frag_spv_len,
+                       "main",
+                       "main",
+                       SDL_GPU_SHADERFORMAT_SPIRV};
+  }
+  return std::nullopt;
 }
 
 [[nodiscard]] SDL_GPUShader *
@@ -335,12 +343,14 @@ create_shader(SDL_GPUDevice *device, const unsigned char *bytes,
                                            SDL_Window *window,
                                            GpuOverlay &result) {
   const auto data = shader_bytes(device);
-  SDL_GPUShader *vertex = create_shader(device, data.vertex, data.vertex_size,
-                                        data.vertex_entrypoint, data.format,
+  if (!data)
+    return false;
+  SDL_GPUShader *vertex = create_shader(device, data->vertex, data->vertex_size,
+                                        data->vertex_entrypoint, data->format,
                                         SDL_GPU_SHADERSTAGE_VERTEX);
   SDL_GPUShader *fragment = create_shader(
-      device, data.fragment, data.fragment_size, data.fragment_entrypoint,
-      data.format, SDL_GPU_SHADERSTAGE_FRAGMENT);
+      device, data->fragment, data->fragment_size, data->fragment_entrypoint,
+      data->format, SDL_GPU_SHADERSTAGE_FRAGMENT);
   if (vertex == nullptr || fragment == nullptr) {
     if (fragment != nullptr)
       SDL_ReleaseGPUShader(device, fragment);
@@ -420,12 +430,14 @@ void release_temporal_resolve_baseline(SDL_GPUDevice *device,
     SDL_GPUDevice *device, SDL_Window *window,
     GpuTemporalResolveBaseline &baseline) {
   const auto data = shader_bytes(device);
-  SDL_GPUShader *vertex = create_shader(device, data.vertex, data.vertex_size,
-                                        data.vertex_entrypoint, data.format,
+  if (!data)
+    return false;
+  SDL_GPUShader *vertex = create_shader(device, data->vertex, data->vertex_size,
+                                        data->vertex_entrypoint, data->format,
                                         SDL_GPU_SHADERSTAGE_VERTEX);
   SDL_GPUShader *fragment = create_shader(
-      device, data.fragment, data.fragment_size, data.fragment_entrypoint,
-      data.format, SDL_GPU_SHADERSTAGE_FRAGMENT);
+      device, data->fragment, data->fragment_size, data->fragment_entrypoint,
+      data->format, SDL_GPU_SHADERSTAGE_FRAGMENT);
   if (vertex == nullptr || fragment == nullptr) {
     if (fragment != nullptr)
       SDL_ReleaseGPUShader(device, fragment);
@@ -841,12 +853,14 @@ apply_graphics(SDL_GPUDevice *device, SDL_Window *window,
 create_scene_pipeline(SDL_GPUDevice *device, SDL_Window *window,
                       graphics::PrimitiveTopology topology, bool blended) {
   const auto data = shader_bytes(device);
-  SDL_GPUShader *vertex = create_shader(device, data.vertex, data.vertex_size,
-                                        data.vertex_entrypoint, data.format,
+  if (!data)
+    return nullptr;
+  SDL_GPUShader *vertex = create_shader(device, data->vertex, data->vertex_size,
+                                        data->vertex_entrypoint, data->format,
                                         SDL_GPU_SHADERSTAGE_VERTEX);
   SDL_GPUShader *fragment = create_shader(
-      device, data.fragment, data.fragment_size, data.fragment_entrypoint,
-      data.format, SDL_GPU_SHADERSTAGE_FRAGMENT);
+      device, data->fragment, data->fragment_size, data->fragment_entrypoint,
+      data->format, SDL_GPU_SHADERSTAGE_FRAGMENT);
   if (vertex == nullptr || fragment == nullptr) {
     if (fragment != nullptr)
       SDL_ReleaseGPUShader(device, fragment);
