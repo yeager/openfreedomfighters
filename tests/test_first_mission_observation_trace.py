@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import pathlib
+import json
+import stat
 import sys
+import tempfile
 import unittest
 
 
@@ -91,6 +94,26 @@ class FirstMissionObservationTraceTests(unittest.TestCase):
         source["platform"] = "other"
         with self.assertRaises(ValueError):
             trace.sanitize_trace(source)
+
+    def test_cli_creates_owner_only_output_without_following_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            private = pathlib.Path(directory)
+            input_path = private / "raw.json"
+            input_path.write_text(json.dumps(document([event()])), encoding="utf-8")
+            output_path = private / "sanitized.json"
+            old_argv = sys.argv
+            try:
+                sys.argv = ["trace", str(input_path), str(output_path)]
+                self.assertEqual(trace.main(), 0)
+                self.assertEqual(stat.S_IMODE(output_path.stat().st_mode), 0o600)
+            finally:
+                sys.argv = old_argv
+            target = private / "target.json"
+            target.write_text("{}", encoding="utf-8")
+            link = private / "link.json"
+            link.symlink_to(target.name)
+            with self.assertRaisesRegex(ValueError, "must not be a symlink"):
+                trace._outside_repository(link, "input")
 
 
 if __name__ == "__main__":

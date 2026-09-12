@@ -58,7 +58,20 @@ python3 tools/first_mission_observation_trace.py PRIVATE_INPUT.json PRIVATE_OUTP
 ```
 
 Collect two clean baseline launches with the same private configuration and a
-third launch with exactly one input experiment. Review repeat agreement before
-adding any native behavior. The sanitized traces remain private; only an
-authored behavior specification and source-free test fixture may enter the
-repository.
+third launch with exactly one input experiment. The repeat gate below requires
+the baselines to be structurally identical after sanitization, all declared
+metadata to match, one visible action outcome, and one later reset or terminal
+mission outcome. It emits only an aggregate review record, never raw rows.
+
+```sh
+python3 tools/first_mission_observation_repeat_bundle.py \
+  PRIVATE_BASELINE_A.json PRIVATE_BASELINE_B.json \
+  PRIVATE_ONE_PROBE.json PRIVATE_REVIEW_BUNDLE.json
+```
+
+All four paths must be distinct, private, and outside the repository. The
+input and output final path entries are opened without following symlinks; the
+output is created exclusively with owner-only `0600` permissions. Review the
+bundle before adding any native behavior. The sanitized traces remain private;
+only an authored behavior specification and source-free test fixture may enter
+the repository.
