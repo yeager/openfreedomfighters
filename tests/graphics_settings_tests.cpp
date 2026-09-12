@@ -199,6 +199,31 @@ int main() {
             fsr_enabled.effective->fallbacks.size() == 2,
         "preserve an FSR request only when the runtime reports a loaded adapter");
 
+  // A capability object may cross process boundaries in a future native
+  // backend.  Even a complete vendor claim must not turn a plain Modern
+  // request into a Modern+ renderer path.
+  auto vendor_ready = capabilities;
+  vendor_ready.temporal_upscaler = true;
+  vendor_ready.dlss_upscaler = true;
+  vendor_ready.fsr_upscaler = true;
+  vendor_ready.xess_upscaler = true;
+  advanced.modern_plus = false;
+  advanced.upscaler = off::settings::Upscaler::dlss;
+  const auto plain_modern_vendor =
+      off::settings::resolve_graphics_settings(advanced, vendor_ready);
+  check(plain_modern_vendor.effective.has_value() &&
+            !plain_modern_vendor.effective->modern_plus &&
+            plain_modern_vendor.effective->upscaler ==
+                off::settings::Upscaler::temporal &&
+            plain_modern_vendor.effective->fallbacks.size() == 2 &&
+            plain_modern_vendor.effective->fallbacks[0].reason ==
+                off::settings::FallbackReason::modern_plus_upscaler_required &&
+            plain_modern_vendor.effective->fallbacks[1].reason ==
+                off::settings::FallbackReason::mailbox_unavailable,
+        "never activate a vendor upscaler outside Modern+ even when a "
+        "capability object claims it is ready");
+
+  advanced.modern_plus = true;
   advanced.upscaler = off::settings::Upscaler::dlss;
   advanced.profile = off::Mode::original;
   const auto original_advanced =

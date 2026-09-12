@@ -64,6 +64,7 @@ enum class FallbackReason : std::uint8_t {
   mailbox_unavailable,
   immediate_unavailable,
   modern_plus_unavailable,
+  modern_plus_upscaler_required,
   temporal_upscaler_unavailable,
   dlss_upscaler_unavailable,
   fsr_upscaler_unavailable,

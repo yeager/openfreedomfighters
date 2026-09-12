@@ -30,6 +30,11 @@ namespace {
          value == ShadowQuality::ultra;
 }
 
+[[nodiscard]] bool vendor_upscaler(Upscaler value) {
+  return value == Upscaler::dlss || value == Upscaler::fsr ||
+         value == Upscaler::xess;
+}
+
 } // namespace
 
 GraphicsResolution
@@ -100,7 +105,19 @@ resolve_graphics_settings(const RequestedGraphicsSettings &requested,
       effective.fallbacks.push_back({GraphicsField::modern_plus,
                                      FallbackReason::modern_plus_unavailable});
     }
-    if (effective.upscaler == Upscaler::dlss && !capabilities.dlss_upscaler) {
+    // Vendor reconstruction is a Modern+ feature.  The runtime negotiator
+    // already applies the same policy when it exposes bindings, but settings
+    // can also be resolved by tools, tests, and a restored preferences file.
+    // Keep this second boundary so a stale or malformed capability object can
+    // never activate a vendor path from the plain Modern profile.
+    if (vendor_upscaler(effective.upscaler) && !requested.modern_plus) {
+      effective.upscaler = capabilities.temporal_upscaler ? Upscaler::temporal
+                                                          : Upscaler::native;
+      effective.fallbacks.push_back(
+          {GraphicsField::upscaler,
+           FallbackReason::modern_plus_upscaler_required});
+    } else if (effective.upscaler == Upscaler::dlss &&
+               !capabilities.dlss_upscaler) {
       effective.upscaler = capabilities.temporal_upscaler ? Upscaler::temporal
                                                           : Upscaler::native;
       effective.fallbacks.push_back(
