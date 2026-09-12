@@ -35,8 +35,8 @@ The repository Gitleaks configuration excludes only ignored CMake build products
 tracked history and all source, documentation, configuration, and other untracked
 working files remain in scope.
 
-## Release workflow
+## Development-package workflow
 
-Tags matching `v*` and explicit manual dispatches build and test data-free binaries for Linux, macOS, and Windows. The requested release version must exactly match the version in `CMakeLists.txt`. Before GitHub Release creation, the workflow verifies that all expected artifacts exist, audits their filenames for prohibited game-data formats, and runs Gitleaks.
+Tags matching `v*` and explicit manual dispatches build and test data-free binaries for Linux, macOS, and Windows. The requested version must exactly match the version in `CMakeLists.txt`. The workflow uploads the validated packages only as GitHub Actions artifacts; it has read-only repository permission and never creates, edits, or attaches files to a GitHub Release.
 
-Release binaries contain only independently authored code and permitted runtime dependencies. They still require a legally purchased supported installation at runtime. Until the roadmap reaches a playable gate, tagged packages are development snapshots rather than playable releases.
+These archives contain only independently authored code and permitted runtime dependencies, and still require a legally purchased supported installation at runtime. They are development artifacts, not public downloads or playable releases. A production publishing workflow must be introduced separately, protected, and gated by the signing, notarization, provenance, clean-install, and platform-qualification requirements in `RELEASE_ENGINEERING.md`.

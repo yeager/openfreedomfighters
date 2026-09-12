@@ -62,6 +62,11 @@ see [MovieControl-to-cutscene dispatcher recovery](MOVIE_CONTROL_CUTSCENE_DISPAT
 
 ## Private structural trace utility
 
+Before a separately maintained observer is configured, its source-free,
+opaque protocol plan may be checked with
+[MovieControl opaque observer probe plan](MOVIE_CONTROL_OBSERVER_PROBE_PLAN.md).
+That preparatory gate neither discovers a target nor supplies instrumentation.
+
 `tools/movie_control_phase_one_trace.py` is a deliberately narrow sanitizer for
 the output of a separately maintained private observer. It does **not** inspect
 or instrument the original executable itself. That observer must assign

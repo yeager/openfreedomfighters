@@ -4,10 +4,13 @@ This is the Phase 6 packaging, trust, migration, diagnostics, support, and
 reproducibility contract. It defines a production pipeline, not current status.
 
 Today GitHub builds data-free development archives for Linux x86-64, macOS, and
-Windows x64 and performs a filename retail-extension audit plus Gitleaks. It does
-not yet create native installers, sign Windows packages, sign/notarize macOS,
-publish a Deck-qualified package, attest provenance/SBOMs, test migrations,
-upload privacy-reviewed crash reports, or run clean-install campaign acceptance.
+Windows x64 and performs a filename retail-extension audit plus Gitleaks. It
+uploads them only as ephemeral Actions artifacts: the workflow has read-only
+repository permission and does not create GitHub Releases or publish downloads.
+It does not yet create native installers, sign Windows packages, sign/notarize
+macOS, publish a Deck-qualified package, attest provenance/SBOMs, test
+migrations, upload privacy-reviewed crash reports, or run clean-install campaign
+acceptance.
 
 ## Release identity and inputs
 

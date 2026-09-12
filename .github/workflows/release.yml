@@ -1,4 +1,4 @@
-name: Release
+name: Development packages
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   RELEASE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
@@ -147,7 +147,7 @@ jobs:
           path: OpenFreedomFighters-windows-x64.zip
           if-no-files-found: error
 
-  create-release:
+  verify-development-packages:
     needs: [build-linux, build-macos, build-windows]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -178,13 +178,3 @@ jobs:
           python3 tools/verify_release_package.py windows artifacts/windows-x64/OpenFreedomFighters-windows-x64.zip
       - name: Scan repository with Gitleaks
         uses: ./.github/actions/gitleaks
-      - name: Create release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
-          name: OpenFreedomFighters ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
-          files: |
-            artifacts/linux-x86_64/OpenFreedomFighters-linux-x86_64.tar.gz
-            artifacts/macos/OpenFreedomFighters-macos.tar.gz
-            artifacts/windows-x64/OpenFreedomFighters-windows-x64.zip
-          generate_release_notes: true
