@@ -18,6 +18,9 @@ Those facts do not establish that `ZLIST_CutSequence` dispatches either phase,
 activates the player after phase two, consumes a scene clock, drives a view,
 or reports completion. Normal startup must remain fail-closed.
 
+The upstream MovieControl-to-player handoff has its own source-free observation
+boundary; see [MovieControl-to-cutscene dispatcher recovery](MOVIE_CONTROL_CUTSCENE_DISPATCH.md).
+
 ## Missing contract
 
 Private observation must establish the real player dispatcher and both success

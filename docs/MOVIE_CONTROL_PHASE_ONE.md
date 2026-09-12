@@ -55,6 +55,9 @@ and all of its required effects. The resulting public tests must use authored
 fixtures or source-free recordings; normal startup remains fail-closed until
 then.
 
+The subsequent MovieControl-to-first-cut handoff is a separate missing contract;
+see [MovieControl-to-cutscene dispatcher recovery](MOVIE_CONTROL_CUTSCENE_DISPATCH.md).
+
 ## Private structural trace utility
 
 `tools/movie_control_phase_one_trace.py` is a deliberately narrow sanitizer for
