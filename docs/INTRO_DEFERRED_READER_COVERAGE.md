@@ -84,3 +84,25 @@ source-free ordering fact, not an inferred callback or activation rule.
 
 This schema records evidence for review; it neither admits a reader nor changes
 ParamAnim construction, lifecycle, rendering, activation, or playback.
+
+## Repeated-observation gate
+
+Collect two fresh private observations, sanitize each one, then pass both to
+`tools/paramanim_deferred_reader_repeat_pair.py`. The gate accepts only an
+exact ordered match of the complete categorical transcript. It also requires
+exactly one observed reader write, a preceding successful deferred-preparation
+record, and both malformed and unsupported rejected-input observations. A
+component-reader write further requires a preceding successful owner-reader
+record. A later callback may appear only when the transcript explicitly
+declares it and must follow the write. Therefore a positive-looking write alone
+cannot nominate a reader.
+
+The tool cannot attest that a caller used separate processes, and it does not
+recover field layout, cardinality, or a source/object mapping. Those remain
+review requirements before implementation. Its inputs and output must remain
+outside the repository, and the output is never overwritten.
+
+```sh
+python3 tools/paramanim_deferred_reader_repeat_pair.py \
+  PRIVATE_FIRST.json PRIVATE_SECOND.json PRIVATE_REPEAT_PAIR.json
+```
