@@ -111,6 +111,7 @@ add_library(off_core
     src/graphics/temporal_jitter.cpp
     src/graphics/temporal_resolve_inputs.cpp
     src/graphics/temporal_resolve_baseline.cpp
+    src/platform/runtime_presentation_settings.cpp
     src/graphics/scene_render.cpp
     src/graphics/scene_gpu_plan.cpp
     src/graphics/intro_renderer_relocation_prefix.cpp
@@ -647,6 +648,11 @@ if(BUILD_TESTING)
     add_executable(off_render_scale_tests tests/render_scale_tests.cpp)
     target_link_libraries(off_render_scale_tests PRIVATE off_core)
     add_test(NAME off_render_scale_tests COMMAND off_render_scale_tests)
+    add_executable(off_runtime_presentation_settings_tests
+        tests/runtime_presentation_settings_tests.cpp)
+    target_link_libraries(off_runtime_presentation_settings_tests PRIVATE off_core)
+    add_test(NAME off_runtime_presentation_settings_tests
+        COMMAND off_runtime_presentation_settings_tests)
     add_executable(off_temporal_history_tests tests/temporal_history_tests.cpp)
     target_link_libraries(off_temporal_history_tests PRIVATE off_core)
     add_test(NAME off_temporal_history_tests COMMAND off_temporal_history_tests)

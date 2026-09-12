@@ -1,5 +1,5 @@
 #include "off/platform/sdl_gpu_runtime.hpp"
-#include "off/graphics/render_scale.hpp"
+#include "off/platform/runtime_presentation_settings.hpp"
 #include "off/graphics/scene_instance_history.hpp"
 #include "off/graphics/temporal_resolve_baseline.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
@@ -1494,7 +1494,6 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   if (show_graphics_menu) {
     static_cast<void>(menu.handle_key(ui::GraphicsMenuKey::f10, true, false));
   }
-  Mode active_mode = mode;
   GpuRenderScaleTarget render_scale_target;
   GpuTemporalResolveBaseline temporal_baseline;
   graphics::SceneInstanceHistoryLifecycle scene_instance_history;
@@ -1619,10 +1618,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                 transaction == settings::GraphicsApplyTransaction::applied;
             const auto acknowledged =
                 menu.acknowledge_apply(applied, ui::GraphicsClock::now());
-            if (applied)
-              active_mode = proposal->effective.profile;
             if (acknowledged == ui::GraphicsMenuEffect::commit_requested) {
-              active_mode = menu.confirmed_effective().profile;
               if (!graphics_settings_path.empty())
                 static_cast<void>(settings::save_graphics_settings(
                     graphics_settings_path, menu.confirmed_requested()));
@@ -1642,10 +1638,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
           const bool restored =
               transaction == settings::GraphicsApplyTransaction::applied;
           static_cast<void>(menu.acknowledge_revert(restored));
-          if (restored)
-            active_mode = menu.confirmed_effective().profile;
         } else if (effect == ui::GraphicsMenuEffect::commit_requested) {
-          active_mode = menu.confirmed_effective().profile;
           if (!graphics_settings_path.empty())
             static_cast<void>(settings::save_graphics_settings(
                 graphics_settings_path, menu.confirmed_requested()));
@@ -1668,8 +1661,6 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       const bool restored =
           transaction == settings::GraphicsApplyTransaction::applied;
       static_cast<void>(menu.acknowledge_revert(restored));
-      if (restored)
-        active_mode = menu.confirmed_effective().profile;
     }
     SDL_GPUCommandBuffer *command = SDL_AcquireGPUCommandBuffer(device);
     SDL_GPUTexture *swapchain = nullptr;
@@ -1738,11 +1729,11 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     }
     SDL_GPUTexture *presentation_target =
         capture_texture != nullptr ? capture_texture : swapchain;
-    const auto render_scale = menu.live_effective().render_scale_percent;
-    const auto scaled_extent = graphics::resolve_render_scale_extent(
-        {swapchain_width, swapchain_height}, render_scale);
-    if (!scaled_extent) {
-      result = {.success = false, .message = "render scale dimensions are unsupported"};
+    const auto presentation = resolve_runtime_presentation_settings(
+        menu.live_effective(), {swapchain_width, swapchain_height});
+    if (!presentation) {
+      result = {.success = false,
+                .message = "effective graphics presentation is unsupported"};
       SDL_SubmitGPUCommandBuffer(command);
       if (capture_transfer != nullptr)
         SDL_ReleaseGPUTransferBuffer(device, capture_transfer);
@@ -1751,10 +1742,11 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       break;
     }
     SDL_GPUTexture *content_target = presentation_target;
-    if (render_scale != 100U) {
+    if (presentation->spatial_resample) {
       const auto format = SDL_GetGPUSwapchainTextureFormat(device, window);
-      if (!ensure_render_scale_target(device, scaled_extent->width, scaled_extent->height,
-                                      format, render_scale_target)) {
+      if (!ensure_render_scale_target(device, presentation->content_extent.width,
+                                      presentation->content_extent.height, format,
+                                      render_scale_target)) {
         result = failure("render scale target creation failed");
         SDL_SubmitGPUCommandBuffer(command);
         if (capture_transfer != nullptr)
@@ -1765,13 +1757,13 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       }
       content_target = render_scale_target.texture;
     }
-    const Uint32 content_width = render_scale == 100U ? swapchain_width : scaled_extent->width;
-    const Uint32 content_height = render_scale == 100U ? swapchain_height : scaled_extent->height;
+    const Uint32 content_width = presentation->content_extent.width;
+    const Uint32 content_height = presentation->content_extent.height;
     // This path is intentionally limited to the explicit source-only
     // diagnostic scene. Normal startup has no recovered world producer and
     // must not allocate fabricated temporal inputs.
     const bool temporal_diagnostic = scene != nullptr &&
-                                     active_mode == Mode::modern &&
+                                     presentation->profile == Mode::modern &&
                                      presentation_target != nullptr;
     if (temporal_diagnostic) {
       const auto format = SDL_GetGPUSwapchainTextureFormat(device, window);
@@ -1952,7 +1944,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     if (swapchain != nullptr) {
       const SDL_GPUColorTargetInfo target{
           .texture = content_target,
-          .clear_color = active_mode == Mode::original
+          .clear_color = presentation->profile == Mode::original
                              ? SDL_FColor{0, 0, 0, 1}
                              : SDL_FColor{0.015F, 0.025F, 0.05F, 1},
           .load_op = SDL_GPU_LOADOP_CLEAR,
