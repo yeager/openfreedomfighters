@@ -39,6 +39,17 @@ int main() {
               std::byte{0xff},
           },
   });
+  texture.mips.push_back({
+      .width = 1,
+      .height = 1,
+      .encoded =
+          {
+              std::byte{0x60},
+              std::byte{0x50},
+              std::byte{0x40},
+              std::byte{0xff},
+          },
+  });
 
   off::data::PrimitiveEntry primitive;
   primitive.packed_index = 42;
@@ -256,7 +267,7 @@ int main() {
         "reject an invalid scene instance resource reference");
 
   invalid_scene_asset = scene_asset;
-  invalid_scene_asset.textures[0].mip_zero.pixels.clear();
+  invalid_scene_asset.textures[0].mips[0].pixels.clear();
   bool invalid_scene_texture_rejected = false;
   try {
     off::graphics::validate_scene_render_asset(invalid_scene_asset);
@@ -264,17 +275,31 @@ int main() {
     invalid_scene_texture_rejected = true;
   }
   check(invalid_scene_texture_rejected,
-        "reject inconsistent scene RGBA storage before upload");
+        "reject inconsistent scene mip RGBA storage before upload");
+
+  invalid_scene_asset = scene_asset;
+  invalid_scene_asset.textures[0].mips[1].width = 2;
+  bool invalid_scene_mip_chain_rejected = false;
+  try {
+    off::graphics::validate_scene_render_asset(invalid_scene_asset);
+  } catch (const std::invalid_argument &) {
+    invalid_scene_mip_chain_rejected = true;
+  }
+  check(invalid_scene_mip_chain_rejected,
+        "reject a scene mip chain whose source dimensions do not halve");
 
   const auto gpu_plan = off::graphics::prepare_scene_gpu_plan(scene_asset);
   check(gpu_plan.textures.size() == 1 && gpu_plan.meshes.size() == 2 &&
             gpu_plan.instances.size() == 3 &&
             gpu_plan.meshes[0].vertices.size() == 4 &&
             gpu_plan.meshes[0].vertices[0].color[3] == 1.0F &&
-            gpu_plan.textures[0].rgba8 ==
+            gpu_plan.textures[0].mips.size() == 2 &&
+            gpu_plan.textures[0].mips[0].rgba8 ==
                 std::vector<std::uint8_t>{0x10, 0x20, 0x30, 0xff} &&
+            gpu_plan.textures[0].mips[1].rgba8 ==
+                std::vector<std::uint8_t>{0x40, 0x50, 0x60, 0xff} &&
             gpu_plan.source_only_diagnostic,
-        "own normalized upload resources independently of parser storage");
+        "own every normalized source mip independently of parser storage");
   bool valid_gpu_plan_accepted = true;
   try {
     off::graphics::validate_scene_gpu_plan(gpu_plan);
@@ -283,6 +308,16 @@ int main() {
   }
   check(valid_gpu_plan_accepted,
         "accept an independently validated owning GPU plan");
+  auto invalid_gpu_mip_plan = gpu_plan;
+  invalid_gpu_mip_plan.textures[0].mips[1].height = 2;
+  bool invalid_gpu_mip_chain_rejected = false;
+  try {
+    off::graphics::validate_scene_gpu_plan(invalid_gpu_mip_plan);
+  } catch (const std::invalid_argument &) {
+    invalid_gpu_mip_chain_rejected = true;
+  }
+  check(invalid_gpu_mip_chain_rejected,
+        "reject a GPU upload plan with a non-halving mip chain");
   check(gpu_plan.draws.size() == 3 && gpu_plan.draws[0].instance_index == 0 &&
             gpu_plan.draws[1].instance_index == 1 &&
             gpu_plan.instances[0].mesh_index == gpu_plan.draws[0].mesh_index &&

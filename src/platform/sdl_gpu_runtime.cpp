@@ -807,6 +807,7 @@ struct TextureUpload {
   SDL_GPUTexture *texture{};
   Uint32 width{};
   Uint32 height{};
+  Uint32 mip_level{};
 };
 
 [[nodiscard]] SDL_GPUTransferBuffer *
@@ -1053,12 +1054,13 @@ template<class Images>
     buffers.push_back({index_transfer, gpu_mesh.index_buffer,
                        static_cast<Uint32>(index_bytes)});
   }
-  const auto create_texture = [&](Uint32 width, Uint32 height,
-                                  const std::uint8_t *rgba,
+  const auto create_texture = [&](const graphics::SceneGpuTexture &source,
                                   SDL_GPUTexture *&destination) {
-    const auto byte_count = static_cast<std::uint64_t>(width) * height * 4U;
-    if (byte_count == 0 || byte_count > std::numeric_limits<Uint32>::max())
+    if (source.mips.empty() ||
+        source.mips.size() > std::numeric_limits<Uint32>::max())
       return false;
+    const auto width = source.mips.front().width;
+    const auto height = source.mips.front().height;
     const SDL_GPUTextureCreateInfo info{
         .type = SDL_GPU_TEXTURETYPE_2D,
         .format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM,
@@ -1066,36 +1068,44 @@ template<class Images>
         .width = width,
         .height = height,
         .layer_count_or_depth = 1,
-        .num_levels = 1,
+        .num_levels = static_cast<Uint32>(source.mips.size()),
         .sample_count = SDL_GPU_SAMPLECOUNT_1};
     destination = SDL_CreateGPUTexture(device, &info);
-    auto *transfer =
-        make_upload_transfer(device, rgba, static_cast<Uint32>(byte_count));
-    if (destination == nullptr || transfer == nullptr) {
-      if (transfer != nullptr)
-        SDL_ReleaseGPUTransferBuffer(device, transfer);
+    if (destination == nullptr)
       return false;
+    for (std::size_t mip_level = 0; mip_level < source.mips.size(); ++mip_level) {
+      const auto &mip = source.mips[mip_level];
+      const auto byte_count =
+          static_cast<std::uint64_t>(mip.width) * mip.height * 4U;
+      if (byte_count == 0 || byte_count > std::numeric_limits<Uint32>::max())
+        return false;
+      auto *transfer = make_upload_transfer(device, mip.rgba8.data(),
+                                            static_cast<Uint32>(byte_count));
+      if (transfer == nullptr)
+        return false;
+      textures.push_back({transfer, destination, mip.width, mip.height,
+                          static_cast<Uint32>(mip_level)});
     }
-    textures.push_back({transfer, destination, width, height});
     return true;
   };
   for (std::size_t index = 0; index < source.textures.size(); ++index) {
     const auto &texture = source.textures[index];
-    if (!create_texture(texture.width, texture.height, texture.rgba8.data(),
-                        result.textures[index])) {
+    if (!create_texture(texture, result.textures[index])) {
       release_transfers();
       return false;
     }
   }
   constexpr std::array<std::uint8_t, 4> white{255, 255, 255, 255};
-  if (!create_texture(1, 1, white.data(), result.white_texture)) {
+  const graphics::SceneGpuTexture white_texture{
+      .mips = {{.width = 1, .height = 1, .rgba8 = {white.begin(), white.end()}}}};
+  if (!create_texture(white_texture, result.white_texture)) {
     release_transfers();
     return false;
   }
   const SDL_GPUSamplerCreateInfo sampler_info{
       .min_filter = SDL_GPU_FILTER_LINEAR,
       .mag_filter = SDL_GPU_FILTER_LINEAR,
-      .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+      .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_LINEAR,
       .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
       .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
       .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT};
@@ -1135,6 +1145,7 @@ template<class Images>
                                           .pixels_per_row = upload.width,
                                           .rows_per_layer = upload.height};
     const SDL_GPUTextureRegion to{.texture = upload.texture,
+                                  .mip_level = upload.mip_level,
                                   .w = upload.width,
                                   .h = upload.height,
                                   .d = 1};

@@ -22,10 +22,17 @@ struct SceneGpuVertex {
   std::array<float, 2> texture_coordinates{};
 };
 
-struct SceneGpuTexture {
+struct SceneGpuTextureMip {
   std::uint32_t width{0};
   std::uint32_t height{0};
   std::vector<std::uint8_t> rgba8;
+};
+
+struct SceneGpuTexture {
+  // Ordered source mip chain for one diagnostic texture. No GPU-generated
+  // levels are admitted: each level has passed the CPU decoder and plan
+  // validation before an SDL backend sees it.
+  std::vector<SceneGpuTextureMip> mips;
 };
 
 struct SceneGpuMesh {

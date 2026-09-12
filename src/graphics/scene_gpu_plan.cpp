@@ -16,6 +16,7 @@ constexpr float depth_minimum = 0.05F;
 constexpr float depth_span = 0.9F;
 constexpr float minimum_extent = 1.0e-6F;
 constexpr std::size_t maximum_gpu_draws = 4'000'000;
+constexpr std::size_t maximum_gpu_texture_mips = 16;
 
 [[nodiscard]] bool fits_rgba8_extent(std::uint32_t width,
                                      std::uint32_t height) {
@@ -42,10 +43,19 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
     throw std::invalid_argument("scene GPU plan has an invalid contract");
   }
   for (const auto &texture : plan.textures) {
-    if (!fits_rgba8_extent(texture.width, texture.height) ||
-        texture.rgba8.size() !=
-            static_cast<std::size_t>(texture.width) * texture.height * 4U) {
-      throw std::invalid_argument("scene GPU texture storage is inconsistent");
+    if (texture.mips.empty() || texture.mips.size() > maximum_gpu_texture_mips)
+      throw std::invalid_argument("scene GPU texture mip chain is invalid");
+    auto expected_width = texture.mips.front().width;
+    auto expected_height = texture.mips.front().height;
+    for (const auto &mip : texture.mips) {
+      if (!fits_rgba8_extent(mip.width, mip.height) ||
+          mip.width != expected_width || mip.height != expected_height ||
+          mip.rgba8.size() !=
+              static_cast<std::size_t>(mip.width) * mip.height * 4U) {
+        throw std::invalid_argument("scene GPU texture mip storage is inconsistent");
+      }
+      expected_width = std::max(1U, expected_width / 2U);
+      expected_height = std::max(1U, expected_height / 2U);
     }
   }
   for (const auto &mesh : plan.meshes) {
@@ -214,11 +224,14 @@ SceneGpuPlan prepare_scene_gpu_plan(const SceneRenderAsset &asset) {
   SceneGpuPlan result;
   result.textures.reserve(asset.textures.size());
   for (const auto &texture : asset.textures) {
-    result.textures.push_back({
-        .width = texture.mip_zero.width,
-        .height = texture.mip_zero.height,
-        .rgba8 = texture.mip_zero.pixels,
-    });
+    SceneGpuTexture gpu_texture;
+    gpu_texture.mips.reserve(texture.mips.size());
+    for (const auto &mip : texture.mips) {
+      gpu_texture.mips.push_back({.width = mip.width,
+                                  .height = mip.height,
+                                  .rgba8 = mip.pixels});
+    }
+    result.textures.push_back(std::move(gpu_texture));
   }
   result.meshes.reserve(asset.meshes.size());
   for (const auto &mesh : asset.meshes) {

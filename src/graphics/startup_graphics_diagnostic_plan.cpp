@@ -34,8 +34,13 @@ SceneGpuPlan make_startup_graphics_diagnostic_plan(
       throw std::invalid_argument("startup diagnostic resource identity disagrees");
     if (!texture_by_catalog.emplace(resource.catalog_image_index, result.textures.size()).second)
       throw std::invalid_argument("startup diagnostic texture identity is duplicated");
-    result.textures.push_back({image.mip_zero.width, image.mip_zero.height,
-                               image.mip_zero.pixels});
+    // Startup graphics remain a separate mip-zero diagnostic path. Do not
+    // infer a chain here; scene TEX ownership is the only path retaining one.
+    result.textures.push_back({
+        .mips = {{.width = image.mip_zero.width,
+                  .height = image.mip_zero.height,
+                  .rgba8 = image.mip_zero.pixels}},
+    });
   }
   for (const auto &submission : expanded.submissions()) {
     if (submission.resource_index >= expanded.resources().size())

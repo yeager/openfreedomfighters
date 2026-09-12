@@ -40,8 +40,11 @@ map, or child transforms.
 
 The asset includes line lists, untextured meshes, and transparent geometry. The
 diagnostic single-mesh preview's selection rules do not apply to scene assets.
-Textures are decoded to owned RGBA8 mip-zero images once per referenced TEX
-entry. Mesh vertices, indexes, and draw ranges are copied into owned storage.
+Each source TEX mip is decoded once to an owned RGBA8 mip chain per referenced
+TEX entry. Mesh vertices, indexes, and draw ranges are copied into owned
+storage. The chain is retained and uploaded only by the source-only diagnostic
+scene path; it does not establish retail material selection, LOD choice, or
+faithful original rendering.
 
 `load_scene_render_asset` applies this contract to any supplied scene archive.
 It requires the paired PRM, TEX, and GMS resources plus both RMC and RMI layers,
@@ -95,12 +98,13 @@ validation, then rejects invalid vertex indexes and non-finite vertex attributes
 source transforms, map transforms, or extents. Checked cumulative budgets cap a
 scene at 16 map layers, 131,072 resolution records, 16,000,000 deduplicated
 vertices, 32,000,000 deduplicated indexes, 4,000,000 deduplicated draw ranges,
-and 1 GiB of decoded mip-zero RGBA data. These are defensive implementation
+16 source mip levels per texture, and 1 GiB of decoded RGBA data across every
+retained mip. These are defensive implementation
 limits, not claims about the file format.
 
 `validate_scene_render_asset` independently repeats the GPU-boundary invariants
 for an already owned asset. It checks all mesh, texture, resolution, and instance
-references; exact RGBA8 storage; finite attributes and transforms; topology-aware
+references; exact ordered, halving RGBA8 mip-chain storage; finite attributes and transforms; topology-aware
 contiguous draw ranges; vertex indexes; provenance links; and the same cumulative
 budgets. Upload code must call this validator even when the asset originally came
 from the builder, because future cache and tooling paths may construct or mutate
@@ -158,9 +162,9 @@ uniform generation testable identically on Linux, macOS, and Windows.
 
 ## SDL runtime integration contract
 
-The next SDL GPU step is to consume the validated plan as a multi-instance
+The SDL GPU runtime consumes the validated plan as a multi-instance
 **source-only diagnostic scene**. The runtime may upload each deduplicated mesh
-and texture once, bind the shared white fallback for untextured commands, and
+and every validated source mip of each texture once, bind the shared white fallback for untextured commands, and
 submit every planned command in its established diagnostic schedule. It must use
 the plan's global fit and per-instance source diagnostic positions unchanged;
 RMC/RMI transforms must remain retained evidence and must not influence GPU

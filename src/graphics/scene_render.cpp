@@ -23,6 +23,7 @@ constexpr std::size_t maximum_scene_vertices = 16'000'000;
 constexpr std::size_t maximum_scene_indices = 32'000'000;
 constexpr std::size_t maximum_scene_draws = 4'000'000;
 constexpr std::size_t maximum_scene_rgba_bytes = 1024U * 1024U * 1024U;
+constexpr std::size_t maximum_scene_texture_mips = 16;
 constexpr std::size_t maximum_scene_archives = 4096;
 constexpr std::size_t maximum_scene_directory_entries = 1024;
 constexpr std::array required_scene_extensions{".prm", ".tex", ".gms", ".rmc",
@@ -250,19 +251,26 @@ void validate_scene_render_asset(const SceneRenderAsset &asset) {
   std::size_t total_draws = 0;
   std::size_t total_rgba_bytes = 0;
   for (const auto &texture : asset.textures) {
-    if (!fits_rgba8_extent(texture.mip_zero.width, texture.mip_zero.height)) {
-      throw std::invalid_argument(
-          "scene render texture has invalid dimensions");
+    if (texture.mips.empty() || texture.mips.size() > maximum_scene_texture_mips)
+      throw std::invalid_argument("scene render texture has an invalid mip chain");
+    auto expected_width = texture.mips.front().width;
+    auto expected_height = texture.mips.front().height;
+    for (const auto &mip : texture.mips) {
+      if (!fits_rgba8_extent(mip.width, mip.height) ||
+          mip.width != expected_width || mip.height != expected_height) {
+        throw std::invalid_argument("scene render texture has invalid mip dimensions");
+      }
+      const auto expected_bytes = static_cast<std::size_t>(mip.width) *
+                                  mip.height * 4U;
+      if (mip.pixels.size() != expected_bytes) {
+        throw std::invalid_argument(
+            "scene render texture has inconsistent mip RGBA storage");
+      }
+      add_bounded(total_rgba_bytes, expected_bytes, maximum_scene_rgba_bytes,
+                  "scene render asset exceeds decoded texture budget");
+      expected_width = std::max(1U, expected_width / 2U);
+      expected_height = std::max(1U, expected_height / 2U);
     }
-    const auto expected_bytes =
-        static_cast<std::size_t>(texture.mip_zero.width) *
-        texture.mip_zero.height * 4U;
-    if (texture.mip_zero.pixels.size() != expected_bytes) {
-      throw std::invalid_argument(
-          "scene render texture has inconsistent RGBA storage");
-    }
-    add_bounded(total_rgba_bytes, expected_bytes, maximum_scene_rgba_bytes,
-                "scene render asset exceeds decoded texture budget");
   }
 
   for (const auto &mesh : asset.meshes) {
@@ -455,15 +463,21 @@ SceneRenderAsset build_scene_render_asset(
           const auto image_index = *binding.texture_image_index;
           auto texture_lookup = texture_by_image.find(image_index);
           if (texture_lookup == texture_by_image.end()) {
-            auto decoded = decode_texture_mip(textures[image_index], 0);
-            add_bounded(total_rgba_bytes, decoded.pixels.size(),
-                        maximum_scene_rgba_bytes,
-                        "scene render asset exceeds decoded texture budget");
+            std::vector<RgbaImage> decoded_mips;
+            decoded_mips.reserve(textures[image_index].mips.size());
+            for (std::size_t mip_index = 0;
+                 mip_index < textures[image_index].mips.size(); ++mip_index) {
+              auto decoded = decode_texture_mip(textures[image_index], mip_index);
+              add_bounded(total_rgba_bytes, decoded.pixels.size(),
+                          maximum_scene_rgba_bytes,
+                          "scene render asset exceeds decoded texture budget");
+              decoded_mips.push_back(std::move(decoded));
+            }
             texture_index = result.textures.size();
             result.textures.push_back({
                 .texture_image_index = image_index,
                 .texture_id = textures[image_index].id,
-                .mip_zero = std::move(decoded),
+                .mips = std::move(decoded_mips),
             });
             texture_by_image.emplace(image_index, *texture_index);
           } else {

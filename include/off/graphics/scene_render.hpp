@@ -29,7 +29,10 @@ struct SceneRenderResolution {
 struct SceneRenderTexture {
   std::size_t texture_image_index{0};
   std::uint32_t texture_id{0};
-  RgbaImage mip_zero;
+  // Every decoded source mip is retained in its declared order. This belongs
+  // exclusively to the source-only diagnostic scene path; it does not imply
+  // recovered original texture-selection or material behavior.
+  std::vector<RgbaImage> mips;
 };
 
 struct SceneRenderMesh {
