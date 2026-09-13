@@ -46,6 +46,15 @@ code reference from which a single phase-one callback can be identified. This
 is a negative result, not a fallback license to infer a callback. Dynamic,
 source-free lifecycle observation remains required.
 
+A subsequent static review of the owned executable confirms that MovieControl
+has separate initialization, setup, per-frame, and event-handling paths. The
+initialization and setup paths are both plausible early-lifecycle work, while
+the per-frame path is reached through the class's virtual interface. Static
+evidence does not establish which early path a global phase-one dispatcher
+selects, its call order, its successful-completion condition, or its failure
+effects. It therefore does not narrow the implementation boundary enough to
+replace the required lifecycle observations.
+
 ## Required private observation
 
 Use an isolated, owned installation to record a source-free lifecycle trace
