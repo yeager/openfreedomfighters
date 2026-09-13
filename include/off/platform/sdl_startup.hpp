@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/data/install.hpp"
+#include "off/platform/startup_preparation.hpp"
 
 #include <filesystem>
 #include <functional>
@@ -119,6 +120,7 @@ application_project_saves_directory() noexcept;
 [[nodiscard]] StartupPreflightResult
 run_sdl_startup_preflight(const std::filesystem::path &data_path,
                           const std::function<void()> &prepare_assets,
-                          std::string_view explicit_locale = {});
+                          std::string_view explicit_locale = {},
+                          StartupPreparationStageObserver observe_stage = {});
 
 } // namespace off::platform

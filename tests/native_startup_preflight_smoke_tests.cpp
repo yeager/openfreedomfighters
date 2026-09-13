@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -33,8 +34,12 @@ int main() {
         "fixture game-data root must be absent");
 
   bool prepared_assets = false;
+  std::vector<off::platform::StartupPreparationStage> stages;
   auto result = off::platform::run_sdl_startup_preflight(
-      missing_root, [&] { prepared_assets = true; }, "en");
+      missing_root, [&] { prepared_assets = true; }, "en",
+      [&](off::platform::StartupPreparationStage stage) {
+        stages.push_back(stage);
+      });
 
   check(result.outcome == off::platform::StartupPreflightOutcome::data_error,
         "missing root reports a data error");
@@ -50,6 +55,8 @@ int main() {
         "startup dialog is path-free and carries a stable support code");
   check(!prepared_assets,
         "asset preparation is not called after data verification fails");
+  check(stages == std::vector{off::platform::StartupPreparationStage::verifying_game_data},
+        "missing data reports only the initial verification boundary");
   check(!result.window, "failed preflight hands no window to the runtime");
   check(SDL_WasInit(0) == 0,
         "failed preflight destroys its temporary window and SDL session");

@@ -49,14 +49,17 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <string>
@@ -73,10 +76,44 @@ namespace {
 void usage(std::ostream &output) {
   output << "Usage: openfreedomfighters [--data PATH] [--mode original|modern] "
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
-            "[--screenshot FILE.bmp] [--locale TAG] "
+            "[--screenshot FILE.bmp] [--locale TAG] [--startup-progress-receipt FILE] "
             "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] "
             "[--probe-startup-boot] [--probe-startup-boot-profile] [--probe-startup-route-cold] [--probe-soundtrack] [--probe-localization] [--probe-movie-cuts] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
 }
+
+class StartupProgressReceipt final {
+public:
+  explicit StartupProgressReceipt(const std::filesystem::path &path)
+      : output_(path, std::ios::out | std::ios::trunc), started_(Clock::now()) {
+    if (!output_)
+      throw std::runtime_error("could not create startup progress receipt");
+  }
+  void record(std::string_view phase) noexcept {
+    try {
+      std::lock_guard lock{mutex_};
+      const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+          Clock::now() - started_);
+      output_ << "phase=" << phase << " elapsed_ms=" << elapsed.count() << '\n';
+      output_.flush();
+    } catch (...) {
+    }
+  }
+  void record(off::platform::StartupPreparationStage stage) noexcept {
+    switch (stage) {
+    case off::platform::StartupPreparationStage::verifying_game_data:
+      record("verify_initial"); break;
+    case off::platform::StartupPreparationStage::preparing_assets:
+      record("prepare_assets"); break;
+    case off::platform::StartupPreparationStage::reverifying_game_data:
+      record("verify_handoff"); break;
+    }
+  }
+private:
+  using Clock = std::chrono::steady_clock;
+  std::ofstream output_;
+  Clock::time_point started_;
+  std::mutex mutex_;
+};
 
 [[nodiscard]] off::data::AudioBankProfile inspect_verified_game_audio(
     const std::filesystem::path& root) {
@@ -1052,6 +1089,7 @@ int main(int argc, char **argv) {
   bool mode_specified = false;
   std::optional<std::filesystem::path> diagnostic_scene_archive;
   std::filesystem::path screenshot_path;
+  std::filesystem::path startup_progress_receipt_path;
   std::string locale;
   for (int index = 1; index < argc; ++index) {
     const std::string_view argument{argv[index]};
@@ -1108,6 +1146,8 @@ int main(int argc, char **argv) {
       probe_intro_named_global = true;
     } else if (argument == "--screenshot" && index + 1 < argc) {
       screenshot_path = argv[++index];
+    } else if (argument == "--startup-progress-receipt" && index + 1 < argc) {
+      startup_progress_receipt_path = argv[++index];
     } else if (argument == "--locale" && index + 1 < argc) {
       locale = argv[++index];
       if (locale.empty() || locale.size() > 35U) {
@@ -1178,7 +1218,7 @@ int main(int argc, char **argv) {
   if (probe_count != 0U &&
       (verify_only || diagnostic_renderer_requested || frame_limit != 0U ||
        show_graphics_menu || !screenshot_path.empty() || !locale.empty() ||
-       mode_specified)) {
+       mode_specified || !startup_progress_receipt_path.empty())) {
     std::cerr << "Source probes cannot be combined with runtime options.\n";
     usage(std::cerr);
     return 2;
@@ -1197,6 +1237,33 @@ int main(int argc, char **argv) {
                             : std::filesystem::current_path();
     if (!std::filesystem::is_directory(parent)) {
       std::cerr << "Screenshot output directory does not exist.\n";
+      return 2;
+    }
+  }
+  if (!startup_progress_receipt_path.empty()) {
+    if (verify_only || startup_progress_receipt_path.extension() != ".log") {
+      std::cerr << "Startup progress receipts require a normal runtime launch and a .log file.\n";
+      return 2;
+    }
+    if (std::filesystem::exists(startup_progress_receipt_path)) {
+      std::cerr << "Startup progress receipt already exists; refusing to overwrite it.\n";
+      return 2;
+    }
+    const auto parent = startup_progress_receipt_path.has_parent_path()
+                            ? startup_progress_receipt_path.parent_path()
+                            : std::filesystem::current_path();
+    if (!std::filesystem::is_directory(parent)) {
+      std::cerr << "Startup progress receipt directory does not exist.\n";
+      return 2;
+    }
+  }
+  std::shared_ptr<StartupProgressReceipt> startup_progress_receipt;
+  if (!startup_progress_receipt_path.empty()) {
+    try {
+      startup_progress_receipt =
+          std::make_shared<StartupProgressReceipt>(startup_progress_receipt_path);
+    } catch (const std::exception &error) {
+      std::cerr << "Could not start progress receipt: " << error.what() << '\n';
       return 2;
     }
   }
@@ -1516,7 +1583,18 @@ int main(int argc, char **argv) {
           ui_fonts = off::ui::load_retail_ui_fonts(data_path / "Scenes" /
                                                    "FF-StartUp.ZIP");
         },
-        locale);
+        locale,
+        startup_progress_receipt
+            ? [receipt = startup_progress_receipt](
+                  off::platform::StartupPreparationStage stage) {
+                receipt->record(stage);
+              }
+            : off::platform::StartupPreparationStageObserver{});
+    if (startup_progress_receipt)
+      startup_progress_receipt->record(
+          preflight.outcome == off::platform::StartupPreflightOutcome::ready
+              ? "preflight_ready"
+              : "preflight_not_ready");
     if (preflight.outcome ==
         off::platform::StartupPreflightOutcome::quit_requested)
       return 0;
@@ -1658,6 +1736,8 @@ int main(int argc, char **argv) {
     std::cout << "Canonical intro sound records: " << intro->sounds().size()
               << "; logical backend retained, owner preparation and playback "
                  "not activated.\n";
+  if (startup_progress_receipt)
+    startup_progress_receipt->record("gpu_runtime_started");
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       startup_window, mode, mode_specified,
       off::platform::application_graphics_settings_path(),
@@ -1667,6 +1747,8 @@ int main(int argc, char **argv) {
       nullptr,
       frame_limit, show_graphics_menu,
       screenshot_path, locale, diagnostic_startup_graphics);
+  if (startup_progress_receipt)
+    startup_progress_receipt->record("gpu_runtime_finished");
   if (!runtime.success) {
     std::cerr << "Native runtime failed: " << runtime.message << '\n';
     return 4;

@@ -21,6 +21,9 @@ enum class StartupPreparationOutcome {
 enum class StartupPreparationStage {
   verifying_game_data,
   preparing_assets,
+  // This is intentionally distinct from the initial verifier pass: source
+  // bytes may have changed while CPU preparation was running.
+  reverifying_game_data,
 };
 using StartupPreparationStageObserver =
     std::function<void(StartupPreparationStage)>;

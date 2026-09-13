@@ -370,7 +370,8 @@ void draw_data_error_backdrop(SDL_Window *window) {
 [[nodiscard]] StartupPreflightResult
 run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
                                const std::function<void()> &prepare_assets,
-                               std::string_view explicit_locale) {
+                               std::string_view explicit_locale,
+                               StartupPreparationStageObserver observe_stage) {
   if (!SDL_Init(SDL_INIT_VIDEO))
     return {.outcome = StartupPreflightOutcome::platform_error,
             .message =
@@ -429,6 +430,14 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
           prepare_assets, cancelled,
           [&](StartupPreparationStage stage) {
             preparation_stage.store(stage);
+            // This optional observer is diagnostic-only.  It sees coarse
+            // source-free orchestration boundaries and cannot affect startup.
+            if (observe_stage) {
+              try {
+                observe_stage(stage);
+              } catch (...) {
+              }
+            }
           },
           [&]() {
             return data::verify_install(
@@ -547,10 +556,12 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
 StartupPreflightResult
 run_sdl_startup_preflight(const std::filesystem::path &data_path,
                           const std::function<void()> &prepare_assets,
-                          std::string_view explicit_locale) {
+                          std::string_view explicit_locale,
+                          StartupPreparationStageObserver observe_stage) {
   try {
     return run_sdl_startup_preflight_impl(data_path, prepare_assets,
-                                          explicit_locale);
+                                          explicit_locale,
+                                          std::move(observe_stage));
   } catch (...) {
     return {.outcome = StartupPreflightOutcome::platform_error,
             .message = "Native startup encountered an unexpected error"};

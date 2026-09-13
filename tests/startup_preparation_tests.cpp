@@ -58,7 +58,7 @@ int main() {
         "failed handoff verification rejects prepared source state");
   check(stages == std::vector{StartupPreparationStage::verifying_game_data,
                               StartupPreparationStage::preparing_assets,
-                              StartupPreparationStage::verifying_game_data},
+                              StartupPreparationStage::reverifying_game_data},
         "handoff verification follows preparation before state admission");
   stages.clear();
   result = prepare_startup_cpu(

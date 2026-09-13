@@ -60,7 +60,7 @@ prepare_startup_cpu(const std::function<data::InstallVerification()> &verify,
   if (reverify) {
     try {
       if (observe_stage)
-        observe_stage(StartupPreparationStage::verifying_game_data);
+        observe_stage(StartupPreparationStage::reverifying_game_data);
       result.verification = reverify();
     } catch (const std::exception &error) {
       result.verification.error = data::InstallError::io_error;
