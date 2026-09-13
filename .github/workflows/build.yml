@@ -221,8 +221,22 @@ jobs:
           $env:PATH = "${{ github.workspace }}/zlib-install/bin;$env:PATH"
           $projectVersion = (Select-String -Path CMakeLists.txt -Pattern '^project\(OpenFreedomFighters VERSION ([^ ]+) LANGUAGES ' | ForEach-Object { $_.Matches[0].Groups[1].Value })
           if ([string]::IsNullOrWhiteSpace($projectVersion)) { throw 'CMake project version is missing' }
-          $versionOutput = & install-check/bin/openfreedomfighters.exe --version
-          if ($LASTEXITCODE -ne 0) { throw "installed executable --version failed with exit code $LASTEXITCODE" }
+          # Keep the install smoke diagnostic if a Windows runtime loader ever
+          # stalls before main.  A direct native invocation otherwise consumes
+          # the whole job timeout and hides the failing command.
+          $versionStdout = Join-Path (Get-Location) 'installed-version.stdout'
+          $versionStderr = Join-Path (Get-Location) 'installed-version.stderr'
+          $versionProcess = Start-Process -FilePath 'install-check/bin/openfreedomfighters.exe' `
+            -ArgumentList '--version' -RedirectStandardOutput $versionStdout `
+            -RedirectStandardError $versionStderr -PassThru
+          if (-not $versionProcess.WaitForExit(30000)) {
+            Stop-Process -Id $versionProcess.Id -Force
+            throw 'installed executable --version timed out after 30 seconds'
+          }
+          if ($versionProcess.ExitCode -ne 0) {
+            throw "installed executable --version failed with exit code $($versionProcess.ExitCode): $([System.IO.File]::ReadAllText($versionStderr))"
+          }
+          $versionOutput = [System.IO.File]::ReadAllText($versionStdout).TrimEnd("`r", "`n")
           if ($versionOutput -ne "OpenFreedomFighters $projectVersion") { throw "installed executable reported unexpected version: $versionOutput" }
           $missingDataRoot = Join-Path (Get-Location) 'install-check/absent-game-data'
           if (Test-Path -LiteralPath $missingDataRoot) { throw 'missing-data fixture root unexpectedly exists' }
