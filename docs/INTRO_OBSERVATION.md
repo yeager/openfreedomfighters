@@ -42,6 +42,15 @@ visual state before gameplay; it does not establish a scene count, an authored
 viewport, frame durations, transition semantics, or a playback order beyond
 the separately observed broad chronology.
 
+`tools/intro_visual_timeline_audit.py` is the private receipt boundary for a
+future repeat. An external observer compares its own isolated capture set and
+provides only a bounded order plus the categorical relation to the previous
+sample: initial, unchanged, or changed. The tool rejects all other fields and
+retains only the capture extent, count, and orders at which a visual change was
+observed. It does not open, copy, hash, or retain screenshots; it does not
+launch, attach to, or control an original process. Input and output must remain
+outside the repository, and an existing receipt is never overwritten.
+
 ## What it does not establish
 
 The sample does not identify the serialized sequence-player records, frame
