@@ -13,11 +13,15 @@ open a game file or executable, attach a debugger, or implement instrumentation.
 The raw JSON input has exactly two fields:
 
 - `format`, exactly `off.movie-control-observer-probe-plan.raw/v1`;
-- `probes`, exactly four objects with these slot/point relations:
+- `probes`, exactly eight objects with these slot/point relations:
   `{"slot": 0, "point": "global_phase_one_enter"}`,
   `{"slot": 1, "point": "candidate_enter"}`,
   `{"slot": 2, "point": "candidate_leave"}`, and
-  `{"slot": 3, "point": "global_phase_one_leave"}`.
+  `{"slot": 3, "point": "global_phase_one_leave"}`;
+  `{"slot": 4, "point": "event16_gate"}`,
+  `{"slot": 5, "point": "handoff_boundary"}`,
+  `{"slot": 6, "point": "player_activation"}`, and
+  `{"slot": 7, "point": "route_terminal"}`.
 
 The point labels are protocol positions only. They are not executable names,
 addresses, offsets, symbols, paths, locator rules, game strings, asset
@@ -29,6 +33,12 @@ in the canonical output.
 The canonical output changes only the format marker to
 `off.movie-control-observer-probe-plan/v1`; it retains the fixed probe list. The
 validator never creates target-specific information.
+
+The first four positions delimit phase-one candidate selection. The final four
+delimit the event-16-to-player route required for the runner's second
+structural record. All eight are opaque protocol positions, not executable
+names, selectors, locations, or instrumentation instructions. A canonical plan
+therefore declares every source-free boundary required by the two records.
 
 ## Private use
 

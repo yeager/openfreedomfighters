@@ -4,7 +4,7 @@
 This is a schema gate for a separately maintained private observer.  It does
 not locate a process, inspect a game installation, attach a debugger, or
 instrument an executable.  The plan intentionally carries no target details:
-it can only select the four fixed, opaque protocol points below.
+it can only select the fixed, opaque protocol points below.
 """
 
 from __future__ import annotations
@@ -30,6 +30,13 @@ PROTOCOL_POINTS = (
     "candidate_enter",
     "candidate_leave",
     "global_phase_one_leave",
+    # The collection runner also requires a source-free event-16-to-player
+    # route record. These positions are not executable targets or instructions
+    # for how an external observer reaches them.
+    "event16_gate",
+    "handoff_boundary",
+    "player_activation",
+    "route_terminal",
 )
 
 
@@ -52,7 +59,7 @@ def validate_probe_plan(raw: Any) -> dict[str, Any]:
         raise ValueError("unrecognized probe-plan format")
     probes = raw["probes"]
     if not isinstance(probes, list) or len(probes) != len(PROTOCOL_POINTS):
-        raise ValueError("probe plan must contain exactly four probes")
+        raise ValueError("probe plan must contain every fixed protocol probe")
     seen_slots: set[int] = set()
     canonical: list[dict[str, Any]] = []
     for probe in probes:

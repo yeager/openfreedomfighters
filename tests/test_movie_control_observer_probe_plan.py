@@ -24,6 +24,16 @@ def plan(**changes: object) -> dict[str, object]:
 
 
 class MovieControlObserverProbePlanTests(unittest.TestCase):
+    def test_protocol_covers_phase_one_and_event16_to_player_route(self) -> None:
+        self.assertEqual(
+            probe_plan.PROTOCOL_POINTS,
+            (
+                "global_phase_one_enter", "candidate_enter", "candidate_leave",
+                "global_phase_one_leave", "event16_gate", "handoff_boundary",
+                "player_activation", "route_terminal",
+            ),
+        )
+
     def test_accepts_only_the_fixed_opaque_protocol(self) -> None:
         self.assertEqual(
             probe_plan.validate_probe_plan(plan()),
@@ -35,12 +45,7 @@ class MovieControlObserverProbePlanTests(unittest.TestCase):
         )
 
     def test_canonicalizes_unordered_probes_and_rejects_bad_sets(self) -> None:
-        unordered = [
-            {"slot": 3, "point": "global_phase_one_leave"},
-            {"slot": 1, "point": "candidate_enter"},
-            {"slot": 0, "point": "global_phase_one_enter"},
-            {"slot": 2, "point": "candidate_leave"},
-        ]
+        unordered = list(reversed(plan()["probes"]))
         self.assertEqual(
             probe_plan.validate_probe_plan(plan(probes=unordered))["probes"],
             plan()["probes"],
