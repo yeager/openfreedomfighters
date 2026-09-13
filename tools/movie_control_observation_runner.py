@@ -235,18 +235,22 @@ def _validate_trace_relation(
     observation evidence and must not leave a misleading pair of files.
     """
     successful_candidates = _phase_one_success_candidates(phase_trace)
-    admitted_callbacks = {
+    admitted_callbacks = [
         event["callback_ordinal"]
         for event in dispatch_trace_record["events"]
         if event["event16_gate"] == "admitted"
         and event["movie_component_is_constructed"]
         and event["movie_owner_is_constructed_owner"]
         and event["movie_phase_one_completed"]
-    }
+    ]
     if len(successful_candidates) != 1:
         raise ValueError("phase-one record must contain exactly one completed constructed callback")
-    successful_callbacks = {successful_candidates[0]["callback_ordinal"]}
-    if admitted_callbacks != successful_callbacks:
+    # Keep the relation one-to-one.  A set would silently collapse duplicate
+    # admitted routes that share an observer-local ordinal, making an
+    # ambiguous observation appear to bind to one phase-one callback.
+    if len(admitted_callbacks) != 1:
+        raise ValueError("dispatch record must contain exactly one admitted constructed callback")
+    if admitted_callbacks[0] != successful_candidates[0]["callback_ordinal"]:
         raise ValueError("dispatch record is not tied to the completed phase-one callback")
 
 

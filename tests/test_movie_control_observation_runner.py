@@ -131,6 +131,19 @@ class MovieControlObservationRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exactly one"):
             runner._validate_trace_relation(duplicate, dispatch)
 
+    def test_collection_rejects_duplicate_admitted_routes_with_same_ordinal(self) -> None:
+        phase = phase_one_trace.sanitize_trace({
+            "format": phase_one_trace.INPUT_FORMAT, "events": [phase_one_event()],
+        })
+        duplicate = dispatch_trace.sanitize_trace({
+            "format": dispatch_trace.INPUT_FORMAT,
+            "events": [dispatch_event(), dispatch_event(observation_order=1)],
+        })
+        # Repeated admitted routes are not one phase-one-to-dispatch relation,
+        # even when their observer-local callback ordinals happen to match.
+        with self.assertRaisesRegex(ValueError, "exactly one admitted"):
+            runner._validate_trace_relation(phase, duplicate)
+
     def test_invalid_observer_deadline_is_rejected_before_start(self) -> None:
         with self.assertRaisesRegex(ValueError, "timeout"):
             runner.execute_observation(

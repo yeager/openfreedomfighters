@@ -65,7 +65,8 @@ five-minute bounded deadline by default (configurable from 1 to 1800 seconds),
 hides observer stdout and stderr, and never forwards raw records to a terminal.
 It then validates both records through the strict source-free schemas and
 requires their one completed constructed phase-one callback and admitted
-MovieControl route to share the same observer-local callback ordinal. It deletes
+MovieControl route to form a one-to-one relation through the same observer-local
+callback ordinal. It deletes
 the raw forms and retains only their sanitized structural forms in the private
 workspace. The same raw-record cleanup runs after observer failure, timeout, or
 schema/relation rejection. The supplied observer and canonical-plan entries
