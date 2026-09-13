@@ -158,6 +158,13 @@ int main() {
     check(duplicate && !RetailLocalizationSession::open(
         cache, packs, installation, parser, source_set, extract, {*duplicate}),
         "session rejects duplicate reviewed sites");
+    const auto duplicate_ordinal = ReviewedRetailLookupArtifact::reviewed(
+        reviewed_binding, {{"site.fixture.same-value-a", 1U},
+                           {"site.fixture.same-value-b", 1U}});
+    check(duplicate_ordinal && !RetailLocalizationSession::open(
+        cache, packs, installation, parser, source_set, extract,
+        {*duplicate_ordinal}),
+        "session rejects multiple opaque sites for one reviewed catalog value");
     auto wrong_binding = reviewed_binding;
     wrong_binding.source_set = "source.fixture.other";
     const auto mismatched = ReviewedRetailLookupArtifact::reviewed(

@@ -34,6 +34,7 @@ std::optional<RetailLookupSiteBindings> RetailLookupSiteBindings::admit(
     const std::vector<ReviewedRetailLookupArtifact> &artifacts) {
   if (!valid_source(source) || artifacts.empty()) return std::nullopt;
   RetailLookupSiteBindings result;
+  std::vector<std::uint64_t> admitted_ordinals;
   for (const auto &artifact : artifacts) {
     if (artifact.source_ != source || artifact.observations_.empty()) return std::nullopt;
     for (const auto &observation : artifact.observations_) {
@@ -41,6 +42,7 @@ std::optional<RetailLookupSiteBindings> RetailLookupSiteBindings::admit(
           observation.catalog_ordinal < source.first_ordinal ||
           observation.catalog_ordinal - source.first_ordinal >= source.ordinal_count)
         return std::nullopt;
+      admitted_ordinals.push_back(observation.catalog_ordinal);
       result.bindings_.push_back({observation.lookup_site,
           make_retail_string_id(source.source_set, observation.catalog_ordinal)});
     }
@@ -48,6 +50,9 @@ std::optional<RetailLookupSiteBindings> RetailLookupSiteBindings::admit(
   std::ranges::sort(result.bindings_, {}, &Entry::lookup_site);
   if (std::ranges::adjacent_find(result.bindings_, {}, &Entry::lookup_site) !=
       result.bindings_.end()) return std::nullopt;
+  std::ranges::sort(admitted_ordinals);
+  if (std::ranges::adjacent_find(admitted_ordinals) != admitted_ordinals.end())
+    return std::nullopt;
   return result.bindings_.empty() ? std::nullopt : std::optional<RetailLookupSiteBindings>{std::move(result)};
 }
 
