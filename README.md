@@ -334,6 +334,8 @@ menu transition. See
   coverage categories, then explicitly reports lifecycle, renderer, audio, and
   playback as not started. It stops before cut-command-session construction and
   never exposes source values, labels, handles, offsets, or payload data.
+  Its private, source-free aggregate receipt workflow is documented in
+  [INTRO_READINESS_RECEIPT.md](docs/INTRO_READINESS_RECEIPT.md).
 - `--probe-first-cut-initialization` extends that check through the two
   recovered first-cut initialization phases, using retained runtime identities
   from the owned installation while recording aggregate lifecycle evidence.
