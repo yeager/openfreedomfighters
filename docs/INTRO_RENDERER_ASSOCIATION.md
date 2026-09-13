@@ -59,8 +59,10 @@ that includes:
 
 If records are constructed from runtime state rather than serialized, recover
 that constructor, its consumers and ownership instead of inventing a payload
-layout. Dynamic relation maintenance and the separate outer-tail List
-associations also remain unfinished.
+layout. Dynamic relation maintenance remains unfinished. The separate
+outer-tail List associations now have a fail-closed, session-owned initial
+dispatch boundary; they are still not dynamic relation maintenance or a
+draw-record producer.
 
 Until those prerequisites are connected, normal startup must leave first-cut
 playback disconnected. A populated relation container, guessed record layout,

@@ -18,6 +18,7 @@ class NormalIntroSceneSession;
 }
 
 namespace off::platform {
+class NormalIntroSceneHostFrameBridge;
 
 struct RuntimeResult {
   bool success{false};
@@ -33,6 +34,14 @@ struct RuntimeResult {
 // ends before this borrow ends. The renderer intentionally cannot receive a
 // detached IntroRuntime pointer: its image catalog is dispatched through the
 // session that owns the reader and first-cut lifetime.
+//
+// `admitted_intro_frame` is the only normal-path pixel authority.  It is
+// produced by a NormalIntroSceneHost only after its lifecycle, event, camera,
+// view and picture-frame gates have admitted a frame.  The retained session
+// remains separate: it owns the authored images uploaded by the renderer.
+// A null bridge is the normal current state and deliberately produces a
+// clear-only world pass.  The explicit diagnostic snapshot is a separate
+// command and cannot be combined with a host-admitted frame.
 [[nodiscard]] RuntimeResult
 run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     bool mode_explicitly_requested,
@@ -43,6 +52,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     const ui::RetailUiTextureSet &ui_textures,
                     const graphics::NormalIntroSceneSession *intro_session,
                     const graphics::IntroPreviewSnapshot *intro_preview_diagnostic,
+                    const NormalIntroSceneHostFrameBridge *admitted_intro_frame = nullptr,
                     std::size_t frame_limit = 0,
                     bool show_graphics_menu = false,
                     const std::filesystem::path &screenshot_path = {},

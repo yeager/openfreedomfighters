@@ -4,6 +4,7 @@
 #include <iostream>
 #include <optional>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 
 namespace {
@@ -78,6 +79,8 @@ int main() {
 
   auto host = admitted_host();
   auto bridge = platform::NormalIntroSceneHostFrameBridge::bind(host);
+  static_assert(!std::is_copy_constructible_v<platform::NormalIntroSceneHostFrameBridge>);
+  static_assert(!std::is_copy_assignable_v<platform::NormalIntroSceneHostFrameBridge>);
   check(bridge.draws().size() == 1 && bridge.draws()[0].catalog_image_index == 4,
         "admitted host forwards only its assembled source-backed draw");
   std::cout << "normal intro scene host frame bridge tests passed\n";

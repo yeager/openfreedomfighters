@@ -1664,6 +1664,7 @@ int main(int argc, char **argv) {
       scene ? &*scene : nullptr, *startup_graphics,
       ui_fonts, ui_textures, intro_session.get(),
       intro_legal_picture_preflight ? &*intro_legal_picture_preflight : nullptr,
+      nullptr,
       frame_limit, show_graphics_menu,
       screenshot_path, locale, diagnostic_startup_graphics);
   if (!runtime.success) {

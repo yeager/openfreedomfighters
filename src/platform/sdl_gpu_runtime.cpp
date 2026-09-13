@@ -7,6 +7,7 @@
 #include "off/platform/sdl_intro_renderer.hpp"
 #include "off/platform/sdl_startup_picture_executor.hpp"
 #include "off/platform/intro_preview_diagnostic.hpp"
+#include "off/platform/normal_intro_scene_host_frame_bridge.hpp"
 #include "off/platform/sdl_locale.hpp"
 #include "off/platform/sdl_menu_gamepad.hpp"
 #include "off/platform/sdl_menu_keyboard.hpp"
@@ -1243,6 +1244,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     const ui::RetailUiTextureSet &ui_textures,
                     const graphics::NormalIntroSceneSession *intro_session,
                     const graphics::IntroPreviewSnapshot *intro_preview_diagnostic,
+                    const NormalIntroSceneHostFrameBridge *admitted_intro_frame,
                     std::size_t frame_limit, bool show_graphics_menu,
                     const std::filesystem::path &screenshot_path,
                     std::string_view explicit_locale,
@@ -1258,6 +1260,12 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     return {.success = false,
             .message = "Retained intro session has not reached its source-backed reader boundary"};
   }
+  if (admitted_intro_frame != nullptr && intro_session == nullptr)
+    return {.success = false,
+            .message = "Normal intro frame admission requires a retained intro session"};
+  if (admitted_intro_frame != nullptr && intro_preview_diagnostic != nullptr)
+    return {.success = false,
+            .message = "Normal intro frame admission cannot use a diagnostic snapshot"};
   const graphics::IntroRuntime *const intro =
       intro_session != nullptr ? std::addressof(intro_session->runtime()) : nullptr;
   try {
@@ -1783,6 +1791,23 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         break;
       }
     }
+    // Normal rendering receives no loader-derived or diagnostic fallback.
+    // Only a frame already admitted by the normal scene host may prepare a
+    // draw; without that authority the world pass below stays clear-only.
+    std::unique_ptr<SdlIntroFrame> admitted_intro_host_frame;
+    if (admitted_intro_frame != nullptr) {
+      try {
+        admitted_intro_host_frame = admitted_intro_frame->prepare(*gpu_intro, command);
+      } catch (const std::exception &error) {
+        result = {.success = false,
+                  .message = std::string("normal intro host frame preparation failed: ") +
+                             error.what()};
+        SDL_SubmitGPUCommandBuffer(command);
+        SDL_WaitForGPUIdle(device);
+        release_overlay_transfers();
+        break;
+      }
+    }
     // Modern mode remains spatial-only until a renderer binds and submits a
     // complete temporal resolve pass.  In particular, do not acquire history,
     // allocate vector/history targets, or jitter this scene's projection:
@@ -1976,6 +2001,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         }
       if (diagnostic_intro_frame != nullptr)
         diagnostic_intro_frame->draw(command, pass);
+      if (admitted_intro_host_frame != nullptr)
+        admitted_intro_host_frame->draw(command, pass);
       SDL_EndGPURenderPass(pass);
 
       if (temporal_inputs) {
@@ -2269,7 +2296,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     if (overlay_transfer != nullptr) {
       SDL_WaitForGPUIdle(device);
     }
-    if (diagnostic_intro_frame != nullptr)
+    if (diagnostic_intro_frame != nullptr || admitted_intro_host_frame != nullptr)
       SDL_WaitForGPUIdle(device);
     release_overlay_transfers();
     ++frames;

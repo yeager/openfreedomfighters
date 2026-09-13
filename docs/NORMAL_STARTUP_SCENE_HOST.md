@@ -15,9 +15,14 @@ section. The remaining concrete operations must come from its caller:
 allocation diagnostic-state selection/restoration, List associations, camera,
 scene and saved-resource operations. Reader callback routing
 no longer lives in `main`. `NormalIntroSceneHost` implements the later strict
-ordering state machine described here, but is not yet connected to that session
-or SDL. It prevents a shortcut that creates an audio device or a draw call
-during loading and then incorrectly reports an active intro.
+ordering state machine described here. Its admitted frame can reach the SDL
+runtime only through `NormalIntroSceneHostFrameBridge`; this is a renderer
+hand-off, not host wiring. Normal startup does not construct a host or provide
+that bridge, so its world pass remains clear-only. The retained
+`NormalIntroSceneSession` separately owns the authored images uploaded by SDL;
+a bridge cannot replace that ownership with a snapshot or detached runtime.
+This prevents a shortcut that creates an audio device or a draw call during
+loading and then incorrectly reports an active intro.
 
 Normal startup currently stops after preparing the cold first-cut command
 session. It does not call the session's loader-tail transition until those
@@ -123,7 +128,12 @@ the following stages exactly once, with real services at every boundary:
 3. Route the selected first-cut camera and pass the live camera/view evidence
    through `FirstCutViewAdmissionGate`.
 4. Only after a view is admitted, prepare a source-backed first-cut picture
-   frame and submit it to `SdlIntroRenderer`.
+   frame. `NormalIntroSceneHostFrameBridge` is the sole normal GPU authority:
+   it validates that the host is still at `frame_assembled`, then prepares that
+   frame with the `SdlIntroRenderer` whose images remain owned by the retained
+   session. A null bridge produces no world draw. The explicit diagnostic
+   snapshot is mutually exclusive with this path and cannot be used as a
+   fallback.
 5. In the same admitted ordinary-frame stage, perform the two sound receives,
    ordinary component update, position/bounds update, optional renderer
    traversal, and prepared-record sound processing in the documented order.
@@ -192,12 +202,13 @@ startup: it neither refreshes nor dispatches the manager nor supplies receiver
 operations, lifecycle services, or cutscene playback.
 
 Nor is there a concrete normal-host lifecycle table for the receiver. The
-existing `NormalIntroSceneHost` and its factory are an inert future-host model:
-they require caller-owned lifecycle callbacks and caller-provided first-cut
-phase-one/phase-two services. The normal executable does not create that host,
-does not bind the MovieControl phase-two external services, and does not enter
-the global component lifecycle. Supplying any of those from the cold loader
-path would invent an event tick, service readiness, or target resolution.
+existing `NormalIntroSceneHost` and its factory still require caller-owned
+lifecycle callbacks and caller-provided first-cut phase-one/phase-two services.
+Their completed frame endpoint is wired to SDL through the checked bridge, but
+the normal executable does not create that host, bind the MovieControl
+phase-two external services, or enter the global component lifecycle. Supplying
+any of those from the cold loader path would invent an event tick, service
+readiness, or target resolution.
 
 The smallest remaining real host boundary is therefore one admitted ordinary
 scene-frame service that, after the future recovered phase-one/global lifecycle
