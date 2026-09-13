@@ -707,16 +707,22 @@ int main() {
   check(main_package.cut_identifier() == main_cut_identifier &&
             main_package.package_identifier() == main_package_identifier,
         "MovieCut main package retains caller-selected identifiers");
-  off::runtime::MovieCutMainPackageSource::validate_checked(
+  const auto no_animation_capabilities =
+      off::runtime::MovieCutMainPackageSource::validate_checked(
       movie_cut_root, main_cut_identifier, main_package_identifier);
+  check(no_animation_capabilities.static_scene_graph &&
+            no_animation_capabilities.texture_resources &&
+            no_animation_capabilities.sound_definitions &&
+            !no_animation_capabilities.animation_resources,
+        "MovieCut main validation reports only validated static capabilities");
 
   auto malformed_main_members = main_members;
   malformed_main_members[2].second = {std::byte{1}};
   write_package_zip(movie_cut_main_archive, malformed_main_members);
   bool rejected_main_buf = false;
   try {
-    off::runtime::MovieCutMainPackageSource::validate_checked(
-        movie_cut_root, main_cut_identifier, main_package_identifier);
+    static_cast<void>(off::runtime::MovieCutMainPackageSource::validate_checked(
+        movie_cut_root, main_cut_identifier, main_package_identifier));
   } catch (const std::runtime_error &) {
     rejected_main_buf = true;
   }
@@ -729,6 +735,11 @@ int main() {
   write_package_zip(movie_cut_main_archive, main_members);
   static_cast<void>(off::runtime::MovieCutMainPackageSource::prepare_checked(
       movie_cut_root, main_cut_identifier, main_package_identifier));
+  const auto animation_capabilities =
+      off::runtime::MovieCutMainPackageSource::validate_checked(
+          movie_cut_root, main_cut_identifier, main_package_identifier);
+  check(animation_capabilities.animation_resources,
+        "MovieCut main validation reports a checked animation member");
 
   bool rejected_main_package = false;
   try {

@@ -376,6 +376,8 @@ void write_movie_cut_probe(const std::filesystem::path& root,
   if (!std::filesystem::is_directory(movie_root, error) || error)
     throw std::runtime_error("MovieCuts directory is unavailable");
   std::size_t cut_directories{}, loader_packages{}, main_packages{}, other_packages{};
+  std::size_t static_scene_graph_packages{}, texture_resource_packages{},
+      sound_definition_packages{}, animation_resource_packages{};
   for (const auto& entry : std::filesystem::directory_iterator(movie_root, error)) {
     if (error) throw std::runtime_error("MovieCuts directory enumeration failed");
     if (!entry.is_directory() || entry.is_symlink()) continue;
@@ -393,8 +395,13 @@ void write_movie_cut_probe(const std::filesystem::path& root,
     const auto main_name = cut + "_MAIN";
     const auto main = entry.path() / (main_name + ".ZIP");
     if (std::filesystem::is_regular_file(main, error) && !error) {
-      off::runtime::MovieCutMainPackageSource::validate_checked(root, cut,
-                                                                 main_name);
+      const auto capabilities =
+          off::runtime::MovieCutMainPackageSource::validate_checked(root, cut,
+                                                                     main_name);
+      static_scene_graph_packages += capabilities.static_scene_graph ? 1U : 0U;
+      texture_resource_packages += capabilities.texture_resources ? 1U : 0U;
+      sound_definition_packages += capabilities.sound_definitions ? 1U : 0U;
+      animation_resource_packages += capabilities.animation_resources ? 1U : 0U;
       ++main_packages;
     }
     for (const auto& file : std::filesystem::directory_iterator(entry.path(), error)) {
@@ -412,6 +419,10 @@ void write_movie_cut_probe(const std::filesystem::path& root,
          << "movie-cut-verified-loader-packages=" << loader_packages << '\n'
          << "movie-cut-verified-main-packages=" << main_packages << '\n'
          << "movie-cut-other-packages=" << other_packages << '\n'
+         << "movie-cut-static-scene-graph-packages=" << static_scene_graph_packages << '\n'
+         << "movie-cut-texture-resource-packages=" << texture_resource_packages << '\n'
+         << "movie-cut-sound-definition-packages=" << sound_definition_packages << '\n'
+         << "movie-cut-animation-resource-packages=" << animation_resource_packages << '\n'
          << "movie-cut-routing=unavailable\n"
          << "movie-cut-playback=unavailable\n";
 }

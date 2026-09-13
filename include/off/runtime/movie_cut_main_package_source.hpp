@@ -109,6 +109,19 @@ private:
   std::shared_ptr<const void> archive_, zgf_, gms_, support_, raw_sources_;
 };
 
+// Aggregate member capabilities from one already validated MovieCut main
+// archive. These are package-format facts only; they do not imply that any
+// resource is decodable by a renderer, selected by a cut, or playable.
+struct MovieCutMainPackageCapabilities final {
+  bool static_scene_graph{};
+  bool texture_resources{};
+  bool sound_definitions{};
+  bool animation_resources{};
+
+  [[nodiscard]] bool operator==(const MovieCutMainPackageCapabilities &) const =
+      default;
+};
+
 class MovieCutMainPackageSource final {
 public:
   [[nodiscard]] static MovieCutMainPackage prepare_checked(
@@ -124,23 +137,30 @@ public:
   // core-resource parsing, and GMS/BUF cross-check, but does not inflate and
   // retain opaque members which the probe neither inspects nor exposes.
   // This is validation only: it cannot select, load, or play a cut.
-  static void validate_checked(const std::filesystem::path &data_root,
-                               std::string_view cut_identifier,
-                               std::string_view package_identifier) {
+  [[nodiscard]] static MovieCutMainPackageCapabilities validate_checked(
+      const std::filesystem::path &data_root, std::string_view cut_identifier,
+      std::string_view package_identifier) {
+    MovieCutMainPackageCapabilities capabilities;
     static_cast<void>(prepare_checked_impl(data_root, cut_identifier,
-                                            package_identifier, false));
+                                            package_identifier, false,
+                                            &capabilities));
+    return capabilities;
   }
 
 private:
   [[nodiscard]] static std::optional<MovieCutMainPackage> prepare_checked_impl(
       const std::filesystem::path &data_root, std::string_view cut_identifier,
-      std::string_view package_identifier, bool retain_opaque_sources) {
-    if (!detail::movie_cut_safe_identifier(cut_identifier) ||
-        !detail::movie_cut_safe_identifier(package_identifier)) {
-      throw std::runtime_error("MovieCut main package identifier is invalid");
+      std::string_view package_identifier, bool retain_opaque_sources,
+      MovieCutMainPackageCapabilities *capabilities = nullptr) {
+    if (!retain_opaque_sources) {
+      if (capabilities == nullptr) {
+        throw std::runtime_error("MovieCut validation requires capabilities");
+      }
     }
-    if (package_identifier != std::string(cut_identifier) + "_MAIN") {
-      throw std::runtime_error("MovieCut main package name is non-canonical");
+    if (!detail::movie_cut_safe_identifier(cut_identifier) ||
+        !detail::movie_cut_safe_identifier(package_identifier) ||
+        package_identifier != std::string(cut_identifier) + "_MAIN") {
+      throw std::runtime_error("MovieCut main package identifier is invalid");
     }
     const auto root = detail::movie_cut_canonical_data_root(data_root);
     auto owner = std::make_shared<detail::MovieCutMainPackageOwner>(
@@ -154,7 +174,6 @@ private:
         ".ZGF", ".SUP", ".BUF", ".GMS", ".TEX", ".SND",
         ".LOC", ".OCT", ".SGP", ".RMC", ".RMI", ".PRM"};
     constexpr std::string_view optional_animation = ".ANM";
-
     const auto exact_member = [&](std::string_view extension) -> const data::ZipEntry & {
       const std::string expected = prefix + std::string(extension);
       const auto count = static_cast<std::size_t>(std::count_if(
@@ -166,7 +185,6 @@ private:
       }
       return *entry;
     };
-
     const auto expected_count = static_cast<std::size_t>(
         std::count_if(owner->archive.entries().begin(), owner->archive.entries().end(),
                       [&](const data::ZipEntry &entry) {
@@ -179,7 +197,6 @@ private:
     for (const auto extension : required_extensions) {
       static_cast<void>(exact_member(extension));
     }
-
     const auto &zgf_member = exact_member(".ZGF");
     const auto &gms_member = exact_member(".GMS");
     const auto &support_member = exact_member(".SUP");
@@ -189,16 +206,18 @@ private:
     owner->gms_bytes = owner->archive.read(gms_member);
     owner->gms = data::GmsImage::parse(
         data::PackedResource::parse(owner->gms_bytes));
-    // A MovieCut main package carries the same paired GMS/BUF source boundary
-    // as the verified scene archives.  Keep the bytes opaque after this
-    // structural cross-check, but do not let a malformed auxiliary block pass
-    // preparation merely because no MovieCut runtime reader is admitted yet.
     auto buf_bytes = owner->archive.read(exact_member(".BUF"));
     owner->gms.validate_buf(buf_bytes);
     owner->support_bytes = owner->archive.read(support_member);
     owner->support = data::SceneSupport::parse(owner->support_bytes);
     if (owner->support.dependencies().empty()) {
       throw std::runtime_error("MovieCut main package support has no dependencies");
+    }
+    if (capabilities != nullptr) {
+      *capabilities = {.static_scene_graph = true,
+                       .texture_resources = true,
+                       .sound_definitions = true,
+                       .animation_resources = expected_count == 1U};
     }
     if (!retain_opaque_sources) {
       return std::nullopt;
