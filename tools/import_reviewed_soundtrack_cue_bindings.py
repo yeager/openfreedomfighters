@@ -58,8 +58,19 @@ def build_receipt(evidence: Any, catalog_manifest: Any) -> dict[str, Any]:
     required = frozenset(("format", "method_version", "verified_data_manifest_fingerprint", "platform",
                           "architecture", "positive_repeat_count", "negative_run_count", "bindings",
                           "negative_candidate_count"))
-    if frozenset(evidence) != required or evidence["positive_repeat_count"] != 2 or evidence["negative_run_count"] != 1:
+    if (frozenset(evidence) != required or evidence["method_version"] != 1 or
+            evidence["positive_repeat_count"] != 2 or evidence["negative_run_count"] != 1 or
+            evidence["platform"] not in ("windows", "linux", "macos") or
+            evidence["architecture"] not in ("x86", "x86_64", "arm64") or
+            type(evidence["negative_candidate_count"]) is not int or
+            evidence["negative_candidate_count"] < 1):
         raise ValueError("evidence has an unsupported review shape")
+    fingerprint = evidence["verified_data_manifest_fingerprint"]
+    if (not isinstance(fingerprint, str) or len(fingerprint) != 64 or
+            any(c not in "0123456789abcdef" for c in fingerprint)):
+        raise ValueError("evidence has an invalid installation fingerprint")
+    if not isinstance(evidence["bindings"], list):
+        raise ValueError("evidence bindings must be an array")
     catalog = _catalog(catalog_manifest)
     entries: list[dict[str, Any]] = []
     tokens: set[int] = set()
@@ -76,7 +87,7 @@ def build_receipt(evidence: Any, catalog_manifest: Any) -> dict[str, Any]:
                         "expected_sha256": catalog[(ordinal, format_name)]})
     if not entries:
         raise ValueError("evidence contains no reviewed bindings")
-    return {"format": OUTPUT_FORMAT, "verified_data_manifest_fingerprint": evidence["verified_data_manifest_fingerprint"],
+    return {"format": OUTPUT_FORMAT, "verified_data_manifest_fingerprint": fingerprint,
             "bindings": entries}
 
 
