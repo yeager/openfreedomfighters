@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import sys
+import tempfile
 import unittest
 
 
@@ -90,6 +91,22 @@ class MovieControlCutsceneDispatchRepeatPairTests(unittest.TestCase):
         specimen["events"][0]["address"] = 1
         with self.assertRaises(ValueError):
             pair.sanitize_repeat_pair(specimen, sanitized(event()))
+
+    def test_cli_rejects_parent_symlink_without_opening_its_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            private = pathlib.Path(directory)
+            target = private / "target"
+            target.mkdir()
+            alias = private / "alias"
+            alias.symlink_to(target.name, target_is_directory=True)
+            old_argv = sys.argv
+            try:
+                sys.argv = ["pair", str(alias / "first.json"),
+                            str(private / "second.json"), str(private / "output.json")]
+                self.assertEqual(pair.main(), 1)
+            finally:
+                sys.argv = old_argv
+            self.assertTrue(target.exists())
 
 
 if __name__ == "__main__":

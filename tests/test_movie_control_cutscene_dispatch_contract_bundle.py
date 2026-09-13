@@ -113,6 +113,17 @@ class MovieControlCutsceneDispatchContractBundleTests(unittest.TestCase):
                 self.assertEqual(bundle.main(), 1)
             finally:
                 sys.argv = old_argv
+            target = private / "target"
+            target.mkdir()
+            alias = private / "alias"
+            alias.symlink_to(target.name, target_is_directory=True)
+            old_argv = sys.argv
+            try:
+                sys.argv = ["bundle", str(alias / "success.json"), str(failure_path), str(private / "second-bundle.json")]
+                self.assertEqual(bundle.main(), 1)
+            finally:
+                sys.argv = old_argv
+            self.assertTrue(target.exists())
 
 
 if __name__ == "__main__":

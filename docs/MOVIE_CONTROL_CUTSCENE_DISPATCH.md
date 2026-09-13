@@ -92,6 +92,10 @@ handoff/delivery/activation state, outcome, and external-service state. The
 trace must also reach one terminal boundary: either a started player or an
 explicit failed event, handoff, or activation boundary.
 
+The preceding dispatch-trace sanitizer uses the same private bounded no-follow
+regular-file boundary; it never follows a parent symlink while accepting one
+observer record.
+
 Run this gate separately for the successful route and for each observed failure
 route. It establishes repeatability only; it does not turn an observation into
 a native integration contract or bypass normal startup's fail-closed gate.
@@ -102,7 +106,10 @@ python3 tools/movie_control_cutscene_dispatch_repeat_pair.py \
 ```
 
 All three paths must be outside this repository, distinct, and the output must
-not already exist. Keep the pair result private with the two sanitized inputs.
+not already exist. The tool rejects parent traversal and every symlinked path
+component, accepts only bounded regular inputs through no-follow descriptors,
+and creates the result once with mode `0600`. Keep the pair result private with
+the two sanitized inputs.
 
 ## End-to-end lifecycle review gate
 
@@ -143,7 +150,9 @@ constructed source-bound failed boundary of the same callback with the same
 phase-completion and pre-status preconditions.
 It rejects duplicate or mismatched routes, raw inputs, extra fields, and a
 successful matching route in the failure trace. The private output is new and
-outside the repository; it remains review-only.
+outside the repository; it remains review-only. Inputs and output use the same
+bounded no-follow regular-file boundary as the repeat-pair gate, including
+rejection of parent traversal and symlinked path components.
 
 ```sh
 python3 tools/movie_control_cutscene_dispatch_contract_bundle.py \

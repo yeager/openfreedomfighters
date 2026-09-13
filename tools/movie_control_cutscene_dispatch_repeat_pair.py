@@ -18,6 +18,7 @@ import sys
 from typing import Any
 
 import movie_control_cutscene_dispatch_trace as dispatch_trace
+import private_structural_json
 
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -59,13 +60,6 @@ def sanitize_repeat_pair(first: Any, second: Any) -> dict[str, Any]:
     return {"format": OUTPUT_FORMAT, "events": first_trace["events"]}
 
 
-def _outside_repository(path: pathlib.Path, label: str) -> pathlib.Path:
-    resolved = path.resolve()
-    if resolved.is_relative_to(REPOSITORY_ROOT):
-        raise ValueError(f"{label} must be outside the repository")
-    return resolved
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("first", type=pathlib.Path,
@@ -76,19 +70,19 @@ def main() -> int:
                         help="new private repeat-pair JSON path")
     args = parser.parse_args()
     try:
-        first_path = _outside_repository(args.first, "first input")
-        second_path = _outside_repository(args.second, "second input")
-        output_path = _outside_repository(args.output, "output")
+        first_path = private_structural_json.outside_repository(
+            args.first, REPOSITORY_ROOT, "first input")
+        second_path = private_structural_json.outside_repository(
+            args.second, REPOSITORY_ROOT, "second input")
+        output_path = private_structural_json.outside_repository(
+            args.output, REPOSITORY_ROOT, "output")
         if len({first_path, second_path, output_path}) != 3:
             raise ValueError("inputs and output paths must differ")
-        if output_path.exists():
-            raise ValueError("refusing to overwrite an existing private trace")
         result = sanitize_repeat_pair(
-            json.loads(first_path.read_text(encoding="utf-8")),
-            json.loads(second_path.read_text(encoding="utf-8")),
+            private_structural_json.read_json(first_path, "first input"),
+            private_structural_json.read_json(second_path, "second input"),
         )
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+        private_structural_json.write_new_json(output_path, result, "private repeat-pair trace")
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

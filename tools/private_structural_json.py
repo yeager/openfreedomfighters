@@ -20,9 +20,22 @@ MAX_PRIVATE_JSON_BYTES = 4 * 1024 * 1024
 
 def outside_repository(path: pathlib.Path, repository_root: pathlib.Path,
                        label: str) -> pathlib.Path:
-    if path.is_symlink():
-        raise ValueError(f"{label} must not be a symlink")
-    resolved = path.resolve()
+    """Resolve a private path only after rejecting every symlink component.
+
+    Checking just the final entry is insufficient: an observer-result path can
+    cross a symlinked parent before the final ``O_NOFOLLOW`` open happens.
+    Rejecting ``..`` also keeps the pre-open component walk and the later
+    resolved path equivalent.
+    """
+    absolute = path if path.is_absolute() else pathlib.Path.cwd() / path
+    current = pathlib.Path(absolute.anchor)
+    for component in absolute.parts[1:]:
+        if component == "..":
+            raise ValueError(f"{label} must not contain parent traversal")
+        current /= component
+        if current.exists() and current.is_symlink():
+            raise ValueError(f"{label} must not traverse a symlink")
+    resolved = absolute.resolve()
     if resolved.is_relative_to(repository_root):
         raise ValueError(f"{label} must be outside the repository")
     return resolved

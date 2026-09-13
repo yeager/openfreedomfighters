@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import sys
+import tempfile
 import unittest
 
 
@@ -87,6 +88,21 @@ class MovieControlCutsceneDispatchTraceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             trace.sanitize_trace({"format": trace.INPUT_FORMAT,
                                   "events": [event(outcome="failure")]})
+
+    def test_cli_rejects_parent_symlink_without_opening_its_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            private = pathlib.Path(directory)
+            target = private / "target"
+            target.mkdir()
+            alias = private / "alias"
+            alias.symlink_to(target.name, target_is_directory=True)
+            old_argv = sys.argv
+            try:
+                sys.argv = ["trace", str(alias / "raw.json"), str(private / "sanitized.json")]
+                self.assertEqual(trace.main(), 1)
+            finally:
+                sys.argv = old_argv
+            self.assertTrue(target.exists())
 
 
 if __name__ == "__main__":
