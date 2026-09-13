@@ -16,6 +16,8 @@ constexpr std::array all_kinds{
     SceneResourceKind::sgp, SceneResourceKind::buf, SceneResourceKind::loc,
     SceneResourceKind::anm};
 
+constexpr std::size_t required_family_member_count = all_kinds.size() - 1U;
+
 [[nodiscard]] std::string normalized(std::string_view value) {
   std::string result;
   result.reserve(value.size());
@@ -69,7 +71,8 @@ ScenePackageFamily ScenePackageFamily::open_complete_checked(
   }
   require_regular_archive(archive_path);
   auto archive = std::make_shared<ZipArchive>(ZipArchive::open(archive_path));
-  if (archive->entries().size() != all_kinds.size()) {
+  if (archive->entries().size() != required_family_member_count &&
+      archive->entries().size() != all_kinds.size()) {
     throw std::runtime_error("scene package does not have a complete resource family");
   }
   auto catalog = SceneResourceCatalog::from_archive(*archive);
@@ -81,7 +84,8 @@ ScenePackageFamily ScenePackageFamily::open_complete_checked(
                                 kind == SceneResourceKind::anm
                             ? catalog.optional_member(kind)
                             : std::addressof(catalog.member(kind));
-    if (entry == nullptr || normalized(entry->name) != expected) {
+    if ((kind != SceneResourceKind::anm && entry == nullptr) ||
+        (entry != nullptr && normalized(entry->name) != expected)) {
       throw std::runtime_error("scene package has an unexpected resource family");
     }
   }

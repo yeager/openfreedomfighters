@@ -277,7 +277,7 @@ load_intro_prepared_resources(const std::filesystem::path &intro_archive) {
   std::vector<std::byte> texture_bytes;
   std::vector<std::byte> sound_definitions;
   // The normal launcher path names the canonical archive.  Require its full
-  // thirteen-member identity before passing any of its bytes to an intro
+  // twelve-member identity before passing any of its bytes to an intro
   // reader.  The generic helper remains available for narrow parser fixtures
   // and is not an admission path for a live scene.
   if (intro_archive.filename() == "FF-Intro.ZIP") {

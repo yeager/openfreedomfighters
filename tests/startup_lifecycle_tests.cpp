@@ -377,6 +377,17 @@ int main() {
   check(complete_family.member_count() == 13U &&
             complete_family.read(off::data::SceneResourceKind::anm).size() == 1U,
         "complete scene family retains all thirteen C03A resource roles");
+  auto intro_family_members = startup_package_members();
+  for (auto &[name, contents] : intro_family_members) {
+    const auto found = name.find("FF-StartUp");
+    if (found != std::string::npos) name.replace(found, 10U, "FF-Intro");
+  }
+  write_package_zip(complete_family_fixture, intro_family_members);
+  const auto intro_family = off::data::ScenePackageFamily::open_complete_checked(
+      complete_family_fixture, "FF-Intro");
+  check(intro_family.member_count() == 12U &&
+            intro_family.read(off::data::SceneResourceKind::loc).size() == 1U,
+        "complete scene family accepts the twelve-member intro form without ANM");
   auto split_complete_family = complete_family_members;
   split_complete_family.back().first = "SCENES/FF-Intro.ANM";
   write_package_zip(complete_family_fixture, split_complete_family);

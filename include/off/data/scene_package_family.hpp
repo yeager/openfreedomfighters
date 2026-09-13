@@ -14,9 +14,10 @@ namespace off::data {
 // boundary only: it owns a ZIP snapshot and exposes member bytes by resource
 // role, but it neither parses the role-specific formats nor creates a scene.
 //
-// FF-Intro and FF-C03A are the observed thirteen-member variant: the ten core
-// scene resources plus BUF, LOC, and ANM.  Keeping this admission separate
-// from their later readers prevents a partial or mixed archive from becoming a
+// The checked family has ten core scene resources plus BUF and LOC. ANM is a
+// separately optional resource: FF-Intro is the observed twelve-member form,
+// while FF-C03A carries all thirteen roles. Keeping this admission separate
+// from later readers prevents a partial or mixed archive from becoming a
 // common input merely because one consumer happened to need fewer members.
 class ScenePackageFamily final {
 public:

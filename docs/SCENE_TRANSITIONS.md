@@ -98,9 +98,9 @@ scene.
 ## Complete shared scene-family admission
 
 `ScenePackageFamily::open_complete_checked` is the source-only admission
-boundary for the observed thirteen-member `FF-Intro` and `FF-C03A` families.
-It rejects symlinked or non-regular archive inputs, requires exactly the ten
-core resources plus `BUF`, `LOC`, and `ANM`, and checks that every member is in
+boundary for the observed `FF-Intro` and `FF-C03A` families. It rejects
+symlinked or non-regular archive inputs, requires the ten core resources plus
+`BUF` and `LOC`, permits an authored `ANM` companion, and checks that every member is in
 the canonical `Scenes/<expected-stem>` family before exposing any member bytes.
 It owns the ZIP snapshot, so callers cannot retain an entry borrowed from a
 later-replaced archive. It does not parse member formats or construct, activate,
