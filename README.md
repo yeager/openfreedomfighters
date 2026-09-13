@@ -242,6 +242,10 @@ OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
 # window and never starts audio, schedules an event, or renders a cutscene.
 ./build/openfreedomfighters --probe-first-cut-cold
 
+# Report only aggregate intro readiness and blocker categories. This stops
+# before constructing a cut command session or invoking any lifecycle.
+./build/openfreedomfighters --probe-intro-readiness
+
 # Exercise both recovered first-cut initialization phases against retained
 # owned-data identities. This is still cold: no clock, scene host, audio, or
 # renderer is admitted.
@@ -325,6 +329,11 @@ menu transition. See
   through observer-only target callbacks. Cutscene lifecycle, gameplay effects,
   audio and rendering remain cold. See
   [INTRO_BOOTSTRAP.md](docs/INTRO_BOOTSTRAP.md#first-cut-cold-probe).
+- `--probe-intro-readiness` is the narrower owned-data readiness report. It
+  prints only aggregate reader, unresolved-reader-family, and lifecycle
+  coverage categories, then explicitly reports lifecycle, renderer, audio, and
+  playback as not started. It stops before cut-command-session construction and
+  never exposes source values, labels, handles, offsets, or payload data.
 - `--probe-first-cut-initialization` extends that check through the two
   recovered first-cut initialization phases, using retained runtime identities
   from the owned installation while recording aggregate lifecycle evidence.

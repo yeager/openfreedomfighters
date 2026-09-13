@@ -82,7 +82,7 @@ void usage(std::ostream &output) {
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] [--startup-progress-receipt FILE] "
             "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] [--diagnostic-first-cut-picture-step COMMAND_INDEX] "
-            "[--probe-startup-boot] [--probe-startup-boot-profile] [--probe-startup-route-cold] [--probe-soundtrack] [--probe-intro-audio] [--probe-intro-audio-decode] [--probe-localization] [--probe-movie-cuts] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
+            "[--probe-startup-boot] [--probe-startup-boot-profile] [--probe-startup-route-cold] [--probe-soundtrack] [--probe-intro-audio] [--probe-intro-audio-decode] [--probe-localization] [--probe-movie-cuts] [--probe-intro-readiness] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
 }
 
 class StartupProgressReceipt final {
@@ -681,8 +681,9 @@ void write_reader_coverage_probe(std::ostream& output,
   }
 }
 
-int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initialization,
-                        bool observe_renderer_payload, bool observe_named_global) {
+int run_first_cut_probe(const std::filesystem::path &data_path, bool readiness_only,
+                        bool run_initialization, bool observe_renderer_payload,
+                        bool observe_named_global) {
   off::runtime::ApplicationServices application(
       off::runtime::ClockExecutionPolicy::no_recording_or_replay,
       off::runtime::make_monotonic_clock_samples());
@@ -735,6 +736,22 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
   if(reader_coverage.stage!=off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete ||
       reader_coverage.total_discovered!=intro.deferred_reader_work().size())
     throw std::runtime_error("first-cut cold probe found incomplete reader coverage");
+  if(readiness_only) {
+    // This report deliberately stops before command-session construction. The
+    // output is aggregate-only: it cannot expose asset data or invoke a
+    // lifecycle, renderer, audio, event, clock, or playback path.
+    std::cout << "intro-readiness-probe=completed\n"
+              << "intro-readiness-reader-bracket=complete\n";
+    write_reader_coverage_probe(std::cout,reader_coverage);
+    write_unimplemented_attachment_reader_frontier_probe(
+        std::cout,unimplemented_reader_frontier);
+    write_lifecycle_coverage_probe(std::cout,intro.preflight_global_lifecycle());
+    std::cout << "intro-readiness-lifecycle=not-admitted\n"
+              << "intro-readiness-renderer=not-created\n"
+              << "intro-readiness-audio=not-started\n"
+              << "intro-readiness-playback=not-started\n";
+    return 0;
+  }
   std::size_t paramanim_profiled_owners{};
   for(const auto& shape:paramanim_dispatch.shapes) paramanim_profiled_owners+=shape.count;
   if(paramanim_dispatch.attachment_instances<paramanim_dispatch.attachment_owners ||
@@ -1228,6 +1245,7 @@ int main(int argc, char **argv) {
   bool probe_intro_audio_decode = false;
   bool probe_localization = false;
   bool probe_movie_cuts = false;
+  bool probe_intro_readiness = false;
   bool probe_first_cut_cold = false;
   bool probe_first_cut_initialization = false;
   bool probe_intro_renderer_payload = false;
@@ -1296,6 +1314,8 @@ int main(int argc, char **argv) {
       probe_localization = true;
     } else if (argument == "--probe-movie-cuts") {
       probe_movie_cuts = true;
+    } else if (argument == "--probe-intro-readiness") {
+      probe_intro_readiness = true;
     } else if (argument == "--probe-first-cut-cold") {
       probe_first_cut_cold = true;
     } else if (argument == "--probe-first-cut-initialization") {
@@ -1328,7 +1348,7 @@ int main(int argc, char **argv) {
   }
   if (data_path.empty())
     data_path = default_game_data_path();
-  if (data_path.empty() && (verify_only || probe_startup_boot || probe_startup_boot_profile || probe_startup_route_cold || probe_soundtrack || probe_intro_audio || probe_intro_audio_decode || probe_localization || probe_movie_cuts || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
+  if (data_path.empty() && (verify_only || probe_startup_boot || probe_startup_boot_profile || probe_startup_route_cold || probe_soundtrack || probe_intro_audio || probe_intro_audio_decode || probe_localization || probe_movie_cuts || probe_intro_readiness || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
     std::cerr
         << "A legally purchased Freedom Fighters installation is required; "
            "pass --data PATH or set OPENFREEDOMFIGHTERS_DATA.\n";
@@ -1355,6 +1375,7 @@ int main(int argc, char **argv) {
       static_cast<unsigned>(probe_intro_audio_decode) +
       static_cast<unsigned>(probe_localization) +
       static_cast<unsigned>(probe_movie_cuts) +
+      static_cast<unsigned>(probe_intro_readiness) +
       static_cast<unsigned>(probe_first_cut_cold) +
       static_cast<unsigned>(probe_first_cut_initialization) +
       static_cast<unsigned>(probe_intro_renderer_payload) +
@@ -1598,14 +1619,15 @@ int main(int argc, char **argv) {
     }
   }
 
-  if (probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global) {
+  if (probe_intro_readiness || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global) {
     const auto verification=off::data::verify_install(
         data_path,{}, {.deep_audit_cache_root=off::platform::application_deep_audit_cache_root()});
     if(!verification) {
       std::cerr << "Game-data verification failed: " << verification.message << '\n';
       return 3;
     }
-    try { return run_first_cut_probe(data_path,probe_first_cut_initialization,
+    try { return run_first_cut_probe(data_path,probe_intro_readiness,
+                                     probe_first_cut_initialization,
                                      probe_intro_renderer_payload,probe_intro_named_global); }
     catch(const std::exception& error) {
       std::cerr << "First-cut cold probe failed: " << error.what() << '\n';

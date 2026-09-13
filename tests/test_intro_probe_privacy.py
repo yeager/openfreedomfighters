@@ -23,6 +23,15 @@ class IntroProbePrivacyTests(unittest.TestCase):
         self.assertNotIn('\"lifecycle-component=\"', source)
         self.assertNotIn('\"lifecycle-reader=\"', source)
 
+    def test_readiness_probe_stops_before_cut_command_session(self) -> None:
+        source = MAIN.read_text(encoding="utf-8")
+        readiness = source.index("if(readiness_only)")
+        command_session = source.index("session->prepare_supported_first_cut_player()")
+        self.assertLess(readiness, command_session)
+        self.assertIn('"intro-readiness-probe=completed\\n"', source)
+        self.assertIn('"intro-readiness-playback=not-started\\n"', source)
+        self.assertNotIn('"intro-readiness-source-"', source)
+
 
 if __name__ == "__main__":
     unittest.main()

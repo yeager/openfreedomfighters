@@ -62,6 +62,14 @@ validated terminal-versus-attachment-delimiter shape, retaining an explicit
 unknown bucket for formats outside that narrow classifier. These are aggregate
 investigation counts, not a claim that a deferred attachment reader exists.
 
+`--probe-intro-readiness` is the smallest owned-data report for this boundary.
+It performs the checked source construction and ordinary reader bracket, then
+reports aggregate reader coverage, unresolved reader-family categories, and
+lifecycle coverage. It stops before a first-cut command session is constructed;
+it does not create a renderer, start audio, sample a clock, schedule an event,
+or invoke a lifecycle. Its output contains no source values, labels, handles,
+offsets, identities, or payload bytes.
+
 Candidate-specific inventories may emit a privacy-safe compact framing profile:
 bounded byte count, attachment count, delimiter count, and framing-tag
 statistics. They never emit a source type, value, source identity, offset,
