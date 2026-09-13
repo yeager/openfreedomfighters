@@ -16,6 +16,7 @@
 #include <future>
 #include <memory>
 #include <string>
+#include <system_error>
 #include <vector>
 
 namespace off::platform {
@@ -113,6 +114,18 @@ std::filesystem::path application_deep_audit_cache_root() noexcept {
   }
 #endif
   return {};
+}
+
+[[nodiscard]] data::InstallVerificationOptions
+startup_install_verification_options(const std::filesystem::path &data_path) noexcept {
+  // A missing or non-directory game-data root can be reported directly by the
+  // verifier.  Do not initialize SDL's preference-string cache in that path:
+  // it has no audit work to perform and it needlessly extends the temporary
+  // startup session's process-global lifetime.
+  std::error_code error;
+  if (!std::filesystem::is_directory(data_path, error) || error)
+    return {};
+  return {.deep_audit_cache_root = application_deep_audit_cache_root()};
 }
 
 std::filesystem::path application_graphics_settings_path() noexcept {
@@ -425,7 +438,7 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
           [&]() {
             return data::verify_install(
                 data_path, [&] { return cancelled.load(); },
-                {.deep_audit_cache_root = application_deep_audit_cache_root()});
+                startup_install_verification_options(data_path));
           },
           prepare_assets, cancelled,
           [&](StartupPreparationStage stage) {
@@ -442,7 +455,7 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
           [&]() {
             return data::verify_install(
                 data_path, [&] { return cancelled.load(); },
-                {.deep_audit_cache_root = application_deep_audit_cache_root()});
+                startup_install_verification_options(data_path));
           });
     });
   } catch (...) {
