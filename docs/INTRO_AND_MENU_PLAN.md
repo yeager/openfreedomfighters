@@ -26,7 +26,7 @@ soundtrack files must never be required to launch.
 
 | Area | Present implementation | Missing from normal execution |
 | --- | --- | --- |
-| Launch | Timed splash, full file hashing, worker preparation, error popup, same-window GPU handoff, and a bounded normal Original GPU capture from supported Steam data | A world pass beyond its intentional clear-only state, plus regression coverage across the complete intro-to-menu path |
+| Launch | Timed splash, full file hashing, worker preparation, error popup, same-window GPU handoff, labelled reader-admitted static fallback, and a bounded normal Original GPU capture from supported Steam data | A world scene pass beyond its intentional clear-only state, plus regression coverage across the complete intro-to-menu path |
 | Intro data | Directory construction, retained source/resource identities, partial deferred readers and cold first-cut preparation | Complete required readers, concrete loader-tail services and global lifecycle |
 | Renderer relations | Scene-owned initial relation lists resolved through canonical resources | Dynamic maintenance, separate List associations and accepted draw-record production |
 | MovieControl | Source-checked factory phase-two callback and retained service binding | Phase one, live external services, global dispatch and event-16 activation |

@@ -54,9 +54,10 @@ for a portable installation.
   startup, not intro presentation, playback, or a rendered main menu.
 - A normal Original launch from the supported Steam installation has completed
   a bounded GPU frame run and private screenshot capture under an isolated
-  display test. The normal world pass is intentionally clear-only; this
-  verifies startup-to-GPU handoff, not an intro frame, timed playback, or menu
-  rendering.
+  display test. The retained world scene pass is intentionally clear-only;
+  normal output separately presents the labelled reader-admitted static
+  fallback. This verifies startup-to-GPU handoff, not timed intro playback or
+  menu rendering.
 - `--diagnostic-intro-picture` can render one source-backed first-cut picture
   with its decoded images and quad geometry. It uses an explicitly project-owned
   fit projection and baseline GPU state, so it is a visual diagnostic—not
