@@ -390,6 +390,20 @@ struct IntroParamAnimDeferredDispatchInventory {
   std::size_t owners_with_deferred_blocks{};
   std::vector<IntroParamAnimDeferredShape> shapes;
 };
+// Aggregate-only join between retained ParamAnim construction and the already
+// prepared first-cut command table.  This proves only source-to-owner and
+// owner-to-constructed-component associations; it does not admit a ParamAnim
+// reader, decode a deferred block, or assign command/event behavior.
+struct IntroParamAnimFirstCutJoinInventory {
+  std::size_t attachment_owners{};
+  std::size_t attachment_instances{};
+  std::size_t constructed_component_bindings{};
+  std::size_t owners_with_deferred_blocks{};
+  std::size_t nonzero_command_records{};
+  std::size_t command_records_targeting_paramanim_owners{};
+  std::size_t unique_command_targets_targeting_paramanim_owners{};
+  std::size_t mapped_event_commands_targeting_paramanim_owners{};
+};
 // Same privacy boundary as the ParamAnim inventory, but kept as a distinct
 // family because shared framing is not evidence of shared reader semantics.
 struct IntroParticleEmitterDeferredShape {
@@ -1047,6 +1061,11 @@ public:
   // Structural research aid only. This neither invokes ParamAnim behavior nor
   // changes deferred-reader admission.
   [[nodiscard]] IntroParamAnimDeferredDispatchInventory paramanim_deferred_dispatch_inventory() const;
+  // Requires the checked first-cut player preparation. This is a source-free,
+  // aggregate-only diagnostic join; it cannot be used as reader, callback, or
+  // playback admission evidence.
+  [[nodiscard]] IntroParamAnimFirstCutJoinInventory
+  paramanim_first_cut_join_inventory() const;
   // Structural research aid only. ParticleEmitter stays separate from
   // ParamAnim even when a private probe finds matching compact framing.
   [[nodiscard]] IntroParticleEmitterDeferredDispatchInventory particle_emitter_deferred_dispatch_inventory() const;

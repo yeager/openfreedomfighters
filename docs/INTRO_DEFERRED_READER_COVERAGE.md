@@ -46,6 +46,14 @@ and could accidentally make an ordinary or lifecycle path appear covered.
 Existing behavior remains fail-closed: the family is constructor-only and its
 generic callbacks reject when reached.
 
+`IntroRuntime::paramanim_first_cut_join_inventory()` adds one narrower
+diagnostic after the first-cut player has been prepared. It reports aggregate
+owner-to-constructed-component bindings and aggregate first-cut
+command-target intersections. It does not expose identities or values, and a
+nonzero intersection would still prove neither a ParamAnim reader nor command
+semantics. A zero intersection rules out only direct first-cut command-target
+association in the reviewed command table.
+
 ## Required next evidence
 
 A reviewed, source-free observation must establish one concrete reader form

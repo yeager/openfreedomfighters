@@ -765,7 +765,15 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
   if(!first_cut || first_cut->initialization().phase_one_complete() ||
       first_cut->initialization().phase_two_complete() || first_cut->receiver().open() ||
       first_cut->receiver().closed())
-    throw std::runtime_error("first-cut cold probe observed an unexpected lifecycle transition");
+      throw std::runtime_error("first-cut cold probe observed an unexpected lifecycle transition");
+  const auto paramanim_first_cut_join=intro.paramanim_first_cut_join_inventory();
+  if(paramanim_first_cut_join.attachment_owners!=paramanim_dispatch.attachment_owners ||
+      paramanim_first_cut_join.attachment_instances!=paramanim_dispatch.attachment_instances ||
+      paramanim_first_cut_join.owners_with_deferred_blocks!=
+          paramanim_dispatch.owners_with_deferred_blocks ||
+      paramanim_first_cut_join.constructed_component_bindings!=
+          paramanim_dispatch.attachment_instances)
+    throw std::runtime_error("first-cut cold probe found inconsistent ParamAnim command join inventory");
   std::optional<std::int32_t> latest_command_position;
   for(const auto& command:first_cut_source_data.commands) {
     const auto position=std::bit_cast<std::int32_t>(command.timeline_position);
@@ -939,6 +947,16 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
               << " framing-digest=" << shape.framing_digest
               << " count=" << shape.count << '\n';
   }
+  std::cout << "paramanim-constructed-component-bindings="
+            << paramanim_first_cut_join.constructed_component_bindings << '\n'
+            << "paramanim-first-cut-nonzero-command-records="
+            << paramanim_first_cut_join.nonzero_command_records << '\n'
+            << "paramanim-first-cut-command-records-targeting-owners="
+            << paramanim_first_cut_join.command_records_targeting_paramanim_owners << '\n'
+            << "paramanim-first-cut-unique-command-targets="
+            << paramanim_first_cut_join.unique_command_targets_targeting_paramanim_owners << '\n'
+            << "paramanim-first-cut-mapped-event-commands="
+            << paramanim_first_cut_join.mapped_event_commands_targeting_paramanim_owners << '\n';
   std::cout << "particle-emitter-attachment-owners=" << particle_dispatch.attachment_owners << '\n'
             << "particle-emitter-attachment-instances=" << particle_dispatch.attachment_instances << '\n'
             << "particle-emitter-owners-with-deferred-blocks=" << particle_dispatch.owners_with_deferred_blocks << '\n';

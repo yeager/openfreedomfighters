@@ -1526,6 +1526,40 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                     target.resource==host.directory_resource_mapping()[*source];
               }),
               "first-cut command targets retain unique source-backed live owner provenance without dispatch");
+        const auto paramanim_join=host.paramanim_first_cut_join_inventory();
+        std::size_t expected_paramanim_owners{},expected_paramanim_instances{},expected_paramanim_deferred{};
+        std::vector<std::size_t> paramanim_sources;
+        for(std::size_t row=0;row<host.resources().sources().directory().size();++row) {
+          std::size_t instances{};
+          const auto& source=host.resources().sources().directory()[row];
+          for(std::size_t slot=0;slot<source.attachments.size();++slot)
+            instances+=host.resources().sources().attachment_identifier(row,slot)=="ZGEOM_ParamAnim";
+          if(instances==0U) continue;
+          ++expected_paramanim_owners;expected_paramanim_instances+=instances;
+          expected_paramanim_deferred+=source.deferred_source_offset!=0U;
+          paramanim_sources.push_back(row);
+        }
+        std::size_t expected_paramanim_command_records{},expected_paramanim_mapped_events{};
+        std::vector<std::uint32_t> expected_paramanim_targets;
+        for(const auto& command:host.resources().first_cut().commands) {
+          const auto source=host.resources().sources().local_source_for_authored_reference(command.target_reference);
+          if(!source || std::ranges::find(paramanim_sources,*source)==paramanim_sources.end()) continue;
+          ++expected_paramanim_command_records;
+          if(std::ranges::find(expected_paramanim_targets,command.target_reference)==expected_paramanim_targets.end())
+            expected_paramanim_targets.push_back(command.target_reference);
+          if(command.event_reference<host.source_event_name_mapping().size() &&
+              host.source_event_name_mapping()[command.event_reference] &&
+              *host.source_event_name_mapping()[command.event_reference]!=0U)
+            ++expected_paramanim_mapped_events;
+        }
+        check(paramanim_join.attachment_owners==expected_paramanim_owners &&
+                paramanim_join.attachment_instances==expected_paramanim_instances &&
+                paramanim_join.constructed_component_bindings==expected_paramanim_instances &&
+                paramanim_join.owners_with_deferred_blocks==expected_paramanim_deferred &&
+                paramanim_join.command_records_targeting_paramanim_owners==expected_paramanim_command_records &&
+                paramanim_join.unique_command_targets_targeting_paramanim_owners==expected_paramanim_targets.size() &&
+                paramanim_join.mapped_event_commands_targeting_paramanim_owners==expected_paramanim_mapped_events,
+              "ParamAnim first-cut join retains only checked aggregate owner-component and command-target associations");
         off::cutscene::FirstCutRuntimeCommandRouter command_router{host};
         check(command_router.sender()==player->list_owner.value &&
               std::ranges::all_of(command_targets,[&](const auto& target) {
