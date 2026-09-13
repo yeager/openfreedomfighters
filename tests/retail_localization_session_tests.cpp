@@ -1,5 +1,6 @@
 #include "off/ui/retail_localization_session.hpp"
 
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -104,11 +105,35 @@ int main() {
                   "Projektöversättning",
           "session admits local reviewed artifacts after private enrollment");
 
+    // Exercise the complete supported-locale surface through the actual
+    // enrollment -> reviewed lookup-site -> resolver path.  The fixture text
+    // is authored test data only; production packs remain owner-local and
+    // contain no retail source field.
+    constexpr std::array<std::string_view, 20> supported_locales{
+        "en", "sv", "da", "nb", "fi", "de", "fr", "es", "it", "pt-BR",
+        "pl", "cs", "hu", "ro", "tr", "ru", "uk", "ja", "ko", "zh-Hans"};
+    for (const auto locale : supported_locales) {
+      const auto translation = std::string{"localized-"} + std::string{locale};
+      write(packs / (std::string{locale} + ".offl10n"),
+            pack(parser, source_set, locale, opaque_one, translation));
+    }
+    const auto all_locales = RetailLocalizationSession::open(
+        cache, packs, installation, parser, source_set, extract, {*reviewed});
+    check(all_locales && all_locales->local_pack_count() == supported_locales.size(),
+          "enrollment admits exactly one canonical pack for every supported locale");
+    for (const auto locale : supported_locales) {
+      const auto expected = std::string{"localized-"} + std::string{locale};
+      check(all_locales->resolve_lookup_site("site.fixture.status", locale, {}) ==
+                expected,
+            "an admitted lookup site selects its exact explicit local pack");
+    }
+
     const auto second = RetailLocalizationSession::open(
         cache, packs, installation, parser, source_set, extract, {*reviewed});
     check(second && calls == 1U &&
               second->cache_status() == RetailLocalizationCacheStatus::loaded &&
-              second->local_pack_count() == 1U && second->has_private_fallback(),
+              second->local_pack_count() == supported_locales.size() &&
+              second->has_private_fallback(),
           "matching session reuses private cache without source extraction");
 
     const auto no_packs = RetailLocalizationSession::open(
