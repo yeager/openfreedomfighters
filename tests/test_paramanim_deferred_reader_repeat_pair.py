@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pathlib
 import sys
+import tempfile
 import unittest
 
 
@@ -118,6 +119,16 @@ class ParamAnimDeferredReaderRepeatPairTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             repeat_pair.sanitize_repeat_pair(
                 specimen, complete())
+
+    def test_rejects_a_symlinked_private_artifact_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            target = root / "target.json"
+            target.write_text("{}", encoding="utf-8")
+            alias = root / "alias.json"
+            alias.symlink_to(target)
+            with self.assertRaises(ValueError):
+                repeat_pair._outside_repository(alias, "first input")
 
 
 if __name__ == "__main__":

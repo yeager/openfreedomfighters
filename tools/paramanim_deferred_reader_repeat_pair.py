@@ -105,6 +105,11 @@ def sanitize_repeat_pair(first: Any, second: Any) -> dict[str, Any]:
 
 
 def _outside_repository(path: pathlib.Path, label: str) -> pathlib.Path:
+    # Do not silently canonicalize a caller-supplied symlink before the
+    # no-follow reader sees it.  The sanitiser rejects such a final path, and
+    # the repeat gate must provide the same private-artifact boundary.
+    if path.is_symlink():
+        raise ValueError(f"{label} must not be a symlink")
     resolved = path.resolve()
     if resolved.is_relative_to(REPOSITORY_ROOT):
         raise ValueError(f"{label} must be outside the repository")
