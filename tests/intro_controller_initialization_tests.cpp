@@ -295,6 +295,25 @@ int main() {
             !movie.deadline_assigned() && !movie.activated(),
             "failed loader-tail boundary never advances lifecycle, deadline, cut, or frame state");
     }
+    {
+      std::vector<std::string> log;
+      MovieControlFirstUpdate movie{17,91,1};
+      IntroStartupActivation activation{
+        IntroStartupActivationBoundaries{
+          [&]{log.push_back("readers");},
+          [&]{log.push_back("tail");},
+          [&]{log.push_back("lifecycle");}}, movie};
+      IntroPostReaderActivationServices services{};
+      services.movie_control_phase_two={
+        []{return false;}, []{}, [](bool){}, []{},
+        [&]{log.push_back("clock");return 100;}, [&]{log.push_back("phase2");}};
+      activation.run_after_reader_bracket(services);
+      check(log==std::vector<std::string>{"tail","lifecycle","clock","phase2"} &&
+            activation.stage()==IntroStartupActivationStage::movie_control_phase_two_complete &&
+            activation.awaits_first_update() && movie.deadline()==101 && !movie.activated(),
+            "post-reader activation cannot replay readers or activate a cut");
+      rejects([&]{activation.run_after_reader_bracket(services);});
+    }
     std::cout<<"Controller phase-two ordering, properties, deadline and presentation boundaries verified.\n";
     return 0;
   } catch(const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
