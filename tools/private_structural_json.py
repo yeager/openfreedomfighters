@@ -32,6 +32,12 @@ def outside_repository(path: pathlib.Path, repository_root: pathlib.Path,
         raise ValueError(f"{label} must not contain parent traversal")
     if len(absolute.parts) < 2:
         raise ValueError(f"{label} must name a private file")
+    # POSIX leaves the meaning of an initial ``//`` implementation-defined;
+    # Linux currently treats it as ``/`` while pathlib retains ``//`` as a
+    # distinct lexical anchor.  Reject it rather than allowing that mismatch
+    # to bypass the lexical repository-boundary check below.
+    if os.name == "posix" and absolute.anchor != "/":
+        raise ValueError(f"{label} must use a standard absolute path")
     current = pathlib.Path(absolute.anchor)
     for component in absolute.parts[1:]:
         current /= component

@@ -31,6 +31,12 @@ class PrivateStructuralJsonTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must not contain parent traversal"):
             structural_json.outside_repository(pathlib.Path("..") / "private.json", ROOT, "input")
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux preserves a // lexical anchor")
+    def test_rejects_double_slash_repository_alias_before_opening(self) -> None:
+        alias = pathlib.Path("//" + str(ROOT).lstrip("/")) / "README.md"
+        with self.assertRaisesRegex(ValueError, "standard absolute path"):
+            structural_json.outside_repository(alias, ROOT, "input")
+
 
 if __name__ == "__main__":
     unittest.main()
