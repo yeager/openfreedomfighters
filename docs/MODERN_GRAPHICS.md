@@ -88,6 +88,18 @@ compose UI afterward at output resolution. The coordinator is not a filter,
 does not allocate API resources, and is not an active runtime fallback until a
 backend records that pass.
 
+`AdmittedTemporalSceneFrame` is the preceding live-scene boundary. It is a
+non-owning, backend-neutral gate that accepts a frame only when the dispatcher
+supplies distinct live resources, complete producer receipts, jittered finite
+camera transforms, and finite uniquely identified instance transforms. First
+frames must explicitly use current values as their invalid previous values.
+The gate reuses the resolve input lifecycle for extent, jitter and history-slot
+validation; it cannot allocate inputs, fabricate previous transforms or motion
+vectors, infer a camera, submit work, or enable an upscaler. The normal startup
+fallback does not construct it. A future scene dispatcher must retain the input
+records through backend consumption and pass this gate before a temporal
+backend can be considered.
+
 The runtime derives its available upscalers from completed renderer bindings,
 not configuration defaults, product names, or detected libraries. A binding must
 identify and version its runtime, have a compatible native device, accept the
