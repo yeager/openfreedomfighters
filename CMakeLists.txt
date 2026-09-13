@@ -131,6 +131,7 @@ add_library(off_core
     src/graphics/temporal_jitter.cpp
     src/graphics/temporal_resolve_inputs.cpp
     src/graphics/temporal_resolve_baseline.cpp
+    src/graphics/admitted_temporal_scene_frame.cpp
     src/platform/runtime_presentation_settings.cpp
     src/graphics/scene_render.cpp
     src/graphics/scene_gpu_plan.cpp
@@ -834,6 +835,11 @@ if(BUILD_TESTING)
     target_link_libraries(off_temporal_resolve_baseline_tests PRIVATE off_core)
     add_test(NAME off_temporal_resolve_baseline_tests
         COMMAND off_temporal_resolve_baseline_tests)
+    add_executable(off_admitted_temporal_scene_frame_tests
+        tests/admitted_temporal_scene_frame_tests.cpp)
+    target_link_libraries(off_admitted_temporal_scene_frame_tests PRIVATE off_core)
+    add_test(NAME off_admitted_temporal_scene_frame_tests
+        COMMAND off_admitted_temporal_scene_frame_tests)
 
     add_executable(off_scene_archive_selection_tests
         tests/scene_archive_selection_tests.cpp)
