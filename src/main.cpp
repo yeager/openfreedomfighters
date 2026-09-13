@@ -18,6 +18,7 @@
 #include "off/cutscene/first_cut_command_session.hpp"
 #include "off/cutscene/first_cut_timeline_profile.hpp"
 #include "off/graphics/intro_preview_builder.hpp"
+#include "off/graphics/intro_audio_cue_inventory.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_renderer_payload_observation.hpp"
 #include "off/graphics/intro_outer_loader_tail_readiness.hpp"
@@ -78,7 +79,7 @@ void usage(std::ostream &output) {
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] [--startup-progress-receipt FILE] "
             "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] "
-            "[--probe-startup-boot] [--probe-startup-boot-profile] [--probe-startup-route-cold] [--probe-soundtrack] [--probe-localization] [--probe-movie-cuts] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
+            "[--probe-startup-boot] [--probe-startup-boot-profile] [--probe-startup-route-cold] [--probe-soundtrack] [--probe-intro-audio] [--probe-localization] [--probe-movie-cuts] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
 }
 
 class StartupProgressReceipt final {
@@ -270,6 +271,24 @@ void write_soundtrack_probe(
          << "soundtrack-duration-near-pairs-250ms="
          << duration_comparison.near_duration_pairs << '\n'
          << "soundtrack-duration-only-cue-mapping=unavailable\n";
+}
+
+void write_intro_audio_probe(const std::filesystem::path& root, std::ostream& output) {
+  const auto resources = off::graphics::load_intro_prepared_resources(
+      root / "Scenes" / "FF-Intro.ZIP");
+  if (!resources.audio())
+    throw std::runtime_error("intro has no prepared audio inventory");
+  const auto inventory = off::graphics::IntroAudioCueInventory::from_prepared(
+      resources.sounds(), resources.audio()->header(), resources.audio()->record_indices());
+  output << "intro-audio-probe=completed\n"
+         << "intro-audio-source-owners=" << inventory.source_owner_count << '\n'
+         << "intro-audio-distinct-sound-definitions="
+         << inventory.distinct_sound_definition_count << '\n'
+         << "intro-audio-distinct-streams=" << inventory.distinct_stream_count << '\n'
+         << "intro-audio-local-bank-streams=" << inventory.local_bank_stream_count << '\n'
+         << "intro-audio-global-bank-streams=" << inventory.global_bank_stream_count << '\n'
+         << "intro-audio-cue-mapping=unavailable\n"
+         << "intro-audio-playback=not-started\n";
 }
 
 void write_localization_probe(const std::filesystem::path& root,
@@ -1116,6 +1135,7 @@ int main(int argc, char **argv) {
   bool probe_startup_boot_profile = false;
   bool probe_startup_route_cold = false;
   bool probe_soundtrack = false;
+  bool probe_intro_audio = false;
   bool probe_localization = false;
   bool probe_movie_cuts = false;
   bool probe_first_cut_cold = false;
@@ -1168,6 +1188,8 @@ int main(int argc, char **argv) {
       probe_startup_route_cold = true;
     } else if (argument == "--probe-soundtrack") {
       probe_soundtrack = true;
+    } else if (argument == "--probe-intro-audio") {
+      probe_intro_audio = true;
     } else if (argument == "--probe-localization") {
       probe_localization = true;
     } else if (argument == "--probe-movie-cuts") {
@@ -1204,7 +1226,7 @@ int main(int argc, char **argv) {
   }
   if (data_path.empty())
     data_path = default_game_data_path();
-  if (data_path.empty() && (verify_only || probe_startup_boot || probe_startup_boot_profile || probe_startup_route_cold || probe_soundtrack || probe_localization || probe_movie_cuts || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
+  if (data_path.empty() && (verify_only || probe_startup_boot || probe_startup_boot_profile || probe_startup_route_cold || probe_soundtrack || probe_intro_audio || probe_localization || probe_movie_cuts || probe_first_cut_cold || probe_first_cut_initialization || probe_intro_renderer_payload || probe_intro_named_global)) {
     std::cerr
         << "A legally purchased Freedom Fighters installation is required; "
            "pass --data PATH or set OPENFREEDOMFIGHTERS_DATA.\n";
@@ -1226,6 +1248,7 @@ int main(int argc, char **argv) {
       static_cast<unsigned>(probe_startup_boot_profile) +
       static_cast<unsigned>(probe_startup_route_cold) +
       static_cast<unsigned>(probe_soundtrack) +
+      static_cast<unsigned>(probe_intro_audio) +
       static_cast<unsigned>(probe_localization) +
       static_cast<unsigned>(probe_movie_cuts) +
       static_cast<unsigned>(probe_first_cut_cold) +
@@ -1401,6 +1424,23 @@ int main(int argc, char **argv) {
       return 0;
     } catch (const std::exception& error) {
       std::cerr << "Soundtrack probe failed: " << error.what() << '\n';
+      return 3;
+    }
+  }
+
+  if (probe_intro_audio) {
+    const auto verification = off::data::verify_install(
+        data_path, {}, {.deep_audit_cache_root =
+                            off::platform::application_deep_audit_cache_root()});
+    if (!verification) {
+      std::cerr << "Game-data verification failed: " << verification.message << '\n';
+      return 3;
+    }
+    try {
+      write_intro_audio_probe(verification.root, std::cout);
+      return 0;
+    } catch (const std::exception& error) {
+      std::cerr << "Intro audio probe failed: " << error.what() << '\n';
       return 3;
     }
   }

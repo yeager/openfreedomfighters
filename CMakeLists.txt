@@ -141,6 +141,7 @@ add_library(off_core
     src/graphics/intro_renderer_resource_relations.cpp
     src/graphics/startup_graphics_asset.cpp
     src/graphics/intro_prepared_resources.cpp
+    src/graphics/intro_audio_cue_inventory.cpp
     src/graphics/movie_control_first_cut_runtime_handoff.cpp
     src/graphics/movie_control_first_cut_scene_frame_adapter.cpp
     src/graphics/movie_control_event16_admission_snapshot.cpp
@@ -911,6 +912,11 @@ if(BUILD_TESTING)
     target_link_libraries(off_intro_prepared_resources_tests PRIVATE off_core)
     target_compile_definitions(off_intro_prepared_resources_tests PRIVATE
         OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/intro-prepared-resources-work")
+    add_executable(off_intro_audio_cue_inventory_tests
+        tests/intro_audio_cue_inventory_tests.cpp)
+    target_link_libraries(off_intro_audio_cue_inventory_tests PRIVATE off_core)
+    add_test(NAME off_intro_audio_cue_inventory_tests
+        COMMAND off_intro_audio_cue_inventory_tests)
     foreach(OFF_INTRO_PREPARED_RESOURCES_TEST_GROUP IN ITEMS
             outer-loader-tail-readiness
             named-global-envelopes
