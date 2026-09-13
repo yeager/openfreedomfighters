@@ -88,6 +88,17 @@ IntroPreviewSnapshot build_intro_preview(const IntroRuntime &runtime,
   return result;
 }
 
+IntroPreviewSnapshot build_incomplete_intro_fallback(
+    const IntroRuntime &runtime, IntroPreviewTarget target) {
+  const auto *const receipt = runtime.legal_picture_component_reader_state();
+  if (receipt == nullptr)
+    throw std::runtime_error(
+        "incomplete intro fallback requires a legal-picture reader receipt");
+  return build_intro_preview(
+      runtime, receipt->source_directory_index, target,
+      IntroPreviewPolicy::admitted_first_cut_legal_picture);
+}
+
 std::span<const IntroPreparedImage> select_intro_gpu_upload_images(
     std::span<const IntroPreparedImage> retained_images,
     const IntroPreviewSnapshot *explicit_diagnostic) noexcept {

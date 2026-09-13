@@ -884,6 +884,8 @@ static OFF_NOINLINE void test_prepared_runtime_scopes() {
       rejects([&]{(void)off::graphics::build_intro_preview(
           host,1,{1280,720},
           off::graphics::IntroPreviewPolicy::admitted_first_cut_legal_picture);});
+      rejects([&]{(void)off::graphics::build_incomplete_intro_fallback(
+          host,{1280,720});});
       rejects([&]{(void)off::graphics::build_intro_preview(host,1,{0,720});});
       rejects([&]{(void)off::graphics::build_intro_preview(host,0,{1280,720});});
       rejects([&]{(void)off::graphics::build_intro_preview(host,999,{1280,720});});
@@ -1453,6 +1455,12 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                 "Center component boundary retains only the completed legal-picture provenance");
           rejects([&]{host.apply_supported_first_cut_legal_picture_component_reader(*legal_work);});
         }
+        const auto incomplete_fallback=off::graphics::build_incomplete_intro_fallback(
+            host,{1280U,720U});
+        check(legal_source && incomplete_fallback.draw.source_index==*legal_source &&
+                  !incomplete_fallback.draw.draw_plan.groups().empty() &&
+                  !incomplete_fallback.images.empty(),
+              "incomplete startup fallback selects only the reader-admitted legal picture");
         host.prepare_supported_first_cut_player();
         const auto* player=host.first_cut_player_prepared_state();
         check(player && player->list_owner==list_reader->owner && player->sequence_owner==sequence_reader->owner &&

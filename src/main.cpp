@@ -1453,8 +1453,10 @@ int main(int argc, char **argv) {
   std::optional<off::graphics::StartupGraphicsExpandedPlan>
       startup_graphics_cpu_plan;
   std::unique_ptr<off::graphics::NormalIntroSceneSession> intro_session;
-  std::optional<off::graphics::IntroPreviewSnapshot>
-      intro_legal_picture_preflight;
+  // This may be rendered only as a labelled, static fallback while the
+  // observed MovieControl/loader-tail path is incomplete. It is not a
+  // cutscene frame and does not activate the retained intro session.
+  std::optional<off::graphics::IntroPreviewSnapshot> intro_static_fallback;
   off::ui::RetailUiFontSet ui_fonts;
   off::ui::RetailUiTextureSet ui_textures;
   off::platform::StartupWindow startup_window;
@@ -1553,24 +1555,12 @@ int main(int argc, char **argv) {
             intro_session->complete_postconstruction_reader_bracket(0U);
             intro_session->prepare_supported_first_cut_player();
             // A retained intro runtime is not a cutscene admission.  The
-            // source-backed legal-picture frame is deliberately built only
-            // for the explicit diagnostic command; ordinary startup must not
-            // turn a loader receipt into an unobserved cutscene preview.
-            if (diagnostic_intro_picture) {
-              const auto legal_source =
-                  intro.resources()
-                      .sources()
-                      .local_source_for_authored_reference(
-                          intro.resources().member().references[1]);
-              if (!legal_source)
-                throw std::runtime_error(
-                    "first-cut legal picture source is unavailable");
-              intro_legal_picture_preflight.emplace(
-                  off::graphics::build_intro_preview(
-                      intro, *legal_source, {.width = 1280U, .height = 720U},
-                      off::graphics::IntroPreviewPolicy::
-                          admitted_first_cut_legal_picture));
-            }
+            // one legal-picture receipt is nevertheless sufficient to show
+            // a labelled static fallback while MovieControl and loader-tail
+            // evidence remains incomplete. It never activates this session.
+            intro_static_fallback.emplace(
+                off::graphics::build_incomplete_intro_fallback(
+                    intro, {.width = 1280U, .height = 720U}));
           }
           startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
               data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -1666,9 +1656,10 @@ int main(int argc, char **argv) {
                    "indirect source resolution is pending.\n";
     }
   }
-  if (!diagnostic_scene && !diagnostic_startup_graphics && !diagnostic_intro_picture)
-    std::cout << "Authored startup resources loaded; world rendering pending. "
-                 "This is not gameplay or a faithful rendered startup menu.\n";
+  if (!diagnostic_scene && !diagnostic_startup_graphics)
+    std::cout << "Authored startup resources loaded; showing a static "
+                 "source-backed intro fallback while cutscene playback is pending. "
+                 "This is not gameplay, animated intro playback, or a faithful rendered startup menu.\n";
   if (startup_graphics_cpu_plan)
     std::cout << "Startup menu CPU plan: "
               << startup_graphics_cpu_plan->submissions().size()
@@ -1685,8 +1676,9 @@ int main(int argc, char **argv) {
     std::cout << "Startup graphics diagnostic: source images and source quad "
                  "geometry, generic fit projection; not a faithful menu.\n";
   if (diagnostic_intro_picture)
-    std::cout << "Intro picture diagnostic: source image data and source quad "
-                 "geometry, generic fit projection; not cutscene playback.\n";
+    std::cout << "Intro picture diagnostic compatibility option: the normal "
+                 "static source-backed fallback is already enabled; generic fit "
+                 "projection, not cutscene playback.\n";
   const auto* intro = intro_session
                           ? std::addressof(intro_session->runtime())
                           : nullptr;
@@ -1695,13 +1687,13 @@ int main(int argc, char **argv) {
               << intro->pictures().size() << " picture definitions, "
               << intro->resources().images().size()
               << " images; automatic scene activation remains pending.\n";
-  if (intro_legal_picture_preflight)
-    std::cout << "First-cut legal picture preflight: "
-              << intro_legal_picture_preflight->draw.draw_plan.groups().size()
+  if (intro_static_fallback)
+    std::cout << "Incomplete intro fallback: "
+              << intro_static_fallback->draw.draw_plan.groups().size()
               << " draw groups, "
-              << intro_legal_picture_preflight->images.size()
-              << " referenced images; displayed as a source-backed startup frame, "
-                 "not cutscene playback.\n";
+              << intro_static_fallback->images.size()
+              << " referenced images; displayed from verified game data as a "
+                 "static startup fallback, not cutscene playback.\n";
   if (intro_session && intro_session->first_cut_player())
     std::cout << "Source-backed first-cut session retained: cold command "
                  "admission and no playback.\n";
@@ -1743,7 +1735,7 @@ int main(int argc, char **argv) {
       off::platform::application_graphics_settings_path(),
       scene ? &*scene : nullptr, *startup_graphics,
       ui_fonts, ui_textures, intro_session.get(),
-      intro_legal_picture_preflight ? &*intro_legal_picture_preflight : nullptr,
+      intro_static_fallback ? &*intro_static_fallback : nullptr,
       nullptr,
       frame_limit, show_graphics_menu,
       screenshot_path, locale, diagnostic_startup_graphics);

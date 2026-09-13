@@ -1256,7 +1256,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,
                     const graphics::NormalIntroSceneSession *intro_session,
-                    const graphics::IntroPreviewSnapshot *intro_preview_diagnostic,
+                    const graphics::IntroPreviewSnapshot *intro_static_fallback,
                     const NormalIntroSceneHostFrameBridge *admitted_intro_frame,
                     std::size_t frame_limit, bool show_graphics_menu,
                     const std::filesystem::path &screenshot_path,
@@ -1276,9 +1276,9 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   if (admitted_intro_frame != nullptr && intro_session == nullptr)
     return {.success = false,
             .message = "Normal intro frame admission requires a retained intro session"};
-  if (admitted_intro_frame != nullptr && intro_preview_diagnostic != nullptr)
+  if (admitted_intro_frame != nullptr && intro_static_fallback != nullptr)
     return {.success = false,
-            .message = "Normal intro frame admission cannot use a diagnostic snapshot"};
+            .message = "Normal intro frame admission cannot use a static fallback"};
   const graphics::IntroRuntime *const intro =
       intro_session != nullptr ? std::addressof(intro_session->runtime()) : nullptr;
   try {
@@ -1292,6 +1292,10 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   SDL_Window *window = startup_window.get();
   if (window == nullptr)
     return {.success = false, .message = "Startup window is missing"};
+  if (intro_static_fallback != nullptr)
+    SDL_SetWindowTitle(
+        window,
+        "OpenFreedomFighters — Intro fallback (cutscene playback pending)");
   if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
     return failure("SDL gamepad initialization failed");
   const GamepadSession gamepad_session;
@@ -1366,7 +1370,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   try {
     if (intro) {
       const auto images = graphics::select_intro_gpu_upload_images(
-          intro->resources().images(), intro_preview_diagnostic);
+          intro->resources().images(), intro_static_fallback);
       gpu_intro = std::make_unique<SdlIntroRenderer>(device, images);
     }
   } catch (const std::exception& error) {
@@ -1378,9 +1382,9 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     SDL_DestroyGPUDevice(device);
     return result;
   }
-  if (intro_preview_diagnostic != nullptr && gpu_intro == nullptr) {
+  if (intro_static_fallback != nullptr && gpu_intro == nullptr) {
     const RuntimeResult result{false,
-        "intro diagnostic requires retained intro image resources"};
+        "incomplete intro fallback requires retained intro image resources"};
     startup_textures.reset();
     release_overlay(device, overlay);
     release_scene(device, gpu);
@@ -1785,18 +1789,18 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       release_overlay_transfers();
       break;
     }
-    std::optional<IntroPreviewDiagnosticSubmission> diagnostic_submission;
-    std::unique_ptr<SdlIntroFrame> diagnostic_intro_frame;
-    if (intro_preview_diagnostic != nullptr) {
+    std::optional<IntroPreviewDiagnosticSubmission> static_fallback_submission;
+    std::unique_ptr<SdlIntroFrame> static_intro_fallback_frame;
+    if (intro_static_fallback != nullptr) {
       try {
-        diagnostic_submission.emplace(IntroPreviewDiagnosticSubmission::build(
-            *intro_preview_diagnostic, content_width, content_height,
+        static_fallback_submission.emplace(IntroPreviewDiagnosticSubmission::build(
+            *intro_static_fallback, content_width, content_height,
             SDL_GetGPUSwapchainTextureFormat(device, window)));
-        diagnostic_intro_frame = gpu_intro->prepare(command,
-                                                     diagnostic_submission->draws());
+        static_intro_fallback_frame = gpu_intro->prepare(command,
+            static_fallback_submission->draws());
       } catch (const std::exception &error) {
         result = {.success = false,
-                  .message = std::string("intro diagnostic frame preparation failed: ") +
+                  .message = std::string("incomplete intro fallback preparation failed: ") +
                              error.what()};
         SDL_SubmitGPUCommandBuffer(command);
         SDL_WaitForGPUIdle(device);
@@ -1804,9 +1808,9 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         break;
       }
     }
-    // Normal rendering receives no loader-derived or diagnostic fallback.
-    // Only a frame already admitted by the normal scene host may prepare a
-    // draw; without that authority the world pass below stays clear-only.
+    // The static fallback has no scene authority. Only a host-admitted frame
+    // may represent an active cutscene; the fallback merely presents the
+    // independently validated legal-picture receipt.
     std::unique_ptr<SdlIntroFrame> admitted_intro_host_frame;
     if (admitted_intro_frame != nullptr) {
       try {
@@ -2018,8 +2022,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
               pass, static_cast<Uint32>(draw.index_count), 1,
               static_cast<Uint32>(draw.first_index), 0, 0);
         }
-      if (diagnostic_intro_frame != nullptr)
-        diagnostic_intro_frame->draw(command, pass);
+      if (static_intro_fallback_frame != nullptr)
+        static_intro_fallback_frame->draw(command, pass);
       if (admitted_intro_host_frame != nullptr)
         admitted_intro_host_frame->draw(command, pass);
       SDL_EndGPURenderPass(pass);
@@ -2315,7 +2319,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     if (overlay_transfer != nullptr) {
       SDL_WaitForGPUIdle(device);
     }
-    if (diagnostic_intro_frame != nullptr || admitted_intro_host_frame != nullptr)
+    if (static_intro_fallback_frame != nullptr || admitted_intro_host_frame != nullptr)
       SDL_WaitForGPUIdle(device);
     release_overlay_transfers();
     ++frames;
@@ -2331,8 +2335,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   if (result.success && intro)
     result.message += " (" + std::to_string(gpu_intro->image_count()) +
         " source-backed intro images uploaded; automatic intro playback pending)";
-  if (result.success && intro_preview_diagnostic != nullptr)
-    result.message += " (source-backed intro picture rendered with generic fit projection; playback pending)";
+  if (result.success && intro_static_fallback != nullptr)
+    result.message += " (incomplete static intro fallback rendered from source-backed data; playback pending)";
   gpu_intro.reset();
   release_overlay(device, overlay);
   startup_textures.reset();

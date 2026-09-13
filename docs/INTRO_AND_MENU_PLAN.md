@@ -30,7 +30,7 @@ soundtrack files must never be required to launch.
 | Intro data | Directory construction, retained source/resource identities, partial deferred readers and cold first-cut preparation | Complete required readers, concrete loader-tail services and global lifecycle |
 | Renderer relations | Scene-owned initial relation lists resolved through canonical resources | Dynamic maintenance, separate List associations and accepted draw-record production |
 | MovieControl | Source-checked factory phase-two callback and retained service binding | Phase one, live external services, global dispatch and event-16 activation |
-| Intro picture | A source-backed static legal picture drawn using a generic fit projection | Authored camera, live cut timing, animation and admitted scene draws |
+| Intro picture | A labelled normal-startup fallback drawn from the reader-admitted legal picture using a generic fit projection | Authored camera, live cut timing, animation and admitted scene draws |
 | Scene host | Checked ordering boundaries and a first-frame assembler | Connection to the scene session and a repeatable ordinary update/render loop |
 | Intro audio | Source-bank bindings, decoders, channel service and SDL output adapters | Scene-driven start, readiness, update, stop and audible normal playback |
 | Menu data | Checked FF-StartUp package, normal-startup retained source hierarchy registry and BootMenu source discovery | Complete readers, menu activation and a concrete live scene factory |
@@ -47,14 +47,16 @@ reproduction route are maintained in the [I1 coverage matrix](INTRO_I1_COVERAGE_
 
 The current normal path is visible in [main.cpp](../src/main.cpp) and
 [sdl_gpu_runtime.cpp](../src/platform/sdl_gpu_runtime.cpp). It prepares a cold
-`NormalIntroSceneSession`, then passes its retained runtime to SDL. A static
-source-picture preview is built only for the explicit diagnostic command. The
-normal route does not construct `NormalIntroSceneHost`, complete the loader
-tail, update a cut or commit a menu scene. Source-picture diagnostics and
-synthetic BootMenu probes must remain separate from the production route.
-The verified normal GPU capture reaches the frame limit only after that
-fail-closed route; its world pass remains clear-only and it is not evidence of
-an intro frame, timed playback, or menu rendering.
+`NormalIntroSceneSession`, then passes its retained runtime to SDL. Its normal
+route now presents one static fallback after the exact legal-picture owner and
+component reader receipts are retained. The window title and runtime status
+label this as incomplete intro playback. It uses only the installed game's
+decoded image and authored quad data, with a project generic-fit projection;
+it does not construct `NormalIntroSceneHost`, complete the loader tail, update
+a cut, select an authored camera, run MovieControl, or commit a menu scene.
+The fallback is not evidence of an intro frame, timed playback, or menu
+rendering. Source-picture diagnostics and synthetic BootMenu probes remain
+separate from the production route.
 
 ## Delivery order
 

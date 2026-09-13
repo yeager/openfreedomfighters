@@ -53,9 +53,22 @@ struct IntroPreviewSnapshot {
     IntroPreviewTarget target,
     IntroPreviewPolicy policy = IntroPreviewPolicy::exact_source_picture);
 
+// Builds the one bounded startup fallback that may be shown while native
+// cutscene playback is incomplete.  It requires the exact legal-picture
+// owner and component reader receipts and therefore cannot select an
+// arbitrary authored image.  The result is deliberately a static snapshot:
+// it does not run MovieControl, the outer loader tail, a scene lifecycle,
+// timing, audio, camera selection, or a transition.
+//
+// This is presentation-only proof of a retained source picture, not first-cut
+// admission.  A caller must keep the incomplete-startup label visible in its
+// own UI/status reporting and must not use this snapshot as a scene frame.
+[[nodiscard]] IntroPreviewSnapshot build_incomplete_intro_fallback(
+    const IntroRuntime &runtime, IntroPreviewTarget target);
+
 // Selects the CPU image set for one SDL intro-renderer lifetime.  Normal
 // retained startup owns every prepared intro image.  The explicitly supplied
-// diagnostic snapshot instead owns exactly the images named by its already
+// static fallback snapshot instead owns exactly the images named by its already
 // validated draw plan.  This does not select a picture, admit a scene, or
 // alter the retained runtime.
 [[nodiscard]] std::span<const IntroPreparedImage> select_intro_gpu_upload_images(
