@@ -28,6 +28,11 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 4
     steps:
+      - name: Prepare smoke diagnostics directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path smoke-diagnostics -Force | Out-Null
+          Set-Content -LiteralPath smoke-diagnostics/collection-status.txt -Encoding utf8 -Value 'CI-produced Windows installed-executable smoke diagnostics. No game data is collected.'
       - name: Download installed executable smoke input
         uses: actions/download-artifact@v8
         with:
@@ -43,11 +48,13 @@ jobs:
         timeout-minutes: 2
         run: |
           $ErrorActionPreference = 'Stop'
+          $diagnostics = Join-Path (Get-Location) 'smoke-diagnostics'
           function Write-InstalledExecutableDiagnostics {
             param([Parameter(Mandatory = $true)][string]$Executable)
 
-            Write-Host "Installed executable diagnostics for $Executable"
-            Get-Item -LiteralPath $Executable | Format-List FullName,Length,CreationTimeUtc,LastWriteTimeUtc
+            Get-Item -LiteralPath $Executable |
+              Select-Object Name,Length,CreationTimeUtc,LastWriteTimeUtc |
+              ConvertTo-Json | Set-Content -LiteralPath (Join-Path $diagnostics 'executable-metadata.json') -Encoding utf8
             $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
             $dumpbin = if (Test-Path -LiteralPath $vswhere) {
               $installationPath = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
@@ -58,12 +65,12 @@ jobs:
               }
             }
             if ($dumpbin) {
-              Write-Host 'PE headers:'
-              & $dumpbin /headers $Executable
-              Write-Host 'PE dependencies:'
-              & $dumpbin /dependents $Executable
+              & $dumpbin /headers $Executable 2>&1 |
+                Out-File -LiteralPath (Join-Path $diagnostics 'pe-headers.txt') -Encoding utf8
+              & $dumpbin /dependents $Executable 2>&1 |
+                Out-File -LiteralPath (Join-Path $diagnostics 'pe-dependencies.txt') -Encoding utf8
             } else {
-              Write-Warning 'dumpbin.exe was not available for PE diagnostics.'
+              Set-Content -LiteralPath (Join-Path $diagnostics 'pe-diagnostics.txt') -Encoding utf8 -Value 'dumpbin.exe was not available on this runner.'
             }
           }
 
@@ -71,6 +78,18 @@ jobs:
           if (!(Test-Path -LiteralPath $archive)) { throw 'installed executable smoke archive is missing' }
           $inputRoot = Join-Path (Get-Location) 'smoke-input/unpacked'
           Expand-Archive -Path $archive -DestinationPath $inputRoot
+          Get-Item -LiteralPath $archive |
+            Select-Object Name,Length,CreationTimeUtc,LastWriteTimeUtc |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $diagnostics 'input-archive-metadata.json') -Encoding utf8
+          $inputLayout = Get-ChildItem -LiteralPath $inputRoot -Recurse -Force | ForEach-Object {
+            [PSCustomObject]@{
+              relativePath = $_.FullName.Substring($inputRoot.Length).TrimStart('\\')
+              type = if ($_.PSIsContainer) { 'directory' } else { 'file' }
+              length = if ($_.PSIsContainer) { $null } else { $_.Length }
+            }
+          }
+          $inputLayout | ConvertTo-Json -Depth 3 |
+            Set-Content -LiteralPath (Join-Path $diagnostics 'input-layout.json') -Encoding utf8
           $executable = Join-Path $inputRoot 'install-check/bin/openfreedomfighters.exe'
           $runtimeBin = Join-Path $inputRoot 'runtime'
           $expectedVersionPath = Join-Path $inputRoot 'expected-version.txt'
@@ -82,8 +101,8 @@ jobs:
           $env:PATH = "$runtimeBin;$env:PATH"
           Write-InstalledExecutableDiagnostics -Executable $executable
 
-          $versionStdout = Join-Path (Get-Location) 'installed-version.stdout'
-          $versionStderr = Join-Path (Get-Location) 'installed-version.stderr'
+          $versionStdout = Join-Path $diagnostics 'version.stdout.txt'
+          $versionStderr = Join-Path $diagnostics 'version.stderr.txt'
           & $executable --version 1> $versionStdout 2> $versionStderr
           $versionStatus = $LASTEXITCODE
           if ($versionStatus -ne 0) {
@@ -96,8 +115,8 @@ jobs:
 
           $missingDataRoot = Join-Path (Get-Location) 'absent-game-data'
           if (Test-Path -LiteralPath $missingDataRoot) { throw 'missing-data fixture root unexpectedly exists' }
-          $missingDataStdout = Join-Path (Get-Location) 'missing-data.stdout'
-          $missingDataStderr = Join-Path (Get-Location) 'missing-data.stderr'
+          $missingDataStdout = Join-Path $diagnostics 'missing-data.stdout.txt'
+          $missingDataStderr = Join-Path $diagnostics 'missing-data.stderr.txt'
           & $executable --data $missingDataRoot --locale en 1> $missingDataStdout 2> $missingDataStderr
           $missingDataStatus = $LASTEXITCODE
           if ($missingDataStatus -ne 3) { throw "installed missing-data launch exited with $missingDataStatus, expected 3" }
@@ -106,3 +125,11 @@ jobs:
           if ($missingDataMessage -cne 'Game-data verification failed: game-data directory does not exist') {
             throw "installed missing-data launch reported unexpected stderr: $missingDataMessage"
           }
+      - name: Upload installed executable smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installed-smoke-diagnostics
+          path: smoke-diagnostics
+          if-no-files-found: warn
+          retention-days: 1
