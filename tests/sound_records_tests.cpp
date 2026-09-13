@@ -17,6 +17,7 @@ off::data::SoundDefinitionBank bank() {
   const auto word = [&](std::size_t offset, std::uint32_t value) {
     for (unsigned i=0;i<4;++i) bytes[offset+i]=std::byte((value>>(i*8))&255);
   };
+  word(0,16); word(4,64); word(8,3); word(12,4);
   word(17,1); word(21,48); word(25,0xabcdef01);
   word(29,std::bit_cast<std::uint32_t>(3.25F));
   bytes[48]=std::byte{'x'};

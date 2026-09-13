@@ -20,9 +20,12 @@ struct SimpleSoundDefinition {
   std::string logical_identifier;
 };
 
-// Owns the COMPLETE unwrapped SND image. No global header layout is inferred.
-// Construction validates only the explicit native byte budget; record validation
-// happens on lookup. Successful parsing does not prove every bank variant valid.
+// Owns the complete unwrapped SND image.  The four-word member envelope is
+// corpus-validated before any interior definition reference can be accepted:
+// its declared payload size is member bytes minus 48, its declared member size
+// is exact, and the remaining two words are the observed 3/4 revision pair.
+// Record validation still happens on lookup. Successful parsing does not prove
+// every definition variant valid or authorize playback.
 class SoundDefinitionBank final {
 public:
   [[nodiscard]] static SoundDefinitionBank parse(

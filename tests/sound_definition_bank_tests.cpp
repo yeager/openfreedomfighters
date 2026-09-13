@@ -3,6 +3,7 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 namespace {
 using off::data::SoundDefinitionBank;
@@ -17,7 +18,8 @@ void word(std::vector<std::byte>& bytes, std::size_t offset, std::uint32_t value
 }
 std::vector<std::byte> fixture() {
   std::vector<std::byte> bytes(80, std::byte{0xaa});
-  // Independently authored fixture. There is no assumed/stripped bank header.
+  // Independently authored complete SND envelope.
+  word(bytes, 0, 32); word(bytes, 4, 80); word(bytes, 8, 3); word(bytes, 12, 4);
   word(bytes, 19, 1); word(bytes, 23, 61); word(bytes, 27, 0xdeadbeef);
   word(bytes, 31, std::bit_cast<std::uint32_t>(3.25F));
   bytes[61] = std::byte{'a'}; bytes[62] = std::byte{'/'};
@@ -45,9 +47,12 @@ int main() {
     rejects([&] { (void)bank.simple_definition(65); });
     rejects([&] { (void)bank.simple_definition(UINT32_MAX); });
     rejects([] { (void)SoundDefinitionBank::parse(fixture(), 79); });
-    const auto empty = SoundDefinitionBank::parse({}, 0);
-    check(!empty.simple_definition(0), "empty image has no fabricated header requirements or nonzero records");
-    rejects([&] { (void)empty.simple_definition(1); });
+    rejects([] { (void)SoundDefinitionBank::parse({}, 0); });
+    for (const auto mutation : {std::pair{0U, 31U}, std::pair{4U, 79U},
+                                std::pair{8U, 2U}, std::pair{12U, 5U}}) {
+      auto bad = fixture(); word(bad, mutation.first, mutation.second);
+      rejects([&] { (void)SoundDefinitionBank::parse(bad, bad.size()); });
+    }
     for (auto type : {0U, 2U, UINT32_MAX}) {
       auto bad = fixture(); word(bad, 19, type);
       rejects([&] { (void)SoundDefinitionBank::parse(bad, 80).simple_definition(19); });

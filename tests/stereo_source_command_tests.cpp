@@ -18,6 +18,7 @@ void put(std::vector<std::byte>& bytes,std::size_t offset,std::uint32_t value) {
 int main() {
   try {
     std::vector<std::byte> bytes(80);
+    put(bytes,0,32); put(bytes,4,80); put(bytes,8,3); put(bytes,12,4);
     for(const auto offset:{16U,32U}) {
       put(bytes,offset,1); put(bytes,offset+4,72);
       put(bytes,offset+8,offset==16?17:1); put(bytes,offset+12,std::bit_cast<std::uint32_t>(9.0F));

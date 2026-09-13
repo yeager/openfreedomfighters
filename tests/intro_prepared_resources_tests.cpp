@@ -245,7 +245,7 @@ struct Fixture {
     std::array<std::size_t, 10> block_offsets{};
     std::array<std::size_t, 10> attachment_offsets{};
     std::size_t remaining_sound_source_offset{};
-    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false,bool room_animation_scope=false,bool lens_flare_scope=false,bool remaining_scope=false,bool three_fade_targets=false) : payload(1024), snd(16) {
+    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false,bool room_animation_scope=false,bool lens_flare_scope=false,bool remaining_scope=false,bool three_fade_targets=false) : payload(1024) {
         if(language_group && !leading_group) throw std::runtime_error("language fixture requires leading group");
         if(camera_row && !language_group) throw std::runtime_error("camera row fixture requires language group");
         if(second_window && !camera_row) throw std::runtime_error("second Window fixture requires Camera row");
@@ -697,7 +697,9 @@ struct Fixture {
         const auto sequences = tex.size(); tex.resize(sequences + 8192);
         set(tex, 0, static_cast<std::uint32_t>(end)); set(tex, 4, static_cast<std::uint32_t>(sequences)); set(tex, 8, 3); set(tex, 12, 4);
         if(include_sound || remaining_scope) {
+            snd.resize(16);
             text(snd,"Independent/Sound.asset"); snd.resize(144);
+            set(snd,0,96); set(snd,4,144); set(snd,8,3); set(snd,12,4);
             set(snd,128,1); set(snd,132,16); set(snd,136,0x1234);
             set(snd,140,std::bit_cast<std::uint32_t>(12.375F));
         }

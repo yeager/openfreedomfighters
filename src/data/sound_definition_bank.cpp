@@ -10,8 +10,17 @@ namespace off::data {
 
 SoundDefinitionBank SoundDefinitionBank::parse(
     std::span<const std::byte> image, std::size_t byte_budget) {
-  if (image.size() > byte_budget || image.size() > std::numeric_limits<std::uint32_t>::max())
+  constexpr std::size_t declared_payload_bias = 48U;
+  if (image.size() > byte_budget ||
+      image.size() > std::numeric_limits<std::uint32_t>::max())
     throw std::runtime_error("Sound definition bank exceeds the native byte budget");
+  if (image.size() < declared_payload_bias)
+    throw std::runtime_error("Sound definition bank is smaller than its envelope");
+  const ByteReader reader(image);
+  if (reader.u32(0U) != image.size() - declared_payload_bias ||
+      reader.u32(4U) != image.size() || reader.u32(8U) != 3U ||
+      reader.u32(12U) != 4U)
+    throw std::runtime_error("Sound definition bank envelope is invalid");
   SoundDefinitionBank result;
   result.image_.assign(image.begin(), image.end());
   return result;

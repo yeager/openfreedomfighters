@@ -67,11 +67,16 @@ int main() {
             "out-of-range signed input bypasses response without clamping");
     }
     off::audio::SoundRecordRegistry live;
-    std::vector<std::byte> bytes(32);
+    std::vector<std::byte> bytes(64);
+    const auto put = [&](std::size_t offset,std::uint32_t value) {
+      for (unsigned i=0;i<4;++i)
+        bytes[offset+i]=static_cast<std::byte>((value>>(i*8))&255U);
+    };
+    put(0,16); put(4,64); put(8,3); put(12,4);
     bytes[16]=std::byte{1};
     const auto duration=std::bit_cast<std::uint32_t>(9.25F);
     for (unsigned i=0;i<4;++i) bytes[28+i]=static_cast<std::byte>((duration>>(8*i))&255);
-    const auto bank=off::data::SoundDefinitionBank::parse(bytes,32);
+    const auto bank=off::data::SoundDefinitionBank::parse(bytes,64);
     auto first=live.create(19), other=live.create(23);
     first.get().active_source=16; other.get().active_source=16; other.get().category=1;
     check(live.prepare(first.binding(),bank,100) && live.prepare(other.binding(),bank,100),
