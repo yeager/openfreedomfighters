@@ -131,6 +131,12 @@ emulator; it does not establish intro playback, menu behavior, or gameplay.
 A bounded native startup completed a local capture after preparing the retained
 intro resources without exporting game assets.
 
+On 2026-09-14, a clean native Linux x86-64 build of v0.1.0 completed from
+`main` and passed `--probe-intro-readiness` against a verified owned
+installation. The source-free receipt confirms the reader bracket completed
+while lifecycle, renderer, audio, and playback remained cold; incomplete reader
+coverage therefore continues to block normal intro admission as intended.
+
 The current Linux x86-64 suite passes all 127 tests with software Vulkan;
 14 targeted tests also pass ASan/UBSan with leak detection. A
 separate owned-data run validates the 470-resource intro's relation lists and
