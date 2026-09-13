@@ -76,6 +76,10 @@ tokens, and every mismatch. Each rejection selects the game-audio path. The
 repository contains no cue bindings, titles, filenames, samples, timing, or
 retail text, and this resolver does not start playback.
 
+The private, fresh-isolated observation and import boundary for future reviewed
+cue mappings is documented in `PRIVATE_SOUNDTRACK_CUE_EVIDENCE.md`. It is
+offline-only: no private receipt is loaded by the current runtime.
+
 **Current implementation:** startup exposes hash-verified soundtrack candidates
 and reports optional failures. The candidate catalog groups album editions by
 their filename ordinal, preferring FLAC and retaining MP3 as a fallback; an
