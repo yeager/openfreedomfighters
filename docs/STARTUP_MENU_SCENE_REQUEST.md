@@ -54,7 +54,10 @@ The utility does not open or instrument an original executable or game data.
 Its input and output must remain outside this repository. It rejects parent
 traversal and every symlink component, opens each existing path component by
 descriptor with `O_NOFOLLOW`, bounds input to a regular private file, and
-creates output once with `O_EXCL` mode `0600`.
+creates output once with `O_EXCL` mode `0600`. The parent directory must
+already exist and be a real private directory. This observation tooling
+requires POSIX descriptor-relative `O_NOFOLLOW` support and fails closed where
+that support is unavailable.
 
 ```sh
 python3 tools/menu_scene_request_trace.py PRIVATE_INPUT.json PRIVATE_OUTPUT.json
@@ -62,14 +65,16 @@ python3 tools/menu_scene_request_trace.py PRIVATE_INPUT.json PRIVATE_OUTPUT.json
 
 ## Repeat gate
 
-`tools/menu_scene_request_repeat_pair.py` accepts two independently collected,
+`tools/menu_scene_request_repeat_pair.py` accepts two separately supplied,
 already-sanitized v2 traces. They must be byte-identical, pass the v2 schema
 again, and terminate successfully with delivered selection, an active-window
 replacement that explicitly delivered that selection, a receiver-to-manager
 entry, a `request_only` or `clear_then_request` manager request, and a
 validated target. Package admission remains optional; when present at the
-successful terminal edge it must be admitted. The repeat-pair output retains
-only those source-free records and has the same private-path protections.
+successful terminal edge it must be admitted. The tool proves equality of the
+supplied artifacts, not that they were collected in separate runs; collection
+independence remains a review requirement. The repeat-pair output retains only
+those source-free records and has the same private-path protections.
 
 ```sh
 python3 tools/menu_scene_request_repeat_pair.py FIRST_V2.json SECOND_V2.json PRIVATE_PAIR.json
