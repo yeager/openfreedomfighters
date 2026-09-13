@@ -2132,11 +2132,9 @@ int main() {
   std::vector<std::string> lifecycle_order;
   const off::runtime::StartupBootMenuReaderServices reader_services{
       .event_registry_live = [] { return true; },
-      .resolve_identity =
-          [&](std::uint64_t identity) -> std::optional<std::uint16_t> {
+      .resolve_reader_identity = [&]() -> std::optional<std::uint16_t> {
         ++resolve_calls;
-        return identity == 101U ? std::optional<std::uint16_t>{31U}
-                                : std::nullopt;
+        return std::uint16_t{31U};
       },
       .live_window_owner = [](std::uint64_t owner) { return owner == 81U; },
       .live_boot_menu_component =
@@ -2151,7 +2149,7 @@ int main() {
   rejected = false;
   try {
     static_cast<void>(generic_construction_admission.read_component(
-        std::move(boot_token), 101U, reader_services));
+        std::move(boot_token), reader_services));
   } catch (const std::runtime_error &) {
     rejected = true;
   }
@@ -2160,9 +2158,8 @@ int main() {
         "boot-menu reader rejects construction not attested by the checked "
         "source-backed factory");
 
-  auto reader_token =
-      boot_menu.read_component(source_backed_boot_token(9U), 101U,
-                               reader_services);
+  auto reader_token = boot_menu.read_component(source_backed_boot_token(9U),
+                                                reader_services);
   check(boot_menu.reader_complete() && !boot_menu.initialized() &&
             !boot_menu.failed() && reader_token.valid() &&
             resolve_calls == 1U && boot_menu.reader_id() == 31U &&
@@ -2177,12 +2174,10 @@ int main() {
   const off::runtime::StartupBootMenuInitializationServices
       initialization_services{
           .event_registry_live = [] { return true; },
-          .resolve_identity =
-              [&](std::uint64_t identity) -> std::optional<std::uint16_t> {
+          .resolve_routing_identity = [&]() -> std::optional<std::uint16_t> {
             ++resolve_calls;
             lifecycle_order.push_back("second-lookup");
-            return identity == 102U ? std::optional<std::uint16_t>{32U}
-                                    : std::nullopt;
+            return std::uint16_t{32U};
           },
           .live_window_owner = [](std::uint64_t owner) { return owner == 81U; },
           .live_boot_menu_component =
@@ -2203,7 +2198,7 @@ int main() {
               },
       };
   auto initialization_receipt = boot_menu.initialize_component(
-      std::move(reader_token), 102U, initialization_services);
+      std::move(reader_token), initialization_services);
   check(boot_menu.initialized() && !boot_menu.failed() && resolve_calls == 2U &&
             initialized_owner == 81U && initialized_component == 82U &&
             initialized_route == 32U && boot_menu.reader_id() == 31U &&
@@ -2224,7 +2219,7 @@ int main() {
   rejected = false;
   try {
     static_cast<void>(missing_registry.read_component(
-        std::move(missing_token), 101U, unavailable_registry_services));
+        std::move(missing_token), unavailable_registry_services));
   } catch (const std::runtime_error &) {
     rejected = true;
   }
@@ -2238,14 +2233,14 @@ int main() {
   off::runtime::StartupBootMenuAdmission routing_failure;
   auto routing_token = source_backed_boot_token(11U);
   auto routing_reader = routing_failure.read_component(std::move(routing_token),
-                                                       101U, reader_services);
+                                                       reader_services);
   auto failed_routing_services = initialization_services;
   failed_routing_services.route_retained_object =
       [](std::uint64_t, std::uint64_t, std::uint16_t) { return false; };
   rejected = false;
   try {
     static_cast<void>(routing_failure.initialize_component(
-        std::move(routing_reader), 102U, failed_routing_services));
+        std::move(routing_reader), failed_routing_services));
   } catch (const std::runtime_error &) {
     rejected = true;
   }
@@ -2266,57 +2261,47 @@ int main() {
   off::runtime::StartupBootMenuAdmission store_before_common;
   bool reader_id_stored_before_common{};
   auto store_reader_services = reader_services;
-  store_reader_services.resolve_identity =
-      [](std::uint64_t key) -> std::optional<std::uint16_t> {
-    return key == 201U ? std::optional<std::uint16_t>{41U} : std::nullopt;
-  };
+  store_reader_services.resolve_reader_identity =
+      []() -> std::optional<std::uint16_t> { return std::uint16_t{41U}; };
   store_reader_services.common_component_reader =
       [&](std::uint64_t, std::uint64_t) {
         reader_id_stored_before_common = store_before_common.reader_id() == 41U;
         return true;
       };
   auto store_reader_token = store_before_common.read_component(
-      new_boot_token(), 201U, store_reader_services);
+      new_boot_token(), store_reader_services);
   check(store_reader_token.valid() && reader_id_stored_before_common,
         "boot-menu reader stores its first identity before the common reader");
 
   off::runtime::StartupBootMenuAdmission equality_allowed;
   auto equality_reader_services = reader_services;
-  equality_reader_services.resolve_identity =
-      [](std::uint64_t key) -> std::optional<std::uint16_t> {
-    return key == 202U ? std::optional<std::uint16_t>{52U} : std::nullopt;
-  };
+  equality_reader_services.resolve_reader_identity =
+      []() -> std::optional<std::uint16_t> { return std::uint16_t{52U}; };
   auto equality_reader_token = equality_allowed.read_component(
-      new_boot_token(), 202U, equality_reader_services);
+      new_boot_token(), equality_reader_services);
   auto equality_initialization_services = initialization_services;
-  equality_initialization_services.resolve_identity =
-      [](std::uint64_t key) -> std::optional<std::uint16_t> {
-    return key == 203U ? std::optional<std::uint16_t>{52U} : std::nullopt;
-  };
+  equality_initialization_services.resolve_routing_identity =
+      []() -> std::optional<std::uint16_t> { return std::uint16_t{52U}; };
   equality_initialization_services.route_retained_object =
       [](std::uint64_t, std::uint64_t, std::uint16_t route) {
         return route == 52U;
       };
   auto equality_receipt = equality_allowed.initialize_component(
-      std::move(equality_reader_token), 203U, equality_initialization_services);
+      std::move(equality_reader_token), equality_initialization_services);
   check(equality_allowed.initialized() && equality_allowed.reader_id() == 52U &&
             equality_allowed.routing_id() == 52U && equality_receipt.valid(),
         "boot-menu permits equal opaque reader and routing identities");
 
   off::runtime::StartupBootMenuAdmission latch_after_route;
   auto latch_reader_services = reader_services;
-  latch_reader_services.resolve_identity =
-      [](std::uint64_t key) -> std::optional<std::uint16_t> {
-    return key == 204U ? std::optional<std::uint16_t>{61U} : std::nullopt;
-  };
+  latch_reader_services.resolve_reader_identity =
+      []() -> std::optional<std::uint16_t> { return std::uint16_t{61U}; };
   auto latch_reader_token = latch_after_route.read_component(
-      new_boot_token(), 204U, latch_reader_services);
+      new_boot_token(), latch_reader_services);
   bool unlatch_seen_during_route{};
   auto latch_initialization_services = initialization_services;
-  latch_initialization_services.resolve_identity =
-      [](std::uint64_t key) -> std::optional<std::uint16_t> {
-    return key == 205U ? std::optional<std::uint16_t>{62U} : std::nullopt;
-  };
+  latch_initialization_services.resolve_routing_identity =
+      []() -> std::optional<std::uint16_t> { return std::uint16_t{62U}; };
   latch_initialization_services.route_retained_object =
       [&](std::uint64_t, std::uint64_t, std::uint16_t route) {
         unlatch_seen_during_route = route == 62U && !latch_after_route.initialized() &&
@@ -2324,7 +2309,7 @@ int main() {
         return true;
       };
   auto latch_receipt = latch_after_route.initialize_component(
-      std::move(latch_reader_token), 205U, latch_initialization_services);
+      std::move(latch_reader_token), latch_initialization_services);
   check(unlatch_seen_during_route && latch_after_route.initialized() &&
             latch_after_route.routing_id() == 62U && latch_receipt.valid(),
         "boot-menu success latch is set only after retained routing succeeds");
@@ -2332,8 +2317,8 @@ int main() {
   off::runtime::StartupBootMenuAdmission reader_failure_order;
   std::vector<std::string> reader_failure_order_calls;
   auto failed_first_reader_services = reader_services;
-  failed_first_reader_services.resolve_identity =
-      [&](std::uint64_t) -> std::optional<std::uint16_t> {
+  failed_first_reader_services.resolve_reader_identity =
+      [&]() -> std::optional<std::uint16_t> {
     reader_failure_order_calls.push_back("first-resolve");
     return std::nullopt;
   };
@@ -2345,7 +2330,7 @@ int main() {
   rejected = false;
   try {
     static_cast<void>(reader_failure_order.read_component(
-        new_boot_token(), 206U, failed_first_reader_services));
+        new_boot_token(), failed_first_reader_services));
   } catch (const std::runtime_error &) {
     rejected = true;
   }
@@ -2355,7 +2340,7 @@ int main() {
 
   off::runtime::StartupBootMenuAdmission common_initialization_failure;
   auto common_failure_reader = common_initialization_failure.read_component(
-      new_boot_token(), 101U, reader_services);
+      new_boot_token(), reader_services);
   std::vector<std::string> common_initialization_failure_calls;
   auto failed_common_initialization_services = initialization_services;
   failed_common_initialization_services.common_window_initialization =
@@ -2363,8 +2348,8 @@ int main() {
         common_initialization_failure_calls.push_back("common-initialization");
         return false;
       };
-  failed_common_initialization_services.resolve_identity =
-      [&](std::uint64_t) -> std::optional<std::uint16_t> {
+  failed_common_initialization_services.resolve_routing_identity =
+      [&]() -> std::optional<std::uint16_t> {
     common_initialization_failure_calls.push_back("second-resolve");
     return std::optional<std::uint16_t>{71U};
   };
@@ -2376,8 +2361,7 @@ int main() {
   rejected = false;
   try {
     static_cast<void>(common_initialization_failure.initialize_component(
-        std::move(common_failure_reader), 207U,
-        failed_common_initialization_services));
+        std::move(common_failure_reader), failed_common_initialization_services));
   } catch (const std::runtime_error &) {
     rejected = true;
   }
@@ -2388,7 +2372,7 @@ int main() {
 
   off::runtime::StartupBootMenuAdmission second_resolve_failure;
   auto second_resolve_reader = second_resolve_failure.read_component(
-      new_boot_token(), 101U, reader_services);
+      new_boot_token(), reader_services);
   std::vector<std::string> second_resolve_failure_calls;
   auto failed_second_resolve_services = initialization_services;
   failed_second_resolve_services.common_window_initialization =
@@ -2396,8 +2380,8 @@ int main() {
         second_resolve_failure_calls.push_back("common-initialization");
         return true;
       };
-  failed_second_resolve_services.resolve_identity =
-      [&](std::uint64_t) -> std::optional<std::uint16_t> {
+  failed_second_resolve_services.resolve_routing_identity =
+      [&]() -> std::optional<std::uint16_t> {
     second_resolve_failure_calls.push_back("second-resolve");
     return std::nullopt;
   };
@@ -2409,7 +2393,7 @@ int main() {
   rejected = false;
   try {
     static_cast<void>(second_resolve_failure.initialize_component(
-        std::move(second_resolve_reader), 208U, failed_second_resolve_services));
+        std::move(second_resolve_reader), failed_second_resolve_services));
   } catch (const std::runtime_error &) {
     rejected = true;
   }

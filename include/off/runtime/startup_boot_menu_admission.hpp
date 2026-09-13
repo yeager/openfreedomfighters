@@ -86,9 +86,12 @@ private:
 
 struct StartupBootMenuReaderServices {
   std::function<bool()> event_registry_live;
-  // Resolves a caller-owned opaque native registry key. It is not a platform
-  // action, a serialized property, or a menu-selection identifier.
-  std::function<std::optional<std::uint16_t>(std::uint64_t)> resolve_identity;
+  // Resolves the reader identity at the recovered runtime boundary. The
+  // lookup input is deliberately owned by that service: no caller may stand
+  // in for unrecovered source/runtime state with an arbitrary integer.
+  // Neither the opaque lookup nor the result is a platform action, serialized
+  // property, or menu-selection identifier.
+  std::function<std::optional<std::uint16_t>()> resolve_reader_identity;
   std::function<bool(std::uint64_t)> live_window_owner;
   std::function<bool(std::uint64_t)> live_boot_menu_component;
   // The common reader follows successful resolution of the first identity.
@@ -97,7 +100,9 @@ struct StartupBootMenuReaderServices {
 
 struct StartupBootMenuInitializationServices {
   std::function<bool()> event_registry_live;
-  std::function<std::optional<std::uint16_t>(std::uint64_t)> resolve_identity;
+  // As above, routing-key recovery remains inside the concrete runtime
+  // service rather than becoming a public caller parameter.
+  std::function<std::optional<std::uint16_t>()> resolve_routing_identity;
   std::function<bool(std::uint64_t)> live_window_owner;
   std::function<bool(std::uint64_t)> live_boot_menu_component;
   // Common initialization must precede the second lookup and retained route.
@@ -113,14 +118,12 @@ class StartupBootMenuAdmission final {
 public:
   [[nodiscard]] StartupBootMenuReaderToken
   read_component(StartupBootControllerToken construction,
-                 std::uint64_t first_lookup_key,
                  const StartupBootMenuReaderServices &services) {
     if (busy_ || failed_ || reader_complete_ || initialized_) {
       throw std::runtime_error("Startup boot-menu reader is unavailable");
     }
     if (!construction.valid() || !construction.source_backed_factory_ ||
-        first_lookup_key == 0U ||
-        !services.event_registry_live || !services.resolve_identity ||
+        !services.event_registry_live || !services.resolve_reader_identity ||
         !services.live_window_owner || !services.live_boot_menu_component ||
         !services.common_component_reader) {
       failed_ = true;
@@ -134,7 +137,7 @@ public:
           !services.live_boot_menu_component(construction.component())) {
         throw std::runtime_error("Startup boot-menu reader owner is not live");
       }
-      const auto reader = services.resolve_identity(first_lookup_key);
+      const auto reader = services.resolve_reader_identity();
       if (!reader || *reader == 0U) {
         throw std::runtime_error("Startup boot-menu reader identity resolution failed");
       }
@@ -158,15 +161,14 @@ public:
 
   [[nodiscard]] StartupBootMenuInitializationReceipt
   initialize_component(StartupBootMenuReaderToken reader_complete,
-                       std::uint64_t second_lookup_key,
                        const StartupBootMenuInitializationServices &services) {
     if (busy_ || failed_ || !reader_complete_ || initialized_ ||
         !reader_complete.valid() || reader_complete.admission_ != this ||
         reader_complete.reader_id_ != reader_id_) {
       throw std::runtime_error("Startup boot-menu initialization is unavailable");
     }
-    if (second_lookup_key == 0U || !services.event_registry_live ||
-        !services.resolve_identity || !services.live_window_owner ||
+    if (!services.event_registry_live || !services.resolve_routing_identity ||
+        !services.live_window_owner ||
         !services.live_boot_menu_component ||
         !services.common_window_initialization ||
         !services.route_retained_object) {
@@ -187,7 +189,7 @@ public:
                                                  reader_complete.component())) {
         throw std::runtime_error("Startup boot-menu common initialization failed");
       }
-      const auto routing = services.resolve_identity(second_lookup_key);
+      const auto routing = services.resolve_routing_identity();
       if (!routing || *routing == 0U) {
         throw std::runtime_error(
             "Startup boot-menu routing identity resolution failed");
