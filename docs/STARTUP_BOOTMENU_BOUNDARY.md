@@ -36,6 +36,11 @@ receipt for a missing service, dead owner/component, failed common
 initialization, unresolved second identity, or failed routing; each failure
 latches the admission closed.
 
+The two identity-resolution calls are owned by the concrete runtime services.
+Their lookup inputs are not parameters of the portable lifecycle boundary:
+until those inputs are recovered, a caller cannot substitute arbitrary numeric
+values merely to manufacture a reader or initialization receipt.
+
 This is not input admission. The first resolved identity is opaque; it is not a
 key, controller button, action-map entry, or proof that the native component
 handler accepts it. The two registry keys/results remain separate opaque roles;
