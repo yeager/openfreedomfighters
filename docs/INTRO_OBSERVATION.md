@@ -36,6 +36,12 @@ This corroborates the broad opening-state ordering recorded above. It does not
 authorize a pixel replica, timeline implementation, or automatic native intro
 presentation.
 
+A private capture-set audit retained five mutually distinct full-window samples
+at one 16:9 capture extent. It corroborates that the observed opening changes
+visual state before gameplay; it does not establish a scene count, an authored
+viewport, frame durations, transition semantics, or a playback order beyond
+the separately observed broad chronology.
+
 ## What it does not establish
 
 The sample does not identify the serialized sequence-player records, frame
