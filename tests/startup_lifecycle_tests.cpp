@@ -2230,6 +2230,21 @@ int main() {
         "boot-menu reader fails closed without exposing an identity when the "
         "registry is absent");
 
+  off::runtime::StartupBootMenuAdmission missing_reader_resolution;
+  auto missing_reader_services = reader_services;
+  missing_reader_services.resolve_reader_identity = {};
+  rejected = false;
+  try {
+    static_cast<void>(missing_reader_resolution.read_component(
+        source_backed_boot_token(10U), missing_reader_services));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected && missing_reader_resolution.failed() &&
+            missing_reader_resolution.reader_id() == 0U,
+        "boot-menu reader requires its concrete resolver service rather than "
+        "a caller-supplied lookup value");
+
   off::runtime::StartupBootMenuAdmission routing_failure;
   auto routing_token = source_backed_boot_token(11U);
   auto routing_reader = routing_failure.read_component(std::move(routing_token),
@@ -2250,6 +2265,24 @@ int main() {
             routing_failure.routing_id() == 0U,
         "boot-menu initialization does not expose partial state when retained "
         "routing fails");
+
+  off::runtime::StartupBootMenuAdmission missing_routing_resolution;
+  auto missing_routing_reader = missing_routing_resolution.read_component(
+      source_backed_boot_token(11U), reader_services);
+  auto missing_routing_services = initialization_services;
+  missing_routing_services.resolve_routing_identity = {};
+  rejected = false;
+  try {
+    static_cast<void>(missing_routing_resolution.initialize_component(
+        std::move(missing_routing_reader), missing_routing_services));
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected && missing_routing_resolution.failed() &&
+            missing_routing_resolution.reader_id() == 0U &&
+            missing_routing_resolution.routing_id() == 0U,
+        "boot-menu initialization requires its concrete routing resolver "
+        "service rather than a caller-supplied lookup value");
 
   // These focused checks model the independently recovered call boundaries:
   // first identity storage precedes the common reader; common initialization
