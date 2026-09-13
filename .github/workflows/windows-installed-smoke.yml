@@ -87,7 +87,7 @@ jobs:
           & $executable --version 1> $versionStdout 2> $versionStderr
           $versionStatus = $LASTEXITCODE
           if ($versionStatus -ne 0) {
-            throw "installed executable --version failed with exit code $versionStatus: $([System.IO.File]::ReadAllText($versionStderr))"
+            throw "installed executable --version failed with exit code ${versionStatus}: $([System.IO.File]::ReadAllText($versionStderr))"
           }
           $versionOutput = [System.IO.File]::ReadAllText($versionStdout).TrimEnd("`r", "`n")
           if ($versionOutput -cne "OpenFreedomFighters $expectedVersion") {
