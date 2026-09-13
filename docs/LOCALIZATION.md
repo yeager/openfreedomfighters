@@ -50,13 +50,16 @@ The list balances the original market, Nordic coverage, broad PC/Steam audiences
 
 Translation catalogs are keyed by stable semantic IDs. The current catalog
 builder rejects missing or duplicate IDs, empty entries, invalid locale or
-message IDs, and invalid UTF-8; tests also cover every built-in message in
-each of the 20 F10 locales and the locale fallback order. Original retail
+message IDs, invalid UTF-8, and an invalid formatting contract. The only
+current project formatting contract is exactly one `{seconds}` marker on the
+revert countdown; other messages may not contain formatting braces. Tests also
+cover every built-in message in each of the 20 F10 locales and the locale
+fallback order. Original retail
 strings are read at runtime from the user's data where technically possible
 and are never committed. New Swedish and other translations require
 independently contributed text with an explicit license grant. Placeholder
-compatibility, accelerator-collision, pseudo-localization, and UI-overflow
-checks remain planned work, not current CI guarantees.
+contracts beyond that countdown, accelerator-collision checks, and complete
+game UI overflow checks remain planned work, not current CI guarantees.
 
 ## Private retail-text extraction
 

@@ -50,6 +50,26 @@ bool valid_utf8(std::string_view value) noexcept {
   return true;
 }
 
+// The project-authored catalog currently has exactly one formatting contract.
+// Keep it structural and inspect only catalog text: this API must never become
+// a way to parse, transform, or validate retail LOC data.
+bool valid_format_contract(MessageId id, std::string_view value) noexcept {
+  constexpr std::string_view seconds_marker{"{seconds}"};
+  const auto first_open = value.find('{');
+  const auto first_close = value.find('}');
+  if (id != MessageId::reverting_in_seconds)
+    return first_open == std::string_view::npos &&
+           first_close == std::string_view::npos;
+
+  const auto marker = value.find(seconds_marker);
+  return marker != std::string_view::npos &&
+         value.find(seconds_marker, marker + seconds_marker.size()) ==
+             std::string_view::npos &&
+         first_open == marker && first_close == marker + seconds_marker.size() - 1U &&
+         value.find('{', marker + 1U) == std::string_view::npos &&
+         value.find('}', marker + seconds_marker.size()) == std::string_view::npos;
+}
+
 std::optional<Locale> locale_from_tag(std::string_view tag) noexcept {
   // Keep the project-owned catalog on the same input boundary as private
   // translation packs. In particular, a malformed explicit --locale must not
@@ -236,6 +256,9 @@ ProjectCatalog::build(std::span<const CatalogEntry> entries) {
       return {.catalog = std::nullopt, .error = CatalogError::empty_message};
     if (!valid_utf8(entry.text))
       return {.catalog = std::nullopt, .error = CatalogError::invalid_utf8};
+    if (!valid_format_contract(entry.id, entry.text))
+      return {.catalog = std::nullopt,
+              .error = CatalogError::invalid_format_contract};
     if (seen[locale][id])
       return {.catalog = std::nullopt,
               .error = CatalogError::duplicate_message};

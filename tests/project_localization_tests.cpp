@@ -4,6 +4,7 @@
 
 #include <array>
 #include <iostream>
+#include <string>
 #include <vector>
 
 namespace {
@@ -194,5 +195,32 @@ int main() {
   check(!duplicate_message.catalog &&
             duplicate_message.error == CatalogError::duplicate_message,
         "duplicate message IDs are rejected");
+  std::vector<CatalogEntry> complete_entries;
+  complete_entries.reserve(locale_count * message_id_count);
+  for (const auto locale : locale_tags)
+    for (std::size_t id{}; id < message_id_count; ++id) {
+      const auto message = static_cast<MessageId>(id);
+      const auto text = catalog.resolve(message, locale, "en-US");
+      check(text.has_value(), "fixture obtains a complete authored catalog");
+      complete_entries.push_back(
+          {static_cast<Locale>(complete_entries.size() / message_id_count),
+           message, *text});
+    }
+  const auto accepted_complete = ProjectCatalog::build(complete_entries);
+  check(accepted_complete.catalog.has_value(),
+        "the complete authored catalog satisfies its formatting contract");
+  complete_entries[static_cast<std::size_t>(MessageId::apply)].text =
+      "Apply {seconds}";
+  const auto unexpected_marker = ProjectCatalog::build(complete_entries);
+  check(!unexpected_marker.catalog &&
+            unexpected_marker.error == CatalogError::invalid_format_contract,
+        "only the declared countdown message may contain a formatting marker");
+  complete_entries[static_cast<std::size_t>(MessageId::apply)].text = "Apply";
+  complete_entries[static_cast<std::size_t>(MessageId::reverting_in_seconds)].text =
+      "Reverting in {seconds} seconds ({seconds})";
+  const auto repeated_marker = ProjectCatalog::build(complete_entries);
+  check(!repeated_marker.catalog &&
+            repeated_marker.error == CatalogError::invalid_format_contract,
+        "countdown translations require exactly one canonical seconds marker");
   return failures == 0 ? 0 : 1;
 }

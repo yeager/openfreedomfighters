@@ -102,6 +102,7 @@ enum class CatalogError : std::uint8_t {
   invalid_message_id,
   empty_message,
   invalid_utf8,
+  invalid_format_contract,
   duplicate_message,
   missing_message,
 };
