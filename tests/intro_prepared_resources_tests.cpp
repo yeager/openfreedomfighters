@@ -1052,6 +1052,31 @@ static OFF_NOINLINE void check_complete_runtime_post_directory(
                 particle_dispatch.owners_with_deferred_blocks==profiled_particle_owners &&
                 valid_particle_shapes,
             "synthetic ParticleEmitter owners produce bounded aggregate-only deferred shapes");
+      const auto unimplemented_reader_coverage=
+          host.unimplemented_attachment_reader_coverage_inventory();
+      check(unimplemented_reader_coverage.entries.size()==6U &&
+                std::ranges::all_of(unimplemented_reader_coverage.entries,[](const auto& entry) {
+                  return entry.attachment_instances>=entry.attachment_owners &&
+                      entry.owners_with_deferred_blocks<=entry.attachment_owners;
+                }),
+            "unimplemented attachment reader frontier retains only bounded aggregate populations");
+      const auto paramanim_entry=std::ranges::find_if(
+          unimplemented_reader_coverage.entries,[](const auto& entry) {
+            return entry.family==off::graphics::IntroUnimplementedAttachmentReaderFamily::parameter_animation;
+          });
+      const auto particle_entry=std::ranges::find_if(
+          unimplemented_reader_coverage.entries,[](const auto& entry) {
+            return entry.family==off::graphics::IntroUnimplementedAttachmentReaderFamily::particle_emitter;
+          });
+      check(paramanim_entry!=unimplemented_reader_coverage.entries.end() &&
+                particle_entry!=unimplemented_reader_coverage.entries.end() &&
+                paramanim_entry->attachment_owners==paramanim_dispatch.attachment_owners &&
+                paramanim_entry->attachment_instances==paramanim_dispatch.attachment_instances &&
+                paramanim_entry->owners_with_deferred_blocks==paramanim_dispatch.owners_with_deferred_blocks &&
+                particle_entry->attachment_owners==particle_dispatch.attachment_owners &&
+                particle_entry->attachment_instances==particle_dispatch.attachment_instances &&
+                particle_entry->owners_with_deferred_blocks==particle_dispatch.owners_with_deferred_blocks,
+            "unimplemented reader frontier agrees with separately profiled ParamAnim and ParticleEmitter populations");
       rejects([&]{host.prepare_scene_lifetime_keys_registry();});
       host.prepare_scene_lifetime_keys_backing();
       const auto* keys_backing=host.scene_lifetime_keys_backing();

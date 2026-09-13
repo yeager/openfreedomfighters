@@ -2156,6 +2156,51 @@ IntroRuntime::particle_emitter_deferred_dispatch_inventory() const {
   return result;
 }
 
+IntroUnimplementedAttachmentReaderCoverageInventory
+IntroRuntime::unimplemented_attachment_reader_coverage_inventory() const {
+  IntroUnimplementedAttachmentReaderCoverageInventory result;
+  if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete)
+    return result;
+  struct Candidate {
+    IntroUnimplementedAttachmentReaderFamily family;
+    std::string_view identifier;
+  };
+  constexpr std::array candidates{
+      Candidate{IntroUnimplementedAttachmentReaderFamily::film_grain_camera_setup,
+                "ZGEOM_FilmGrainCamSetup"},
+      Candidate{IntroUnimplementedAttachmentReaderFamily::lens_flare_control,
+                "ZWINDOW_LensFlareControl"},
+      Candidate{IntroUnimplementedAttachmentReaderFamily::parameter_animation,
+                "ZGEOM_ParamAnim"},
+      Candidate{IntroUnimplementedAttachmentReaderFamily::particle_emitter,
+                "ZGEOM_ParticleEmitter"},
+      Candidate{IntroUnimplementedAttachmentReaderFamily::lens_flare_lights,
+                "ZLIST_LensFlareLights"},
+      Candidate{IntroUnimplementedAttachmentReaderFamily::scroll_texture,
+                "ZSTDOBJ_ScrollTexture"},
+  };
+  const auto& sources = resources_.sources();
+  const auto& directory = sources.directory();
+  for (const auto candidate : candidates) {
+    IntroUnimplementedAttachmentReaderCoverageEntry entry{.family = candidate.family};
+    for (std::size_t row{}; row < directory.size(); ++row) {
+      std::size_t instances{};
+      for (std::size_t slot{}; slot < directory[row].attachments.size(); ++slot) {
+        if (sources.attachment_identifier(row, slot) == candidate.identifier)
+          ++instances;
+      }
+      if (instances == 0U)
+        continue;
+      ++entry.attachment_owners;
+      entry.attachment_instances += instances;
+      if (directory[row].deferred_source_offset != 0U)
+        ++entry.owners_with_deferred_blocks;
+    }
+    result.entries.push_back(entry);
+  }
+  return result;
+}
+
 void IntroRuntime::record_supported_reader_admission(const IntroDeferredReaderWork& work) {
   if(work.source_directory_index>=directory_resource_mapping_.size() ||
       directory_resource_mapping_.at(work.source_directory_index)!=work.resource ||

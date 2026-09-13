@@ -407,6 +407,27 @@ struct IntroParticleEmitterDeferredDispatchInventory {
   std::size_t owners_with_deferred_blocks{};
   std::vector<IntroParticleEmitterDeferredShape> shapes;
 };
+// Aggregate-only frontier for constructor-retained attachment families which
+// have no admitted deferred reader.  This is a prioritisation aid only: it
+// carries neither a source identity nor bytes, and it does not establish a
+// shared grammar or callback contract.
+enum class IntroUnimplementedAttachmentReaderFamily : std::uint8_t {
+  film_grain_camera_setup,
+  lens_flare_control,
+  parameter_animation,
+  particle_emitter,
+  lens_flare_lights,
+  scroll_texture,
+};
+struct IntroUnimplementedAttachmentReaderCoverageEntry {
+  IntroUnimplementedAttachmentReaderFamily family{};
+  std::size_t attachment_owners{};
+  std::size_t attachment_instances{};
+  std::size_t owners_with_deferred_blocks{};
+};
+struct IntroUnimplementedAttachmentReaderCoverageInventory {
+  std::vector<IntroUnimplementedAttachmentReaderCoverageEntry> entries;
+};
 // Live values are owned by the real lifecycle caller. This adapter must never
 // derive them from archived source flags or prepared picture positions.
 struct FirstCutLegalPictureActivationPrerequisites {
@@ -1020,6 +1041,11 @@ public:
   // Structural research aid only. ParticleEmitter stays separate from
   // ParamAnim even when a private probe finds matching compact framing.
   [[nodiscard]] IntroParticleEmitterDeferredDispatchInventory particle_emitter_deferred_dispatch_inventory() const;
+  // Read-only aggregate frontier. This does not classify a deferred block or
+  // nominate a parser; a family remains unimplemented until reviewed grammar
+  // and lifecycle evidence independently admit it.
+  [[nodiscard]] IntroUnimplementedAttachmentReaderCoverageInventory
+  unimplemented_attachment_reader_coverage_inventory() const;
   // Explicit first-cut activation bridge. It is disconnected from normal
   // startup and does not create a view, submit a draw or dispatch cut events.
   [[nodiscard]] FirstCutLegalPictureActivationResult activate_first_cut_legal_picture(

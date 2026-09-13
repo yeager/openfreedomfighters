@@ -20,6 +20,13 @@ meaning, destination state, mutation timing, callback registration, or any
 activation/playback effect. The constructor's empty ParamAnim storage is not a
 valid inferred destination.
 
+`IntroRuntime::unimplemented_attachment_reader_coverage_inventory()` provides
+the comparable aggregate population for all six constructor-only attachment
+families. It reports only owner, instance, and queued-block counts. It neither
+exposes identities or source bytes nor treats a queued block as an admitted
+grammar. Use it to choose the next private observation target; do not use it
+to promote a family into reader coverage.
+
 ## Implementation decision
 
 Do not implement a ParamAnim reader yet. A parser that accepts the observed
