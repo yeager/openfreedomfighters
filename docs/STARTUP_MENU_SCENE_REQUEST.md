@@ -51,11 +51,28 @@ and refuses a package result unless the trace first proves that edge with a
 validated retained target.
 
 The utility does not open or instrument an original executable or game data.
-Its input and output must remain outside this repository, and it refuses to
-overwrite a previous private output.
+Its input and output must remain outside this repository. It rejects parent
+traversal and every symlink component, opens each existing path component by
+descriptor with `O_NOFOLLOW`, bounds input to a regular private file, and
+creates output once with `O_EXCL` mode `0600`.
 
 ```sh
 python3 tools/menu_scene_request_trace.py PRIVATE_INPUT.json PRIVATE_OUTPUT.json
+```
+
+## Repeat gate
+
+`tools/menu_scene_request_repeat_pair.py` accepts two independently collected,
+already-sanitized v2 traces. They must be byte-identical, pass the v2 schema
+again, and terminate successfully with delivered selection, an active-window
+replacement that explicitly delivered that selection, a receiver-to-manager
+entry, a `request_only` or `clear_then_request` manager request, and a
+validated target. Package admission remains optional; when present at the
+successful terminal edge it must be admitted. The repeat-pair output retains
+only those source-free records and has the same private-path protections.
+
+```sh
+python3 tools/menu_scene_request_repeat_pair.py FIRST_V2.json SECOND_V2.json PRIVATE_PAIR.json
 ```
 
 Only a reviewed source-free result that closes this chain can authorize a

@@ -28,17 +28,29 @@ def outside_repository(path: pathlib.Path, repository_root: pathlib.Path,
     resolved path equivalent.
     """
     absolute = path if path.is_absolute() else pathlib.Path.cwd() / path
+    if any(component == ".." for component in absolute.parts):
+        raise ValueError(f"{label} must not contain parent traversal")
+    if len(absolute.parts) < 2:
+        raise ValueError(f"{label} must name a private file")
     current = pathlib.Path(absolute.anchor)
     for component in absolute.parts[1:]:
-        if component == "..":
-            raise ValueError(f"{label} must not contain parent traversal")
         current /= component
-        if current.exists() and current.is_symlink():
+        try:
+            metadata = os.lstat(current)
+        except FileNotFoundError:
+            # A new final output has no entry yet. Its parent is still bound
+            # descriptor-by-descriptor before O_EXCL creation below.
+            continue
+        if stat.S_ISLNK(metadata.st_mode):
             raise ValueError(f"{label} must not traverse a symlink")
-    resolved = absolute.resolve()
-    if resolved.is_relative_to(repository_root):
+    # Do not canonicalize the caller's path: doing so would follow a symlink
+    # before the descriptor-bound open below has rejected it.  With `..`
+    # forbidden, this lexical check has the same repository boundary as the
+    # no-follow component walk.
+    repository = repository_root.resolve()
+    if absolute.is_relative_to(repository):
         raise ValueError(f"{label} must be outside the repository")
-    return resolved
+    return absolute
 
 
 def _open_parent_no_follow(path: pathlib.Path, label: str) -> tuple[int, str]:
@@ -46,18 +58,32 @@ def _open_parent_no_follow(path: pathlib.Path, label: str) -> tuple[int, str]:
     directory = getattr(os, "O_DIRECTORY", None)
     if no_follow is None or directory is None:
         raise ValueError(f"platform cannot safely open {label}")
+    if not path.is_absolute() or not path.name:
+        raise ValueError(f"{label} must name a private file")
+    descriptor = os.open(path.anchor, os.O_RDONLY | directory | no_follow)
     try:
-        descriptor = os.open(path.parent, os.O_RDONLY | directory | no_follow)
-    except OSError as error:
-        raise ValueError(f"{label} parent must be an existing real directory") from error
-    if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+        # Opening only the final parent with O_NOFOLLOW leaves every earlier
+        # component vulnerable to a symlink swap. Walk one directory FD at a
+        # time instead, retaining no path-based trust after this point.
+        for component in path.parts[1:-1]:
+            try:
+                child = os.open(component, os.O_RDONLY | directory | no_follow,
+                                dir_fd=descriptor)
+            except OSError as error:
+                raise ValueError(
+                    f"{label} parent must be an existing real directory") from error
+            os.close(descriptor)
+            descriptor = child
+        if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            raise ValueError(f"{label} parent must be an existing real directory")
+        return descriptor, path.name
+    except Exception:
         os.close(descriptor)
-        raise ValueError(f"{label} parent must be an existing real directory")
-    return descriptor, path.name
+        raise
 
 
-def read_json(path: pathlib.Path, label: str) -> Any:
-    """Read a bounded regular JSON file without following its final entry."""
+def read_bytes(path: pathlib.Path, label: str) -> bytes:
+    """Read a bounded regular private file without following any component."""
     directory, name = _open_parent_no_follow(path, label)
     no_follow = getattr(os, "O_NOFOLLOW")
     try:
@@ -70,12 +96,24 @@ def read_json(path: pathlib.Path, label: str) -> Any:
             metadata = os.fstat(descriptor)
             if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_PRIVATE_JSON_BYTES:
                 raise ValueError(f"{label} must be a bounded regular private file")
-            with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as stream:
-                return json.load(stream)
+            payload = bytearray()
+            while len(payload) <= MAX_PRIVATE_JSON_BYTES:
+                chunk = os.read(descriptor, min(65536, MAX_PRIVATE_JSON_BYTES + 1 - len(payload)))
+                if not chunk:
+                    break
+                payload.extend(chunk)
+            if len(payload) > MAX_PRIVATE_JSON_BYTES:
+                raise ValueError(f"{label} must be a bounded regular private file")
+            return bytes(payload)
         finally:
             os.close(descriptor)
     finally:
         os.close(directory)
+
+
+def read_json(path: pathlib.Path, label: str) -> Any:
+    """Read bounded UTF-8 JSON without following its final entry."""
+    return json.loads(read_bytes(path, label).decode("utf-8"))
 
 
 def write_new_json(path: pathlib.Path, record: Any, label: str) -> None:
@@ -89,9 +127,11 @@ def write_new_json(path: pathlib.Path, record: Any, label: str) -> None:
         except OSError as error:
             raise ValueError(f"refusing to overwrite {label}") from error
         try:
-            with os.fdopen(descriptor, "w", encoding="utf-8", closefd=False) as stream:
-                json.dump(record, stream, indent=2)
-                stream.write("\n")
+            payload = (json.dumps(record, indent=2) + "\n").encode("utf-8")
+            view = memoryview(payload)
+            while view:
+                view = view[os.write(descriptor, view):]
+            os.fsync(descriptor)
         finally:
             os.close(descriptor)
     finally:

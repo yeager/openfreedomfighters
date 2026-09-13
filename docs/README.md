@@ -41,6 +41,7 @@
 - [Picture submission cache](PICTURE_SUBMISSION_CACHE.md)
 - [Windows reference capture](STARTUP_STATE_CAPTURE.md)
 - [Startup BootMenu boundary](STARTUP_BOOTMENU_BOUNDARY.md)
+- [Startup menu scene-request evidence gate](STARTUP_MENU_SCENE_REQUEST.md)
 - [Startup and intro executable evidence map](STARTUP_INTRO_EXECUTABLE_MAP.md)
 - [Private Windows intro observation boundary](INTRO_OBSERVATION.md)
 

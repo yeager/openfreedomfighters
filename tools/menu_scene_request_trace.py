@@ -15,6 +15,8 @@ import pathlib
 import sys
 from typing import Any
 
+import private_structural_json
+
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent
 INPUT_FORMAT = "off.startup-menu-scene-request.raw/v2"
@@ -197,10 +199,8 @@ def sanitize_trace(raw: Any) -> dict[str, Any]:
 
 
 def _outside_repository(path: pathlib.Path, label: str) -> pathlib.Path:
-    resolved = path.resolve()
-    if resolved.is_relative_to(REPOSITORY_ROOT):
-        raise ValueError(f"{label} must be outside the repository")
-    return resolved
+    """Keep raw observer artifacts private without following any symlink."""
+    return private_structural_json.outside_repository(path, REPOSITORY_ROOT, label)
 
 
 def main() -> int:
@@ -213,12 +213,9 @@ def main() -> int:
         output_path = _outside_repository(args.output, "output")
         if input_path == output_path:
             raise ValueError("input and output paths must differ")
-        if output_path.exists():
-            raise ValueError("refusing to overwrite an existing private trace")
-        raw = json.loads(input_path.read_text(encoding="utf-8"))
+        raw = private_structural_json.read_json(input_path, "input")
         sanitized = sanitize_trace(raw)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(sanitized, indent=2) + "\n", encoding="utf-8")
+        private_structural_json.write_new_json(output_path, sanitized, "private trace")
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
