@@ -214,92 +214,27 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          function Write-InstalledExecutableDiagnostics {
-            param([Parameter(Mandatory = $true)][string]$Executable)
-
-            Write-Host "Installed executable diagnostics for $Executable"
-            Get-Item -LiteralPath $Executable | Format-List FullName,Length,CreationTimeUtc,LastWriteTimeUtc
-            $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-            $dumpbin = if (Test-Path -LiteralPath $vswhere) {
-              $installationPath = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-              if ($installationPath) {
-                Get-ChildItem -Path (Join-Path $installationPath 'VC/Tools/MSVC') -Filter dumpbin.exe -Recurse -ErrorAction SilentlyContinue |
-                  Where-Object { $_.FullName -match '\\Hostx64\\x64\\dumpbin\.exe$' } |
-                  Select-Object -First 1 -ExpandProperty FullName
-              }
-            }
-            if ($dumpbin) {
-              Write-Host 'PE headers:'
-              & $dumpbin /headers $Executable
-              Write-Host 'PE dependencies:'
-              & $dumpbin /dependents $Executable
-            } else {
-              Write-Warning 'dumpbin.exe was not available for PE diagnostics.'
-            }
-          }
           cmake --install build --config Release --prefix install-check
           if (!(Test-Path install-check/bin/openfreedomfighters.exe)) { throw 'installed executable is missing' }
           if (!(Test-Path install-check/bin/assets/openfreedomfighters-splash.bmp)) { throw 'installed splash asset is missing' }
           if (!(Test-Path install-check/bin/assets/Rajdhani-SemiBold.ttf)) { throw 'installed font asset is missing' }
-          $env:PATH = "${{ github.workspace }}/zlib-install/bin;$env:PATH"
           $projectVersion = (Select-String -Path CMakeLists.txt -Pattern '^project\(OpenFreedomFighters VERSION ([^ ]+) LANGUAGES ' | ForEach-Object { $_.Matches[0].Groups[1].Value })
           if ([string]::IsNullOrWhiteSpace($projectVersion)) { throw 'CMake project version is missing' }
-          # Run the real installed executable in an out-of-process PowerShell
-          # job. The worker owns the process and enforces its own short timeout;
-          # the outer timeout covers a stuck worker without leaving the Actions
-          # step waiting for a loader-stalled child process.
-          $versionStdout = Join-Path (Get-Location) 'installed-version.stdout'
-          $versionStderr = Join-Path (Get-Location) 'installed-version.stderr'
-          $versionJob = Start-Job -ArgumentList (Join-Path (Get-Location) 'install-check/bin/openfreedomfighters.exe'), $versionStdout, $versionStderr -ScriptBlock {
-            param($executable, $stdoutPath, $stderrPath)
-            $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-            $startInfo.FileName = $executable
-            $startInfo.Arguments = '--version'
-            $startInfo.UseShellExecute = $false
-            $startInfo.RedirectStandardOutput = $true
-            $startInfo.RedirectStandardError = $true
-            $process = [System.Diagnostics.Process]::Start($startInfo)
-            if (-not $process.WaitForExit(30000)) {
-              # This worker is deliberately isolated from the CI step. Kill is
-              # non-recursive here; closing the worker also tears down children
-              # owned by the Actions job object.
-              try { $process.Kill() } catch { }
-              [pscustomobject]@{ TimedOut = $true; ExitCode = $null }
-              return
-            }
-            [System.IO.File]::WriteAllText($stdoutPath, $process.StandardOutput.ReadToEnd())
-            [System.IO.File]::WriteAllText($stderrPath, $process.StandardError.ReadToEnd())
-            [pscustomobject]@{ TimedOut = $false; ExitCode = $process.ExitCode }
-          }
-          $completedVersionJob = Wait-Job -Job $versionJob -Timeout 40
-          if ($null -eq $completedVersionJob) {
-            # Stop-Job targets only the isolated worker, rather than waiting on
-            # the loader-stalled game process from the Actions step itself.
-            Stop-Job -Job $versionJob -ErrorAction SilentlyContinue
-            Write-InstalledExecutableDiagnostics -Executable 'install-check/bin/openfreedomfighters.exe'
-            throw 'installed executable --version worker timed out after 40 seconds'
-          }
-          $versionResult = @(Receive-Job -Job $versionJob)
-          if ($versionResult.Count -ne 1 -or $versionResult[0].TimedOut) {
-            Write-InstalledExecutableDiagnostics -Executable 'install-check/bin/openfreedomfighters.exe'
-            throw 'installed executable --version timed out after 30 seconds'
-          }
-          if ($versionResult[0].ExitCode -ne 0) {
-            Write-InstalledExecutableDiagnostics -Executable 'install-check/bin/openfreedomfighters.exe'
-            throw "installed executable --version failed with exit code $($versionResult[0].ExitCode): $([System.IO.File]::ReadAllText($versionStderr))"
-          }
-          $versionOutput = [System.IO.File]::ReadAllText($versionStdout).TrimEnd("`r", "`n")
-          if ($versionOutput -ne "OpenFreedomFighters $projectVersion") { throw "installed executable reported unexpected version: $versionOutput" }
-          $missingDataRoot = Join-Path (Get-Location) 'install-check/absent-game-data'
-          if (Test-Path -LiteralPath $missingDataRoot) { throw 'missing-data fixture root unexpectedly exists' }
-          $missingDataStdout = Join-Path (Get-Location) 'missing-data.stdout'
-          $missingDataStderr = Join-Path (Get-Location) 'missing-data.stderr'
-          & install-check/bin/openfreedomfighters.exe --data $missingDataRoot --locale en 1> $missingDataStdout 2> $missingDataStderr
-          $missingDataStatus = $LASTEXITCODE
-          if ($missingDataStatus -ne 3) { throw "installed missing-data launch exited with $missingDataStatus, expected 3" }
-          if ((Get-Item -LiteralPath $missingDataStdout).Length -ne 0) { throw 'installed missing-data launch wrote unexpected stdout' }
-          $missingDataMessage = [System.IO.File]::ReadAllText($missingDataStderr).TrimEnd("`r", "`n")
-          if ($missingDataMessage -cne 'Game-data verification failed: game-data directory does not exist') { throw "installed missing-data launch reported unexpected stderr: $missingDataMessage" }
+          $smokeInput = Join-Path (Get-Location) 'windows-installed-smoke-input'
+          New-Item -ItemType Directory -Path $smokeInput | Out-Null
+          Copy-Item -Recurse -Path install-check -Destination (Join-Path $smokeInput 'install-check')
+          if (!(Test-Path -LiteralPath zlib-install/bin)) { throw 'zlib runtime directory is missing' }
+          New-Item -ItemType Directory -Path (Join-Path $smokeInput 'runtime') | Out-Null
+          Copy-Item -Path zlib-install/bin/*.dll -Destination (Join-Path $smokeInput 'runtime')
+          Set-Content -NoNewline -Path (Join-Path $smokeInput 'expected-version.txt') -Value $projectVersion
+          Compress-Archive -Path (Join-Path $smokeInput '*') -DestinationPath windows-installed-smoke-input.zip
+      - name: Upload installed executable smoke input
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-installed-smoke-input
+          path: windows-installed-smoke-input.zip
+          if-no-files-found: error
+          retention-days: 1
       - name: Verify intro GPU rendering and presentation on D3D12 when available
         shell: pwsh
         run: |

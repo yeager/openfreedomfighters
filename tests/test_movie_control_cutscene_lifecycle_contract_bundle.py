@@ -68,7 +68,7 @@ def dispatch_contract() -> dict[str, object]:
     success = dispatch_trace.sanitize_trace({"format": dispatch_trace.INPUT_FORMAT, "events": [dispatch_event()]})
     pair = dispatch_repeat.sanitize_repeat_pair(success, success)
     failure = dispatch_trace.sanitize_trace({"format": dispatch_trace.INPUT_FORMAT, "events": [dispatch_event(
-        phase="failure", event16_gate="failed", handoff="failed", delivery_mode="not_observed",
+        phase="failure", handoff="failed", delivery_mode="not_observed",
         player_activation="not_started", outcome="failure",
     )]})
     return dispatch_bundle.sanitize_contract_bundle(pair, failure)

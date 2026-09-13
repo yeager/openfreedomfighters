@@ -76,17 +76,25 @@ def _validate(event: dict[str, Any]) -> None:
     if gate == "admitted":
         if phase not in ("event16", "handoff", "player_activation", "completion", "failure"):
             raise ValueError("admitted event16 requires its dispatch or a later phase")
-        if not movie_ready or event["outcome"] != "success":
-            raise ValueError("admitted event16 requires phase-one completion and success")
+        if not movie_ready:
+            raise ValueError("admitted event16 requires phase-one completion")
+        if event["outcome"] == "failure":
+            # An admitted event is not itself a failure.  A failed observation
+            # may describe only the later handoff or player-activation boundary.
+            if phase not in ("handoff", "player_activation", "failure") or (
+                    handoff != "failed" and activation != "failed"):
+                raise ValueError("admitted event16 failure must be downstream at handoff or player activation")
     if gate == "waiting" and phase != "event16":
         raise ValueError("waiting event16 belongs only to the event16 phase")
-    if handoff in ("attempted", "delivered"):
+    if handoff in ("attempted", "delivered", "failed"):
         if phase not in ("handoff", "player_activation", "completion", "failure"):
             raise ValueError("cutscene handoff requires its delivery or a later phase")
         if gate != "admitted" or not source_bound or not target_bound:
             raise ValueError("cutscene handoff requires admitted source-bound MovieControl and player relations")
-    if handoff == "delivered" and event["outcome"] != "success":
-        raise ValueError("delivered cutscene handoff requires success")
+    if handoff == "failed" and activation not in ("not_entered", "not_started"):
+        raise ValueError("failed cutscene handoff cannot activate the player")
+    if handoff == "delivered" and event["outcome"] != "success" and activation != "failed":
+        raise ValueError("delivered cutscene handoff failure must be at player activation")
     if delivery_mode == "synchronous":
         if handoff != "delivered" or not source_bound or not target_bound:
             raise ValueError("synchronous delivery requires a delivered source-bound handoff")
@@ -97,6 +105,11 @@ def _validate(event: dict[str, Any]) -> None:
             raise ValueError("started player requires its activation or a later phase")
         if handoff != "delivered" or not source_bound or event["outcome"] != "success":
             raise ValueError("started player requires a delivered source-bound handoff")
+    if activation == "failed":
+        if phase not in ("player_activation", "failure"):
+            raise ValueError("failed player requires its activation or failure phase")
+        if handoff != "delivered" or not source_bound or not target_bound or event["outcome"] != "failure":
+            raise ValueError("failed player requires a delivered source-bound failed activation")
     if phase == "failure" and event["outcome"] != "failure":
         raise ValueError("failure phase requires failure outcome")
     if event["outcome"] == "failure" and not any(value == "failed" for value in (gate, handoff, activation)):

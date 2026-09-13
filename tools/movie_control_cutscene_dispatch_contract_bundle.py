@@ -85,8 +85,9 @@ def _is_matching_failure(event: dict[str, Any], success: dict[str, Any]) -> bool
     return (
         _is_source_bound(event) and
         event["callback_ordinal"] == success["callback_ordinal"] and
+        event["event16_gate"] == "admitted" and
         event["outcome"] == "failure" and
-        event["handoff"] in ("failed", "attempted") and
+        (event["handoff"] == "failed" or event["player_activation"] == "failed") and
         all(event[field] == success[field] for field in _PRECONDITION_FIELDS)
     )
 

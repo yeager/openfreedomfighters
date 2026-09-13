@@ -62,6 +62,11 @@ successful delivered handoff from an admitted, source-bound MovieControl
 relation to the constructed sequence-owner relation. A player start is accepted
 only after that delivered source-bound handoff.
 
+A failed observation may retain an admitted event only when the failure is at
+the source-bound handoff or at player activation after a delivered handoff.
+This separates a downstream failure from an unproven event-gate failure; a
+review bundle requires that admitted gate for its matching failure route.
+
 Keep raw and sanitized observations private. Only a reviewed source-free
 behavior specification and authored tests may subsequently connect the runtime
 path.

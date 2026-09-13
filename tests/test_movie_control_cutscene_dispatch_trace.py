@@ -89,6 +89,30 @@ class MovieControlCutsceneDispatchTraceTests(unittest.TestCase):
             trace.sanitize_trace({"format": trace.INPUT_FORMAT,
                                   "events": [event(outcome="failure")]})
 
+    def test_allows_admitted_event16_failure_only_at_downstream_boundaries(self) -> None:
+        handoff_failure = trace.sanitize_trace({"format": trace.INPUT_FORMAT, "events": [event(
+            phase="failure", handoff="failed", delivery_mode="not_observed",
+            player_activation="not_started", outcome="failure",
+        )]})
+        self.assertEqual(handoff_failure["events"][0]["event16_gate"], "admitted")
+        activation_failure = trace.sanitize_trace({"format": trace.INPUT_FORMAT, "events": [event(
+            phase="failure", handoff="delivered", player_activation="failed", outcome="failure",
+        )]})
+        self.assertEqual(activation_failure["events"][0]["player_activation"], "failed")
+
+    def test_rejects_admitted_event16_failure_before_a_downstream_boundary(self) -> None:
+        for changes in (
+            {"phase": "event16", "handoff": "failed", "delivery_mode": "not_observed",
+             "player_activation": "not_started", "outcome": "failure"},
+            {"phase": "failure", "handoff": "attempted", "delivery_mode": "not_observed",
+             "player_activation": "not_started", "outcome": "failure"},
+            {"phase": "failure", "handoff": "delivered", "player_activation": "not_started",
+             "outcome": "failure"},
+        ):
+            with self.subTest(changes=changes):
+                with self.assertRaises(ValueError):
+                    trace.sanitize_trace({"format": trace.INPUT_FORMAT, "events": [event(**changes)]})
+
     def test_cli_rejects_parent_symlink_without_opening_its_target(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             private = pathlib.Path(directory)

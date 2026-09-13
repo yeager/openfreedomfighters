@@ -43,7 +43,7 @@ def success_pair(*events: dict[str, object]) -> dict[str, object]:
 
 def failure_trace(**changes: object) -> dict[str, object]:
     failure = {
-        "phase": "failure", "event16_gate": "failed", "handoff": "failed", "delivery_mode": "not_observed",
+        "phase": "failure", "handoff": "failed", "delivery_mode": "not_observed",
         "player_activation": "not_started", "outcome": "failure", "external_service": "entered",
     }
     failure.update(changes)
@@ -75,11 +75,23 @@ class MovieControlCutsceneDispatchContractBundleTests(unittest.TestCase):
         ambiguous = sanitized(
             event(observation_order=0),
             event(observation_order=1, phase="failure", handoff="failed",
-                  event16_gate="failed", delivery_mode="not_observed", player_activation="not_started",
+                  delivery_mode="not_observed", player_activation="not_started",
                   outcome="failure"),
         )
         with self.assertRaises(ValueError):
             bundle.sanitize_contract_bundle(success_pair(), ambiguous)
+
+    def test_requires_an_admitted_event16_for_the_matching_failure(self) -> None:
+        failure = failure_trace()
+        failure["events"][0]["event16_gate"] = "failed"
+        with self.assertRaises(ValueError):
+            bundle.sanitize_contract_bundle(success_pair(), failure)
+
+    def test_accepts_matching_player_activation_failure_after_admitted_delivery(self) -> None:
+        result = bundle.sanitize_contract_bundle(success_pair(), failure_trace(
+            handoff="delivered", delivery_mode="synchronous", player_activation="failed"))
+        self.assertEqual(result["failure"]["event16_gate"], "admitted")
+        self.assertEqual(result["failure"]["player_activation"], "failed")
 
     def test_rejects_missing_or_duplicate_success_routes(self) -> None:
         with self.assertRaises(ValueError):
