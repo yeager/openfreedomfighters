@@ -707,14 +707,16 @@ int main() {
   check(main_package.cut_identifier() == main_cut_identifier &&
             main_package.package_identifier() == main_package_identifier,
         "MovieCut main package retains caller-selected identifiers");
+  off::runtime::MovieCutMainPackageSource::validate_checked(
+      movie_cut_root, main_cut_identifier, main_package_identifier);
 
   auto malformed_main_members = main_members;
   malformed_main_members[2].second = {std::byte{1}};
   write_package_zip(movie_cut_main_archive, malformed_main_members);
   bool rejected_main_buf = false;
   try {
-    static_cast<void>(off::runtime::MovieCutMainPackageSource::prepare_checked(
-        movie_cut_root, main_cut_identifier, main_package_identifier));
+    off::runtime::MovieCutMainPackageSource::validate_checked(
+        movie_cut_root, main_cut_identifier, main_package_identifier);
   } catch (const std::runtime_error &) {
     rejected_main_buf = true;
   }

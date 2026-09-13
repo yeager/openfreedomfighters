@@ -393,10 +393,8 @@ void write_movie_cut_probe(const std::filesystem::path& root,
     const auto main_name = cut + "_MAIN";
     const auto main = entry.path() / (main_name + ".ZIP");
     if (std::filesystem::is_regular_file(main, error) && !error) {
-      const auto package = off::runtime::MovieCutMainPackageSource::prepare_checked(
-          root, cut, main_name);
-      if (package.cut_identifier() != cut || package.package_identifier() != main_name)
-        throw std::runtime_error("MovieCut main identity disagrees with its directory");
+      off::runtime::MovieCutMainPackageSource::validate_checked(root, cut,
+                                                                 main_name);
       ++main_packages;
     }
     for (const auto& file : std::filesystem::directory_iterator(entry.path(), error)) {

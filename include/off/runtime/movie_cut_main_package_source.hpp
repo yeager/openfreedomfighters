@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -113,6 +114,27 @@ public:
   [[nodiscard]] static MovieCutMainPackage prepare_checked(
       const std::filesystem::path &data_root, std::string_view cut_identifier,
       std::string_view package_identifier) {
+    return prepare_checked_impl(data_root, cut_identifier, package_identifier,
+                                true)
+        .value();
+  }
+
+  // Used by the aggregate MovieCuts probe after verify_install has hashed the
+  // complete owned corpus.  It preserves the package's exact archive layout,
+  // core-resource parsing, and GMS/BUF cross-check, but does not inflate and
+  // retain opaque members which the probe neither inspects nor exposes.
+  // This is validation only: it cannot select, load, or play a cut.
+  static void validate_checked(const std::filesystem::path &data_root,
+                               std::string_view cut_identifier,
+                               std::string_view package_identifier) {
+    static_cast<void>(prepare_checked_impl(data_root, cut_identifier,
+                                            package_identifier, false));
+  }
+
+private:
+  [[nodiscard]] static std::optional<MovieCutMainPackage> prepare_checked_impl(
+      const std::filesystem::path &data_root, std::string_view cut_identifier,
+      std::string_view package_identifier, bool retain_opaque_sources) {
     if (!detail::movie_cut_safe_identifier(cut_identifier) ||
         !detail::movie_cut_safe_identifier(package_identifier)) {
       throw std::runtime_error("MovieCut main package identifier is invalid");
@@ -177,6 +199,9 @@ public:
     owner->support = data::SceneSupport::parse(owner->support_bytes);
     if (owner->support.dependencies().empty()) {
       throw std::runtime_error("MovieCut main package support has no dependencies");
+    }
+    if (!retain_opaque_sources) {
+      return std::nullopt;
     }
     owner->raw_sources.push_back(std::move(buf_bytes));
     for (const auto extension : required_extensions) {
