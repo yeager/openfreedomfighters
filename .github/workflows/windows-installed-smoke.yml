@@ -117,7 +117,11 @@ jobs:
           if (Test-Path -LiteralPath $missingDataRoot) { throw 'missing-data fixture root unexpectedly exists' }
           $missingDataStdout = Join-Path $diagnostics 'missing-data.stdout.txt'
           $missingDataStderr = Join-Path $diagnostics 'missing-data.stderr.txt'
-          & $executable --data $missingDataRoot --locale en 1> $missingDataStdout 2> $missingDataStderr
+          # Normal startup deliberately presents a localized modal dialog for
+          # missing data and waits for the user to dismiss it. CI has no user,
+          # so exercise the same verifier through the explicitly headless
+          # verify-only path instead.
+          & $executable --verify-only --data $missingDataRoot --locale en 1> $missingDataStdout 2> $missingDataStderr
           $missingDataStatus = $LASTEXITCODE
           if ($missingDataStatus -ne 3) { throw "installed missing-data launch exited with $missingDataStatus, expected 3" }
           if ((Get-Item -LiteralPath $missingDataStdout).Length -ne 0) { throw 'installed missing-data launch wrote unexpected stdout' }
