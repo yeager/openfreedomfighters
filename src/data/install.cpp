@@ -5,6 +5,7 @@
 #include "off/audio/decode.hpp"
 #include "off/crypto/sha256.hpp"
 #include "off/data/archive_vfs.hpp"
+#include "off/data/animation_image.hpp"
 #include "off/data/audio_bank_header.hpp"
 #include "off/data/gms_image.hpp"
 #include "off/data/packed_resource.hpp"
@@ -293,6 +294,11 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
     std::size_t local_gms_object_handle_count = 0;
     std::size_t external_gms_object_handle_count = 0;
     std::size_t gms_resource_count = 0;
+    std::size_t animation_image_count = 0;
+    std::size_t animation_reference_table_count = 0;
+    std::size_t animation_descriptor_count = 0;
+    std::size_t animation_section_count = 0;
+    std::size_t animation_component_count = 0;
     std::size_t gms_payload_bytes = 0;
     std::size_t gms_directory_entry_count = 0;
     std::size_t gms_identifier_count = 0;
@@ -520,6 +526,14 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
           static_cast<void>(SoundDefinitionBank::parse(archive.read(member),
                                                        1024U * 1024U));
           ++sound_definition_files_in_archive;
+        } else if (extension == ".anm") {
+          const auto animation = AnimationImage::parse(archive.read(member));
+          ++animation_image_count;
+          animation_reference_table_count += animation.reference_tables().size();
+          animation_descriptor_count += animation.descriptors().size();
+          animation_section_count += animation.sections().size();
+          for (const auto &section : animation.sections())
+            animation_component_count += section.components.size();
         } else if (extension == ".prm") {
           auto bytes = archive.read(member);
           auto catalog = PrimitiveCatalog::parse(bytes);
@@ -750,6 +764,9 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
         local_gms_object_handle_count != 2'998 ||
         external_gms_object_handle_count != 4 ||
         gms_resource_count != scene_archive_count ||
+        animation_image_count != 42 || animation_reference_table_count != 112 ||
+        animation_descriptor_count != 457 || animation_section_count != 336 ||
+        animation_component_count != 546 ||
         gms_payload_bytes != 33'436'872 ||
         gms_directory_entry_count != 179'838 ||
         gms_identifier_count != 154'941 || gms_pool_group_count != 29'450 ||
