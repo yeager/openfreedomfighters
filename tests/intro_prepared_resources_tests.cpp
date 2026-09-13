@@ -884,7 +884,12 @@ static OFF_NOINLINE void test_prepared_runtime_scopes() {
       rejects([&]{(void)off::graphics::build_intro_preview(
           host,1,{1280,720},
           off::graphics::IntroPreviewPolicy::admitted_first_cut_legal_picture);});
+      rejects([&]{(void)off::graphics::build_intro_preview(
+          host,1,{1280,720},
+          off::graphics::IntroPreviewPolicy::admitted_first_cut_fade_picture);});
       rejects([&]{(void)off::graphics::build_incomplete_intro_fallback(
+          host,{1280,720});});
+      rejects([&]{(void)off::graphics::build_admitted_first_cut_fade_previews(
           host,{1280,720});});
       rejects([&]{(void)off::graphics::build_intro_preview(host,1,{0,720});});
       rejects([&]{(void)off::graphics::build_intro_preview(host,0,{1280,720});});
@@ -1461,6 +1466,25 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                   !incomplete_fallback.draw.draw_plan.groups().empty() &&
                   !incomplete_fallback.images.empty(),
               "incomplete startup fallback selects only the reader-admitted legal picture");
+        const auto admitted_fades=off::graphics::build_admitted_first_cut_fade_previews(
+            host,{1280U,720U});
+        check(!admitted_fades.empty() &&
+                  admitted_fades.size()==host.fade_picture_reader_states().size() &&
+                  std::ranges::is_sorted(admitted_fades,{},[](const auto& preview) {
+                    return preview.draw.source_index;
+                  }) &&
+                  std::ranges::all_of(admitted_fades,[&](const auto& preview) {
+                    const auto owner=host.fade_picture_reader_states().find(preview.draw.source_index);
+                    const auto component=host.fade_picture_component_reader_states().find(preview.draw.source_index);
+                    return owner!=host.fade_picture_reader_states().end() &&
+                        component!=host.fade_picture_component_reader_states().end() &&
+                        owner->second.owner==component->second.owner &&
+                        owner->second.resource==component->second.resource &&
+                        owner->second.component_index==component->second.component_index &&
+                        owner->second.picture_asset_reference==component->second.picture_asset_reference &&
+                        !preview.draw.draw_plan.groups().empty() && !preview.images.empty();
+                  }),
+              "FadeToBlack preview inventory requires all exact reader/component receipts without selecting a cut frame");
         host.prepare_supported_first_cut_player();
         const auto* player=host.first_cut_player_prepared_state();
         check(player && player->list_owner==list_reader->owner && player->sequence_owner==sequence_reader->owner &&

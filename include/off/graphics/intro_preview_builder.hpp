@@ -26,6 +26,7 @@ struct IntroPreviewTarget {
 enum class IntroPreviewPolicy : std::uint8_t {
   exact_source_picture,
   admitted_first_cut_legal_picture,
+  admitted_first_cut_fade_picture,
 };
 
 struct IntroPreviewDraw {
@@ -65,6 +66,19 @@ struct IntroPreviewSnapshot {
 // own UI/status reporting and must not use this snapshot as a scene frame.
 [[nodiscard]] IntroPreviewSnapshot build_incomplete_intro_fallback(
     const IntroRuntime &runtime, IntroPreviewTarget target);
+
+// Returns one static snapshot for every exact FadeToBlack picture whose owner
+// and component reader receipts were completed during the ordinary reader
+// bracket.  The returned order is the stable source-directory order.  This is
+// a resource audit surface only: it does not infer a fade order, duration,
+// camera, draw state, or cutscene activation.
+//
+// The function rejects a partial FadeToBlack receipt set rather than selecting
+// a subset.  Its expected set is derived from the retained first-cut command
+// targets; source order is not playback order.
+[[nodiscard]] std::vector<IntroPreviewSnapshot>
+build_admitted_first_cut_fade_previews(const IntroRuntime &runtime,
+                                       IntroPreviewTarget target);
 
 // Selects the CPU image set for one SDL intro-renderer lifetime.  Normal
 // retained startup owns every prepared intro image.  The explicitly supplied

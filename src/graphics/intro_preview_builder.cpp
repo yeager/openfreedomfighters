@@ -31,7 +31,8 @@ IntroPreviewSnapshot build_intro_preview(const IntroRuntime &runtime,
                                          IntroPreviewTarget target,
                                          IntroPreviewPolicy policy) {
   if (policy != IntroPreviewPolicy::exact_source_picture &&
-      policy != IntroPreviewPolicy::admitted_first_cut_legal_picture)
+      policy != IntroPreviewPolicy::admitted_first_cut_legal_picture &&
+      policy != IntroPreviewPolicy::admitted_first_cut_fade_picture)
     throw std::runtime_error("intro preview policy is unsupported");
   if (target.width == 0 || target.height == 0)
     throw std::runtime_error("intro preview target dimensions are invalid");
@@ -56,6 +57,24 @@ IntroPreviewSnapshot build_intro_preview(const IntroRuntime &runtime,
             owner_receipt->picture_asset_reference)
       throw std::runtime_error(
           "intro preview first-cut legal-picture admission is unavailable");
+  }
+  if (policy == IntroPreviewPolicy::admitted_first_cut_fade_picture) {
+    const auto owner_receipt =
+        runtime.fade_picture_reader_states().find(source_index);
+    const auto component_receipt =
+        runtime.fade_picture_component_reader_states().find(source_index);
+    if (owner_receipt == runtime.fade_picture_reader_states().end() ||
+        component_receipt ==
+            runtime.fade_picture_component_reader_states().end() ||
+        owner_receipt->second.owner != runtime.source_handle(source_index) ||
+        component_receipt->second.owner != owner_receipt->second.owner ||
+        component_receipt->second.resource != owner_receipt->second.resource ||
+        component_receipt->second.component_index !=
+            owner_receipt->second.component_index ||
+        component_receipt->second.picture_asset_reference !=
+            owner_receipt->second.picture_asset_reference)
+      throw std::runtime_error(
+          "intro preview first-cut FadeToBlack admission is unavailable");
   }
 
   const auto &picture = runtime.picture_for_source(source_index);
@@ -97,6 +116,58 @@ IntroPreviewSnapshot build_incomplete_intro_fallback(
   return build_intro_preview(
       runtime, receipt->source_directory_index, target,
       IntroPreviewPolicy::admitted_first_cut_legal_picture);
+}
+
+std::vector<IntroPreviewSnapshot> build_admitted_first_cut_fade_previews(
+    const IntroRuntime &runtime, IntroPreviewTarget target) {
+  const auto &owners = runtime.fade_picture_reader_states();
+  const auto &components = runtime.fade_picture_component_reader_states();
+  const auto &sources = runtime.resources().sources();
+  const auto &directory = sources.directory();
+  std::vector<std::size_t> expected_sources;
+  for (const auto &command : runtime.resources().first_cut().commands) {
+    const auto source =
+        sources.local_source_for_authored_reference(command.target_reference);
+    if (!source || *source >= directory.size())
+      throw std::runtime_error(
+          "intro preview first-cut command target is unresolved");
+    const auto &row = directory[*source];
+    if (row.source_type == picture_source_type && row.attachments.size() == 1U &&
+        row.attachments[0].parameter == 0.0F &&
+        sources.attachment_identifier(*source, 0U) == "ZWINPIC_FadeToBlack")
+      expected_sources.push_back(*source);
+  }
+  std::ranges::sort(expected_sources);
+  expected_sources.erase(
+      std::unique(expected_sources.begin(), expected_sources.end()),
+      expected_sources.end());
+  // A partial result would create an invented selection policy, so do not
+  // expose anything until every exact command-target reader/component pair
+  // agrees.  This validates the retained package's actual target population,
+  // rather than assigning a hard-coded count to another supported package.
+  if (expected_sources.empty() || owners.size() != expected_sources.size() ||
+      components.size() != owners.size())
+    throw std::runtime_error(
+        "intro preview first-cut FadeToBlack receipt set is incomplete");
+  std::vector<IntroPreviewSnapshot> result;
+  result.reserve(owners.size());
+  for (const auto &[source, owner] : owners) {
+    if (!std::ranges::binary_search(expected_sources, source))
+      throw std::runtime_error(
+          "intro preview first-cut FadeToBlack receipt source is unexpected");
+    const auto component = components.find(source);
+    if (component == components.end() ||
+        component->second.owner != owner.owner ||
+        component->second.resource != owner.resource ||
+        component->second.component_index != owner.component_index ||
+        component->second.picture_asset_reference != owner.picture_asset_reference)
+      throw std::runtime_error(
+          "intro preview first-cut FadeToBlack receipt set is inconsistent");
+    result.push_back(build_intro_preview(
+        runtime, source, target,
+        IntroPreviewPolicy::admitted_first_cut_fade_picture));
+  }
+  return result;
 }
 
 std::span<const IntroPreparedImage> select_intro_gpu_upload_images(

@@ -30,7 +30,7 @@ soundtrack files must never be required to launch.
 | Intro data | Directory construction, retained source/resource identities, partial deferred readers and cold first-cut preparation | Complete required readers, concrete loader-tail services and global lifecycle |
 | Renderer relations | Scene-owned initial relation lists resolved through canonical resources | Dynamic maintenance, separate List associations and accepted draw-record production |
 | MovieControl | Source-checked factory phase-two callback and retained service binding | Phase one, live external services, global dispatch and event-16 activation |
-| Intro picture | A labelled normal-startup fallback drawn from the reader-admitted legal picture using a generic fit projection | Authored camera, live cut timing, animation and admitted scene draws |
+| Intro picture | A labelled normal-startup fallback drawn from the reader-admitted legal picture using a generic fit projection; a private diagnostic inventory can snapshot all three fully reader-admitted FadeToBlack resources in source order | Authored camera, live cut timing, animation and admitted scene draws |
 | Scene host | Checked ordering boundaries and a first-frame assembler | Connection to the scene session and a repeatable ordinary update/render loop |
 | Intro audio | Source-bank bindings, decoders, channel service and SDL output adapters | Scene-driven start, readiness, update, stop and audible normal playback |
 | Menu data | Checked FF-StartUp package, normal-startup retained source hierarchy registry and BootMenu source discovery | Complete readers, menu activation and a concrete live scene factory |
@@ -57,6 +57,13 @@ a cut, select an authored camera, run MovieControl, or commit a menu scene.
 The fallback is not evidence of an intro frame, timed playback, or menu
 rendering. Source-picture diagnostics and synthetic BootMenu probes remain
 separate from the production route.
+
+The FadeToBlack inventory is deliberately not a second normal fallback and is
+not a timeline. It derives the expected source set from retained first-cut
+command targets, requires every exact owner and component receipt, returns
+only static resource snapshots in stable source order, and rejects a partial
+set. The source order does not establish playback order, fade direction,
+duration, camera, or scene admission.
 
 ## Delivery order
 
