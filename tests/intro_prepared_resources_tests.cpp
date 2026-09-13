@@ -1485,6 +1485,30 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                         !preview.draw.draw_plan.groups().empty() && !preview.images.empty();
                   }),
               "FadeToBlack preview inventory requires all exact reader/component receipts without selecting a cut frame");
+        const auto picture_steps=
+            off::graphics::admitted_first_cut_picture_preview_steps(host);
+        check(!picture_steps.empty() &&
+                  std::ranges::is_sorted(picture_steps,{},[](const auto& step) {
+                    return step.command_index;
+                  }) &&
+                  std::ranges::all_of(picture_steps,[&](const auto& step) {
+                    const auto& command=host.resources().first_cut().commands.at(step.command_index);
+                    const auto source=host.resources().sources().local_source_for_authored_reference(
+                        command.target_reference);
+                    return source && *source==step.source_index &&
+                        (step.policy==off::graphics::IntroPreviewPolicy::admitted_first_cut_legal_picture ||
+                         step.policy==off::graphics::IntroPreviewPolicy::admitted_first_cut_fade_picture);
+                  }),
+              "manual first-cut picture inventory preserves only admitted picture command indices");
+        const auto selected_step=picture_steps.front();
+        const auto selected_snapshot=off::graphics::build_admitted_first_cut_picture_step(
+            host,selected_step.command_index,{1280U,720U});
+        check(selected_snapshot.draw.source_index==selected_step.source_index &&
+                  !selected_snapshot.draw.draw_plan.groups().empty() &&
+                  !selected_snapshot.images.empty(),
+              "manual first-cut picture selection snapshots one admitted command target without playback");
+        rejects([&]{(void)off::graphics::build_admitted_first_cut_picture_step(
+            host,host.resources().first_cut().commands.size(),{1280U,720U});});
         host.prepare_supported_first_cut_player();
         const auto* player=host.first_cut_player_prepared_state();
         check(player && player->list_owner==list_reader->owner && player->sequence_owner==sequence_reader->owner &&

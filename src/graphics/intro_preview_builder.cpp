@@ -170,6 +170,48 @@ std::vector<IntroPreviewSnapshot> build_admitted_first_cut_fade_previews(
   return result;
 }
 
+std::vector<FirstCutPicturePreviewStep>
+admitted_first_cut_picture_preview_steps(const IntroRuntime &runtime) {
+  const auto &sources = runtime.resources().sources();
+  const auto &directory = sources.directory();
+  const auto *const legal = runtime.legal_picture_component_reader_state();
+  const auto &fades = runtime.fade_picture_component_reader_states();
+  std::vector<FirstCutPicturePreviewStep> result;
+  const auto &commands = runtime.resources().first_cut().commands;
+  result.reserve(commands.size());
+  for (std::size_t command_index = 0; command_index < commands.size();
+       ++command_index) {
+    const auto source =
+        sources.local_source_for_authored_reference(
+            commands[command_index].target_reference);
+    if (!source || *source >= directory.size() ||
+        directory[*source].source_type != picture_source_type)
+      continue;
+    if (legal != nullptr && legal->source_directory_index == *source) {
+      result.push_back({command_index, *source,
+                        IntroPreviewPolicy::admitted_first_cut_legal_picture});
+      continue;
+    }
+    if (fades.contains(*source))
+      result.push_back({command_index, *source,
+                        IntroPreviewPolicy::admitted_first_cut_fade_picture});
+  }
+  return result;
+}
+
+IntroPreviewSnapshot build_admitted_first_cut_picture_step(
+    const IntroRuntime &runtime, std::size_t command_index,
+    IntroPreviewTarget target) {
+  const auto steps = admitted_first_cut_picture_preview_steps(runtime);
+  const auto found = std::ranges::find(
+      steps, command_index, &FirstCutPicturePreviewStep::command_index);
+  if (found == steps.end())
+    throw std::runtime_error(
+        "first-cut diagnostic command does not select an admitted picture");
+  return build_intro_preview(runtime, found->source_index, target,
+                             found->policy);
+}
+
 std::span<const IntroPreparedImage> select_intro_gpu_upload_images(
     std::span<const IntroPreparedImage> retained_images,
     const IntroPreviewSnapshot *explicit_diagnostic) noexcept {

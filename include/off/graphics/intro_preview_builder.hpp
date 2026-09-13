@@ -41,6 +41,16 @@ struct IntroPreviewSnapshot {
   std::vector<IntroPreparedImage> images;
 };
 
+// One manually selectable, source-backed still-image candidate from the
+// retained first-cut command array. `command_index` is the original array
+// index; it is an identity for inspection, not a clock position or a playback
+// step. Multiple records may intentionally identify the same picture source.
+struct FirstCutPicturePreviewStep {
+  std::size_t command_index{};
+  std::size_t source_index{};
+  IntroPreviewPolicy policy{IntroPreviewPolicy::exact_source_picture};
+};
+
 // Snapshots one already-retained intro picture and exactly the images named by
 // its current draw plan.  It intentionally does not select a camera, derive a
 // transform, submit a draw, or make the cut active.
@@ -79,6 +89,22 @@ struct IntroPreviewSnapshot {
 [[nodiscard]] std::vector<IntroPreviewSnapshot>
 build_admitted_first_cut_fade_previews(const IntroRuntime &runtime,
                                        IntroPreviewTarget target);
+
+// Enumerates only reader-admitted legal-picture and FadeToBlack targets in
+// the authored first-cut command array. The order is the retained command
+// order, and the index is the original command-array index. This is an
+// inspection inventory: it creates no dispatch, timing, fade, lifecycle,
+// camera, audio, or playback state.
+[[nodiscard]] std::vector<FirstCutPicturePreviewStep>
+admitted_first_cut_picture_preview_steps(const IntroRuntime &runtime);
+
+// Builds one static diagnostic snapshot selected by an exact retained
+// first-cut command index. The selected command must target a picture with a
+// completed legal-picture or FadeToBlack reader/component receipt. It is not
+// a cutscene frame and does not advance to any other command.
+[[nodiscard]] IntroPreviewSnapshot build_admitted_first_cut_picture_step(
+    const IntroRuntime &runtime, std::size_t command_index,
+    IntroPreviewTarget target);
 
 // Selects the CPU image set for one SDL intro-renderer lifetime.  Normal
 // retained startup owns every prepared intro image.  The explicitly supplied

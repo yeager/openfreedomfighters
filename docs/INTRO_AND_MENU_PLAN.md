@@ -65,6 +65,13 @@ only static resource snapshots in stable source order, and rejects a partial
 set. The source order does not establish playback order, fade direction,
 duration, camera, or scene admission.
 
+`--diagnostic-first-cut-picture-step COMMAND_INDEX` is a separate manual
+inspection surface. It selects exactly one retained command-array index and
+accepts only a reader-admitted legal-picture or FadeToBlack target. The index
+identifies the authored record; it is not a timestamp, an animation step, or
+evidence that dispatch, fades, camera selection, audio, lifecycle, or playback
+has occurred.
+
 ## Delivery order
 
 ```text

@@ -78,7 +78,7 @@ void usage(std::ostream &output) {
   output << "Usage: openfreedomfighters [--data PATH] [--mode original|modern] "
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] [--startup-progress-receipt FILE] "
-            "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] "
+            "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] [--diagnostic-first-cut-picture-step COMMAND_INDEX] "
             "[--probe-startup-boot] [--probe-startup-boot-profile] [--probe-startup-route-cold] [--probe-soundtrack] [--probe-intro-audio] [--probe-localization] [--probe-movie-cuts] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
 }
 
@@ -1131,6 +1131,7 @@ int main(int argc, char **argv) {
   bool diagnostic_scene = false;
   bool diagnostic_startup_graphics = false;
   bool diagnostic_intro_picture = false;
+  std::optional<std::size_t> diagnostic_first_cut_picture_step;
   bool probe_startup_boot = false;
   bool probe_startup_boot_profile = false;
   bool probe_startup_route_cold = false;
@@ -1180,6 +1181,16 @@ int main(int argc, char **argv) {
       diagnostic_startup_graphics = true;
     } else if (argument == "--diagnostic-intro-picture") {
       diagnostic_intro_picture = true;
+    } else if (argument == "--diagnostic-first-cut-picture-step" && index + 1 < argc) {
+      const std::string_view value{argv[++index]};
+      std::size_t parsed{};
+      const auto [end, error] = std::from_chars(
+          value.data(), value.data() + value.size(), parsed);
+      if (error != std::errc{} || end != value.data() + value.size()) {
+        std::cerr << "First-cut diagnostic command index must be a non-negative integer.\n";
+        return 2;
+      }
+      diagnostic_first_cut_picture_step = parsed;
     } else if (argument == "--probe-startup-boot") {
       probe_startup_boot = true;
     } else if (argument == "--probe-startup-boot-profile") {
@@ -1235,14 +1246,15 @@ int main(int argc, char **argv) {
   }
   if (static_cast<unsigned>(diagnostic_scene) +
           static_cast<unsigned>(diagnostic_startup_graphics) +
-          static_cast<unsigned>(diagnostic_intro_picture) >
+          static_cast<unsigned>(diagnostic_intro_picture) +
+          static_cast<unsigned>(diagnostic_first_cut_picture_step.has_value()) >
       1U) {
     std::cerr << "Select only one diagnostic renderer.\n";
     return 2;
   }
   const bool diagnostic_renderer_requested =
       diagnostic_scene || diagnostic_startup_graphics ||
-      diagnostic_intro_picture;
+      diagnostic_intro_picture || diagnostic_first_cut_picture_step.has_value();
   const unsigned probe_count =
       static_cast<unsigned>(probe_startup_boot) +
       static_cast<unsigned>(probe_startup_boot_profile) +
@@ -1565,7 +1577,8 @@ int main(int argc, char **argv) {
           // no component reader, active-root choice, input, camera, rendering
           // or scene transition is admitted here.
           if (!diagnostic_scene && !diagnostic_startup_graphics &&
-              !diagnostic_intro_picture) {
+              !diagnostic_intro_picture &&
+              !diagnostic_first_cut_picture_step.has_value()) {
             auto package = std::make_shared<const off::runtime::StartupSceneLoadPackage>(
                 off::runtime::StartupScenePackageSource::prepare_checked(
                     "FF-Startup", data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -1634,9 +1647,16 @@ int main(int argc, char **argv) {
             // one legal-picture receipt is nevertheless sufficient to show
             // a labelled static fallback while MovieControl and loader-tail
             // evidence remains incomplete. It never activates this session.
-            intro_static_fallback.emplace(
-                off::graphics::build_incomplete_intro_fallback(
-                    intro, {.width = 1280U, .height = 720U}));
+            if (diagnostic_first_cut_picture_step) {
+              intro_static_fallback.emplace(
+                  off::graphics::build_admitted_first_cut_picture_step(
+                      intro, *diagnostic_first_cut_picture_step,
+                      {.width = 1280U, .height = 720U}));
+            } else {
+              intro_static_fallback.emplace(
+                  off::graphics::build_incomplete_intro_fallback(
+                      intro, {.width = 1280U, .height = 720U}));
+            }
           }
           startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
               data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -1755,6 +1775,11 @@ int main(int argc, char **argv) {
     std::cout << "Intro picture diagnostic compatibility option: the normal "
                  "static source-backed fallback is already enabled; generic fit "
                  "projection, not cutscene playback.\n";
+  if (diagnostic_first_cut_picture_step)
+    std::cout << "First-cut picture diagnostic: command index "
+              << *diagnostic_first_cut_picture_step
+              << " selected one reader-admitted source-backed still image; "
+                 "no dispatch, timing, fade, scene activation, audio, or playback.\n";
   const auto* intro = intro_session
                           ? std::addressof(intro_session->runtime())
                           : nullptr;

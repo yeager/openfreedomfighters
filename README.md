@@ -281,6 +281,10 @@ work. Close the window to exit. For development:
   indexed SDL GPU renderer. It uses the real decoded picture images and quads,
   but a project-authored fit projection and baseline render state; it is not
   automatic intro playback or a faithful cutscene camera.
+- `--diagnostic-first-cut-picture-step COMMAND_INDEX` selects one still image
+  by its retained first-cut command-array index. It accepts only the
+  reader-admitted legal-picture or FadeToBlack targets and does not dispatch,
+  time, fade, activate, or play the cutscene.
 
 Normal startup does not present an intro picture after the three-second
 OpenFreedomFighters splash. The generic-fit first-cut image path is restricted
