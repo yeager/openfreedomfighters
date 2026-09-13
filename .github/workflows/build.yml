@@ -230,7 +230,10 @@ jobs:
             -ArgumentList '--version' -RedirectStandardOutput $versionStdout `
             -RedirectStandardError $versionStderr -PassThru
           if (-not $versionProcess.WaitForExit(30000)) {
-            Stop-Process -Id $versionProcess.Id -Force
+            # Do not wait on Stop-Process here: a loader deadlock can make its
+            # synchronous cleanup hang too. Kill is non-waiting; the Actions
+            # runner owns final process-tree cleanup after this failure.
+            try { $versionProcess.Kill($true) } catch { }
             throw 'installed executable --version timed out after 30 seconds'
           }
           if ($versionProcess.ExitCode -ne 0) {
