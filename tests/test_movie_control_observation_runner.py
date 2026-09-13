@@ -218,11 +218,22 @@ class MovieControlObservationRunnerTests(unittest.TestCase):
         link = parent / "runner-plan-link.json"
         target.write_text('{"retail":"must not be read"}', encoding="utf-8")
         link.symlink_to(target.name)
-        with self.assertRaisesRegex(ValueError, "canonical plan must not be a symlink"):
+        with self.assertRaisesRegex(ValueError, "canonical plan must not traverse a symlink"):
             runner._outside_repository(link, "canonical plan")
         self.assertTrue(target.exists())
         link.unlink()
         target.unlink()
+
+    def test_runner_rejects_a_symlinked_private_parent_before_resolution(self) -> None:
+        parent = pathlib.Path(__file__).resolve().parents[1] / ".test-work"
+        target = parent / "runner-private-parent-target"
+        link = parent / "runner-private-parent-link"
+        target.mkdir(parents=True, exist_ok=True)
+        link.symlink_to(target.name, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "must not traverse a symlink"):
+            runner._outside_repository(link / "canonical-plan.json", "canonical plan")
+        link.unlink()
+        target.rmdir()
 
     def test_plan_reader_rejects_a_final_symlink_without_reading_the_target(self) -> None:
         parent = pathlib.Path(__file__).resolve().parents[1] / ".test-work"

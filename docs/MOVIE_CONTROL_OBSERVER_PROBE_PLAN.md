@@ -69,8 +69,9 @@ MovieControl route to share the same observer-local callback ordinal. It deletes
 the raw forms and retains only their sanitized structural forms in the private
 workspace. The same raw-record cleanup runs after observer failure, timeout, or
 schema/relation rejection. The supplied observer and canonical-plan entries
-must be regular, non-symlinked files; the plan is read through a no-follow
-descriptor. An extra file, symlink, pre-existing workspace, malformed plan,
+must be regular files reached through no symlinked path component; the plan is
+read through a no-follow descriptor. An extra file, symlinked path component,
+pre-existing workspace, malformed plan,
 unsupported trace field, ambiguous phase-one candidate, or unmatched dispatch
 relation fails collection.
 

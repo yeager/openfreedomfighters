@@ -45,13 +45,17 @@ MAX_TIMEOUT_SECONDS = 1800
 
 
 def _outside_repository(path: pathlib.Path, label: str) -> pathlib.Path:
-    # ``Path.resolve`` deliberately follows a final symlink.  Checking for a
-    # symlink after resolving would therefore validate the target rather than
-    # the operator-supplied entry.  Do this check first so a plan or observer
-    # cannot silently cross a private-file boundary through a final symlink.
-    if path.is_symlink():
-        raise ValueError(f"{label} must not be a symlink")
-    resolved = path.resolve()
+    # ``Path.resolve`` follows every symlink. Reject each existing component
+    # first: checking only the final entry would let a private observer, plan,
+    # or workspace cross a replaced parent directory before the final no-follow
+    # open below can protect it.
+    absolute = path if path.is_absolute() else pathlib.Path.cwd() / path
+    current = pathlib.Path(absolute.anchor)
+    for component in absolute.parts[1:]:
+        current /= component
+        if current.exists() and current.is_symlink():
+            raise ValueError(f"{label} must not traverse a symlink")
+    resolved = absolute.resolve()
     if resolved.is_relative_to(REPOSITORY_ROOT):
         raise ValueError(f"{label} must be outside the repository")
     return resolved
