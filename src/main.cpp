@@ -681,12 +681,27 @@ void write_reader_coverage_probe(std::ostream& output,
   }
 }
 
+[[nodiscard]] off::runtime::ClockSamplingServices inert_intro_readiness_clock_samples() {
+  // A readiness report never advances the application clock.  Keep even the
+  // supplied samplers fail-closed so constructing the report does not sample
+  // host time or invent a clock value as a hidden side effect.
+  return {[]() -> std::int64_t {
+            throw std::runtime_error("intro readiness probe does not admit clock sampling");
+          },
+          []() -> std::int32_t {
+            throw std::runtime_error("intro readiness probe does not admit clock sampling");
+          }};
+}
+
 int run_first_cut_probe(const std::filesystem::path &data_path, bool readiness_only,
                         bool run_initialization, bool observe_renderer_payload,
                         bool observe_named_global) {
+  auto clock_samples = inert_intro_readiness_clock_samples();
+  if (!readiness_only)
+    clock_samples = off::runtime::make_monotonic_clock_samples();
   off::runtime::ApplicationServices application(
       off::runtime::ClockExecutionPolicy::no_recording_or_replay,
-      off::runtime::make_monotonic_clock_samples());
+      std::move(clock_samples));
   application.initialize_native_group_registration();
   application.initialize_native_window_language_registration();
   application.initialize_native_picture_registration();

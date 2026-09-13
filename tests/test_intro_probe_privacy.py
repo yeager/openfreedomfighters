@@ -32,6 +32,14 @@ class IntroProbePrivacyTests(unittest.TestCase):
         self.assertIn('"intro-readiness-playback=not-started\\n"', source)
         self.assertNotIn('"intro-readiness-source-"', source)
 
+    def test_readiness_probe_uses_inert_clock_sources(self) -> None:
+        source = MAIN.read_text(encoding="utf-8")
+        self.assertIn("inert_intro_readiness_clock_samples", source)
+        guard = source.index("if (!readiness_only)")
+        monotonic = source.index("clock_samples = off::runtime::make_monotonic_clock_samples()")
+        self.assertLess(guard, monotonic)
+        self.assertIn("intro readiness probe does not admit clock sampling", source)
+
 
 if __name__ == "__main__":
     unittest.main()
