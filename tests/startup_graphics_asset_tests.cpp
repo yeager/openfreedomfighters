@@ -744,7 +744,14 @@ int main(int argc, char **argv) {
               diagnostic.draws.size() == 77 &&
               diagnostic.draws.front().depth_policy ==
                   off::graphics::SceneDepthPolicy::test_only &&
-              diagnostic.draws.front().blend_enabled,
+              diagnostic.draws.front().blend_enabled &&
+              diagnostic.draws.front().first_index == 0 &&
+              diagnostic.draws.front().index_count == 4 &&
+              std::is_sorted(diagnostic.draws.begin(), diagnostic.draws.end(),
+                             [](const auto &left, const auto &right) {
+                               return left.source_diagnostic_depth >
+                                      right.source_diagnostic_depth;
+                             }),
           "build a source-only startup graphics GPU diagnostic with ordered blended quads");
   }
 

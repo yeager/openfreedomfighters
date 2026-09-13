@@ -62,10 +62,19 @@ SceneGpuPlan make_startup_graphics_diagnostic_plan(
     const auto instance_index = result.instances.size();
     result.instances.push_back({instance_index, mesh_index,
                                 {1, 0, 0, 0, 1, 0, 0, 0, 1}, {0, 0, 0}});
+    double depth_sum = 0.0;
+    for (const auto index : result.meshes[mesh_index].indices) {
+      depth_sum += transform_scene_source_diagnostic_position(
+                       result.instances[instance_index],
+                       result.meshes[mesh_index].vertices[index].position)[2];
+    }
+    const auto source_diagnostic_depth = static_cast<float>(
+        depth_sum / static_cast<double>(result.meshes[mesh_index].indices.size()));
     result.draws.push_back({instance_index, mesh_index, texture->second,
                             PrimitiveTopology::triangle_strip,
                             VertexAlphaClass::variable,
-                            SceneDepthPolicy::test_only, true, 0, 4});
+                            SceneDepthPolicy::test_only, true,
+                            source_diagnostic_depth, 0, 4});
   }
   if (result.draws.empty())
     throw std::invalid_argument("startup diagnostic has no source submissions");
@@ -84,6 +93,11 @@ SceneGpuPlan make_startup_graphics_diagnostic_plan(
                        .center_horizontal = (low[0] + high[0]) * 0.5F,
                        .center_vertical = (low[1] + high[1]) * 0.5F,
                        .xy_scale = 1.0F};
+  std::stable_sort(result.draws.begin(), result.draws.end(),
+                   [](const SceneGpuDraw &left, const SceneGpuDraw &right) {
+                     return left.source_diagnostic_depth >
+                            right.source_diagnostic_depth;
+                   });
   validate_scene_gpu_plan(result);
   return result;
 }
