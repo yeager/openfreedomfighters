@@ -13,6 +13,10 @@ completed synchronous dispatch, one matching failed dispatch, four ordered
 player lifecycle phases, and one matching failed activation. It rejects extra
 fields, duplicate keys, unsupported JSON features, mismatched callback
 ordinals, malformed categories, trailing data, symlinks, and oversized files.
+It checks the producer's bounded ordinals, orders, masks, and cross-record
+relations rather than encoding one fixture's values. The receipt therefore
+accepts independently reviewed source-free observations that satisfy the same
+structural contract without treating a test recording as the game's behavior.
 
 The admitted object is intentionally inert. It retains no observer identity or
 retail content and is not passed to MovieControl, the cutscene player, a scene,
