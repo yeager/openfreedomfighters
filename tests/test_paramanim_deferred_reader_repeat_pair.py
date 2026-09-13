@@ -17,6 +17,7 @@ def event(**changes: object) -> dict[str, object]:
     value: dict[str, object] = {
         "observation_order": 0, "stage": "owner_reader",
         "owner_input_form": "accepted_bounded", "component_input_form": "accepted_bounded",
+        "parameters_chunk": "present_required",
         "terminal_rule": "required", "attachment_delimiter_rule": "required",
         "trailing_bytes_policy": "accepted_none_only", "destination_write": "owner_reader",
         "reader_prerequisite": "preparation_before_owner_reader",
@@ -32,6 +33,7 @@ def rejected(order: int = 1, *, owner: str = "rejected_malformed",
              component: str = "accepted_bounded") -> dict[str, object]:
     return event(observation_order=order, stage="failure",
                  owner_input_form=owner, component_input_form=component,
+                 parameters_chunk="not_observed",
                  terminal_rule="rejected_missing", destination_write="not_observed",
                  reader_prerequisite="not_observed", raw_value_preservation="not_observed",
                  ownership="not_observed", duplicate_reentry="not_observed",
@@ -64,9 +66,18 @@ def rollback(order: int = 5) -> dict[str, object]:
                  outcome="failure")
 
 
+def missing_parameters(order: int = 6) -> dict[str, object]:
+    return event(observation_order=order, stage="failure",
+                 destination_write="not_observed", parameters_chunk="missing_rejected",
+                 reader_prerequisite="not_observed", raw_value_preservation="not_observed",
+                 ownership="not_observed", duplicate_reentry="not_observed",
+                 failure_rollback="no_write", outcome="failure")
+
+
 def complete() -> dict[str, object]:
     return sanitized(preparation(), event(observation_order=1), rejected(2), unsupported(3),
-                     component_malformed(4), component_unsupported(5), rollback(6))
+                     component_malformed(4), component_unsupported(5), rollback(6),
+                     missing_parameters(7))
 
 
 def sanitized(*events: dict[str, object]) -> dict[str, object]:
@@ -112,6 +123,13 @@ class ParamAnimDeferredReaderRepeatPairTests(unittest.TestCase):
                                       rollback(4))
         with self.assertRaises(ValueError):
             repeat_pair.sanitize_repeat_pair(missing_component, missing_component)
+
+    def test_requires_the_separate_missing_parameters_failure(self) -> None:
+        without_parameters = sanitized(preparation(), event(observation_order=1), rejected(2),
+                                       unsupported(3), component_malformed(4),
+                                       component_unsupported(5), rollback(6))
+        with self.assertRaises(ValueError):
+            repeat_pair.sanitize_repeat_pair(without_parameters, without_parameters)
 
     def test_rejects_retail_or_identity_fields_on_revalidation(self) -> None:
         specimen = complete()

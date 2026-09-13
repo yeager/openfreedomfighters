@@ -97,6 +97,9 @@ Each bounded observation record carries only these categorical relations:
 
 - owner and component input form: `accepted_bounded`,
   `rejected_malformed`, or `rejected_unsupported`;
+- parameter-chunk state: `present_required`, `missing_rejected`, or
+  `not_observed`. The repeat gate requires the dedicated, no-write
+  `missing_rejected` failure independently of either reader boundary;
 - terminal rule, attachment-delimiter rule, and a no-trailing-bytes policy;
 - reader boundary for a destination write, the required deferred-preparation
   and owner-reader prerequisite ordering, raw-value preservation, local

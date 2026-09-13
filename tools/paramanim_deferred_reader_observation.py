@@ -33,6 +33,7 @@ _STAGES = ("deferred_preparation", "owner_reader", "component_reader",
 _STAGE_RANK = {stage: rank for rank, stage in enumerate(_STAGES)}
 _INPUT_FORMS = frozenset(("accepted_bounded", "rejected_malformed",
                           "rejected_unsupported"))
+_PARAMETERS_CHUNK = frozenset(("present_required", "missing_rejected", "not_observed"))
 _TERMINALS = frozenset(("required", "rejected_missing", "rejected_premature"))
 _DELIMITERS = frozenset(("required", "rejected_missing", "rejected_duplicate",
                          "rejected_before_terminal"))
@@ -51,7 +52,7 @@ _OUTCOMES = frozenset(("success", "failure"))
 _SIDE_EFFECTS = frozenset(("none",))
 _FIELDS = frozenset((
     "observation_order", "stage", "owner_input_form", "component_input_form",
-    "terminal_rule", "attachment_delimiter_rule", "trailing_bytes_policy",
+    "parameters_chunk", "terminal_rule", "attachment_delimiter_rule", "trailing_bytes_policy",
     "destination_write", "reader_prerequisite", "raw_value_preservation", "ownership",
     "duplicate_reentry", "failure_rollback", "later_consumer", "outcome",
     "side_effect",
@@ -87,6 +88,13 @@ def _validate(event: dict[str, Any]) -> None:
         if (event["outcome"] != "failure" or event["destination_write"] != "not_observed" or
                 event["failure_rollback"] != "no_write" or event["side_effect"] != "none"):
             raise ValueError("rejected input must fail before mutation or side effects")
+    if event["parameters_chunk"] == "missing_rejected":
+        if (event["stage"] != "failure" or event["outcome"] != "failure" or
+                event["owner_input_form"] != "accepted_bounded" or
+                event["component_input_form"] != "accepted_bounded" or
+                event["destination_write"] != "not_observed" or
+                event["failure_rollback"] != "no_write" or event["side_effect"] != "none"):
+            raise ValueError("missing parameters require a no-write failure after bounded input")
     if event["destination_write"] != "not_observed":
         if event["stage"] != event["destination_write"]:
             raise ValueError("destination write must occur at its declared reader boundary")
@@ -99,6 +107,8 @@ def _validate(event: dict[str, Any]) -> None:
             raise ValueError("a write requires successful raw-value preservation")
         if event["ownership"] == "not_observed" or event["duplicate_reentry"] == "not_observed":
             raise ValueError("a write requires ownership and re-entry evidence")
+        if event["parameters_chunk"] != "present_required":
+            raise ValueError("a write requires an observed parameters chunk")
     elif (event["reader_prerequisite"] != "not_observed" or
           event["raw_value_preservation"] == "preserved" or event["ownership"] != "not_observed"):
         raise ValueError("state contract cannot be claimed without a write")
@@ -153,6 +163,7 @@ def sanitize_observation(raw: Any) -> dict[str, Any]:
             "observation_order": order, "stage": stage,
             "owner_input_form": _enum(event["owner_input_form"], "owner_input_form", _INPUT_FORMS),
             "component_input_form": _enum(event["component_input_form"], "component_input_form", _INPUT_FORMS),
+            "parameters_chunk": _enum(event["parameters_chunk"], "parameters_chunk", _PARAMETERS_CHUNK),
             "terminal_rule": _enum(event["terminal_rule"], "terminal_rule", _TERMINALS),
             "attachment_delimiter_rule": _enum(event["attachment_delimiter_rule"], "attachment_delimiter_rule", _DELIMITERS),
             "trailing_bytes_policy": _enum(event["trailing_bytes_policy"], "trailing_bytes_policy", _TRAILING),

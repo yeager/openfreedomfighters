@@ -66,6 +66,12 @@ def _has_complete_contract(events: list[dict[str, Any]]) -> bool:
     }
     if not expected_rejections.issubset(observed_rejections):
         return False
+    # Private static analysis identifies a dedicated rejection when ParamAnim
+    # has no parameters chunk. Keep this separate from owner/component grammar:
+    # its location is not yet admitted. A repeated reader contract must still
+    # demonstrate the no-write failure before a parser can be reviewed.
+    if not any(event["parameters_chunk"] == "missing_rejected" for event in events):
+        return False
     # A positive write does not prove that its destination is recoverable on a
     # later failure.  Require an accepted-input, post-write rollback record.
     if not any(event["stage"] == "failure" and
