@@ -8,6 +8,7 @@
 #include "off/data/first_cut_owner_reader.hpp"
 #include "off/data/first_cut_list_component_reader.hpp"
 #include "off/data/first_cut_command_component_reader.hpp"
+#include "off/data/first_cut_command_control_inventory.hpp"
 #include "off/data/loc_string_index.hpp"
 #include "off/data/loc_catalog.hpp"
 #include "off/data/zip_archive.hpp"
@@ -801,6 +802,13 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
       particle_emitter_first_cut_join.constructed_component_bindings!=
           particle_dispatch.attachment_instances)
     throw std::runtime_error("first-cut cold probe found inconsistent ParticleEmitter command join inventory");
+  const auto admitted_picture_steps=off::graphics::admitted_first_cut_picture_preview_steps(intro);
+  std::vector<std::size_t> admitted_picture_command_indices;
+  admitted_picture_command_indices.reserve(admitted_picture_steps.size());
+  for(const auto& step:admitted_picture_steps)
+    admitted_picture_command_indices.push_back(step.command_index);
+  const auto command_controls=off::data::inventory_first_cut_command_controls(
+      first_cut_source_data.commands,admitted_picture_command_indices);
   std::optional<std::int32_t> latest_command_position;
   for(const auto& command:first_cut_source_data.commands) {
     const auto position=std::bit_cast<std::int32_t>(command.timeline_position);
@@ -953,6 +961,20 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
             << expected_command_target_deliveries << '\n'
             << "first-cut-command-component-delivery-attempts="
             << command_component_delivery_attempts << '\n'
+            << "first-cut-command-control-records=" << command_controls.command_records << '\n'
+            << "first-cut-command-distinct-raw-controls=" << command_controls.distinct_raw_control_records << '\n'
+            << "first-cut-command-nonzero-event-references=" << command_controls.nonzero_event_references << '\n'
+            << "first-cut-command-distinct-event-references=" << command_controls.distinct_event_references << '\n'
+            << "first-cut-command-nonzero-target-references=" << command_controls.nonzero_target_references << '\n'
+            << "first-cut-command-distinct-target-references=" << command_controls.distinct_target_references << '\n'
+            << "first-cut-command-nonzero-arguments=" << command_controls.nonzero_arguments << '\n'
+            << "first-cut-command-distinct-arguments=" << command_controls.distinct_arguments << '\n'
+            << "first-cut-command-nonempty-target-names=" << command_controls.nonempty_target_names << '\n'
+            << "first-cut-command-reader-admitted-picture-records=" << command_controls.reader_admitted_picture_commands << '\n'
+            << "first-cut-command-non-picture-records=" << command_controls.non_picture_commands << '\n'
+            << "first-cut-command-raw-control-digest=" << command_controls.raw_control_digest << '\n'
+            << "first-cut-command-reader-admitted-picture-control-digest="
+            << command_controls.reader_admitted_picture_control_digest << '\n'
             ;
   write_reader_coverage_probe(std::cout,reader_coverage);
   write_lifecycle_coverage_probe(std::cout,intro.preflight_global_lifecycle());

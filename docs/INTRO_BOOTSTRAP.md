@@ -939,6 +939,14 @@ position-only digest. It does not print event identities, targets, arguments,
 or names. This is timing evidence for a future clock-driven player, not a
 substitute timer.
 
+The cold probe additionally reports a source-free first-cut command-control
+inventory: raw-field cardinalities, empty/non-empty target-name count, the
+reader-admitted picture-command relation, and opaque deterministic control-word
+digests. It neither emits raw command values or target text nor assigns any
+field a scheduling, event, fade, or dispatch meaning. The picture relation is
+only the already-completed reader/component admission result; it is not a
+playback selection.
+
 `FirstCutClockedCommandRunner` now binds an already-admitted command session to
 the recovered scene-clock-to-timeline conversion. The scene host supplies the
 start word and each sampled scene-clock word. The runner does not create a
