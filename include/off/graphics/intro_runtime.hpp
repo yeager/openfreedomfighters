@@ -424,6 +424,15 @@ struct IntroUnimplementedAttachmentReaderCoverageEntry {
   std::size_t attachment_owners{};
   std::size_t attachment_instances{};
   std::size_t owners_with_deferred_blocks{};
+  // These counters classify only bounded compact-block framing.  They do not
+  // identify a reader grammar, a payload field, or an executable callback.
+  std::size_t profiled_deferred_blocks{};
+  std::size_t unprofiled_deferred_blocks{};
+  std::size_t distinct_bounded_shapes{};
+  std::size_t largest_bounded_shape_population{};
+  [[nodiscard]] bool has_repeated_bounded_shape() const noexcept {
+    return largest_bounded_shape_population >= 2U;
+  }
 };
 struct IntroUnimplementedAttachmentReaderCoverageInventory {
   std::vector<IntroUnimplementedAttachmentReaderCoverageEntry> entries;

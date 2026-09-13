@@ -22,10 +22,21 @@ valid inferred destination.
 
 `IntroRuntime::unimplemented_attachment_reader_coverage_inventory()` provides
 the comparable aggregate population for all six constructor-only attachment
-families. It reports only owner, instance, and queued-block counts. It neither
-exposes identities or source bytes nor treats a queued block as an admitted
-grammar. Use it to choose the next private observation target; do not use it
-to promote a family into reader coverage.
+families. It reports only owner, instance, queued-block, bounded-profile and
+repeat-population counts. The cold probe writes the same deterministic matrix
+as `reader-frontier-family` records. A `repeated-bounded-shape=yes` record
+means two or more owned blocks have the same compact framing tags; it does not
+mean their payload grammar, destination contract, callback timing, or reader
+semantics are shared. An unprofiled block is reported as a count rather than
+being silently discarded. The inventory neither exposes identities or source
+bytes nor treats a queued block as an admitted grammar. Use it to choose the
+next private observation target; do not use it to promote a family into reader
+coverage.
+
+The current priority rule is deliberately narrow: investigate a family only
+after the matrix reports at least one bounded repeated shape, then collect the
+reviewed negative and destination evidence below. It is a triage filter, not
+an implementation threshold.
 
 ## Implementation decision
 

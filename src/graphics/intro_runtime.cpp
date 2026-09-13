@@ -2183,6 +2183,7 @@ IntroRuntime::unimplemented_attachment_reader_coverage_inventory() const {
   const auto& directory = sources.directory();
   for (const auto candidate : candidates) {
     IntroUnimplementedAttachmentReaderCoverageEntry entry{.family = candidate.family};
+    std::vector<data::DeferredCompactBlockProfile> profiles;
     for (std::size_t row{}; row < directory.size(); ++row) {
       std::size_t instances{};
       for (std::size_t slot{}; slot < directory[row].attachments.size(); ++slot) {
@@ -2195,7 +2196,31 @@ IntroRuntime::unimplemented_attachment_reader_coverage_inventory() const {
       entry.attachment_instances += instances;
       if (directory[row].deferred_source_offset != 0U)
         ++entry.owners_with_deferred_blocks;
+      if (directory[row].deferred_source_offset == 0U)
+        continue;
+      try {
+        const auto block = sources.deferred_source_block(row);
+        if (block.size() <= sizeof(std::uint32_t))
+          throw std::runtime_error("unimplemented reader frontier requires a bounded block body");
+        const auto profile = data::DeferredCompactBlockProfiler::profile(
+            block.subspan(sizeof(std::uint32_t)));
+        ++entry.profiled_deferred_blocks;
+        profiles.push_back(profile);
+      } catch (const std::exception&) {
+        ++entry.unprofiled_deferred_blocks;
+      }
     }
+    std::vector<data::DeferredCompactBlockProfile> distinct_profiles;
+    for (const auto& profile : profiles) {
+      if (std::ranges::find(distinct_profiles, profile) == distinct_profiles.end())
+        distinct_profiles.push_back(profile);
+    }
+    for (const auto& profile : distinct_profiles) {
+      entry.largest_bounded_shape_population = std::max(
+          entry.largest_bounded_shape_population,
+          static_cast<std::size_t>(std::ranges::count(profiles, profile)));
+    }
+    entry.distinct_bounded_shapes = distinct_profiles.size();
     result.entries.push_back(entry);
   }
   return result;

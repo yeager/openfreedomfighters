@@ -468,6 +468,43 @@ void write_startup_route_cold_probe(const std::filesystem::path &root,
   return "unknown";
 }
 
+[[nodiscard]] std::string_view unimplemented_attachment_reader_family_label(
+    off::graphics::IntroUnimplementedAttachmentReaderFamily family) noexcept {
+  using Family=off::graphics::IntroUnimplementedAttachmentReaderFamily;
+  switch(family) {
+  case Family::film_grain_camera_setup: return "film-grain-camera-setup";
+  case Family::lens_flare_control: return "lens-flare-control";
+  case Family::parameter_animation: return "parameter-animation";
+  case Family::particle_emitter: return "particle-emitter";
+  case Family::lens_flare_lights: return "lens-flare-lights";
+  case Family::scroll_texture: return "scroll-texture";
+  }
+  return "unknown";
+}
+
+void write_unimplemented_attachment_reader_frontier_probe(
+    std::ostream& output,
+    const off::graphics::IntroUnimplementedAttachmentReaderCoverageInventory& frontier) {
+  for(const auto& entry:frontier.entries) {
+    if(entry.profiled_deferred_blocks+entry.unprofiled_deferred_blocks!=
+        entry.owners_with_deferred_blocks ||
+       entry.distinct_bounded_shapes>entry.profiled_deferred_blocks ||
+       entry.largest_bounded_shape_population>entry.profiled_deferred_blocks)
+      throw std::runtime_error("unimplemented attachment reader frontier has inconsistent totals");
+    output << "reader-frontier-family="
+           << unimplemented_attachment_reader_family_label(entry.family)
+           << " owners=" << entry.attachment_owners
+           << " instances=" << entry.attachment_instances
+           << " deferred-blocks=" << entry.owners_with_deferred_blocks
+           << " profiled-blocks=" << entry.profiled_deferred_blocks
+           << " unprofiled-blocks=" << entry.unprofiled_deferred_blocks
+           << " distinct-bounded-shapes=" << entry.distinct_bounded_shapes
+           << " largest-bounded-shape=" << entry.largest_bounded_shape_population
+           << " repeated-bounded-shape="
+           << (entry.has_repeated_bounded_shape()?"yes":"no") << '\n';
+  }
+}
+
 void write_lifecycle_coverage_probe(
     std::ostream& output, const off::graphics::IntroLifecyclePreflightReport& report) {
   const auto write_population=[&output](std::string_view name, std::size_t required,
@@ -570,6 +607,8 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
   const auto matpos_dispatch=intro.matpos_deferred_dispatch_inventory();
   const auto paramanim_dispatch=intro.paramanim_deferred_dispatch_inventory();
   const auto particle_dispatch=intro.particle_emitter_deferred_dispatch_inventory();
+  const auto unimplemented_reader_frontier=
+      intro.unimplemented_attachment_reader_coverage_inventory();
   if(reader_coverage.stage!=off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete ||
       reader_coverage.total_discovered!=intro.deferred_reader_work().size())
     throw std::runtime_error("first-cut cold probe found incomplete reader coverage");
@@ -877,6 +916,8 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
               << " framing-digest=" << shape.framing_digest
               << " count=" << shape.count << '\n';
   }
+  write_unimplemented_attachment_reader_frontier_probe(
+      std::cout,unimplemented_reader_frontier);
   std::cout
             << "outer-loader-source-inputs=verified\n";
   std::cout << "outer-loader-tail=native-services-required\n"

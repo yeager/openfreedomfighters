@@ -1057,9 +1057,15 @@ static OFF_NOINLINE void check_complete_runtime_post_directory(
       check(unimplemented_reader_coverage.entries.size()==6U &&
                 std::ranges::all_of(unimplemented_reader_coverage.entries,[](const auto& entry) {
                   return entry.attachment_instances>=entry.attachment_owners &&
-                      entry.owners_with_deferred_blocks<=entry.attachment_owners;
+                      entry.owners_with_deferred_blocks<=entry.attachment_owners &&
+                      entry.profiled_deferred_blocks+entry.unprofiled_deferred_blocks==
+                          entry.owners_with_deferred_blocks &&
+                      entry.distinct_bounded_shapes<=entry.profiled_deferred_blocks &&
+                      entry.largest_bounded_shape_population<=entry.profiled_deferred_blocks &&
+                      (!entry.has_repeated_bounded_shape() ||
+                          entry.largest_bounded_shape_population>=2U);
                 }),
-            "unimplemented attachment reader frontier retains only bounded aggregate populations");
+            "unimplemented attachment reader frontier retains only bounded aggregate populations and repeat metrics");
       const auto paramanim_entry=std::ranges::find_if(
           unimplemented_reader_coverage.entries,[](const auto& entry) {
             return entry.family==off::graphics::IntroUnimplementedAttachmentReaderFamily::parameter_animation;
@@ -1077,6 +1083,13 @@ static OFF_NOINLINE void check_complete_runtime_post_directory(
                 particle_entry->attachment_instances==particle_dispatch.attachment_instances &&
                 particle_entry->owners_with_deferred_blocks==particle_dispatch.owners_with_deferred_blocks,
             "unimplemented reader frontier agrees with separately profiled ParamAnim and ParticleEmitter populations");
+      check(paramanim_entry->profiled_deferred_blocks==paramanim_dispatch.owners_with_deferred_blocks &&
+                paramanim_entry->unprofiled_deferred_blocks==0U &&
+                paramanim_entry->distinct_bounded_shapes==1U &&
+                paramanim_entry->largest_bounded_shape_population==
+                    paramanim_dispatch.owners_with_deferred_blocks &&
+                paramanim_entry->has_repeated_bounded_shape(),
+            "unimplemented reader frontier exposes ParamAnim's repeated bounded framing without reader admission");
       rejects([&]{host.prepare_scene_lifetime_keys_registry();});
       host.prepare_scene_lifetime_keys_backing();
       const auto* keys_backing=host.scene_lifetime_keys_backing();
