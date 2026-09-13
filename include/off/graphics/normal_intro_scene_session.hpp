@@ -4,6 +4,7 @@
 #include "off/cutscene/first_cut_clocked_command_runner.hpp"
 #include "off/graphics/intro_outer_loader_tail_readiness.hpp"
 #include "off/graphics/movie_control_first_cut_runtime_handoff.hpp"
+#include "off/graphics/first_cut_fade_phase_one_session.hpp"
 
 #include <cstdint>
 #include <memory>
@@ -18,6 +19,7 @@ struct IntroOuterLoaderTailServices;
 // admission, rendering, or playback evidence.
 enum class NormalIntroSceneSessionStage : std::uint8_t {
   postconstructed,
+  diagnostic_fade_reader_bracket_complete,
   reader_bracket_complete,
   outer_loader_tail_complete,
   failed,
@@ -41,6 +43,10 @@ public:
   NormalIntroSceneSession(const NormalIntroSceneSession &) = delete;
   NormalIntroSceneSession &operator=(const NormalIntroSceneSession &) = delete;
   void complete_postconstruction_reader_bracket(std::uint64_t saved);
+  // Diagnostic/test-only restricted bracket for the already source-bound
+  // first-cut FadeToBlack reader pair. It must never be treated as the normal
+  // all-reader bracket or used to unlock lifecycle, loader-tail, or cut paths.
+  void complete_diagnostic_first_cut_fade_reader_bracket(std::uint64_t saved);
   // Binds the reviewed, still-cold first-cut command session to the same
   // scene-owned lifetime as its source runtime. This does not execute either
   // lifecycle phase, schedule a cut, start audio, or admit rendering.
@@ -51,6 +57,11 @@ public:
   void prepare_first_cut_command_runner(
       float derived_end,
       runtime::IntroLiveTargetRegistry::DispatchServices dispatch);
+  // Diagnostic/test-only: creates the bounded FadeToBlack phase-one probe
+  // after the reader bracket. It remains unavailable to normal startup and
+  // does not admit global lifecycle, MovieControl, audio, clock, or rendering.
+  [[nodiscard]] std::unique_ptr<FirstCutFadePhaseOneSession>
+  make_diagnostic_first_cut_fade_phase_one_session();
   void complete_outer_loader_tail(const IntroOuterLoaderTailServices &services);
   [[nodiscard]] NormalIntroSceneSessionStage stage() const noexcept {
     return stage_;
@@ -88,6 +99,7 @@ private:
   std::unique_ptr<cutscene::FirstCutRuntimeCommandRouter> first_cut_command_router_;
   std::unique_ptr<cutscene::FirstCutCommandSession> first_cut_command_session_;
   std::unique_ptr<cutscene::FirstCutClockedCommandRunner> first_cut_command_runner_;
+  bool diagnostic_first_cut_fade_phase_one_issued_{};
   NormalIntroReaderBracketObservation reader_bracket_observation_;
   NormalIntroSceneSessionStage stage_{
       NormalIntroSceneSessionStage::postconstructed};

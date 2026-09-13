@@ -140,6 +140,39 @@ void NormalIntroSceneSession::prepare_supported_first_cut_player() {
   }
 }
 
+void NormalIntroSceneSession::complete_diagnostic_first_cut_fade_reader_bracket(
+    std::uint64_t saved) {
+  if (stage_ != NormalIntroSceneSessionStage::postconstructed)
+    throw std::runtime_error("normal intro fade diagnostic reader bracket is unavailable");
+  try {
+    runtime_->run_postconstruction_reader_bracket(
+        saved,
+        {.external_loader_service = [](std::uint64_t) {},
+         .source_script_work = [](const IntroSourceScriptWork &) {},
+         .pre_reader_service = [] {},
+         .prepare_deferred_reader = [](const IntroDeferredReaderWork &) {},
+         .owner_reader_boundary = [this](const IntroDeferredReaderWork &work) {
+           for (const auto &command : runtime_->resources().first_cut().commands) {
+             const auto target = runtime_->resources().sources().local_source_for_authored_reference(
+                 command.target_reference);
+             if (target && *target == work.source_directory_index) {
+               runtime_->apply_supported_first_cut_fade_picture_deferred_reader(work);
+               break;
+             }
+           }
+         },
+         .component_reader_boundary = [this](const IntroDeferredReaderWork &work) {
+           if (runtime_->fade_picture_reader_states().contains(work.source_directory_index))
+             runtime_->apply_supported_first_cut_fade_picture_component_reader(work);
+         },
+         .end_reader_service = [] {}});
+    stage_ = NormalIntroSceneSessionStage::diagnostic_fade_reader_bracket_complete;
+  } catch (...) {
+    stage_ = NormalIntroSceneSessionStage::failed;
+    throw;
+  }
+}
+
 MovieControlFirstCutRuntimeHandoff NormalIntroSceneSession::make_first_cut_handoff() {
   // The first-cut receiver remains cold across the loader tail. That tail is
   // required before the later global lifecycle and event-16 route, so
@@ -175,6 +208,17 @@ void NormalIntroSceneSession::prepare_first_cut_command_runner(
     first_cut_command_router_.reset();
     throw;
   }
+}
+
+std::unique_ptr<FirstCutFadePhaseOneSession>
+NormalIntroSceneSession::make_diagnostic_first_cut_fade_phase_one_session() {
+  if (stage_ != NormalIntroSceneSessionStage::diagnostic_fade_reader_bracket_complete ||
+      diagnostic_first_cut_fade_phase_one_issued_)
+    throw std::runtime_error("normal intro fade diagnostic is unavailable");
+  auto result = std::unique_ptr<FirstCutFadePhaseOneSession>(
+      new FirstCutFadePhaseOneSession(*runtime_));
+  diagnostic_first_cut_fade_phase_one_issued_ = true;
+  return result;
 }
 
 void NormalIntroSceneSession::complete_outer_loader_tail(

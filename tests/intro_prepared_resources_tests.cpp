@@ -2702,6 +2702,66 @@ static OFF_NOINLINE void test_first_cut_fade_runtime_phase_one() {
     }
 }
 
+static OFF_NOINLINE void test_first_cut_fade_diagnostic_session() {
+    enum class Scenario { complete, service_failure };
+    for (const auto scenario : {Scenario::complete, Scenario::service_failure}) {
+      Fixture fixture(false,true,true,true,true,true,true,true,true,true,true,true);
+      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
+      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+      app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
+      app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
+      app.initialize_native_remaining_intro_scope_registration();
+      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
+      auto scene=off::graphics::make_normal_intro_scene_session(
+          std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,"FF-Intro.gms",
+              off::graphics::IntroSoundLoadPolicy::directory_construction));
+      auto& host=scene->runtime();
+      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+      host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
+      host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
+      host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
+      host.construct_room_animation_scope_without_engine_renderer();host.set_light_policy(false);
+      host.construct_lens_flare_animation_scope_without_engine_renderer();host.construct_remaining_directory_without_engine_renderer();
+      rejects([&] { static_cast<void>(scene->make_diagnostic_first_cut_fade_phase_one_session()); });
+      scene->complete_diagnostic_first_cut_fade_reader_bracket(0);
+      auto diagnostic=scene->make_diagnostic_first_cut_fade_phase_one_session();
+      rejects([&] { static_cast<void>(scene->make_diagnostic_first_cut_fade_phase_one_session()); });
+      rejects([&] { scene->prepare_supported_first_cut_player(); });
+      std::vector<std::size_t> dimensions_order, invalidations;
+      const off::graphics::IntroFadePicturePhaseOneServices services{
+          [&] { dimensions_order.push_back(dimensions_order.size()); return std::array<std::int32_t,2>{640,480}; },
+          [&](auto owner,auto resource) {
+            const auto source=host.source_index(owner);
+            const auto* picture=source ? host.constructed_picture_owner(*source) : nullptr;
+            check(picture && picture->owner==owner && picture->resource==resource,
+                  "diagnostic fade invalidation retains the exact source-bound owner/resource pair");
+            invalidations.push_back(*source);
+            if(scenario==Scenario::service_failure) throw std::runtime_error("diagnostic invalidation failure");
+          }};
+      if(scenario==Scenario::complete) {
+        diagnostic->execute(services);
+        check(diagnostic->stage()==off::graphics::FirstCutFadePhaseOneSessionStage::complete &&
+                  diagnostic->receipts().size()==3U && invalidations==std::vector<std::size_t>{9,7,4} &&
+                  dimensions_order.size()==3U,
+              "diagnostic fade phase one visits the three retained receipts in reviewed reverse construction order");
+        rejects([&] { diagnostic->execute(services); });
+      } else {
+        rejects([&] { diagnostic->execute(services); });
+        check(diagnostic->stage()==off::graphics::FirstCutFadePhaseOneSessionStage::failed &&
+                  diagnostic->receipts().empty() && invalidations==std::vector<std::size_t>{9} &&
+                  dimensions_order.size()==1U,
+              "a diagnostic fade service failure commits no session completion receipt and rejects the remaining targets");
+        rejects([&] { diagnostic->execute(services); });
+      }
+      const auto lifecycle=host.preflight_global_lifecycle();
+      check(!lifecycle.ready() && lifecycle.covered_components==0U && lifecycle.covered_owners==0U &&
+                !host.components().phases_completed() && host.registered_cameras().entries().empty(),
+            "diagnostic fade phase one never admits global lifecycle, owners, cameras, or rendering");
+    }
+}
+
 static OFF_NOINLINE void test_room_animation_runtime_scope() {
     for(const bool existing_shared_state:{false,true}) {
       Fixture room_fixture(false,true,true,true,true,true,true,true,true);
@@ -4765,6 +4825,7 @@ int main(int argc, char* argv[]) {
         TestGroup{"prepared-runtime-scopes", test_prepared_runtime_scopes},
         TestGroup{"complete-runtime-scopes", test_complete_runtime_scopes},
         TestGroup{"first-cut-fade-phase-one", test_first_cut_fade_runtime_phase_one},
+        TestGroup{"first-cut-fade-diagnostic-session", test_first_cut_fade_diagnostic_session},
         TestGroup{"movie-control-phase-two", test_movie_control_runtime_phase_two},
         TestGroup{"room-animation-runtime-scope", test_room_animation_runtime_scope},
         TestGroup{"visual-scope-lifecycle", test_visual_scope_lifecycle},

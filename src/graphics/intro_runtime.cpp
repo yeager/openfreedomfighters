@@ -4572,6 +4572,25 @@ void IntroRuntime::run_first_cut_fade_phase_one(std::size_t component_index,
   record_supported_component_admission(component_index);
 }
 
+void IntroRuntime::run_isolated_first_cut_fade_phase_one(
+    std::size_t component_index, const IntroFadePicturePhaseOneServices& services) {
+  if (component_index>=components_.size() || !services.engine_dimensions ||
+      !services.invalidate_resource || !first_cut_fade_reader_matches(component_index))
+    throw std::runtime_error("isolated FadeToBlack phase one requires its source-backed picture and scene services");
+  const auto source=*components_.at(component_index).source().directory_index;
+  const auto dimensions=services.engine_dimensions();
+  if (!first_cut_fade_reader_matches(component_index))
+    throw std::runtime_error("isolated FadeToBlack dimension sampling changed its live reader state");
+  auto& owner=constructed_picture_owners_.at(source);
+  auto& picture=picture_for_source(source);
+  auto& size=*constructed_picture_components_.at(component_index).fade_size;
+  size.initialize(owner.size_scale,dimensions[0],dimensions[1],picture.submission_cache(),[&] {
+    services.invalidate_resource(owner.owner,owner.resource);
+  });
+  if (!first_cut_fade_reader_matches(component_index))
+    throw std::runtime_error("isolated FadeToBlack invalidation changed its live reader state");
+}
+
 void IntroRuntime::apply_supported_first_cut_legal_picture_deferred_reader(
     const IntroDeferredReaderWork& work) {
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||

@@ -156,6 +156,7 @@ add_library(off_core
     src/runtime/reviewed_scene_manager_lifecycle_contract.cpp
     src/runtime/reviewed_scene_activation_gate.cpp
     src/graphics/normal_intro_scene_session.cpp
+    src/graphics/first_cut_fade_phase_one_session.cpp
     src/graphics/normal_intro_scene_lifecycle_services.cpp
     src/graphics/intro_lifecycle_admission.cpp
     src/graphics/intro_preview_builder.cpp
@@ -935,6 +936,7 @@ if(BUILD_TESTING)
             outer-loader-tail-readiness
             named-global-envelopes
             first-cut-fade-phase-one
+            first-cut-fade-diagnostic-session
             movie-control-phase-two
             prepared-runtime-scopes
             complete-runtime-scopes

@@ -40,6 +40,7 @@
 namespace off::graphics {
 
 class IntroRuntime;
+class FirstCutFadePhaseOneSession;
 
 struct IntroRuntimeHandle {
   std::uint64_t value{};
@@ -1392,6 +1393,12 @@ private:
   void record_supported_component_admission(std::size_t component);
   [[nodiscard]] bool first_cut_fade_reader_matches(std::size_t component) const;
   void run_first_cut_fade_phase_one(std::size_t component,runtime::ComponentRecord& record);
+  // Diagnostic-only companion to the factory callback above.  It deliberately
+  // omits component-admission recording, so it cannot turn a local fade probe
+  // into global lifecycle evidence.
+  void run_isolated_first_cut_fade_phase_one(
+      std::size_t component, const IntroFadePicturePhaseOneServices& services);
+  friend class FirstCutFadePhaseOneSession;
   [[nodiscard]] bool movie_control_reader_matches() const;
   void run_movie_control_phase_two(std::size_t component,runtime::ComponentRecord& record);
   void allocate_source_scope(std::uint32_t count_group);

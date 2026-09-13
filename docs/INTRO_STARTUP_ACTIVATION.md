@@ -22,6 +22,18 @@ MovieControl phase-two call after a global pass that already dispatched the
 factory-owned callback. Replaying readers or initializing a second controller
 would not implement the original startup sequence.
 
+## Isolated FadeToBlack phase-one diagnostic
+
+`FirstCutFadePhaseOneSession` is a diagnostic-only, source-bound seam for the
+three reviewed first-cut `FadeToBlack` reader/component receipts. Its restricted
+reader bracket is intentionally a distinct session stage: it cannot unlock the
+first-cut player, loader tail, MovieControl, global component lifecycle, clock,
+audio, view creation, rendering, or presentation. The session can invoke only
+the existing size and resource-invalidation callbacks once, in retained order;
+it records local completion receipts and permanently fails on a service error.
+It is not constructed by normal startup and is not evidence that the original
+global dispatcher selected these callbacks.
+
 `IntroOuterLoaderTailReadiness` is a source-backed preflight report, not an
 activation service. It records the retained source section sizes and which
 concrete boundary types remain to be supplied; it never makes the loader tail
