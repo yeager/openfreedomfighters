@@ -286,10 +286,13 @@ work. Close the window to exit. For development:
   reader-admitted legal-picture or FadeToBlack targets and does not dispatch,
   time, fade, activate, or play the cutscene.
 
-Normal startup does not present an intro picture after the three-second
-OpenFreedomFighters splash. The generic-fit first-cut image path is restricted
-to the explicit diagnostic command; it is not a reconstructed cutscene, camera,
-or menu transition.
+After the three-second OpenFreedomFighters splash, normal startup presents one
+labelled static fallback from a reader-admitted first-cut picture while native
+cutscene playback remains incomplete. The generic-fit diagnostic commands are
+separate inspection surfaces; none is a reconstructed cutscene, camera, or
+menu transition. See
+[the intro and menu plan](docs/INTRO_AND_MENU_PLAN.md) and
+[the startup-menu presentation audit](docs/STARTUP_MENU_PRESENTATION_AUDIT.md).
 - `--probe-startup-boot` runs an opt-in, no-window structural diagnostic for
   the checked `FF-StartUp` BootMenu source. It prints only call order and GMS
   directory ordinals plus a content-free hierarchy fingerprint; it creates no
