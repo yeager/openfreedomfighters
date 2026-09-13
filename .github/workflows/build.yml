@@ -214,6 +214,29 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          function Write-InstalledExecutableDiagnostics {
+            param([Parameter(Mandatory = $true)][string]$Executable)
+
+            Write-Host "Installed executable diagnostics for $Executable"
+            Get-Item -LiteralPath $Executable | Format-List FullName,Length,CreationTimeUtc,LastWriteTimeUtc
+            $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+            $dumpbin = if (Test-Path -LiteralPath $vswhere) {
+              $installationPath = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+              if ($installationPath) {
+                Get-ChildItem -Path (Join-Path $installationPath 'VC/Tools/MSVC') -Filter dumpbin.exe -Recurse -ErrorAction SilentlyContinue |
+                  Where-Object { $_.FullName -match '\\Hostx64\\x64\\dumpbin\.exe$' } |
+                  Select-Object -First 1 -ExpandProperty FullName
+              }
+            }
+            if ($dumpbin) {
+              Write-Host 'PE headers:'
+              & $dumpbin /headers $Executable
+              Write-Host 'PE dependencies:'
+              & $dumpbin /dependents $Executable
+            } else {
+              Write-Warning 'dumpbin.exe was not available for PE diagnostics.'
+            }
+          }
           cmake --install build --config Release --prefix install-check
           if (!(Test-Path install-check/bin/openfreedomfighters.exe)) { throw 'installed executable is missing' }
           if (!(Test-Path install-check/bin/assets/openfreedomfighters-splash.bmp)) { throw 'installed splash asset is missing' }
@@ -221,23 +244,49 @@ jobs:
           $env:PATH = "${{ github.workspace }}/zlib-install/bin;$env:PATH"
           $projectVersion = (Select-String -Path CMakeLists.txt -Pattern '^project\(OpenFreedomFighters VERSION ([^ ]+) LANGUAGES ' | ForEach-Object { $_.Matches[0].Groups[1].Value })
           if ([string]::IsNullOrWhiteSpace($projectVersion)) { throw 'CMake project version is missing' }
-          # Keep the install smoke diagnostic if a Windows runtime loader ever
-          # stalls before main.  A direct native invocation otherwise consumes
-          # the whole job timeout and hides the failing command.
+          # Run the real installed executable in an out-of-process PowerShell
+          # job. The worker owns the process and enforces its own short timeout;
+          # the outer timeout covers a stuck worker without leaving the Actions
+          # step waiting for a loader-stalled child process.
           $versionStdout = Join-Path (Get-Location) 'installed-version.stdout'
           $versionStderr = Join-Path (Get-Location) 'installed-version.stderr'
-          $versionProcess = Start-Process -FilePath 'install-check/bin/openfreedomfighters.exe' `
-            -ArgumentList '--version' -RedirectStandardOutput $versionStdout `
-            -RedirectStandardError $versionStderr -PassThru
-          if (-not $versionProcess.WaitForExit(30000)) {
-            # Do not attempt process cleanup here. Both Stop-Process and the
-            # recursive Process.Kill overload can wait on a loader deadlock;
-            # throwing immediately lets the Actions runner clean the process
-            # tree and preserves this as a readable step failure.
+          $versionJob = Start-Job -ArgumentList (Join-Path (Get-Location) 'install-check/bin/openfreedomfighters.exe'), $versionStdout, $versionStderr -ScriptBlock {
+            param($executable, $stdoutPath, $stderrPath)
+            $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+            $startInfo.FileName = $executable
+            $startInfo.Arguments = '--version'
+            $startInfo.UseShellExecute = $false
+            $startInfo.RedirectStandardOutput = $true
+            $startInfo.RedirectStandardError = $true
+            $process = [System.Diagnostics.Process]::Start($startInfo)
+            if (-not $process.WaitForExit(30000)) {
+              # This worker is deliberately isolated from the CI step. Kill is
+              # non-recursive here; closing the worker also tears down children
+              # owned by the Actions job object.
+              try { $process.Kill() } catch { }
+              [pscustomobject]@{ TimedOut = $true; ExitCode = $null }
+              return
+            }
+            [System.IO.File]::WriteAllText($stdoutPath, $process.StandardOutput.ReadToEnd())
+            [System.IO.File]::WriteAllText($stderrPath, $process.StandardError.ReadToEnd())
+            [pscustomobject]@{ TimedOut = $false; ExitCode = $process.ExitCode }
+          }
+          $completedVersionJob = Wait-Job -Job $versionJob -Timeout 40
+          if ($null -eq $completedVersionJob) {
+            # Stop-Job targets only the isolated worker, rather than waiting on
+            # the loader-stalled game process from the Actions step itself.
+            Stop-Job -Job $versionJob -ErrorAction SilentlyContinue
+            Write-InstalledExecutableDiagnostics -Executable 'install-check/bin/openfreedomfighters.exe'
+            throw 'installed executable --version worker timed out after 40 seconds'
+          }
+          $versionResult = @(Receive-Job -Job $versionJob)
+          if ($versionResult.Count -ne 1 -or $versionResult[0].TimedOut) {
+            Write-InstalledExecutableDiagnostics -Executable 'install-check/bin/openfreedomfighters.exe'
             throw 'installed executable --version timed out after 30 seconds'
           }
-          if ($versionProcess.ExitCode -ne 0) {
-            throw "installed executable --version failed with exit code $($versionProcess.ExitCode): $([System.IO.File]::ReadAllText($versionStderr))"
+          if ($versionResult[0].ExitCode -ne 0) {
+            Write-InstalledExecutableDiagnostics -Executable 'install-check/bin/openfreedomfighters.exe'
+            throw "installed executable --version failed with exit code $($versionResult[0].ExitCode): $([System.IO.File]::ReadAllText($versionStderr))"
           }
           $versionOutput = [System.IO.File]::ReadAllText($versionStdout).TrimEnd("`r", "`n")
           if ($versionOutput -ne "OpenFreedomFighters $projectVersion") { throw "installed executable reported unexpected version: $versionOutput" }
