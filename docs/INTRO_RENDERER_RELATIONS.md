@@ -76,8 +76,12 @@ Source views still require valid caller-owned storage until copied.
 Dynamic append, removal, reciprocal updates and dirty-flag propagation are not
 implemented by this initial-load/query class. Its immutable authored lists must
 not stand in for those mutations. The outer-tail two-word List associations use
-the separate `+0x70` reference conversion and still need their own concrete
-service. Neither relation family produces an accepted generic picture record.
+the separate `+0x70` reference conversion. The session-owned normal-tail
+adapter supplies those pairs only from its retained parser receipt and
+dispatches them through a required typed live-resource callback; it does not
+allow a caller to replace or inject raw pairs. This establishes initial
+association dispatch, not dynamic relation maintenance. Neither relation family
+produces an accepted generic picture record.
 The remaining drawing boundary is described in
 [Intro renderer association](INTRO_RENDERER_ASSOCIATION.md).
 

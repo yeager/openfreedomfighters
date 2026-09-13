@@ -6,9 +6,14 @@ runtime, its exactly-once postconstruction reader bracket, its cold reviewed
 first-cut command session, and the following outer loader-tail transition. The
 tail supplies the supported null-reference named reader when neither named
 callback is provided and constructs the concrete renderer relation container.
-The remaining services must come from its caller: allocation diagnostic-state
-selection/restoration, List associations, camera, scene and saved-resource
-operations. Reader callback routing
+`NormalIntroSceneLifecycleServiceAdapters` makes this a session-owned
+production boundary: it takes operation callbacks, but overwrites their
+named/global payload, renderer payload and two-word List association records
+with the retained runtime receipts. A caller cannot substitute a different
+section, inject associations when the source had none, or omit a retained
+section. The remaining concrete operations must come from its caller:
+allocation diagnostic-state selection/restoration, List associations, camera,
+scene and saved-resource operations. Reader callback routing
 no longer lives in `main`. `NormalIntroSceneHost` implements the later strict
 ordering state machine described here, but is not yet connected to that session
 or SDL. It prevents a shortcut that creates an audio device or a draw call
@@ -36,8 +41,12 @@ references and the runtime's canonical resource mapping. Queries preserve
 authored member order and read each resource's current selector. The container
 owns its source/workspace bytes but borrows the related resources. Its
 allocation-state restoration token is not a reference-count release. Dynamic
-relation updates, the separate outer-tail List associations and generic draw
-production remain unfinished.
+relation updates and generic draw production remain unfinished. The production
+boundary preserves this limit:
+it loads only the immutable initial relation container and dispatches typed
+association and saved-resource callbacks; it does not claim dynamic relation
+append/removal, reciprocal maintenance, dirty propagation, draw production,
+camera/view activation, scene activation or rendering.
 
 `IntroRendererPayloadObservation` is a narrower source-backed recovery step.
 It validates the renderer payload's relocation groups through a caller-supplied

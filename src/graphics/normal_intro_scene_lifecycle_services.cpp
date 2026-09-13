@@ -7,33 +7,6 @@
 namespace off::graphics {
 namespace {
 
-[[nodiscard]] bool same_payload(
-    const std::optional<IntroNamedGlobalPayload>& expected,
-    const std::optional<IntroNamedGlobalPayload>& supplied) {
-  return expected.has_value() == supplied.has_value() &&
-      (!expected || (expected->bytes.data() == supplied->bytes.data() &&
-                     expected->bytes.size() == supplied->bytes.size()));
-}
-
-[[nodiscard]] bool same_payload(
-    const std::optional<IntroRendererResourcePayload>& expected,
-    const std::optional<IntroRendererResourcePayload>& supplied) {
-  return expected.has_value() == supplied.has_value() &&
-      (!expected || (expected->bytes.data() == supplied->bytes.data() &&
-                     expected->bytes.size() == supplied->bytes.size()));
-}
-
-[[nodiscard]] bool same_associations(
-    const std::vector<IntroResourceAssociationRecord>& expected,
-    const std::vector<IntroResourceAssociationRecord>& supplied) {
-  if (expected.size() != supplied.size()) return false;
-  for (std::size_t index = 0; index < expected.size(); ++index)
-    if (expected[index].first_reference != supplied[index].first_reference ||
-        expected[index].second_reference != supplied[index].second_reference)
-      return false;
-  return true;
-}
-
 class BoundLifecycleServices final {
  public:
   BoundLifecycleServices(std::shared_ptr<NormalIntroSceneSession> session,
@@ -67,13 +40,15 @@ class BoundLifecycleServices final {
       if (session_->stage() != NormalIntroSceneSessionStage::reader_bracket_complete)
         throw std::runtime_error("normal intro lifecycle adapter reader receipt was lost");
       const auto inputs = session_->runtime().outer_loader_source_inputs();
-      if (!same_payload(inputs.named_global_payload, config_.outer_loader_tail.named_global_payload) ||
-          !same_payload(inputs.renderer_resource_payload,
-                        config_.outer_loader_tail.renderer_resource_payload) ||
-          !same_associations(inputs.resource_associations,
-                             config_.outer_loader_tail.resource_associations))
-        throw std::runtime_error("normal intro lifecycle adapter outer tail lacks source receipts");
-      session_->complete_outer_loader_tail(config_.outer_loader_tail);
+      // The runtime owns these source-backed receipts. A production operation
+      // table cannot replace a valid scene's List pairs with raw references,
+      // or make an absent section appear present. Copy first so a synchronous
+      // callback cannot change this invocation through the caller's table.
+      auto tail = config_.outer_loader_tail;
+      tail.named_global_payload = inputs.named_global_payload;
+      tail.renderer_resource_payload = inputs.renderer_resource_payload;
+      tail.resource_associations = inputs.resource_associations;
+      session_->complete_outer_loader_tail(tail);
       if (session_->stage() != NormalIntroSceneSessionStage::outer_loader_tail_complete ||
           session_->runtime().outer_loader_tail_stage() !=
               IntroOuterLoaderTailStage::second_saved_pass_complete)

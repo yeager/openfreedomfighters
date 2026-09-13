@@ -17,9 +17,12 @@ struct NormalIntroSceneHostLifecycleServices {
   std::function<void()> enter_global_lifecycle;
 };
 
-// Concrete services for a retained normal-scene session. They intentionally
-// contain no replacement parser, fabricated owner map, or default lifecycle
-// callback. The caller supplies the real outer-tail and global-lifecycle work.
+// Concrete operations for a retained normal-scene session. The session, not
+// this caller-supplied table, owns the named/global bytes, renderer bytes, and
+// List-association pairs used by the outer tail: binding replaces those three
+// input fields with its parser-validated source receipts. Callers supply only
+// the concrete allocation-state, association, saved-resource and other
+// operation boundaries. This type does not provide a lifecycle fallback.
 struct NormalIntroSceneLifecycleAdapterConfig {
   std::uint64_t retained_saved_value{};
   IntroOuterLoaderTailServices outer_loader_tail;
