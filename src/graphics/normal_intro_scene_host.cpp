@@ -24,6 +24,18 @@ void NormalIntroSceneHost::activate(const IntroStartupActivationServices& servic
   } catch (...) { stage_ = NormalIntroSceneHostStage::failed; throw; }
 }
 
+void NormalIntroSceneHost::activate_after_reader_bracket(
+    const IntroPostReaderActivationServices& services) {
+  if (stage_ != NormalIntroSceneHostStage::constructed)
+    throw std::runtime_error("normal intro scene post-reader activation is unavailable");
+  try {
+    activation_.run_after_reader_bracket(services);
+    if (!activation_.awaits_first_update())
+      throw std::runtime_error("normal intro scene host did not reach event admission");
+    stage_ = NormalIntroSceneHostStage::awaiting_event16;
+  } catch (...) { stage_ = NormalIntroSceneHostStage::failed; throw; }
+}
+
 MovieControlEvent16Result NormalIntroSceneHost::dispatch_event16(
     const MovieControlEvent16Services& services) {
   if (stage_ != NormalIntroSceneHostStage::awaiting_event16 &&

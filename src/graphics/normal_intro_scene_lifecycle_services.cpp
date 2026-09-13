@@ -10,11 +10,20 @@ namespace {
 class BoundLifecycleServices final {
  public:
   BoundLifecycleServices(std::shared_ptr<NormalIntroSceneSession> session,
-                         NormalIntroSceneLifecycleAdapterConfig config)
+                         NormalIntroSceneLifecycleAdapterConfig config,
+                         bool reader_already_complete = false)
       : session_(std::move(session)), config_(std::move(config)) {
     if (!session_ || !config_.enter_global_lifecycle)
       throw std::runtime_error(
           "normal intro lifecycle adapter requires an owned session and global service");
+    if (reader_already_complete) {
+      if (session_->stage() != NormalIntroSceneSessionStage::reader_bracket_complete ||
+          session_->runtime().reader_bracket_stage() !=
+              IntroReaderBracketStage::ordinary_reader_boundary_complete)
+        throw std::runtime_error(
+            "normal intro lifecycle adapter has no completed reader receipt");
+      stage_ = Stage::reader_complete;
+    }
   }
 
   void reader_bracket() {
@@ -100,6 +109,17 @@ NormalIntroSceneLifecycleServiceAdapters::bind(
   auto bound = std::make_shared<BoundLifecycleServices>(std::move(session),
                                                          std::move(config));
   return {.reader_bracket = [bound] { bound->reader_bracket(); },
+          .outer_loader_tail = [bound] { bound->outer_loader_tail(); },
+          .enter_global_lifecycle = [bound] { bound->enter_global_lifecycle(); }};
+}
+
+NormalIntroSceneHostLifecycleServices
+NormalIntroSceneLifecycleServiceAdapters::bind_after_reader_bracket(
+    std::shared_ptr<NormalIntroSceneSession> session,
+    NormalIntroSceneLifecycleAdapterConfig config) {
+  auto bound = std::make_shared<BoundLifecycleServices>(std::move(session),
+                                                         std::move(config), true);
+  return {.reader_bracket = {},
           .outer_loader_tail = [bound] { bound->outer_loader_tail(); },
           .enter_global_lifecycle = [bound] { bound->enter_global_lifecycle(); }};
 }

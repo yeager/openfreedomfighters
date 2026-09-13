@@ -186,9 +186,9 @@ jobs:
           test -s artifacts/macos-x86_64/OpenFreedomFighters-macos-x86_64.tar.gz
           test -s artifacts/macos-arm64/OpenFreedomFighters-macos-arm64.tar.gz
           test -s artifacts/windows-x64/OpenFreedomFighters-windows-x64.zip
-          python3 tools/verify_release_package.py linux artifacts/linux-x86_64/OpenFreedomFighters-linux-x86_64.tar.gz
-          python3 tools/verify_release_package.py macos artifacts/macos-x86_64/OpenFreedomFighters-macos-x86_64.tar.gz
-          python3 tools/verify_release_package.py macos artifacts/macos-arm64/OpenFreedomFighters-macos-arm64.tar.gz
-          python3 tools/verify_release_package.py windows artifacts/windows-x64/OpenFreedomFighters-windows-x64.zip
+          python3 tools/verify_release_package.py linux artifacts/linux-x86_64/OpenFreedomFighters-linux-x86_64.tar.gz --architecture x86_64
+          python3 tools/verify_release_package.py macos artifacts/macos-x86_64/OpenFreedomFighters-macos-x86_64.tar.gz --architecture x86_64
+          python3 tools/verify_release_package.py macos artifacts/macos-arm64/OpenFreedomFighters-macos-arm64.tar.gz --architecture arm64
+          python3 tools/verify_release_package.py windows artifacts/windows-x64/OpenFreedomFighters-windows-x64.zip --architecture x86_64
       - name: Scan repository with Gitleaks
         uses: ./.github/actions/gitleaks

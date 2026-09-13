@@ -3,6 +3,8 @@
 #include <cstdlib>
 #include <iostream>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
 namespace {
 void check(bool condition, const char* message) {
@@ -67,6 +69,30 @@ int main() {
   IntroStartupActivationServices activation_services{};
   activation_services.movie_control_phase_two = {
       [] { return false; }, [] {}, [](bool) {}, [] {}, [] { return 1U; }, [] {}};
+  IntroPostReaderActivationServices post_reader_services{};
+  post_reader_services.movie_control_phase_two = activation_services.movie_control_phase_two;
+  {
+    std::vector<std::string> order;
+    auto continued = NormalIntroSceneHostFactory::create(
+        evidence(), {.reader_bracket = [&] { order.push_back("reader"); },
+                     .outer_loader_tail = [&] { order.push_back("tail"); },
+                     .enter_global_lifecycle = [&] { order.push_back("lifecycle"); }},
+        {false, false, 44});
+    post_reader_services.movie_control_phase_two = {
+        [&] { order.push_back("input"); return false; },
+        [&] { order.push_back("map"); },
+        [&](bool) { order.push_back("mode"); },
+        [&] { order.push_back("audio"); },
+        [&] { order.push_back("clock"); return 1U; },
+        [&] { order.push_back("renderer"); }};
+    continued.activate_after_reader_bracket(post_reader_services);
+    check(continued.stage() == NormalIntroSceneHostStage::awaiting_event16 &&
+              order == std::vector<std::string>{"tail", "lifecycle", "input", "mode", "audio", "clock", "renderer"},
+          "post-reader activation skips readers and preserves tail/lifecycle/phase-two order");
+    check(rejects([&] { continued.activate_after_reader_bracket(post_reader_services); }) &&
+              continued.stage() == NormalIntroSceneHostStage::awaiting_event16,
+          "post-reader activation is once-only without corrupting the admitted receipt");
+  }
   {
     int tail{}, lifecycle{};
     auto failed_reader = NormalIntroSceneHostFactory::create(

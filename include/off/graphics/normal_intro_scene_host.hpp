@@ -28,6 +28,10 @@ class NormalIntroSceneHost final {
                        IntroStartupActivationBoundaries activation_boundaries,
                        NormalIntroSceneHostFirstCutConfig first_cut);
   void activate(const IntroStartupActivationServices& services);
+  // This is only for a retained normal scene with a completed reader receipt.
+  // It cannot invoke, replace, or replay the reader bracket.
+  void activate_after_reader_bracket(
+      const IntroPostReaderActivationServices& services);
   [[nodiscard]] MovieControlEvent16Result dispatch_event16(
       const MovieControlEvent16Services& services);
   [[nodiscard]] FirstCutRequestedCameraResult route_first_cut(

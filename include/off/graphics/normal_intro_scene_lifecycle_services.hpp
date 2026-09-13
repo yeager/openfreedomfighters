@@ -38,6 +38,12 @@ class NormalIntroSceneLifecycleServiceAdapters final {
   [[nodiscard]] static NormalIntroSceneHostLifecycleServices bind(
       std::shared_ptr<NormalIntroSceneSession> session,
       NormalIntroSceneLifecycleAdapterConfig config);
+  // Binds only the continuation boundaries for a retained session that has
+  // already recorded its ordinary reader bracket. The returned reader callback
+  // is intentionally empty and therefore cannot be passed to normal activate.
+  [[nodiscard]] static NormalIntroSceneHostLifecycleServices bind_after_reader_bracket(
+      std::shared_ptr<NormalIntroSceneSession> session,
+      NormalIntroSceneLifecycleAdapterConfig config);
 };
 
 }  // namespace off::graphics

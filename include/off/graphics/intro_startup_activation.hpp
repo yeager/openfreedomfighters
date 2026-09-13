@@ -33,6 +33,16 @@ struct IntroStartupActivationServices {
   MovieControlPhaseTwoServices movie_control_phase_two;
 };
 
+// Continuation for a retained scene whose ordinary postconstruction reader
+// bracket has already completed.  Keeping this separate makes replaying that
+// bracket impossible: callers may continue only with the outer loader tail,
+// the global lifecycle, and the one canonical MovieControl phase-two call.
+struct IntroPostReaderActivationServices {
+  IntroOuterLoaderTailServices outer_loader_tail;
+  std::function<void()> enter_global_lifecycle;
+  MovieControlPhaseTwoServices movie_control_phase_two;
+};
+
 // Use this form when the loader/runtime object is owned by a higher-level
 // scene host. Each callback must bind the corresponding checked runtime API;
 // it is not a replacement parser or an opportunity to collapse stages.
@@ -72,6 +82,44 @@ public:
       if (runtime_) {
         runtime_->run_outer_loader_tail_through_saved_services(services.outer_loader_tail);
         if (runtime_->outer_loader_tail_stage() != IntroOuterLoaderTailStage::second_saved_pass_complete)
+          throw std::runtime_error("outer loader tail did not reach saved-resource completion");
+      } else {
+        boundaries_.outer_loader_tail();
+      }
+      stage_ = IntroStartupActivationStage::outer_loader_tail_complete;
+
+      if (runtime_) services.enter_global_lifecycle();
+      else boundaries_.enter_global_lifecycle();
+      stage_ = IntroStartupActivationStage::global_lifecycle_complete;
+
+      movie_control_.run_phase_two(services.movie_control_phase_two);
+      if (!movie_control_.phase_two_callback_returned())
+        throw std::runtime_error("MovieControl phase two returned without completion");
+      stage_ = IntroStartupActivationStage::movie_control_phase_two_complete;
+      running_ = false;
+    } catch (...) {
+      running_ = false;
+      stage_ = IntroStartupActivationStage::failed;
+      throw;
+    }
+  }
+
+  void run_after_reader_bracket(const IntroPostReaderActivationServices& supplied) {
+    if (running_ || stage_ != IntroStartupActivationStage::not_started)
+      throw std::runtime_error("intro post-reader activation is reentrant or already attempted");
+    const auto services = supplied;
+    if ((!runtime_ && (!boundaries_.outer_loader_tail || !boundaries_.enter_global_lifecycle)) ||
+        (runtime_ && !services.enter_global_lifecycle))
+      throw std::runtime_error("intro post-reader activation requires global lifecycle service");
+    running_ = true;
+    try {
+      if (runtime_) {
+        if (runtime_->reader_bracket_stage() !=
+            IntroReaderBracketStage::ordinary_reader_boundary_complete)
+          throw std::runtime_error("intro post-reader activation requires ordinary reader completion");
+        runtime_->run_outer_loader_tail_through_saved_services(services.outer_loader_tail);
+        if (runtime_->outer_loader_tail_stage() !=
+            IntroOuterLoaderTailStage::second_saved_pass_complete)
           throw std::runtime_error("outer loader tail did not reach saved-resource completion");
       } else {
         boundaries_.outer_loader_tail();
