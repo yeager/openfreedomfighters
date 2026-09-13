@@ -111,6 +111,13 @@ creates a playback acknowledgement or `SoundReady` event. Mutable sound records
 and explicit preparation now exist in the [retained backend](INTRO_SOUND_RUNTIME.md);
 component callbacks and actual playback still need to be connected.
 
+`--probe-intro-audio-decode` is a private installation compatibility check. It
+fully reads both prepared intro sources through the bounded incremental Vorbis
+reader, requires each stream's physical EOF to agree with its WHD sample count,
+then discards every decoded PCM buffer. Its output contains only aggregate
+stream and sample-value totals. It does not select a cue, open an audio device,
+or start playback.
+
 The sound-owner reader validates its fixed prefix, attachment identities, and
 the four delimiter-bounded attachment payloads from the parsed prefix offset
 before it mutates a canonical sound record. This is a structural boundary

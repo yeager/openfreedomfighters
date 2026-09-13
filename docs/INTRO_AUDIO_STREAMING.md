@@ -56,5 +56,7 @@ streams yet.
 Independent tests exercise mono/stereo streams, multiple refills, exact PCM
 agreement with the offline decoder, count errors, truncated input, chained
 streams, cancellation and moving pending work. Owned-data probes use the same
-public entry point without saving audio into the repository. PCM agreement does
-not establish the original engine's refill timing or audible output.
+public entry point without saving audio into the repository. The private
+`--probe-intro-audio-decode` command fully drains each prepared intro stream and
+reports aggregate completion only. PCM agreement does not establish the
+original engine's refill timing or audible output.
