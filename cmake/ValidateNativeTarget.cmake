@@ -1,6 +1,12 @@
 # Validate the native release matrix before resolving dependencies. Keep this
 # separate from the top-level build so the exact policy can be exercised with
 # CMake script tests without configuring SDL or any host libraries.
+# Script-mode CMake does not inherit the top-level minimum-version policy.
+# `IN_LIST` below must therefore opt into its defined behavior explicitly.
+if(POLICY CMP0057)
+    cmake_policy(SET CMP0057 NEW)
+endif()
+
 function(off_validate_native_target target_system target_processor target_osx_architectures pointer_size)
     if("${pointer_size}" STREQUAL "" OR pointer_size LESS 8)
         message(FATAL_ERROR
