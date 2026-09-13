@@ -55,7 +55,7 @@ struct ManifestVerification {
 [[nodiscard]] ManifestVerification verify_file_manifest(
     const std::filesystem::path& root, std::span<const ManifestFile> manifest,
     const std::function<bool()>& cancelled = {},
-    // Zero selects the conservative production default of two workers.  A
+    // Zero selects the bounded production default of four workers.  A
     // positive value is capped so a corrupt installation cannot turn startup
     // verification into an unbounded thread creator.
     std::size_t hash_workers = 0);

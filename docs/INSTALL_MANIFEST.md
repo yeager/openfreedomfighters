@@ -12,6 +12,12 @@ cache miss and reruns the structural audit. The splash stays responsive while
 verification runs; a cold audit can take longer than its three-second minimum
 display time.
 
+Independent file hashes use at most four workers after the single-threaded
+path-safety and inventory pass. This is a fixed resource bound, not a cache:
+every enrolled immutable file is still opened, read in full, SHA-256 hashed,
+and checked on every launch. Reports remain in manifest order regardless of
+worker completion order.
+
 The application first uses SDL's per-user preference location. Headless tools
 fall back to the platform cache location: `%LOCALAPPDATA%` on Windows,
 `~/Library/Caches` on macOS, and an absolute `$XDG_CACHE_HOME` or `~/.cache` on

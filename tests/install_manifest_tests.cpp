@@ -117,13 +117,13 @@ int main() {
           has(bad_optional, "support.txt", ManifestFileStatus::hash_mismatch),
           "corrupt optional soundtrack/support never fail required data");
     const auto bad_optional_serial = verify_file_manifest(root, manifest, {}, 1);
-    const auto bad_optional_parallel = verify_file_manifest(root, manifest, {}, 2);
+    const auto bad_optional_parallel = verify_file_manifest(root, manifest, {}, 4);
     check(same_checks(bad_optional_serial, bad_optional_parallel) &&
               bad_optional_parallel.required_ok(),
           "parallel hashing preserves serial optional-file reports and required-data success");
     write(root / "streams.wav", "BANK");
     const auto required_serial = verify_file_manifest(root, manifest, {}, 1);
-    const auto required_parallel = verify_file_manifest(root, manifest, {}, 2);
+    const auto required_parallel = verify_file_manifest(root, manifest, {}, 4);
     check(same_checks(required_serial, required_parallel) &&
               !required_parallel.required_ok() &&
               has(required_parallel, "streams.wav", ManifestFileStatus::hash_mismatch),

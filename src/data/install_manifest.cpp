@@ -66,7 +66,11 @@ struct HashTask {
   std::filesystem::file_time_type time;
 };
 
-constexpr std::size_t default_hash_workers = 2;
+// File checks are independent after the single-threaded path-safety pass.
+// Four workers is a fixed launch bound: it improves the many-file Steam
+// inventory on current desktop storage without making integrity work depend on
+// host-reported CPU counts or allowing a caller-controlled thread explosion.
+constexpr std::size_t default_hash_workers = 4;
 constexpr std::size_t maximum_hash_workers = 4;
 bool regular_chain(const std::filesystem::path& root, const std::filesystem::path& path) {
   auto current = root;
