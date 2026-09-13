@@ -88,4 +88,12 @@ IntroPreviewSnapshot build_intro_preview(const IntroRuntime &runtime,
   return result;
 }
 
+std::span<const IntroPreparedImage> select_intro_gpu_upload_images(
+    std::span<const IntroPreparedImage> retained_images,
+    const IntroPreviewSnapshot *explicit_diagnostic) noexcept {
+  if (explicit_diagnostic != nullptr)
+    return explicit_diagnostic->images;
+  return retained_images;
+}
+
 } // namespace off::graphics

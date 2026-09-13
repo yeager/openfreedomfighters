@@ -1,4 +1,5 @@
 #include "off/platform/intro_preview_diagnostic.hpp"
+#include "off/graphics/intro_preview_builder.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -25,6 +26,10 @@ template <class F> void rejects(F &&action) {
 
 int main() {
   using namespace off;
+  const std::array retained_images{
+      graphics::IntroPreparedImage{.catalog_image_index = 3U},
+      graphics::IntroPreparedImage{.catalog_image_index = 7U},
+      graphics::IntroPreparedImage{.catalog_image_index = 11U}};
   const std::array descriptors{data::PictureResourceDescriptor{
       .local_center_x = 20.0F, .local_center_y = -10.0F,
       .u_max = 1.0F, .v_min = 1.0F,
@@ -37,6 +42,17 @@ int main() {
   graphics::IntroPreviewSnapshot snapshot{
       {1280U, 720U}, {1U, data::PictureDrawPlan::build(descriptors, groups, textures)},
       {{{7U, 1U, {1U, 1U, {255U, 255U, 255U, 255U}}}}}};
+  const auto normal_uploads = graphics::select_intro_gpu_upload_images(
+      retained_images, nullptr);
+  const auto diagnostic_uploads = graphics::select_intro_gpu_upload_images(
+      retained_images, &snapshot);
+  check(normal_uploads.size() == retained_images.size() &&
+            normal_uploads.data() == retained_images.data(),
+        "normal retained intro uploads every prepared image");
+  check(diagnostic_uploads.size() == snapshot.images.size() &&
+            diagnostic_uploads.data() == snapshot.images.data() &&
+            diagnostic_uploads.front().catalog_image_index == 7U,
+        "explicit diagnostic uploads only its snapshot-required image");
   // Construct directly from a hand-written plan so the test carries no retail data.
   const auto diagnostic = platform::IntroPreviewDiagnosticSubmission::build(
       snapshot, 1280U, 720U, SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM);

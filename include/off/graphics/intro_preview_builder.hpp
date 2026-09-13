@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace off::graphics {
@@ -51,5 +52,14 @@ struct IntroPreviewSnapshot {
     const IntroRuntime &runtime, std::size_t source_index,
     IntroPreviewTarget target,
     IntroPreviewPolicy policy = IntroPreviewPolicy::exact_source_picture);
+
+// Selects the CPU image set for one SDL intro-renderer lifetime.  Normal
+// retained startup owns every prepared intro image.  The explicitly supplied
+// diagnostic snapshot instead owns exactly the images named by its already
+// validated draw plan.  This does not select a picture, admit a scene, or
+// alter the retained runtime.
+[[nodiscard]] std::span<const IntroPreparedImage> select_intro_gpu_upload_images(
+    std::span<const IntroPreparedImage> retained_images,
+    const IntroPreviewSnapshot *explicit_diagnostic) noexcept;
 
 } // namespace off::graphics

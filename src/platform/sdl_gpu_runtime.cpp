@@ -1343,8 +1343,11 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   // is not scene admission: unresolved cut start must not become a fake draw.
   std::unique_ptr<SdlIntroRenderer> gpu_intro;
   try {
-    if (intro)
-      gpu_intro = std::make_unique<SdlIntroRenderer>(device, intro->resources().images());
+    if (intro) {
+      const auto images = graphics::select_intro_gpu_upload_images(
+          intro->resources().images(), intro_preview_diagnostic);
+      gpu_intro = std::make_unique<SdlIntroRenderer>(device, images);
+    }
   } catch (const std::exception& error) {
     const RuntimeResult result{false, std::string("intro renderer initialization failed: ") + error.what()};
     startup_textures.reset();

@@ -771,11 +771,13 @@ rejects non-picture sources, empty plans, missing or invalid images, duplicate
 image identities, and invalid target extents. It does not select a camera,
 compute a view, alter runtime state, activate a cut, or issue GPU work.
 
-Normal startup displays this snapshot after the project splash through a
-project-authored fit projection and baseline GPU state. The same bridge is
-available explicitly through `--diagnostic-intro-picture`. Neither path is
-intro playback. Picture visibility, ordering, camera admission, pass state and
-the original external basis-scale policy still require independent recovery.
+Normal startup retains and uploads the complete verified intro image catalog,
+but does not build or display this snapshot. The explicit
+`--diagnostic-intro-picture` path uploads only the snapshot's referenced images
+through its own renderer lifetime, using a project-authored fit projection and
+baseline GPU state. It is not intro playback. Picture visibility, ordering,
+camera admission, pass state and the original external basis-scale policy still
+require independent recovery.
 
 ## Conditional first-cut presentation
 
