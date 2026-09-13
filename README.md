@@ -93,6 +93,10 @@ for a portable installation.
   owner or global initialization. Global lifecycle admission, draw-record production, scene updates,
   admitted scene rendering, audio playback, menus, and gameplay remain
   unimplemented.
+- ParamAnim deferred-reader work remains evidence-gated. The private
+  [repeat-observation protocol](docs/INTRO_DEFERRED_READER_COVERAGE.md#private-repeat-observation-runner)
+  retains only two sanitized structural records and their repeat-gated result;
+  it neither starts the game nor adds a reader.
   Window console/property bindings and the scene event-name table are live.
   None of the cameras is registered for normal rendering yet.
   DefaultCam and its PreviewCamera now share an [ordinary update queue](docs/ORDINARY_COMPONENTS.md)
