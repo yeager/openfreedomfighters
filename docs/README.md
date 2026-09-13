@@ -27,6 +27,7 @@
 - [Intro picture submission boundary](INTRO_PICTURE_SUBMISSION.md)
 - [Intro renderer resource relations](INTRO_RENDERER_RELATIONS.md)
 - [Intro renderer association boundary](INTRO_RENDERER_ASSOCIATION.md)
+- [Repeat-gated intro loader-tail contract](INTRO_LOADER_TAIL_CONTRACT.md)
 - [Intro initialization presentation](SDL_INTRO_PRESENTATION.md)
 - [Picture draw order](PICTURE_DRAW_ORDER.md)
 - [Ordered picture dispatch](PICTURE_ORDERED_DRAW_LOOP.md)

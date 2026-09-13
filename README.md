@@ -336,6 +336,11 @@ menu transition. See
   never exposes source values, labels, handles, offsets, or payload data.
   Its private, source-free aggregate receipt workflow is documented in
   [INTRO_READINESS_RECEIPT.md](docs/INTRO_READINESS_RECEIPT.md).
+- The private loader-tail observation workflow has a repeat-gated contract:
+  two byte-identical complete traces and a distinct terminal failure are
+  required before the concrete boundary can be reviewed. It does not admit
+  startup or replace unresolved services. See
+  [INTRO_LOADER_TAIL_CONTRACT.md](docs/INTRO_LOADER_TAIL_CONTRACT.md).
 - `--probe-first-cut-initialization` extends that check through the two
   recovered first-cut initialization phases, using retained runtime identities
   from the owned installation while recording aggregate lifecycle evidence.
