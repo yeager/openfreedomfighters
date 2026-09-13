@@ -13,6 +13,7 @@
 #include "off/data/primitive_catalog.hpp"
 #include "off/data/render_map.hpp"
 #include "off/data/scene_support.hpp"
+#include "off/data/sound_definition_bank.hpp"
 #include "off/data/startup_graphics_composition.hpp"
 #include "off/data/texture_catalog.hpp"
 #include "off/data/zgf_bundle.hpp"
@@ -374,6 +375,7 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
       const auto archive = ZipArchive::open(entry.path());
       std::size_t support_files_in_archive = 0;
       std::size_t scene_graph_files_in_archive = 0;
+      std::size_t sound_definition_files_in_archive = 0;
       std::size_t gms_files_in_archive = 0;
       std::size_t buf_files_in_archive = 0;
       std::size_t texture_files_in_archive = 0;
@@ -511,6 +513,13 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
           texture_catalog = std::move(catalog);
           ++texture_files_in_archive;
           ++texture_catalog_count;
+        } else if (extension == ".snd") {
+          // Every supported scene has one complete SND definition member.
+          // Its envelope is independently corpus-validated; do not leave it
+          // opaque merely because this verifier does not select a sound owner.
+          static_cast<void>(SoundDefinitionBank::parse(archive.read(member),
+                                                       1024U * 1024U));
+          ++sound_definition_files_in_archive;
         } else if (extension == ".prm") {
           auto bytes = archive.read(member);
           auto catalog = PrimitiveCatalog::parse(bytes);
@@ -558,6 +567,7 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
       }
       member_context.clear();
       if (support_files_in_archive != 1 || scene_graph_files_in_archive != 1 ||
+          sound_definition_files_in_archive != 1 ||
           gms_files_in_archive != 1 || texture_files_in_archive != 1 ||
           primitive_files_in_archive != 1 || render_map_files_in_archive != 1 ||
           render_instance_files_in_archive != 1 || !gms_image.has_value() ||
