@@ -136,8 +136,10 @@ python3 tools/movie_control_phase_one_repeat_pair.py \
   FIRST_SANITIZED.json SECOND_SANITIZED.json PAIR_RESULT.json
 ```
 
-All three paths must be outside this repository; `PAIR_RESULT.json` must not
-already exist. Keep the pair result private alongside its input observations.
+All three paths must be outside this repository. Their parent directories must
+already exist as real directories; each input must be a bounded regular file
+and the output is created once with private permissions. Keep the pair result
+private alongside its input observations.
 
 ## Failure-path contract bundle
 

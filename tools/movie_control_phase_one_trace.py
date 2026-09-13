@@ -16,6 +16,8 @@ import pathlib
 import sys
 from typing import Any
 
+import private_structural_json
+
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent
 INPUT_FORMAT = "off.movie-control-phase-one.raw/v2"
@@ -143,13 +145,6 @@ def sanitize_trace(raw: Any) -> dict[str, Any]:
     return {"format": OUTPUT_FORMAT, "events": sanitized}
 
 
-def _outside_repository(path: pathlib.Path, label: str) -> pathlib.Path:
-    resolved = path.resolve()
-    if resolved.is_relative_to(REPOSITORY_ROOT):
-        raise ValueError(f"{label} must be outside the repository")
-    return resolved
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", type=pathlib.Path,
@@ -158,16 +153,14 @@ def main() -> int:
                         help="new private sanitized JSON path")
     args = parser.parse_args()
     try:
-        input_path = _outside_repository(args.input, "input")
-        output_path = _outside_repository(args.output, "output")
+        input_path = private_structural_json.outside_repository(
+            args.input, REPOSITORY_ROOT, "input")
+        output_path = private_structural_json.outside_repository(
+            args.output, REPOSITORY_ROOT, "output")
         if input_path == output_path:
             raise ValueError("input and output paths must differ")
-        if output_path.exists():
-            raise ValueError("refusing to overwrite an existing private trace")
-        raw = json.loads(input_path.read_text(encoding="utf-8"))
-        sanitized = sanitize_trace(raw)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(sanitized, indent=2) + "\n", encoding="utf-8")
+        sanitized = sanitize_trace(private_structural_json.read_json(input_path, "input"))
+        private_structural_json.write_new_json(output_path, sanitized, "private trace")
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
