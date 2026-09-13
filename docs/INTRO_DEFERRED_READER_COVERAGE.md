@@ -54,6 +54,12 @@ nonzero intersection would still prove neither a ParamAnim reader nor command
 semantics. A zero intersection rules out only direct first-cut command-target
 association in the reviewed command table.
 
+`IntroRuntime::particle_emitter_first_cut_join_inventory()` applies the same
+source-free, aggregate-only boundary to ParticleEmitter. It verifies retained
+owner-to-component bindings and reports only aggregate intersections with the
+prepared first-cut command targets. It does not establish a ParticleEmitter
+reader grammar, callback registration, event meaning, or playback behavior.
+
 ## Required next evidence
 
 A reviewed, source-free observation must establish one concrete reader form

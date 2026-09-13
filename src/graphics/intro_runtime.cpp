@@ -2223,6 +2223,75 @@ IntroRuntime::particle_emitter_deferred_dispatch_inventory() const {
   return result;
 }
 
+IntroParticleEmitterFirstCutJoinInventory
+IntroRuntime::particle_emitter_first_cut_join_inventory() const {
+  static_cast<void>(first_cut_player_descriptor());
+  if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete)
+    throw std::runtime_error(
+        "ParticleEmitter first-cut join requires complete directory construction");
+
+  IntroParticleEmitterFirstCutJoinInventory result;
+  const auto& sources = resources_.sources();
+  const auto& directory = sources.directory();
+  std::vector<bool> particle_emitter_owner(directory.size());
+  for (std::size_t row = 0; row < directory.size(); ++row) {
+    const auto& source = directory[row];
+    const auto components = owner_components(source_handle(row));
+    if (components.size() != source.attachments.size())
+      throw std::runtime_error(
+          "ParticleEmitter first-cut join found an incomplete owner-component binding");
+    std::size_t matching_attachments{};
+    for (std::size_t slot = 0; slot < source.attachments.size(); ++slot) {
+      if (sources.attachment_identifier(row, slot) != "ZGEOM_ParticleEmitter")
+        continue;
+      ++matching_attachments;
+      const auto* component = constructed_attachment(components[slot]);
+      if (!component || !component->particle_emitter)
+        throw std::runtime_error(
+            "ParticleEmitter first-cut join found no constructed ParticleEmitter component");
+      ++result.constructed_component_bindings;
+    }
+    if (matching_attachments == 0U)
+      continue;
+    particle_emitter_owner[row] = true;
+    ++result.attachment_owners;
+    result.attachment_instances += matching_attachments;
+    if (source.deferred_source_offset == 0U)
+      continue;
+    const auto matching_work = std::ranges::count_if(
+        deferred_reader_work_, [row](const IntroDeferredReaderWork& work) {
+          return work.source_directory_index == row;
+        });
+    if (matching_work != 1U)
+      throw std::runtime_error(
+          "ParticleEmitter first-cut join requires one queued owner reader");
+    ++result.owners_with_deferred_blocks;
+  }
+
+  std::vector<std::uint32_t> unique_targets;
+  for (const auto& command : resources_.first_cut().commands) {
+    if (command.target_reference == 0U)
+      continue;
+    ++result.nonzero_command_records;
+    const auto source = sources.local_source_for_authored_reference(command.target_reference);
+    if (!source || *source >= particle_emitter_owner.size())
+      throw std::runtime_error(
+          "ParticleEmitter first-cut join found an unresolved command target");
+    if (!particle_emitter_owner[*source])
+      continue;
+    ++result.command_records_targeting_particle_emitter_owners;
+    if (std::ranges::find(unique_targets, command.target_reference) == unique_targets.end()) {
+      unique_targets.push_back(command.target_reference);
+      ++result.unique_command_targets_targeting_particle_emitter_owners;
+    }
+    if (command.event_reference < source_event_name_mapping_.size() &&
+        source_event_name_mapping_[command.event_reference] &&
+        *source_event_name_mapping_[command.event_reference] != 0U)
+      ++result.mapped_event_commands_targeting_particle_emitter_owners;
+  }
+  return result;
+}
+
 IntroUnimplementedAttachmentReaderCoverageInventory
 IntroRuntime::unimplemented_attachment_reader_coverage_inventory() const {
   IntroUnimplementedAttachmentReaderCoverageInventory result;

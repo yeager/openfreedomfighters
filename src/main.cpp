@@ -774,6 +774,14 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
       paramanim_first_cut_join.constructed_component_bindings!=
           paramanim_dispatch.attachment_instances)
     throw std::runtime_error("first-cut cold probe found inconsistent ParamAnim command join inventory");
+  const auto particle_emitter_first_cut_join=intro.particle_emitter_first_cut_join_inventory();
+  if(particle_emitter_first_cut_join.attachment_owners!=particle_dispatch.attachment_owners ||
+      particle_emitter_first_cut_join.attachment_instances!=particle_dispatch.attachment_instances ||
+      particle_emitter_first_cut_join.owners_with_deferred_blocks!=
+          particle_dispatch.owners_with_deferred_blocks ||
+      particle_emitter_first_cut_join.constructed_component_bindings!=
+          particle_dispatch.attachment_instances)
+    throw std::runtime_error("first-cut cold probe found inconsistent ParticleEmitter command join inventory");
   std::optional<std::int32_t> latest_command_position;
   for(const auto& command:first_cut_source_data.commands) {
     const auto position=std::bit_cast<std::int32_t>(command.timeline_position);
@@ -957,6 +965,16 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool run_initial
             << paramanim_first_cut_join.unique_command_targets_targeting_paramanim_owners << '\n'
             << "paramanim-first-cut-mapped-event-commands="
             << paramanim_first_cut_join.mapped_event_commands_targeting_paramanim_owners << '\n';
+  std::cout << "particle-emitter-constructed-component-bindings="
+            << particle_emitter_first_cut_join.constructed_component_bindings << '\n'
+            << "particle-emitter-first-cut-nonzero-command-records="
+            << particle_emitter_first_cut_join.nonzero_command_records << '\n'
+            << "particle-emitter-first-cut-command-records-targeting-owners="
+            << particle_emitter_first_cut_join.command_records_targeting_particle_emitter_owners << '\n'
+            << "particle-emitter-first-cut-unique-command-targets="
+            << particle_emitter_first_cut_join.unique_command_targets_targeting_particle_emitter_owners << '\n'
+            << "particle-emitter-first-cut-mapped-event-commands="
+            << particle_emitter_first_cut_join.mapped_event_commands_targeting_particle_emitter_owners << '\n';
   std::cout << "particle-emitter-attachment-owners=" << particle_dispatch.attachment_owners << '\n'
             << "particle-emitter-attachment-instances=" << particle_dispatch.attachment_instances << '\n'
             << "particle-emitter-owners-with-deferred-blocks=" << particle_dispatch.owners_with_deferred_blocks << '\n';

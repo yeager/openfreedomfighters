@@ -421,6 +421,19 @@ struct IntroParticleEmitterDeferredDispatchInventory {
   std::size_t owners_with_deferred_blocks{};
   std::vector<IntroParticleEmitterDeferredShape> shapes;
 };
+// Aggregate-only join between retained ParticleEmitter construction and the
+// prepared first-cut command table. This establishes neither a deferred-reader
+// grammar nor a command/event contract for ParticleEmitter.
+struct IntroParticleEmitterFirstCutJoinInventory {
+  std::size_t attachment_owners{};
+  std::size_t attachment_instances{};
+  std::size_t constructed_component_bindings{};
+  std::size_t owners_with_deferred_blocks{};
+  std::size_t nonzero_command_records{};
+  std::size_t command_records_targeting_particle_emitter_owners{};
+  std::size_t unique_command_targets_targeting_particle_emitter_owners{};
+  std::size_t mapped_event_commands_targeting_particle_emitter_owners{};
+};
 // Aggregate-only frontier for constructor-retained attachment families which
 // have no admitted deferred reader.  This is a prioritisation aid only: it
 // carries neither a source identity nor bytes, and it does not establish a
@@ -1069,6 +1082,10 @@ public:
   // Structural research aid only. ParticleEmitter stays separate from
   // ParamAnim even when a private probe finds matching compact framing.
   [[nodiscard]] IntroParticleEmitterDeferredDispatchInventory particle_emitter_deferred_dispatch_inventory() const;
+  // Requires the checked first-cut player preparation. This source-free,
+  // aggregate-only join is not reader, callback, or playback evidence.
+  [[nodiscard]] IntroParticleEmitterFirstCutJoinInventory
+  particle_emitter_first_cut_join_inventory() const;
   // Read-only aggregate frontier. This does not classify a deferred block or
   // nominate a parser; a family remains unimplemented until reviewed grammar
   // and lifecycle evidence independently admit it.

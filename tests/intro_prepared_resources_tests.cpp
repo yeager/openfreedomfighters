@@ -1560,6 +1560,41 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
                 paramanim_join.unique_command_targets_targeting_paramanim_owners==expected_paramanim_targets.size() &&
                 paramanim_join.mapped_event_commands_targeting_paramanim_owners==expected_paramanim_mapped_events,
               "ParamAnim first-cut join retains only checked aggregate owner-component and command-target associations");
+        const auto particle_emitter_join=host.particle_emitter_first_cut_join_inventory();
+        std::size_t expected_particle_emitter_owners{},expected_particle_emitter_instances{},
+            expected_particle_emitter_deferred{};
+        std::vector<std::size_t> particle_emitter_sources;
+        for(std::size_t row=0;row<host.resources().sources().directory().size();++row) {
+          std::size_t instances{};
+          const auto& source=host.resources().sources().directory()[row];
+          for(std::size_t slot=0;slot<source.attachments.size();++slot)
+            instances+=host.resources().sources().attachment_identifier(row,slot)=="ZGEOM_ParticleEmitter";
+          if(instances==0U) continue;
+          ++expected_particle_emitter_owners;expected_particle_emitter_instances+=instances;
+          expected_particle_emitter_deferred+=source.deferred_source_offset!=0U;
+          particle_emitter_sources.push_back(row);
+        }
+        std::size_t expected_particle_emitter_command_records{},expected_particle_emitter_mapped_events{};
+        std::vector<std::uint32_t> expected_particle_emitter_targets;
+        for(const auto& command:host.resources().first_cut().commands) {
+          const auto source=host.resources().sources().local_source_for_authored_reference(command.target_reference);
+          if(!source || std::ranges::find(particle_emitter_sources,*source)==particle_emitter_sources.end()) continue;
+          ++expected_particle_emitter_command_records;
+          if(std::ranges::find(expected_particle_emitter_targets,command.target_reference)==expected_particle_emitter_targets.end())
+            expected_particle_emitter_targets.push_back(command.target_reference);
+          if(command.event_reference<host.source_event_name_mapping().size() &&
+              host.source_event_name_mapping()[command.event_reference] &&
+              *host.source_event_name_mapping()[command.event_reference]!=0U)
+            ++expected_particle_emitter_mapped_events;
+        }
+        check(particle_emitter_join.attachment_owners==expected_particle_emitter_owners &&
+                particle_emitter_join.attachment_instances==expected_particle_emitter_instances &&
+                particle_emitter_join.constructed_component_bindings==expected_particle_emitter_instances &&
+                particle_emitter_join.owners_with_deferred_blocks==expected_particle_emitter_deferred &&
+                particle_emitter_join.command_records_targeting_particle_emitter_owners==expected_particle_emitter_command_records &&
+                particle_emitter_join.unique_command_targets_targeting_particle_emitter_owners==expected_particle_emitter_targets.size() &&
+                particle_emitter_join.mapped_event_commands_targeting_particle_emitter_owners==expected_particle_emitter_mapped_events,
+              "ParticleEmitter first-cut join retains only checked aggregate owner-component and command-target associations");
         off::cutscene::FirstCutRuntimeCommandRouter command_router{host};
         check(command_router.sender()==player->list_owner.value &&
               std::ranges::all_of(command_targets,[&](const auto& target) {
