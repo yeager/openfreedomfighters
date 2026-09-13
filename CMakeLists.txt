@@ -536,6 +536,9 @@ if(BUILD_TESTING)
         off_core_tests PRIVATE OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/test-work"
     )
     add_test(NAME off_core_tests COMMAND off_core_tests)
+    add_executable(off_scene_texture_filtering_tests tests/scene_texture_filtering_tests.cpp)
+    target_link_libraries(off_scene_texture_filtering_tests PRIVATE off_core)
+    add_test(NAME off_scene_texture_filtering_tests COMMAND off_scene_texture_filtering_tests)
     add_executable(off_install_manifest_tests tests/install_manifest_tests.cpp)
     target_link_libraries(off_install_manifest_tests PRIVATE off_core)
     target_compile_definitions(off_install_manifest_tests PRIVATE

@@ -104,6 +104,13 @@ while UI remains at output resolution. It is a fixed user-selected scale, not
 dynamic resolution, temporal reconstruction, or a claim of original-engine
 behavior.
 
+The SDL GPU diagnostic-scene path also creates a portable trilinear sampler and
+requests a separate 16x anisotropic sampler for Modern. SDL maps that request
+to Vulkan, Metal, or D3D12. If the active device rejects it, Modern uses the
+trilinear sampler; Original always uses trilinear. This is currently exercised
+only by the explicit source-backed diagnostic scene, not normal gameplay,
+intro playback, or a vendor upscaler.
+
 Modern+ targets the documented DLSS 4.5 release as an optional NVIDIA RTX backend.
 The integration must use NVIDIA's official SDK and redistributable binaries, expose
 the supported quality presets, and report the loaded runtime version exactly.

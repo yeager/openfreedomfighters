@@ -11,6 +11,7 @@
 #include "off/platform/sdl_locale.hpp"
 #include "off/platform/sdl_menu_gamepad.hpp"
 #include "off/platform/sdl_menu_keyboard.hpp"
+#include "off/platform/scene_texture_filtering.hpp"
 #include "off/platform/sdl_swapchain_frame.hpp"
 #include "off/settings/upscaler_runtime.hpp"
 #include "off/settings/graphics_settings_store.hpp"
@@ -67,7 +68,11 @@ struct GpuScene {
   std::vector<GpuSceneMesh> meshes;
   std::vector<SDL_GPUTexture *> textures;
   SDL_GPUTexture *white_texture{nullptr};
-  SDL_GPUSampler *sampler{nullptr};
+  // The trilinear sampler is mandatory for every SDL GPU implementation.  The
+  // second sampler is optional: a device may reject anisotropy, in which case
+  // Modern deterministically uses trilinear filtering too.
+  SDL_GPUSampler *trilinear_sampler{nullptr};
+  SDL_GPUSampler *anisotropic_sampler{nullptr};
   SDL_GPUGraphicsPipeline *triangle_opaque{nullptr};
   SDL_GPUGraphicsPipeline *triangle_blended{nullptr};
   SDL_GPUGraphicsPipeline *line_opaque{nullptr};
@@ -182,8 +187,9 @@ void release_scene(SDL_GPUDevice *device, GpuScene &scene) {
     if (pipeline != nullptr)
       SDL_ReleaseGPUGraphicsPipeline(device, pipeline);
   }
-  if (scene.sampler != nullptr)
-    SDL_ReleaseGPUSampler(device, scene.sampler);
+  for (auto *sampler : {scene.trilinear_sampler, scene.anisotropic_sampler})
+    if (sampler != nullptr)
+      SDL_ReleaseGPUSampler(device, sampler);
   if (scene.white_texture != nullptr)
     SDL_ReleaseGPUTexture(device, scene.white_texture);
   for (auto *texture : scene.textures) {
@@ -1142,7 +1148,14 @@ upload_overlay_retail_textures(SDL_GPUDevice *device,
       .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
       .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_REPEAT,
       .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_REPEAT};
-  staged.sampler = SDL_CreateGPUSampler(device, &sampler_info);
+  staged.trilinear_sampler = SDL_CreateGPUSampler(device, &sampler_info);
+  // SDL GPU maps this request to the active native backend (Vulkan, Metal or
+  // D3D12).  Do not assume that any particular adapter accepts 16x: retaining
+  // a null optional sampler makes the runtime select its known trilinear path.
+  auto anisotropic_info = sampler_info;
+  anisotropic_info.enable_anisotropy = true;
+  anisotropic_info.max_anisotropy = 16.0F;
+  staged.anisotropic_sampler = SDL_CreateGPUSampler(device, &anisotropic_info);
   staged.triangle_opaque = create_scene_pipeline(
       device, window, graphics::PrimitiveTopology::triangle_strip, false);
   staged.triangle_blended = create_scene_pipeline(
@@ -1151,7 +1164,7 @@ upload_overlay_retail_textures(SDL_GPUDevice *device,
       device, window, graphics::PrimitiveTopology::line_list, false);
   staged.line_blended = create_scene_pipeline(
       device, window, graphics::PrimitiveTopology::line_list, true);
-  if (staged.sampler == nullptr || staged.triangle_opaque == nullptr ||
+  if (staged.trilinear_sampler == nullptr || staged.triangle_opaque == nullptr ||
       staged.triangle_blended == nullptr || staged.line_opaque == nullptr ||
       staged.line_blended == nullptr) {
     return fail_upload();
@@ -1970,8 +1983,14 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                                         ? gpu.textures[*draw.texture_index]
                                         : gpu.white_texture;
           if (texture != bound_texture) {
+            const auto filtering = select_scene_texture_filtering(
+                presentation->profile, gpu.anisotropic_sampler != nullptr);
+            SDL_GPUSampler *const sampler =
+                filtering == SceneTextureFiltering::anisotropic_requested
+                    ? gpu.anisotropic_sampler
+                    : gpu.trilinear_sampler;
             const SDL_GPUTextureSamplerBinding binding{.texture = texture,
-                                                       .sampler = gpu.sampler};
+                                                       .sampler = sampler};
             SDL_BindGPUFragmentSamplers(pass, 0, &binding, 1);
             bound_texture = texture;
           }
