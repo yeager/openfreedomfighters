@@ -150,6 +150,7 @@ add_library(off_core
     src/graphics/reviewed_startup_coordinator_pass_contract.cpp
     src/gameplay/reviewed_first_mission_evidence_contract.cpp
     src/runtime/reviewed_scene_manager_lifecycle_contract.cpp
+    src/runtime/reviewed_scene_activation_gate.cpp
     src/graphics/normal_intro_scene_session.cpp
     src/graphics/normal_intro_scene_lifecycle_services.cpp
     src/graphics/intro_lifecycle_admission.cpp
@@ -635,6 +636,13 @@ if(BUILD_TESTING)
         OFF_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/reviewed-scene-manager-lifecycle-contract-test-work")
     add_test(NAME off_reviewed_scene_manager_lifecycle_contract_tests
         COMMAND off_reviewed_scene_manager_lifecycle_contract_tests)
+    add_executable(off_reviewed_scene_activation_gate_tests
+        tests/reviewed_scene_activation_gate_tests.cpp)
+    target_link_libraries(off_reviewed_scene_activation_gate_tests PRIVATE off_core)
+    target_compile_definitions(off_reviewed_scene_activation_gate_tests PRIVATE
+        OFF_TEST_WORK_DIR="${CMAKE_CURRENT_BINARY_DIR}/test-work/reviewed-scene-activation-gate")
+    add_test(NAME off_reviewed_scene_activation_gate_tests
+        COMMAND off_reviewed_scene_activation_gate_tests)
     add_executable(off_scene_support_tests tests/scene_support_tests.cpp)
     target_link_libraries(off_scene_support_tests PRIVATE off_core)
     add_test(NAME off_scene_support_tests COMMAND off_scene_support_tests)

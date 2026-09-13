@@ -36,3 +36,18 @@ The native type retains only
 does not retain a callback ordinal, scene identity, data identity, asset,
 address, raw observation, timing, or service. No runtime activation is wired
 to this receipt.
+
+## Disconnected activation gate
+
+`ReviewedSceneActivationGate` is a deliberately disconnected, one-shot commit
+boundary that can consume the inert receipt when a later behavior-specific
+adapter is independently reviewed. It accepts an opaque caller-owned staged
+lease and an explicit callback; neither value carries a scene name, object
+identity, callback ordinal, camera route, renderer, input route, or gameplay
+state. The gate supplies no manager operation itself.
+
+It rejects a missing receipt, missing staged lease, missing callback, failed
+callback, repeat commit, or recursive use. It keeps the candidate uncommitted
+on failure and retains only its opaque lease after a successful callback. This
+is a portable safety transaction, not evidence that any particular retail
+scene may be activated. Normal startup does not construct or call this gate.
