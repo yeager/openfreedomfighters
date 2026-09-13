@@ -325,6 +325,16 @@ const ProjectCatalog &f10_catalog() {
   return catalog;
 }
 
+std::string intro_fallback_window_title(
+    std::string_view explicit_locale,
+    std::span<const std::string_view> platform_locales) {
+  const auto status = f10_catalog()
+                          .resolve(MessageId::preparing_startup, explicit_locale,
+                                   platform_locales)
+                          .value_or("Preparing startup...");
+  return "OpenFreedomFighters — " + std::string{status};
+}
+
 std::optional<std::string> pseudo_localized_f10_text(MessageId id) {
   const auto source = f10_catalog().resolve(id, "en", "en");
   if (!source)

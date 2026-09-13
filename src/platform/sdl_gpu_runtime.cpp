@@ -18,6 +18,7 @@
 #include "off/ui/graphics_menu_draw.hpp"
 #include "off/ui/graphics_menu_pointer.hpp"
 #include "off/ui/font_run_layout.hpp"
+#include "off/ui/project_localization.hpp"
 
 #include <SDL3/SDL.h>
 #include <SDL3_ttf/SDL_ttf.h>
@@ -1292,10 +1293,6 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   SDL_Window *window = startup_window.get();
   if (window == nullptr)
     return {.success = false, .message = "Startup window is missing"};
-  if (intro_static_fallback != nullptr)
-    SDL_SetWindowTitle(
-        window,
-        "OpenFreedomFighters — Intro fallback (cutscene playback pending)");
   if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
     return failure("SDL gamepad initialization failed");
   const GamepadSession gamepad_session;
@@ -1306,6 +1303,11 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   platform_locales.reserve(platform_locale_storage.size());
   for (const auto &locale : platform_locale_storage)
     platform_locales.push_back(locale);
+  if (intro_static_fallback != nullptr) {
+    const auto title = ui::l10n::intro_fallback_window_title(
+        explicit_locale, platform_locales);
+    SDL_SetWindowTitle(window, title.c_str());
+  }
   // SDL's software window surface and a 3D swapchain cannot coexist. Release
   // the splash surface on its creator thread before claiming this SAME window.
   if (SDL_WindowHasSurface(window) && !SDL_DestroyWindowSurface(window))

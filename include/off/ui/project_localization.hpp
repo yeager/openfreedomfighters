@@ -150,6 +150,14 @@ struct CatalogBuildResult {
 // complete game coverage.
 [[nodiscard]] const ProjectCatalog &f10_catalog();
 
+// Builds the project-owned window title used while the native renderer shows
+// the admitted static intro fallback.  It deliberately reuses the startup
+// preparation status: the fallback is not a separate cutscene lifecycle.
+// Neither input is interpreted as retail text or an asset identifier.
+[[nodiscard]] std::string intro_fallback_window_title(
+    std::string_view explicit_locale,
+    std::span<const std::string_view> platform_locales);
+
 // Generates a deterministic stress representation from the built-in English
 // F10/startup catalog entry named by id.  This accepts an ID rather than text
 // so pseudo-localization cannot be used as a path to transform or extract

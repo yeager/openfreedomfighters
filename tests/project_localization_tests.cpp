@@ -81,6 +81,13 @@ int main() {
   check(catalog.resolve(MessageId::preparing_startup, "zh-CN", "en-US") ==
             "正在准备启动...",
         "startup preparation status resolves as UTF-8");
+  const std::array<std::string_view, 1> swedish_host{{"sv-SE"}};
+  check(intro_fallback_window_title("", swedish_host) ==
+            "OpenFreedomFighters — Förbereder uppstart...",
+        "static intro fallback title follows the system locale");
+  check(intro_fallback_window_title("ja-JP", swedish_host) ==
+            "OpenFreedomFighters — 起動を準備中...",
+        "explicit locale takes priority for the static intro fallback title");
   constexpr std::array<std::string_view, locale_count> locale_tags{{
       "en-US", "sv-SE", "da-DK", "nb-NO", "fi-FI", "de-DE", "fr-FR",
       "es-ES", "it-IT", "pt-BR", "pl-PL", "cs-CZ", "hu-HU", "ro-RO",

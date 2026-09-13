@@ -70,6 +70,12 @@ window claim are released before the final owner destroys the window and quits
 SDL. Gamepad initialization has a separate balanced subsystem lifetime.
 This removes the deliberate window destruction/recreation transition; it does
 not promise uninterrupted pixels while a platform creates its swapchain.
+
+When the GPU runtime presents the static source-backed intro fallback, its
+window title is project-authored: `OpenFreedomFighters` plus the existing
+localized `Preparing startup...` status. It follows `--locale` first, then the
+ordered system-language preferences. This title makes no claim that cutscene
+playback is active and does not use retail UI text.
 Cancellation and error paths retain their original teardown and popup behavior.
 
 ## Verification evidence
