@@ -138,6 +138,35 @@ def sanitize_contract_bundle(phase: Any, dispatch: Any, first_player_success: An
     }
 
 
+def validate_contract_receipt(raw: Any) -> dict[str, Any]:
+    """Revalidate one final lifecycle receipt before it reaches local admission.
+
+    The final bundle intentionally omits the intermediate format tags.  Put
+    them back only long enough to reuse the narrow schema authorities above,
+    then require a byte-for-structure canonical result.  This is an offline
+    review/import boundary, never a runtime switch.
+    """
+    value = _exact(raw, frozenset(("format", "phase_one", "dispatch",
+                                  "player_route", "player_failure")),
+                   "lifecycle receipt")
+    if value["format"] != OUTPUT_FORMAT:
+        raise ValueError("unrecognized lifecycle receipt format")
+    if not isinstance(value["player_route"], list):
+        raise ValueError("lifecycle receipt player route must be an array")
+    canonical = sanitize_contract_bundle(
+        {"format": phase_bundle.OUTPUT_FORMAT, **value["phase_one"]}
+        if isinstance(value["phase_one"], dict) else value["phase_one"],
+        {"format": dispatch_bundle.OUTPUT_FORMAT, **value["dispatch"]}
+        if isinstance(value["dispatch"], dict) else value["dispatch"],
+        {"format": player_trace.OUTPUT_FORMAT, "events": value["player_route"]},
+        {"format": player_trace.OUTPUT_FORMAT, "events": value["player_route"]},
+        {"format": player_trace.OUTPUT_FORMAT, "events": [value["player_failure"]]},
+    )
+    if canonical != value:
+        raise ValueError("lifecycle receipt is not canonical")
+    return canonical
+
+
 def _outside_repository(path: pathlib.Path, label: str) -> pathlib.Path:
     if path.is_symlink():
         raise ValueError(f"{label} must not be a symlink")

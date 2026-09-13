@@ -18,3 +18,23 @@ The admitted object is intentionally inert. It retains no observer identity or
 retail content and is not passed to MovieControl, the cutscene player, a scene,
 a camera, a renderer, or normal startup. A separate reviewed native behavior
 specification remains required before any runtime connection is made.
+
+## Installing a reviewed receipt
+
+`tools/import_reviewed_movie_control_lifecycle_receipt.py` is the only
+operator-side bridge from a final lifecycle bundle to the filename above. It
+accepts only the final source-free bundle from
+`movie_control_cutscene_lifecycle_contract_bundle.py`, repeats the complete
+structural validation, rejects duplicate JSON fields and symlinks, and creates
+one owner-only file without replacing an existing entry. It does not start or
+attach to an observer or game process. Independent review is explicit:
+
+```sh
+python3 tools/import_reviewed_movie_control_lifecycle_receipt.py --reviewed \
+  PRIVATE_LIFECYCLE_BUNDLE.json \
+  PRIVATE_PREFERENCES/reviewed-movie-control-lifecycle/reviewed-movie-control-lifecycle.json
+```
+
+Installing this receipt proves only local structural admission. Normal intro
+playback remains fail-closed until a separate reviewed behavior specification
+is implemented and tested.

@@ -18,6 +18,7 @@ import movie_control_cutscene_lifecycle_contract_bundle as bundle  # noqa: E402
 import movie_control_phase_one_contract_bundle as phase_bundle  # noqa: E402
 import movie_control_phase_one_repeat_pair as phase_repeat  # noqa: E402
 import movie_control_phase_one_trace as phase_trace  # noqa: E402
+import import_reviewed_movie_control_lifecycle_receipt as importer  # noqa: E402
 
 
 def phase_event(**changes: object) -> dict[str, object]:
@@ -127,6 +128,35 @@ class MovieControlCutsceneLifecycleContractBundleTests(unittest.TestCase):
         bad_failure["events"][0]["component_status_before"] = 8
         with self.assertRaises(ValueError):
             bundle.sanitize_contract_bundle(phase_contract(), dispatch_contract(), player_success(), player_success(), bad_failure)
+
+    def test_final_receipt_revalidation_is_canonical_and_strict(self) -> None:
+        receipt = bundle.sanitize_contract_bundle(
+            phase_contract(), dispatch_contract(), player_success(), player_success(), player_failure())
+        self.assertEqual(bundle.validate_contract_receipt(receipt), receipt)
+        receipt["player_route"][0]["address"] = 1
+        with self.assertRaises(ValueError):
+            bundle.validate_contract_receipt(receipt)
+
+    def test_reviewed_import_creates_the_exact_native_receipt_once(self) -> None:
+        receipt = bundle.sanitize_contract_bundle(
+            phase_contract(), dispatch_contract(), player_success(), player_success(), player_failure())
+        with tempfile.TemporaryDirectory() as directory:
+            private = pathlib.Path(directory)
+            source = private / "final-lifecycle.json"
+            target = private / importer.OUTPUT_NAME
+            source.write_text(json.dumps(receipt), encoding="utf-8")
+            importer.import_receipt(source, target)
+            self.assertEqual(json.loads(target.read_text(encoding="utf-8")), receipt)
+            with self.assertRaises(ValueError):
+                importer.import_receipt(source, target)
+            link = private / "receipt-link.json"
+            link.symlink_to(source.name)
+            with self.assertRaisesRegex(ValueError, "must not be a symlink"):
+                importer.import_receipt(link, private / "another.json")
+            linked_parent = private / "linked-parent"
+            linked_parent.symlink_to(".", target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "must not traverse a symlink"):
+                importer.import_receipt(source, linked_parent / importer.OUTPUT_NAME)
 
     def test_cli_uses_new_regular_private_files_without_following_symlinks(self) -> None:
         records = (phase_contract(), dispatch_contract(), player_success(), player_success(), player_failure())
