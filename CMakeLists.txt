@@ -104,6 +104,7 @@ add_library(off_core
     src/data/audio_bank_profile.cpp
     src/data/loc_string_index.cpp
     src/data/loc_catalog.cpp
+    src/data/oct_image.cpp
     src/data/sound_definition_bank.cpp
     src/data/gms_image.cpp
     src/data/install.cpp
@@ -672,6 +673,10 @@ if(BUILD_TESTING)
     add_executable(off_animation_image_tests tests/animation_image_tests.cpp)
     target_link_libraries(off_animation_image_tests PRIVATE off_core)
     add_test(NAME off_animation_image_tests COMMAND off_animation_image_tests)
+
+    add_executable(off_oct_image_tests tests/oct_image_tests.cpp)
+    target_link_libraries(off_oct_image_tests PRIVATE off_core)
+    add_test(NAME off_oct_image_tests COMMAND off_oct_image_tests)
 
     add_executable(off_texture_catalog_tests tests/texture_catalog_tests.cpp)
     target_link_libraries(off_texture_catalog_tests PRIVATE off_core)

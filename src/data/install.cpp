@@ -8,6 +8,7 @@
 #include "off/data/animation_image.hpp"
 #include "off/data/audio_bank_header.hpp"
 #include "off/data/gms_image.hpp"
+#include "off/data/oct_image.hpp"
 #include "off/data/packed_resource.hpp"
 #include "off/data/picture_resource.hpp"
 #include "off/data/picture_texture_binding.hpp"
@@ -295,6 +296,8 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
     std::size_t external_gms_object_handle_count = 0;
     std::size_t gms_resource_count = 0;
     std::size_t animation_image_count = 0;
+    std::size_t oct_image_count = 0;
+    std::size_t oct_structural_bounds_count = 0;
     std::size_t animation_reference_table_count = 0;
     std::size_t animation_descriptor_count = 0;
     std::size_t animation_section_count = 0;
@@ -382,6 +385,7 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
       std::size_t support_files_in_archive = 0;
       std::size_t scene_graph_files_in_archive = 0;
       std::size_t sound_definition_files_in_archive = 0;
+      std::size_t oct_image_files_in_archive = 0;
       std::size_t gms_files_in_archive = 0;
       std::size_t buf_files_in_archive = 0;
       std::size_t texture_files_in_archive = 0;
@@ -534,6 +538,12 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
           animation_section_count += animation.sections().size();
           for (const auto &section : animation.sections())
             animation_component_count += section.components.size();
+        } else if (extension == ".oct") {
+          const auto oct = OctImage::parse(archive.read(member));
+          ++oct_image_count;
+          oct_structural_bounds_count +=
+              oct.envelope().structural_bounds.has_value() ? 1U : 0U;
+          ++oct_image_files_in_archive;
         } else if (extension == ".prm") {
           auto bytes = archive.read(member);
           auto catalog = PrimitiveCatalog::parse(bytes);
@@ -582,6 +592,7 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
       member_context.clear();
       if (support_files_in_archive != 1 || scene_graph_files_in_archive != 1 ||
           sound_definition_files_in_archive != 1 ||
+          oct_image_files_in_archive != 1 ||
           gms_files_in_archive != 1 || texture_files_in_archive != 1 ||
           primitive_files_in_archive != 1 || render_map_files_in_archive != 1 ||
           render_instance_files_in_archive != 1 || !gms_image.has_value() ||
@@ -764,6 +775,8 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
         local_gms_object_handle_count != 2'998 ||
         external_gms_object_handle_count != 4 ||
         gms_resource_count != scene_archive_count ||
+        oct_image_count != scene_archive_count ||
+        oct_structural_bounds_count != 44 ||
         animation_image_count != 42 || animation_reference_table_count != 112 ||
         animation_descriptor_count != 457 || animation_section_count != 336 ||
         animation_component_count != 546 ||
