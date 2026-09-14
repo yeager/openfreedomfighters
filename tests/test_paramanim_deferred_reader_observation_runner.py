@@ -29,21 +29,25 @@ class ParamAnimDeferredReaderObservationRunnerTests(unittest.TestCase):
              mock.patch.object(runner, "_outside_repository", side_effect=lambda value, _label: value), \
              mock.patch.object(runner, "_make_workspace"), \
              mock.patch.object(runner, "_collect", return_value={"events": []}):
-            invoked: list[object] = []
+            invoked: list[tuple[object, object]] = []
             def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[object]:
-                invoked.extend((args, kwargs))
+                invoked.append((args, kwargs))
                 return subprocess.CompletedProcess(args[0], 0)
             runner.execute_observation(observer=pathlib.Path("/private/observer"),
                                        workspace=pathlib.Path("/private/run"), run=fake_run)
-        command, kwargs = invoked[0][0], invoked[1]
-        self.assertEqual(command[1:3], ("--mode", "fresh-isolated"))
-        self.assertNotIn("attach", command)
-        self.assertNotIn("pid", command)
-        self.assertNotIn("target", command)
-        self.assertFalse(kwargs["shell"])
-        self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)
-        self.assertEqual(kwargs["stdout"], subprocess.DEVNULL)
-        self.assertEqual(kwargs["stderr"], subprocess.DEVNULL)
+        self.assertEqual(len(invoked), 2)
+        for raw_name, (args, kwargs) in zip(runner._RAW_NAMES, invoked, strict=True):
+            command = args[0]
+            self.assertEqual(command[1:3], ("--mode", "fresh-isolated"))
+            self.assertEqual(command[3], "--output")
+            self.assertTrue(str(command[4]).endswith(raw_name))
+            self.assertNotIn("attach", command)
+            self.assertNotIn("pid", command)
+            self.assertNotIn("target", command)
+            self.assertFalse(kwargs["shell"])
+            self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)
+            self.assertEqual(kwargs["stdout"], subprocess.DEVNULL)
+            self.assertEqual(kwargs["stderr"], subprocess.DEVNULL)
 
     def test_collection_retains_only_sanitized_runs_and_repeat_pair(self) -> None:
         root = self._empty_workspace("paramanim-runner")
@@ -104,6 +108,24 @@ class ParamAnimDeferredReaderObservationRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "timeout"):
             runner.execute_observation(observer=pathlib.Path("/private/observer"),
                                        workspace=pathlib.Path("/private/run"), timeout_seconds=0)
+
+    def test_second_observer_failure_discards_both_protocol_records(self) -> None:
+        with mock.patch.object(runner, "_validate_observer_path", return_value=pathlib.Path("/private/observer")), \
+             mock.patch.object(runner, "_outside_repository", side_effect=lambda value, _label: value), \
+             mock.patch.object(runner, "_make_workspace"), \
+             mock.patch.object(runner, "_discard_raw_records") as discard:
+            calls = 0
+            def fake_run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[object]:
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise subprocess.CalledProcessError(1, args[0])
+                return subprocess.CompletedProcess(args[0], 0)
+            with self.assertRaisesRegex(ValueError, "did not complete"):
+                runner.execute_observation(observer=pathlib.Path("/private/observer"),
+                                           workspace=pathlib.Path("/private/run"), run=fake_run)
+        self.assertEqual(calls, 2)
+        discard.assert_called_once_with(pathlib.Path("/private/run"))
 
     def test_rejects_symlinked_workspace_parent_before_resolution(self) -> None:
         parent = self._empty_workspace("paramanim-runner-parent")

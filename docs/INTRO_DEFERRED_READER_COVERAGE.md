@@ -154,23 +154,25 @@ overwritten.
 `tools/paramanim_deferred_reader_observation_runner.py` is the narrow optional
 launcher for an operator-maintained private observer. It requires an explicit
 `--execute`, an observer executable outside the repository, and a **new**
-private workspace outside the repository. It invokes exactly the literal
-`fresh-isolated` protocol with two fixed output names; it supplies no game
+private workspace outside the repository. It invokes two separate observer
+processes, each with exactly the literal `fresh-isolated` protocol and one
+fixed output name; it supplies no game
 path, executable path, process ID, target selector, debugger selector, or
 shell. Standard input, output, and error for the private child are suppressed
 and its execution has a bounded timeout.
 
 The workspace must contain exactly `first.raw.json` and `second.raw.json` when
-the observer exits. Both are descriptor-bound, no-follow bounded regular-file
+both observer processes exit. Both are descriptor-bound, no-follow bounded regular-file
 reads. The runner sanitizes both, runs the existing repeat gate, deletes both
 raw records on every collection path, then retains only
 `first.sanitized.json`, `second.sanitized.json`, and `repeat-pair.json` with
 private `0600` permissions. It does not create instrumentation, launch a game,
-or make a reader admissible.
+or make a reader admissible. Separate observer processes do not by themselves
+prove separate game instances; the private observer must establish that property.
 
 ```sh
-python3 tools/paramanim_deferred_reader_observation_runner.py --execute \\
-  --observer /private/paramanim-observer \\
+python3 tools/paramanim_deferred_reader_observation_runner.py --execute \
+  --observer /private/paramanim-observer \
   --workspace /private/new-paramanim-observation
 ```
 

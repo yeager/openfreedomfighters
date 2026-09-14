@@ -167,14 +167,18 @@ def execute_observation(*, observer: pathlib.Path, workspace: pathlib.Path,
     observer_path = _validate_observer_path(observer)
     workspace_path = _outside_repository(workspace, "workspace")
     _make_workspace(workspace_path)
-    command: Sequence[str] = (
-        str(observer_path), "--mode", "fresh-isolated",
-        "--first-output", str(workspace_path / FIRST_RAW_NAME),
-        "--second-output", str(workspace_path / SECOND_RAW_NAME),
-    )
     try:
-        run(command, check=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL, shell=False, timeout=timeout_seconds)
+        # Two separate observer processes are required for a repeat pair. This
+        # proves the retained records did not come from one process call; the
+        # private observer remains responsible for a fresh owned-game instance.
+        for raw_name in _RAW_NAMES:
+            command: Sequence[str] = (
+                str(observer_path), "--mode", "fresh-isolated",
+                "--output", str(workspace_path / raw_name),
+            )
+            run(command, check=True, stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                shell=False, timeout=timeout_seconds)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
         _discard_raw_records(workspace_path)
         raise ValueError("private observer did not complete") from error
