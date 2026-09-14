@@ -884,6 +884,12 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool readiness_o
       first_cut->initialization().phase_two_complete() || first_cut->receiver().open() ||
       first_cut->receiver().closed())
       throw std::runtime_error("first-cut cold probe observed an unexpected lifecycle transition");
+  // Form the typed handoff from the same retained runtime and cold player.
+  // This checks the real MovieControl/sequence reader and live component
+  // relations without sampling a clock, entering lifecycle work, dispatching
+  // event 16, or starting the player.
+  [[maybe_unused]] auto cold_movie_control_handoff=
+      session->make_first_cut_handoff();
   const auto paramanim_first_cut_join=intro.paramanim_first_cut_join_inventory();
   if(paramanim_first_cut_join.attachment_owners!=paramanim_dispatch.attachment_owners ||
       paramanim_first_cut_join.attachment_instances!=paramanim_dispatch.attachment_instances ||
@@ -1041,6 +1047,7 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool readiness_o
             << "owner-envelope=verified\n"
             << "movie-controller-reader=verified\n"
             << "movie-controller-component-reader=verified\n"
+            << "movie-controller-first-cut-handoff=cold-verified\n"
             << "first-component-payload=verified\n"
             << "command-component-payloads=5-verified\n"
             << "reader-bracket-external-loader-calls="

@@ -928,6 +928,13 @@ and every retained cut/group reference translation must agree with the checked
 intro directory mapping. This is still reader-boundary evidence only; it does
 not enroll event 16, run a controller phase, or infer any component callback.
 
+After it confirms that the first-cut player is cold, the probe also constructs
+the typed `MovieControlFirstCutRuntimeHandoff` from those retained live
+relations. `movie-controller-first-cut-handoff=cold-verified` proves only that
+the checked handoff can be formed; it does not sample a clock, run either
+lifecycle phase, dispatch event 16, invoke the receiver, create a view, render,
+or start audio.
+
 The probe creates no SDL window and does not admit a renderer, start audio,
 schedule an event, execute a lifecycle phase, or play a cutscene. It is not a
 playability test and is deliberately outside public CI because it needs the
