@@ -933,7 +933,9 @@ the typed `MovieControlFirstCutRuntimeHandoff` from those retained live
 relations. `movie-controller-first-cut-handoff=cold-verified` proves only that
 the checked handoff can be formed; it does not sample a clock, run either
 lifecycle phase, dispatch event 16, invoke the receiver, create a view, render,
-or start audio.
+or start audio. The probe rechecks the player immediately after construction;
+the marker is withheld if handoff construction changes any lifecycle or receiver
+state.
 
 The probe creates no SDL window and does not admit a renderer, start audio,
 schedule an event, execute a lifecycle phase, or play a cutscene. It is not a

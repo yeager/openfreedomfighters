@@ -890,6 +890,13 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool readiness_o
   // event 16, or starting the player.
   [[maybe_unused]] auto cold_movie_control_handoff=
       session->make_first_cut_handoff();
+  // Do not let successful construction itself be reported as readiness. The
+  // handoff is a relation-only value and must leave the player demonstrably
+  // cold before this probe emits its fixed verification marker.
+  if(first_cut->initialization().phase_one_complete() ||
+      first_cut->initialization().phase_two_complete() || first_cut->receiver().open() ||
+      first_cut->receiver().closed())
+    throw std::runtime_error("first-cut cold probe handoff changed player lifecycle state");
   const auto paramanim_first_cut_join=intro.paramanim_first_cut_join_inventory();
   if(paramanim_first_cut_join.attachment_owners!=paramanim_dispatch.attachment_owners ||
       paramanim_first_cut_join.attachment_instances!=paramanim_dispatch.attachment_instances ||

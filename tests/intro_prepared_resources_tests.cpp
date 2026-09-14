@@ -1664,6 +1664,10 @@ static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
         // its first successful receiver delivery is synchronous with the
         // admitted MovieControl update and is not a playback assertion.
         auto handoff=off::graphics::MovieControlFirstCutRuntimeHandoff::from_runtime(host,session);
+        check(!session.initialization().phase_one_complete() &&
+                  !session.initialization().phase_two_complete() &&
+                  !session.receiver().open() && !session.receiver().closed(),
+              "forming the MovieControl handoff preserves the cold player state");
         off::graphics::MovieControlFirstUpdate movie{
             host.component_handle(host.controller_component_index()),
             host.movie_controller_reader_state()->owner.value,1};
