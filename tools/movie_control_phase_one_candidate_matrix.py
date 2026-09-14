@@ -19,6 +19,7 @@ import pathlib
 import sys
 from typing import Any
 
+import private_structural_json
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent
 INPUT_FORMAT = "off.movie-control-phase-one-candidate-matrix.raw/v1"
@@ -102,7 +103,9 @@ def main() -> int:
             raise ValueError("input and output paths must differ")
         if output_path.exists():
             raise ValueError("refusing to overwrite an existing private matrix")
-        result = sanitize_matrix(json.loads(input_path.read_text(encoding="utf-8")))
+        result = sanitize_matrix(json.loads(
+            input_path.read_text(encoding="utf-8"),
+            object_pairs_hook=private_structural_json.strict_json_object))
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     except (OSError, ValueError, json.JSONDecodeError) as error:

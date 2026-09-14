@@ -20,6 +20,7 @@ from typing import Any
 import cut_sequence_player_lifecycle_trace as player_trace
 import movie_control_cutscene_dispatch_contract_bundle as dispatch_bundle
 import movie_control_phase_one_contract_bundle as phase_bundle
+import private_structural_json
 
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -197,7 +198,7 @@ def _read_private_json_no_follow(path: pathlib.Path, label: str) -> Any:
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > MAX_PRIVATE_RECORD_BYTES:
             raise ValueError(f"{label} must be a bounded regular private file")
         with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as stream:
-            return json.load(stream)
+            return json.load(stream, object_pairs_hook=private_structural_json.strict_json_object)
     finally:
         os.close(descriptor)
 

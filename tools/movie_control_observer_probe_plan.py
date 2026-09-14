@@ -17,6 +17,7 @@ import stat
 import sys
 from typing import Any
 
+import private_structural_json
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent
 INPUT_FORMAT = "off.movie-control-observer-probe-plan.raw/v1"
@@ -104,7 +105,7 @@ def _read_private_json_no_follow(path: pathlib.Path, label: str) -> Any:
         if metadata.st_size > MAX_PLAN_BYTES:
             raise ValueError(f"{label} exceeds the probe-plan size limit")
         with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as stream:
-            return json.load(stream)
+            return json.load(stream, object_pairs_hook=private_structural_json.strict_json_object)
     finally:
         os.close(descriptor)
 
