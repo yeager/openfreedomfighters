@@ -69,4 +69,10 @@ FirstCutViewAdmissionResult FirstCutViewAdmissionGate::admit(
     throw;
   }
 }
+
+std::optional<RendererPendingCameraLease> FirstCutViewAdmissionGate::take_pending_lease() {
+  if (busy_ || failed_)
+    throw std::runtime_error("First-cut view admission gate is busy or failed");
+  return renderer_admission_.take_pending_lease();
+}
 } // namespace off::graphics

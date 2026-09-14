@@ -8,6 +8,44 @@
 
 namespace off::graphics {
 class RendererCameraRegistry;
+class RendererPendingCameraQueue;
+// A queue can issue this capability only after it has retained a concrete
+// camera/state pair.  It is move-only so a caller cannot replay one pending
+// camera through a later materialization boundary.
+class RendererPendingCameraLease final {
+ public:
+  RendererPendingCameraLease() = default;
+  RendererPendingCameraLease(const RendererPendingCameraLease&) = delete;
+  RendererPendingCameraLease& operator=(const RendererPendingCameraLease&) = delete;
+  RendererPendingCameraLease(RendererPendingCameraLease&&) noexcept = default;
+  RendererPendingCameraLease& operator=(RendererPendingCameraLease&&) noexcept = default;
+  [[nodiscard]] explicit operator bool() const noexcept { return queue_ != nullptr && serial_ != 0U; }
+ private:
+  friend class RendererPendingCameraQueue;
+  RendererPendingCameraLease(const RendererPendingCameraQueue* queue, std::uint64_t serial)
+      : queue_(queue), serial_(serial) {}
+  const RendererPendingCameraQueue* queue_{};
+  std::uint64_t serial_{};
+};
+
+// This is issued only by successful pending-queue materialization.  The host
+// retains it until frame assembly, then consumes it exactly once.
+class RendererPendingCameraMaterializationReceipt final {
+ public:
+  RendererPendingCameraMaterializationReceipt() = default;
+  RendererPendingCameraMaterializationReceipt(const RendererPendingCameraMaterializationReceipt&) = delete;
+  RendererPendingCameraMaterializationReceipt& operator=(const RendererPendingCameraMaterializationReceipt&) = delete;
+  RendererPendingCameraMaterializationReceipt(RendererPendingCameraMaterializationReceipt&&) noexcept = default;
+  RendererPendingCameraMaterializationReceipt& operator=(RendererPendingCameraMaterializationReceipt&&) noexcept = default;
+  [[nodiscard]] explicit operator bool() const noexcept { return queue_ != nullptr && serial_ != 0U; }
+ private:
+  friend class RendererPendingCameraQueue;
+  RendererPendingCameraMaterializationReceipt(const RendererPendingCameraQueue* queue,
+                                              std::uint64_t serial)
+      : queue_(queue), serial_(serial) {}
+  const RendererPendingCameraQueue* queue_{};
+  std::uint64_t serial_{};
+};
 struct RegisteredCamera {std::uint64_t owner;float key;};
 struct CameraRegistrationServices {
   std::function<bool(std::uint64_t)> live_owner;
@@ -36,7 +74,9 @@ struct RendererCameraViewAdmissionServices {
   // Counts belong to the concrete state host.  The admission boundary checks
   // them before requesting mutation; it never uses an unbounded placeholder.
   std::function<std::size_t(RendererViewState)> pending_count;
-  std::function<void(RendererViewState,std::uint64_t,std::int32_t)> queue_pending;
+  // The concrete pending queue mints the lease.  A callback that merely
+  // reports queueing cannot authorize later first-cut materialization.
+  std::function<RendererPendingCameraLease(RendererViewState,std::uint64_t,std::int32_t)> queue_pending;
   std::function<std::size_t(RendererViewState)> admitted_view_count;
   std::function<std::uint64_t(RendererViewState,std::uint64_t)> allocate_view;
   std::function<void(std::uint64_t,std::uint64_t)> associate_camera_intermediate;
@@ -65,9 +105,11 @@ public:
   RendererCameraViewAdmissionResult admit(
       std::uint64_t camera, std::int32_t camera_priority,
       const RendererCameraViewAdmissionServices& services);
+  [[nodiscard]] std::optional<RendererPendingCameraLease> take_pending_lease();
   [[nodiscard]] bool failed() const noexcept { return failed_; }
 private:
   bool busy_{}, failed_{};
+  std::optional<RendererPendingCameraLease> pending_lease_;
 };
 
 // A state retains cameras admitted while it is non-ready.  It deliberately
@@ -85,13 +127,18 @@ struct RendererPendingMaterializationServices {
 class RendererPendingCameraQueue final {
 public:
   static constexpr std::size_t capacity=16;
-  void append(RendererViewState state,std::uint64_t camera,std::int32_t priority);
+  [[nodiscard]] RendererPendingCameraLease append(RendererViewState state,std::uint64_t camera,std::int32_t priority);
   void materialize(RendererViewState state,const RendererPendingMaterializationServices& services);
+  [[nodiscard]] RendererPendingCameraMaterializationReceipt materialize(
+      RendererPendingCameraLease&& lease, RendererViewState state,
+      const RendererPendingMaterializationServices& services);
   [[nodiscard]] std::vector<RendererPendingCamera> entries() const;
   [[nodiscard]] bool failed() const noexcept { return failed_; }
 private:
   std::optional<RendererViewState> state_;
   std::vector<RendererPendingCamera> entries_;
+  std::vector<std::uint64_t> lease_serials_;
+  std::uint64_t next_lease_serial_{1U};
   bool busy_{},failed_{};
 };
 

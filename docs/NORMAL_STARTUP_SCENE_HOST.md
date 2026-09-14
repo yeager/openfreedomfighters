@@ -50,6 +50,14 @@ Construction remains inert; it does not invoke the tail, global lifecycle,
 MovieControl, camera/view, renderer, audio, menu, or intro playback. Normal
 startup still does not construct this host.
 
+A first-cut camera that was queued while the renderer state was not ready now
+retains a queue-issued, move-only materialization lease. The host can consume
+that lease only through the issuing queue and accepts an admitted view only
+after the queue returns its matching materialization receipt. A missing,
+foreign, stale, or replayed lease fails closed; it cannot make a frame
+available. This is renderer lifecycle plumbing only, not camera behavior,
+timing, audio, menu, or intro playback wiring.
+
 The [relation reader](INTRO_RENDERER_RELATIONS.md) uses original marked source
 references and the runtime's canonical resource mapping. Queries preserve
 authored member order and read each resource's current selector. The container

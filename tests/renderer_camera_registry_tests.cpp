@@ -46,6 +46,7 @@ struct ViewHarness {
   bool has_backend{}, backend_ready{}, ready{};
   std::size_t pending{}, views{};
   std::optional<RendererViewState> state;
+  RendererPendingCameraQueue pending_queue;
   std::int32_t width{1280}, height{720};
   RendererCameraViewAdmissionServices services() {
     return {
@@ -61,7 +62,10 @@ struct ViewHarness {
       },
       [&](RendererViewState){ effects.push_back("state-ready"); return ready; },
       [&](RendererViewState) { return pending; },
-      [&](RendererViewState value,std::uint64_t camera,std::int32_t priority) { effects.push_back("pending:"+std::to_string(value.value)+":"+std::to_string(camera)+":"+std::to_string(priority)); },
+      [&](RendererViewState value,std::uint64_t camera,std::int32_t priority) {
+        effects.push_back("pending:"+std::to_string(value.value)+":"+std::to_string(camera)+":"+std::to_string(priority));
+        return pending_queue.append(value,camera,priority);
+      },
       [&](RendererViewState) { return views; },
       [&](RendererViewState value,std::uint64_t camera) { effects.push_back("allocate:"+std::to_string(value.value)+":"+std::to_string(camera)); return std::uint64_t{12}; },
       [&](std::uint64_t view,std::uint64_t camera) { effects.push_back("associate:"+std::to_string(view)+":"+std::to_string(camera)); },
@@ -107,7 +111,7 @@ int main() {
     ViewHarness h;h.has_backend=true;h.backend_ready=true;h.state={7};
     RendererPendingCameraQueue pending;auto services=h.services();
     services.pending_count=[&](RendererViewState){return pending.entries().size();};
-    services.queue_pending=[&](RendererViewState state,std::uint64_t camera,std::int32_t priority){pending.append(state,camera,priority);};
+    services.queue_pending=[&](RendererViewState state,std::uint64_t camera,std::int32_t priority){return pending.append(state,camera,priority);};
     h.admission.admit(9,-42,services);
     check(pending.entries()==std::vector<off::graphics::RendererPendingCamera>{{9,-42}},"non-ready admission preserves priority for later state materialization");
     h.ready=true;pending.materialize({7},{[](RendererViewState){return true;},[&](std::uint64_t camera,std::int32_t priority){h.admission.admit(camera,priority,services);}});

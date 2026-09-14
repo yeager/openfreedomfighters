@@ -116,6 +116,7 @@ int main() {
              {}}) == FirstCutRequestedCameraResult::requested_camera_selected,
         "queued-view test requires selected camera route");
   unsigned queue_calls{};
+  RendererPendingCameraQueue pending_queue;
   const auto pending_services = [&] {
     RendererCameraViewAdmissionServices renderer{
         [] { return true; },
@@ -126,8 +127,9 @@ int main() {
         {},
         [](RendererViewState) { return false; },
         [](RendererViewState) { return std::size_t{}; },
-        [&queue_calls](RendererViewState, std::uint64_t, std::int32_t) {
+        [&queue_calls, &pending_queue](RendererViewState state, std::uint64_t camera, std::int32_t priority) {
           ++queue_calls;
+          return pending_queue.append(state, camera, priority);
         },
         {},
         {},
@@ -165,5 +167,25 @@ int main() {
   check(rejected && queued.stage() == NormalIntroSceneHostStage::view_queued,
         "a queued view cannot assemble a frame before materialization and "
         "admission");
+  unsigned materialized{};
+  queued.materialize_queued_first_cut_view(
+      pending_queue, {7U},
+      {[](RendererViewState) { return true; },
+       [&materialized](std::uint64_t camera, std::int32_t priority) {
+         check(camera == 99U && priority == -3, "queued materialization preserves selected camera identity");
+         ++materialized;
+       }});
+  check(queued.stage() == NormalIntroSceneHostStage::view_admitted && materialized == 1U &&
+            pending_queue.entries().empty(),
+        "only the queue-issued pending lease can materialize the selected view once");
+  rejected = false;
+  try {
+    queued.materialize_queued_first_cut_view(
+        pending_queue, {7U}, {[](RendererViewState) { return true; }, [](std::uint64_t, std::int32_t) {}});
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  check(rejected && queued.stage() == NormalIntroSceneHostStage::view_admitted,
+        "materialized queue receipt cannot be replayed through the host");
   std::cout << "normal intro scene host tests passed\n";
 }

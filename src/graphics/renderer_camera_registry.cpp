@@ -47,7 +47,10 @@ RendererCameraViewAdmissionResult RendererCameraViewAdmission::admit(
         throw std::runtime_error("Non-ready state requires bounded pending-camera services");
       if (services.pending_count(*state)>=RendererPendingCameraQueue::capacity)
         throw std::runtime_error("Renderer pending-camera capacity is exhausted");
-      services.queue_pending(*state,camera,camera_priority);
+      auto lease = services.queue_pending(*state,camera,camera_priority);
+      if (!lease)
+        throw std::runtime_error("Pending camera queue did not issue a materialization lease");
+      pending_lease_ = std::move(lease);
       return RendererCameraViewAdmissionResult::pending_queued;
     }
     if (!services.admitted_view_count || !services.allocate_view || !services.associate_camera_intermediate ||
@@ -71,8 +74,16 @@ RendererCameraViewAdmissionResult RendererCameraViewAdmission::admit(
   }
 }
 
-void RendererPendingCameraQueue::append(RendererViewState state,std::uint64_t camera,
-                                        std::int32_t priority) {
+std::optional<RendererPendingCameraLease> RendererCameraViewAdmission::take_pending_lease() {
+  if (busy_ || failed_)
+    throw std::runtime_error("Renderer camera view admission is busy or failed");
+  auto result = std::move(pending_lease_);
+  pending_lease_.reset();
+  return result;
+}
+
+RendererPendingCameraLease RendererPendingCameraQueue::append(RendererViewState state,std::uint64_t camera,
+                                                               std::int32_t priority) {
   if(busy_ || failed_) throw std::runtime_error("Renderer pending-camera queue is busy or failed");
   if(!state.value || !camera) throw std::runtime_error("Pending renderer camera requires live state and camera");
   if(state_ && state_->value!=state.value)
@@ -83,6 +94,13 @@ void RendererPendingCameraQueue::append(RendererViewState state,std::uint64_t ca
   }
   state_=state;
   entries_.push_back({camera,priority});
+  const auto serial = next_lease_serial_++;
+  if (!serial) {
+    failed_ = true;
+    throw std::runtime_error("Renderer pending-camera lease serial exhausted");
+  }
+  lease_serials_.push_back(serial);
+  return RendererPendingCameraLease{this, serial};
 }
 
 void RendererPendingCameraQueue::materialize(RendererViewState state,
@@ -99,7 +117,20 @@ void RendererPendingCameraQueue::materialize(RendererViewState state,
     // source order, making incomplete materialization visible to the host.
     for(const auto entry:entries_) services.admit_ready_camera(entry.camera,entry.priority);
     entries_.clear();
+    lease_serials_.clear();
   } catch(...) {failed_=true;throw;}
+}
+
+RendererPendingCameraMaterializationReceipt RendererPendingCameraQueue::materialize(
+    RendererPendingCameraLease&& lease, RendererViewState state,
+    const RendererPendingMaterializationServices& services) {
+  if (!lease || lease.queue_ != this)
+    throw std::runtime_error("Pending renderer camera materialization requires its queue-issued lease");
+  const auto serial = lease.serial_;
+  if (std::find(lease_serials_.begin(), lease_serials_.end(), serial) == lease_serials_.end())
+    throw std::runtime_error("Pending renderer camera lease is no longer retained");
+  materialize(state, services);
+  return RendererPendingCameraMaterializationReceipt{this, serial};
 }
 
 std::vector<RendererPendingCamera> RendererPendingCameraQueue::entries() const {

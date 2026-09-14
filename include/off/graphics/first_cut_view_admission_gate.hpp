@@ -40,6 +40,7 @@ public:
       FirstCutRequestedCameraResult camera_result,
       const FirstCutRequestedCameraRoute& camera_route,
       const FirstCutViewAdmissionGateServices& services);
+  [[nodiscard]] std::optional<RendererPendingCameraLease> take_pending_lease();
   [[nodiscard]] bool failed() const noexcept { return failed_; }
 
 private:

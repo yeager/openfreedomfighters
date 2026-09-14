@@ -34,6 +34,7 @@ struct Harness {
   bool state_ready{};
   std::optional<FirstCutRequestedCamera> resolved{FirstCutRequestedCamera{44, 99, 0, -3, true}};
   std::vector<std::string> effects;
+  RendererPendingCameraQueue pending;
 
   [[nodiscard]] FirstCutViewAdmissionGateServices services() {
     RendererCameraViewAdmissionServices renderer{
@@ -43,7 +44,8 @@ struct Harness {
         {}, {}, {},
         [&](RendererViewState) { effects.push_back("state-ready"); return state_ready; },
         [](RendererViewState) { return std::size_t{}; },
-        [&](RendererViewState, std::uint64_t, std::int32_t) { effects.push_back("pending"); },
+        [&](RendererViewState state, std::uint64_t camera, std::int32_t priority) {
+          effects.push_back("pending"); return pending.append(state, camera, priority); },
         [](RendererViewState) { return std::size_t{}; },
         [&](RendererViewState, std::uint64_t) { effects.push_back("allocate"); return std::uint64_t{9}; },
         [&](std::uint64_t, std::uint64_t) { effects.push_back("associate"); },

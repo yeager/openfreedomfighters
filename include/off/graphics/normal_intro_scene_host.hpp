@@ -38,6 +38,9 @@ class NormalIntroSceneHost final {
       const FirstCutRequestedCameraServices& services);
   [[nodiscard]] FirstCutViewAdmissionResult admit_first_cut_view(
       const FirstCutViewAdmissionGateServices& services);
+  void materialize_queued_first_cut_view(
+      RendererPendingCameraQueue& queue, RendererViewState state,
+      const RendererPendingMaterializationServices& services);
   [[nodiscard]] platform::FirstCutPictureFrameResult assemble_first_cut_frame(
       const platform::FirstCutPictureFrameInput& evidence);
   [[nodiscard]] NormalIntroSceneHostStage stage() const noexcept { return stage_; }
@@ -55,6 +58,8 @@ class NormalIntroSceneHost final {
   std::optional<MovieControlEvent16Result> event_;
   std::optional<FirstCutRequestedCameraResult> route_result_;
   std::optional<FirstCutViewAdmissionResult> view_result_;
+  std::optional<RendererPendingCameraLease> pending_view_lease_;
+  std::optional<RendererPendingCameraMaterializationReceipt> materialized_view_;
 };
 
 }  // namespace off::graphics

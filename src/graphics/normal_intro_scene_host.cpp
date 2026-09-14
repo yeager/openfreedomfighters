@@ -73,25 +73,44 @@ FirstCutViewAdmissionResult NormalIntroSceneHost::admit_first_cut_view(
   try {
     const auto result = view_gate_.admit(activation_.stage(), *event_, *route_result_, route_, services);
     view_result_ = result;
-    if (result == FirstCutViewAdmissionResult::pending_queued)
+    if (result == FirstCutViewAdmissionResult::pending_queued) {
+      pending_view_lease_ = view_gate_.take_pending_lease();
+      if (!pending_view_lease_)
+        throw std::runtime_error("normal intro scene host pending view has no queue-issued lease");
       // Queuing transfers this camera to the renderer's later materialization
       // boundary. Re-entering the gate would append the same camera again.
       stage_ = NormalIntroSceneHostStage::view_queued;
-    else if (result == FirstCutViewAdmissionResult::view_admitted)
+    } else if (result == FirstCutViewAdmissionResult::view_admitted)
       stage_ = NormalIntroSceneHostStage::view_admitted;
     return result;
+  } catch (...) { stage_ = NormalIntroSceneHostStage::failed; throw; }
+}
+
+void NormalIntroSceneHost::materialize_queued_first_cut_view(
+    RendererPendingCameraQueue& queue, RendererViewState state,
+    const RendererPendingMaterializationServices& services) {
+  if (stage_ != NormalIntroSceneHostStage::view_queued || !pending_view_lease_)
+    throw std::runtime_error("normal intro scene queued view materialization is unavailable");
+  try {
+    materialized_view_ = queue.materialize(std::move(*pending_view_lease_), state, services);
+    pending_view_lease_.reset();
+    if (!materialized_view_)
+      throw std::runtime_error("normal intro scene queued view did not produce a receipt");
+    view_result_ = FirstCutViewAdmissionResult::view_admitted;
+    stage_ = NormalIntroSceneHostStage::view_admitted;
   } catch (...) { stage_ = NormalIntroSceneHostStage::failed; throw; }
 }
 
 platform::FirstCutPictureFrameResult NormalIntroSceneHost::assemble_first_cut_frame(
     const platform::FirstCutPictureFrameInput& evidence) {
   if (stage_ != NormalIntroSceneHostStage::view_admitted ||
-      evidence.view_admission != FirstCutViewAdmissionResult::view_admitted)
+      evidence.view_admission != FirstCutViewAdmissionResult::view_admitted ||
+      (view_result_ == FirstCutViewAdmissionResult::pending_queued && !materialized_view_))
     throw std::runtime_error("normal intro scene host frame assembly is unavailable");
   try {
     const auto result = frame_.assemble(evidence);
     if (result == platform::FirstCutPictureFrameResult::assembled)
-      stage_ = NormalIntroSceneHostStage::frame_assembled;
+      stage_ = NormalIntroSceneHostStage::frame_assembled, materialized_view_.reset();
     return result;
   } catch (...) { stage_ = NormalIntroSceneHostStage::failed; throw; }
 }
