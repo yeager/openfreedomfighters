@@ -97,6 +97,10 @@ for a portable installation.
   [repeat-observation protocol](docs/INTRO_DEFERRED_READER_COVERAGE.md#private-repeat-observation-runner)
   retains only two sanitized structural records and their repeat-gated result;
   it neither starts the game nor adds a reader.
+- Retail localization lookup behavior is also evidence-gated. Its private
+  [two-process repeat-observation protocol](docs/LOCALIZATION.md#private-lookup-and-formatting-observation)
+  retains only matching source-free structural records; it does not open game
+  data or enable Original text presentation.
   Window console/property bindings and the scene event-name table are live.
   None of the cameras is registered for normal rendering yet.
   DefaultCam and its PreviewCamera now share an [ordinary update queue](docs/ORDINARY_COMPONENTS.md)

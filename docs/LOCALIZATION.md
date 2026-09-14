@@ -136,6 +136,16 @@ component, authorize unobserved lookup behavior, or make Original presentation
 localized. Success, missing, failure, and formatting paths still require
 independent reviewed evidence before they can be presented.
 
+`tools/retail_localization_lookup_observation_runner.py` provides repeatable
+private collection. It starts an operator-supplied observer twice in separate
+literal `fresh-isolated` processes, with no target, PID, game path, shell, or
+debugger arguments. It accepts one fixed bounded structural record per run in
+a new private workspace outside the repository, descriptor-binds it without
+following symlinks, rejects extra entries, sanitizes both records, and requires
+an exact match. Raw inputs are removed before only the sanitized records and
+one repeat-pair result are retained. It does not establish that the observer
+independently collected those records; external review still must do that.
+
 ## Clean-room delivery plan
 
 1. Recover only non-expressive format and lookup behavior for retail LOC data.
