@@ -144,8 +144,12 @@ the following stages exactly once, with real services at every boundary:
    It must be strictly past the phase-two deadline.
 3. Route the selected first-cut camera and pass the live camera/view evidence
    through `FirstCutViewAdmissionGate`.
-4. Only after a view is admitted, prepare a source-backed first-cut picture
-   frame. `NormalIntroSceneHostFrameBridge` is the sole normal GPU authority:
+4. Only after a view is admitted, the host mints one
+   `FirstCutFrameAdmissionPermit`; direct view admission and renderer
+   materialization of the queue-issued lease are the only minting paths. The
+   permit is consumed by the first frame assembly attempt, including a rejected
+   one. Prepare a source-backed first-cut picture frame only with that permit.
+   `NormalIntroSceneHostFrameBridge` is the sole normal GPU authority:
    it validates that the host is still at `frame_assembled`, then prepares that
    frame with the `SdlIntroRenderer` whose images remain owned by the retained
    session. A null bridge produces no world draw. The explicit diagnostic

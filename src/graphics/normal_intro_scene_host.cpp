@@ -80,8 +80,10 @@ FirstCutViewAdmissionResult NormalIntroSceneHost::admit_first_cut_view(
       // Queuing transfers this camera to the renderer's later materialization
       // boundary. Re-entering the gate would append the same camera again.
       stage_ = NormalIntroSceneHostStage::view_queued;
-    } else if (result == FirstCutViewAdmissionResult::view_admitted)
+    } else if (result == FirstCutViewAdmissionResult::view_admitted) {
+      frame_admission_permit_.emplace(platform::FirstCutFrameAdmissionPermit::mint());
       stage_ = NormalIntroSceneHostStage::view_admitted;
+    }
     return result;
   } catch (...) { stage_ = NormalIntroSceneHostStage::failed; throw; }
 }
@@ -97,20 +99,24 @@ void NormalIntroSceneHost::materialize_queued_first_cut_view(
     if (!materialized_view_)
       throw std::runtime_error("normal intro scene queued view did not produce a receipt");
     view_result_ = FirstCutViewAdmissionResult::view_admitted;
+    frame_admission_permit_.emplace(platform::FirstCutFrameAdmissionPermit::mint());
     stage_ = NormalIntroSceneHostStage::view_admitted;
   } catch (...) { stage_ = NormalIntroSceneHostStage::failed; throw; }
 }
 
 platform::FirstCutPictureFrameResult NormalIntroSceneHost::assemble_first_cut_frame(
     const platform::FirstCutPictureFrameInput& evidence) {
-  if (stage_ != NormalIntroSceneHostStage::view_admitted ||
-      evidence.view_admission != FirstCutViewAdmissionResult::view_admitted ||
+  if (stage_ != NormalIntroSceneHostStage::view_admitted || !frame_admission_permit_ ||
       (view_result_ == FirstCutViewAdmissionResult::pending_queued && !materialized_view_))
     throw std::runtime_error("normal intro scene host frame assembly is unavailable");
   try {
-    const auto result = frame_.assemble(evidence);
+    const auto result = frame_.assemble(std::move(*frame_admission_permit_), evidence);
+    frame_admission_permit_.reset();
+    materialized_view_.reset();
     if (result == platform::FirstCutPictureFrameResult::assembled)
-      stage_ = NormalIntroSceneHostStage::frame_assembled, materialized_view_.reset();
+      stage_ = NormalIntroSceneHostStage::frame_assembled;
+    else
+      stage_ = NormalIntroSceneHostStage::failed;
     return result;
   } catch (...) { stage_ = NormalIntroSceneHostStage::failed; throw; }
 }

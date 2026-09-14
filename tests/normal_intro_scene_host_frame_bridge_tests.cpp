@@ -39,7 +39,9 @@ off::graphics::NormalIntroSceneHost admitted_host() {
       [] { return std::optional<RendererViewState>{{7}}; }, {}, {}, {},
       [](RendererViewState) { return true; },
       [](RendererViewState) { return std::size_t{}; },
-      [](RendererViewState, std::uint64_t, std::int32_t) {},
+      [](RendererViewState, std::uint64_t, std::int32_t) {
+        return RendererPendingCameraLease{};
+      },
       [](RendererViewState) { return std::size_t{}; },
       [](RendererViewState, std::uint64_t) { return std::uint64_t{9}; },
       [](std::uint64_t, std::uint64_t) {}, [](std::uint64_t) {},
@@ -58,7 +60,6 @@ off::graphics::NormalIntroSceneHost admitted_host() {
       .groups = std::span(&group, 1),
       .transform = {.basis = {0, 0, 1, 0, 1, 0, 1, 0, 0}}};
   check(host.assemble_first_cut_frame({
-      .view_admission = FirstCutViewAdmissionResult::view_admitted,
       .positive_time_member_activated = true,
       .activation_prefix_complete = true,
       .ordered_record_accepted = true,
@@ -83,5 +84,10 @@ int main() {
   static_assert(!std::is_copy_assignable_v<platform::NormalIntroSceneHostFrameBridge>);
   check(bridge.draws().size() == 1 && bridge.draws()[0].catalog_image_index == 4,
         "admitted host forwards only its assembled source-backed draw");
+  rejected = false;
+  try { static_cast<void>(host.assemble_first_cut_frame({})); }
+  catch (const std::runtime_error&) { rejected = true; }
+  check(rejected && host.stage() == graphics::NormalIntroSceneHostStage::frame_assembled,
+        "the direct-view permit is consumed by the first assembly attempt");
   std::cout << "normal intro scene host frame bridge tests passed\n";
 }

@@ -187,5 +187,29 @@ int main() {
   }
   check(rejected && queued.stage() == NormalIntroSceneHostStage::view_admitted,
         "materialized queue receipt cannot be replayed through the host");
+
+  off::data::PictureQuad quad{};
+  quad.horizontal_edge_span = quad.vertical_edge_span = 1;
+  quad.modulation_color = 0xffffffffU;
+  off::data::BoundPictureDrawGroup group{{.image_index = 4U}, {quad}};
+  off::platform::IntroPictureSubmissionInput picture{
+      .groups = std::span(&group, 1),
+      .transform = {.basis = {0, 0, 1, 0, 1, 0, 1, 0, 0}}};
+  check(queued.assemble_first_cut_frame(
+            {.positive_time_member_activated = true,
+             .activation_prefix_complete = true,
+             .ordered_record_accepted = true,
+             .pictures = std::span(&picture, 1)}) ==
+            off::platform::FirstCutPictureFrameResult::assembled &&
+            queued.stage() == NormalIntroSceneHostStage::frame_assembled,
+        "only the materialized queue receipt mints the one-shot frame permit");
+  rejected = false;
+  try {
+    static_cast<void>(queued.assemble_first_cut_frame({}));
+  } catch (const std::runtime_error&) {
+    rejected = true;
+  }
+  check(rejected && queued.stage() == NormalIntroSceneHostStage::frame_assembled,
+        "the consumed materialized-view permit cannot assemble a second frame");
   std::cout << "normal intro scene host tests passed\n";
 }

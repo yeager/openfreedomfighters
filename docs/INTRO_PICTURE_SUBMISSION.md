@@ -40,9 +40,13 @@ public test uses independently authored descriptor data and verifies the
 preserved image identities and geometry; it contains no retail content.
 
 `FirstCutPictureFrame` is the next gate above this boundary. It accepts no
-picture unless the existing view-admission result is `view_admitted`, the
-first member became active at positive time, its activation prefix completed,
-and ordered traversal accepted the record. It retains assembled submissions
-for the caller's same-command-buffer GPU preparation. Normal startup does not
-yet produce these prerequisites, so this remains disconnected from its frame
-loop.
+picture without a move-only, one-shot `FirstCutFrameAdmissionPermit`. Only
+`NormalIntroSceneHost` mints that permit after it directly admits the selected
+view or after the renderer materializes the host's queue-issued camera lease.
+The frame consumes the permit on every assembly attempt; callers cannot supply
+an enum or recreate a permit to claim view admission. The remaining evidence
+requires the first member to be active at positive time, its activation prefix
+to be complete, and ordered traversal to have accepted the record. It retains
+assembled submissions for the caller's same-command-buffer GPU preparation.
+Normal startup does not yet produce these prerequisites, so this remains
+disconnected from its frame loop.

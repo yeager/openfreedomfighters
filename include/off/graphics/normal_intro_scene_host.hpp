@@ -60,6 +60,7 @@ class NormalIntroSceneHost final {
   std::optional<FirstCutViewAdmissionResult> view_result_;
   std::optional<RendererPendingCameraLease> pending_view_lease_;
   std::optional<RendererPendingCameraMaterializationReceipt> materialized_view_;
+  std::optional<platform::FirstCutFrameAdmissionPermit> frame_admission_permit_;
 };
 
 }  // namespace off::graphics

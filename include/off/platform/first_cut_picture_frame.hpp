@@ -6,12 +6,39 @@
 #include <cstdint>
 #include <optional>
 
+namespace off::graphics {
+class NormalIntroSceneHost;
+}
+
 namespace off::platform {
 
-// Evidence produced by the caller's actual lifecycle and ordered traversal.
-// It deliberately contains no fallback route or inferred admission.
+// A move-only, one-shot authority emitted only by NormalIntroSceneHost after
+// its selected first-cut view has been admitted.  It deliberately carries no
+// camera identity, route, or caller-controlled "admitted" flag.
+class FirstCutFrameAdmissionPermit final {
+ public:
+  FirstCutFrameAdmissionPermit(const FirstCutFrameAdmissionPermit&) = delete;
+  FirstCutFrameAdmissionPermit& operator=(const FirstCutFrameAdmissionPermit&) = delete;
+  FirstCutFrameAdmissionPermit(FirstCutFrameAdmissionPermit&& other) noexcept;
+  FirstCutFrameAdmissionPermit& operator=(FirstCutFrameAdmissionPermit&& other) noexcept;
+
+ private:
+  friend class off::graphics::NormalIntroSceneHost;
+  friend class FirstCutPictureFrame;
+
+  FirstCutFrameAdmissionPermit() noexcept = default;
+  [[nodiscard]] static FirstCutFrameAdmissionPermit mint() noexcept {
+    return FirstCutFrameAdmissionPermit{};
+  }
+  [[nodiscard]] bool consume() noexcept;
+
+  bool valid_{true};
+};
+
+// Evidence produced by the actual member activation and ordered traversal.
+// View admission is intentionally absent: it is represented by the separate,
+// host-minted permit consumed by FirstCutPictureFrame::assemble.
 struct FirstCutPictureFrameInput final {
-  graphics::FirstCutViewAdmissionResult view_admission{};
   bool positive_time_member_activated{};
   bool activation_prefix_complete{};
   bool ordered_record_accepted{};
@@ -19,13 +46,14 @@ struct FirstCutPictureFrameInput final {
 };
 
 enum class FirstCutPictureFrameResult : std::uint8_t {
-  view_not_admitted, member_not_activated, activation_incomplete,
+  admission_permit_invalid, member_not_activated, activation_incomplete,
   ordered_record_not_accepted, no_pictures, assembled,
 };
 
 class FirstCutPictureFrame final {
 public:
   [[nodiscard]] FirstCutPictureFrameResult assemble(
+      FirstCutFrameAdmissionPermit&& permit,
       const FirstCutPictureFrameInput &input);
   [[nodiscard]] std::span<const IntroPictureSubmission> submissions() const noexcept {
     return submissions_;
