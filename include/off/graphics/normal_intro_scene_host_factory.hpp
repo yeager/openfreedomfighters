@@ -11,11 +11,19 @@ namespace off::graphics {
 // no fabricated loader/lifecycle fallback.  This factory does not bind normal
 // startup, activate the host, or invoke a supplied callback.
 class NormalIntroSceneHostFactory final {
- public:
-  [[nodiscard]] static NormalIntroSceneHost create(
-      const MovieControlHostEvidence& evidence,
-      NormalIntroSceneHostLifecycleServices lifecycle,
+public:
+  [[nodiscard]] static NormalIntroSceneHost
+  create(const MovieControlHostEvidence &evidence,
+         NormalIntroSceneHostLifecycleServices lifecycle,
+         NormalIntroSceneHostFirstCutConfig first_cut);
+  // Constructs only the continuation form for a retained session that has
+  // already completed its exactly-once reader bracket. The opaque capability
+  // is issued only by the verified session adapter, so this API cannot
+  // silently retain or replay a reader path.
+  [[nodiscard]] static NormalIntroSceneHost create_after_reader_bracket(
+      const MovieControlHostEvidence &evidence,
+      NormalIntroScenePostReaderHostLifecycleServices lifecycle,
       NormalIntroSceneHostFirstCutConfig first_cut);
 };
 
-}  // namespace off::graphics
+} // namespace off::graphics

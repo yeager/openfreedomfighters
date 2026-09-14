@@ -41,6 +41,15 @@ handoff; retaining them neither invokes a service nor advances the tail.
 sections and outstanding service boundaries. It is preflight only: it does not
 provide callbacks, construct a container or transition the session.
 
+`NormalIntroSceneHostFactory::create_after_reader_bracket` now makes the
+already-completed reader receipt usable by the host continuation boundary. It
+accepts an opaque proof issued only by the verified session adapter; it cannot
+fabricate or replay the reader bracket. The proof retains the required tail and
+global lifecycle callbacks without exposing a reader callback.
+Construction remains inert; it does not invoke the tail, global lifecycle,
+MovieControl, camera/view, renderer, audio, menu, or intro playback. Normal
+startup still does not construct this host.
+
 The [relation reader](INTRO_RENDERER_RELATIONS.md) uses original marked source
 references and the runtime's canonical resource mapping. Queries preserve
 authored member order and read each resource's current selector. The container
