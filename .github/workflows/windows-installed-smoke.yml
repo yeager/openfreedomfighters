@@ -117,6 +117,10 @@ jobs:
           if (Test-Path -LiteralPath $missingDataRoot) { throw 'missing-data fixture root unexpectedly exists' }
           $missingDataStdout = Join-Path $diagnostics 'missing-data.stdout.txt'
           $missingDataStderr = Join-Path $diagnostics 'missing-data.stderr.txt'
+          # Exit code 3 is the asserted, expected result for an absent data
+          # directory. Keep PowerShell from turning it into a terminating
+          # native-command error before the checks below inspect it.
+          $PSNativeCommandUseErrorActionPreference = $false
           # Normal startup deliberately presents a localized modal dialog for
           # missing data and waits for the user to dismiss it. CI has no user,
           # so exercise the same verifier through the explicitly headless
