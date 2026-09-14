@@ -31,3 +31,28 @@ This wrapper is a boundary guardrail, not proof that an external observer was
 fresh or isolated. A separately reviewed native behavior contract is still
 required before any normal coordinator, scene, camera, renderer, or intro path
 is enabled.
+
+## Reviewed repeat receipt
+
+`tools/startup_coordinator_repeat_observation_runner.py` is the required
+collection boundary when preparing the reviewed coordinator-pass receipt. It
+starts the explicitly supplied observer twice, once per distinct new private
+workspace, with the same literal `fresh-isolated` invocation. Each run must
+produce one completed and one rejected structural record. Both result classes
+must match across the two runs before the tool writes the single inert receipt.
+Observer streams are discarded, raw files are removed before return, and the
+receipt retains only fixed structural categories.
+
+```sh
+python3 tools/startup_coordinator_repeat_observation_runner.py --execute \
+  --observer PRIVATE_OBSERVER_EXECUTABLE \
+  --canonical-plan PRIVATE_CANONICAL_PLAN.json \
+  --first-workspace NEW_PRIVATE_WORKSPACE_A \
+  --second-workspace NEW_PRIVATE_WORKSPACE_B \
+  --output-directory PRIVATE_RECEIPT_DIRECTORY \
+  --timeout-seconds 300
+```
+
+Two observer invocations provide repeat evidence; they do not by themselves
+prove what the observer did internally. The receipt remains review-only and
+does not enable coordinator, scene, camera, renderer, menu, or intro wiring.
