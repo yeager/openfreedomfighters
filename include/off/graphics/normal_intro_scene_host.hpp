@@ -12,7 +12,7 @@ namespace off::graphics {
 // no lifecycle, camera, view, picture, audio, or renderer fallback.
 enum class NormalIntroSceneHostStage : std::uint8_t {
   constructed, awaiting_event16, event16_not_activated, first_cut_routed,
-  view_pending, view_admitted, frame_assembled, failed,
+  view_pending, view_queued, view_admitted, frame_assembled, failed,
 };
 
 struct NormalIntroSceneHostFirstCutConfig {

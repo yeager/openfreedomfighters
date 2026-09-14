@@ -73,7 +73,11 @@ FirstCutViewAdmissionResult NormalIntroSceneHost::admit_first_cut_view(
   try {
     const auto result = view_gate_.admit(activation_.stage(), *event_, *route_result_, route_, services);
     view_result_ = result;
-    if (result == FirstCutViewAdmissionResult::view_admitted)
+    if (result == FirstCutViewAdmissionResult::pending_queued)
+      // Queuing transfers this camera to the renderer's later materialization
+      // boundary. Re-entering the gate would append the same camera again.
+      stage_ = NormalIntroSceneHostStage::view_queued;
+    else if (result == FirstCutViewAdmissionResult::view_admitted)
       stage_ = NormalIntroSceneHostStage::view_admitted;
     return result;
   } catch (...) { stage_ = NormalIntroSceneHostStage::failed; throw; }
