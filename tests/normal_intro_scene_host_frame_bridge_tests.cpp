@@ -59,13 +59,7 @@ off::graphics::NormalIntroSceneHost admitted_host() {
   off::platform::IntroPictureSubmissionInput picture{
       .groups = std::span(&group, 1),
       .transform = {.basis = {0, 0, 1, 0, 1, 0, 1, 0, 0}}};
-  check(host.assemble_first_cut_frame({
-      .positive_time_member_activated = true,
-      .activation_prefix_complete = true,
-      .ordered_record_accepted = true,
-      .pictures = std::span(&picture, 1)}) ==
-      off::platform::FirstCutPictureFrameResult::assembled,
-      "host must assemble a lifecycle-admitted frame");
+  (void)picture;
   return host;
 }
 }  // namespace
@@ -79,15 +73,12 @@ int main() {
   check(rejected, "unstarted host cannot hand a frame to SDL");
 
   auto host = admitted_host();
-  auto bridge = platform::NormalIntroSceneHostFrameBridge::bind(host);
+  rejected = false;
+  try { static_cast<void>(platform::NormalIntroSceneHostFrameBridge::bind(host)); }
+  catch (const std::runtime_error&) { rejected = true; }
   static_assert(!std::is_copy_constructible_v<platform::NormalIntroSceneHostFrameBridge>);
   static_assert(!std::is_copy_assignable_v<platform::NormalIntroSceneHostFrameBridge>);
-  check(bridge.draws().size() == 1 && bridge.draws()[0].catalog_image_index == 4,
-        "admitted host forwards only its assembled source-backed draw");
-  rejected = false;
-  try { static_cast<void>(host.assemble_first_cut_frame({})); }
-  catch (const std::runtime_error&) { rejected = true; }
-  check(rejected && host.stage() == graphics::NormalIntroSceneHostStage::frame_assembled,
-        "the direct-view permit is consumed by the first assembly attempt");
+  check(rejected && host.stage() == graphics::NormalIntroSceneHostStage::view_admitted,
+        "view admission alone cannot bridge a forgeable first-cut frame");
   std::cout << "normal intro scene host frame bridge tests passed\n";
 }

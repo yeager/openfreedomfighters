@@ -104,14 +104,25 @@ void NormalIntroSceneHost::materialize_queued_first_cut_view(
   } catch (...) { stage_ = NormalIntroSceneHostStage::failed; throw; }
 }
 
+void NormalIntroSceneHost::retain_first_cut_legal_picture_activation(
+    FirstCutLegalPictureActivationReceipt&& activation) {
+  if (stage_ != NormalIntroSceneHostStage::view_admitted ||
+      !frame_admission_permit_ || legal_picture_activation_)
+    throw std::runtime_error("normal intro scene legal-picture activation is unavailable");
+  legal_picture_activation_.emplace(std::move(activation));
+}
+
 platform::FirstCutPictureFrameResult NormalIntroSceneHost::assemble_first_cut_frame(
     const platform::FirstCutPictureFrameInput& evidence) {
   if (stage_ != NormalIntroSceneHostStage::view_admitted || !frame_admission_permit_ ||
+      !legal_picture_activation_ ||
       (view_result_ == FirstCutViewAdmissionResult::pending_queued && !materialized_view_))
     throw std::runtime_error("normal intro scene host frame assembly is unavailable");
   try {
-    const auto result = frame_.assemble(std::move(*frame_admission_permit_), evidence);
+    const auto result = frame_.assemble(std::move(*frame_admission_permit_),
+                                        std::move(*legal_picture_activation_), evidence);
     frame_admission_permit_.reset();
+    legal_picture_activation_.reset();
     materialized_view_.reset();
     if (result == platform::FirstCutPictureFrameResult::assembled)
       stage_ = NormalIntroSceneHostStage::frame_assembled;

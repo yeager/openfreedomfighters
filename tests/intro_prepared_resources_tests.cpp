@@ -2268,7 +2268,7 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
         std::array<float,3> legal_position{4,5,6};
         std::vector<off::cutscene::PictureActivationPrefix::Stage> activation_trace;
         std::size_t position_updates{};
-        const auto activated=host.activate_first_cut_legal_picture({
+        auto activated=host.activate_first_cut_legal_picture({
             true,true,true,legal_flags,parent_flags,legal_position,center_status,1280,720,
             [&] { ++position_updates; },[&](auto stage) { activation_trace.push_back(stage); }});
         const auto expected_center=host.owner_components(host.source_handle(*legal_source));
@@ -2278,6 +2278,24 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
               center_status==1U && position_updates==1U &&
               activation_trace.back()==off::cutscene::PictureActivationPrefix::Stage::record_requested,
               "first-cut adapter resolves the legal member identity and runs only ordered activation plus Center");
+        [[maybe_unused]] auto activation_receipt=std::move(activated).take_receipt();
+        bool replay_rejected{};
+        try { [[maybe_unused]] auto replayed=std::move(activated).take_receipt(); }
+        catch (const std::runtime_error&) { replay_rejected=true; }
+        check(replay_rejected,
+              "a completed legal-picture activation mints one receipt only");
+        std::uint32_t inactive_flags{},inactive_center_status{};
+        std::array<float,3> inactive_position{4,5,6};
+        auto inactive_activation=host.activate_first_cut_legal_picture({
+            true,true,true,inactive_flags,std::uint32_t{0U},inactive_position,
+            inactive_center_status,1280,720,[] {},{}});
+        bool unavailable_rejected{};
+        try {
+          [[maybe_unused]] auto unavailable=
+              std::move(inactive_activation).take_receipt();
+        } catch (const std::runtime_error&) { unavailable_rejected=true; }
+        check(!inactive_activation.activation_prefix_complete && unavailable_rejected,
+              "an activation prefix without a requested record cannot mint a frame receipt");
         off::graphics::IntroAcceptedPictureRecordRegistry accepted_records;
         const off::graphics::PictureQueuedDrawRecord accepted{17,7,9,{},1};
         const auto legal_owner=host.source_handle(*legal_source);

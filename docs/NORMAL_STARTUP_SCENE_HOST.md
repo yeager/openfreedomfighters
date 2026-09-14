@@ -147,8 +147,12 @@ the following stages exactly once, with real services at every boundary:
 4. Only after a view is admitted, the host mints one
    `FirstCutFrameAdmissionPermit`; direct view admission and renderer
    materialization of the queue-issued lease are the only minting paths. The
-   permit is consumed by the first frame assembly attempt, including a rejected
-   one. Prepare a source-backed first-cut picture frame only with that permit.
+   runtime separately emits `FirstCutLegalPictureActivationReceipt` only after
+   the retained legal picture completes its source-bound positive-time
+   activation prefix. The host accepts that receipt only while its view permit
+   remains live, and the first frame assembly attempt consumes both, including
+   a rejected attempt. Prepare a source-backed first-cut picture frame only
+   with both receipts.
    `NormalIntroSceneHostFrameBridge` is the sole normal GPU authority:
    it validates that the host is still at `frame_assembled`, then prepares that
    frame with the `SdlIntroRenderer` whose images remain owned by the retained

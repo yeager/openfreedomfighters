@@ -2448,7 +2448,7 @@ FirstCutLegalPictureActivationResult IntroRuntime::activate_first_cut_legal_pict
               picture.submission_cache(),prerequisites.position_update_service);
         if(stage==cutscene::PictureActivationPrefix::Stage::record_requested) requested=true;
       });
-  return {*legal_source,*center,requested};
+  return FirstCutLegalPictureActivationResult(*legal_source, *center, requested);
 }
 
 void IntroRuntime::run_postconstruction_reader_bracket(

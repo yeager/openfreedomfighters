@@ -195,21 +195,14 @@ int main() {
   off::platform::IntroPictureSubmissionInput picture{
       .groups = std::span(&group, 1),
       .transform = {.basis = {0, 0, 1, 0, 1, 0, 1, 0, 0}}};
-  check(queued.assemble_first_cut_frame(
-            {.positive_time_member_activated = true,
-             .activation_prefix_complete = true,
-             .ordered_record_accepted = true,
-             .pictures = std::span(&picture, 1)}) ==
-            off::platform::FirstCutPictureFrameResult::assembled &&
-            queued.stage() == NormalIntroSceneHostStage::frame_assembled,
-        "only the materialized queue receipt mints the one-shot frame permit");
   rejected = false;
   try {
-    static_cast<void>(queued.assemble_first_cut_frame({}));
+    static_cast<void>(queued.assemble_first_cut_frame(
+        {.ordered_record_accepted = true, .pictures = std::span(&picture, 1)}));
   } catch (const std::runtime_error&) {
     rejected = true;
   }
-  check(rejected && queued.stage() == NormalIntroSceneHostStage::frame_assembled,
-        "the consumed materialized-view permit cannot assemble a second frame");
+  check(rejected && queued.stage() == NormalIntroSceneHostStage::view_admitted,
+        "a materialized view cannot manufacture legal-picture activation evidence");
   std::cout << "normal intro scene host tests passed\n";
 }

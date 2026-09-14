@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/graphics/first_cut_view_admission_gate.hpp"
+#include "off/graphics/first_cut_legal_picture_activation_receipt.hpp"
 #include "off/platform/intro_picture_submission.hpp"
 
 #include <cstdint>
@@ -35,25 +36,24 @@ class FirstCutFrameAdmissionPermit final {
   bool valid_{true};
 };
 
-// Evidence produced by the actual member activation and ordered traversal.
-// View admission is intentionally absent: it is represented by the separate,
-// host-minted permit consumed by FirstCutPictureFrame::assemble.
+// Ordered-record acceptance remains a factual producer result. Legal-picture
+// activation and view admission are represented by separate non-forgeable,
+// one-shot receipts consumed by FirstCutPictureFrame::assemble.
 struct FirstCutPictureFrameInput final {
-  bool positive_time_member_activated{};
-  bool activation_prefix_complete{};
   bool ordered_record_accepted{};
   std::span<const IntroPictureSubmissionInput> pictures;
 };
 
 enum class FirstCutPictureFrameResult : std::uint8_t {
-  admission_permit_invalid, member_not_activated, activation_incomplete,
-  ordered_record_not_accepted, no_pictures, assembled,
+  admission_permit_invalid, activation_receipt_invalid, ordered_record_not_accepted,
+  no_pictures, assembled,
 };
 
 class FirstCutPictureFrame final {
 public:
   [[nodiscard]] FirstCutPictureFrameResult assemble(
       FirstCutFrameAdmissionPermit&& permit,
+      graphics::FirstCutLegalPictureActivationReceipt&& activation,
       const FirstCutPictureFrameInput &input);
   [[nodiscard]] std::span<const IntroPictureSubmission> submissions() const noexcept {
     return submissions_;

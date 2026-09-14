@@ -30,11 +30,15 @@
 #include "off/graphics/picture_ordered_coordinator.hpp"
 #include "off/graphics/center_picture_position.hpp"
 #include "off/graphics/fade_picture_size.hpp"
+#include "off/graphics/first_cut_legal_picture_activation_receipt.hpp"
 #include "off/cutscene/picture_activation_prefix.hpp"
 #include <array>
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
+#include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace off::graphics {
@@ -480,6 +484,27 @@ struct FirstCutLegalPictureActivationPrerequisites {
 struct FirstCutLegalPictureActivationResult {
   std::size_t source{},center_component{};
   bool activation_prefix_complete{};
+  // The receipt is deliberately separate from the diagnostic fields above:
+  // later frame assembly accepts only this non-forgeable source-bound witness.
+  [[nodiscard]] FirstCutLegalPictureActivationReceipt take_receipt() && {
+    if (!receipt_)
+      throw std::runtime_error("first-cut legal picture activation did not complete");
+    auto result = std::move(*receipt_);
+    receipt_.reset();
+    return result;
+  }
+
+ private:
+  friend class IntroRuntime;
+  FirstCutLegalPictureActivationResult(std::size_t source_value,
+                                       std::size_t center_value,
+                                       bool prefix_complete) noexcept
+      : source(source_value), center_component(center_value),
+        activation_prefix_complete(prefix_complete) {
+    if (activation_prefix_complete)
+      receipt_.emplace(FirstCutLegalPictureActivationReceipt{});
+  }
+  std::optional<FirstCutLegalPictureActivationReceipt> receipt_;
 };
 // Published by the concrete MovieControl owner reader only.  Source references
 // with an established directory mapping are retained alongside their authored

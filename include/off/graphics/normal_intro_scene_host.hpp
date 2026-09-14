@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/graphics/first_cut_view_admission_gate.hpp"
+#include "off/graphics/first_cut_legal_picture_activation_receipt.hpp"
 #include "off/platform/first_cut_picture_frame.hpp"
 
 #include <cstdint>
@@ -41,6 +42,8 @@ class NormalIntroSceneHost final {
   void materialize_queued_first_cut_view(
       RendererPendingCameraQueue& queue, RendererViewState state,
       const RendererPendingMaterializationServices& services);
+  void retain_first_cut_legal_picture_activation(
+      FirstCutLegalPictureActivationReceipt&& activation);
   [[nodiscard]] platform::FirstCutPictureFrameResult assemble_first_cut_frame(
       const platform::FirstCutPictureFrameInput& evidence);
   [[nodiscard]] NormalIntroSceneHostStage stage() const noexcept { return stage_; }
@@ -61,6 +64,7 @@ class NormalIntroSceneHost final {
   std::optional<RendererPendingCameraLease> pending_view_lease_;
   std::optional<RendererPendingCameraMaterializationReceipt> materialized_view_;
   std::optional<platform::FirstCutFrameAdmissionPermit> frame_admission_permit_;
+  std::optional<FirstCutLegalPictureActivationReceipt> legal_picture_activation_;
 };
 
 }  // namespace off::graphics

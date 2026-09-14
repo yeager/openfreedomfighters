@@ -21,16 +21,15 @@ bool FirstCutFrameAdmissionPermit::consume() noexcept {
 
 FirstCutPictureFrameResult FirstCutPictureFrame::assemble(
     FirstCutFrameAdmissionPermit&& permit,
+    graphics::FirstCutLegalPictureActivationReceipt&& activation,
     const FirstCutPictureFrameInput &input) {
   submissions_.clear();
   ready_for_render_ = false;
   ++assembly_generation_;
   if (!permit.consume())
     return FirstCutPictureFrameResult::admission_permit_invalid;
-  if (!input.positive_time_member_activated)
-    return FirstCutPictureFrameResult::member_not_activated;
-  if (!input.activation_prefix_complete)
-    return FirstCutPictureFrameResult::activation_incomplete;
+  if (!activation.consume())
+    return FirstCutPictureFrameResult::activation_receipt_invalid;
   if (!input.ordered_record_accepted)
     return FirstCutPictureFrameResult::ordered_record_not_accepted;
   if (input.pictures.empty())

@@ -40,13 +40,15 @@ public test uses independently authored descriptor data and verifies the
 preserved image identities and geometry; it contains no retail content.
 
 `FirstCutPictureFrame` is the next gate above this boundary. It accepts no
-picture without a move-only, one-shot `FirstCutFrameAdmissionPermit`. Only
-`NormalIntroSceneHost` mints that permit after it directly admits the selected
-view or after the renderer materializes the host's queue-issued camera lease.
-The frame consumes the permit on every assembly attempt; callers cannot supply
-an enum or recreate a permit to claim view admission. The remaining evidence
-requires the first member to be active at positive time, its activation prefix
-to be complete, and ordered traversal to have accepted the record. It retains
-assembled submissions for the caller's same-command-buffer GPU preparation.
-Normal startup does not yet produce these prerequisites, so this remains
-disconnected from its frame loop.
+picture without both a move-only, one-shot `FirstCutFrameAdmissionPermit` and
+a move-only, one-shot `FirstCutLegalPictureActivationReceipt`. Only
+`NormalIntroSceneHost` mints the view permit after it directly admits the
+selected view or after the renderer materializes the host's queue-issued camera
+lease. `IntroRuntime` mints the activation receipt only after its retained,
+source-bound legal picture completes the existing positive-time activation
+prefix. The host retains that receipt only after view admission, and frame
+assembly consumes both receipts on every attempt. Callers cannot supply booleans
+to claim member activation or prefix completion. Ordered traversal acceptance
+remains a separate factual producer result. Normal startup does not yet produce
+that producer or the lifecycle prerequisites, so this remains disconnected from
+its frame loop.

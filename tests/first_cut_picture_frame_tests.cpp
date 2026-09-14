@@ -15,6 +15,10 @@ int main() {
   static_assert(!std::is_copy_constructible_v<platform::FirstCutFrameAdmissionPermit>);
   static_assert(!std::is_copy_assignable_v<platform::FirstCutFrameAdmissionPermit>);
   static_assert(std::is_move_constructible_v<platform::FirstCutFrameAdmissionPermit>);
+  static_assert(!std::is_default_constructible_v<graphics::FirstCutLegalPictureActivationReceipt>);
+  static_assert(!std::is_copy_constructible_v<graphics::FirstCutLegalPictureActivationReceipt>);
+  static_assert(!std::is_copy_assignable_v<graphics::FirstCutLegalPictureActivationReceipt>);
+  static_assert(std::is_move_constructible_v<graphics::FirstCutLegalPictureActivationReceipt>);
 
   // A standalone frame has no authority to invent a view admission permit.
   // NormalIntroSceneHost owns the only minting point; its focused tests cover
