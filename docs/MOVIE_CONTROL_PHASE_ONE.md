@@ -104,6 +104,9 @@ Each event has only the following structural fields:
 - before/after ordinary membership and phase-one completion; and
 - `success`/`failure` plus `entered`/`not_entered` external-service state.
 
+The phase-one private ingestion tools reject duplicate JSON object fields; an
+ambiguous record is not accepted by retaining its last repeated field.
+
 On the private observation host, create the raw record with the private
 instrument and then run:
 

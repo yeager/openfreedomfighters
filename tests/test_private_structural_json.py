@@ -37,6 +37,16 @@ class PrivateStructuralJsonTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "standard absolute path"):
             structural_json.outside_repository(alias, ROOT, "input")
 
+    def test_rejects_duplicate_json_fields(self) -> None:
+        work = ROOT / ".test-work" / "private-structural-json-duplicate.json"
+        work.parent.mkdir(parents=True, exist_ok=True)
+        work.write_text('{"format":"first","format":"second"}', encoding="utf-8")
+        try:
+            with self.assertRaisesRegex(ValueError, "duplicate field"):
+                structural_json.read_json(work, "input")
+        finally:
+            work.unlink()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -260,6 +260,16 @@ class MovieControlObservationRunnerTests(unittest.TestCase):
         link.unlink()
         target.unlink()
 
+    def test_plan_reader_rejects_duplicate_json_fields(self) -> None:
+        parent = pathlib.Path(__file__).resolve().parents[1] / ".test-work"
+        plan = parent / "runner-duplicate-plan.json"
+        plan.write_text('{"format":"first","format":"second"}', encoding="utf-8")
+        try:
+            with self.assertRaisesRegex(ValueError, "duplicate field"):
+                runner._read_regular_json_path_no_follow(plan, "canonical plan")
+        finally:
+            plan.unlink()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -28,6 +28,7 @@ from typing import Any, Callable, Sequence
 import movie_control_cutscene_dispatch_trace as dispatch_trace
 import movie_control_observer_probe_plan as probe_plan
 import movie_control_phase_one_trace as phase_one_trace
+import private_structural_json
 
 
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -98,7 +99,7 @@ def _read_regular_json_path_no_follow(path: pathlib.Path, label: str) -> Any:
         if metadata.st_size > MAX_RAW_RECORD_BYTES:
             raise ValueError(f"{label} exceeds the structural size limit")
         with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as stream:
-            return json.load(stream)
+            return json.load(stream, object_pairs_hook=private_structural_json.strict_json_object)
     finally:
         os.close(descriptor)
 
@@ -128,7 +129,7 @@ def _read_regular_json_no_follow(directory: int, name: str) -> Any:
         if metadata.st_size > MAX_RAW_RECORD_BYTES:
             raise ValueError("observer records exceed the structural size limit")
         with os.fdopen(descriptor, "r", encoding="utf-8", closefd=False) as stream:
-            return json.load(stream)
+            return json.load(stream, object_pairs_hook=private_structural_json.strict_json_object)
     finally:
         os.close(descriptor)
 

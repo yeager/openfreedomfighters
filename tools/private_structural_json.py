@@ -18,6 +18,21 @@ from typing import Any
 MAX_PRIVATE_JSON_BYTES = 4 * 1024 * 1024
 
 
+def strict_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Build one JSON object without silently accepting duplicate fields.
+
+    Structural observation schemas use exact field sets.  The default JSON
+    decoder keeps only the last occurrence of a duplicate key, which could
+    make an ambiguous observer record appear to satisfy such a schema.
+    """
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("JSON object has a duplicate field")
+        result[key] = value
+    return result
+
+
 def outside_repository(path: pathlib.Path, repository_root: pathlib.Path,
                        label: str) -> pathlib.Path:
     """Resolve a private path only after rejecting every symlink component.
@@ -119,7 +134,8 @@ def read_bytes(path: pathlib.Path, label: str) -> bytes:
 
 def read_json(path: pathlib.Path, label: str) -> Any:
     """Read bounded UTF-8 JSON without following its final entry."""
-    return json.loads(read_bytes(path, label).decode("utf-8"))
+    return json.loads(read_bytes(path, label).decode("utf-8"),
+                      object_pairs_hook=strict_json_object)
 
 
 def write_new_json(path: pathlib.Path, record: Any, label: str) -> None:
