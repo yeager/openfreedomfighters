@@ -1764,9 +1764,17 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         SDL_ReleaseGPUTexture(device, capture_texture);
       break;
     }
-    const auto draw_list = ui::build_graphics_menu_draw_list(
+    auto draw_list = ui::build_graphics_menu_draw_list(
         menu, {swapchain_width, swapchain_height}, ui::GraphicsClock::now(),
         1.0F, explicit_locale, platform_locales);
+    if (intro_static_fallback != nullptr &&
+        !ui::append_intro_fallback_status(draw_list, explicit_locale,
+                                          platform_locales)) {
+      result = {.success = false,
+                .message = "incomplete intro fallback status overlay failed"};
+      SDL_SubmitGPUCommandBuffer(command);
+      break;
+    }
     const auto overlay_batch =
         draw_list.status == ui::UiBuildStatus::ok
             ? build_overlay_batch(draw_list, ui_fonts, overlay.fonts)

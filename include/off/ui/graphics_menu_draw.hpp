@@ -132,6 +132,13 @@ struct DiagnosticAsciiAtlas {
     GraphicsClock::time_point now, float ui_scale,
     std::string_view explicit_locale,
     std::span<const std::string_view> platform_locales);
+
+// Appends a project-owned status indicator for the bounded static intro
+// fallback. This is presentation-only: it does not admit a scene or alter
+// the intro runtime or cutscene lifecycle.
+[[nodiscard]] bool append_intro_fallback_status(
+    GraphicsMenuDrawList &list, std::string_view explicit_locale = {},
+    std::span<const std::string_view> platform_locales = {});
 [[nodiscard]] UiControl hit_test(const GraphicsMenuDrawList &list, float x,
                                  float y) noexcept;
 [[nodiscard]] bool

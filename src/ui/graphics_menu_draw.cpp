@@ -360,6 +360,41 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
                                        explicit_locale, platform_locales);
 }
 
+bool append_intro_fallback_status(GraphicsMenuDrawList &list,
+                                  std::string_view explicit_locale,
+                                  PlatformLocales platform_locales) {
+  if (list.status != UiBuildStatus::ok || list.target.width == 0U ||
+      list.target.height == 0U || !std::isfinite(list.ui_scale) ||
+      list.ui_scale < 0.5F || list.ui_scale > 4.0F)
+    return false;
+  const auto text = localized(l10n::MessageId::preparing_startup,
+                              explicit_locale, platform_locales);
+  if (text.empty() || list.texts.size() >= maximum_ui_texts ||
+      list.rectangles.size() >= maximum_ui_rects)
+    return false;
+  std::size_t used_bytes = text.size();
+  for (const auto &command : list.texts)
+    used_bytes += command.text.size();
+  if (used_bytes > maximum_ui_text_bytes)
+    return false;
+
+  const float scale = std::min(list.ui_scale, 1.0F);
+  const float padding = 12.0F * scale;
+  const float height = 42.0F * scale;
+  const float width = std::min(static_cast<float>(list.target.width) - padding * 2.0F,
+                               360.0F * scale);
+  if (!(width > 0.0F) || !(height > 0.0F))
+    return false;
+  const UiRect bounds{padding,
+                      static_cast<float>(list.target.height) - height - padding,
+                      width, height};
+  list.rectangles.push_back({UiLayer::modal, bounds, UiColor{0, 0, 0, 190}});
+  list.texts.push_back({UiLayer::modal, bounds, bounds.x + 10.0F * scale,
+                        bounds.y + 27.0F * scale,
+                        UiColor{240, 243, 248, 255}, text});
+  return true;
+}
+
 UiControl hit_test(const GraphicsMenuDrawList &list, float x,
                    float y) noexcept {
   for (auto it = list.hit_targets.rbegin(); it != list.hit_targets.rend();

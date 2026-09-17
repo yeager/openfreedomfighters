@@ -44,6 +44,18 @@ int main() {
   check(closed.status == off::ui::UiBuildStatus::ok &&
             closed.rectangles.empty(),
         "closed menu has no overlay commands");
+  auto fallback_status = closed;
+  constexpr std::array<std::string_view, 1> fallback_locales{{"en-US"}};
+  check(off::ui::append_intro_fallback_status(fallback_status, "sv-SE", fallback_locales) &&
+            off::ui::validate_graphics_menu_draw_list(fallback_status) &&
+            fallback_status.hit_targets.empty() &&
+            has_text(fallback_status, "Förbereder uppstart...") &&
+            fallback_status.rectangles.size() == 1U,
+        "static intro fallback adds a localized, non-interactive framebuffer status");
+  auto invalid_fallback_status =
+      off::ui::build_graphics_menu_draw_list(menu, {0, 720}, now);
+  check(!off::ui::append_intro_fallback_status(invalid_fallback_status),
+        "static intro fallback status rejects an invalid render target");
   check(off::ui::build_graphics_menu_draw_list(menu, {0, 720}, now).status ==
             off::ui::UiBuildStatus::invalid_viewport,
         "zero swapchain extent is rejected");
