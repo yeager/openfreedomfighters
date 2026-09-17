@@ -67,6 +67,14 @@ external service was entered. It must not export identifiers, addresses,
 offsets, paths, game strings, assets, payload bytes, screenshots or executable
 material.
 
+The observation process must be launched through the operator's licensed Steam
+runtime (for example Steam on Windows, or Steam/Proton on a private Linux
+host). Launching the executable directly is not an equivalent observation
+environment: Steam-linked initialization may fail before the game reaches the
+lifecycle being measured. Keep the Steam session, compatibility prefix, logs,
+and every captured artifact private; the repository accepts only the reviewed
+source-free structural result.
+
 The implementation may proceed only when that trace identifies one callback
 and all of its required effects. The resulting public tests must use authored
 fixtures or source-free recordings; normal startup remains fail-closed until
