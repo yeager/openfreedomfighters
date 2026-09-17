@@ -37,6 +37,17 @@ class IntroAudioLaunchAccessTraceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             trace.sanitize_trace({"format": trace.INPUT_FORMAT, "fresh_isolated": True, "events": [event(), event(observation_order=1)]})
 
+    def test_private_reader_rejects_duplicate_json_fields(self) -> None:
+        work = pathlib.Path(__file__).resolve().parents[1] / ".test-work"
+        work.mkdir(parents=True, exist_ok=True)
+        input_path = work / "intro-audio-duplicate.json"
+        input_path.write_text('{"format":"one","format":"two"}', encoding="utf-8")
+        try:
+            with self.assertRaisesRegex(ValueError, "duplicate field"):
+                trace._read(input_path)
+        finally:
+            input_path.unlink()
+
 
 if __name__ == "__main__":
     unittest.main()
