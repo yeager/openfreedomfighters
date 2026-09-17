@@ -1,4 +1,5 @@
 #include "off/platform/sdl_intro_renderer.hpp"
+#include "off/platform/intro_preview_diagnostic.hpp"
 #include <SDL3/SDL.h>
 #include <iostream>
 #include <stdexcept>
@@ -121,6 +122,51 @@ int main() {
       for(unsigned c=0;c<4;++c) if(pixels[(y*64+x)*4+c]!=expected[c]) ++mismatches;
     }
     SDL_UnmapGPUTransferBuffer(gpu.device,gpu.download); require(!mismatches,"perspective indexed image/scissor/order pixel oracle");
+    // Exercise the same generic-fit diagnostic submission used by the normal
+    // static fallback. The source is wholly test-authored; this is a pixel
+    // witness that the fallback path can affect a cleared framebuffer.
+    gpu.frame.reset();
+    SDL_ReleaseGPUTexture(gpu.device,gpu.target); gpu.target=nullptr;
+    SDL_ReleaseGPUTransferBuffer(gpu.device,gpu.download); gpu.download=nullptr;
+    const std::array descriptors{off::data::PictureResourceDescriptor{
+        .local_center_x=0.0F,.local_center_y=0.0F,.u_max=1.0F,.v_min=1.0F,
+        .horizontal_edge_span=2.0F,.vertical_edge_span=2.0F,
+        .modulation_color=0xffffffffU}};
+    const std::array groups{off::data::PictureDrawGroup{.descriptor_span_count=1U,
+                                                          .first_descriptor_index=0U}};
+    const std::array bindings{off::data::PictureTextureBinding{.texture_id=1U,
+                                                                 .image_index=13U}};
+    off::graphics::IntroPreviewSnapshot snapshot{
+        {8U,8U},{0U,off::data::PictureDrawPlan::build(descriptors,groups,bindings)},
+        {{{13U,1U,{1U,1U,{255U,0U,0U,255U}}}}}};
+    gpu.renderer=std::make_unique<SdlIntroRenderer>(gpu.device,snapshot.images);
+    const auto submission=off::platform::IntroPreviewDiagnosticSubmission::build(
+        snapshot,8U,8U,SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM);
+    ti={}; ti.type=SDL_GPU_TEXTURETYPE_2D; ti.format=SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    ti.usage=SDL_GPU_TEXTUREUSAGE_COLOR_TARGET; ti.width=ti.height=8;
+    ti.layer_count_or_depth=ti.num_levels=1; ti.sample_count=SDL_GPU_SAMPLECOUNT_1;
+    gpu.target=SDL_CreateGPUTexture(gpu.device,&ti);
+    di={SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD,64*8*4,0};
+    gpu.download=SDL_CreateGPUTransferBuffer(gpu.device,&di);
+    require(gpu.target&&gpu.download,"create diagnostic fallback readback target");
+    gpu.command=SDL_AcquireGPUCommandBuffer(gpu.device); require(gpu.command,"acquire diagnostic command");
+    gpu.frame=gpu.renderer->prepare(gpu.command,submission.draws());
+    color={}; color.texture=gpu.target; color.load_op=SDL_GPU_LOADOP_CLEAR;
+    color.store_op=SDL_GPU_STOREOP_STORE; color.clear_color={0,0,0,1};
+    pass=SDL_BeginGPURenderPass(gpu.command,&color,1,nullptr); require(pass,"begin diagnostic fallback render pass");
+    gpu.frame->draw(gpu.command,pass); SDL_EndGPURenderPass(pass);
+    copy=SDL_BeginGPUCopyPass(gpu.command); require(copy,"begin diagnostic fallback readback");
+    src={gpu.target,0,0,0,0,0,8,8,1}; dst={gpu.download,0,64,8};
+    SDL_DownloadFromGPUTexture(copy,&src,&dst); SDL_EndGPUCopyPass(copy);
+    submitted=gpu.command; gpu.command=nullptr;
+    fence=SDL_SubmitGPUCommandBufferAndAcquireFence(submitted); require(fence,"submit diagnostic fallback frame");
+    waited=SDL_WaitForGPUFences(gpu.device,true,&fence,1); SDL_ReleaseGPUFence(gpu.device,fence); require(waited,"wait diagnostic fallback frame");
+    pixels=static_cast<unsigned char*>(SDL_MapGPUTransferBuffer(gpu.device,gpu.download,false)); require(pixels,"map diagnostic fallback readback");
+    bool visible=false;
+    for(unsigned pixel=0;pixel<64;++pixel)
+      visible=visible || pixels[pixel*4U]!=0U || pixels[pixel*4U+1U]!=0U || pixels[pixel*4U+2U]!=0U;
+    SDL_UnmapGPUTransferBuffer(gpu.device,gpu.download);
+    require(visible,"generic-fit static fallback produces a non-clear pixel");
     std::cout<<"Verified distinct vertex/index offsets, perspective projection, image ownership, ordering and scissor on 64 pixels.\n";
     return 0;
   } catch(const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }
