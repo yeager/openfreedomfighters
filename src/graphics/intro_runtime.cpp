@@ -4547,6 +4547,97 @@ void IntroRuntime::bind_first_cut_fade_phase_one_services(IntroFadePicturePhaseO
   fade_picture_phase_one_services_=std::move(services);
 }
 
+IntroAdmittedPhaseOneSubsetResult
+IntroRuntime::run_admitted_first_cut_phase_one_subset(
+    IntroFadePicturePhaseOneServices services) {
+  // Do every structural check first.  ComponentLifecycle performs a second,
+  // complete callback preflight immediately before dispatch, so an invalid
+  // member cannot leave a callback prefix behind.
+  if (fade_picture_phase_one_services_)
+    throw std::runtime_error("admitted first-cut phase-one subset fade services already bound");
+  if (components_.failed() || components_.phases_completed())
+    throw std::runtime_error("admitted first-cut phase-one subset component lifecycle is unavailable");
+  if (!services.engine_dimensions || !services.invalidate_resource)
+    throw std::runtime_error("admitted first-cut phase-one subset fade services are incomplete");
+  if (fade_picture_reader_states_.size()!=3U || fade_picture_component_reader_states_.size()!=3U)
+    throw std::runtime_error("admitted first-cut phase-one subset fade readers are incomplete");
+  if (sounds_.size()!=2U)
+    throw std::runtime_error("admitted first-cut phase-one subset sound owners are incomplete");
+  if (isolated_sound_family_phase_one_busy_ || isolated_sound_family_phase_one_failed_ ||
+      isolated_sound_family_phase_one_)
+    throw std::runtime_error("admitted first-cut phase-one subset sound phase is unavailable");
+
+  IntroAdmittedPhaseOneSubsetResult result;
+  std::array<std::size_t,8> sound_callbacks{};
+  constexpr std::array<std::string_view,4> factories{
+      "ZSNDOBJ_SoundExtend", "ZSNDOBJ_SoundNotify", "ZSNDOBJ_SoundSegment",
+      "ZGEOM_ZSetZDefine"};
+
+  for (const auto& [source, reader] : fade_picture_reader_states_) {
+    static_cast<void>(source);
+    if (!first_cut_fade_reader_matches(reader.component_index))
+      throw std::runtime_error("admitted first-cut phase-one subset has mismatched fade reader state");
+    result.fade_components.push_back(reader.component_index);
+  }
+  std::ranges::sort(result.fade_components, std::greater{});
+
+  for (std::size_t reverse=0; reverse<sounds_.size(); ++reverse) {
+    auto& sound=*sounds_.at(sounds_.size()-1U-reverse);
+    const auto source=sound.source_index();
+    if (!sound.source_applied_ || !sound.has_record() || !sound.owner_binding_ ||
+        sound.failed_ || !sound.active_)
+      throw std::runtime_error("admitted first-cut phase-one subset requires prepared reader-backed sound owners");
+    const auto attachment_indices=owner_components(sound.handle());
+    if (attachment_indices.size()!=factories.size())
+      throw std::runtime_error("admitted first-cut phase-one subset has unsupported sound attachment count");
+    for (std::size_t index=0; index<attachment_indices.size(); ++index) {
+      const auto& component=components_.at(attachment_indices[index]);
+      if (!component.constructed() || component.removed() ||
+          component.source().factory_name!=factories[index] ||
+          component.state().attached_owner!=sound.handle().value)
+        throw std::runtime_error("admitted first-cut phase-one subset has unavailable sound attachment");
+    }
+    const auto& extend=constructed_picture_components_.at(attachment_indices[0]).sound_extend;
+    const auto& notify=constructed_picture_components_.at(attachment_indices[1]).sound_notify;
+    const auto& segment=constructed_picture_components_.at(attachment_indices[2]).sound_segment;
+    const auto& define=constructed_picture_components_.at(attachment_indices[3]).sound_define;
+    if (!extend || !notify || !segment || !define || define->property_on_parent ||
+        define->property_key.empty() ||
+        !std::isfinite(sound.record().duration))
+      throw std::runtime_error("admitted first-cut phase-one subset has unsupported sound reader state");
+    result.sound.owners[reverse]={source, attachment_indices[0], attachment_indices[1],
+        attachment_indices[2], attachment_indices[3], sound.record().duration,
+        restore_mode_, false, define->property_key};
+    const auto start=reverse*4U;
+    sound_callbacks[start]=attachment_indices[3];
+    sound_callbacks[start+1U]=attachment_indices[2];
+    sound_callbacks[start+2U]=attachment_indices[1];
+    sound_callbacks[start+3U]=attachment_indices[0];
+  }
+
+  std::vector<std::size_t> callbacks;
+  callbacks.reserve(sound_callbacks.size()+result.fade_components.size());
+  callbacks.insert(callbacks.end(), sound_callbacks.begin(), sound_callbacks.end());
+  callbacks.insert(callbacks.end(), result.fade_components.begin(), result.fade_components.end());
+  // This is a binding only. No supplied service is called until all eleven
+  // existing callbacks have passed ComponentLifecycle's scoped preflight.
+  fade_picture_phase_one_services_=std::move(services);
+  try {
+    components_.run_scoped_phase_one(callbacks);
+    for (auto& owner : result.sound.owners) {
+      const auto payload=constructed_picture_components_.find(owner.extend_component);
+      if (payload==constructed_picture_components_.end() || !payload->second.sound_extend)
+        throw std::runtime_error("admitted first-cut phase-one subset lost SoundExtend payload");
+      owner.extend_ordinary_removed=payload->second.sound_extend->phase_one_ordinary_removed;
+    }
+    isolated_sound_family_phase_one_=result.sound;
+    return result;
+  } catch (...) {
+    isolated_sound_family_phase_one_failed_=true;
+    throw;
+  }
+}
+
 void IntroRuntime::run_first_cut_fade_phase_one(std::size_t component_index,
                                                runtime::ComponentRecord& record) {
   if(component_index>=components_.size() || &record!=&components_.at(component_index) ||

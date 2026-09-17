@@ -923,6 +923,14 @@ struct IntroSoundFamilyPhaseOneResult {
   std::array<Owner,2> owners{};
 };
 
+// The complete, explicitly reviewed first-cut phase-one subset.  This is a
+// bounded callback bundle, not global lifecycle entry: it contains only the
+// three FadeToBlack callbacks and the two four-callback sound families.
+struct IntroAdmittedPhaseOneSubsetResult {
+  std::vector<std::size_t> fade_components;
+  IntroSoundFamilyPhaseOneResult sound;
+};
+
 class IntroRuntimePicture final {
 public:
   [[nodiscard]] std::size_t source_index() const noexcept { return source_->directory_index; }
@@ -1234,6 +1242,13 @@ public:
   // must outlive this runtime; normal startup remains cold until real lifecycle
   // admission. Existing lifecycle dispatch invokes the concrete phase-one body.
   void bind_first_cut_fade_phase_one_services(IntroFadePicturePhaseOneServices services);
+  // Preflights the whole admitted subset before exposing its first callback,
+  // then executes the retained reviewed order: both sound families (reverse
+  // owner order, Define/Segment/Notify/Extend), followed by FadeToBlack in
+  // reverse construction order. It never enters MovieControl or either global
+  // lifecycle pass.
+  [[nodiscard]] IntroAdmittedPhaseOneSubsetResult
+  run_admitted_first_cut_phase_one_subset(IntroFadePicturePhaseOneServices services);
   [[nodiscard]] const std::map<std::size_t,IntroFadePictureReaderState>& fade_picture_reader_states() const noexcept {return fade_picture_reader_states_;}
   [[nodiscard]] const std::map<std::size_t,IntroFadePictureComponentReaderState>& fade_picture_component_reader_states() const noexcept {return fade_picture_component_reader_states_;}
   void apply_supported_first_cut_legal_picture_deferred_reader(const IntroDeferredReaderWork& work);

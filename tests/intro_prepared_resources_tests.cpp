@@ -2724,6 +2724,74 @@ static OFF_NOINLINE void test_first_cut_fade_runtime_phase_one() {
     }
 }
 
+static OFF_NOINLINE void test_admitted_first_cut_phase_one_subset() {
+    // The reviewed subset needs the complete synthetic scene: it owns the
+    // three first-cut FadeToBlack readers and the two retained sound owners.
+    // Keep the grammar adjustment identical to the existing isolated sound
+    // phase-one fixture; this tests the composed dispatcher rather than a
+    // wider, unreviewed SoundExtend variant.
+    Fixture complete(false,true,true,true,true,true,true,true,true,true,true,true);
+    const auto extend=complete.remaining_sound_source_offset+70U;
+    for(std::size_t field=0;field<15;++field)
+      set(complete.payload,extend+field*5U+1U,0U);
+    set(complete.payload,extend+1U,std::bit_cast<std::uint32_t>(-1.0F));
+    set(complete.payload,extend+11U*5U+1U,2U);
+    set(complete.payload,extend+12U*5U+1U,1U);
+    set(complete.payload,extend+13U*5U+1U,1U);
+    const auto segment_start=extend+76U+11U;
+    const auto property_start=segment_start+105U+1U+
+        std::string_view("Independent caption key").size()+1U+1U;
+    set(complete.payload,property_start+1U,0U);
+
+    off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+        {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+    app.initialize_native_group_registration();app.initialize_native_window_language_registration();
+    app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+    app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
+    app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
+    app.initialize_native_remaining_intro_scope_registration();
+    off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
+    off::graphics::IntroRuntime host(complete.build(),app,sequence,"FF-Intro.gms",
+        off::graphics::IntroSoundLoadPolicy::directory_construction);
+    host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
+    host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
+    host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
+    host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
+    host.construct_room_animation_scope_without_engine_renderer();host.set_light_policy(false);
+    host.construct_lens_flare_animation_scope_without_engine_renderer();host.construct_remaining_directory_without_engine_renderer();
+    check_complete_ordinary_reader_bracket(host);
+
+    app.reset_clock();app.clock().assign_crt_mode(true);app.advance_crt();
+    const off::graphics::IntroSoundPreparationServices sound_services{
+        [&](auto handle) { return host.resource_state(handle)->flags; },
+        [&](auto) { return host.root_handle(); },
+        [](auto) { return off::graphics::IntroSoundSpatialState{{0,0,0},{0,0,1}}; },
+        [] { return false; },[](auto) { throw std::runtime_error("unexpected sound owner enable"); }};
+    host.prepare_sound_owner(467,sound_services);
+    host.prepare_sound_owner(468,sound_services);
+
+    std::vector<std::size_t> invalidated;
+    const auto result=host.run_admitted_first_cut_phase_one_subset({
+        [] { return std::array<std::int32_t,2>{1280,720}; },
+        [&](auto owner,auto resource) {
+          const auto source=host.source_index(owner);
+          check(source && resource==host.resource_handle(owner),
+                "admitted first-cut subset invalidation retains the live owner/resource pair");
+          if(source) invalidated.push_back(*source);
+        }});
+    check(result.fade_components.size()==3U && result.sound.owners[0].source==468U &&
+              result.sound.owners[1].source==467U &&
+              result.sound.owners[0].extend_ordinary_removed &&
+              result.sound.owners[1].extend_ordinary_removed &&
+              invalidated==std::vector<std::size_t>{9U,7U,4U},
+          "admitted first-cut subset runs the two sound families before the three reviewed fades");
+    check(host.preflight_global_lifecycle().covered_components==11U &&
+              !host.components().phases_completed() && host.registered_cameras().entries().empty(),
+          "admitted first-cut subset completes only its eleven scoped callbacks without global admission");
+    rejects([&] { static_cast<void>(host.run_admitted_first_cut_phase_one_subset({
+        [] { return std::array<std::int32_t,2>{1280,720}; },[](auto,auto) {}})); });
+}
+
 static OFF_NOINLINE void test_first_cut_fade_diagnostic_session() {
     enum class Scenario { complete, service_failure };
     for (const auto scenario : {Scenario::complete, Scenario::service_failure}) {
@@ -4847,6 +4915,7 @@ int main(int argc, char* argv[]) {
         TestGroup{"prepared-runtime-scopes", test_prepared_runtime_scopes},
         TestGroup{"complete-runtime-scopes", test_complete_runtime_scopes},
         TestGroup{"first-cut-fade-phase-one", test_first_cut_fade_runtime_phase_one},
+        TestGroup{"admitted-first-cut-phase-one-subset", test_admitted_first_cut_phase_one_subset},
         TestGroup{"first-cut-fade-diagnostic-session", test_first_cut_fade_diagnostic_session},
         TestGroup{"movie-control-phase-two", test_movie_control_runtime_phase_two},
         TestGroup{"room-animation-runtime-scope", test_room_animation_runtime_scope},
