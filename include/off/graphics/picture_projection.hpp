@@ -37,8 +37,9 @@ convert_picture_viewport_request(const std::array<float, 4> &request);
 // Conditional ordinary projection, with explicitly resolved camera inputs.
 // Replacement safety policy: finite n/f/h0/h1, n>=5, f>n, signed nonzero
 // half-extents. No near clamp, camera defaults, or half-extent derivation.
-// Double intermediates are checked before binary32 coefficient conversion;
-// this is a finite portable contract, not bit-exact retail arithmetic.
+// Nearest-even independently rounded binary32 sums/products/divisions, including
+// doubled half-extents and computed offsets. No contraction or cancellation.
+// Finite intermediates are required; tangent derivation is a separate contract.
 [[nodiscard]] PictureProjection prepare_picture_projection(float near_distance,
                                                            float far_distance,
                                                            float half_extent_0,

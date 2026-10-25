@@ -1,6 +1,8 @@
 #include "off/graphics/picture_projection.hpp"
 
 #include <cmath>
+#include <bit>
+#include <cfenv>
 #include <limits>
 #include <stdexcept>
 
@@ -45,14 +47,28 @@ PictureProjection prepare_picture_projection(float near_distance,
       half_extent_0 == 0 || half_extent_1 == 0)
     throw std::runtime_error(
         "Picture projection requires resolved valid frustum inputs");
-  const double n = near_distance;
-  const double f = far_distance;
+  if(std::fegetround()!=FE_TONEAREST)
+    throw std::runtime_error("Picture projection requires nearest-even rounding");
+  const auto add=[](float a,float b) { const volatile float v=a+b; finite(v); return float(v); };
+  const auto subtract=[](float a,float b) { const volatile float v=a-b; finite(v); return float(v); };
+  const auto multiply=[](float a,float b) { const volatile float v=a*b; finite(v); return float(v); };
+  const auto divide=[](float a,float b) {
+    if(b==0) throw std::runtime_error("Picture projection divisor is zero");
+    const volatile float v=a/b; finite(v); return float(v);
+  };
+  const auto negate=[](float v) { return std::bit_cast<float>(std::bit_cast<std::uint32_t>(v)^0x80000000U); };
+  const float nx=negate(half_extent_0),ny=negate(half_extent_1);
+  const float dx=subtract(half_extent_0,nx),dy=subtract(half_extent_1,ny);
+  const float nn=add(near_distance,near_distance),d=subtract(far_distance,near_distance);
   PictureProjection result;
-  result.matrix_[0] = checked(n / half_extent_0);
-  result.matrix_[5] = checked(n / half_extent_1);
-  result.matrix_[10] = checked(f / (f - n));
+  result.matrix_[0] = divide(nn,dx);
+  result.matrix_[5] = divide(nn,dy);
+  result.matrix_[8] = divide(add(half_extent_0,nx),dx);
+  result.matrix_[9] = divide(add(ny,half_extent_1),dy);
+  result.matrix_[10] = divide(far_distance,d);
   result.matrix_[11] = 1;
-  result.matrix_[14] = checked(-(f * n) / (f - n));
+  const float negative_far=multiply(far_distance,-1.0F);
+  result.matrix_[14] = divide(multiply(negative_far,near_distance),d);
   return result;
 }
 

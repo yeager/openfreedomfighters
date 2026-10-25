@@ -1,4 +1,7 @@
 #include "off/graphics/picture_view_parameters.hpp"
+#include "off/graphics/camera_display.hpp"
+#include <bit>
+#include <cfenv>
 
 #include <algorithm>
 #include <cmath>
@@ -29,6 +32,56 @@ bool close(float a, float b) {
 
 int main() {
   using namespace off::graphics;
+  off::data::GmsIntroCameraSource source{};
+  source.near_distance=2; source.far_distance=20; source.angle_degrees=90;
+  source.viewport={0,0,1,3};
+  auto canonical=convert_intro_camera_authored(source);
+  const CameraPixelRectangle parent{10,20,210,120};
+  const auto canonical_projection=prepare_camera_picture_projection(canonical,0,400,100,parent);
+  const auto& cm=canonical_projection.matrix();
+  check(cm[0]==1 && close(cm[5],2.0F/3.0F) && cm[8]==0 && cm[9]==0 && cm[11]==1,
+        "canonical producer uses stored ratio and independent display/parent aspects");
+  check(close(project_picture_position(canonical_projection,{0,0,5})[2],0) &&
+        close(project_picture_position(canonical_projection,{0,0,20})[2]/20,1),
+        "canonical depth uses projection near clamp5 and finite far");
+  const auto corner=project_picture_position(canonical_projection,{5,7.5F,5});
+  check(close(corner[0]/corner[3],1) && close(corner[1]/corner[3],1),
+        "canonical horizontal and vertical frustum boundaries reach clip limits");
+  check(prepare_camera_picture_projection(canonical,0,400,100,{0,0,200,100}).matrix()==cm,
+        "parent origin does not alter canonical projection");
+  auto ratio_change=canonical; ratio_change.viewport_ratio=1;
+  check(prepare_camera_picture_projection(ratio_change,0,400,100,parent).matrix()[5]==2,
+        "stored tuple ratio changes projection without rounded viewport feedback");
+  canonical.near_distance=7.1234F; canonical.far_distance=1000.75F; canonical.viewport_ratio=.777F;
+  const auto sequenced=prepare_camera_picture_projection(canonical,0,1237,911,{0,0,997,503});
+  check(std::bit_cast<std::uint32_t>(sequenced.matrix()[5])==0x4023432cU &&
+        sequenced.matrix()[5]!=float((997.0/503.0)/double(canonical.viewport_ratio)),
+        "canonical binary32 sequencing differs from algebraically collapsed double aspect");
+  for(float invalid:{0.0F,-1.0F,std::numbers::pi_v<float>,std::numeric_limits<float>::infinity(),
+                     std::numeric_limits<float>::quiet_NaN()}) {
+    auto bad=canonical; bad.angle_radians=invalid;
+    rejects([&]{(void)prepare_camera_picture_projection(bad,0,400,100,parent);},
+            "canonical producer rejects invalid field of view");
+  }
+  for(float invalid:{0.0F,-1.0F,std::numeric_limits<float>::infinity(),std::numeric_limits<float>::quiet_NaN()}) {
+    auto bad=canonical; bad.viewport_ratio=invalid;
+    rejects([&]{(void)prepare_camera_picture_projection(bad,0,400,100,parent);},
+            "canonical producer rejects invalid stored ratio");
+  }
+  auto bad_depth=canonical; bad_depth.near_distance=1; bad_depth.far_distance=5;
+  rejects([&]{(void)prepare_camera_picture_projection(bad_depth,0,400,100,parent);},
+          "far must exceed clamped near rather than source near");
+  rejects([&]{(void)prepare_camera_picture_projection(canonical,1,400,100,parent);},
+          "alternate runtime flag branch is explicitly unsupported");
+  rejects([&]{(void)prepare_camera_picture_projection(canonical,0,0,100,parent);},
+          "canonical display dimensions must be positive");
+  rejects([&]{(void)prepare_camera_picture_projection(canonical,0,400,100,{5,0,4,1});},
+          "canonical parent edges must be ordered");
+  const auto saved_rounding=std::fegetround();
+  std::fesetround(FE_DOWNWARD);
+  rejects([&]{(void)prepare_camera_picture_projection(canonical,0,400,100,parent);},
+          "canonical projection requires nearest-even environment");
+  std::fesetround(saved_rounding);
   const PictureViewCommonInput common{2, 20, {10, 20, 210, 120}, 400, 100, 3};
   const PictureOrdinaryCameraInput ordinary{std::numbers::pi_v<float> / 2, 2};
   const PictureAlternateCameraInput alternate{0.25F, 0.5F};

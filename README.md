@@ -31,6 +31,8 @@ for a portable installation.
 Normal startup loads the user's local resources and presents a labelled static
 intro image. Animated intro playback, its audio, the original menus, and gameplay
 are still incomplete. The GPU runtime receives no active intro frame bridge.
+Selected ordinary cameras now supply viewport and perspective matrices to SDL
+draws. The static startup image retains its separate diagnostic fit projection.
 
 Archive, texture, geometry, and supported audio readers are implemented. A
 retained scene session owns resources and the deferred-reader bracket. Remaining
@@ -198,7 +200,7 @@ work. Close the window to exit. For development:
 - `--wide-screen` enables the explicit camera WideScreen setting for that launch.
   Its default is false, independent of fullscreen and window aspect. Camera
   display setup runs after SDL backend creation; this does not admit intro
-  playback or supply the missing projection-matrix integration.
+  playback.
 - `--show-graphics-menu` opens settings immediately.
 - `--diagnostic-scene` opens the geometry preview instead of normal startup.
 - `--diagnostic-scene relative/archive.ZIP` inspects one owned scene archive

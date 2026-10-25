@@ -2,6 +2,7 @@
 #include "off/graphics/picture_projection.hpp"
 
 #include <cmath>
+#include <bit>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -33,6 +34,14 @@ int main() {
                                        0,     0, 2, 1, 0, 0, -10, 0};
   check(projection.matrix() == expected,
         "exact ordinary row-order matrix with asymmetric signed half-extents");
+  const auto rounded_depth=prepare_picture_projection(5.0F,10.6F,5.0F,3.0F);
+  check(std::bit_cast<std::uint32_t>(rounded_depth.matrix()[14])==0xc1176db6U &&
+        std::bit_cast<std::uint32_t>(rounded_depth.matrix()[10])==0x3ff24924U &&
+        rounded_depth.matrix()[14]!=float(-(double(10.6F)*5.0)/(double(10.6F)-5.0)),
+        "depth numerator and denominator each round before division");
+  check(std::bit_cast<std::uint32_t>(rounded_depth.matrix()[8])==0U &&
+        std::bit_cast<std::uint32_t>(rounded_depth.matrix()[9])==0U,
+        "computed symmetric offsets retain positive zero under nearest rounding");
   const auto near_clip = project_picture_position(projection, {4, 3, 5});
   const auto far_clip = project_picture_position(projection, {4, 3, 10});
   check(near_clip == std::array<float, 4>{-2, 6, 0, 5} &&

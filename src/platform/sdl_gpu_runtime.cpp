@@ -1725,6 +1725,12 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     std::unique_ptr<SdlIntroFrame> admitted_intro_host_frame;
     if (admitted_intro_frame != nullptr) {
       try {
+        int current_pixel_width{},current_pixel_height{};
+        if(!SDL_GetWindowSizeInPixels(window,&current_pixel_width,&current_pixel_height) ||
+            current_pixel_width<=0 || current_pixel_height<=0)
+          throw std::runtime_error("admitted camera display pixel dimensions unavailable");
+        gpu_intro->set_camera_display_pixels(static_cast<std::uint32_t>(current_pixel_width),
+                                            static_cast<std::uint32_t>(current_pixel_height));
         gpu_intro->set_camera_parent({0,0,content_width,content_height});
         admitted_intro_host_frame = admitted_intro_frame->prepare(*gpu_intro, command);
       } catch (const std::exception &error) {

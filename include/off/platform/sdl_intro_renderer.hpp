@@ -68,12 +68,17 @@ public:
   SdlIntroRenderer(const SdlIntroRenderer&) = delete;
   SdlIntroRenderer& operator=(const SdlIntroRenderer&) = delete;
   // List and every selected camera are borrowed and must outlive this renderer.
-  // Prepared frames copy viewport state and do not borrow the camera.
+  // Prepared frames copy viewport/projection state and do not borrow the camera.
   void attach_camera_display(graphics::CameraRendererList& list,
                              const graphics::CameraDisplayDimensions& display);
+  // Refreshed full-window pixels, independent of the parent render target.
+  // Does not rewrite the node's construction-time aspect snapshot.
+  void set_camera_display_pixels(std::uint32_t width, std::uint32_t height);
   void set_camera_parent(graphics::CameraPixelRectangle parent) { camera_parent_=parent; }
   [[nodiscard]] std::optional<SDL_GPUViewport> selected_camera_viewport() const;
   [[nodiscard]] std::size_t image_count() const noexcept;
+  // Selected camera resolves both viewport and perspective before GPU work.
+  // Diagnostic bypass keeps both explicitly supplied draw values unchanged.
   // No active pass may exist. Validates CPU inputs before encoding commands;
   // uploads indexed expanded geometry in one copy pass. Input spans are copied.
   // Native safety limits: <=65536 vertices per batch and <=64 MiB each for
@@ -82,7 +87,7 @@ public:
   // Waiting for GPU idle cannot make an unsubmitted command safe. On exception,
   // cancel the caller-owned command; no implicit submission/retry is performed.
   [[nodiscard]] std::unique_ptr<SdlIntroFrame> prepare(
-      SDL_GPUCommandBuffer* command, std::span<const SdlIntroDraw> draws, bool diagnostic_viewport = false) const;
+      SDL_GPUCommandBuffer* command, std::span<const SdlIntroDraw> draws, bool diagnostic_camera_bypass = false) const;
 private:
   friend struct SdlIntroFrame::Impl;
   struct Impl;
@@ -91,6 +96,7 @@ private:
   float selected_priority_{};
   std::uint32_t selected_color_{};
   graphics::CameraPixelRectangle camera_parent_{};
+  std::uint32_t display_width_{},display_height_{};
   std::unique_ptr<graphics::CameraRendererNode> camera_node_;
 };
 } // namespace off::platform

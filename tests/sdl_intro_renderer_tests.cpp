@@ -33,6 +33,7 @@ int main() {
     CameraRendererList camera_renderers;
     off::data::GmsIntroCameraSource camera_source{};
     camera_source.viewport={0,0,.5F,1}; camera_source.renderer_list_selector=1;
+    camera_source.near_distance=2; camera_source.far_distance=20; camera_source.angle_degrees=90;
     FreshIntroCamera camera(camera_source);
     Gpu gpu;
     if(!SDL_Init(SDL_INIT_VIDEO)) { std::cout<<"SKIP: video unavailable\n"; return 77; }
@@ -50,14 +51,15 @@ int main() {
     // Destroy source pixels before rendering: renderer must own uploaded images.
     for(auto& image:images) image.mip_zero.pixels.clear();
     off::data::PictureQuad quad{};
-    quad.local_z=2; quad.horizontal_edge_span=2; quad.vertical_edge_span=2; quad.modulation_color=0xffffffff;
+    quad.local_z=10; quad.horizontal_edge_span=10; quad.vertical_edge_span=20; quad.modulation_color=0xffffffff;
     quad.u_max=quad.v_min=1;
     PictureCacheTransform transform{.basis={0,0,1,0,1,0,1,0,0}};
     auto batches=expand_picture_descriptors(std::span(&quad,1),transform);
     SdlIntroDraw draw{}; draw.batches=batches; draw.catalog_image_index=7;
-    // Clip x=x, y=y, z=z/2, w=z. At z=2 the quad occupies
-    // NDC [-.5,.5]^2 => exactly the central 4x4 pixels of an 8x8 target.
-    draw.projection={1,0,0,0, 0,1,0,0, 0,0,.5F,1, 0,0,0,0};
+    // Deliberately wrong for the selected camera. Canonical projection must
+    // replace this matrix with X scale1, Y scale.5, near5/far20 and clip W=Z.
+    // At Z10 the camera projects this quad to NDC [-.5,.5] in both axes.
+    draw.projection={.125F,0,0,0, 0,.125F,0,0, 0,0,.5F,1, 0,0,0,0};
     draw.viewport={0,0,8,8,0,1}; draw.scissor={0,0,8,8};
     using Op=PictureStageOperation; using Arg=PictureStageArgument;
     draw.stage={{},Op::select_argument_1,Arg::texture,Arg::diffuse,Op::select_argument_1,Arg::texture,Arg::diffuse};
@@ -96,7 +98,7 @@ int main() {
     // quad is offscreen; drawing indices 4..7 must select the narrow second
     // quad. Reusing either draw's zero buffer offset produces different pixels.
     auto decoy=quad; decoy.local_center_x=100;
-    auto narrow=quad; narrow.local_center_x=1; narrow.vertical_edge_span=1;
+    auto narrow=quad; narrow.local_center_x=5; narrow.vertical_edge_span=10;
     const std::array second_quads{decoy,narrow};
     auto second_batches=expand_picture_descriptors(second_quads,transform);
     second_batches[0].indices.erase(second_batches[0].indices.begin(),
@@ -108,7 +110,16 @@ int main() {
     // Its lifetime ends at renderer destruction, while the frame owns the copy.
     const CameraDisplayDimensions display{8,8,false,false};
     gpu.renderer->attach_camera_display(camera_renderers,display);
+    gpu.renderer->set_camera_display_pixels(16,8);
+    require(!camera_renderers.head()->aspect(),"display refresh preserves construction metadata snapshot");
+    gpu.renderer->set_camera_display_pixels(8,8);
+    rejects([&] { gpu.renderer->set_camera_display_pixels(0,8); });
+    rejects([&] { gpu.renderer->set_camera_display_pixels(UINT32_MAX,8); });
     apply_camera_display(camera,{camera_renderers,display,[]{return false;}});
+    auto invalid_camera=camera_source; invalid_camera.far_distance=4;
+    camera.apply_authored_parameters(invalid_camera);
+    rejects([&] { (void)gpu.renderer->prepare(gpu.command,draws); });
+    camera.apply_authored_parameters(camera_source);
     gpu.frame=gpu.renderer->prepare(gpu.command,draws);
     require(gpu.frame->indexed_draw_count()==2,"two indexed draws");
     batches.clear(); second_batches.clear(); gpu.renderer.reset(); // frame retains geometry and image owner
@@ -159,8 +170,12 @@ int main() {
     di={SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD,64*8*4,0};
     gpu.download=SDL_CreateGPUTransferBuffer(gpu.device,&di);
     require(gpu.target&&gpu.download,"create diagnostic fallback readback target");
+    gpu.renderer->attach_camera_display(camera_renderers,display);
+    apply_camera_display(camera,{camera_renderers,display,[]{return false;}});
     gpu.command=SDL_AcquireGPUCommandBuffer(gpu.device); require(gpu.command,"acquire diagnostic command");
-    gpu.frame=gpu.renderer->prepare(gpu.command,submission.draws());
+    // A selected camera exists but the explicit diagnostic keeps BOTH its
+    // fitting matrix and full-target viewport, including geometry at Z zero.
+    gpu.frame=gpu.renderer->prepare(gpu.command,submission.draws(),true);
     color={}; color.texture=gpu.target; color.load_op=SDL_GPU_LOADOP_CLEAR;
     color.store_op=SDL_GPU_STOREOP_STORE; color.clear_color={0,0,0,1};
     pass=SDL_BeginGPURenderPass(gpu.command,&color,1,nullptr); require(pass,"begin diagnostic fallback render pass");
@@ -172,11 +187,13 @@ int main() {
     fence=SDL_SubmitGPUCommandBufferAndAcquireFence(submitted); require(fence,"submit diagnostic fallback frame");
     waited=SDL_WaitForGPUFences(gpu.device,true,&fence,1); SDL_ReleaseGPUFence(gpu.device,fence); require(waited,"wait diagnostic fallback frame");
     pixels=static_cast<unsigned char*>(SDL_MapGPUTransferBuffer(gpu.device,gpu.download,false)); require(pixels,"map diagnostic fallback readback");
-    bool visible=false;
-    for(unsigned pixel=0;pixel<64;++pixel)
-      visible=visible || pixels[pixel*4U]!=0U || pixels[pixel*4U+1U]!=0U || pixels[pixel*4U+2U]!=0U;
+    unsigned diagnostic_mismatches=0;
+    for(unsigned y=0;y<8;++y) for(unsigned x=0;x<8;++x) {
+      const std::array<unsigned char,4> expected{255,0,0,255};
+      for(unsigned c=0;c<4;++c) if(pixels[(y*64+x)*4+c]!=expected[c]) ++diagnostic_mismatches;
+    }
     SDL_UnmapGPUTransferBuffer(gpu.device,gpu.download);
-    require(visible,"generic-fit static fallback produces a non-clear pixel");
+    require(!diagnostic_mismatches,"diagnostic bypass preserves fitting projection and full viewport despite camera selection");
     std::cout<<"Verified distinct vertex/index offsets, perspective projection, image ownership, ordering and scissor on 64 pixels.\n";
     return 0;
   } catch(const std::exception& e) { std::cerr<<e.what()<<'\n'; return 1; }

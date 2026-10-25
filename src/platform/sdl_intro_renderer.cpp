@@ -1,3 +1,4 @@
+#include "off/graphics/picture_view_parameters.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
 #include "testgputext/shaders/shader.vert.spv.h"
 #include "testgputext/shaders/shader.vert.msl.h"
@@ -143,10 +144,18 @@ SdlIntroRenderer::~SdlIntroRenderer()=default;
 void SdlIntroRenderer::attach_camera_display(graphics::CameraRendererList& list,
     const graphics::CameraDisplayDimensions& display) {
   if(camera_node_) throw std::runtime_error("renderer display already attached");
+  static_cast<void>(display.aspect_snapshot());
+  set_camera_display_pixels(static_cast<std::uint32_t>(display.width),static_cast<std::uint32_t>(display.height));
   camera_parent_={0,0,static_cast<std::uint32_t>(display.width),static_cast<std::uint32_t>(display.height)};
   camera_node_=std::make_unique<graphics::CameraRendererNode>(list,display,
       [this](graphics::FreshIntroCamera& camera,float priority) { selected_camera_=&camera; selected_priority_=priority; },
       [this](std::uint32_t color) { selected_color_=color; });
+}
+void SdlIntroRenderer::set_camera_display_pixels(std::uint32_t width,std::uint32_t height) {
+  if(!width || !height || width>static_cast<std::uint32_t>(std::numeric_limits<int>::max()) ||
+      height>static_cast<std::uint32_t>(std::numeric_limits<int>::max()))
+    throw std::runtime_error("camera display dimensions must fit positive SDL pixel dimensions");
+  display_width_=width; display_height_=height;
 }
 std::optional<SDL_GPUViewport> SdlIntroRenderer::selected_camera_viewport() const {
   if(!selected_camera_) return std::nullopt;
@@ -159,13 +168,20 @@ std::size_t SdlIntroRenderer::image_count() const noexcept { return impl_->image
 SdlIntroFrame::SdlIntroFrame(std::unique_ptr<Impl> p):impl_(std::move(p)) {}
 SdlIntroFrame::~SdlIntroFrame()=default;
 
-std::unique_ptr<SdlIntroFrame> SdlIntroRenderer::prepare(SDL_GPUCommandBuffer* command,std::span<const SdlIntroDraw> draws, bool diagnostic_viewport) const {
+std::unique_ptr<SdlIntroFrame> SdlIntroRenderer::prepare(SDL_GPUCommandBuffer* command,std::span<const SdlIntroDraw> draws, bool diagnostic_camera_bypass) const {
   if(!command) throw std::runtime_error("intro prepare requires command buffer");
   auto p=std::make_unique<SdlIntroFrame::Impl>(); p->owner=impl_; p->command=command;
   std::vector<Vertex> vertices; std::vector<Uint16> indices;
-  const auto camera_viewport=diagnostic_viewport ? std::optional<SDL_GPUViewport>{} : selected_camera_viewport();
+  const auto camera_viewport=diagnostic_camera_bypass ? std::optional<SDL_GPUViewport>{} : selected_camera_viewport();
+  std::optional<graphics::PictureProjection> camera_projection;
+  if(camera_viewport)
+    camera_projection=graphics::prepare_camera_picture_projection(selected_camera_->parameters(),
+        selected_camera_->flags(),display_width_,display_height_,camera_parent_);
   for(auto draw:draws) {
-    if(camera_viewport) draw.viewport=*camera_viewport;
+    if(camera_viewport) {
+      draw.viewport=*camera_viewport;
+      draw.projection=camera_projection->matrix();
+    }
     const auto& s=draw.state; const auto& v=draw.viewport; const auto& r=draw.scissor;
     if(!valid_state(s)||s.fog_enabled||s.alpha_test_enabled||s.active_later_stages||!impl_->images.contains(draw.catalog_image_index)||
        s.color_format==SDL_GPU_TEXTUREFORMAT_INVALID||

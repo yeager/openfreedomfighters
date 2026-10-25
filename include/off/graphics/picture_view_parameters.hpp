@@ -5,6 +5,19 @@
 #include <array>
 
 namespace off::graphics {
+struct IntroCameraState;
+struct CameraPixelRectangle;
+// Production ordinary camera producer. Parent unsigned extents and full window
+// pixel dimensions are independent; stored camera ratio is never pixel-rounded.
+// Nearest-even binary32 sequencing, near clamp5, positive ratio/dimensions,
+// 0<angle<pi, far>near, finite arithmetic and runtime flag0x1 clear are required.
+// tan(double(roundedHalfAngle)) narrows explicitly; CRT tangent implementations
+// remain a portability boundary, not a claim of bitwise numerical parity.
+[[nodiscard]] PictureProjection prepare_camera_picture_projection(
+    const IntroCameraState& camera, std::uint32_t runtime_flags,
+    std::uint32_t display_width, std::uint32_t display_height,
+    CameraPixelRectangle parent);
+
 
 struct PicturePassRectangle {
   float left;
@@ -42,8 +55,10 @@ struct PictureResolvedView {
 // bounded from below by 5. Only this projection helper substitutes 1 for zero
 // rectangle dimensions and uses absolute nonzero dimensions. Viewport requests
 // keep signed sizes.
-// Equations use sequenced double intermediates, then checked binary32 resolved
-// values and prepare_picture_projection's valid-frustum safety policy. This
+// These generic utilities derive extents with sequenced double intermediates,
+// then checked binary32 values feed the nearest-even binary32 coefficient
+// builder prepare_picture_projection. Their extent derivation differs from the
+// production canonical camera producer above. This
 // does not promise bit-exact retail floating-point evaluation.
 [[nodiscard]] PictureResolvedView
 prepare_picture_view_parameters(const PictureViewCommonInput &common,

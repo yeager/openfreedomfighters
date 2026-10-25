@@ -1,6 +1,9 @@
 #include "off/graphics/picture_view_parameters.hpp"
 
 #include <algorithm>
+#include <cfenv>
+#include <numbers>
+#include "off/graphics/camera_display.hpp"
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -67,6 +70,35 @@ PictureResolvedView finish(double n, double f, double h0, double h1) {
           prepare_picture_projection_alternate_depth(near, half0, half1)};
 }
 } // namespace
+
+PictureProjection prepare_camera_picture_projection(
+    const IntroCameraState& camera, std::uint32_t runtime_flags,
+    std::uint32_t display_width, std::uint32_t display_height,
+    CameraPixelRectangle parent) {
+  if(std::fegetround()!=FE_TONEAREST || (runtime_flags&1U)!=0U ||
+      !display_width || !display_height || parent.right<=parent.left || parent.bottom<=parent.top)
+    throw std::runtime_error("Canonical camera projection requires ordinary flags, nearest rounding and positive dimensions");
+  for(float v:{camera.near_distance,camera.far_distance,camera.angle_radians,camera.viewport_ratio})
+    static_cast<void>(finite(v));
+  if(camera.viewport_ratio<=0 || camera.angle_radians<=0 || double(camera.angle_radians)>=std::numbers::pi)
+    throw std::runtime_error("Canonical camera projection requires positive ratio and field of view below pi");
+  const float n=std::max(5.0F,camera.near_distance),f=camera.far_distance;
+  if(f<=n) throw std::runtime_error("Canonical camera far distance must exceed clamped near");
+  const auto multiply=[](float a,float b) { const volatile float v=a*b; return resolved(v); };
+  const auto divide32=[](float a,float b) {
+    if(b==0) throw std::runtime_error("Canonical camera projection divisor is zero");
+    const volatile float v=a/b; return resolved(v);
+  };
+  const float a=divide32(float(display_width),float(display_height));
+  const float b=divide32(float(parent.right-parent.left),float(parent.bottom-parent.top));
+  const float q=divide32(a,b),i=divide32(1.0F,a);
+  const float r=multiply(camera.viewport_ratio,q);
+  const float h=multiply(camera.angle_radians,.5F);
+  const float t=resolved(std::tan(double(h)));
+  const float x=multiply(t,n);
+  const float u=multiply(x,i),v=multiply(u,r),y=divide32(v,1.0F);
+  return prepare_picture_projection(n,f,x,y);
+}
 
 PictureResolvedView
 prepare_picture_view_parameters(const PictureViewCommonInput &common,
