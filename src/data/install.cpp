@@ -211,18 +211,12 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
     std::unordered_set<std::string> required_top_level;
     for (const auto& file : observed_required)
       required_top_level.insert(lowercase(file.path.substr(0, file.path.find('/'))));
-    std::vector<std::string> excluded_names;
-    for (const auto& entry : std::filesystem::directory_iterator(root)) {
-      if (cancelled && cancelled())
-        return failure(InstallError::io_error, root, "game-data verification cancelled");
-      const auto name = entry.path().filename().string();
-      if (!required_top_level.contains(lowercase(name)))
-        excluded_names.push_back(name);
-    }
-    std::vector<std::string_view> excluded;
-    excluded.reserve(excluded_names.size());
-    for (const auto& name : excluded_names) excluded.emplace_back(name);
-    const auto installation_mount = installation_vfs.mount_directory(root, excluded);
+    if (cancelled && cancelled())
+      return failure(InstallError::io_error, root, "game-data verification cancelled");
+    std::vector<std::string_view> included;
+    included.reserve(required_top_level.size());
+    for (const auto& name : required_top_level) included.emplace_back(name);
+    const auto installation_mount = installation_vfs.mount_directory_subset(root, included);
     static_cast<void>(installation_mount);
     constexpr std::array required_paths{
         "Scenes/StartLoader.ZIP",

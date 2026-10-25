@@ -73,7 +73,7 @@ struct StartupSourcePictureBackendHooks {
 
 struct StartupSourcePictureDrawResult {
   std::size_t prepared_picture_count{};
-  std::size_t submitted_group_count{};
+  std::size_t submitted_draw_count{};
 };
 
 // Conditional source-backed submission only. This neither selects the startup

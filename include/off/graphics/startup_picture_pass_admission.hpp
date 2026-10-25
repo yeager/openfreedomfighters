@@ -53,7 +53,7 @@ struct StartupSourcePictureRuntimeSnapshot {
 
 struct StartupPicturePassResult {
   std::size_t prepared_picture_count{};
-  std::size_t submitted_group_count{};
+  std::size_t submitted_draw_count{};
 };
 
 // One coordinator read supplies every value below. No field is derived from
@@ -161,7 +161,7 @@ public:
     const auto result = downstream_.submit(asset, requested_state,
                                            source.traversal, source.transforms,
                                            backend);
-    return {result.prepared_picture_count, result.submitted_group_count};
+    return {result.prepared_picture_count, result.submitted_draw_count};
   }
 
   [[nodiscard]] StartupPicturePassResult submit(

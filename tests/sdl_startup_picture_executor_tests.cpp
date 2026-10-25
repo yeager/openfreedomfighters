@@ -43,14 +43,14 @@ struct FakeExecutor final {
 
 int main() {
   using namespace off;
-  std::array<graphics::StartupGraphicsImage, graphics::startup_graphics_image_count> asset_images{};
+  std::vector<graphics::StartupGraphicsImage> asset_images(3);
   for (std::size_t index = 0; index < asset_images.size(); ++index) {
     asset_images[index].catalog_image_index = index + 10;
     asset_images[index].texture_id = static_cast<std::uint32_t>(index + 100);
   }
   check(platform::SdlStartupPictureTextureRegistry::has_valid_asset_identities(asset_images),
-        "registry accepts six unique full startup identities");
-  asset_images[5].texture_id = asset_images[0].texture_id;
+        "registry accepts a variable set of unique full startup identities");
+  asset_images.back().texture_id = asset_images.front().texture_id;
   check(!platform::SdlStartupPictureTextureRegistry::has_valid_asset_identities(asset_images),
         "registry rejects duplicate startup texture identities");
   const std::array submissions{submission(0, 4, 17), submission(1, 2, 19)};
@@ -72,6 +72,27 @@ int main() {
   check(packet.draws()[0].batches[0].first_descriptor == 17 &&
             packet.draws()[0].viewport.x == 5 && packet.draws()[0].scissor.w == 80,
         "packet retains caller render state without deriving it");
+
+  const std::array all_resources{
+      resources[0], resources[1],
+      graphics::StartupGraphicsPreparedResource{5, 55, 505, 1, 1}};
+  const std::array all_handles{
+      textures[0], textures[1],
+      platform::StartupPictureTextureHandle{5, 55, 505}};
+  const auto subset_packet = platform::SdlStartupPictureFramePacket::assemble(
+      submissions, all_resources, all_handles, state);
+  check(subset_packet.indexed_draw_count() == submissions.size(),
+        "packet accepts a verified resident asset handle unused by this state's draws");
+  const std::array mismatched_unused_handle{
+      textures[0], textures[1],
+      platform::StartupPictureTextureHandle{5, 56, 506}};
+  rejects([&] { static_cast<void>(platform::SdlStartupPictureFramePacket::assemble(
+      submissions, all_resources, mismatched_unused_handle, state)); });
+  const std::array unknown_unused_handle{
+      textures[0], textures[1],
+      platform::StartupPictureTextureHandle{8, 88, 808}};
+  rejects([&] { static_cast<void>(platform::SdlStartupPictureFramePacket::assemble(
+      submissions, all_resources, unknown_unused_handle, state)); });
 
   auto unordered = submissions;
   unordered[1].emission_ordinal = 9;

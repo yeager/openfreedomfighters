@@ -11,8 +11,10 @@
 
 namespace off::graphics {
 
-inline constexpr std::size_t maximum_startup_prepared_pictures = 21;
-inline constexpr std::size_t maximum_startup_prepared_submissions = 77;
+inline constexpr std::size_t maximum_startup_prepared_pictures =
+    data::maximum_startup_graphics_pictures;
+inline constexpr std::size_t maximum_startup_prepared_submissions =
+    data::maximum_startup_graphics_draws;
 
 struct StartupGraphicsPreparedResource {
   std::size_t resource_index{};
@@ -96,8 +98,8 @@ private:
   std::vector<StartupGraphicsPreparedSubmission> submissions_;
 };
 
-// Preserves the recovered CPU traversal and immediate emission sequence. It is
-// deliberately not a GPU plan and contains no rasterization decisions.
+// Preserves traversal order from local hierarchy, role, and descriptor data.
+// It is not a GPU plan and contains no rasterization decisions.
 [[nodiscard]] StartupGraphicsPreparedPlan
 prepare_startup_graphics_plan(const StartupGraphicsAsset &asset,
                               std::uint8_t requested_state);

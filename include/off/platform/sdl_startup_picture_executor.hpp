@@ -23,7 +23,7 @@ struct StartupPictureTextureHandle final {
   std::uint32_t texture_id{};
 };
 
-// Owns the startup-only renderer and its six GPU images.  It deliberately
+// Owns the startup-only renderer and its locally discovered GPU images. It deliberately
 // cannot be fed generic intro images: construction preserves and checks the
 // full catalog-index/texture-id identity supplied by StartupGraphicsAsset.
 class SdlStartupPictureTextureRegistry final {

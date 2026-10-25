@@ -75,7 +75,7 @@ private:
     const StartupGraphicsPreparedPlan &prepared,
     std::span<const StartupGraphicsPictureTransform> transforms);
 
-// Convenience source bridge for the recovered startup menu. It prepares the
+// Convenience source bridge for a locally discovered startup UI composition. It prepares the
 // requested visibility state, composes every retained root-to-picture chain,
 // and expands descriptor geometry. It still does not select a camera, project
 // to a window, create GPU resources, or submit pixels.

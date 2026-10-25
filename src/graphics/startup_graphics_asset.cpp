@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 namespace off::graphics {
@@ -46,19 +47,22 @@ unique_member(const data::ZipArchive &archive, std::string_view extension) {
 [[nodiscard]] std::vector<std::size_t> image_indexes(
     const data::StartupGraphicsComposition &composition) {
   std::vector<std::size_t> indexes;
-  indexes.reserve(startup_graphics_image_count);
+  std::unordered_set<std::size_t> seen;
   for (const auto &row : composition.rows()) {
     for (const auto &picture : row.pictures) {
       for (const auto &group : picture.draw_plan.groups()) {
-        if (std::ranges::find(indexes, group.texture.image_index) ==
-            indexes.end())
+        if (seen.insert(group.texture.image_index).second) {
           indexes.push_back(group.texture.image_index);
+          if (indexes.size() > maximum_startup_graphics_images)
+            throw std::runtime_error(
+                "startup graphics composition exceeds its image budget");
+        }
       }
     }
   }
-  if (indexes.size() != startup_graphics_image_count)
+  if (indexes.empty() || indexes.size() > maximum_startup_graphics_images)
     throw std::runtime_error(
-        "startup graphics composition does not reference exactly six images");
+        "startup graphics composition has no images or exceeds its image budget");
   std::ranges::sort(indexes);
   return indexes;
 }
@@ -84,6 +88,7 @@ StartupGraphicsAsset build_startup_graphics_asset(
 
   StartupGraphicsAsset result;
   result.composition_ = std::move(composition);
+  result.images_.reserve(indexes.size());
   for (std::size_t output = 0; output < indexes.size(); ++output) {
     const auto index = indexes[output];
     auto decoded = decode_texture_mip(textures.images()[index], 0);
@@ -94,8 +99,8 @@ StartupGraphicsAsset build_startup_graphics_asset(
         expected != decoded.pixels.size())
       throw std::runtime_error(
           "startup graphics image decoded to an invalid extent");
-    result.images_[output] = {index, textures.images()[index].id,
-                              std::move(decoded)};
+    result.images_.push_back({index, textures.images()[index].id,
+                              std::move(decoded)});
   }
   return result;
 }

@@ -13,7 +13,8 @@ StartupGraphicsExpandedPlan expand_startup_graphics_plan(
   if (prepared.pictures().size() > maximum_startup_prepared_pictures ||
       prepared.submissions().size() > maximum_startup_prepared_submissions ||
       prepared.quads().size() != prepared.submissions().size() ||
-      prepared.resources().size() != startup_graphics_image_count ||
+      prepared.resources().empty() ||
+      prepared.resources().size() > maximum_startup_graphics_images ||
       transforms.size() != prepared.pictures().size())
     throw std::runtime_error("Startup expansion input counts are invalid");
   // The prepared-plan factory guarantees unique picture directory identities.
@@ -97,7 +98,8 @@ expand_startup_graphics_plan_with_composed_transforms(
   transforms.reserve(prepared.pictures().size());
   const auto &rows = asset.composition().rows();
   for (const auto &picture : prepared.pictures()) {
-    if (picture.row_index >= rows.size() || picture.picture_index >= 3U)
+    if (picture.row_index >= rows.size() ||
+        picture.picture_index >= rows[picture.row_index].pictures.size())
       throw std::runtime_error("prepared startup picture is outside composition");
     const auto &source = rows[picture.row_index].pictures[picture.picture_index];
     if (source.directory_index != picture.picture_directory_index)

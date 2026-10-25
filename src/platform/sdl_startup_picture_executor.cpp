@@ -4,13 +4,13 @@
 #include <iterator>
 #include <stdexcept>
 #include <unordered_map>
-#include <unordered_set>
 
 namespace off::platform {
 
 bool SdlStartupPictureTextureRegistry::has_valid_asset_identities(
     std::span<const graphics::StartupGraphicsImage> images) noexcept {
-  if (images.size() != graphics::startup_graphics_image_count)
+  if (images.empty() ||
+      images.size() > graphics::maximum_startup_graphics_images)
     return false;
   for (std::size_t index = 0; index < images.size(); ++index) {
     for (std::size_t prior = 0; prior < index; ++prior)
@@ -77,10 +77,20 @@ SdlStartupPictureFramePacket SdlStartupPictureFramePacket::assemble(
     if (!prepared_resources.emplace(resource.resource_index, &resource).second)
       throw std::runtime_error("startup picture packet has ambiguous prepared resource identity");
 
+  // Residency may be established for the full local asset while this packet
+  // draws only the current state's subset. Validate every supplied handle,
+  // but retain only handles used by submitted draws in the packet.
+  for (const auto& [resource_index, handle] : handles) {
+    const auto resource = prepared_resources.find(resource_index);
+    if (resource == prepared_resources.end() ||
+        resource->second->catalog_image_index != handle.catalog_image_index ||
+        resource->second->texture_id != handle.texture_id)
+      throw std::runtime_error("startup picture packet texture identity mismatches admission");
+  }
+
   SdlStartupPictureFramePacket result;
   result.batches_.reserve(submissions.size());
   result.draws_.reserve(submissions.size());
-  std::unordered_set<std::size_t> used;
   for (std::size_t ordinal = 0; ordinal < submissions.size(); ++ordinal) {
     const auto& submission = submissions[ordinal];
     if (submission.emission_ordinal != ordinal)
@@ -93,7 +103,6 @@ SdlStartupPictureFramePacket SdlStartupPictureFramePacket::assemble(
         resource->second->catalog_image_index != found->second.catalog_image_index ||
         resource->second->texture_id != found->second.texture_id)
       throw std::runtime_error("startup picture packet resource texture identity mismatches admission");
-    used.insert(submission.resource_index);
     result.texture_handles_.push_back(found->second);
     graphics::ExpandedPictureBatch batch;
     batch.first_descriptor = submission.descriptor_index;
@@ -112,8 +121,6 @@ SdlStartupPictureFramePacket SdlStartupPictureFramePacket::assemble(
     draw.state = state.draw_state;
     result.draws_.push_back(draw);
   }
-  if (used.size() != handles.size())
-    throw std::runtime_error("startup picture packet texture identity is not used by admitted submissions");
   return result;
 }
 

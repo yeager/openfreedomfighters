@@ -102,13 +102,26 @@ ArchiveVfs::MountId ArchiveVfs::mount_archive(const std::filesystem::path& archi
 ArchiveVfs::MountId ArchiveVfs::mount_directory(
     const std::filesystem::path& directory,
     std::span<const std::string_view> excluded_top_level) {
-    std::vector<std::string> exclusions;
-    exclusions.reserve(excluded_top_level.size());
-    for (const auto name : excluded_top_level) {
+    return mount_directory_impl(directory, excluded_top_level, false);
+}
+
+ArchiveVfs::MountId ArchiveVfs::mount_directory_subset(
+    const std::filesystem::path& directory,
+    std::span<const std::string_view> included_top_level) {
+    return mount_directory_impl(directory, included_top_level, true);
+}
+
+ArchiveVfs::MountId ArchiveVfs::mount_directory_impl(
+    const std::filesystem::path& directory,
+    std::span<const std::string_view> selected_top_level,
+    bool include_only) {
+    std::vector<std::string> selected;
+    selected.reserve(selected_top_level.size());
+    for (const auto name : selected_top_level) {
         if (!is_safe_archive_path(name) || name.find_first_of("/\\") != std::string_view::npos) {
-            throw std::runtime_error("VFS exclusion must be a single safe top-level name");
+            throw std::runtime_error("VFS selection must be a single safe top-level name");
         }
-        exclusions.push_back(normalized(name));
+        selected.push_back(normalized(name));
     }
     std::error_code error;
     const auto root = std::filesystem::canonical(directory, error);
@@ -119,17 +132,27 @@ ArchiveVfs::MountId ArchiveVfs::mount_directory(
     Mount mount;
     mount.id = next_mount_id_++;
     mount.directory = root;
+    if (include_only && selected.empty()) {
+        mounts_.push_back(std::move(mount));
+        return mounts_.back().id;
+    }
     std::uintmax_t total_size = 0;
     for (std::filesystem::recursive_directory_iterator iterator(root), end;
          iterator != end;
          ++iterator) {
-        // Name/depth are lexical: do not query a matched entry's status, size,
-        // or target. Disable recursion even when the entry is a symlink/file.
-        if (iterator.depth() == 0 &&
-            std::find(exclusions.begin(), exclusions.end(),
-                      normalized(iterator->path().filename().string())) != exclusions.end()) {
-            iterator.disable_recursion_pending();
-            continue;
+        // Top-level selection is lexical: do not query an unselected entry's
+        // status, size, or target. Disable recursion even when it is a symlink.
+        if (iterator.depth() == 0) {
+            const auto top_level_name =
+                normalized(iterator->path().filename().string());
+            const bool selected_entry =
+                std::find(selected.begin(), selected.end(), top_level_name) !=
+                selected.end();
+            if ((include_only && !selected_entry) ||
+                (!include_only && selected_entry)) {
+                iterator.disable_recursion_pending();
+                continue;
+            }
         }
         const auto status = iterator->symlink_status();
         if (std::filesystem::is_symlink(status)) {

@@ -70,7 +70,7 @@ struct IntroSynthesizedCameraMetadata {
   std::uint32_t class_identifier;
 };
 enum class IntroResourceLoadStage {
-  prepared, constructing_root, root_ready, allocating_initial_scope, initial_scope_ready, first_group_ready, window_language_ready, picture_component_prefix_ready, authored_camera_ready, second_window_picture_ready, second_window_scope_ready, following_visual_scope_ready, room_animation_scope_ready, lens_flare_animation_scope_ready, directory_construction_complete, failed
+  prepared, constructing_root, root_ready, directory_construction_complete, failed
 };
 enum class IntroSoundLoadPolicy {prepared_compatibility,directory_construction};
 // This is the boundary around the deferred reader queue, not evidence that a
@@ -901,8 +901,8 @@ struct IntroSoundPreparationServices {
   std::function<void(IntroRuntimeHandle)> enable_owner;
 };
 
-// Explicit diagnostic/integration result for the two recovered intro sound
-// owners. This is deliberately not a global component lifecycle result.
+// Explicit diagnostic/integration result for locally discovered sound owners.
+// This is deliberately not a global component lifecycle result.
 struct IntroSoundFamilyPhaseOneResult {
   struct Owner {
     std::size_t source{};
@@ -911,12 +911,12 @@ struct IntroSoundFamilyPhaseOneResult {
     bool segment_restore{},extend_ordinary_removed{};
     std::string defined_key;
   };
-  std::array<Owner,2> owners{};
+  std::vector<Owner> owners;
 };
 
 // The complete, explicitly reviewed first-cut phase-one subset.  This is a
-// bounded callback bundle, not global lifecycle entry: it contains only the
-// three FadeToBlack callbacks and the two four-callback sound families.
+// bounded callback bundle, not global lifecycle entry: it contains only
+// command-targeted FadeToBlack callbacks and locally discovered sound owners.
 struct IntroAdmittedPhaseOneSubsetResult {
   std::vector<std::size_t> fade_components;
   IntroSoundFamilyPhaseOneResult sound;
@@ -971,27 +971,15 @@ public:
   [[nodiscard]] std::uint16_t declare_scene_event_name(std::string_view name,std::uint16_t requested=0);
   [[nodiscard]] const runtime::SceneEventNames& scene_event_names() const noexcept {return event_names_;}
   [[nodiscard]] std::span<const std::optional<std::uint32_t>> source_event_name_mapping() const noexcept {return source_event_name_mapping_;}
-  // Explicit native cold-load staging before engine renderer creation. Reset
-  // retained scene progress once, execute first-row progress, then allocate.
-  // This is not evidence of the original cold reset caller or renderer timing.
+  // Explicit native cold-load setup before engine renderer creation. Retains
+  // loader progress and queue controls; each local source is then constructed
+  // from its parsed directory row by the whole-directory entrypoint.
   void begin_source_loading_without_engine_renderer();
   // Pre-row operation for the next unconstructed directory entry. Requires
   // genuinely absent engine renderer, not merely a failed readiness check.
   float advance_source_loading_progress_without_engine_renderer(std::size_t source);
   [[nodiscard]] std::optional<float> loading_progress() const noexcept {return loading_progress_;}
-  // Actual first-scope batch only. Later scopes must be interleaved with real
-  // owner construction and attachment; this never constructs all source rows.
-  void allocate_initial_source_scope();
-  void construct_first_authored_group();
-  void construct_window_language_groups_without_engine_renderer();
-  void construct_picture_component_prefix_without_engine_renderer();
-  void construct_authored_camera_without_engine_renderer();
-  void construct_second_window_picture_without_engine_renderer();
-  void construct_second_window_scope_without_engine_renderer();
-  void construct_following_visual_scope_without_engine_renderer();
-  void construct_room_animation_scope_without_engine_renderer();
-  void construct_lens_flare_animation_scope_without_engine_renderer();
-  void construct_remaining_directory_without_engine_renderer();
+  void construct_source_directory_without_engine_renderer();
   void set_restore_mode(bool value);
   [[nodiscard]] bool restore_mode() const noexcept {return restore_mode_;}
   [[nodiscard]] IntroSoundLoadPolicy sound_load_policy() const noexcept {return sound_load_policy_;}
@@ -1073,11 +1061,9 @@ public:
   // into it from owner_reader_boundary after deferred preparation; this does
   // not make the surrounding reader bracket or normal startup complete.
   void apply_supported_window_deferred_reader(const IntroDeferredReaderWork& work);
-  [[nodiscard]] const std::optional<IntroAuthoredGroupOwner>& language_owner() const noexcept {return language_owner_;}
   [[nodiscard]] IntroRuntimeHandle current_source_parent() const noexcept {return current_source_parent_.value?current_source_parent_:root_handle();}
   [[nodiscard]] std::optional<IntroSceneResourceProperty> scene_resource_property(std::string_view key) const;
   void set_scene_resource_property_native(std::string key,IntroRuntimeResourceHandle resource);
-  [[nodiscard]] const std::optional<IntroAuthoredGroupOwner>& first_authored_group() const noexcept {return first_authored_group_;}
   [[nodiscard]] std::uint32_t group_class_instance_count() const {return application_.group_class_instance_count();}
   [[nodiscard]] bool manager_row_edit() const noexcept {return manager_row_edit_;}
   [[nodiscard]] bool scene_resource_edit() const noexcept {return scene_resource_edit_;}
@@ -1421,6 +1407,7 @@ private:
   void record_supported_owner_admission(std::size_t source, IntroRuntimeHandle owner);
   void record_supported_component_admission(std::size_t component);
   [[nodiscard]] bool first_cut_fade_reader_matches(std::size_t component) const;
+  [[nodiscard]] std::vector<std::size_t> first_cut_fade_target_sources() const;
   void run_first_cut_fade_phase_one(std::size_t component,runtime::ComponentRecord& record);
   // Diagnostic-only companion to the factory callback above.  It deliberately
   // omits component-admission recording, so it cannot turn a local fade probe
@@ -1433,7 +1420,6 @@ private:
   void allocate_source_scope(std::uint32_t count_group);
   std::map<std::size_t,std::unique_ptr<IntroWindowOwner>> window_owners_;
   IntroWindowOwner* window_owner_{}; // Non-owning first-cut convenience, never latest Window.
-  std::optional<IntroAuthoredGroupOwner> language_owner_;
   std::map<std::size_t,IntroConstructedPictureOwner> constructed_picture_owners_;
   std::map<std::size_t,IntroConstructedPictureOwner> constructed_visual_owners_;
   std::map<std::size_t,IntroAuthoredGroupOwner> constructed_group_owners_;
@@ -1462,15 +1448,12 @@ private:
   std::vector<std::size_t> root_attachments_;
   bool resource_allocation_enabled_{}; // Actual scene-constructor mode starts off.
   std::vector<IntroSourceResourceScope> source_resource_scopes_;
-  std::optional<IntroAuthoredGroupOwner> first_authored_group_;
   // Concrete native registration for the supported ZGROUP factory, independent
   // of authored class ordinals and component registration.
   std::uint32_t count_group_selector_{};
   bool manager_row_edit_{},scene_resource_edit_{};
   void construct_group_row_without_engine_renderer(std::size_t row);
-  void construct_picture_row_without_engine_renderer(std::size_t row);
   void construct_non_group_row_without_engine_renderer(std::size_t row);
-  void construct_unprocessed_directory_records_without_engine_renderer();
   void construct_owner_attachments(std::size_t row,std::uint32_t& mask,std::vector<std::uint64_t>& attachments);
   void apply_directory_transform(std::size_t row,IntroRuntimeResourceHandle resource);
   void assign_fresh_directory_metadata(IntroRuntimeResourceHandle resource,std::uint32_t metadata);

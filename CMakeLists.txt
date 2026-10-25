@@ -1116,8 +1116,8 @@ if(BUILD_TESTING)
             outer-loader-tail-readiness
             named-global-envelopes
             prepared-runtime-scopes
-            generic-directory-tail-lifecycle
-            visual-scope-lifecycle
+            generic-directory-lifecycle
+            typed-deferred-reader-targets
             prepared-resource-variants
             runtime-and-archive-lifecycle
             runtime-scene-identity-and-later

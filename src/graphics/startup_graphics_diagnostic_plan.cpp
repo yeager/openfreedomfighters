@@ -19,7 +19,8 @@ SceneGpuPlan make_startup_graphics_diagnostic_plan(
     const StartupGraphicsAsset &asset,
     const StartupGraphicsExpandedPlan &expanded) {
   if (expanded.resources().size() != asset.images().size() ||
-      expanded.resources().size() != startup_graphics_image_count)
+      expanded.resources().empty() ||
+      expanded.resources().size() > maximum_startup_graphics_images)
     throw std::invalid_argument("startup diagnostic resources are incomplete");
   SceneGpuPlan result;
   result.source_only_diagnostic = true;

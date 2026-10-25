@@ -77,6 +77,57 @@
 
 namespace {
 
+[[nodiscard]] bool equal_ascii_case_insensitive(std::string_view left,
+                                                std::string_view right) noexcept {
+  if (left.size() != right.size()) return false;
+  for (std::size_t index = 0; index < left.size(); ++index) {
+    auto a = static_cast<unsigned char>(left[index]);
+    auto b = static_cast<unsigned char>(right[index]);
+    if (a >= 'A' && a <= 'Z') a = static_cast<unsigned char>(a + ('a' - 'A'));
+    if (b >= 'A' && b <= 'Z') b = static_cast<unsigned char>(b + ('a' - 'A'));
+    if (a != b) return false;
+  }
+  return true;
+}
+
+template <class Visitor>
+void for_each_verified_scene_file(const std::filesystem::path& root,
+                                  std::string_view extension,
+                                  Visitor&& visitor) {
+  std::error_code error;
+  std::filesystem::recursive_directory_iterator entries(root, error), end;
+  if (error) throw std::runtime_error("could not enumerate verified scene files");
+  bool found_scenes_directory = false;
+  while (entries != end) {
+    if (error) throw std::runtime_error("could not enumerate verified scene files");
+    const auto path = entries->path();
+    if (entries.depth() == 0 &&
+        !equal_ascii_case_insensitive(path.filename().string(), "Scenes")) {
+      entries.disable_recursion_pending();
+    } else {
+      if (entries.depth() == 0) found_scenes_directory = true;
+      const auto status = entries->symlink_status(error);
+      if (error || std::filesystem::is_symlink(status))
+        throw std::runtime_error("verified scene namespace contains a symbolic link or unavailable path");
+      if (entries.depth() == 0 && !std::filesystem::is_directory(status))
+        throw std::runtime_error("verified Scenes namespace is not a directory");
+      if (std::filesystem::is_regular_file(status) &&
+          equal_ascii_case_insensitive(path.extension().string(), extension)) {
+        const auto relative = path.lexically_relative(root);
+        const auto virtual_path = relative.generic_string();
+        if (relative.empty() || relative.is_absolute() ||
+            !off::data::is_safe_archive_path(virtual_path))
+          throw std::runtime_error("verified scene path is unsafe");
+        visitor(virtual_path);
+      }
+    }
+    entries.increment(error);
+    if (error) throw std::runtime_error("could not enumerate verified scene files");
+  }
+  if (!found_scenes_directory)
+    throw std::runtime_error("verified Scenes namespace is missing");
+}
+
 void usage(std::ostream &output) {
   output << "Usage: openfreedomfighters [--data PATH] [--mode original|modern] "
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
@@ -122,42 +173,26 @@ private:
 [[nodiscard]] off::data::AudioBankProfile inspect_verified_game_audio(
     const std::filesystem::path& root) {
   off::data::ArchiveVfs installation_vfs;
-  constexpr std::array<std::string_view, 5> excluded{
-      "Freedom_Fighters_OST", "Launcher.exe", "eax.dll", "steam_api.dll",
-      "steam_appid.txt"};
-  static_cast<void>(installation_vfs.mount_directory(root, excluded));
+  constexpr std::array<std::string_view, 2> included{"Scenes", "streams.wav"};
+  static_cast<void>(installation_vfs.mount_directory_subset(root, included));
   off::data::AudioBankProfile profile;
-  std::error_code error;
-  std::filesystem::recursive_directory_iterator entries(root / "Scenes", error);
-  if (error) throw std::runtime_error("could not enumerate verified scene audio");
-  for (const auto& entry : entries) {
-    if (!entry.is_regular_file() || entry.path().extension() != ".WHD") continue;
-    const auto relative = std::filesystem::relative(entry.path(), root, error);
-    if (error) throw std::runtime_error("could not resolve verified scene audio path");
+  for_each_verified_scene_file(root, ".WHD", [&](const std::string& relative) {
     profile.add(off::data::AudioBankHeader::parse(
-        installation_vfs.read(relative.generic_string())).records());
-  }
+        installation_vfs.read(relative)).records());
+  });
   return profile;
 }
 
 [[nodiscard]] std::vector<off::audio::AudioDuration>
 inspect_verified_global_vorbis_durations(const std::filesystem::path& root) {
   off::data::ArchiveVfs installation_vfs;
-  constexpr std::array<std::string_view, 5> excluded{
-      "Freedom_Fighters_OST", "Launcher.exe", "eax.dll", "steam_api.dll",
-      "steam_appid.txt"};
-  static_cast<void>(installation_vfs.mount_directory(root, excluded));
+  constexpr std::array<std::string_view, 2> included{"Scenes", "streams.wav"};
+  static_cast<void>(installation_vfs.mount_directory_subset(root, included));
   std::set<std::array<std::uint32_t, 5>> unique_records;
   std::vector<off::audio::AudioDuration> result;
-  std::error_code error;
-  std::filesystem::recursive_directory_iterator entries(root / "Scenes", error);
-  if (error) throw std::runtime_error("could not enumerate verified scene audio");
-  for (const auto& entry : entries) {
-    if (!entry.is_regular_file() || entry.path().extension() != ".WHD") continue;
-    const auto relative = std::filesystem::relative(entry.path(), root, error);
-    if (error) throw std::runtime_error("could not resolve verified scene audio path");
+  for_each_verified_scene_file(root, ".WHD", [&](const std::string& relative) {
     const auto header = off::data::AudioBankHeader::parse(
-        installation_vfs.read(relative.generic_string()));
+        installation_vfs.read(relative));
     for (const auto& record : header.records()) {
       constexpr std::uint32_t global_bank_flag = 0x80000000U;
       constexpr std::uint32_t vorbis_format = 0x00001000U;
@@ -177,7 +212,7 @@ inspect_verified_global_vorbis_durations(const std::filesystem::path& root) {
       result.push_back({.frames = record.sample_value_count / record.channels,
                         .sample_rate = record.sample_rate});
     }
-  }
+  });
   if (result.empty()) {
     throw std::runtime_error("verified installation has no global Vorbis streams");
   }
@@ -721,16 +756,7 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool readiness_o
       off::graphics::IntroSoundLoadPolicy::directory_construction);
   runtime->construct_root();
   runtime->begin_source_loading_without_engine_renderer();
-  runtime->construct_first_authored_group();
-  runtime->construct_window_language_groups_without_engine_renderer();
-  runtime->construct_picture_component_prefix_without_engine_renderer();
-  runtime->construct_authored_camera_without_engine_renderer();
-  runtime->construct_second_window_picture_without_engine_renderer();
-  runtime->construct_second_window_scope_without_engine_renderer();
-  runtime->construct_following_visual_scope_without_engine_renderer();
-  runtime->construct_room_animation_scope_without_engine_renderer();
-  runtime->construct_lens_flare_animation_scope_without_engine_renderer();
-  runtime->construct_remaining_directory_without_engine_renderer();
+  runtime->construct_source_directory_without_engine_renderer();
   auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
   session->complete_postconstruction_reader_bracket(0U);
   auto& intro=session->runtime();
@@ -1780,19 +1806,10 @@ int main(int argc, char **argv) {
             intro.construct_root();
             // The engine GPU runtime is created below, after CPU preflight. The
             // startup splash is a separate renderer. Reset load progress once
-            // under the native staging policy, then construct the reviewed
-            // directory prefix.
+            // under the native staging policy, then construct each local
+            // source from its parsed hierarchy and class record.
             intro.begin_source_loading_without_engine_renderer();
-            intro.construct_first_authored_group();
-            intro.construct_window_language_groups_without_engine_renderer();
-            intro.construct_picture_component_prefix_without_engine_renderer();
-            intro.construct_authored_camera_without_engine_renderer();
-            intro.construct_second_window_picture_without_engine_renderer();
-            intro.construct_second_window_scope_without_engine_renderer();
-            intro.construct_following_visual_scope_without_engine_renderer();
-            intro.construct_room_animation_scope_without_engine_renderer();
-            intro.construct_lens_flare_animation_scope_without_engine_renderer();
-            intro.construct_remaining_directory_without_engine_renderer();
+            intro.construct_source_directory_without_engine_renderer();
             // The reviewed cold-load reader bracket establishes source-backed
             // first-cut ownership and reference translation.  It deliberately
             // does not admit a global lifecycle, schedule an event, activate a

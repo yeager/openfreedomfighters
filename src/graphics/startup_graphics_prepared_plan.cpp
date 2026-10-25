@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <numeric>
 #include <ranges>
 #include <stdexcept>
 
@@ -46,28 +47,25 @@ prepare_startup_graphics_plan(const StartupGraphicsAsset &asset,
                                  image.texture_id, image.mip_zero.width,
                                  image.mip_zero.height});
   }
-  if (result.resources_.size() != startup_graphics_image_count)
-    throw std::runtime_error("startup prepared resource set is incomplete");
-
-  const auto resting_shape = traversal.pictures.size() == 21 &&
-                             traversal.group_emissions.size() == 77;
-  const auto background_only_shape = traversal.pictures.size() == 7 &&
-                                     traversal.group_emissions.size() == 7;
-  if (!resting_shape && !background_only_shape)
-    throw std::runtime_error("startup prepared traversal shape is invalid");
+  if (result.resources_.empty() ||
+      result.resources_.size() > maximum_startup_graphics_images)
+    throw std::runtime_error("startup prepared resource set is empty or too large");
+  if (traversal.pictures.size() > maximum_startup_prepared_pictures ||
+      traversal.draw_emissions.size() > maximum_startup_prepared_submissions)
+    throw std::runtime_error("startup prepared traversal exceeds its bounds");
 
   result.pictures_.reserve(traversal.pictures.size());
-  result.quads_.reserve(traversal.group_emissions.size());
-  result.submissions_.reserve(traversal.group_emissions.size());
+  result.quads_.reserve(traversal.draw_emissions.size());
+  result.submissions_.reserve(traversal.draw_emissions.size());
   for (std::size_t picture_ordinal = 0;
        picture_ordinal < traversal.pictures.size(); ++picture_ordinal) {
     const auto &picture = traversal.pictures[picture_ordinal];
     if (picture.row_index >= asset.composition().rows().size() ||
         picture.picture_index >=
             asset.composition().rows()[picture.row_index].pictures.size() ||
-        picture.first_group_emission != result.submissions_.size() ||
-        picture.draw_group_count > traversal.group_emissions.size() -
-                                       picture.first_group_emission)
+        picture.first_draw_emission != result.submissions_.size() ||
+        picture.draw_emission_count > traversal.draw_emissions.size() -
+                                          picture.first_draw_emission)
       throw std::runtime_error("startup prepared picture span is invalid");
     const auto &source_picture =
         asset.composition().rows()[picture.row_index]
@@ -76,7 +74,12 @@ prepare_startup_graphics_plan(const StartupGraphicsAsset &asset,
     if (picture.row_directory_index != source_row.owner_directory_index ||
         picture.picture_directory_index != source_picture.directory_index ||
         picture.role != source_picture.role ||
-        picture.draw_group_count != source_picture.draw_plan.groups().size())
+        picture.draw_emission_count != std::accumulate(
+            source_picture.draw_plan.groups().begin(),
+            source_picture.draw_plan.groups().end(), std::size_t{0},
+            [](std::size_t total, const auto& group) {
+              return total + group.quads.size();
+            }))
       throw std::runtime_error("startup prepared picture identity is invalid");
     if (source_picture.alignment_enum > 15U ||
         (source_picture.extension_control.has_value() &&
@@ -92,42 +95,48 @@ prepare_startup_graphics_plan(const StartupGraphicsAsset &asset,
          picture.row_directory_index, picture.picture_directory_index,
          picture.role, source_picture.base_render_property,
          source_picture.authored_alpha, source_picture.alignment_enum,
-         source_picture.extension_control, picture.first_group_emission,
-         picture.draw_group_count});
-    for (std::size_t relative = 0; relative < picture.draw_group_count;
-         ++relative) {
-      const auto emission_ordinal = picture.first_group_emission + relative;
-      const auto &emission = traversal.group_emissions[emission_ordinal];
-      if (emission.row_index != picture.row_index ||
-          emission.picture_index != picture.picture_index ||
-          emission.picture_directory_index != picture.picture_directory_index ||
-          emission.group_index != relative)
-        throw std::runtime_error("startup prepared emission identity is invalid");
-      const auto &group = source_picture.draw_plan.groups()[emission.group_index];
-      if (group.quads.size() != 1 || !finite(group.quads.front()))
-        throw std::runtime_error("startup prepared group is not one finite quad");
-      const auto resource = std::ranges::find_if(
-          result.resources_, [&](const auto &candidate) {
-            return candidate.catalog_image_index == group.texture.image_index &&
-                   candidate.texture_id == group.texture.texture_id;
-          });
-      if (resource == result.resources_.end())
-        throw std::runtime_error("startup prepared texture identity is missing");
-      const auto prepared_quad = result.quads_.size();
-      result.quads_.push_back(
-          {emission_ordinal, emission.row_index, emission.picture_index,
-           emission.picture_directory_index, emission.group_index,
-           group.quads.front().descriptor_index, resource->resource_index,
-           group.quads.front(), group.texture.prm_offset,
-           group.texture.authored_texture_resource_record});
-      result.submissions_.push_back(
-          {emission_ordinal, picture_ordinal, prepared_quad});
+         source_picture.extension_control, picture.first_draw_emission,
+         picture.draw_emission_count});
+    std::size_t relative = 0;
+    for (std::size_t group_index = 0;
+         group_index < source_picture.draw_plan.groups().size(); ++group_index) {
+      const auto &group = source_picture.draw_plan.groups()[group_index];
+      for (const auto &quad : group.quads) {
+        const auto emission_ordinal = picture.first_draw_emission + relative;
+        const auto &emission = traversal.draw_emissions[emission_ordinal];
+        if (emission.row_index != picture.row_index ||
+            emission.picture_index != picture.picture_index ||
+            emission.picture_directory_index != picture.picture_directory_index ||
+            emission.group_index != group_index ||
+            emission.descriptor_index != quad.descriptor_index || !finite(quad))
+          throw std::runtime_error(
+              "startup prepared emission order disagrees with source descriptors");
+        const auto resource = std::ranges::find_if(
+            result.resources_, [&](const auto &candidate) {
+              return candidate.catalog_image_index == group.texture.image_index &&
+                     candidate.texture_id == group.texture.texture_id;
+            });
+        if (resource == result.resources_.end())
+          throw std::runtime_error("startup prepared texture identity is missing");
+        const auto prepared_quad = result.quads_.size();
+        result.quads_.push_back(
+            {emission_ordinal, emission.row_index, emission.picture_index,
+             emission.picture_directory_index, group_index,
+             quad.descriptor_index, resource->resource_index,
+             quad, group.texture.prm_offset,
+             group.texture.authored_texture_resource_record});
+        result.submissions_.push_back(
+            {emission_ordinal, picture_ordinal, prepared_quad});
+        ++relative;
+      }
     }
+    if (relative != picture.draw_emission_count)
+      throw std::runtime_error("startup prepared descriptor span is incomplete");
   }
   if (result.pictures_.size() > maximum_startup_prepared_pictures ||
       result.quads_.size() > maximum_startup_prepared_submissions ||
       result.submissions_.size() != result.quads_.size() ||
-      result.submissions_.size() != traversal.group_emissions.size())
+      result.submissions_.size() != traversal.draw_emissions.size())
     throw std::runtime_error("startup prepared plan exceeds its bounds");
   return result;
 }

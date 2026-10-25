@@ -5,7 +5,9 @@
 #include "off/data/scene_package_family.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <string_view>
 #include <stdexcept>
 #include <utility>
 
@@ -305,10 +307,11 @@ load_intro_prepared_resources(const std::filesystem::path &intro_archive) {
     // Supported installation layout: scene archive and paired WHD/WAV live in
     // Scenes, global streams.wav in its parent. Logical SND names are not paths.
     data::ArchiveVfs vfs;
-    constexpr std::array<std::string_view,5> excluded{
-        "Freedom_Fighters_OST","Launcher.exe","eax.dll","steam_api.dll","steam_appid.txt"};
     const auto root=intro_archive.parent_path().parent_path();
-    static_cast<void>(vfs.mount_directory(root,excluded));
+    const auto scene_directory_name = intro_archive.parent_path().filename().string();
+    const std::array<std::string_view, 2> included{
+        scene_directory_name, "streams.wav"};
+    static_cast<void>(vfs.mount_directory_subset(root,included));
     const auto base=(intro_archive.parent_path().filename()/intro_archive.stem()).generic_string();
     auto header=data::AudioBankHeader::parse(vfs.read(base+".WHD"));
     result.audio_.emplace(result.sounds_,std::move(header),

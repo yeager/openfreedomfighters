@@ -1,60 +1,54 @@
 # Scene directory construction
 
-Status: implementation in progress. The runtime still contains fixed prefix
-stages; this contract describes their replacement. It does not establish scene
-activation, intro playback, or renderer admission.
+Status: local whole-directory construction is implemented. This boundary does
+not establish scene activation, intro playback, renderer admission, or
+compatibility with an owned installation.
 
 ## Input and ownership
 
-Construction consumes the local parser's directory, validated parent references,
-and allocation partitions. Directory position identifies an input record; it
-must not determine its class, flags, component list, or gameplay role.
+After ROOT and source-load initialization, the runtime walks the parsed local
+directory once. Each row's parsed pool group and class partition determine
+resource allocation and handler selection. Its parsed parent reference
+determines attachment to an earlier canonical owner; an absent parent attaches
+to ROOT. Group construction and entry into a child pool remain separate
+properties.
 
-Each record receives exactly one canonical owner/resource mapping. A parent
-reference must resolve to an already constructed owner in the same scene. An
-absent parent refers to the scene root. Allocation follows each record's parsed
-pool and class partition, independently of parent selection. Group construction
-and entry into a child pool are separate properties.
+Each row receives one canonical owner/resource mapping and any supported
+attachments and deferred-reader work. Unknown classes, unsupported records,
+invalid parents, and failed construction stop the walk and leave the runtime
+failed with only its completed prefix published. Directory positions select
+records; they do not select class behavior or scene roles.
 
-Supported class handlers consume the local record's transform, properties,
-attachments, and deferred-reader inputs. Unknown classes or unsupported records
-must identify the failed input and leave the scene in a failed state. Partial
-construction must remain destructible; it must not enable updates or rendering.
-
-## Scene roles and completion
-
-Camera, window, controller, and cut references resolve through validated local
-references and typed bindings. Where a role requires uniqueness, missing or
-ambiguous bindings fail explicitly. Accessors return the canonical owner;
-they must not create a second mutable copy for a special directory position.
-
-Directory construction completes only when every input record has a valid
-mapping and its supported construction work has completed. Reader coverage,
-component initialization, scene activation, audio, and drawing remain separate
-requirements after construction.
+Controller, camera, window, and cut roles are resolved from parsed typed
+records and local references. Missing or ambiguous required bindings fail
+explicitly. Construction completion requires every directory row to have a
+live mapping. It does not run the deferred readers or admit component updates.
 
 ## Acceptance checks
 
-Use independent synthetic scenes with different directory sizes, sibling order,
-component positions, and nested groups. Include a root-level group that does not
-enter a child pool, followed by a sibling, to detect accidental nesting. Verify
-canonical parent/owner identities and deferred-reader order, not just totals.
-
-Reject missing or forward parent references, invalid partitions, exhausted
-allocation slots, unknown class handlers, ambiguous required roles, and malformed
-attachments. Verify failure cleanup and that no scene activation occurs after a
-partial construction failure. A private owned-installation run must additionally
-confirm that supported normal startup still loads before claiming compatibility.
+Use independently authored synthetic scenes with different directory sizes,
+parent relationships, pool partitions, and component positions. Verify that
+resource mappings match source records, parents resolve to canonical owners,
+and deferred-reader work preserves source identity and order. Include malformed
+parents, unsupported classes, missing registrations, and ambiguous typed roles.
+Confirm that a failure preserves only the completed construction prefix and
+does not enable camera registration, component phases, presentation, or
+playback.
 
 ## Current verification limits
 
-The small synthetic tail tests cover variable record counts, component ownership,
-parent validation, mapping, deferred-reader order, and construction failures.
-The initial construction stages still require a fixed prelude and remain to be
-generalized.
+The synthetic tests cover directory mapping, parent ownership, reader ordering,
+typed external-command selection, and fade-target reader completeness. A
+source-backed normal session also covers the reader bracket, MovieControl's
+deadline wait and event-16 activation, and both first-cut player initialization
+phases. It stops at lifecycle receiver closure; it does not cover the
+scene-frame adapter, full Fade-session integration, or playback. The latest
+TRV2 run passed all nine intro test groups and the GMS image tests.
 
-The removed population-specific fixture also supplied integration checks for
-fade sessions, MovieControl, and the scene-frame adapter. Those checks need new
-independent fixtures; passing the directory tests does not replace their
-coverage. Positive and ambiguous external-command bindings and variable fade
-receipt sets also require focused runtime checks before release.
+A private owned-installation readiness run completed directory construction
+and the reader bracket. It still reports incomplete reader coverage and does
+not admit lifecycle execution, renderer creation, audio, or playback. This
+validates the loading boundary, not end-to-end game compatibility.
+
+Intro playback and end-to-end scene activation remain unimplemented. Passing
+the directory-construction checks does not establish that the intro plays.

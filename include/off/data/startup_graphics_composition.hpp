@@ -12,6 +12,10 @@
 
 namespace off::data {
 
+inline constexpr std::size_t maximum_startup_graphics_rows = 4096;
+inline constexpr std::size_t maximum_startup_graphics_pictures = 4096;
+inline constexpr std::size_t maximum_startup_graphics_draws = 16384;
+
 struct StartupGraphicsLocalTransform {
     std::size_t directory_index{0};
     std::array<float, 9> basis{};
@@ -47,7 +51,7 @@ struct StartupGraphicsRowComposition {
     bool authored_hidden{false};
     std::vector<std::size_t> construction_chain;
     std::vector<StartupGraphicsLocalTransform> transform_chain;
-    std::array<StartupGraphicsCompositionInstance, 3> pictures;
+    std::vector<StartupGraphicsCompositionInstance> pictures;
 };
 
 struct StartupGraphicsVisiblePicture {
@@ -56,7 +60,7 @@ struct StartupGraphicsVisiblePicture {
     std::size_t row_directory_index{0};
     std::size_t picture_directory_index{0};
     StartupGraphicsCompositionRole role{StartupGraphicsCompositionRole::row_chrome};
-    std::size_t draw_group_count{0};
+    std::size_t draw_emission_count{0};
 };
 
 struct StartupGraphicsVisibility final {
@@ -65,15 +69,16 @@ struct StartupGraphicsVisibility final {
     std::vector<StartupGraphicsVisiblePicture> pictures;
 };
 
-struct StartupGraphicsDrawGroupEmission {
+struct StartupGraphicsDrawEmission {
     std::size_t row_index{0};
     std::size_t picture_index{0};
     std::size_t picture_directory_index{0};
     std::size_t group_index{0};
+    std::size_t descriptor_index{0};
 };
 
 struct StartupGraphicsTraversalPicture : StartupGraphicsVisiblePicture {
-    std::size_t first_group_emission{0};
+    std::size_t first_draw_emission{0};
 };
 
 // CPU-side renderer-neutral traversal and immediate emission plan. This order
@@ -82,53 +87,55 @@ struct StartupGraphicsTraversalPlan final {
     std::uint8_t requested_state{0};
     std::uint8_t effective_state{0};
     std::vector<StartupGraphicsTraversalPicture> pictures;
-    std::vector<StartupGraphicsDrawGroupEmission> group_emissions;
+    std::vector<StartupGraphicsDrawEmission> draw_emissions;
 };
 
 struct StartupGraphicsRowLocation {
     std::size_t owner_directory_index{0};
     std::size_t background_directory_index{0};
-    std::array<std::size_t, 2> chrome_directory_indexes{};
+    std::vector<std::size_t> chrome_directory_indexes;
 };
 
 class StartupGraphicsComposition final {
 public:
     [[nodiscard]] static StartupGraphicsComposition from_rows(
-        std::array<StartupGraphicsRowComposition, 8> rows
+        std::vector<StartupGraphicsRowComposition> rows
     );
-    // Exact binary32 X/Y comparisons are intentional: -0 equals +0, while an
-    // adjacent nextafter value does not. Z is retained but is not a locator key.
-    [[nodiscard]] static std::array<StartupGraphicsRowLocation, 8> locate(
+    // Locates the unique structurally valid overlay descended from the
+    // registered graphics-window owner. Unrelated matching structures are
+    // ignored; missing or ambiguous semantic owners/candidates are rejected.
+    [[nodiscard]] static std::vector<StartupGraphicsRowLocation> locate(
         std::span<const GmsDirectoryEntry> directory,
-        std::span<const GmsHierarchyNode> hierarchy
+        std::span<const GmsHierarchyNode> hierarchy,
+        std::span<const std::size_t> registered_window_owner_sources
     );
 
-    // Precondition: image, primitive allocation, and catalog are the paired
-    // members of the already verified supported startup archive. Image indexes
-    // in resulting draw plans are identities relative to the supplied catalog.
+    // Precondition: image, primitive allocation, and catalog are paired local
+    // archive members. Resulting draw-plan image indexes are relative to the
+    // supplied catalog.
     [[nodiscard]] static StartupGraphicsComposition build(
         const GmsImage& image,
         std::span<const std::byte> primitive_allocation,
         const TextureCatalog& textures
     );
 
-    [[nodiscard]] const std::array<StartupGraphicsRowComposition, 8>& rows()
+    [[nodiscard]] const std::vector<StartupGraphicsRowComposition>& rows()
         const noexcept { return rows_; }
 
-    // Evaluates the recovered state-mask and authored-hide contract. The result
+    // Evaluates the authored state-mask and hide contract. The result
     // preserves identities but deliberately does not assert GPU draw order.
     [[nodiscard]] StartupGraphicsVisibility visible_pictures(
         std::uint8_t requested_state
     ) const;
 
-    // Reproduces the recovered live hierarchy preorder and immediate picture
-    // group emission order without making a GPU scheduling guarantee.
+    // Emits typed chrome pictures before the row background in descending
+    // row-owner order, preserving local hierarchy order within each role.
     [[nodiscard]] StartupGraphicsTraversalPlan traversal_emission_plan(
         std::uint8_t requested_state
     ) const;
 
 private:
-    std::array<StartupGraphicsRowComposition, 8> rows_;
+    std::vector<StartupGraphicsRowComposition> rows_;
 };
 
 }  // namespace off::data

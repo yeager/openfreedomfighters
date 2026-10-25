@@ -406,6 +406,89 @@ void test_zip_reader() {
         std::cout << "SKIP: unavailable directory/file symlink fixture: "
                   << directory_link_error.message() << "; " << file_link_error.message() << '\n';
     }
+
+    const auto subset_root = work / "included-loose";
+    const auto subset_outside = work / "included-outside";
+    std::filesystem::remove_all(subset_root);
+    std::filesystem::remove_all(subset_outside);
+    std::filesystem::create_directories(subset_root / "Scenes/nested");
+    std::filesystem::create_directories(subset_outside);
+    {
+        std::ofstream(subset_root / "Scenes/nested/scene.bin", std::ios::binary) << "scene";
+        std::ofstream(subset_root / "streams.wav", std::ios::binary) << "audio";
+        std::ofstream(subset_outside / "outside.bin", std::ios::binary) << "outside";
+        std::ofstream(subset_root / "unselected.bin", std::ios::binary) << "ignore";
+    }
+    std::error_code unselected_link_error;
+    std::filesystem::create_directory_symlink(
+        subset_outside, subset_root / "unselected-link", unselected_link_error);
+    const std::array<std::string_view, 2> included{"scenes", "STREAMS.WAV"};
+    off::data::ArchiveVfs subset;
+    static_cast<void>(subset.mount_directory_subset(subset_root, included));
+    check(subset.contains("Scenes/nested/scene.bin") && subset.contains("streams.wav") &&
+              !subset.contains("unselected.bin") &&
+              !subset.contains("unselected-link/outside.bin"),
+          "include-only VFS mount indexes selected namespaces with case folding");
+    if (!unselected_link_error)
+        check(subset.contains("Scenes/nested/scene.bin"),
+              "unselected top-level symlink does not block or enter the mount");
+
+    const auto empty_selection = std::array<std::string_view, 0>{};
+    off::data::ArchiveVfs empty_subset;
+    static_cast<void>(empty_subset.mount_directory_subset(subset_root, empty_selection));
+    check(empty_subset.mount_count() == 1 && empty_subset.contains("Scenes/nested/scene.bin") == false,
+          "empty include-only selection publishes a valid empty mount");
+
+    if (!unselected_link_error) {
+        const auto selected_link_root = work / "selected-link-root";
+        std::filesystem::remove_all(selected_link_root);
+        std::filesystem::create_directories(selected_link_root);
+        std::error_code selected_link_error;
+        std::filesystem::create_directory_symlink(
+            subset_outside, selected_link_root / "Scenes", selected_link_error);
+        if (!selected_link_error) {
+            off::data::ArchiveVfs selected_link_mount;
+            bool selected_link_rejected = false;
+            const std::array<std::string_view, 1> selected_names{"Scenes"};
+            try {
+                static_cast<void>(selected_link_mount.mount_directory_subset(
+                    selected_link_root, selected_names));
+            } catch (const std::runtime_error&) { selected_link_rejected = true; }
+            check(selected_link_rejected && selected_link_mount.mount_count() == 0,
+                  "selected top-level symlink rejects the subset mount atomically");
+        }
+
+        const auto selected_nested_link_root = work / "selected-nested-link-root";
+        std::filesystem::remove_all(selected_nested_link_root);
+        std::filesystem::create_directories(selected_nested_link_root / "Scenes");
+        std::error_code selected_nested_link_error;
+        std::filesystem::create_directory_symlink(
+            subset_outside, selected_nested_link_root / "Scenes/nested-link",
+            selected_nested_link_error);
+        if (!selected_nested_link_error) {
+            off::data::ArchiveVfs selected_nested_link_mount;
+            bool selected_nested_link_rejected = false;
+            const std::array<std::string_view, 1> selected_names{"Scenes"};
+            try {
+                static_cast<void>(selected_nested_link_mount.mount_directory_subset(
+                    selected_nested_link_root, selected_names));
+            } catch (const std::runtime_error&) { selected_nested_link_rejected = true; }
+            check(selected_nested_link_rejected && selected_nested_link_mount.mount_count() == 0,
+                  "symlink inside a selected namespace rejects the subset mount atomically");
+        }
+    }
+
+    for (const auto invalid : std::array<std::string_view, 10>{
+             "", ".", "..", "../Scenes", "/Scenes", "Scenes/child",
+             "Scenes\\child", "Scenes/", "C:Scenes", std::string_view{"a\0b", 3}}) {
+        off::data::ArchiveVfs rejected_subset;
+        const std::array<std::string_view, 1> names{invalid};
+        bool invalid_rejected = false;
+        try { static_cast<void>(rejected_subset.mount_directory_subset(subset_root, names)); }
+        catch (const std::runtime_error&) { invalid_rejected = true; }
+        check(invalid_rejected && rejected_subset.mount_count() == 0,
+              "unsafe top-level include rejects without publishing a mount");
+    }
 }
 
 }  // namespace

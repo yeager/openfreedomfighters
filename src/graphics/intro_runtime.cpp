@@ -324,8 +324,6 @@ void IntroRuntime::begin_source_loading_without_engine_renderer() {
     position_mode_.collection_enabled=false;
     position_mode_.suppression=std::bit_cast<std::int32_t>(std::bit_cast<std::uint32_t>(position_mode_.suppression)+std::uint32_t{1});
     directory_position_controls_prepared_=true;
-    advance_source_loading_progress_without_engine_renderer(0);
-    allocate_initial_source_scope();
   } catch(...) {
     resource_load_stage_=IntroResourceLoadStage::failed;
     throw;
@@ -347,17 +345,6 @@ float IntroRuntime::advance_source_loading_progress_without_engine_renderer(std:
   return *loading_progress_;
 }
 
-void IntroRuntime::allocate_initial_source_scope() {
-  if(resource_load_stage_!=IntroResourceLoadStage::root_ready || !source_resource_scopes_.empty() ||
-      resource_allocation_enabled_ || components_.construction_mode())
-    throw std::runtime_error("Initial source batch requires the completed root and inactive allocation mode");
-  resource_load_stage_=IntroResourceLoadStage::allocating_initial_scope;
-  try {
-    allocate_source_scope(0);
-    resource_load_stage_=IntroResourceLoadStage::initial_scope_ready;
-  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
-}
-
 void IntroRuntime::allocate_source_scope(std::uint32_t count_group) {
   if(resource_allocation_enabled_ || components_.construction_mode())
     throw std::runtime_error("Source batch requires inactive allocation mode");
@@ -374,25 +361,25 @@ void IntroRuntime::allocate_source_scope(std::uint32_t count_group) {
     const auto& entry=directory[source];
     if(entry.pool_group!=count_group) continue;
     if(entry.group_slot_index>=slot_indices.size() || slot_indices[entry.group_slot_index])
-      throw std::runtime_error("Invalid initial source resource slot mapping");
+      throw std::runtime_error("Invalid parsed source resource slot mapping");
     const auto index=hierarchy_index(source_handle(source));
     if(hierarchy_resources_[index] || resource_states_[index] || resource_owners_[index])
       throw std::runtime_error("Source resource was already allocated or associated");
     slot_indices[entry.group_slot_index]=index;
   }
   if(std::ranges::any_of(slot_indices,[](const auto& index){return !index;}))
-    throw std::runtime_error("Initial source resource partitions are not fully mapped");
+    throw std::runtime_error("Parsed source resource partitions are not fully mapped");
   IntroSourceResourceScope scope;
   scope.count_group=count_group;
   scope.counts=group.class_counts;
   std::uint32_t offset=0;
   for(std::size_t category=0;category<scope.counts.size();++category) {
     if(scope.counts[category]>group.slot_count-offset)
-      throw std::runtime_error("Initial source resource partition overflow");
+      throw std::runtime_error("Parsed source resource partition overflow");
     if(scope.counts[category]) scope.next_in_partition[category]=offset;
     offset+=scope.counts[category];
   }
-  if(offset!=group.slot_count) throw std::runtime_error("Initial source resource count mismatch");
+  if(offset!=group.slot_count) throw std::runtime_error("Parsed source resource count mismatch");
   scope.resources.reserve(group.slot_count);
   source_resource_scopes_.reserve(source_resource_scopes_.size()+1);
   try {
@@ -419,84 +406,6 @@ void IntroRuntime::allocate_source_scope(std::uint32_t count_group) {
   }
 }
 
-void IntroRuntime::construct_first_authored_group() {
-  if(!application_.has_group_registration())
-    throw std::runtime_error("First group requires a registered concrete group factory");
-  if(resource_load_stage_!=IntroResourceLoadStage::initial_scope_ready || loading_progress_!=0.8F ||
-      first_authored_group_ || resource_allocation_enabled_ || components_.construction_mode())
-    throw std::runtime_error("First group requires the completed absent-renderer pre-row stage");
-  const auto& directory=resources_.sources().directory();
-  if(directory.empty()) throw std::runtime_error("First group source is absent");
-  const auto& source=directory.front();
-  const auto zero=[](float value){return value==0.0F && !std::signbit(value);};
-  if(source.source_type!=0x00100001U || source.source_variant || source.parent_steps || source.enters_child_pool ||
-      source.object_flags!=0x03200000U || source.class_data_value || source.auxiliary_value ||
-      source.buf_auxiliary_offset || source.child_value || source.post_load_source_offset ||
-      source.attachment_table_offset || !source.attachments.empty() || !source.deferred_source_offset || source.basis!=engine_identity ||
-      !std::ranges::all_of(source.position,zero) || source.pool_group || source.pool_class)
-    throw std::runtime_error("Unsupported first authored group source shape");
-  const auto root=resource_handle(root_handle());
-  const auto& root_state=resource_state_for_handle(root);
-  if(!root_state || root_state->flags!=0x09000000U || root_state->context.value ||
-      !root_owner_state_ || root_owner_state_->aggregate_flags || !root_owner_state_->enabled ||
-      root_owner_state_->room_mode || !child_owners(root_handle()).empty() ||
-      hierarchy_[0].parent!=no_picture_transform_parent || hierarchy_[0].matrix!=engine_identity ||
-      !std::ranges::all_of(hierarchy_[0].position,zero))
-    throw std::runtime_error("First group requires the actual fresh live ROOT");
-  auto& scope=source_resource_scopes_.at(0);
-  if(!scope.next_in_partition[0] || *scope.next_in_partition[0]!=0 || !scope.counts[0])
-    throw std::runtime_error("First group partition is absent or already consumed");
-  const auto resource=scope.resources.at(*scope.next_in_partition[0]);
-  const auto index=resource_index(resource);
-  if(index!=hierarchy_index(source_handle(0)) || resource_owners_[index] ||
-      !resource_states_[index] || resource_states_[index]->flags!=0x09000000U ||
-      resource_states_[index]->context.value || resource_states_[index]->metadata ||
-      resource_states_[index]->directory_auxiliary || hierarchy_[index].parent!=no_picture_transform_parent ||
-      hierarchy_[index].matrix!=engine_identity || !std::ranges::all_of(hierarchy_[index].position,zero))
-    throw std::runtime_error("First group supplied resource is not fresh and ownerless");
-  const auto names=resources_.source_names();
-  if(source.buf_name_offset>=names.size()) throw std::runtime_error("Group name is out of range");
-  std::size_t end=source.buf_name_offset;
-  while(end<names.size() && names[end]!=std::byte{0}) ++end;
-  if(end==names.size()) throw std::runtime_error("Group name is unterminated");
-  try {
-    ++*scope.next_in_partition[0]; // Consume supplied slot BEFORE concrete factory allocation.
-    std::string name;
-    for(std::size_t i=source.buf_name_offset;i<end;++i) name.push_back(static_cast<char>(names[i]));
-    first_authored_group_=IntroAuthoredGroupOwner{source_handle(0),resource,std::move(name)};
-    resource_owners_[index]=source_handle(0);
-    const auto previous_count=application_.register_group_instance();
-    // The registered concrete ZGROUP notification accepts the previous count
-    // and has no effects; this does not stand in for other class notifications.
-    static_cast<void>(previous_count);
-    manager_row_edit_=true;
-    scene_resource_edit_=true;
-    loaded_resource_handles_.push_back(resource);
-    resource_states_[index]->metadata=0;
-    resource_states_[index]->directory_auxiliary=0;
-    // Exact equal transform service branch: no dirty write or queue call.
-    // Concrete parent selection is ROOT for this admitted first-source route.
-    auto merged=resource_states_[index]->flags|(source.object_flags&0xfffffU);
-    if(merged&0x8080U) merged|=0x8080U;
-    const bool suppressed=false;
-    set_resource_flags_no_maintenance(resource,merged,~merged,{resource_allocation_enabled_,suppressed});
-    // Empty ROOT group insertion: canonical parent establishes its sole child,
-    // hence head/tail/count, without sibling or category/spatial side effects.
-    hierarchy_[index].parent=resource_index(root);
-    const auto current=resource_states_[index]->flags;
-    set_resource_flags_no_maintenance(resource,current,~current,{resource_allocation_enabled_,suppressed});
-    ++count_group_selector_;
-    first_authored_group_->source_word=source.child_value;
-    first_authored_group_->flags=(first_authored_group_->flags&0x00ffffffU)|(source.object_flags&0xff000000U);
-    deferred_reader_work_.push_back({resource,source.deferred_source_offset,0,false,{}});
-    directory_resource_mapping_.resize(directory.size());
-    directory_resource_mapping_[0]=resource;
-    manager_row_edit_=false;
-    scene_resource_edit_=false;
-    resource_load_stage_=IntroResourceLoadStage::first_group_ready;
-  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
-}
-
 std::optional<IntroSceneResourceProperty> IntroRuntime::scene_resource_property(std::string_view key) const {
   if(key.find('\0')!=std::string_view::npos) throw std::runtime_error("Scene property key contains NUL");
   const auto found=scene_resource_properties_.find(key);
@@ -513,45 +422,6 @@ void IntroRuntime::set_scene_resource_property_native(std::string key,IntroRunti
   scene_resource_properties_.emplace(std::move(key),IntroSceneResourceProperty{16,resource});
 }
 
-void IntroRuntime::construct_window_language_groups_without_engine_renderer() {
-  if(resource_load_stage_!=IntroResourceLoadStage::first_group_ready || window_owner_ || language_owner_ ||
-      resource_allocation_enabled_ || components_.construction_mode() || loaded_resource_handles_.size()!=1 ||
-      count_group_selector_!=1 || current_source_parent()!=root_handle() || manager_row_edit_ || scene_resource_edit_)
-    throw std::runtime_error("Window and Language require the completed first group stage");
-  if(!application_.has_class_registration(0x00100030U) || !application_.has_class_registration(0x00101389U))
-    throw std::runtime_error("Window and Language require concrete class registration");
-  const auto& directory=resources_.sources().directory();
-  if(directory.size()<3) throw std::runtime_error("Window or Language source is absent");
-  const auto zero=[](float value){return value==0.0F && !std::signbit(value);};
-  // Validate the bounded source shapes before consuming any factory slot.
-  for(std::size_t row=1;row<=2;++row) {
-    const auto& source=directory[row];
-    if(source.source_type!=(row==1?0x00100030U:0x00101389U) || source.source_variant || source.parent_steps ||
-        !source.enters_child_pool || source.object_flags!=0x03000000U || source.class_data_value ||
-        source.auxiliary_value || source.buf_auxiliary_offset || source.child_value || source.post_load_source_offset ||
-        source.attachment_table_offset || !source.attachments.empty() || !source.deferred_source_offset ||
-        source.basis!=engine_identity || !std::ranges::all_of(source.position,zero) || source.pool_class ||
-        source.pool_group!=(row==1?0U:2U))
-      throw std::runtime_error("Unsupported Window or Language source shape");
-  }
-  const auto root=resource_handle(root_handle());
-  const auto& root_state=resource_state_for_handle(root);
-  if(!root_state || root_state->flags!=0x09000000U || root_state->context.value ||
-      !root_owner_state_ || !root_owner_state_->enabled || root_owner_state_->aggregate_flags || root_owner_state_->room_mode ||
-      hierarchy_[0].parent!=no_picture_transform_parent || hierarchy_[0].matrix!=engine_identity ||
-      !std::ranges::all_of(hierarchy_[0].position,zero) ||
-      child_owners(root_handle())!=std::vector<IntroRuntimeHandle>{source_handle(0)})
-    throw std::runtime_error("Window construction requires the retained fresh ROOT ancestry");
-  try {
-    for(std::size_t row=1;row<=2;++row) {
-      advance_source_loading_progress_without_engine_renderer(row);
-      if(row==2) allocate_source_scope(count_group_selector_);
-      construct_group_row_without_engine_renderer(row);
-    }
-    resource_load_stage_=IntroResourceLoadStage::window_language_ready;
-  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
-}
-
 void IntroRuntime::construct_group_row_without_engine_renderer(std::size_t row) {
       const auto& source=resources_.sources().directory().at(row);
       if(source.source_type!=0x00100030U && source.source_type!=0x00101389U && source.source_type!=0x00100001U && source.source_type!=0x00100021U && source.source_type!=0x0010002eU && source.source_type!=0x00100031U)
@@ -560,7 +430,7 @@ void IntroRuntime::construct_group_row_without_engine_renderer(std::size_t row) 
       if(!application_.has_class_registration(source.source_type))
         throw std::runtime_error("Group concrete class is not registered");
       if(window_owners_.contains(row) || constructed_group_owners_.contains(row) ||
-          (source.source_type==0x00101389U && language_owner_))
+          constructed_room_owners_.contains(row))
         throw std::runtime_error("Group owner is already constructed");
       const auto zero=[](float value){return value==0.0F && !std::signbit(value);};
       const auto found=std::ranges::find(source_resource_scopes_,source.pool_group,&IntroSourceResourceScope::count_group);
@@ -603,10 +473,6 @@ void IntroRuntime::construct_group_row_without_engine_renderer(std::size_t row) 
         resource_owners_[index]=owner;
         stored.show_2d=application_.live_variables().bind("Show2d",stored.pending_visibility);
         set_scene_resource_property_native("rWindows",resource);
-      } else if(source.source_type==0x00101389U) {
-        language_owner_=IntroAuthoredGroupOwner{owner,resource,std::move(name),source.source_type};
-        group=&*language_owner_;
-        resource_owners_[index]=owner;
       } else if(source.source_type==0x00100021U) {
         auto& room=constructed_room_owners_.try_emplace(row).first->second;
         room.group={owner,resource,std::move(name),source.source_type};
@@ -630,7 +496,7 @@ void IntroRuntime::construct_group_row_without_engine_renderer(std::size_t row) 
       apply_directory_transform(row,resource);
       attach_directory_owner(row,resource,parent);
       ++count_group_selector_;
-      current_source_parent_=owner;
+      current_source_parent_=source.enters_child_pool?owner:parent;
       group->source_word=source.child_value;
       group->flags=(group->flags&0x00ffffffU)|(source.object_flags&0xff000000U);
       if(!source.attachments.empty()) {
@@ -644,6 +510,80 @@ void IntroRuntime::construct_group_row_without_engine_renderer(std::size_t row) 
       directory_resource_mapping_.at(row)=resource;
       manager_row_edit_=false;
       scene_resource_edit_=false;
+}
+
+void IntroRuntime::construct_source_directory_without_engine_renderer() {
+  const auto& directory=resources_.sources().directory();
+  if(resource_load_stage_!=IntroResourceLoadStage::root_ready || !loading_progress_ ||
+      !directory_position_controls_prepared_ || directory.empty() ||
+      resource_allocation_enabled_ || components_.construction_mode() || manager_row_edit_ || scene_resource_edit_ ||
+      loaded_resource_handles_.size()!=0 || !source_resource_scopes_.empty())
+    throw std::runtime_error("Whole-directory construction requires a fresh ROOT and retained source-load state");
+
+  directory_resource_mapping_.assign(directory.size(),std::nullopt);
+  try {
+    for(std::size_t row=0;row<directory.size();++row) {
+      const auto& source=directory[row];
+      if(!application_.has_class_registration(source.source_type))
+        throw std::runtime_error("Unsupported local source class " +
+                                 std::to_string(source.source_type) + " at directory entry " +
+                                 std::to_string(row));
+      if(source.post_load_source_offset!=0U)
+        throw std::runtime_error("Unsupported local source post-load block at directory entry " +
+                                 std::to_string(row));
+      if(!std::ranges::all_of(source.position,[](float value){return std::isfinite(value);}) ||
+          !std::ranges::all_of(source.basis,[](float value){return std::isfinite(value);}))
+        throw std::runtime_error("Invalid local source transform at directory entry " +
+                                 std::to_string(row));
+      if(owner_components(source_handle(row)).size()!=source.attachments.size())
+        throw std::runtime_error("Local source attachment catalog is inconsistent at directory entry " +
+                                 std::to_string(row));
+      for(std::size_t slot=0;slot<source.attachments.size();++slot) {
+        const auto factory=resources_.sources().attachment_identifier(row,slot);
+        if(!application_.has_component_class_registration(factory))
+          throw std::runtime_error("Unsupported local source attachment class '" + std::string(factory) +
+                                   "' at directory entry " + std::to_string(row));
+      }
+
+      advance_source_loading_progress_without_engine_renderer(row);
+      const auto parent=resources_.sources().hierarchy().at(row).parent_directory_index;
+      if(parent) {
+        if(*parent>=row || !directory_resource_mapping_.at(*parent))
+          throw std::runtime_error("Local source parent has no earlier live resource at directory entry " +
+                                   std::to_string(row));
+        const auto parent_owner=associated_resource_owner(*directory_resource_mapping_.at(*parent));
+        if(!parent_owner || *parent_owner!=source_handle(*parent))
+          throw std::runtime_error("Local source parent is not bound to its parsed owner at directory entry " +
+                                   std::to_string(row));
+        current_source_parent_=source_handle(*parent);
+      } else {
+        current_source_parent_=root_handle();
+      }
+      const auto actual_parent=current_source_parent_;
+
+      if(std::ranges::find(source_resource_scopes_,source.pool_group,
+                           &IntroSourceResourceScope::count_group)==source_resource_scopes_.end())
+        allocate_source_scope(source.pool_group);
+
+      if(source.pool_class%8U==0U)
+        construct_group_row_without_engine_renderer(row);
+      else
+        construct_non_group_row_without_engine_renderer(row);
+      current_source_parent_=source.enters_child_pool?source_handle(row):actual_parent;
+    }
+
+    if(loaded_resource_handles_.size()!=directory.size() ||
+        directory_resource_mapping_.size()!=directory.size() ||
+        std::ranges::any_of(directory_resource_mapping_,[](const auto& resource){return !resource;}))
+      throw std::runtime_error("Whole-directory construction did not map every local source");
+    resource_load_stage_=IntroResourceLoadStage::directory_construction_complete;
+  } catch(...) {
+    manager_row_edit_=false;
+    scene_resource_edit_=false;
+    current_source_parent_=root_handle();
+    resource_load_stage_=IntroResourceLoadStage::failed;
+    throw;
+  }
 }
 
 std::uint16_t IntroRuntime::declare_scene_event_name(std::string_view name,std::uint16_t requested) {
@@ -679,56 +619,6 @@ const IntroConstructedPictureComponent* IntroRuntime::constructed_picture_compon
   if(source>=resources_.sources().directory().size()) return nullptr;
   const auto& list=owner_components_.at(hierarchy_index(source_handle(source)));
   return list.empty()?nullptr:constructed_attachment(list.front());
-}
-
-void IntroRuntime::construct_picture_component_prefix_without_engine_renderer() {
-  if(resource_load_stage_!=IntroResourceLoadStage::window_language_ready || !window_owner_ || !language_owner_ ||
-      !constructed_picture_owners_.empty() || resource_allocation_enabled_ || components_.construction_mode() ||
-      loaded_resource_handles_.size()!=3 || count_group_selector_!=3 || current_source_parent()!=language_owner_->owner ||
-      manager_row_edit_ || scene_resource_edit_)
-    throw std::runtime_error("Picture prefix requires the completed Window and Language stage");
-  if(!application_.has_class_registration(0x00200046U) ||
-      !application_.has_component_class_registration("ZGEOM_Center") ||
-      !application_.has_component_class_registration("ZWINPIC_FadeToBlack"))
-    throw std::runtime_error("Picture prefix requires concrete owner and component registrations");
-  const auto& directory=resources_.sources().directory();
-  if(directory.size()<5) throw std::runtime_error("Picture prefix sources are absent");
-  const auto zero=[](float value){return value==0.0F && !std::signbit(value);};
-  const auto& root_state=resource_state(root_handle());
-  if(!root_state || root_state->flags!=0x09000000U || root_state->context.value ||
-      !root_owner_state_ || !root_owner_state_->enabled || root_owner_state_->room_mode ||
-      root_owner_state_->aggregate_flags || !root_owner_state_->category_memberships.empty() ||
-      window_owner_->group.aggregate_flags || language_owner_->aggregate_flags ||
-      resource_parent(window_owner_->group.owner)!=resource_handle(root_handle()) ||
-      resource_parent(language_owner_->owner)!=resource_handle(window_owner_->group.owner) ||
-      child_owners(window_owner_->group.owner)!=std::vector<IntroRuntimeHandle>{language_owner_->owner} ||
-      !child_owners(language_owner_->owner).empty())
-    throw std::runtime_error("Picture prefix requires the retained fresh non-room ancestry");
-  for(std::size_t row=3;row<=4;++row) {
-    const auto& source=directory[row];
-    const auto expected=row==3?"ZGEOM_Center":"ZWINPIC_FadeToBlack";
-    if(source.source_type!=0x00200046U || source.source_variant || source.parent_steps!=(row==3?0:1) ||
-        source.enters_child_pool || source.object_flags!=(row==3?0x00200400U:0x00200000U) ||
-        source.class_data_value || source.auxiliary_value || source.buf_auxiliary_offset || source.child_value ||
-        source.post_load_source_offset || !source.deferred_source_offset || source.attachments.size()!=1 ||
-        source.basis!=engine_identity || !std::ranges::all_of(source.position,zero) || source.pool_class!=1 ||
-        source.pool_group!=(row==3?3U:2U) || resources_.sources().attachment_identifier(row,0)!=expected ||
-        source.attachments.front().parameter!=(row==3?1.0F:0.0F) || owner_components(source_handle(row)).size()!=1)
-      throw std::runtime_error("Unsupported Picture prefix source shape");
-  }
-  try {
-    for(std::size_t row=3;row<=4;++row) {
-      advance_source_loading_progress_without_engine_renderer(row);
-      if(row==3) allocate_source_scope(count_group_selector_);
-      else current_source_parent_=window_owner_->group.owner;
-      construct_picture_row_without_engine_renderer(row);
-    }
-    resource_load_stage_=IntroResourceLoadStage::picture_component_prefix_ready;
-  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
-}
-
-void IntroRuntime::construct_picture_row_without_engine_renderer(std::size_t row) {
-  construct_non_group_row_without_engine_renderer(row);
 }
 
 void IntroRuntime::construct_non_group_row_without_engine_renderer(std::size_t row) {
@@ -1175,8 +1065,6 @@ void IntroRuntime::assign_owner_property_data(std::size_t source,std::span<const
 }
 
 IntroAuthoredGroupOwner* IntroRuntime::group_owner(IntroRuntimeHandle owner) {
-  if(first_authored_group_ && first_authored_group_->owner==owner) return &*first_authored_group_;
-  if(language_owner_ && language_owner_->owner==owner) return &*language_owner_;
   for(auto& [source,group]:constructed_group_owners_) {static_cast<void>(source);if(group.owner==owner) return &group;}
   for(auto& [source,room]:constructed_room_owners_) {static_cast<void>(source);if(room.group.owner==owner) return &room.group;}
   for(auto& [source,window]:window_owners_) {static_cast<void>(source);if(window->group.owner==owner) return &window->group;}
@@ -1255,153 +1143,6 @@ void IntroRuntime::apply_directory_transform(std::size_t row,IntroRuntimeResourc
   position_updates_.notify_with_collection_disabled(position_mode_);
 }
 
-void IntroRuntime::construct_authored_camera_without_engine_renderer() {
-  constexpr std::size_t row=5;
-  if(resource_load_stage_!=IntroResourceLoadStage::picture_component_prefix_ready || !window_owner_ ||
-      !language_owner_ || !live_cameras_.empty() || resource_allocation_enabled_ ||
-      components_.construction_mode() || manager_row_edit_ || scene_resource_edit_ ||
-      loaded_resource_handles_.size()!=row || count_group_selector_!=3 ||
-      current_source_parent()!=window_owner_->group.owner)
-    throw std::runtime_error("Authored camera requires the completed Picture prefix");
-  if(!application_.has_class_registration(0x00400003U))
-    throw std::runtime_error("Authored camera requires its concrete class registration");
-  const auto& directory=resources_.sources().directory();
-  if(directory.size()<=row || resources_.camera_index()!=row)
-    throw std::runtime_error("Authored camera is not the next directory source");
-  const auto& source=directory[row];
-  const auto zero=[](float value){return value==0.0F && !std::signbit(value);};
-  const auto identity=[](const std::array<float,9>& basis) {
-    for(std::size_t i=0;i<basis.size();++i)
-      if(std::bit_cast<std::uint32_t>(basis[i])!=std::bit_cast<std::uint32_t>(engine_identity[i])) return false;
-    return true;
-  };
-  if(source.source_type!=0x00400003U || source.source_variant || source.parent_steps ||
-      source.enters_child_pool || source.object_flags!=0x00200400U || source.class_data_value ||
-      source.auxiliary_value || source.buf_auxiliary_offset || source.child_value ||
-      source.post_load_source_offset || !source.deferred_source_offset || !source.attachments.empty() ||
-      !identity(source.basis) || !std::ranges::all_of(source.position,zero) ||
-      source.pool_class!=3 || source.pool_group!=2 || !owner_components(source_handle(row)).empty())
-    throw std::runtime_error("Unsupported authored camera source shape");
-  const auto* fade=constructed_picture_owner(4);
-  const auto& root_state=resource_state(root_handle());
-  const auto parent=window_owner_->group.owner;
-  const auto parent_resource=resource_handle(parent);
-  const auto& parent_state=resource_state_for_handle(parent_resource);
-  if(!fade || !root_state || root_state->flags!=0x09000000U || root_state->context.value ||
-      !root_owner_state_ || !root_owner_state_->enabled || root_owner_state_->room_mode ||
-      root_owner_state_->aggregate_flags || !root_owner_state_->category_memberships.empty() ||
-      !parent_state || parent_state->flags!=0x09000000U || parent_state->context.value ||
-      window_owner_->group.aggregate_flags || resource_parent(parent)!=resource_handle(root_handle()) ||
-      child_owners(parent)!=std::vector<IntroRuntimeHandle>{language_owner_->owner,fade->owner})
-    throw std::runtime_error("Authored camera requires the retained fresh Window ancestry");
-  try {
-    advance_source_loading_progress_without_engine_renderer(row);
-    const auto scope_it=std::ranges::find(source_resource_scopes_,source.pool_group,&IntroSourceResourceScope::count_group);
-    if(scope_it==source_resource_scopes_.end()) throw std::runtime_error("Camera allocation scope is absent");
-    auto& scope=*scope_it;
-    auto& cursor=scope.next_in_partition[3];
-    const auto begin=std::uint64_t{scope.counts[0]}+scope.counts[1]+scope.counts[2];
-    const auto end=begin+scope.counts[3];
-    if(!cursor || *cursor<begin || *cursor>=end)
-      throw std::runtime_error("Camera partition is absent or exhausted");
-    const auto resource=scope.resources.at(*cursor);
-    const auto index=resource_index(resource);
-    const auto owner=source_handle(row);
-    if(index!=hierarchy_index(owner) || resource_owners_[index] || !resource_states_[index] ||
-        resource_states_[index]->flags!=0x09000000U || resource_states_[index]->context.value ||
-        resource_states_[index]->metadata || resource_states_[index]->directory_auxiliary ||
-        hierarchy_[index].parent!=no_picture_transform_parent || !identity(hierarchy_[index].matrix) ||
-        !std::ranges::all_of(hierarchy_[index].position,zero))
-      throw std::runtime_error("Camera requires its fresh supplied resource");
-    const auto names=resources_.source_names();
-    if(source.buf_name_offset>=names.size()) throw std::runtime_error("Camera name is out of range");
-    std::size_t name_end=source.buf_name_offset;
-    while(name_end<names.size() && names[name_end]!=std::byte{0}) ++name_end;
-    if(name_end==names.size()) throw std::runtime_error("Camera name is unterminated");
-    ++*cursor;
-    std::string name;
-    for(std::size_t i=source.buf_name_offset;i<name_end;++i) name.push_back(static_cast<char>(names[i]));
-    auto live=std::make_unique<IntroLiveCameraOwner>();
-    live->metadata={owner,resource,std::move(name)};
-    live->context=root_handle();
-    auto& camera=*live_cameras_.emplace(row,std::move(live)).first->second;
-    resource_owners_[index]=owner;
-    camera.metadata.notification_sequence=application_.register_class_instance(source.source_type);
-    manager_row_edit_=true;scene_resource_edit_=true;
-    loaded_resource_handles_.push_back(resource);
-    resource_states_[index]->metadata=0;resource_states_[index]->directory_auxiliary=0;
-    // The validated authored pose equals the fresh pose bitwise: the real
-    // transform setter's equality return performs no dirtying or queue work.
-    const auto merged=resource_states_[index]->flags|(source.object_flags&0xfffffU);
-    set_resource_flags_no_maintenance(resource,merged,~merged,{resource_allocation_enabled_,false});
-    hierarchy_[index].parent=resource_index(parent_resource);
-    const auto current=resource_states_[index]->flags;
-    set_resource_flags_no_maintenance(resource,current,~current,{resource_allocation_enabled_,false});
-    // Normal registration returns at resource hide. Camera enabled is a
-    // separate word; neither renderer membership nor dimensions change here.
-    deferred_reader_work_.push_back({resource,source.deferred_source_offset,row,false,{}});
-    directory_resource_mapping_.at(row)=resource;
-    manager_row_edit_=false;scene_resource_edit_=false;
-    resource_load_stage_=IntroResourceLoadStage::authored_camera_ready;
-  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
-}
-
-void IntroRuntime::construct_second_window_picture_without_engine_renderer() {
-  if(resource_load_stage_!=IntroResourceLoadStage::authored_camera_ready || !window_owner_ || !language_owner_ ||
-      !constructed_camera_owner() || resource_allocation_enabled_ || components_.construction_mode() ||
-      manager_row_edit_ || scene_resource_edit_ || loaded_resource_handles_.size()!=6 ||
-      count_group_selector_!=3 || current_source_parent()!=window_owner_->group.owner)
-    throw std::runtime_error("Second Window requires the completed authored camera stage");
-  if(!application_.has_class_registration(0x00100030U) || !application_.has_class_registration(0x00200046U) ||
-      !application_.has_component_class_registration("ZWINPIC_FadeToBlack"))
-    throw std::runtime_error("Second Window requires concrete Window, Picture and Fade registrations");
-  const auto& directory=resources_.sources().directory();
-  if(directory.size()<8) throw std::runtime_error("Second Window sources are absent");
-  const auto zero=[](float value){return std::bit_cast<std::uint32_t>(value)==0U;};
-  const auto identity=[](const auto& matrix) {
-    for(std::size_t i=0;i<engine_identity.size();++i)
-      if(std::bit_cast<std::uint32_t>(matrix[i])!=std::bit_cast<std::uint32_t>(engine_identity[i])) return false;
-    return true;
-  };
-  for(std::size_t row=6;row<=7;++row) {
-    const auto& source=directory[row];
-    const bool window=row==6;
-    if(source.source_type!=(window?0x00100030U:0x00200046U) || source.source_variant ||
-        source.parent_steps!=(window?1:0) || source.enters_child_pool!=window ||
-        source.object_flags!=(window?0x03000000U:0x00200000U) || source.class_data_value ||
-        source.auxiliary_value || source.buf_auxiliary_offset || source.child_value ||
-        source.post_load_source_offset || !source.deferred_source_offset ||
-        !identity(source.basis) || !std::ranges::all_of(source.position,zero) ||
-        source.pool_class!=(window?0U:1U) || source.pool_group!=(window?0U:4U))
-      throw std::runtime_error("Unsupported second Window source shape");
-    if(window) {
-      if(source.attachment_table_offset || !source.attachments.empty() || !owner_components(source_handle(row)).empty())
-        throw std::runtime_error("Second Window has unsupported attachments");
-    } else if(source.attachments.size()!=1 || resources_.sources().attachment_identifier(row,0)!="ZWINPIC_FadeToBlack" ||
-        source.attachments.front().parameter!=0.0F || owner_components(source_handle(row)).size()!=1) {
-      throw std::runtime_error("Second Window Picture requires its actual Fade attachment");
-    }
-  }
-  const auto& root_state=resource_state(root_handle());
-  if(!root_state || root_state->flags!=0x09000000U || root_state->context.value ||
-      !root_owner_state_ || !root_owner_state_->enabled || root_owner_state_->room_mode ||
-      root_owner_state_->aggregate_flags || !root_owner_state_->category_memberships.empty() ||
-      hierarchy_[0].parent!=no_picture_transform_parent || !identity(hierarchy_[0].matrix) ||
-      !std::ranges::all_of(hierarchy_[0].position,zero) ||
-      resource_parent(window_owner_->group.owner)!=resource_handle(root_handle()) ||
-      child_owners(root_handle())!=std::vector<IntroRuntimeHandle>{source_handle(0),window_owner_->group.owner})
-    throw std::runtime_error("Second Window requires the retained fresh ROOT ancestry");
-  try {
-    advance_source_loading_progress_without_engine_renderer(6);
-    current_source_parent_=root_handle();
-    construct_group_row_without_engine_renderer(6);
-    advance_source_loading_progress_without_engine_renderer(7);
-    allocate_source_scope(count_group_selector_);
-    construct_picture_row_without_engine_renderer(7);
-    resource_load_stage_=IntroResourceLoadStage::second_window_picture_ready;
-  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
-}
-
 const IntroConstructedCameraOwner* IntroRuntime::constructed_camera_owner(std::size_t source) const noexcept {
   const auto found=live_cameras_.find(source);
   return found==live_cameras_.end()?nullptr:&found->second->metadata;
@@ -1423,8 +1164,6 @@ const IntroConstructedPictureOwner* IntroRuntime::constructed_visual_owner(std::
   return found==constructed_visual_owners_.end()?nullptr:&found->second;
 }
 const IntroAuthoredGroupOwner* IntroRuntime::constructed_group_owner(std::size_t source) const noexcept {
-  if(source==0) return first_authored_group_?&*first_authored_group_:nullptr;
-  if(language_owner_ && source<resources_.sources().directory().size() && source_handle(source)==language_owner_->owner) return &*language_owner_;
   if(const auto window=window_owners_.find(source);window!=window_owners_.end()) return &window->second->group;
   if(const auto room=constructed_room_owners_.find(source);room!=constructed_room_owners_.end()) return &room->second.group;
   const auto found=constructed_group_owners_.find(source);
@@ -1486,8 +1225,8 @@ void IntroRuntime::prepare_scene_lifetime_keys_registry() {
     static_cast<void>(data::OwnerBufKeysProfileParser::parse(property));
     properties.push_back(property);
   }
-  if(properties.empty())
-    throw std::runtime_error("Scene KEYS registry found no supported MatPosAnim owners");
+  // A scene without MatPosAnim owners needs no KEYS entries. Publish the
+  // empty registry so optional reader lookups remain ordinary misses.
   if(properties.size()>std::numeric_limits<std::uint64_t>::max()-next_scene_lifetime_keys_handle_+1U)
     throw std::runtime_error("Scene KEYS registry opaque handle range is exhausted");
 
@@ -1602,27 +1341,6 @@ std::optional<data::KeysBackingSample> IntroRuntime::evaluate_scene_lifetime_key
     return std::nullopt;
   return data::KeysBackingEvaluator::evaluate(*scene_lifetime_keys_backing_, binding->descriptor,
                                               normalized_coordinate);
-}
-
-void IntroRuntime::construct_lens_flare_animation_scope_without_engine_renderer() {
-  if(resource_load_stage_!=IntroResourceLoadStage::room_animation_scope_ready ||
-      loaded_resource_handles_.size()!=resources_.sources().directory().size() ||
-      resource_allocation_enabled_ || components_.construction_mode() || manager_row_edit_ || scene_resource_edit_ ||
-      !directory_position_controls_prepared_ || position_mode_.immediate || position_mode_.collection_enabled ||
-      position_updates_.failed())
-    throw std::runtime_error("Directory construction requires completed local-record construction and retained loader controls");
-  resource_load_stage_=IntroResourceLoadStage::lens_flare_animation_scope_ready;
-}
-
-void IntroRuntime::construct_remaining_directory_without_engine_renderer() {
-  if(resource_load_stage_!=IntroResourceLoadStage::lens_flare_animation_scope_ready ||
-      loaded_resource_handles_.size()!=resources_.sources().directory().size() ||
-      resource_allocation_enabled_ || components_.construction_mode() || manager_row_edit_ || scene_resource_edit_ ||
-      !directory_position_controls_prepared_ || position_mode_.immediate || position_mode_.collection_enabled ||
-      position_updates_.failed() || sound_load_policy_!=IntroSoundLoadPolicy::directory_construction ||
-      !source_script_work_.empty())
-    throw std::runtime_error("Directory construction requires complete local-record construction and retained loader controls");
-  resource_load_stage_=IntroResourceLoadStage::directory_construction_complete;
 }
 
 void IntroRuntime::prepare_deferred_references(IntroDeferredReaderWork& work) {
@@ -2582,191 +2300,6 @@ IntroRuntime::resolve_marked_source_address(std::uint32_t reference) const {
   return slot*slot_bytes;
 }
 
-void IntroRuntime::construct_unprocessed_directory_records_without_engine_renderer() {
-  const auto& directory = resources_.sources().directory();
-  if (loaded_resource_handles_.size() > directory.size() ||
-      directory_resource_mapping_.size() != directory.size())
-    throw std::runtime_error("Local source directory mapping is inconsistent");
-
-  try {
-    for (std::size_t row = loaded_resource_handles_.size(); row < directory.size(); ++row) {
-      const auto& source = directory[row];
-      if (!application_.has_class_registration(source.source_type))
-        throw std::runtime_error("Unsupported local source class " +
-                                 std::to_string(source.source_type) + " at directory entry " +
-                                 std::to_string(row));
-      if (source.post_load_source_offset != 0U)
-        throw std::runtime_error("Unsupported local source post-load block at directory entry " +
-                                 std::to_string(row));
-      if (!std::ranges::all_of(source.position, [](float value) { return std::isfinite(value); }) ||
-          !std::ranges::all_of(source.basis, [](float value) { return std::isfinite(value); }))
-        throw std::runtime_error("Invalid local source transform at directory entry " +
-                                 std::to_string(row));
-
-      const bool group_partition = source.pool_class % 8U == 0U;
-      if (owner_components(source_handle(row)).size() != source.attachments.size())
-        throw std::runtime_error("Local source attachment catalog is inconsistent at directory entry " +
-                                 std::to_string(row));
-      for (std::size_t slot = 0; slot < source.attachments.size(); ++slot) {
-        const auto factory = resources_.sources().attachment_identifier(row, slot);
-        if (!application_.has_component_class_registration(factory))
-          throw std::runtime_error("Unsupported local source attachment class '" + std::string(factory) +
-                                   "' at directory entry " + std::to_string(row));
-      }
-
-      advance_source_loading_progress_without_engine_renderer(row);
-      const auto parent = resources_.sources().hierarchy().at(row).parent_directory_index;
-      if (parent) {
-        if (*parent >= row || !directory_resource_mapping_.at(*parent))
-          throw std::runtime_error("Local source parent has no earlier live resource at directory entry " +
-                                   std::to_string(row));
-        const auto parent_owner = associated_resource_owner(*directory_resource_mapping_.at(*parent));
-        if (!parent_owner || *parent_owner != source_handle(*parent))
-          throw std::runtime_error("Local source parent is not bound to its parsed owner at directory entry " +
-                                   std::to_string(row));
-        current_source_parent_ = source_handle(*parent);
-      } else {
-        current_source_parent_ = root_handle();
-      }
-      if (std::ranges::find(source_resource_scopes_, source.pool_group,
-                            &IntroSourceResourceScope::count_group) == source_resource_scopes_.end()) {
-        if (source.pool_group != count_group_selector_)
-          throw std::runtime_error("Local source allocation group is not the next authored group at directory entry " +
-                                   std::to_string(row));
-        allocate_source_scope(source.pool_group);
-      }
-      if (group_partition)
-        construct_group_row_without_engine_renderer(row);
-      else
-        construct_non_group_row_without_engine_renderer(row);
-    }
-  } catch (...) {
-    resource_load_stage_ = IntroResourceLoadStage::failed;
-    throw;
-  }
-}
-
-void IntroRuntime::construct_room_animation_scope_without_engine_renderer() {
-  if (resource_load_stage_ != IntroResourceLoadStage::following_visual_scope_ready ||
-      loaded_resource_handles_.size() > resources_.sources().directory().size() ||
-      resource_allocation_enabled_ || components_.construction_mode() || manager_row_edit_ || scene_resource_edit_ ||
-      !directory_position_controls_prepared_ || position_mode_.immediate || position_mode_.collection_enabled ||
-      position_updates_.failed())
-    throw std::runtime_error("Local directory construction requires the completed preceding scope and retained loader controls");
-
-  construct_unprocessed_directory_records_without_engine_renderer();
-  resource_load_stage_ = IntroResourceLoadStage::room_animation_scope_ready;
-}
-
-void IntroRuntime::construct_following_visual_scope_without_engine_renderer() {
-  if(resource_load_stage_!=IntroResourceLoadStage::second_window_scope_ready ||
-      loaded_resource_handles_.size()!=42 || count_group_selector_!=4 ||
-      resource_allocation_enabled_ || components_.construction_mode() || manager_row_edit_ || scene_resource_edit_ ||
-      current_source_parent()!=source_handle(6))
-    throw std::runtime_error("Following visual scope requires the completed second Window");
-  if(!application_.has_class_registration(0x00100001U) || !application_.has_class_registration(0x0020003aU))
-    throw std::runtime_error("Following visual scope requires Group and concrete visual registrations");
-  const auto& directory=resources_.sources().directory();
-  if(directory.size()<48) throw std::runtime_error("Following visual scope sources are absent");
-  const auto zero=[](float value){return std::bit_cast<std::uint32_t>(value)==0U;};
-  for(std::size_t row=42;row<=47;++row) {
-    const auto& source=directory[row];
-    const bool group=row==42;
-    const auto flags=group?0x03000000U:row<=44?0x00200000U:0U;
-    if(source.source_type!=(group?0x00100001U:0x0020003aU) || source.source_variant ||
-        source.parent_steps!=(group?1:0) || source.enters_child_pool!=group ||
-        source.pool_group!=(group?0U:5U) || source.pool_class!=(group?0U:1U) || source.object_flags!=flags ||
-        source.auxiliary_value || source.buf_auxiliary_offset || source.child_value || source.post_load_source_offset ||
-        source.attachment_table_offset || !source.attachments.empty() || !owner_components(source_handle(row)).empty() ||
-        !source.deferred_source_offset || !engine_identity_bits(source.basis) || !std::ranges::all_of(source.position,zero) ||
-        ((group || row==44)?source.class_data_value!=0:source.class_data_value==0))
-      throw std::runtime_error("Unsupported following visual scope source shape");
-  }
-  const auto& root_state=resource_state(root_handle());
-  if(!root_state || root_state->flags!=0x09000000U || root_state->context.value ||
-      !root_owner_state_ || !root_owner_state_->enabled || root_owner_state_->room_mode ||
-      root_owner_state_->aggregate_flags || !root_owner_state_->category_memberships.empty() ||
-      hierarchy_[0].parent!=no_picture_transform_parent || !engine_identity_bits(hierarchy_[0].matrix) ||
-      !std::ranges::all_of(hierarchy_[0].position,zero) ||
-      resource_parent(source_handle(6))!=resource_handle(root_handle()) ||
-      child_owners(root_handle())!=std::vector<IntroRuntimeHandle>{source_handle(0),source_handle(1),source_handle(6)})
-    throw std::runtime_error("Following visual scope requires retained fresh ROOT ancestry");
-  std::vector<IntroRuntimeHandle> children;
-  for(std::size_t row=7;row<=41;++row) children.push_back(source_handle(row));
-  if(child_owners(source_handle(6))!=children)
-    throw std::runtime_error("Second Window child scope is not complete");
-  try {
-    advance_source_loading_progress_without_engine_renderer(42);
-    current_source_parent_=root_handle();
-    construct_group_row_without_engine_renderer(42);
-    for(std::size_t row=43;row<=47;++row) {
-      advance_source_loading_progress_without_engine_renderer(row);
-      if(row==43) allocate_source_scope(count_group_selector_);
-      construct_non_group_row_without_engine_renderer(row);
-    }
-    resource_load_stage_=IntroResourceLoadStage::following_visual_scope_ready;
-  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
-}
-
-void IntroRuntime::construct_second_window_scope_without_engine_renderer() {
-  if(resource_load_stage_!=IntroResourceLoadStage::second_window_picture_ready ||
-      loaded_resource_handles_.size()!=8 || count_group_selector_!=4 ||
-      resource_allocation_enabled_ || components_.construction_mode() || manager_row_edit_ || scene_resource_edit_)
-    throw std::runtime_error("Second Window scope requires its Window and first Picture");
-  if(!directory_position_controls_prepared_ || position_mode_.immediate || position_mode_.collection_enabled || position_updates_.failed())
-    throw std::runtime_error("Second Window scope requires established directory position controls");
-  const auto& window=window_for_owner(current_source_parent());
-  const auto& root_state=resource_state(root_handle());
-  const auto& window_state=resource_state(window.group.owner);
-  if(window.group.owner!=source_handle(6) || window.group.aggregate_flags ||
-      !root_state || root_state->flags!=0x09000000U || root_state->context.value ||
-      !root_owner_state_ || !root_owner_state_->enabled || root_owner_state_->room_mode ||
-      root_owner_state_->aggregate_flags || !root_owner_state_->category_memberships.empty() ||
-      !window_state || window_state->flags!=0x09000000U || window_state->context.value ||
-      resource_parent(window.group.owner)!=resource_handle(root_handle()) ||
-      child_owners(root_handle())!=std::vector<IntroRuntimeHandle>{source_handle(0),source_handle(1),source_handle(6)} ||
-      child_owners(window.group.owner)!=std::vector<IntroRuntimeHandle>{source_handle(7)})
-    throw std::runtime_error("Second Window child prefix is not retained");
-  const auto& directory=resources_.sources().directory();
-  if(directory.size()<42) throw std::runtime_error("Second Window scope sources are absent");
-  constexpr std::array<std::size_t,13> characters{8,12,14,17,19,21,23,25,27,29,31,33,35};
-  const auto exact=[](float actual,float expected){return std::bit_cast<std::uint32_t>(actual)==std::bit_cast<std::uint32_t>(expected);};
-  for(std::size_t row=8;row<=41;++row) {
-    const auto& source=directory[row];
-    const bool character=std::ranges::find(characters,row)!=characters.end();
-    const bool picture=row==9 || row==36;
-    const bool camera=row==10;
-    const bool list=!character && !picture && !camera;
-    const auto type=character?0x0020002dU:picture?0x00200046U:camera?0x00400003U:0x0800001aU;
-    const bool hidden=row==8 || row==17 || row==18 || row==20 || row==21;
-    const auto x=character?(row==8?80.0F:100.0F):0.0F;
-    const auto y=character?(row==8?150.0F:300.0F):0.0F;
-    if(source.source_type!=type || !application_.has_class_registration(type) || source.source_variant ||
-        source.parent_steps || source.enters_child_pool || source.pool_group!=4 || source.pool_class!=(character || picture?1U:3U) ||
-        (source.object_flags&0xfffffU)!=(hidden?0x400U:0U) || source.class_data_value || source.auxiliary_value ||
-        source.buf_auxiliary_offset || source.child_value || source.post_load_source_offset || !source.deferred_source_offset ||
-        !engine_identity_bits(source.basis) || !exact(source.position[0],x) || !exact(source.position[1],y) || !exact(source.position[2],0.0F))
-      throw std::runtime_error("Unsupported second Window owner source");
-    const auto expected_count=camera || row==8?0U:list?(row==11 || row==37 || row==38 || row==41?1U:2U):1U;
-    if(source.attachments.size()!=expected_count || owner_components(source_handle(row)).size()!=expected_count ||
-        (!expected_count && source.attachment_table_offset))
-      throw std::runtime_error("Unsupported second Window attachment count");
-    for(std::size_t slot=0;slot<source.attachments.size();++slot) {
-      const auto expected=list?"ZLIST_ExternCutSequenceCommand":character?"ZCHAROBJ_CharFader":row==36?"ZWINPIC_LogoFade":"ZWINPIC_FadeToBlack";
-      if(resources_.sources().attachment_identifier(row,slot)!=expected ||
-          !application_.has_component_class_registration(expected) ||
-          std::bit_cast<std::uint32_t>(source.attachments[slot].parameter)!=(list?0x3f800000U:0U))
-        throw std::runtime_error("Unsupported second Window attachment factory or argument");
-    }
-  }
-  try {
-    for(std::size_t row=8;row<=41;++row) {
-      advance_source_loading_progress_without_engine_renderer(row);
-      construct_non_group_row_without_engine_renderer(row);
-    }
-    resource_load_stage_=IntroResourceLoadStage::second_window_scope_ready;
-  } catch(...) {resource_load_stage_=IntroResourceLoadStage::failed;throw;}
-}
 IntroWindowOwner& IntroRuntime::window_for_owner(IntroRuntimeHandle owner) {
   static_cast<void>(hierarchy_index(owner));
   if(resource_load_stage_==IntroResourceLoadStage::failed)
@@ -2953,7 +2486,7 @@ const IntroSoundFamilyPhaseOneResult& IntroRuntime::run_isolated_sound_family_ph
       isolated_sound_family_phase_one_)
     throw std::runtime_error("Isolated intro sound phase one cannot run twice");
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
-      components_.failed() || components_.phases_completed() || sounds_.size()!=2U)
+      components_.failed() || components_.phases_completed())
     throw std::runtime_error("Isolated intro sound phase one is unavailable for this scene");
   struct BusyGuard {
     bool& value;
@@ -2964,7 +2497,11 @@ const IntroSoundFamilyPhaseOneResult& IntroRuntime::run_isolated_sound_family_ph
     IntroSoundFamilyPhaseOneResult result;
     constexpr std::array<std::string_view,4> factories{
         "ZSNDOBJ_SoundExtend","ZSNDOBJ_SoundNotify","ZSNDOBJ_SoundSegment","ZGEOM_ZSetZDefine"};
-    std::array<std::size_t,8> callback_order{};
+    if(sounds_.size()>std::numeric_limits<std::size_t>::max()/factories.size())
+      throw std::runtime_error("Sound phase-one callback count overflows host capacity");
+    const auto callback_count=sounds_.size()*factories.size();
+    result.owners.resize(sounds_.size());
+    std::vector<std::size_t> callback_order(callback_count);
     for(std::size_t reverse=0;reverse<sounds_.size();++reverse) {
       auto& sound=*sounds_.at(sounds_.size()-1U-reverse);
       const auto source=sound.source_index();
@@ -2990,15 +2527,15 @@ const IntroSoundFamilyPhaseOneResult& IntroRuntime::run_isolated_sound_family_ph
       output={source,attachment_indices[0],attachment_indices[1],attachment_indices[2],attachment_indices[3],
               sound.record().duration,restore_mode_,false,define->property_key};
       // Real first-phase order: define, segment, notify, extend.  The scoped
-      // runtime preflights all eight typed callbacks before the first one
+      // runtime preflights all typed callbacks before the first one
       // runs; it provides no owner lookup, retirement or global completion.
-      const auto start=reverse*4U;
+      const auto start=reverse*factories.size();
       callback_order[start]=attachment_indices[3];
       callback_order[start+1U]=attachment_indices[2];
       callback_order[start+2U]=attachment_indices[1];
       callback_order[start+3U]=attachment_indices[0];
     }
-    components_.run_scoped_phase_one(callback_order);
+    if(!callback_order.empty()) components_.run_scoped_phase_one(callback_order);
     for(std::size_t reverse=0;reverse<sounds_.size();++reverse) {
       auto& output=result.owners[reverse];
       const auto payload=constructed_picture_components_.find(output.extend_component);
@@ -3945,10 +3482,8 @@ void IntroRuntime::prepare_supported_first_cut_player() {
     tail_members[slot-2U]=IntroFirstCutTailMemberProvenance{
         reference,*source,source_handle(*source),*directory_resource_mapping_[*source]};
   }
-  const bool reviewed_component_form=resources_.sources().deferred_source_block(
-      resources_.first_cut_index()).size()==171U;
-  if(reviewed_component_form && !first_cut_component_reader_state_)
-    throw std::runtime_error("First-cut player requires its reviewed component reader state");
+  if(!first_cut_component_reader_state_)
+    throw std::runtime_error("First-cut player requires the typed component reader state");
   if(first_cut_component_reader_state_ &&
       (first_cut_component_reader_state_->owner!=list.owner ||
        first_cut_component_reader_state_->resource!=list.resource ||
@@ -4102,10 +3637,8 @@ cutscene::FirstCutPlayerDescriptor IntroRuntime::first_cut_player_descriptor() c
       player.sequence_component_index != sequence.component_index ||
       player.list_resource != list.resource || player.sequence_resource != sequence.resource)
     throw std::runtime_error("First-cut player prepared state no longer matches its readers");
-  const bool reviewed_component_form=resources_.sources().deferred_source_block(
-      resources_.first_cut_index()).size()==171U;
-  if(reviewed_component_form && !first_cut_component_reader_state_)
-    throw std::runtime_error("First-cut player descriptor requires reviewed component reader state");
+  if(!first_cut_component_reader_state_)
+    throw std::runtime_error("First-cut player descriptor requires typed component reader state");
   if(player.leading_controls!=std::array<std::uint32_t,3>{list.authored.settings_words[0],
          list.authored.settings_words[1],list.authored.settings_words[2]} ||
       player.raw_scalar!=list.authored.settings_words[3] ||
@@ -4383,14 +3916,35 @@ bool IntroRuntime::first_cut_fade_reader_matches(std::size_t component_index) co
   return picture!=pictures_.end();
 }
 
+std::vector<std::size_t> IntroRuntime::first_cut_fade_target_sources() const {
+  std::vector<std::size_t> targets;
+  for(const auto& command:resources_.first_cut().commands) {
+    if(command.target_reference==0U) continue;
+    const auto source=resources_.sources().local_source_for_authored_reference(
+        command.target_reference);
+    if(!source)
+      throw std::runtime_error("First-cut fade target has no local source binding");
+    targets.push_back(*source);
+  }
+  std::ranges::sort(targets);
+  const auto unique_end=std::unique(targets.begin(),targets.end());
+  targets.erase(unique_end,targets.end());
+  return targets;
+}
+
 void IntroRuntime::bind_first_cut_fade_phase_one_services(IntroFadePicturePhaseOneServices services) {
+  const auto targets=first_cut_fade_target_sources();
   if(fade_picture_phase_one_services_ || components_.failed() ||
       !services.engine_dimensions || !services.invalidate_resource ||
-      fade_picture_reader_states_.size()!=3U || fade_picture_component_reader_states_.size()!=3U)
+      fade_picture_reader_states_.size()!=targets.size() ||
+      fade_picture_component_reader_states_.size()!=targets.size())
     throw std::runtime_error("First-cut fade phase one requires complete readers and retained scene services");
-  for(const auto& [source,reader]:fade_picture_reader_states_) {
-    static_cast<void>(source);
-    if(!first_cut_fade_reader_matches(reader.component_index))
+  for(const auto source:targets) {
+    const auto reader=fade_picture_reader_states_.find(source);
+    if(reader==fade_picture_reader_states_.end() ||
+        !fade_picture_component_reader_states_.contains(source))
+      throw std::runtime_error("First-cut fade phase one is missing a unique command target reader");
+    if(!first_cut_fade_reader_matches(reader->second.component_index))
       throw std::runtime_error("First-cut fade phase one has mismatched live reader state");
   }
   fade_picture_phase_one_services_=std::move(services);
@@ -4408,25 +3962,32 @@ IntroRuntime::run_admitted_first_cut_phase_one_subset(
     throw std::runtime_error("admitted first-cut phase-one subset component lifecycle is unavailable");
   if (!services.engine_dimensions || !services.invalidate_resource)
     throw std::runtime_error("admitted first-cut phase-one subset fade services are incomplete");
-  if (fade_picture_reader_states_.size()!=3U || fade_picture_component_reader_states_.size()!=3U)
+  const auto fade_targets=first_cut_fade_target_sources();
+  if (fade_picture_reader_states_.size()!=fade_targets.size() ||
+      fade_picture_component_reader_states_.size()!=fade_targets.size())
     throw std::runtime_error("admitted first-cut phase-one subset fade readers are incomplete");
-  if (sounds_.size()!=2U)
-    throw std::runtime_error("admitted first-cut phase-one subset sound owners are incomplete");
   if (isolated_sound_family_phase_one_busy_ || isolated_sound_family_phase_one_failed_ ||
       isolated_sound_family_phase_one_)
     throw std::runtime_error("admitted first-cut phase-one subset sound phase is unavailable");
 
   IntroAdmittedPhaseOneSubsetResult result;
-  std::array<std::size_t,8> sound_callbacks{};
   constexpr std::array<std::string_view,4> factories{
       "ZSNDOBJ_SoundExtend", "ZSNDOBJ_SoundNotify", "ZSNDOBJ_SoundSegment",
       "ZGEOM_ZSetZDefine"};
+  if(sounds_.size()>std::numeric_limits<std::size_t>::max()/factories.size())
+    throw std::runtime_error("admitted first-cut sound callback count overflows host capacity");
+  const auto sound_callback_count=sounds_.size()*factories.size();
+  result.sound.owners.resize(sounds_.size());
+  std::vector<std::size_t> sound_callbacks(sound_callback_count);
 
-  for (const auto& [source, reader] : fade_picture_reader_states_) {
-    static_cast<void>(source);
-    if (!first_cut_fade_reader_matches(reader.component_index))
+  for (const auto source : fade_targets) {
+    const auto reader=fade_picture_reader_states_.find(source);
+    if(reader==fade_picture_reader_states_.end() ||
+        !fade_picture_component_reader_states_.contains(source))
+      throw std::runtime_error("admitted first-cut phase-one subset is missing a unique command target reader");
+    if (!first_cut_fade_reader_matches(reader->second.component_index))
       throw std::runtime_error("admitted first-cut phase-one subset has mismatched fade reader state");
-    result.fade_components.push_back(reader.component_index);
+    result.fade_components.push_back(reader->second.component_index);
   }
   std::ranges::sort(result.fade_components, std::greater{});
 
@@ -4457,7 +4018,7 @@ IntroRuntime::run_admitted_first_cut_phase_one_subset(
     result.sound.owners[reverse]={source, attachment_indices[0], attachment_indices[1],
         attachment_indices[2], attachment_indices[3], sound.record().duration,
         restore_mode_, false, define->property_key};
-    const auto start=reverse*4U;
+    const auto start=reverse*factories.size();
     sound_callbacks[start]=attachment_indices[3];
     sound_callbacks[start+1U]=attachment_indices[2];
     sound_callbacks[start+2U]=attachment_indices[1];
@@ -4465,11 +4026,15 @@ IntroRuntime::run_admitted_first_cut_phase_one_subset(
   }
 
   std::vector<std::size_t> callbacks;
+  if(result.fade_components.size()>std::numeric_limits<std::size_t>::max()-sound_callbacks.size())
+    throw std::runtime_error("admitted first-cut callback count overflows host capacity");
   callbacks.reserve(sound_callbacks.size()+result.fade_components.size());
   callbacks.insert(callbacks.end(), sound_callbacks.begin(), sound_callbacks.end());
   callbacks.insert(callbacks.end(), result.fade_components.begin(), result.fade_components.end());
-  // This is a binding only. No supplied service is called until all eleven
-  // existing callbacks have passed ComponentLifecycle's scoped preflight.
+  if(callbacks.empty())
+    throw std::runtime_error("admitted first-cut phase-one subset has no source-backed callbacks");
+  // This is a binding only. No supplied service is called until every selected
+  // callback passes ComponentLifecycle's scoped preflight.
   fade_picture_phase_one_services_=std::move(services);
   try {
     components_.run_scoped_phase_one(callbacks);
@@ -4479,7 +4044,7 @@ IntroRuntime::run_admitted_first_cut_phase_one_subset(
         throw std::runtime_error("admitted first-cut phase-one subset lost SoundExtend payload");
       owner.extend_ordinary_removed=payload->second.sound_extend->phase_one_ordinary_removed;
     }
-    isolated_sound_family_phase_one_=result.sound;
+    if(!result.sound.owners.empty()) isolated_sound_family_phase_one_=result.sound;
     return result;
   } catch (...) {
     isolated_sound_family_phase_one_failed_=true;

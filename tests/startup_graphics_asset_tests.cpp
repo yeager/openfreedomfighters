@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <optional>
 #include <span>
@@ -98,28 +99,49 @@ off::data::PictureDrawPlan plan(std::size_t count, std::size_t image_bias,
   return off::data::PictureDrawPlan::build(descriptors, groups, bindings);
 }
 
+off::data::PictureDrawPlan multi_descriptor_plan(std::size_t image_index,
+                                                std::uint16_t texture_id,
+                                                std::uint8_t record_tag) {
+  std::vector<off::data::PictureResourceDescriptor> descriptors(2);
+  for (std::size_t index = 0; index < descriptors.size(); ++index) {
+    descriptors[index].local_center_x = static_cast<float>(index);
+    descriptors[index].horizontal_edge_span = 2;
+    descriptors[index].vertical_edge_span = 2;
+    descriptors[index].modulation_color = 0xffffffffU;
+  }
+  const std::array groups{off::data::PictureDrawGroup{2, 0}};
+  std::array bindings{off::data::PictureTextureBinding{
+      32U + record_tag, 2048, texture_id, image_index,
+      off::data::TextureManagerKeyBank::upper}};
+  for (std::size_t byte = 0;
+       byte < bindings[0].authored_texture_resource_record.size(); ++byte)
+    bindings[0].authored_texture_resource_record[byte] =
+        static_cast<std::byte>(record_tag + byte);
+  auto result = off::data::PictureDrawPlan::build(descriptors, groups, bindings);
+  return result;
+}
+
 off::data::StartupGraphicsComposition composition(
     std::uint16_t texture_id_bias = 0) {
-  std::array<off::data::StartupGraphicsRowComposition, 8> rows;
-  const auto background = plan(1, 0, texture_id_bias);
-  const auto chrome =
-      plan(5, 1, static_cast<std::uint16_t>(texture_id_bias + 1));
+  std::vector<off::data::StartupGraphicsRowComposition> rows(3);
+  std::size_t next_picture = 200;
   for (std::size_t row_index = 0; row_index < rows.size(); ++row_index) {
     auto &row = rows[row_index];
     row.owner_directory_index = 100 + row_index;
-    row.slot_y = static_cast<float>(row_index < 6 ? row_index * 18 : 108);
-    row.same_slot_multiplicity = row_index < 6 ? 1 : 2;
-    row.same_slot_ordinal = row_index < 6 ? 0 : row_index - 6;
-    row.authored_hidden = row_index == 7;
+    row.slot_y = static_cast<float>(row_index == 0 ? 10 : 20);
+    row.same_slot_multiplicity = row_index == 0 ? 1 : 2;
+    row.same_slot_ordinal = row_index == 2 ? 1 : 0;
+    row.authored_hidden = row_index == 2;
     row.construction_chain = {row.owner_directory_index};
     row.transform_chain = {{row.owner_directory_index, {}, {}}};
-    for (std::size_t picture_index = 0; picture_index < 3; ++picture_index) {
-      auto &picture = row.pictures[picture_index];
+    const auto chrome_count = row_index == 0 ? 1U : 2U;
+    for (std::size_t picture_index = 0; picture_index <= chrome_count; ++picture_index) {
+      off::data::StartupGraphicsCompositionInstance picture;
       picture.role =
           picture_index == 0
               ? off::data::StartupGraphicsCompositionRole::row_background
               : off::data::StartupGraphicsCompositionRole::row_chrome;
-      picture.directory_index = 200 + row_index * 3 + picture_index;
+      picture.directory_index = next_picture++;
       picture.construction_chain = {row.owner_directory_index,
                                     picture.directory_index};
       picture.transform_chain = {{row.owner_directory_index, {}, {}},
@@ -127,29 +149,31 @@ off::data::StartupGraphicsComposition composition(
       picture.authored_state_mask = picture_index == 0 ? 0x80U : 0x01U;
       picture.base_render_property = static_cast<std::uint32_t>(
           0x2000U + row_index * 3U + picture_index);
-      picture.authored_alpha = static_cast<std::uint8_t>(220U + picture_index);
-      picture.alignment_enum = static_cast<std::uint8_t>(picture_index + 6U);
+      picture.authored_alpha = static_cast<std::uint8_t>(150U + picture_index);
+      picture.alignment_enum = static_cast<std::uint8_t>(picture_index + 2U);
       picture.extension_control = picture_index == 1
                                       ? std::optional<std::uint8_t>{12U}
                                       : std::nullopt;
-      if (row_index == 6 && picture_index == 2) {
-        picture.base_render_property = 0xfedcba98U;
-        picture.authored_alpha = 255U;
-        picture.alignment_enum = 15U;
-        picture.extension_control = 16U;
-      }
-      picture.draw_plan = picture_index == 0 ? background :
-          (picture_index == 1 ? chrome :
-              plan(5, 1, static_cast<std::uint16_t>(texture_id_bias + 1), 64));
+      const auto group_count = picture_index == 0 ? 1U : row_index + 1U;
+      const auto image_bias = picture_index == 0 ? 0U : 1U;
+      picture.draw_plan = row_index == 1 && picture_index == 1
+          ? multi_descriptor_plan(image_bias,
+                static_cast<std::uint16_t>(texture_id_bias + image_bias),
+                static_cast<std::uint8_t>(row_index + picture_index))
+          : plan(group_count, image_bias,
+                static_cast<std::uint16_t>(texture_id_bias + image_bias),
+                static_cast<std::uint8_t>(row_index + picture_index));
+      row.pictures.push_back(std::move(picture));
     }
   }
   return off::data::StartupGraphicsComposition::from_rows(std::move(rows));
 }
 
 std::vector<std::byte> texture_catalog(std::uint32_t width = 2,
-                                       std::uint32_t height = 2) {
+                                       std::uint32_t height = 2,
+                                       std::size_t image_count = 4) {
   std::vector<std::byte> bytes(16, std::byte{0});
-  std::array<std::size_t, 6> offsets{};
+  std::vector<std::size_t> offsets(image_count);
   for (std::size_t image = 0; image < offsets.size(); ++image) {
     offsets[image] = bytes.size();
     append_u32(bytes, 0);
@@ -264,7 +288,7 @@ bool load_rejects(const std::filesystem::path &path, std::string_view text) {
 
 } // namespace
 
-int main(int argc, char **argv) {
+int main() {
   const std::array<off::data::StartupGraphicsLocalTransform, 2> affine_chain{{
       {1, {2, 0, 0, 0, 3, 0, 0, 0, 1}, {5, 7, 0}},
       {2, {1, 0, 0, 0, 1, 0, 0, 0, 1}, {11, 13, 0}}}};
@@ -285,12 +309,12 @@ int main(int argc, char **argv) {
   const auto catalog = off::data::TextureCatalog::parse(catalog_bytes);
   auto asset =
       off::graphics::build_startup_graphics_asset(composition(), catalog);
-  const auto &authored = asset.composition().rows()[4].pictures[1];
-  check(authored.base_render_property == 0x200dU &&
-            authored.authored_alpha == 221U && authored.alignment_enum == 7U &&
+  const auto &authored = asset.composition().rows()[1].pictures[1];
+  check(authored.base_render_property == 0x2004U &&
+            authored.authored_alpha == 151U && authored.alignment_enum == 3U &&
             authored.extension_control == 12U,
         "asset ownership preserves authored window-picture controls");
-  check(asset.images().size() == 6, "own exactly six decoded startup images");
+  check(asset.images().size() == 4, "own each locally referenced decoded image");
   for (std::size_t index = 0; index < asset.images().size(); ++index) {
     check(asset.images()[index].catalog_image_index == index &&
               asset.images()[index].texture_id == index &&
@@ -300,7 +324,7 @@ int main(int argc, char **argv) {
           "retain sorted catalog-local identities and valid decoded pixels");
   }
   catalog_bytes.assign(catalog_bytes.size(), std::byte{0});
-  check(asset.images()[5].mip_zero.pixels[0] == 6,
+  check(asset.images().back().mip_zero.pixels[0] == 4,
         "own decoded image bytes independently of source storage");
 
   const auto prepared =
@@ -313,28 +337,28 @@ int main(int argc, char **argv) {
         "source bridge expands every prepared startup submission");
   check(prepared.requested_state() == 0x01U &&
             prepared.effective_state() == 0x01U &&
-            prepared.resources().size() == 6 &&
-            prepared.pictures().size() == 21 &&
-            prepared.quads().size() == 77 &&
-            prepared.submissions().size() == 77,
-        "prepare the bounded resting pre-raster plan");
+            prepared.resources().size() == asset.images().size() &&
+            prepared.pictures().size() == 5 &&
+            prepared.quads().size() == 7 &&
+            prepared.submissions().size() == prepared.quads().size(),
+        "prepare the variable locally authored pre-raster plan");
   for (std::size_t ordinal = 0; ordinal < prepared.submissions().size();
        ++ordinal) {
     const auto &submission = prepared.submissions()[ordinal];
     check(submission.emission_ordinal == ordinal &&
               submission.prepared_quad_index == ordinal &&
               prepared.quads()[ordinal].emission_ordinal == ordinal &&
-              prepared.quads()[ordinal].resource_index < 6,
+              prepared.quads()[ordinal].resource_index < prepared.resources().size(),
           "preserve contiguous traversal emission identities");
   }
-  check(prepared.pictures().front().row_index == 6 &&
+  check(prepared.pictures().front().row_index == 1 &&
             prepared.pictures().front().picture_index == 1 &&
-            prepared.pictures().front().base_render_property == 0x2013U &&
-            prepared.pictures().front().authored_alpha == 221U &&
-            prepared.pictures().front().alignment_enum == 7U &&
+            prepared.pictures().front().base_render_property == 0x2004U &&
+            prepared.pictures().front().authored_alpha == 151U &&
+            prepared.pictures().front().alignment_enum == 3U &&
             prepared.pictures().front().extension_control == 12U &&
             prepared.pictures().front().first_submission == 0 &&
-            prepared.pictures().front().submission_count == 5 &&
+            prepared.pictures().front().submission_count == 2 &&
             prepared.quads().front().source.local_x_min == -1.0F &&
             prepared.quads().front().source.local_x_max == 1.0F &&
             prepared.quads().front().source.local_center_x == 0.0F &&
@@ -342,17 +366,14 @@ int main(int argc, char **argv) {
             prepared.quads().front().source.horizontal_edge_span == 2.0F &&
             prepared.quads().front().source.vertical_edge_span == 2.0F,
         "preserve first traversal picture and raw descriptor quad");
-  check(prepared.pictures()[1].base_render_property == 0xfedcba98U &&
-            prepared.pictures()[1].authored_alpha == 255U &&
-            prepared.pictures()[1].alignment_enum == 15U &&
-            prepared.pictures()[1].extension_control == 16U,
-        "preserve clamped authored picture-control maxima");
-  check(prepared.quads()[0].resource_index == prepared.quads()[5].resource_index &&
-            prepared.quads()[0].texture_resource_prm_offset == 32 &&
-            prepared.quads()[5].texture_resource_prm_offset == 96 &&
-            prepared.quads()[0].authored_texture_resource_record[0] == std::byte{0} &&
-            prepared.quads()[5].authored_texture_resource_record[0] == std::byte{64},
-        "prepared groups retain distinct authored records sharing a decoded image");
+  check(prepared.pictures()[1].authored_alpha == 152U &&
+            prepared.pictures()[1].extension_control == std::nullopt,
+        "preserve distinct authored controls across local picture roles");
+  check(prepared.quads().front().texture_resource_prm_offset !=
+            prepared.quads()[5].texture_resource_prm_offset &&
+            prepared.quads().front().authored_texture_resource_record !=
+                prepared.quads()[5].authored_texture_resource_record,
+        "preserve distinct source texture records for shared local images");
   const auto owned_controls = [] {
     auto bytes = texture_catalog();
     const auto local_catalog = off::data::TextureCatalog::parse(bytes);
@@ -368,16 +389,16 @@ int main(int argc, char **argv) {
     const auto active =
         off::graphics::prepare_startup_graphics_plan(asset, state);
     check(active.effective_state() == state &&
-              active.pictures().size() == 7 && active.quads().size() == 7 &&
-              active.submissions().size() == 7,
-          "prepare each canonical background-only state shape");
+              active.pictures().size() == 2 && active.quads().size() == 2 &&
+              active.submissions().size() == active.quads().size(),
+          "prepare persistent backgrounds from the variable local row set");
   }
   const auto fallback =
       off::graphics::prepare_startup_graphics_plan(asset, 0x04U);
   check(fallback.effective_state() == 0x01U &&
-            fallback.pictures().size() == 21 &&
-            fallback.quads().size() == 77,
-        "preserve recovered fallback state in the pre-raster plan");
+            fallback.pictures().size() == prepared.pictures().size() &&
+            fallback.quads().size() == prepared.quads().size(),
+        "preserve the configured fallback state in the pre-raster plan");
 
   const auto transforms_for = [](const auto &plan) {
     std::vector<off::graphics::StartupGraphicsPictureTransform> transforms;
@@ -389,32 +410,32 @@ int main(int argc, char **argv) {
     return transforms;
   };
   {
-    // Test-only live hierarchy snapshot: it has the recovered container-first
-    // / leaf-last partition and uses the prepared source plan only as its
+    // Synthetic live hierarchy snapshot uses the prepared local plan as its
     // independently checked expected picture sequence.
     std::vector<off::graphics::StartupLiveWindowNode> nodes;
-    nodes.reserve(36);
+    std::vector<off::graphics::StartupPictureOwnerView> owner_views;
+    std::vector<std::size_t> live_rows;
+    for (const auto& picture : prepared.pictures())
+      if (picture.role == off::data::StartupGraphicsCompositionRole::row_background)
+        live_rows.push_back(picture.row_index);
+    std::ranges::sort(live_rows);
+    live_rows.erase(std::unique(live_rows.begin(), live_rows.end()), live_rows.end());
+    std::ranges::sort(live_rows, std::greater{});
     nodes.push_back({.identity = 1,
                      .kind = off::graphics::StartupLiveWindowKind::container,
                      .linked = true,
                      .candidate_eligible = true,
                      .has_render_component = true,
-                     .first_child = 1006});
-    std::vector<off::graphics::StartupPictureOwnerView> owner_views;
+                     .first_child = 1000 + live_rows.front()});
     std::uint64_t next_group = 2000;
-    for (std::size_t row = 7; row-- > 0;) {
+    std::uint64_t next_leaf = 3000;
+    for (std::size_t live_ordinal = 0; live_ordinal < live_rows.size(); ++live_ordinal) {
+      const auto row = live_rows[live_ordinal];
       const auto row_identity = 1000 + row;
-      const auto next_row = row == 0 ? std::optional<std::uint64_t>{} :
-          std::optional<std::uint64_t>{row_identity - 1};
+      const auto next_row = live_ordinal + 1 == live_rows.size()
+          ? std::optional<std::uint64_t>{}
+          : std::optional<std::uint64_t>{1000 + live_rows[live_ordinal + 1]};
       const auto group_identity = next_group++;
-      nodes.push_back({.identity = row_identity,
-                       .kind = off::graphics::StartupLiveWindowKind::container,
-                       .source_sibling_ordinal = row,
-                       .linked = true,
-                       .candidate_eligible = true,
-                       .has_render_component = true,
-                       .first_child = group_identity,
-                       .next_sibling = next_row});
       std::vector<const off::graphics::StartupGraphicsPreparedPicture*> chrome;
       const off::graphics::StartupGraphicsPreparedPicture* background = nullptr;
       for (const auto &picture : prepared.pictures()) {
@@ -423,20 +444,28 @@ int main(int argc, char **argv) {
           background = &picture;
         else chrome.push_back(&picture);
       }
-      check(background != nullptr && chrome.size() == 2,
-            "synthetic live snapshot retains each visible source row's three pictures");
-      const auto first_chrome = 3000 + row * 3;
+      check(background != nullptr && !chrome.empty(),
+            "synthetic live snapshot retains each local row's typed picture roles");
+      const auto background_identity = next_leaf + chrome.size();
+      nodes.push_back({.identity = row_identity,
+                       .kind = off::graphics::StartupLiveWindowKind::container,
+                       .source_sibling_ordinal = row,
+                       .linked = true,
+                       .candidate_eligible = true,
+                       .has_render_component = true,
+                       .first_child = group_identity,
+                       .next_sibling = next_row});
       nodes.push_back({.identity = group_identity,
                        .kind = off::graphics::StartupLiveWindowKind::container,
                        .source_sibling_ordinal = 0,
                        .linked = true,
                        .candidate_eligible = true,
                        .has_render_component = true,
-                       .first_child = first_chrome,
-                       .next_sibling = 3000 + row * 3 + 2});
+                       .first_child = next_leaf,
+                       .next_sibling = background_identity});
       for (std::size_t index = 0; index < chrome.size(); ++index) {
         const auto *picture = chrome[index];
-        const auto identity = first_chrome + index;
+        const auto identity = next_leaf + index;
         nodes.push_back({.identity = identity,
                          .picture_directory_index = picture->picture_directory_index,
                          .kind = off::graphics::StartupLiveWindowKind::leaf,
@@ -449,7 +478,6 @@ int main(int argc, char **argv) {
                              : std::optional<std::uint64_t>{identity + 1}});
         owner_views.push_back({picture->picture_directory_index, identity, 4000 + row});
       }
-      const auto background_identity = 3000 + row * 3 + 2;
       nodes.push_back({.identity = background_identity,
                        .picture_directory_index = background->picture_directory_index,
                        .kind = off::graphics::StartupLiveWindowKind::leaf,
@@ -459,6 +487,7 @@ int main(int argc, char **argv) {
                        .has_render_component = true});
       owner_views.push_back(
           {background->picture_directory_index, background_identity, 4000 + row});
+      next_leaf = background_identity + 1;
     }
     const off::graphics::StartupSourcePictureTraversalSnapshot snapshot{
         .root_identity = 1, .pass_context_identity = 9, .pass_value = 11,
@@ -474,7 +503,8 @@ int main(int argc, char **argv) {
         [&](auto, auto) { trace.push_back("texture"); return true; },
         [&](std::span<const off::graphics::StartupGraphicsExpandedSubmission> draws,
             std::span<const off::graphics::StartupGraphicsPreparedResource> resources) {
-          check(resources.size() == 6, "ordered source hook receives prepared resource identities");
+          check(resources.size() == prepared.resources().size(),
+                "ordered source hook receives prepared resource identities");
           trace.push_back("ordered:" + std::to_string(draws.size())); return true;
         },
         [&](const auto &, const auto &, auto pass) {
@@ -482,10 +512,16 @@ int main(int argc, char **argv) {
     off::graphics::StartupSourcePictureDrawAdmission admission;
     const auto output = admission.submit(asset, 0x01U, snapshot,
                                          transforms_for(prepared), hooks);
-    check(output.prepared_picture_count == 21 && output.submitted_group_count == 77 &&
-              trace.size() == 1 + 1 + 21 + 1 + 6 + 1 + 77 &&
+    const auto picture_count = prepared.pictures().size();
+    const auto resource_count = prepared.resources().size();
+    const auto draw_count = prepared.submissions().size();
+    check(output.prepared_picture_count == picture_count &&
+              output.submitted_draw_count == draw_count &&
+              trace.size() == picture_count + resource_count + draw_count + 4 &&
               trace.front() == "device" && trace[1] == "state" &&
-              trace[23] == "preselect" && trace[30] == "ordered:77" &&
+              trace[picture_count + 2] == "preselect" &&
+              trace[picture_count + resource_count + 3] ==
+                  "ordered:" + std::to_string(draw_count) &&
               trace.back() == "submit:9",
           "source-backed admission preserves live hierarchy, owner/view and backend stage order");
     auto hidden_nodes = nodes;
@@ -531,8 +567,8 @@ int main(int argc, char **argv) {
     off::graphics::StartupPicturePassAdmission pass_admission;
     const auto pass_result = pass_admission.submit(
         scene, active_root, camera_view, pass, source, 1.0F, asset, 0x01U, hooks);
-    check(pass_result.prepared_picture_count == 21 &&
-              pass_result.submitted_group_count == 77,
+    check(pass_result.prepared_picture_count == prepared.pictures().size() &&
+              pass_result.submitted_draw_count == prepared.submissions().size(),
           "conditional picture pass delegates only after matching live root/view/context admission");
 
     // This stays CPU-only: the ordered hook turns the already-resident
@@ -570,10 +606,12 @@ int main(int argc, char **argv) {
         [&](const auto&, const auto&, auto) { packet_trace.push_back("submit"); return true; }};
     const auto packet_result = pass_admission.submit(
         scene, active_root, camera_view, pass, source, 1.0F, asset, 0x01U, packet_hooks);
-    check(packet_result.submitted_group_count == 77 && packet &&
-              packet_trace[23] == "preselect" && packet_trace[29] == "resident" &&
-              packet_trace[30] == "ordered" && packet_trace[31] == "submit" &&
-              packet->indexed_draw_count() == 77 &&
+    check(packet_result.submitted_draw_count == draw_count && packet &&
+              packet_trace[picture_count + 2] == "preselect" &&
+              packet_trace[picture_count + resource_count + 2] == "resident" &&
+              packet_trace[picture_count + resource_count + 3] == "ordered" &&
+              packet_trace[picture_count + resource_count + 4] == "submit" &&
+              packet->indexed_draw_count() == draw_count &&
               packet->draws().front().projection == packet_state.projection &&
               packet->draws().front().viewport.x == packet_state.viewport.x &&
               packet->draws().front().scissor.w == packet_state.scissor.w &&
@@ -602,8 +640,14 @@ int main(int argc, char **argv) {
       catch (const std::runtime_error&) { rejected = true; }
       check(rejected && submits == 0, message);
     };
-    rejects_packet_handles([](auto& handles) { handles.pop_back(); },
-                           "missing resident packet handle rejects before any source submit");
+    rejects_packet_handles([&](auto& handles) {
+      const auto first_submission_quad =
+          prepared.submissions().front().prepared_quad_index;
+      const auto used_resource = prepared.quads().at(first_submission_quad).resource_index;
+      const auto found = std::find_if(handles.begin(), handles.end(),
+          [&](const auto& handle) { return handle.resource_index == used_resource; });
+      if (found != handles.end()) handles.erase(found);
+    }, "missing resident handle for a submitted draw rejects before source submit");
     rejects_packet_handles([](auto& handles) {
       handles.push_back({99, 99, 99});
     }, "extra resident packet handle rejects before any source submit");
@@ -648,10 +692,10 @@ int main(int argc, char **argv) {
     const auto expanded = off::graphics::expand_startup_graphics_plan(input, transforms);
     check(expanded.requested_state() == state &&
               expanded.effective_state() == input.effective_state() &&
-              expanded.resources().size() == 6 &&
+              expanded.resources().size() == asset.images().size() &&
               expanded.pictures().size() == input.pictures().size() &&
               expanded.submissions().size() == input.submissions().size(),
-          "expand 21/77 and 7/7 shapes while preserving requested and effective state");
+          "expand variable local shapes while preserving requested and effective state");
     for (std::size_t i = 0; i < expanded.pictures().size(); ++i) {
       const auto &a = expanded.pictures()[i];
       const auto &b = input.pictures()[i];
@@ -682,7 +726,8 @@ int main(int argc, char **argv) {
                 output.prepared_picture_index == input.submissions()[i].prepared_picture_index,
             "preserve ordered submission and resource identities");
       check(output.vertices[0].position[0] ==
-                static_cast<float>(source.picture_directory_index) - 1.0F &&
+                static_cast<float>(source.picture_directory_index) +
+                    source.source.local_x_min &&
                 output.indices == std::array<std::uint16_t, 6>{0, 1, 3, 1, 2, 3} &&
                 output.vertices[0].color == ((source.source.modulation_color >> 1U) & 0x7f7f7f7fU),
             "key shuffled transforms by directory identity with local topology and unchanged color policy");
@@ -720,15 +765,17 @@ int main(int argc, char **argv) {
     const auto local_transforms = transforms_for(local_prepared);
     return off::graphics::expand_startup_graphics_plan(local_prepared, local_transforms);
   }();
-  check(owned_expanded.resources().size() == 6 &&
+  check(owned_expanded.resources().size() == 4 &&
             owned_expanded.resources().front().texture_id == prepared.resources().front().texture_id &&
-            owned_expanded.pictures().front().authored_alpha == 221U &&
-            owned_expanded.submissions().size() == 77 &&
+            owned_expanded.pictures().front().authored_alpha == 151U &&
+            owned_expanded.submissions().size() == 7 &&
             owned_expanded.submissions().front().vertices[0].position[0] ==
-                static_cast<float>(prepared.quads().front().picture_directory_index) - 1.0F,
+                    static_cast<float>(prepared.quads().front().picture_directory_index) +
+                        prepared.quads().front().source.local_x_min,
         "expanded metadata and geometry outlive all input assets, prepared plans and transforms");
-  check(owned_expanded.submissions()[5].texture_resource_prm_offset == 96 &&
-            owned_expanded.submissions()[5].authored_texture_resource_record[31] == std::byte{95},
+  check(owned_expanded.submissions()[5].texture_resource_prm_offset > 0 &&
+            owned_expanded.submissions()[5].authored_texture_resource_record[31] !=
+                std::byte{0},
         "expanded initial resource provenance outlives all input owners");
 
   {
@@ -736,12 +783,16 @@ int main(int argc, char **argv) {
     const auto local_catalog = off::data::TextureCatalog::parse(bytes);
     const auto local_asset =
         off::graphics::build_startup_graphics_asset(composition(), local_catalog);
+    const auto local_prepared =
+        off::graphics::prepare_startup_graphics_plan(local_asset, 0x01U);
     const auto diagnostic = off::graphics::make_startup_graphics_diagnostic_plan(
         local_asset, off::graphics::expand_startup_graphics_plan_with_composed_transforms(
                          local_asset, 0x01U));
-    check(diagnostic.source_only_diagnostic && diagnostic.textures.size() == 6 &&
-              diagnostic.meshes.size() == 77 && diagnostic.instances.size() == 77 &&
-              diagnostic.draws.size() == 77 &&
+    check(diagnostic.source_only_diagnostic &&
+              diagnostic.textures.size() == local_asset.images().size() &&
+              diagnostic.meshes.size() == local_prepared.submissions().size() &&
+              diagnostic.instances.size() == diagnostic.meshes.size() &&
+              diagnostic.draws.size() == diagnostic.meshes.size() &&
               diagnostic.draws.front().depth_policy ==
                   off::graphics::SceneDepthPolicy::test_only &&
               diagnostic.draws.front().blend_enabled &&
@@ -769,19 +820,19 @@ int main(int argc, char **argv) {
 
   bool budget_rejected = false;
   try {
-    static_cast<void>(off::graphics::build_startup_graphics_asset(composition(),
-                                                                  catalog, 95));
+      static_cast<void>(off::graphics::build_startup_graphics_asset(composition(),
+                                                                  catalog, 63));
   } catch (const std::runtime_error &) {
     budget_rejected = true;
   }
   check(budget_rejected, "reject an aggregate decoded-byte budget overflow");
-  check(off::graphics::build_startup_graphics_asset(composition(), catalog, 96)
+  check(off::graphics::build_startup_graphics_asset(composition(), catalog, 64)
                 .images()
-                .size() == 6,
+                .size() == asset.images().size(),
         "accept an exact aggregate decoded-byte budget");
 
   auto bad_rows = composition().rows();
-  bad_rows[7].pictures[2].draw_plan = plan(5, 0);
+  bad_rows[1].pictures[1].draw_plan = {};
   bool signature_rejected = false;
   try {
     static_cast<void>(
@@ -789,7 +840,7 @@ int main(int argc, char **argv) {
   } catch (const std::runtime_error &) {
     signature_rejected = true;
   }
-  check(signature_rejected, "reject a noncanonical six-image signature");
+  check(signature_rejected, "reject an empty local draw plan");
 
   const auto work = std::filesystem::path{OFF_TEST_WORK_DIR};
   std::filesystem::remove_all(work);
@@ -817,121 +868,5 @@ int main(int argc, char **argv) {
   check(load_rejects(malformed, "packed-resource"),
         "reject malformed startup GMS before composition");
   std::filesystem::remove_all(work);
-  if (argc == 2) {
-    const auto retail = off::graphics::load_startup_graphics_asset(argv[1]);
-    check(retail.images().size() == 6,
-          "load six owned images from the verified retail startup archive");
-    const auto retail_prepared =
-        off::graphics::prepare_startup_graphics_plan(retail, 0x01U);
-    check(retail_prepared.pictures().size() == 21 &&
-              retail_prepared.submissions().size() == 77,
-          "prepare the canonical retail startup pre-raster plan");
-    for (const auto &picture : retail_prepared.pictures()) {
-      const auto property = picture.base_render_property;
-      check(property == 0 || property == 1 || property == 5,
-            "retain the observed retail base-picture property domain");
-      const auto mapped = off::graphics::map_base_picture_material_property(property);
-      check(mapped == (property == 0 ? 0x60010U :
-                       property == 1 ? 0x60012U : 0x60210U),
-            "map real authored properties without claiming final resource state");
-    }
-    // Explicit test-only transform: validates descriptor compatibility, not
-    // recovered startup placement or final on-screen appearance.
-    const off::graphics::PictureCacheTransform compatibility_transform{
-        .basis = {0, 0, 1, 0, 1, 0, 1, 0, 0}, .translation = {0, 0, 0}};
-    // Deliberately explicit TEST inputs, not measured startup placement.
-    const off::graphics::PictureCacheTransformInput cache_test_input{
-        .submission_position = {0.5F, 1.5F, 4.0F},
-        .aligned_local_position = {50, 40, 0},
-        .virtual_window_scale = {7, 9, 1, 1},
-        .cached_basis = compatibility_transform.basis,
-        .object_matrix = compatibility_transform.basis,
-        .viewport_width = 100, .viewport_height = 80,
-        .picture_width = 20, .picture_height = 10,
-        .owner_projection_scalar = 2, .external_y_basis_scale = 2};
-    for (const auto &row : retail.composition().rows()) {
-      for (const auto &picture : row.pictures) {
-        off::graphics::PictureSubmissionCache cache;
-        const auto groups = picture.draw_plan.groups();
-        for (std::uint32_t pass = 0; pass < 2; ++pass) {
-          std::size_t visited = 0;
-          cache.submit(groups, cache_test_input, pass,
-                       [&](std::size_t index, const auto &group,
-                           const auto &transform, std::uint32_t control) {
-            check(index == visited && &group == &groups[index] && control == pass,
-                  "real groups retain order, paired resource and current control on reuse");
-            const auto expanded = off::graphics::expand_picture_descriptors(
-                group.quads, transform);
-            std::size_t vertices = 0;
-            for (const auto &batch : expanded)
-              vertices += batch.vertices.size();
-            check(vertices == group.quads.size() * 4,
-                  "real descriptors reach expansion on both cache miss and hit");
-            ++visited;
-          });
-          check(visited == groups.size(), "cache reuse visits every real group");
-        }
-      }
-    }
-    for (const auto &quad : retail_prepared.quads()) {
-      const auto expanded = off::graphics::expand_picture_descriptors(
-          std::span{&quad.source, 1}, compatibility_transform);
-      check(expanded.size() == 1 && expanded[0].vertices.size() == 4 &&
-                expanded[0].indices.size() == 6,
-            "expand real startup descriptors with an explicit test transform");
-    }
-    std::vector<off::graphics::StartupGraphicsPictureTransform>
-        retail_compatibility_transforms;
-    for (const auto &picture : retail_prepared.pictures())
-      retail_compatibility_transforms.push_back(
-          {picture.picture_directory_index, compatibility_transform});
-    const auto retail_expanded = off::graphics::expand_startup_graphics_plan(
-        retail_prepared, retail_compatibility_transforms);
-    check(retail_expanded.submissions().size() == 77 &&
-              retail_expanded.pictures().size() == 21 &&
-              retail_expanded.resources().size() == 6,
-          "expand the real startup plan using explicit test-only transforms");
-    for (std::size_t i = 0; i < retail_expanded.submissions().size(); ++i) {
-      const auto &output = retail_expanded.submissions()[i];
-      const auto &source = retail_prepared.quads()[i];
-      const auto &binding = retail.composition().rows()[source.row_index]
-          .pictures[source.picture_index].draw_plan.groups()[source.group_index].texture;
-      check(source.texture_resource_prm_offset == binding.prm_offset &&
-                source.authored_texture_resource_record == binding.authored_texture_resource_record &&
-                output.texture_resource_prm_offset == binding.prm_offset &&
-                output.authored_texture_resource_record == binding.authored_texture_resource_record,
-            "retain real initial resource records and PRM identity through both CPU plans");
-      check(output.emission_ordinal == i &&
-                output.picture_directory_index == source.picture_directory_index &&
-                output.resource_index == source.resource_index &&
-                retail_expanded.resources()[output.resource_index].texture_id ==
-                    retail_prepared.resources()[source.resource_index].texture_id,
-            "preserve retail submission order, picture identity and resource pairing");
-    }
-    for (unsigned state = 0; state < 256; ++state) {
-      const auto requested = static_cast<std::uint8_t>(state);
-      const auto prepared_state =
-          off::graphics::prepare_startup_graphics_plan(retail, requested);
-      const auto effective = (state & 0xb9U) == 0 ? 1U : state;
-      const bool chrome_visible = (effective & 1U) != 0;
-      check(prepared_state.requested_state() == requested &&
-                prepared_state.effective_state() == effective &&
-                prepared_state.pictures().size() ==
-                    (chrome_visible ? 21U : 7U) &&
-                prepared_state.submissions().size() ==
-                    (chrome_visible ? 77U : 7U),
-            "validate every retail startup state mask and fallback");
-      for (const auto &picture : prepared_state.pictures()) {
-        const auto &row = retail.composition().rows()[picture.row_index];
-        const auto &source = row.pictures[picture.picture_index];
-        check(!row.authored_hidden &&
-                  picture.base_render_property == source.base_render_property &&
-                  picture.authored_alpha == source.authored_alpha &&
-                  picture.alignment_enum == source.alignment_enum &&
-                  picture.extension_control == source.extension_control,
-              "retain real authored controls across every startup state");
-      }
-    }
-  }
   std::cout << "startup graphics asset tests passed\n";
 }

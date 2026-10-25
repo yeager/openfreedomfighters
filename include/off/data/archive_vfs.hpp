@@ -26,6 +26,12 @@ public:
     [[nodiscard]] MountId mount_directory(
         const std::filesystem::path& directory,
         std::span<const std::string_view> excluded_top_level = {});
+    // Includes only the selected single top-level entries, matched with VFS
+    // case folding. Unselected entries are not inspected or traversed. An
+    // empty selection creates a valid empty mount after validating the root.
+    [[nodiscard]] MountId mount_directory_subset(
+        const std::filesystem::path& directory,
+        std::span<const std::string_view> included_top_level);
     [[nodiscard]] MountId mount(const std::filesystem::path& archive) {
         return mount_archive(archive);
     }
@@ -49,6 +55,11 @@ private:
 
     std::vector<Mount> mounts_;
     MountId next_mount_id_{1};
+
+    [[nodiscard]] MountId mount_directory_impl(
+        const std::filesystem::path& directory,
+        std::span<const std::string_view> selected_top_level,
+        bool include_only);
 };
 
 }  // namespace off::data
