@@ -1954,7 +1954,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                         .h = swapchain_height},
         .load_op = SDL_GPU_LOADOP_DONT_CARE,
         .flip_mode = SDL_FLIP_NONE,
-        .filter = SDL_GPU_FILTER_NEAREST,
+        .filter = SDL_GPU_FILTER_LINEAR,
         .cycle = false};
     SDL_BlitGPUTexture(command, &output_blit);
     SDL_GPUFence *capture_fence = nullptr;
