@@ -46,10 +46,13 @@ The ordinary active-view traversal walks the renderer's active-object array,
 then calls virtual candidate enumerators on each active view object. It filters
 the returned runtime candidates, derives per-candidate pose records from the
 candidate and view state, and passes accepted candidates into renderer-local
-cache and view-list materialization. This establishes a normal per-view
-candidate producer, beyond the conditional shadow-carrier route described
-below. The enumerators' concrete implementations and the active-object array's
-population source remain unknown. The candidate collection has not been
+cache and view-list materialization. The active-object array is populated by
+runtime scene-object activation: the activation path walks an object's own
+child array and queues or registers each child for renderer-view processing.
+This establishes a normal per-view candidate producer, beyond the conditional
+shadow-carrier route described below. The candidate enumerators' concrete
+implementations and the producer of the scene object's child array remain
+unknown. The candidate collection has not been
 identified as the RMC/RMI tables or as an exhaustive enumeration of GMS rows.
 Eligible candidates retain their runtime object identity when wrapped, but
 this does not prove that every map-resolved direct PRM source reaches the view
