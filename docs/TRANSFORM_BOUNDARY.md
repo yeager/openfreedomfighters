@@ -53,10 +53,14 @@ builder in the traced callsite. Treat those records as unconsumed there, not as
 a verified draw packet.
 
 The GMS loader also records each geometry object's local pool ordinal during
-construction. The traced view child-row path follows linked runtime rows and
-renderer-local handles, and does not read or carry that GMS ordinal. No
-pointer or value-flow join from the loader's geometry object to those view rows
-has been established; matching ordinals alone would not prove identity.
+construction and calls a runtime setter that writes a link field at offset
+`+0x6c`. The traced view child-row path reads a `+0x6c` link through a
+component-owned object, then follows renderer-local handles. The setter
+callsite's receiver is a loader-local object, but the available trace does not
+prove that it is the same object or list node read by the view path. The view
+path also does not read or carry the GMS ordinal. No pointer or value-flow join
+from the loader's geometry object to those view rows has been established;
+matching offsets or ordinals alone would not prove identity.
 
 The view-side geometry builders also derive frustum planes from view state and
 test geometry bounds against those planes, updating visibility masks before
