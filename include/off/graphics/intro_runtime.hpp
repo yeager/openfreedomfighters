@@ -903,9 +903,11 @@ private:
   bool active_{}, failed_{}, source_applied_{};
 };
 
-struct IntroSoundSpatialState {
+struct IntroSourceTransformSnapshot {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::array<float,9> basis;
   std::array<float,3> position;
-  std::array<float,3> direction;
 };
 
 struct IntroSoundPreparationServices {
@@ -916,7 +918,6 @@ struct IntroSoundPreparationServices {
   // preparation/stop through this host is rejected, not a mutation-safe traversal.
   std::function<std::uint32_t(IntroRuntimeHandle)> resource_flags;
   std::function<IntroRuntimeHandle(IntroRuntimeHandle)> parent_owner;
-  std::function<IntroSoundSpatialState(IntroRuntimeHandle)> spatial_state;
   std::function<bool()> owner_enable_requested;
   std::function<void(IntroRuntimeHandle)> enable_owner;
 };
@@ -1340,6 +1341,10 @@ public:
   // Borrow the actual hierarchy pose and complete resource flags, never a
   // separate preview/listener copy. No structural host mutation during use.
   [[nodiscard]] PreviewCameraResourceView camera_resource_view(IntroRuntimeHandle owner);
+  // Raw canonical source state, copied by value; never parent-composed.
+  [[nodiscard]] IntroSourceTransformSnapshot source_transform(IntroRuntimeHandle owner) const;
+  void update_source_transform(IntroRuntimeHandle owner, const std::array<float,9>& basis,
+                               const std::array<float,3>& position);
   void set_local_transform(IntroRuntimeHandle handle, const std::array<float,9>& basis,
                            const std::array<float,3>& position);
   [[nodiscard]] std::span<const std::unique_ptr<IntroRuntimePicture>> pictures() const noexcept { return pictures_; }
@@ -1485,6 +1490,8 @@ private:
   void construct_non_group_row_without_engine_renderer(std::size_t row);
   void construct_owner_attachments(std::size_t row,std::uint32_t& mask,std::vector<std::uint64_t>& attachments);
   void apply_directory_transform(std::size_t row,IntroRuntimeResourceHandle resource);
+  void apply_source_transform(IntroRuntimeHandle owner, IntroRuntimeResourceHandle resource,
+                              const std::array<float,9>& basis, const std::array<float,3>& position);
   void assign_fresh_directory_metadata(IntroRuntimeResourceHandle resource,std::uint32_t metadata);
   void assign_directory_property(std::size_t source);
   void attach_directory_owner(std::size_t source,IntroRuntimeResourceHandle resource,IntroRuntimeHandle parent);

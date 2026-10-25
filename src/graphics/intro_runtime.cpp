@@ -1124,25 +1124,58 @@ void IntroRuntime::attach_directory_owner(std::size_t source_index,IntroRuntimeR
 }
 
 void IntroRuntime::apply_directory_transform(std::size_t row,IntroRuntimeResourceHandle resource) {
-  const auto index=resource_index(resource);
   const auto& source=resources_.sources().directory().at(row);
+  apply_source_transform(source_handle(row),resource,source.basis,source.position);
+}
+
+void IntroRuntime::apply_source_transform(IntroRuntimeHandle owner, IntroRuntimeResourceHandle resource,
+    const std::array<float,9>& basis, const std::array<float,3>& position) {
+  const auto index=hierarchy_index(owner);
+  if(resource_load_stage_==IntroResourceLoadStage::failed ||
+      resource_handle(owner)!=resource || resource_index(resource)!=index ||
+      associated_resource_owner(resource)!=owner || !resource_states_.at(index))
+    throw std::runtime_error("Source transform requires a canonical live resource");
+  for(float value:basis) if(!std::isfinite(value)) throw std::runtime_error("Source basis must be finite");
+  for(float value:position) if(!std::isfinite(value)) throw std::runtime_error("Source position must be finite");
   auto& pose=hierarchy_.at(index);
   bool equal=true;
   for(std::size_t i=0;i<3;++i)
-    if(std::bit_cast<std::uint32_t>(source.position[i])!=std::bit_cast<std::uint32_t>(pose.position[i])) equal=false;
+    if(std::bit_cast<std::uint32_t>(position[i])!=std::bit_cast<std::uint32_t>(pose.position[i])) equal=false;
   if(equal) for(std::size_t i=0;i<6;++i)
-    if(std::bit_cast<std::uint32_t>(source.basis[i])!=std::bit_cast<std::uint32_t>(pose.matrix[i])) equal=false;
+    if(std::bit_cast<std::uint32_t>(basis[i])!=std::bit_cast<std::uint32_t>(pose.matrix[i])) equal=false;
   if(equal) return;
   if(!directory_position_controls_prepared_ || position_mode_.immediate || position_mode_.collection_enabled || position_updates_.failed())
-    throw std::runtime_error("Directory transform requires established disabled position collection");
-  auto& state=resource_states_.at(index);
-  if(!state || !resource_owners_.at(index)) throw std::runtime_error("Directory transform requires a canonical live resource");
-  pose.position=source.position;
-  state->flags|=0x00100000U;
-  pose.matrix=source.basis;
-  state->flags|=0x00100000U;
-  // This concrete early branch does not obtain/retain a handle or read flags.
+    throw std::runtime_error("Source transform requires established disabled position collection");
+  // Validate the retained service before publishing the raw pose. Its disabled
+  // collection branch has no resource/backend callback and does not enqueue.
   position_updates_.notify_with_collection_disabled(position_mode_);
+  pose.position=position;
+  pose.matrix=basis;
+  resource_states_[index]->flags|=0x00100000U;
+  for(auto& picture:pictures_) picture->cache_.invalidate();
+}
+
+IntroSourceTransformSnapshot IntroRuntime::source_transform(IntroRuntimeHandle owner) const {
+  if(resource_load_stage_==IntroResourceLoadStage::failed)
+    throw std::runtime_error("Failed source loading has no live source transform");
+  const auto source=source_index(owner);
+  if(!source || source_handle(*source)!=owner)
+    throw std::runtime_error("Source transform requires a directory owner");
+  const auto index=hierarchy_index(owner);
+  const auto resource=resource_handle(owner);
+  if(resource_index(resource)!=index || associated_resource_owner(resource)!=owner)
+    throw std::runtime_error("Source transform has no canonical resource association");
+  if(resource_load_stage_!=IntroResourceLoadStage::prepared &&
+      (*source>=directory_resource_mapping_.size() || directory_resource_mapping_[*source]!=resource))
+    throw std::runtime_error("Source transform requires its completed directory mapping");
+  const auto& pose=hierarchy_.at(index);
+  return {owner,resource,pose.matrix,pose.position};
+}
+
+void IntroRuntime::update_source_transform(IntroRuntimeHandle owner,
+    const std::array<float,9>& basis, const std::array<float,3>& position) {
+  const auto source=source_transform(owner);
+  apply_source_transform(owner,source.resource,basis,position);
 }
 
 const IntroConstructedCameraOwner* IntroRuntime::constructed_camera_owner(std::size_t source) const noexcept {
@@ -2423,7 +2456,7 @@ void IntroRuntime::stop_sound_owner(std::size_t source) {
 void IntroRuntime::prepare_sound_owner(std::size_t source,
     const IntroSoundPreparationServices& services) {
   if (sound_preparation_busy_) throw std::runtime_error("Reentrant intro sound preparation is unsupported");
-  if (!services.resource_flags || !services.parent_owner || !services.spatial_state ||
+  if (!services.resource_flags || !services.parent_owner ||
       !services.owner_enable_requested || !services.enable_owner)
     throw std::runtime_error("Missing live intro sound-owner preparation service");
   if (!application_.clock().ready() || application_.clock().failed())
@@ -2452,13 +2485,14 @@ void IntroRuntime::prepare_sound_owner(std::size_t source,
         throw std::runtime_error("Failed intro sound preparation requires unsupported owner disposal");
       return;
     }
-    const auto spatial = services.spatial_state(owner.handle_);
+    const auto spatial = source_transform(owner.handle_);
     for (float value : spatial.position)
       if (!std::isfinite(value)) throw std::runtime_error("Invalid live sound position");
-    for (float value : spatial.direction)
+    const std::array<float,3> direction{spatial.basis[0],spatial.basis[1],spatial.basis[2]};
+    for (float value : direction)
       if (!std::isfinite(value)) throw std::runtime_error("Invalid live sound direction");
     record.position = spatial.position;
-    record.direction = spatial.direction;
+    record.direction = direction;
     if (services.owner_enable_requested()) services.enable_owner(owner.handle_);
     owner.active_ = true;
     record_supported_owner_admission(source,owner.handle_);

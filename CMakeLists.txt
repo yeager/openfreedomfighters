@@ -1130,6 +1130,7 @@ if(BUILD_TESTING)
             typed-deferred-reader-targets
             param-anim-light-runtime
             basic-light-owner-runtime
+            sound-source-transforms
             prepared-resource-variants
             runtime-and-archive-lifecycle
             runtime-scene-identity-and-later

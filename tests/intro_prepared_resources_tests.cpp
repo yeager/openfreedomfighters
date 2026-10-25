@@ -24,6 +24,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -1541,6 +1542,159 @@ static OFF_NOINLINE void test_prepared_resource_variants() {
     rejects([&]{sound_host.construct_source_directory_without_engine_renderer();});
 }
 
+static OFF_NOINLINE void test_sound_source_transforms() {
+    using namespace off::graphics;
+    const auto initialize=[](off::runtime::ApplicationServices& app) {
+        app.initialize_native_group_registration();app.initialize_native_window_language_registration();
+        app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+        app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
+        app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
+        app.initialize_native_remaining_intro_scope_registration();
+    };
+    const auto construct=[](IntroRuntime& host) {
+        host.construct_root();host.begin_source_loading_without_engine_renderer();
+        host.construct_source_directory_without_engine_renderer();
+    };
+    Fixture fixture(true,true);
+    constexpr std::array<float,9> basis{2,3,4,5,6,7,8,9,10};
+    constexpr std::array<float,3> position{11,12,13};
+    set(fixture.payload,512U+48U*9U+4U,static_cast<std::uint32_t>(fixture.payload.size()));
+    for(float value:basis) word(fixture.payload,std::bit_cast<std::uint32_t>(value));
+    set(fixture.payload,512U+48U*9U+8U,static_cast<std::uint32_t>(fixture.payload.size()));
+    for(float value:position) word(fixture.payload,std::bit_cast<std::uint32_t>(value));
+    set(fixture.payload,fixture.block_offsets[9]+40U,0U);
+    off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+        {[]{return std::int64_t{0};},[]{return std::int32_t{100};}});
+    initialize(app);app.reset_clock();app.clock().assign_crt_mode(true);
+    off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+    IntroRuntime host(fixture.build(),app,sequence,"synthetic-scene",IntroSoundLoadPolicy::directory_construction);
+    construct(host);
+    const auto& directory=host.resources().sources().directory();
+    const auto row=static_cast<std::size_t>(std::distance(directory.begin(),
+        std::ranges::find(directory,0x00200012U,&off::data::GmsDirectoryEntry::source_type)));
+    const auto owner=host.source_handle(row);
+    const auto resource=host.resource_handle(owner);
+    const auto initialized=host.source_transform(owner);
+    check(initialized.owner==owner && initialized.resource==resource && initialized.basis==basis && initialized.position==position,
+          "normal directory allocation initializes canonical nonidentity sound transform");
+    host.run_postconstruction_reader_bracket(1U,{
+        [](auto){},[](const auto&){},[]{},[](const auto&){},
+        [&](const auto& work){if(work.source_directory_index==row)host.apply_supported_sound_owner_deferred_reader(work);},
+        [](const auto&){},[]{}});
+    auto& sound=host.sound_for_source(row);
+    auto& record=sound.record();
+    const auto parent=host.resource_owner(host.resource_parent(owner));
+    host.set_local_transform(parent,{11,0,0,0,13,0,0,0,17},{200,300,400});
+    const auto parent_pose=host.hierarchy().at(host.hierarchy_index(parent));
+    auto& cache=host.picture_for_source(host.resources().pictures().front().directory_index).submission_cache();
+    const auto clean_cache=[&] {
+        PictureCacheTransformInput input{.virtual_window_scale={0,0,1,1},
+            .cached_basis={0,0,1,0,1,0,1,0,0},.object_matrix={0,0,1,0,1,0,1,0,0},
+            .viewport_width=100,.viewport_height=100,.picture_width=10,.picture_height=10,
+            .owner_projection_scalar=1,.external_y_basis_scale=1};
+        cache.submit(std::span<const off::data::BoundPictureDrawGroup>{},input,0,[](auto,const auto&,const auto&,auto){});
+        check(!cache.dirty(),"source transform test prepares a real clean picture cache");
+    };
+    auto state=*host.resource_state(owner);state.flags=0x09000080U;host.assign_resource_state(owner,state);
+    clean_cache();
+    host.update_source_transform(owner,basis,position);
+    auto last_only=basis;last_only[6]=99.F;
+    host.update_source_transform(owner,last_only,position);
+    check(host.source_transform(owner).basis==basis && host.resource_state(owner)->flags==state.flags && !cache.dirty(),
+          "bitwise equal compared fields ignore isolated final-basis changes without dirtying resources or cache");
+    auto changed=basis;changed[0]=-4.F;changed[1]=8.F;changed[2]=16.F;changed[8]=27.F;
+    const std::array<float,3> changed_position{0,24,25};
+    host.update_source_transform(owner,changed,changed_position);
+    check(host.source_transform(owner).basis==changed && host.source_transform(owner).position==changed_position &&
+          host.resource_state(owner)->flags==(state.flags|0x00100000U) && cache.dirty() &&
+          host.position_updates().pending_count()==0U && !host.position_updates().failed() &&
+          !host.directory_position_mode().collection_enabled,
+          "checked update copies complete raw pose, preserves flags and uses disabled collection without backend work");
+    check(host.hierarchy().at(host.hierarchy_index(parent)).matrix==parent_pose.matrix &&
+          host.hierarchy().at(host.hierarchy_index(parent)).position==parent_pose.position &&
+          host.resource_parent(owner)==host.resource_handle(parent),
+          "source updates preserve transformed parent and parent identity");
+    state=*host.resource_state(owner);state.flags&=~0x00100000U;host.assign_resource_state(owner,state);
+    auto signed_zero=changed_position;signed_zero[0]=-0.F;
+    host.update_source_transform(owner,changed,signed_zero);
+    check(std::signbit(host.source_transform(owner).position[0]) &&
+          (host.resource_state(owner)->flags&0x00100000U),"signed zero is a changed source position bit pattern");
+    const auto before_bad=host.source_transform(owner);const auto before_flags=host.resource_state(owner)->flags;
+    auto bad_basis=changed;bad_basis[8]=std::numeric_limits<float>::infinity();
+    rejects([&]{host.update_source_transform(owner,bad_basis,signed_zero);});
+    auto bad_position=signed_zero;bad_position[1]=std::numeric_limits<float>::quiet_NaN();
+    rejects([&]{host.update_source_transform(owner,changed,bad_position);});
+    check(host.source_transform(owner).basis==before_bad.basis && host.resource_state(owner)->flags==before_flags,
+          "nonfinite inputs including ignored basis fields reject before mutation");
+    IntroRuntime foreign(fixture.build(),app,sequence);
+    rejects([&]{(void)host.source_transform(foreign.source_handle(row));});
+    rejects([&]{host.update_source_transform(foreign.source_handle(row),basis,position);});
+    const auto stable=host.source_transform(owner);
+    const auto size_before=host.hierarchy().size();
+    check(host.create_default_camera_resource(false,[](auto){}).has_value() && host.hierarchy().size()==size_before+1U &&
+          host.source_transform(owner).basis==stable.basis && host.source_transform(owner).resource==stable.resource,
+          "source snapshot identity survives synthesized camera insertion and vector growth");
+    bool enable_requested=false;unsigned enabled{};
+    IntroSoundPreparationServices services{
+        [&](auto h){check(h==owner,"sound flags uses canonical source owner");return host.resource_state(h)->flags;},
+        [&](auto h){return host.resource_owner(host.resource_parent(h));},
+        [&]{return enable_requested;},[&](auto h){check(h==owner,"enable receives sound owner");++enabled;}};
+    state=*host.resource_state(owner);state.flags|=0x400U;host.assign_resource_state(owner,state);
+    record.position={71,72,73};record.direction={81,82,83};
+    host.prepare_sound_owner(row,services);
+    check(record.position==std::array<float,3>{71,72,73} && record.direction==std::array<float,3>{81,82,83} &&
+          !sound.active() && enabled==0U,"disabled resource skips spatial snapshot and owner enable");
+    state.flags&=~0x400U;host.assign_resource_state(owner,state);
+    record.active_source=0U;record.flags=0U;
+    host.prepare_sound_owner(row,services);
+    check(record.position==std::array<float,3>{71,72,73} && !sound.active() && enabled==0U,
+          "backend failure does not consume source transform despite a valid canonical provider");
+    record.active_source=128U;
+    host.prepare_sound_owner(row,services);
+    check(sound.active() && enabled==0U && record.position==signed_zero &&
+          record.direction==std::array<float,3>{-4,8,16} && record.parent==parent.value,
+          "successful preparation with owner enable false copies raw unnormalized direction and position without parent composition");
+    host.update_source_transform(owner,basis,{101,102,103});
+    check(record.position==signed_zero && record.direction==std::array<float,3>{-4,8,16} &&
+          initialized.basis==basis && initialized.position==position,
+          "audio and caller snapshots remain values after later source updates");
+    check(!host.preflight_global_lifecycle().ready(),"individual sound preparation does not admit global lifecycle");
+    // Missing association is produced by actual root construction, not a fake
+    // lookup service. A later load failure must not restore parsed-row access.
+    foreign.construct_root();
+    rejects([&]{(void)foreign.source_transform(foreign.source_handle(row));});
+    rejects([&]{foreign.update_source_transform(foreign.source_handle(row),basis,position);});
+    auto& unassociated=foreign.sound_for_source(row);
+    auto& unassociated_record=unassociated.record();
+    unassociated_record.position={31,32,33};unassociated_record.direction={41,42,43};
+    rejects([&]{foreign.prepare_sound_owner(row,{
+        [](auto){return 0U;},[&](auto){return foreign.root_handle();},
+        []{return false;},[](auto){throw std::runtime_error("unassociated sound must not enable");}});});
+    check(unassociated.failed() && !unassociated.active() &&
+          unassociated_record.position==std::array<float,3>{31,32,33} &&
+          unassociated_record.direction==std::array<float,3>{41,42,43},
+          "sound preparation identity failure preserves spatial fields and fails its owner without borrowing another source");
+    off::runtime::ApplicationServices missing_app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+        {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+    off::runtime::SceneComponentSequence missing_sequence{[]{return std::uint32_t{1};}};
+    IntroRuntime failed(fixture.build(),missing_app,missing_sequence,"synthetic-scene",IntroSoundLoadPolicy::directory_construction);
+    failed.construct_root();failed.begin_source_loading_without_engine_renderer();
+    rejects([&]{failed.construct_source_directory_without_engine_renderer();});
+    rejects([&]{(void)failed.source_transform(failed.source_handle(row));});
+    rejects([&]{failed.update_source_transform(failed.source_handle(row),basis,position);});
+    Fixture plain(false,true);
+    IntroRuntime immediate(plain.build(),app,sequence,"synthetic.wld",IntroSoundLoadPolicy::directory_construction);
+    construct(immediate);
+    const auto immediate_owner=immediate.source_handle(immediate.resources().camera_index());
+    const auto prior=immediate.source_transform(immediate_owner);
+    const auto prior_flags=immediate.resource_state(immediate_owner)->flags;
+    rejects([&]{immediate.update_source_transform(immediate_owner,basis,position);});
+    check(immediate.source_transform(immediate_owner).basis==prior.basis &&
+          immediate.source_transform(immediate_owner).position==prior.position &&
+          immediate.resource_state(immediate_owner)->flags==prior_flags,
+          "unsupported retained immediate mode rejects source update before state changes");
+}
+
 static OFF_NOINLINE void test_runtime_and_archive_lifecycle() {
     Fixture fixture;
     std::int32_t clock_sample=1000;
@@ -1576,6 +1730,7 @@ static OFF_NOINLINE void test_runtime_and_archive_lifecycle() {
         check(record.range==50 && record.gain_multiplier==66 &&
               record.derived_range==static_cast<float>((66.0F/0.78125F)*50.0F),
               "authored range input is not a pitch setter");
+        sound_host.set_local_transform(owner.handle(),{1,0,0,0,1,0,0,0,1},{3,4,5});
         std::vector<std::string> calls;
         std::uint32_t owner_status=0x80, flags=0x400;
         off::graphics::IntroSoundPreparationServices services{
@@ -1586,7 +1741,6 @@ static OFF_NOINLINE void test_runtime_and_archive_lifecycle() {
             return flags;
           },
           [&](auto) { calls.push_back("parent"); return sound_host.root_handle(); },
-          [&](auto) { calls.push_back("spatial"); return off::graphics::IntroSoundSpatialState{{3,4,5},{1,0,0}}; },
           [&] { calls.push_back("gate"); return true; },
           [&](auto) { calls.push_back("enable"); owner_status|=1; }
         };
@@ -1601,7 +1755,7 @@ static OFF_NOINLINE void test_runtime_and_archive_lifecycle() {
         flags=0; calls.clear(); clock_sample=1250;
         sound_application.advance_crt();
         sound_host.prepare_sound_owner(9,services);
-        check(calls==std::vector<std::string>{"parent","flags","spatial","gate","enable"} &&
+        check(calls==std::vector<std::string>{"parent","flags","gate","enable"} &&
               owner.active() && owner_status==0x81 && record.start_time==256 &&
               record.duration==12.375F && record.progress==0 && record.playback_state==7 &&
               record.direction==std::array<float,3>{1,0,0},
@@ -1624,7 +1778,6 @@ static OFF_NOINLINE void test_runtime_and_archive_lifecycle() {
                 "simultaneous scenes have distinct sound bindings despite equal local owner handles");
           second.prepare_sound_owner(9,{
             [](auto) { return 0x400U; },[&](auto) { return second.root_handle(); },
-            [](auto) { return off::graphics::IntroSoundSpatialState{{0,0,0},{0,0,1}}; },
             [] { return false; },[](auto) { throw std::runtime_error("unexpected owner enable"); }
           });
           auto& other=second.sound_for_source(9).record();
@@ -1646,7 +1799,7 @@ static OFF_NOINLINE void test_runtime_and_archive_lifecycle() {
               sound_application.sound_records().resolve(stale)==&record,
               "binding stop changes canonical membership/state but does not dispose the owner");
         auto broken=services;
-        broken.spatial_state=[](auto)->off::graphics::IntroSoundSpatialState { throw std::runtime_error("live spatial unavailable"); };
+        broken.enable_owner=[](auto) { throw std::runtime_error("live owner enable unavailable"); };
         rejects([&] { sound_host.prepare_sound_owner(9,broken); });
         check(owner.failed(),"failed callback stops further owner use without fake disposal");
         rejects([&] { (void)owner.record(); });
@@ -1662,7 +1815,6 @@ static OFF_NOINLINE void test_runtime_and_archive_lifecycle() {
         record.active_source=0;
         off::graphics::IntroSoundPreparationServices services{
           [](auto) { return 0U; }, [&](auto) { return missing.root_handle(); },
-          [](auto)->off::graphics::IntroSoundSpatialState { throw std::runtime_error("must not reach spatial after failed prepare"); },
           [] { return false; }, [](auto) { throw std::runtime_error("must not enable failed owner"); }
         };
         auto incomplete=services; incomplete.parent_owner={};
@@ -2350,6 +2502,7 @@ int main(int argc, char* argv[]) {
         TestGroup{"basic-light-owner-runtime", test_basic_light_owner_runtime},
         TestGroup{"param-anim-light-runtime", test_param_anim_light_runtime},
         TestGroup{"prepared-resource-variants", test_prepared_resource_variants},
+        TestGroup{"sound-source-transforms", test_sound_source_transforms},
         TestGroup{"runtime-and-archive-lifecycle", test_runtime_and_archive_lifecycle},
         TestGroup{"runtime-scene-identity-and-later", test_runtime_scene_identity_and_later},
         TestGroup{"default-camera-and-archive-lifecycle", test_default_camera_and_archive_lifecycle},
