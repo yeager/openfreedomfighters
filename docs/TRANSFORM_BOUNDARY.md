@@ -63,6 +63,14 @@ path. The view builder also writes intermediate pose records to local scratch
 storage that is not passed to its next list builder in the traced callsite.
 Treat those records as unconsumed there, not as a verified draw packet.
 
+The GMS loader has a separate parsed-row virtual path: it calls slot `+0x108`
+on a runtime object's subobject, then forwards the returned pointer unchanged
+to that object's slot `+0x2c` after incrementing a nested counter. Static
+analysis does not resolve either vtable target or the returned object's type.
+Renderer child registration also occupies slot `+0x2c`, but its observed
+signature and child-factory effects differ. The shared slot offset does not
+establish that these calls share an implementation or object identity.
+
 The GMS loader also records each geometry object's local pool ordinal during
 construction and calls a runtime setter that writes a link field at offset
 `+0x6c`. The view child-list builder reads `+0x6c` through the runtime object
