@@ -7,9 +7,11 @@
 #include <functional>
 #include <limits>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
+#include <locale>
 
 namespace off::data {
 
@@ -87,8 +89,14 @@ class ParticleTemplateDeferredReader {
         }
         if(i!=text.size())fail();
         if(text.front()=='+')text.remove_prefix(1);
-        float result{};const auto parsed=std::from_chars(text.data(),text.data()+text.size(),result,std::chars_format::general);
-        if(parsed.ec!=std::errc{}||parsed.ptr!=text.data()+text.size()||!std::isfinite(result))fail();
+        // Floating from_chars is missing from some supported libc++ versions.
+        // The grammar above is locale-independent; imbue the classic locale
+        // here as well so conversion behaves identically on every platform.
+        std::istringstream input{std::string{text}};
+        input.imbue(std::locale::classic());
+        input >> std::noskipws;
+        float result{};
+        if(!(input>>result)||input.peek()!=std::char_traits<char>::eof()||!std::isfinite(result))fail();
         return result;
     }
 public:
