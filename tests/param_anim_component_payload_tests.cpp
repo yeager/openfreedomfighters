@@ -129,6 +129,44 @@ void test_numeric_conversion_and_unread_nonnumeric_tail() {
           "the component reader does not consume an unrelated string tail");
 }
 
+void test_unsigned_integer_payload_float_conversion() {
+    using off::data::ParamAnimComponentPayloadReader;
+    struct Example { std::uint32_t payload; std::uint32_t expected_float_bits; };
+    // Expected IEEE binary32 encodings are independent of a host conversion
+    // expression, including ties on both sides of the unsigned high-bit range.
+    constexpr Example examples[]{
+        {0U, 0x00000000U},
+        {0x01000001U, 0x4b800000U}, // 2^24 + 1 ties down to even
+        {0x01000003U, 0x4b800002U}, // 2^24 + 3 ties up to even
+        {0x80000000U, 0x4f000000U},
+        {0x80000080U, 0x4f000000U}, // 2^31 + 128 ties down
+        {0x80000081U, 0x4f000001U}, // one above the midpoint
+        {0xffffff7fU, 0x4f7fffffU}, // one below the final midpoint
+        {0xffffff80U, 0x4f800000U}, // final midpoint rounds to 2^32
+        {0xffffffffU, 0x4f800000U},
+    };
+    constexpr std::uint8_t classes[]{3U, 8U, 10U, 11U};
+    for (const auto cls : classes) {
+        for (const auto example : examples) {
+            Bytes payload;
+            append_i32(payload, cls, -1);
+            append_i32(payload, cls, 0);
+            payload.push_back(static_cast<std::byte>(cls | 0xc0U));
+            append_u32(payload, example.payload);
+            append_i32(payload, cls, std::numeric_limits<std::int32_t>::min());
+            append_i32(payload, 10U, -1);
+            const auto value = ParamAnimComponentPayloadReader::read(payload);
+            check(std::bit_cast<std::uint32_t>(value.scalar_c) == example.expected_float_bits,
+                  "all integer classes convert unsigned payloads with binary32 rounding in float fields");
+            check(value.control_a && !value.control_b && value.initial_control &&
+                  value.mode_word == 0xffffU,
+                  "negative and zero integer controls and signed low-word mode retain their behavior");
+            check(value.consumed_values == 5U && value.consumed_bytes == payload.size(),
+                  "unsigned float interpretation leaves field boundaries unchanged");
+        }
+    }
+}
+
 void test_length_class_advances_over_its_bounded_payload() {
     using off::data::ParamAnimComponentPayloadReader;
     for (const auto tag : {std::byte{0x07}, std::byte{0x09}, std::byte{0x0c}}) {
@@ -201,6 +239,7 @@ int main() {
     test_optional_modes_and_component_extent();
     test_type_two_branch_and_low_six_bit_tags();
     test_numeric_conversion_and_unread_nonnumeric_tail();
+    test_unsigned_integer_payload_float_conversion();
     test_length_class_advances_over_its_bounded_payload();
     test_x86_truncation_invalid_results();
     test_truncated_required_values_reject_without_partial_state();

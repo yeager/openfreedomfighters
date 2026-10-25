@@ -98,8 +98,11 @@ truncate toward zero to signed 32-bit; NaN and out-of-range conversion use the
 signed 32-bit minimum result. Signed-integer classes are returned directly.
 String and length-delimited values advance the cursor but yield zero for these
 numeric helpers. Component float reads cast binary64 to binary32, preserve
-binary32, convert signed integers to binary32, and yield zero for string or
-length-delimited values. A terminal or separator cannot satisfy a required
+binary32, interpret the 32-bit payload of integer classes 3, 8, 10, and 11
+as an unsigned value before conversion to binary32, and yield zero for string
+or length-delimited values. This differs from integer reads: a payload whose
+signed interpretation is -1 converts to 4294967296.0F in a float field, while
+an integer field retains -1. Preserve binary32 rounding of the unsigned value. A terminal or separator cannot satisfy a required
 typed field. Use the component reader's existing typed state and defaults;
 do not apply these permissive component conversions to owner fields.
 
@@ -145,6 +148,9 @@ Use independently authored compact streams to cover:
   typed decoding continues to reject that same class and class six;
 - a single matching ParamAnim attachment with values left after the reader's
   consumed prefix;
+- component float fields receiving each integer class, including high-bit-set
+  payloads and values near binary32 rounding boundaries; integer and boolean
+  fields retain their existing signed conversion behavior;
 - component strings and length-delimited fields yielding their documented
   numeric default while still advancing by their complete bounded extent;
 - malformed lengths, truncated fields, wrong kinds, extra/missing

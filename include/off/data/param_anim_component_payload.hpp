@@ -145,7 +145,9 @@ private:
         case CompactTypedValueKind::binary32:
             return std::bit_cast<float>(value.binary32_bits());
         case CompactTypedValueKind::signed32:
-            return static_cast<float>(value.signed32());
+            // Float fields interpret integer-class payload bits as unsigned;
+            // integer and boolean fields retain their signed conversion.
+            return static_cast<float>(value.u32_bits());
         case CompactTypedValueKind::nul_terminated_string:
         case CompactTypedValueKind::length_u32:
             return 0.0F;
