@@ -52,6 +52,12 @@ pose records to local scratch storage that is not passed to its next list
 builder in the traced callsite. Treat those records as unconsumed there, not as
 a verified draw packet.
 
+The GMS loader also records each geometry object's local pool ordinal during
+construction. The traced view child-row path follows linked runtime rows and
+renderer-local handles, and does not read or carry that GMS ordinal. No
+pointer or value-flow join from the loader's geometry object to those view rows
+has been established; matching ordinals alone would not prove identity.
+
 The view-side geometry builders also derive frustum planes from view state and
 test geometry bounds against those planes, updating visibility masks before
 linking eligible geometry resources. This confirms that view state affects
