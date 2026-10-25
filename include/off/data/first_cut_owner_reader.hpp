@@ -9,21 +9,23 @@
 
 namespace off::data {
 
-// Reviewed owner-base envelope for the one supported first-cut list record.
+// Owner-base envelope for the supported first-cut list record.
 // It exposes a bounded component suffix but does not invoke component readers.
 class FirstCutOwnerReader final {
 public:
   [[nodiscard]] static DeferredOwnerReaderResult read(
       std::span<const std::byte> owner_block) {
-    constexpr std::size_t block_size=171U;
     constexpr std::size_t component_offset=14U;
-    constexpr std::size_t component_extent=157U;
-    if(owner_block.size()!=block_size || read_u32(owner_block,0U)!=block_size ||
+    // Component command strings have variable length. The owner declares the
+    // complete block extent; component readers validate the bounded suffix.
+    if(owner_block.size()<=component_offset ||
+        read_u32(owner_block,0U)!=owner_block.size() ||
         byte(owner_block,4U)!=0x89U || read_u32(owner_block,5U)!=8U ||
-        byte(owner_block,13U)!=0x06U || byte(owner_block,170U)!=0xffU)
+        byte(owner_block,13U)!=0x06U ||
+        byte(owner_block,owner_block.size()-1U)!=0xffU)
       fail();
 
-    return {owner_block.subspan(component_offset),component_extent};
+    return {owner_block.subspan(component_offset),owner_block.size()-component_offset};
   }
 
 private:

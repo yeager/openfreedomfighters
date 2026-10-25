@@ -35,6 +35,7 @@
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -1229,21 +1230,33 @@ int main() {
             scalar(index%2U==0U?0x03U:0x83U,10U+index);
             scalar(0x8aU,20U+index); scalar(0x88U,30U+index);
             scalar(index%2U==0U?0x83U:0x03U,40U+index);
-            stream.push_back(std::byte{0x04}); stream.push_back(std::byte{0}); stream.push_back(std::byte{0x06});
+            stream.push_back(std::byte{0x04});
+            if(index==2U)
+                for(const char value:std::string_view{"SyntheticTarget"})
+                    stream.push_back(static_cast<std::byte>(value));
+            stream.push_back(std::byte{0}); stream.push_back(std::byte{0x06});
         }
         stream.push_back(std::byte{0xff});
-        const off::data::DeferredOwnerReaderResult owner_result{stream,stream.size()};
+        std::vector<std::byte> owner_block(14U);
+        owner_block[4]=std::byte{0x89};set_u32(owner_block,5U,8U);owner_block[13]=std::byte{0x06};
+        owner_block.insert(owner_block.end(),stream.begin(),stream.end());
+        set_u32(owner_block,0U,static_cast<std::uint32_t>(owner_block.size()));
+        const auto owner_result=off::data::FirstCutOwnerReader::read(owner_block);
         const auto parsed=FirstCutComponentPayloadSession::read(owner_result);
-        check(stream.size()==157U && parsed.list.controls.front()==1U &&
+        check(owner_result.component_extent==owner_block.size()-14U && parsed.list.controls.front()==1U &&
                   std::bit_cast<std::uint32_t>(parsed.list.final_value)==0x80000000U &&
                   parsed.commands.front().timeline_position==10U && parsed.commands.back().event_argument==44U &&
-                  parsed.commands.front().target_name.empty(),
-              "first-cut component payload session reads exactly one list and five ordered commands");
+                  parsed.commands.front().target_name.empty() &&
+                  parsed.commands[2].target_name=="SyntheticTarget",
+              "first-cut component payload session dispatches five typed records with variable names");
+        check_rejected([&] {
+            static_cast<void>(FirstCutComponentPayloadSession::read(stream,stream.size()-1U));
+        }, "first-cut component payload session rejects a mismatched declared suffix extent");
         check_rejected([&] {
             auto malformed=stream;
             malformed.push_back(std::byte{0});
             static_cast<void>(FirstCutComponentPayloadSession::read(malformed,malformed.size()));
-        }, "first-cut component payload session rejects a suffix beyond its reviewed extent");
+        }, "first-cut component payload session rejects a malformed terminal after variable command text");
     }
     {
         using off::data::FirstCutCommandComponentReader;
@@ -1299,19 +1312,26 @@ int main() {
     {
         using off::data::FirstCutOwnerReader;
         using off::data::DeferredOwnerReaderResult;
-        std::array<std::byte,171> block{};
-        block[0]=std::byte{0xab};
-        block[4]=std::byte{0x89};
-        block[5]=std::byte{0x08};
-        block[13]=std::byte{0x06};
-        // Six attachment delimiters, followed by the reviewed terminal.
-        for(std::size_t index=0;index<6U;++index)
-          block[14U+index*2U]=std::byte{0x06};
-        block[170]=std::byte{0xff};
+        const auto make_block=[](std::size_t size) {
+            std::vector<std::byte> block(size);
+            set_u32(block,0U,static_cast<std::uint32_t>(size));
+            block[4]=std::byte{0x89};set_u32(block,5U,8U);block[13]=std::byte{0x06};
+            for(std::size_t index=0;index<6U;++index)
+                block[14U+index*2U]=std::byte{0x06};
+            block.back()=std::byte{0xff};
+            return block;
+        };
+        auto block=make_block(171U);
         const auto result=FirstCutOwnerReader::read(block);
         check(result.component_suffix.data()==block.data()+14U &&
-                  result.component_suffix.size()==157U && result.component_extent==157U,
-              "first-cut owner reader exposes only its reviewed bounded component suffix");
+                  result.component_suffix.size()==block.size()-14U &&
+                  result.component_extent==block.size()-14U,
+              "first-cut owner reader bounds its suffix from the declared source extent");
+        const auto variable_block=make_block(211U);
+        const auto variable_result=FirstCutOwnerReader::read(variable_block);
+        check(variable_result.component_suffix.size()==variable_block.size()-14U &&
+                  variable_result.component_extent==variable_block.size()-14U,
+              "first-cut owner reader accepts a longer independently authored component suffix");
         check_rejected([&] {
             auto malformed=block;
             malformed[13]=std::byte{0x07};
@@ -1319,9 +1339,24 @@ int main() {
         }, "first-cut owner reader rejects a malformed owner-base delimiter");
         check_rejected([&] {
             auto malformed=block;
-            malformed[170]=std::byte{0x00};
+            malformed.back()=std::byte{0x00};
             static_cast<void>(FirstCutOwnerReader::read(malformed));
         }, "first-cut owner reader rejects a missing terminal");
+        check_rejected([&] {
+            auto malformed=variable_block;
+            malformed.pop_back();
+            static_cast<void>(FirstCutOwnerReader::read(malformed));
+        }, "first-cut owner reader rejects a truncated variable-length block");
+        check_rejected([&] {
+            auto malformed=variable_block;
+            set_u32(malformed,0U,static_cast<std::uint32_t>(malformed.size()-1U));
+            static_cast<void>(FirstCutOwnerReader::read(malformed));
+        }, "first-cut owner reader rejects a declared extent that is too short");
+        check_rejected([&] {
+            auto malformed=variable_block;
+            set_u32(malformed,0U,static_cast<std::uint32_t>(malformed.size()+1U));
+            static_cast<void>(FirstCutOwnerReader::read(malformed));
+        }, "first-cut owner reader rejects a declared extent that exceeds the supplied bytes");
     }
     {
         using off::data::DeferredComponentReader;

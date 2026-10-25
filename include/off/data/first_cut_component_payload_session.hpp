@@ -26,7 +26,7 @@ struct FirstCutComponentPayloadSession final {
 
   [[nodiscard]] static FirstCutComponentPayloadSession read(
       std::span<const std::byte> component_suffix,std::size_t component_extent) {
-    if(component_extent!=157U || component_suffix.size()!=component_extent ||
+    if(component_suffix.size()!=component_extent ||
         component_suffix.empty() || component_suffix.back()!=std::byte{0xff}) fail();
     FirstCutComponentPayloadSession result;
     std::array<DeferredComponentReader,6> readers{
