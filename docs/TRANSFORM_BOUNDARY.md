@@ -59,11 +59,12 @@ visibility selection. The culling path does not write the three matrix pointers
 later consumed by the traced BonesVS draw entry, so it does not establish that
 the active camera is applied to submitted geometry.
 
-The post-cull view list reaches a draw path after its shadow preparation stage.
-The traced call is on this post-cull route; reuse of the same carrier builder
-for a normal gameplay draw has not been established. For each prepared group,
-the renderer resolves a local draw entry and builds a stack-local carrier. The entry's child array is
-populated from filtered runtime child rows as pairs containing a null draw
+The post-cull view list reaches a shadow submission path after its preparation
+stage. Its traced caller advances a shadow-list cursor and passes a tuple to the
+draw routine that builds a stack-local carrier. No normal gameplay caller of
+this carrier builder has been established. For each prepared group, the
+renderer resolves a local draw entry and builds the carrier. The entry's child
+array is populated from filtered runtime child rows as pairs containing a null draw
 record pointer and the child-row pointer. A later per-view update allocates a
 draw record for an eligible child and passes that exact record, child row, and
 owner to renderer virtual slot 42. RTTI-identified D3D and X86 renderer
@@ -73,10 +74,10 @@ cache consumer. The cache setup writes the record's `+0x10` runtime-child
 pointer; the cache consumer invokes the resolved row-root factory with that
 record and stores the resulting concrete instance at `+0x18`. The traced draw
 obtains that instance and calls its draw method with the separate stack-local
-carrier. In the renderer factory branch for child-row type 1 when
-the renderer feature check passes, this instance is the BonesVS implementation;
-its draw method consumes the carrier's three matrix pointers. This proves that
-the traced route can reach BonesVS under that branch, but the row type and
+carrier. In the D3D renderer factory branch for child-row type 1 when its
+feature check passes, this instance is the BonesVS implementation; its draw
+method consumes the carrier's three matrix pointers. This proves that the
+traced route can reach BonesVS under that branch, but the row type and
 feature value for a particular scene entry have not been established. The
 child row's handle resolves through a renderer-local table; no identity link
 ties this child row to a parsed GMS row. The view builder's runtime candidate
@@ -93,11 +94,13 @@ path, its fidelity to parsed scene identity, or the active camera.
 The draw-record metadata and the stack carrier are distinct: the record
 selects and caches the child instance, while the carrier supplies the matrix
 triplet to its draw method. The traced carrier contains a constant matrix
-reference, a locally composed matrix derived in part from a runtime object
-field, and a renderer-owned buffer. Their full meanings and the contribution
-of the active camera have not been established. Nor has this producer carrier
-been tied to a parsed GMS runtime object and parent chain. Consequently the
-conditional dispatch join does not authorize world-space production.
+reference, a locally composed matrix built from shadow-list transform inputs
+and a resolved renderer object's matrix, and a renderer-owned draw buffer.
+The shadow-list tuple is read at fixed fields, but its concrete type and any
+relationship to the active gameplay camera are unknown. Nor has this producer
+carrier been tied to a parsed GMS runtime object and parent chain.
+Consequently the conditional dispatch join does not authorize world-space
+production.
 
 These facts establish GMS runtime identity and hierarchy provenance. They do
 not establish the complete submitted object-to-world or world-to-clip transform.
