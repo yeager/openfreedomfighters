@@ -52,6 +52,13 @@ pose records to local scratch storage that is not passed to its next list
 builder in the traced callsite. Treat those records as unconsumed there, not as
 a verified draw packet.
 
+The view-side geometry builders also derive frustum planes from view state and
+test geometry bounds against those planes, updating visibility masks before
+linking eligible geometry resources. This confirms that view state affects
+visibility selection. The culling path does not write the three matrix pointers
+later consumed by the traced BonesVS draw entry, so it does not establish that
+the active camera is applied to submitted geometry.
+
 These facts establish GMS runtime identity and hierarchy provenance. They do
 not establish the complete submitted object-to-world or world-to-clip transform.
 
