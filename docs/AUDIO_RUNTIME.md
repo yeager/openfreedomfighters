@@ -13,7 +13,7 @@ They do not open an audio device or establish the planned mixer behavior below.
 The intro sound components require retained sound records during initialization;
 backend absence is not a supported reason to replace their callbacks with no-ops.
 Intro source-to-SND-to-WHD bindings now load from the owned installation, with
-bounded on-demand decoding; see [audio formats](AUDIO_FORMAT.md#intro-source-binding).
+bounded on-demand decoding; see [audio formats](AUDIO_FORMAT.md).
 Mutable records, source assignment, explicit owner preparation, binding stop and
 category-volume state now share a retained [intro sound backend](INTRO_SOUND_RUNTIME.md).
 Attached component callbacks and the complete scene lifecycle remain unconnected.

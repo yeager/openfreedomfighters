@@ -250,7 +250,7 @@ menu transition. See
   cut/group reference translations, then runs due source-backed commands
   through observer-only target callbacks. Cutscene lifecycle, gameplay effects,
   audio and rendering remain cold. See
-  [INTRO_BOOTSTRAP.md](docs/INTRO_BOOTSTRAP.md#first-cut-cold-probe).
+  [INTRO_BOOTSTRAP.md](docs/INTRO_BOOTSTRAP.md).
 - `--probe-intro-readiness` is the narrower owned-data readiness report. It
   prints only aggregate reader, unresolved-reader-family, and lifecycle
   coverage categories, then explicitly reports lifecycle, renderer, audio, and
@@ -268,7 +268,7 @@ menu transition. See
   from the owned installation while recording aggregate lifecycle evidence.
   It also verifies the closed command receiver's timing order without exposing
   commands. It is not a cutscene player: no clock, host callback, audio, or
-  rendering is started. See [INTRO_BOOTSTRAP.md](docs/INTRO_BOOTSTRAP.md#first-cut-initialization-probe).
+  rendering is started. See [INTRO_BOOTSTRAP.md](docs/INTRO_BOOTSTRAP.md).
 - `--probe-intro-renderer-payload` relocates the retained intro renderer
   payload through the source GMS slot domain and reports aggregate workspace
   structure. It does not create a renderer container, submit a frame, or
