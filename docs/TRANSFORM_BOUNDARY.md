@@ -62,21 +62,27 @@ the active camera is applied to submitted geometry.
 The post-cull view list reaches the per-view submission path after its shadow
 preparation stage. For each ordinary prepared group, the renderer resolves a
 local draw entry and builds a stack-local carrier. The entry's child array is
-populated from filtered runtime child rows, but each pair initially contains a
-null draw-record pointer and the child-row pointer. Submission dispatches only
-when a separate draw-record pointer is present; the writer that populates that
-pointer has not been identified. The carrier contains an identity matrix, a
-generated object/view matrix, and renderer state. Its three-pointer layout
-matches what the BonesVS method consumes, but no concrete BonesVS child has
-been proven on this route. The view builder's runtime candidate pointer is
+populated from filtered runtime child rows as pairs containing a null draw
+record pointer and the child-row pointer. A later per-view update allocates a
+draw record for an eligible child and passes that exact record, child row, and
+owner to renderer virtual slot 42. RTTI-identified D3D and X86 renderer
+vtables both resolve this slot to the same record-processing method. That
+method sends the same record through the draw-cache creation path and then the
+cache consumer. The cache setup writes the record's `+0x10` runtime-child
+pointer; its consumer resolves that child instance and passes the same record
+to the instance's virtual draw method, caching the result at `+0x18`. This
+identifies the writer and dispatch chain for the child draw-record pointer.
+The concrete child-instance virtual target has not been shown to be BonesVS,
+so the chain does not yet prove that the carrier's three-pointer layout is
+consumed on this route. The view builder's runtime candidate pointer is
 preserved into the draw entry; a renderer-generated handle indexes a local
 table to recover that same runtime object, whose transform contributes to the
 carrier matrix together with view state. The renderer handle is not a GMS row
 index. The candidate collection and its runtime child chain have not been
 joined to a specific parsed GMS row and parent chain, and the view-state input
-has not been identified as the active gameplay camera. Thus the normal submit
-path is identified, but its fidelity to parsed scene identity and the active
-camera remains unresolved.
+has not been identified as the active gameplay camera. Thus the ordinary
+child-record submit chain is established, while its fidelity to parsed scene
+identity and the active camera remains unresolved.
 
 The per-draw cache path is now joined to the BonesVS consumer. Its factory
 creates an entry, initializes that entry's own three matrix pointers, and stores
@@ -89,19 +95,12 @@ matrix fields are a distinct set and must not be treated as the submitted
 record's fields.
 
 The producer of the caller-owned record's matrix triplet is still unresolved.
-The identified cache-entry initializer and backend state updater write to
-different objects; neither establishes the record's `+0x20/+0x24/+0x28`
-values. No camera/view input has been joined to those fields, nor has the
-producer record been tied to a GMS runtime object or the per-view geometry list.
-Consequently this dispatch join does not authorize world-space production.
-
-A bounded whole-program static pass found no direct code reference to the
-renderer method that receives this record. It examined all decoded indirect
-calls using that method's virtual-slot offset; none could be tied to the
-renderer receiver and the same record pointer. This leaves the record creator
-and matrix-triplet writer unproven. The pass narrows the next evidence target
-to a caller/owner identity join; matching field offsets or a generic indirect
-call alone are insufficient.
+The child-record factory/dispatch chain above proves record identity through
+the cache consumer, but does not establish the record's
+`+0x20/+0x24/+0x28` values. No camera/view input has been joined to those
+fields, nor has this producer record been tied to a GMS runtime object or the
+per-view geometry list. Consequently the dispatch join does not authorize
+world-space production.
 
 These facts establish GMS runtime identity and hierarchy provenance. They do
 not establish the complete submitted object-to-world or world-to-clip transform.
@@ -193,11 +192,10 @@ World-space scene rendering remains gated on all of the following:
 5. Establish the exact relationship between dequantized spatial bounds and
    transformed render geometry.
 6. Join the ordinary per-view draw entry's runtime-object handle to a parsed
-   GMS row and parent chain, identify the writer of its child draw-record
-   pointers and prove which instances are dispatched, and identify the
-   view-state input relative to the active gameplay camera. Then recover
-   view/projection, depth, winding, culling, and normal-transform conventions
-   independently of the diagnostic fit.
+   GMS row and parent chain, identify which child instances are dispatched,
+   and identify the view-state input relative to the active gameplay camera.
+   Then recover view/projection, depth, winding, culling, and
+   normal-transform conventions independently of the diagnostic fit.
 7. Validate a candidate formula across the supported corpus and against
    deterministic runtime observations, then add synthetic arithmetic tests and
    cross-backend image comparisons.
