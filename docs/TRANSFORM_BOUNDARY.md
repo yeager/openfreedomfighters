@@ -72,6 +72,12 @@ that lookup, but the returned object's concrete vtable target and type are
 unresolved. No evidence establishes that it dispatches to the renderer child
 lookup or joins the renderer-owned child list.
 
+The GMS pool initializer zeroes each fixed-size row and explicitly initializes
+its `+0x54` pointer field to null. The loader later reads that field as a
+subobject pointer, so a subsequent runtime path must populate it. The traced
+parent-link setter writes `+0x6c`, not `+0x54`; the later writer and the
+subobject's concrete class remain unidentified.
+
 The GMS loader also records each geometry object's local pool ordinal during
 construction and calls a runtime setter that writes a link field at offset
 `+0x6c`. The view child-list builder reads `+0x6c` through the runtime object
