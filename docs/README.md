@@ -47,12 +47,6 @@
 
 ## Project and technical reference
 
-- [Current technical map](TECHNICAL_MAP.md)
-- [Resource-format census](FORMAT_CENSUS.md)
-- [Windows ABI replacement map](ABI_MAP.md)
-- [Code-boundary census](CODE_CENSUS.md)
-- [2003 versus digital-build provenance](BUILD_PROVENANCE.md)
-- [Private disassembly status](DISASSEMBLY_STATUS.md)
 - [Portable data layer](DATA_LAYER.md)
 - [Installation hashes and optional soundtrack](INSTALL_MANIFEST.md)
 - [Derived cache and parser fuzzing specification](CACHE_AND_FUZZING.md)

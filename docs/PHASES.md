@@ -11,8 +11,8 @@ gate. All public artifacts follow the [clean-room protocol](../CLEAN_ROOM.md) an
 - **Public CI evidence:** deterministic tests built entirely from independently
   authored fixtures, plus source, dependency, secret, and retail-content scans.
 - **Private compatibility evidence:** reproducible local runs against a verified
-  user-owned installation. Reports contain only aggregate facts, hashes, bounded
-  measurements, and pass/fail outcomes suitable for clean-room publication.
+  user-owned installation. Retail-derived observations and reports stay outside
+  the repository; public evidence uses independently authored fixtures and code.
 - **Hardware evidence:** named target OS, architecture, GPU/API, driver, command,
   and result. A hosted compile is not a hardware or runtime pass.
 - **Fidelity evidence:** behavior traces or image/audio comparisons against the
@@ -26,19 +26,18 @@ an undecoded retail resource remains incomplete and reports the limitation.
 
 ## Phase 0 - Evidence, policy, and reproducibility
 
-Inputs are the supported executable and installation, black-box observations,
-private static analysis, and public platform documentation. Deliverables are the
-build provenance, technical/ABI/code maps, clean-room specifications, aggregate
-format census, and reproducible non-extracting inspection tools.
+Inputs are user-owned installations, black-box observations, private analysis,
+and public platform documentation. Repository deliverables are independently
+authored implementation specifications, safe inspection tooling, and synthetic
+validation fixtures. Retail-derived observations and analysis outputs remain
+private.
 
 Work is complete only when outstanding runtime-computed imports and loader
 metadata are resolved, all exported registrations have behavior-only subsystem
 specifications, remaining resource-section schemas are scoped, and boot/menu/
-first-level black-box traces are recorded privately. The gate requires a fresh
-contributor to reproduce the public structural report without emitting retail
-payloads. See the [technical map](TECHNICAL_MAP.md), [ABI map](ABI_MAP.md),
-[code census](CODE_CENSUS.md), [disassembly status](DISASSEMBLY_STATUS.md), and
-[build provenance](BUILD_PROVENANCE.md).
+first-level black-box traces are recorded privately. The gate requires public
+validation to use project-authored synthetic fixtures and to keep all
+retail-derived analysis outside Git.
 
 ## Phase 1 - Portable data layer
 

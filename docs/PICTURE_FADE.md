@@ -154,9 +154,7 @@ the [intro and menu plan](INTRO_AND_MENU_PLAN.md).
 The 39-test suite and targeted size/cache/transform ASan/UBSan executable pass
 locally. The private owned-resource probe also checks that explicit dimension
 initialization leaves actual descriptor spans and modulation unchanged. Private
-research revalidated the complete existing disassembly against a freshly streamed
-disassembly of the installed executable on 2026-09-06; the output hashes match.
-Original code and the complete listing remain outside the public repository.
+analysis artifacts are kept outside the repository.
 
 ## Mutable colors and paired materials
 

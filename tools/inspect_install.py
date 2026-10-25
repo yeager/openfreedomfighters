@@ -32,9 +32,8 @@ PE_DIRECTORY_NAMES = (
     "reserved",
 )
 
-# Interoperability names for ordinals observed in the supported build. System
-# mappings are cross-checked against Wine .spec files; EAX is resolved from the
-# retail DLL's own export directory. See docs/ABI_MAP.md.
+# Interoperability names are resolved locally from public system ABI files and
+# the user's installed EAX DLL. Generated retail-derived reports stay local.
 KNOWN_ORDINALS = {
     "dsound.dll": {2: "DirectSoundEnumerateA"},
     "eax.dll": {6: "EAXDirectSoundCreate8"},

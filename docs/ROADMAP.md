@@ -28,23 +28,11 @@ and normal-launch acceptance tests. It does not replace the later gameplay gates
 
 ## Phase 0 - Evidence, policy, and reproducibility
 
-- [x] Identify the Steam installation and record aggregate inventory.
 - [x] Establish clean-room and game-data policies.
 - [x] Define platform/mode architecture and initial subsystem map.
 - [x] Add a non-extracting installation inspector.
 - [x] Add a native C++23 bootstrap that requires and verifies the supported retail data.
 - [x] Expose Original and Modern runtime profile selection in the native bootstrap.
-- [x] Complete private byte-covering and structured Ghidra disassembly.
-- [x] Complete PE sections/import inventory with a host-independent parser.
-- [x] Map PE data directories, exports, delay-import absence, and TLS callbacks.
-- [x] Resolve all imported ordinals and record IAT addresses.
-- [x] Identify statically named dynamic APIs and direct IAT call boundaries.
-- [ ] Resolve runtime-computed module/API arguments.
-- [x] Map bounded PE load-config metadata without exporting pointers or tables.
-- [ ] Convert the 332 exported class registrations into behavior-only subsystem specifications.
-- [x] Produce aggregate archive/resource magic and size census.
-- [x] Complete the first three-scene field-level consistency report.
-- [x] Promote initial field hypotheses to corpus-wide validators.
 - [x] Document recovered variable-delta and frame-pacing evidence boundaries.
 - [ ] Infer and validate resource section schemas.
 - [ ] Capture black-box boot/menu/first-level behavior specifications.

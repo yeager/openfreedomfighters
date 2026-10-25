@@ -4,7 +4,7 @@ OpenFreedomFighters separates research from implementation so that repository co
 
 ## Roles
 
-1. **Researcher:** observes a legally acquired copy, records behavior, file-layout facts, API boundaries, hashes, black-box test vectors, and concise interface specifications. The researcher does not publish disassembly, decompiler output, original code, dialogue, textures, models, audio, or other expressive content.
+1. **Researcher:** observes a legally acquired copy and records private behavior notes and test observations. The researcher does not publish retail-derived data or analysis artifacts.
 2. **Specification reviewer:** removes implementation-shaped expression and checks that a specification describes inputs, outputs, state changes, edge cases, and tests only.
 3. **Implementer:** works from approved specifications and public platform documentation. Implementers must not consult unpublished decompilation or disassembly for the component they implement.
 
@@ -13,7 +13,7 @@ For a solo contributor, these roles must be separated by artifacts and time: ret
 ## Permitted repository material
 
 - independently written source code and tests;
-- facts, measurements, hashes, ABI names, and high-level format descriptions;
+- independently authored, non-expressive behavior and interface specifications that do not reproduce retail values or payloads;
 - small synthetic fixtures created from scratch;
 - scripts that inspect a user's local installation without redistributing it;
 - links and citations to public documentation.
@@ -21,7 +21,7 @@ For a solo contributor, these roles must be separated by artifacts and time: ret
 ## Prohibited repository material
 
 - original binaries or assets, including extracted archive members;
-- disassembly/decompiler dumps or mechanically translated original code;
+- retail-derived data, including executable/resource fingerprints, inventories, payload measurements, disassembly/decompiler dumps, and mechanically translated original code;
 - original symbol/debug databases, leaked source, SDKs, or confidential material;
 - dialogue or localization text copied from the game;
 - patches containing substantial original machine-code sequences;

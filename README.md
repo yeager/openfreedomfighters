@@ -28,7 +28,6 @@ for a portable installation.
 
 ## Current state
 
-- The Steam executable has been disassembled for private research.
 - Archive, texture, geometry and supported audio formats have working readers.
 - Startup shows the project splash for three seconds. Missing or invalid game
   data produces an error dialog over it.
@@ -394,9 +393,9 @@ gitleaks detect --source . --no-git --redact
 
 ## Documentation
 
-Start with the [roadmap](docs/ROADMAP.md), [build provenance](docs/BUILD_PROVENANCE.md)
-or [architecture](docs/ARCHITECTURE.md). The [documentation index](docs/README.md)
-covers file formats, rendering research, tools and implementation plans.
+Start with the [roadmap](docs/ROADMAP.md) or
+[architecture](docs/ARCHITECTURE.md). The [documentation index](docs/README.md)
+covers implementation plans and public platform boundaries.
 
 ## License
 
