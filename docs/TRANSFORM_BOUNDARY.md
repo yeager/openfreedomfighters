@@ -65,6 +65,12 @@ the per-view geometry list to that draw method. The draw method's matrix
 triplet therefore remains unjoined to both the view-side cache entry and the
 GMS runtime identity.
 
+A separate view-state object also owns three pointer fields at the same
+offsets. The BonesVS method reads its triplet from a distinct record argument;
+the matching offsets do not establish shared allocation or pointer identity.
+The writer for that draw record and its relationship to active view state
+remain unresolved.
+
 These facts establish GMS runtime identity and hierarchy provenance. They do
 not establish the complete submitted object-to-world or world-to-clip transform.
 
