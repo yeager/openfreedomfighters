@@ -83,6 +83,8 @@ private:
             if (empty_or_terminal())
                 fail("ParamAnim payload is truncated before a required value");
             const auto remaining = input_.subspan(position_);
+            if (peek_class() == 12U)
+                fail("ParamAnim required field has no consuming advance for class twelve");
             CompactTypedValueDecoder decoder(remaining);
             auto value = decoder.next();
             if (value.kind == CompactTypedValueKind::terminator ||

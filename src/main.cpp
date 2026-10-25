@@ -593,9 +593,11 @@ void write_startup_route_cold_probe(const std::filesystem::path &root,
   case Family::first_cut_camera: return "first-cut-camera";
   case Family::basic_group_owner: return "basic-group-owner";
   case Family::vert_anim_component: return "vert-anim-component";
+  case Family::basic_light_owner: return "basic-light-owner";
   case Family::param_anim_component: return "param-anim-component";
   case Family::lens_flare_component: return "lens-flare-component";
   case Family::matpos_component: return "matpos-component";
+  case Family::count: break;
   }
   return "unknown";
 }
@@ -681,7 +683,7 @@ void write_lifecycle_coverage_probe(
 
 void write_reader_coverage_probe(std::ostream& output,
     const off::graphics::IntroDeferredReaderCoverageInventory& coverage) {
-  constexpr std::size_t family_count=15U;
+  constexpr auto family_count=static_cast<std::size_t>(off::graphics::IntroDeferredReaderFamily::count);
   constexpr std::size_t state_count=3U;
   std::array<std::array<std::size_t,state_count>,family_count> counts{};
   for(const auto& entry:coverage.entries) {

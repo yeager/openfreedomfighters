@@ -1501,6 +1501,9 @@ IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() c
           return IntroDeferredReaderFamily::basic_group_owner;
       } catch(const std::exception&) {}
     }
+    if(basic_light_owner_deferred_reader_states_.contains(work.source_directory_index) ||
+       supports_basic_light_owner_deferred_reader(work))
+      return IntroDeferredReaderFamily::basic_light_owner;
     if(param_anim_deferred_reader_states_.contains(work.source_directory_index) ||
        supports_param_anim_deferred_reader(work))
       return IntroDeferredReaderFamily::param_anim_component;
@@ -3332,11 +3335,12 @@ void IntroRuntime::apply_supported_vert_anim_deferred_reader(
   }
 }
 
-bool IntroRuntime::supports_param_anim_deferred_reader(
+bool IntroRuntime::supports_light_owner_deferred_identity(
     const IntroDeferredReaderWork& work) const noexcept {
   try {
     if (resource_load_stage_ != IntroResourceLoadStage::directory_construction_complete ||
         !work.processed || param_anim_deferred_reader_states_.contains(work.source_directory_index) ||
+        basic_light_owner_deferred_reader_states_.contains(work.source_directory_index) ||
         std::ranges::find_if(deferred_reader_work_, [&](const auto& candidate) {
           return std::addressof(candidate) == std::addressof(work);
         }) == deferred_reader_work_.end()) return false;
@@ -3344,15 +3348,74 @@ bool IntroRuntime::supports_param_anim_deferred_reader(
     if (source.source_type != 0x00800023U && source.source_type != 0x00800020U &&
         source.source_type != 0x00800024U) return false;
     const auto owner = source_handle(work.source_directory_index);
-    const auto attached = owner_components(owner);
     const auto object = constructed_object_owners_.find(work.source_directory_index);
+    return source.deferred_source_offset == work.source_offset &&
+        directory_resource_mapping_.at(work.source_directory_index) == work.resource &&
+        associated_resource_owner(work.resource) && *associated_resource_owner(work.resource) == owner &&
+        object != constructed_object_owners_.end() && object->second.owner == owner &&
+        object->second.resource == work.resource && resource_state_for_handle(work.resource);
+  } catch (const std::exception&) { return false; }
+}
+
+bool IntroRuntime::supports_basic_light_owner_deferred_reader(
+    const IntroDeferredReaderWork& work) const noexcept {
+  try {
+    if (!supports_light_owner_deferred_identity(work)) return false;
+    return resources_.sources().directory().at(work.source_directory_index).attachments.empty() &&
+        owner_components(source_handle(work.source_directory_index)).empty();
+  } catch (const std::exception&) { return false; }
+}
+
+void IntroRuntime::apply_supported_basic_light_owner_deferred_reader(
+    const IntroDeferredReaderWork& work) {
+  if (!supports_basic_light_owner_deferred_reader(work))
+    throw std::runtime_error("basic light reader requires unique supported live work");
+  const auto owner = source_handle(work.source_directory_index);
+  const auto type = resources_.sources().directory().at(work.source_directory_index).source_type;
+  const auto family = type == 0x00800023U ? data::LightOwnerFamily::spotlight :
+      type == 0x00800020U ? data::LightOwnerFamily::square_spotlight :
+                          data::LightOwnerFamily::omnidirectional;
+  const data::DeferredReaderWorkIdentity identity{
+      work.resource.value, work.source_offset, work.source_directory_index};
+  data::DeferredReaderSession session(identity,
+      resources_.sources().deferred_source_block(work.source_directory_index));
+  bool owner_flag{};
+  try {
+    session.prepare(identity);
+    session.read_owner([&](std::span<const std::byte> block) {
+      const auto parsed = data::LightParamAnimationDeferredReader::read(block, family);
+      owner_flag = parsed.owner_flag_enabled;
+      return data::DeferredOwnerReaderResult{parsed.component_suffix, parsed.component_extent};
+    });
+    const auto result = session.read_components({});
+    if (result.dispatched_components != 0U || result.continuation.size() != 1U ||
+        result.continuation.front() != std::byte{0xff})
+      throw std::runtime_error("basic light reader requires an exact terminal continuation");
+    session.deactivate();
+  } catch (...) {
+    if (session.state() != data::DeferredReaderSessionState::deactivated) session.deactivate();
+    throw;
+  }
+  auto& object = constructed_object_owners_.at(work.source_directory_index);
+  const auto [entry, inserted] = basic_light_owner_deferred_reader_states_.emplace(
+      work.source_directory_index, IntroBasicLightOwnerDeferredReaderState{
+          owner, work.resource, work.source_directory_index, work.source_offset, owner_flag});
+  if (!inserted) throw std::runtime_error("basic light reader cannot retain duplicate state");
+  try { record_supported_reader_admission(work); }
+  catch (...) { basic_light_owner_deferred_reader_states_.erase(entry); throw; }
+  object.flags = (object.flags & ~0x4U) | (owner_flag ? 0x4U : 0U);
+}
+
+bool IntroRuntime::supports_param_anim_deferred_reader(
+    const IntroDeferredReaderWork& work) const noexcept {
+  try {
+    if (!supports_light_owner_deferred_identity(work)) return false;
+    const auto& source = resources_.sources().directory().at(work.source_directory_index);
+    const auto owner = source_handle(work.source_directory_index);
+    const auto attached = owner_components(owner);
     if (source.attachments.size() != 1U || attached.size() != 1U ||
-        resources_.sources().attachment_identifier(work.source_directory_index, 0U) != "ZGEOM_ParamAnim" ||
-        source.deferred_source_offset != work.source_offset ||
-        directory_resource_mapping_.at(work.source_directory_index) != work.resource ||
-        !associated_resource_owner(work.resource) || *associated_resource_owner(work.resource) != owner ||
-        object == constructed_object_owners_.end() || object->second.owner != owner ||
-        object->second.resource != work.resource || !resource_state_for_handle(work.resource)) return false;
+        resources_.sources().attachment_identifier(work.source_directory_index, 0U) != "ZGEOM_ParamAnim")
+      return false;
     const auto component_index = attached.front();
     const auto& component = components_.at(component_index);
     const auto payload = constructed_picture_components_.find(component_index);

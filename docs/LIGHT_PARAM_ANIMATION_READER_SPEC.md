@@ -1,6 +1,7 @@
 # Light-owner ParamAnim deferred-reader specification
 
-Status: behavior contract for an independently implemented, bounded reader.
+Status: behavior contract for independently implemented, bounded light-owner
+and optional ParamAnim readers.
 It does not authorize animation evaluation, scene activation, rendering, or
 playback.
 
@@ -96,20 +97,27 @@ The component's numeric helpers intentionally differ from the strict light
 owner helpers. For component integer reads, binary64 and binary32 values
 truncate toward zero to signed 32-bit; NaN and out-of-range conversion use the
 signed 32-bit minimum result. Signed-integer classes are returned directly.
-String and length-delimited values advance the cursor but yield zero for these
-numeric helpers. Component float reads cast binary64 to binary32, preserve
+String classes 4/5 and length-delimited classes 7/9 advance the cursor but
+yield zero for these numeric helpers. Component float reads cast binary64 to binary32, preserve
 binary32, interpret the 32-bit payload of integer classes 3, 8, 10, and 11
 as an unsigned value before conversion to binary32, and yield zero for string
-or length-delimited values. This differs from integer reads: a payload whose
+or supported length-delimited values. Class 12 remains valid for generic
+delimiter scanning but cannot satisfy a required ParamAnim field: that
+component helper has no consuming advance for it. Reject it in required typed
+positions, while permitting it in an unread trailing region handled by the
+generic dispatcher. This differs from integer reads: a payload whose
 signed interpretation is -1 converts to 4294967296.0F in a float field, while
 an integer field retains -1. Preserve binary32 rounding of the unsigned value. A terminal or separator cannot satisfy a required
 typed field. Use the component reader's existing typed state and defaults;
 do not apply these permissive component conversions to owner fields.
 
 Require dispatch coverage for every attachment in the accepted owner list and
-a valid terminal continuation for the complete owner block. The current
-supported path may require a single ParamAnim attachment because no sibling
-reader is included in this contract. Validate the full component slice with
+a valid terminal continuation for the complete owner block. The supported paths are an empty attachment list or a single ParamAnim
+attachment. No sibling reader is included in this contract. For an empty
+list, dispatch with zero readers and require zero component delimiters before
+the terminal. Retain only the owner flag and owner-reader identity; do not
+create a synthetic component or ParamAnim payload state. Report this path as
+a light-owner reader, distinct from the ParamAnim component path. Validate the full component slice with
 the bounded generic dispatcher even when the ParamAnim reader consumes only
 a prefix of that slice. Do not convert parsed values into animation updates,
 callbacks, events, or lifecycle evidence.
@@ -121,7 +129,7 @@ admission record or partially published typed state.
 
 ## Failure behavior
 
-Reject an unsupported owner family, a missing or extra attachment, a wrong
+Reject an unsupported owner family, an extra attachment, a wrong
 attachment identity, a truncated required value, a value of the wrong kind,
 an invalid compact extent, a separator inside a typed field sequence, an
 incomplete component dispatch, or a missing/invalid terminal. A terminal
@@ -146,12 +154,16 @@ Use independently authored compact streams to cover:
   opaque bodies;
 - delimiter scanning that skips an unknown class by one tag byte while direct
   typed decoding continues to reject that same class and class six;
+- an empty attachment list for each light family, including correct flag
+  updates and rejection of unexpected component delimiters or malformed tails;
 - a single matching ParamAnim attachment with values left after the reader's
   consumed prefix;
 - component float fields receiving each integer class, including high-bit-set
   payloads and values near binary32 rounding boundaries; integer and boolean
   fields retain their existing signed conversion behavior;
-- component strings and length-delimited fields yielding their documented
+- class-12 rejection in required component fields while preserving opaque
+  class-12 framing in unread trailing regions;
+- component strings and supported length-delimited fields yielding their documented
   numeric default while still advancing by their complete bounded extent;
 - malformed lengths, truncated fields, wrong kinds, extra/missing
   attachments, bad delimiters, and invalid terminal continuation;

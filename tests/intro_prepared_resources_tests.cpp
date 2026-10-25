@@ -1369,6 +1369,107 @@ static OFF_NOINLINE void test_param_anim_light_runtime() {
     }
 }
 
+static OFF_NOINLINE void test_basic_light_owner_runtime() {
+    // Every family: set, clear, terminal tail, unexpected attachment delimiter.
+    for (unsigned scenario{}; scenario < 12U; ++scenario) {
+        Fixture fixture(false,true,false,true,false,false,false,false,false,3U,1U,1U);
+        const auto record = fixture.synthetic_external_record_offsets.front();
+        // Repartition the original list owner's declared slot into the light
+        // class in that same parsed parent pool; total allocation is unchanged.
+        const auto original_image = fixture.image();
+        const auto original = std::ranges::find(original_image.directory(),record,
+            &off::data::GmsDirectoryEntry::record_offset);
+        if (original == original_image.directory().end())
+            throw std::runtime_error("synthetic light replacement has no original owner");
+        std::uint32_t pool_table{};
+        for (unsigned byte{}; byte<4U; ++byte)
+            pool_table |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(fixture.payload[20U+byte])) << (8U*byte);
+        const auto counts = pool_table + 4U + original->pool_group*24U*4U;
+        const auto& old_counts = original_image.pool_groups().at(original->pool_group).class_counts;
+        if (old_counts[original->pool_class] == 0U)
+            throw std::runtime_error("synthetic light replacement has no declared slot");
+        set(fixture.payload,counts+original->pool_class*4U,old_counts[original->pool_class]-1U);
+        set(fixture.payload,counts+2U*4U,old_counts[2U]+1U);
+        constexpr std::array<std::uint32_t,3> types{0x00800023U,0x00800020U,0x00800024U};
+        set(fixture.payload,record+16U,types[scenario%3U]);
+        set(fixture.payload,record+20U,0U); // genuinely absent attachment list
+        Bytes block(4U);
+        scalar(block,3U,7U);scalar(block,8U,9U);scalar(block,11U,scenario<3U?1U:0U);
+        block.push_back(std::byte{0x46});block.push_back(std::byte{0x86});
+        if (scenario>=9U) block.push_back(std::byte{0xc6});
+        finish(block);
+        if (scenario>=6U && scenario<9U) {
+            block.push_back(std::byte{0});set(block,0U,static_cast<std::uint32_t>(block.size()));
+        }
+        set(fixture.payload,record+32U,static_cast<std::uint32_t>(fixture.payload.size()));
+        fixture.payload.insert(fixture.payload.end(),block.begin(),block.end());
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        app.initialize_native_group_registration();app.initialize_native_window_language_registration();
+        app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+        app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
+        app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
+        app.initialize_native_remaining_intro_scope_registration();
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        runtime->construct_root();runtime->begin_source_loading_without_engine_renderer();
+        runtime->construct_source_directory_without_engine_renderer();
+        const auto& directory=runtime->resources().sources().directory();
+        const auto found=std::ranges::find(directory,record,&off::data::GmsDirectoryEntry::record_offset);
+        const auto row=static_cast<std::size_t>(std::distance(directory.begin(),found));
+        const auto owner=runtime->source_handle(row);
+        // Seed live flags explicitly in this synthetic test: the public
+        // inspection view is const, but its runtime-owned object is mutable.
+        // Opposite option bits prove both set and clear while preserving peers.
+        auto& seeded=const_cast<off::graphics::IntroConstructedObjectOwner&>(
+            *runtime->constructed_object_owner(row));
+        seeded.flags |= 0x80U;
+        if (scenario>=3U) seeded.flags |= 4U;
+        const auto initial_flags=seeded.flags;
+        const auto component_count=runtime->components().size();
+        const auto initial_lifecycle=runtime->preflight_global_lifecycle();
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        auto& host=session->runtime();
+        if (scenario>=6U) rejects([&]{session->complete_postconstruction_reader_bracket(13U);});
+        else session->complete_postconstruction_reader_bracket(13U);
+        if (scenario<6U) {
+            const auto& state=host.basic_light_owner_deferred_reader_states().at(row);
+            check(state.owner==owner && state.source_directory_index==row &&
+                  state.resource==host.resource_handle(owner) &&
+                  state.source_offset==host.resources().sources().directory().at(row).deferred_source_offset &&
+                  state.owner_flag_enabled==(scenario<3U),
+                  "normal scene binds empty-attachment light reader to canonical owner identity");
+            check(host.constructed_object_owner(row)->flags==((initial_flags&~4U)|(scenario<3U?4U:0U)),
+                  "basic light reader sets or clears only its option bit");
+        } else {
+            check(host.basic_light_owner_deferred_reader_states().empty() &&
+                  host.constructed_object_owner(row)->flags==initial_flags,
+                  "invalid empty-attachment light continuation rolls back flag and receipt");
+        }
+        check(host.param_anim_deferred_reader_states().empty() && host.owner_components(owner).empty() &&
+              host.components().size()==component_count && !host.constructed_picture_component(row),
+              "empty light reader never synthesizes a component or ParamAnim state");
+        const auto work=std::ranges::find(host.deferred_reader_work(),row,
+            &off::graphics::IntroDeferredReaderWork::source_directory_index);
+        auto foreign=*work;
+        check(!host.supports_basic_light_owner_deferred_reader(foreign),
+              "basic light reader rejects copied noncanonical work");
+        rejects([&]{host.apply_supported_basic_light_owner_deferred_reader(foreign);});
+        check(!host.supports_param_anim_deferred_reader(*work),
+              "empty light owner cannot enter the ParamAnim component path");
+        const auto lifecycle=host.preflight_global_lifecycle();
+        check(lifecycle.covered_owners==initial_lifecycle.covered_owners &&
+              lifecycle.covered_components==initial_lifecycle.covered_components && !lifecycle.ready(),
+              "basic light reader receipt does not supply owner or component lifecycle admission");
+        bool covered{};
+        for (const auto& entry:host.reader_coverage_inventory().entries)
+            if (entry.family==off::graphics::IntroDeferredReaderFamily::basic_light_owner &&
+                entry.state==off::graphics::IntroDeferredReaderImplementationState::applied) covered=true;
+        check(covered==(scenario<6U),"basic light coverage reports only committed owner readers");
+    }
+}
+
 static OFF_NOINLINE void test_prepared_resource_variants() {
     const auto initialize_app=[](off::runtime::ApplicationServices& target) {
         target.initialize_native_group_registration();
@@ -2246,6 +2347,7 @@ int main(int argc, char* argv[]) {
         TestGroup{"prepared-runtime-scopes", test_prepared_runtime_scopes},
         TestGroup{"generic-directory-lifecycle", test_generic_directory_tail_lifecycle},
         TestGroup{"typed-deferred-reader-targets", test_visual_scope_lifecycle},
+        TestGroup{"basic-light-owner-runtime", test_basic_light_owner_runtime},
         TestGroup{"param-anim-light-runtime", test_param_anim_light_runtime},
         TestGroup{"prepared-resource-variants", test_prepared_resource_variants},
         TestGroup{"runtime-and-archive-lifecycle", test_runtime_and_archive_lifecycle},

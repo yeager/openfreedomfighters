@@ -169,7 +169,7 @@ void test_unsigned_integer_payload_float_conversion() {
 
 void test_length_class_advances_over_its_bounded_payload() {
     using off::data::ParamAnimComponentPayloadReader;
-    for (const auto tag : {std::byte{0x07}, std::byte{0x09}, std::byte{0x0c}}) {
+    for (const auto tag : {std::byte{0x07}, std::byte{0x09}}) {
     Bytes payload{tag};
     append_u32(payload, 7U); // four-byte extent word and three opaque bytes
     payload.insert(payload.end(), {std::byte{0xff}, std::byte{0x02}, std::byte{0x03}});
@@ -200,6 +200,33 @@ void test_length_class_advances_over_its_bounded_payload() {
     truncated.insert(truncated.end(), {std::byte{0x00}, std::byte{0x00}, std::byte{0x00}});
     rejects([&] { (void)ParamAnimComponentPayloadReader::read(truncated); },
             "a length class extending beyond the component slice must be rejected");
+    }
+}
+
+void test_class_twelve_is_framing_only_for_param_anim() {
+    using off::data::ParamAnimComponentPayloadReader;
+    for (const auto tag : {std::byte{0x0c}, std::byte{0x4c}, std::byte{0x8c}, std::byte{0xcc}}) {
+        Bytes length{tag};
+        append_u32(length, 6U);
+        length.insert(length.end(), {std::byte{6}, std::byte{0xff}});
+        // Check all four required typed positions on the long control branch.
+        for (unsigned position{}; position<4U; ++position) {
+            Bytes payload;
+            for (unsigned field{}; field<4U; ++field) {
+                if (field==position) payload.insert(payload.end(),length.begin(),length.end());
+                else append_i32(payload,3U,1);
+            }
+            rejects([&] { (void)ParamAnimComponentPayloadReader::read(payload); },
+                    "class twelve cannot satisfy a required ParamAnim field regardless of high tag bits");
+        }
+        Bytes payload;
+        append_i32(payload,3U,1);append_f32(payload,8.F);append_i32(payload,3U,0);
+        const auto prefix_size=payload.size();
+        payload.insert(payload.end(),length.begin(),length.end());
+        const auto result=ParamAnimComponentPayloadReader::read(payload);
+        check(result.scalar_c==8.F && result.consumed_bytes==prefix_size &&
+              result.consumed_values==3U,
+              "ParamAnim leaves a class-twelve trailing value for generic framing dispatch");
     }
 }
 
@@ -241,6 +268,7 @@ int main() {
     test_numeric_conversion_and_unread_nonnumeric_tail();
     test_unsigned_integer_payload_float_conversion();
     test_length_class_advances_over_its_bounded_payload();
+    test_class_twelve_is_framing_only_for_param_anim();
     test_x86_truncation_invalid_results();
     test_truncated_required_values_reject_without_partial_state();
 }

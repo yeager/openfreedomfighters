@@ -1129,6 +1129,7 @@ if(BUILD_TESTING)
             generic-directory-lifecycle
             typed-deferred-reader-targets
             param-anim-light-runtime
+            basic-light-owner-runtime
             prepared-resource-variants
             runtime-and-archive-lifecycle
             runtime-scene-identity-and-later

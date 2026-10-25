@@ -343,7 +343,8 @@ enum class IntroDeferredReaderFamily : std::uint8_t {
   first_cut_sequence, first_cut_list, first_cut_legal_picture,
   external_cut_commands, first_cut_fade_picture, first_cut_camera,
   basic_group_owner, vert_anim_component,
-  lens_flare_component, matpos_component, param_anim_component,
+  lens_flare_component, matpos_component, param_anim_component, basic_light_owner,
+  count,
 };
 enum class IntroDeferredReaderImplementationState : std::uint8_t {
   unimplemented, implemented_not_applied, applied,
@@ -625,6 +626,14 @@ struct IntroLensFlareDeferredReaderState {
   std::size_t source_directory_index{}, component_index{};
   std::uint32_t source_offset{};
   data::LensFlareDeferredReaderValues values;
+};
+// Completed empty-attachment light reader; no component or lifecycle evidence.
+struct IntroBasicLightOwnerDeferredReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t source_directory_index{};
+  std::uint32_t source_offset{};
+  bool owner_flag_enabled{};
 };
 // Inert typed light/ParamAnim state. No lifecycle or playback evidence.
 struct IntroParamAnimDeferredReaderState {
@@ -1198,6 +1207,9 @@ public:
   [[nodiscard]] bool supports_vert_anim_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
   void apply_supported_vert_anim_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroVertAnimDeferredReaderState>& vert_anim_deferred_reader_states() const noexcept { return vert_anim_deferred_reader_states_; }
+  [[nodiscard]] bool supports_basic_light_owner_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
+  void apply_supported_basic_light_owner_deferred_reader(const IntroDeferredReaderWork& work);
+  [[nodiscard]] const std::map<std::size_t,IntroBasicLightOwnerDeferredReaderState>& basic_light_owner_deferred_reader_states() const noexcept { return basic_light_owner_deferred_reader_states_; }
   [[nodiscard]] bool supports_param_anim_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
   void apply_supported_param_anim_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroParamAnimDeferredReaderState>& param_anim_deferred_reader_states() const noexcept { return param_anim_deferred_reader_states_; }
@@ -1374,6 +1386,8 @@ private:
   std::map<std::size_t,IntroVertAnimDeferredReaderState> vert_anim_deferred_reader_states_;
   std::map<std::size_t,IntroLensFlareDeferredReaderState> lens_flare_deferred_reader_states_;
   std::map<std::size_t,IntroParamAnimDeferredReaderState> param_anim_deferred_reader_states_;
+  std::map<std::size_t,IntroBasicLightOwnerDeferredReaderState> basic_light_owner_deferred_reader_states_;
+  [[nodiscard]] bool supports_light_owner_deferred_identity(const IntroDeferredReaderWork& work) const noexcept;
   std::optional<IntroFirstCutPlayerPreparedState> first_cut_player_prepared_state_;
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;
   std::map<std::size_t,IntroFadePictureReaderState> fade_picture_reader_states_;
