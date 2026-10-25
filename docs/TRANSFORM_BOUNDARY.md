@@ -81,10 +81,12 @@ subobject's concrete class remain unidentified.
 The loader's earlier `ZSysInterfaceWintel` helper dispatch (vtable slot `+0x0`
 at the subobject reached through the global `+0x9b` field) resolves to
 `FUN_00423980`, which forwards the current pool row to `FUN_0042f8c0` for row
-state application. Neither helper directly stores to row `+0x54`; the latter
-uses row virtual slots, whose concrete targets remain unresolved. This rules
-out a direct write by this helper but does not rule out an indirect setter.
-Accordingly, the later `+0x54` writer is still not identified.
+state application. `FUN_0042f8c0` passes scalar state fields to the row's
+virtual setters at slots `+0x3c`, `+0x4c`, `+0x54`, `+0x58`, `+0x60`, and
+`+0x8`; the setter implementations depend on the row's concrete class. This
+helper chain contains no direct store to row `+0x54`, and the setter at slot
+`+0x54` is not established as a producer for that field. The later writer
+remains unidentified.
 
 The GMS loader also records each geometry object's local pool ordinal during
 construction and calls a runtime setter that writes a link field at offset
