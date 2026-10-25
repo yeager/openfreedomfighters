@@ -1343,12 +1343,17 @@ GmsIntroCameraSource GmsImage::intro_camera_source(std::size_t index) const {
     if (reader.u32(offset) != 122U) fail();
     const auto end = offset + 122U;
     auto cursor = offset + 4U;
-    const auto tag = [&](std::uint8_t expected) {
-        if (cursor >= end || payload[cursor] != static_cast<std::byte>(expected)) fail();
+    const auto tag = [&](std::uint8_t expected, bool ignore_high_flag = false) {
+        if (cursor >= end) fail();
+        const auto actual = std::to_integer<std::uint8_t>(payload[cursor]);
+        const auto matches = ignore_high_flag
+            ? (actual & 0x7fU) == (expected & 0x7fU)
+            : actual == expected;
+        if (!matches) fail();
         ++cursor;
     };
-    const auto word = [&](std::uint8_t expected) {
-        tag(expected);
+    const auto word = [&](std::uint8_t expected, bool ignore_high_flag = false) {
+        tag(expected, ignore_high_flag);
         if (4U > end - cursor) fail();
         const auto value = reader.u32(cursor);
         cursor += 4U;
@@ -1380,7 +1385,10 @@ GmsIntroCameraSource GmsImage::intro_camera_source(std::size_t index) const {
     result.integer_a = word(0x03);
     result.renderer_list_selector = word(0x83);
     result.priority = word(0x83);
-    result.aspect_mode = word(0x03);
+    // Compact signed-integer dispatch uses the low six class bits and the
+    // continuation bit. The independent high flag bit does not change this
+    // field's scalar extent or value; keep the continuation requirement exact.
+    result.aspect_mode = word(0x03, true);
     result.flag_option_a = word(0x83);
     result.auxiliary_floats = {single(0x02), single(0x02)};
     result.flag_option_b = word(0x03);

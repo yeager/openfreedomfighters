@@ -671,6 +671,11 @@ void intro_camera_tests() {
     check(camera.auxiliary_floats == std::array<float, 2>{-3.5F,7.25F} &&
           camera.viewport == std::array<float, 4>{-0.25F,1.5F,2.25F,-4.0F},
           "camera preserves finite raw floats without viewport composition or constraints");
+    auto high_flag_aspect_mode = fixture();
+    high_flag_aspect_mode[609U + 70U] = std::byte{0x83};
+    const auto high_flag_camera = decode(high_flag_aspect_mode);
+    check(high_flag_camera.aspect_mode == camera.aspect_mode,
+          "camera aspect mode accepts the independent high flag without changing its signed integer value");
     auto zero = fixture();
     for (const auto position : {4U,13U,37U,46U})
         set_double_bits(zero, 610U + position, 0x8000000000000000ULL);
@@ -694,6 +699,7 @@ void intro_camera_tests() {
         auto bytes = fixture(); mutation(bytes);
         check_rejected([&] { static_cast<void>(decode(bytes)); }, "malformed restricted camera rejected");
     };
+    reject([](auto& b) { b[609U + 70U] = std::byte{0x84}; });
     for (std::uint32_t size = 0; size < 122U; ++size)
         reject([&](auto& b) { set_u32(b, 609U, size); });
     for (const auto header : {123U,0x0100007aU,0x00ffffffU})
@@ -976,7 +982,8 @@ int main() {
             std::byte{0x42}, std::byte{0x00}, std::byte{0x00}, std::byte{0x80}, std::byte{0x3f},
             std::byte{0x88}, std::byte{0xff}, std::byte{0xff}, std::byte{0xff}, std::byte{0xff},
             std::byte{0x44}, std::byte{'x'}, std::byte{0},
-            std::byte{0x87}, std::byte{0x10}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
+            std::byte{0x87}, std::byte{0x07}, std::byte{0x00}, std::byte{0x00}, std::byte{0x00},
+            std::byte{0x06}, std::byte{0xff}, std::byte{0x06},
             std::byte{0xff},
         };
         CompactTypedValueDecoder decoder(stream);
@@ -998,9 +1005,10 @@ int main() {
               "compact decoder admits recovered signed32 classes without assigning field semantics");
         check(string.kind == CompactTypedValueKind::nul_terminated_string && string.payload.size() == 2U &&
                   string.encoded.size() == 3U && length.kind == CompactTypedValueKind::length_u32 &&
-                  length.u32_bits() == 16U && terminal.kind == CompactTypedValueKind::terminator &&
+                  length.payload.size() == 4U && length.u32_bits() == 7U &&
+                  length.encoded.size() == 8U && terminal.kind == CompactTypedValueKind::terminator &&
                   terminal.raw_tag == 0xffU && terminal.encoded.size() == 1U && decoder.empty(),
-              "compact decoder bounds NUL strings, length values, and exact terminators");
+              "compact decoder bounds strings, opaque length-delimited bodies, and terminators");
         check_rejected([&] { static_cast<void>(wide.signed32()); },
                        "compact decoder rejects an incompatible typed representation");
         check_rejected([] {
@@ -1018,6 +1026,27 @@ int main() {
             CompactTypedValueDecoder decoder(unterminated);
             static_cast<void>(decoder.next());
         }, "compact decoder rejects an unterminated string within its supplied boundary");
+        check_rejected([] {
+            const std::array<std::byte, 6> truncated_length{
+                std::byte{0x07}, std::byte{0x07}, std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0}};
+            CompactTypedValueDecoder decoder(truncated_length);
+            static_cast<void>(decoder.next());
+        }, "compact decoder rejects a length-delimited body beyond its supplied boundary");
+        check_rejected([] {
+            const std::array<std::byte, 6> undersized_length{
+                std::byte{0x07}, std::byte{0x03}, std::byte{0}, std::byte{0}, std::byte{0}, std::byte{0xff}};
+            CompactTypedValueDecoder decoder(undersized_length);
+            static_cast<void>(decoder.next());
+        }, "compact decoder rejects a length smaller than its extent word");
+        {
+            const std::array<std::byte, 5> minimal_length{
+                std::byte{0x07}, std::byte{0x04}, std::byte{0}, std::byte{0}, std::byte{0}};
+            CompactTypedValueDecoder decoder(minimal_length);
+            const auto value = decoder.next();
+            check(value.kind == CompactTypedValueKind::length_u32 && value.u32_bits() == 4U &&
+                      value.encoded.size() == minimal_length.size() && decoder.empty(),
+                  "a minimal length-delimited value ending exactly at its boundary is valid");
+        }
     }
     {
         using off::data::BoundedComponentBlockCursor;
@@ -1167,6 +1196,24 @@ int main() {
                   received_starts[0] == std::byte{0x83} && received_starts[1] == std::byte{0x04} &&
                   result.continuation.size() == 2U && result.continuation.front() == std::byte{0xff},
               "component dispatcher isolates each bounded payload and retains the terminator");
+        {
+            const std::array length_delimited_stream{
+                std::byte{0x07}, std::byte{0x07}, std::byte{0}, std::byte{0}, std::byte{0},
+                std::byte{0x06}, std::byte{0xff}, std::byte{0x06},
+                std::byte{0x03}, std::byte{0x22}, std::byte{0}, std::byte{0}, std::byte{0},
+                std::byte{0x06}, std::byte{0xff},
+            };
+            std::size_t bounded_length{};
+            const std::array<DeferredComponentReader, 1> length_reader{
+                [&](std::span<const std::byte>& child) { bounded_length = child.size(); },
+            };
+            const auto length_dispatch =
+                DeferredComponentDispatcher::dispatch(length_delimited_stream, length_reader);
+            check(length_dispatch.dispatched_components == 1U && bounded_length == 13U &&
+                      length_dispatch.continuation.size() == 1U &&
+                      length_dispatch.continuation.front() == std::byte{0xff},
+                  "opaque length bodies containing separator and terminal tags stay within one component");
+        }
         {
             const std::array terminal_only{std::byte{0xff}, std::byte{0xa5}};
             const std::array<DeferredComponentReader, 0> no_readers{};

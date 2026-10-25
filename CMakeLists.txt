@@ -628,6 +628,11 @@ if(BUILD_TESTING)
     target_compile_definitions(off_vfs_file_reader_tests PRIVATE
         OFF_VFS_READER_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/vfs-reader-test-work")
     add_test(NAME off_vfs_file_reader_tests COMMAND off_vfs_file_reader_tests)
+    add_executable(off_param_anim_component_payload_tests
+        tests/param_anim_component_payload_tests.cpp)
+    target_link_libraries(off_param_anim_component_payload_tests PRIVATE off_core)
+    add_test(NAME off_param_anim_component_payload_tests
+        COMMAND off_param_anim_component_payload_tests)
     add_executable(off_sound_records_tests tests/sound_records_tests.cpp)
     target_link_libraries(off_sound_records_tests PRIVATE off_core)
     add_test(NAME off_sound_records_tests COMMAND off_sound_records_tests)

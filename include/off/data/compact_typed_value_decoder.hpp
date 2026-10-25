@@ -30,8 +30,9 @@ struct CompactTypedValue final {
     // This view includes the tag and exactly the bytes advanced by this
     // decoder.  It lets a schema-specific reader retain byte provenance.
     std::span<const std::byte> encoded;
-    // This is encoded.subspan(1) for non-terminators and empty for the
-    // terminator.  It contains no inferred interpretation.
+    // Most payloads are encoded.subspan(1); length_u32 exposes only its
+    // four-byte extent word, while encoded also spans the opaque body.
+    // Terminators have an empty payload.
     std::span<const std::byte> payload;
 
     [[nodiscard]] std::uint32_t u32_bits() const {
@@ -79,7 +80,8 @@ public:
 
     // Decodes one value without interpreting its schema role.  Unknown class
     // values and class 6 are rejected without advancement because their byte
-    // extent is not recovered by the generic contract.
+    // extent is not recovered by the generic contract. Class 7 carries a u32
+    // extent that includes that word and the opaque bytes following it.
     [[nodiscard]] CompactTypedValue next() {
         if (empty()) fail("compact typed value stream is truncated");
         const auto begin = cursor_;
@@ -99,6 +101,15 @@ public:
             while (cursor_ < input_.size() && input_[cursor_] != std::byte{0}) ++cursor_;
             if (cursor_ == input_.size()) fail("compact string value is unterminated");
             ++cursor_;
+        } else if (kind == CompactTypedValueKind::length_u32) {
+            if (payload_size > input_.size() - cursor_ - 1U) {
+                fail("compact length value is truncated before its extent word");
+            }
+            const auto extent = read_u32(cursor_ + 1U);
+            if (extent < payload_size || extent >= input_.size() - cursor_) {
+                fail("compact length value exceeds its supplied boundary");
+            }
+            cursor_ += 1U + static_cast<std::size_t>(extent);
         } else {
             if (payload_size > input_.size() - cursor_ - 1U) {
                 fail("compact typed value payload is truncated");
@@ -106,7 +117,10 @@ public:
             cursor_ += 1U + payload_size;
         }
         const auto encoded = input_.subspan(begin, cursor_ - begin);
-        return {kind, tag, value_class, continuation, encoded, encoded.subspan(1U)};
+        const auto payload = kind == CompactTypedValueKind::length_u32
+                                 ? encoded.subspan(1U, payload_size)
+                                 : encoded.subspan(1U);
+        return {kind, tag, value_class, continuation, encoded, payload};
     }
 
 private:
@@ -139,6 +153,15 @@ private:
         case CompactTypedValueKind::nul_terminated_string: return 0U;
         }
         fail("compact typed value kind has no fixed payload size");
+    }
+
+    [[nodiscard]] std::uint32_t read_u32(std::size_t offset) const noexcept {
+        std::uint32_t value = 0;
+        for (std::size_t index = 0; index < sizeof(value); ++index) {
+            value |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(input_[offset + index]))
+                     << static_cast<unsigned int>(index * 8U);
+        }
+        return value;
     }
 
     [[noreturn]] static void fail(const char* message) { throw std::runtime_error(message); }
