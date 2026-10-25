@@ -340,7 +340,7 @@ enum class IntroDeferredReaderFamily : std::uint8_t {
   unclassified, sound_owner, window_owner, movie_controller,
   first_cut_sequence, first_cut_list, first_cut_legal_picture,
   external_cut_commands, first_cut_fade_picture, first_cut_camera,
-  basic_group_owner, following_visual_owner, vert_anim_component,
+  basic_group_owner, vert_anim_component,
   lens_flare_component, matpos_component,
 };
 enum class IntroDeferredReaderImplementationState : std::uint8_t {
@@ -584,15 +584,6 @@ struct IntroFirstCutCameraReaderState {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
   data::GmsIntroCameraSource authored;
-};
-// A completed owner-boundary receipt for the five reviewed attachment-free
-// following-visual records. It establishes identity only; their payload and
-// runtime behavior remain unrecovered and therefore unadmitted.
-struct IntroFollowingVisualOwnerReaderReceipt {
-  IntroRuntimeHandle owner;
-  IntroRuntimeResourceHandle resource;
-  std::size_t source_directory_index{};
-  std::uint32_t source_offset{};
 };
 // Completed source-bound state for the narrow attachment-free ZGROUP reader.
 // It retains provenance only; scalar and flag effects are applied directly to
@@ -1199,8 +1190,6 @@ public:
   [[nodiscard]] const IntroFirstCutListReaderState* first_cut_list_reader_state() const noexcept {return first_cut_list_reader_state_?&*first_cut_list_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutComponentReaderState* first_cut_component_reader_state() const noexcept {return first_cut_component_reader_state_?&*first_cut_component_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutCameraReaderState* first_cut_camera_reader_state() const noexcept {return first_cut_camera_reader_state_?&*first_cut_camera_reader_state_:nullptr;}
-  void apply_supported_following_visual_owner_deferred_reader(const IntroDeferredReaderWork& work);
-  [[nodiscard]] const std::map<std::size_t,IntroFollowingVisualOwnerReaderReceipt>& following_visual_owner_reader_receipts() const noexcept {return following_visual_owner_reader_receipts_;}
   void apply_supported_basic_group_owner_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroBasicGroupOwnerReaderState>& basic_group_owner_reader_states() const noexcept {return basic_group_owner_reader_states_;}
   // Non-mutating gate for the one recovered MatPos deferred reader.  The
@@ -1234,6 +1223,7 @@ public:
   // session. It remains cold and does not admit global lifecycle work.
   [[nodiscard]] cutscene::FirstCutPlayerSession first_cut_player_session() const;
   void apply_supported_external_cut_commands_deferred_reader(const IntroDeferredReaderWork& work);
+  [[nodiscard]] bool supports_external_cut_commands_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
   [[nodiscard]] const IntroExternalCutCommandsReaderState* external_cut_commands_reader_state() const noexcept {return external_cut_commands_reader_state_?&*external_cut_commands_reader_state_:nullptr;}
   void apply_supported_first_cut_fade_picture_deferred_reader(const IntroDeferredReaderWork& work);
   void apply_supported_first_cut_fade_picture_component_reader(const IntroDeferredReaderWork& work);
@@ -1378,7 +1368,6 @@ private:
   std::optional<IntroFirstCutListReaderState> first_cut_list_reader_state_;
   std::optional<IntroFirstCutComponentReaderState> first_cut_component_reader_state_;
   std::optional<IntroFirstCutCameraReaderState> first_cut_camera_reader_state_;
-  std::map<std::size_t,IntroFollowingVisualOwnerReaderReceipt> following_visual_owner_reader_receipts_;
   std::map<std::size_t,IntroBasicGroupOwnerReaderState> basic_group_owner_reader_states_;
   std::map<std::size_t,IntroMatPosDeferredReaderState> matpos_deferred_reader_states_;
   std::map<std::size_t,IntroMatPosOwnerRefreshReceipt> matpos_owner_refresh_receipts_;
@@ -1481,6 +1470,7 @@ private:
   void construct_group_row_without_engine_renderer(std::size_t row);
   void construct_picture_row_without_engine_renderer(std::size_t row);
   void construct_non_group_row_without_engine_renderer(std::size_t row);
+  void construct_unprocessed_directory_records_without_engine_renderer();
   void construct_owner_attachments(std::size_t row,std::uint32_t& mask,std::vector<std::uint64_t>& attachments);
   void apply_directory_transform(std::size_t row,IntroRuntimeResourceHandle resource);
   void assign_fresh_directory_metadata(IntroRuntimeResourceHandle resource,std::uint32_t metadata);

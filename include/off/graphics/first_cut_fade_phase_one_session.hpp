@@ -10,10 +10,11 @@ namespace off::graphics {
 
 class IntroRuntime;
 
-// A deliberately isolated diagnostic pass over the three reviewed first-cut
-// FadeToBlack receipts.  It is neither a global lifecycle phase nor a cut
-// activation: it cannot reach MovieControl, clocks, audio, frame submission,
-// or renderer admission.  Normal startup never creates this type.
+// A deliberately isolated diagnostic pass over first-cut FadeToBlack
+// receipts discovered from the local command targets. It is neither a global
+// lifecycle phase nor a cut activation: it cannot reach MovieControl, clocks,
+// audio, frame submission, or renderer admission. Normal startup never creates
+// this type.
 enum class FirstCutFadePhaseOneSessionStage : std::uint8_t {
   cold,
   executing,

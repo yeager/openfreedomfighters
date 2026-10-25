@@ -45,3 +45,16 @@ allocation slots, unknown class handlers, ambiguous required roles, and malforme
 attachments. Verify failure cleanup and that no scene activation occurs after a
 partial construction failure. A private owned-installation run must additionally
 confirm that supported normal startup still loads before claiming compatibility.
+
+## Current verification limits
+
+The small synthetic tail tests cover variable record counts, component ownership,
+parent validation, mapping, deferred-reader order, and construction failures.
+The initial construction stages still require a fixed prelude and remain to be
+generalized.
+
+The removed population-specific fixture also supplied integration checks for
+fade sessions, MovieControl, and the scene-frame adapter. Those checks need new
+independent fixtures; passing the directory tests does not replace their
+coverage. Positive and ambiguous external-command bindings and variable fade
+receipt sets also require focused runtime checks before release.

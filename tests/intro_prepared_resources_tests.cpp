@@ -131,14 +131,13 @@ struct FixtureReferenceMap {
     bool full_second_scope{};
     bool following_visual_scope{};
     bool room_animation_scope{};
-    bool lens_flare_scope{};
     std::uint32_t operator()(std::uint32_t value) const {
         if(!value) return 0;
         if(picture_order) {
             if(camera_row) {
                 if(value==9) return 6;
-                if(value==3) return lens_flare_scope?201U:room_animation_scope?70U:following_visual_scope?49U:full_second_scope?43U:second_window?9U:7U;
-                if(value>=5 && value<=8) return value+(lens_flare_scope?197U:room_animation_scope?66U:following_visual_scope?45U:full_second_scope?39U:second_window?5U:3U);
+                if(value==3) return following_visual_scope?49U:full_second_scope?43U:second_window?9U:7U;
+                if(value>=5 && value<=8) return value+(following_visual_scope?45U:full_second_scope?39U:second_window?5U:3U);
             }
             if(value==2) return 5;
             if(value==3) return 6;
@@ -159,15 +158,14 @@ Bytes controller(FixtureReferenceMap map={}) {
     scalar(b, 0x83, 17); scalar(b, 0x88, 0); scalar(b, 8, 2);
     b.push_back(std::byte{6}); finish(b); return b;
 }
-Bytes first_cut(FixtureReferenceMap map={},bool include_events=true,bool three_fade_targets=false) {
+Bytes first_cut(FixtureReferenceMap map={},bool include_events=true) {
     Bytes b(4); scalar(b, 0x89, 8); word(b, map(5)); b.push_back(std::byte{6});
     constexpr std::array<std::uint8_t, 7> tags{0x83, 0x83, 3, 8, 3, 0x83, 3};
     for (std::size_t i = 0; i < tags.size(); ++i) scalar(b, tags[i], i == 3 ? 0 : 1);
     floating(b, 2, -0.0F); b.push_back(std::byte{6});
     for (std::uint32_t i = 0; i < 5; ++i) {
         scalar(b, 3, 31 - i); scalar(b, 0x8a, i == 4 || !include_events ? 0 : 1);
-        constexpr std::array<std::uint32_t,5> fade_references{5U,8U,10U,5U,8U};
-        scalar(b, 0x88, three_fade_targets?fade_references[i]:map(2)); scalar(b, 0x83, 100 + i);
+        scalar(b, 0x88, map(2)); scalar(b, 0x83, 100 + i);
         b.push_back(std::byte{4}); text(b, "IndependentTarget"); b.push_back(std::byte{6});
     }
     finish(b); return b;
@@ -244,17 +242,17 @@ struct Fixture {
     Bytes payload, names, prm, tex, snd;
     std::array<std::size_t, 10> block_offsets{};
     std::array<std::size_t, 10> attachment_offsets{};
-    std::size_t remaining_sound_source_offset{};
-    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false,bool room_animation_scope=false,bool lens_flare_scope=false,bool remaining_scope=false,bool three_fade_targets=false) : payload(1024) {
+    std::vector<std::size_t> tail_record_offsets;
+    std::size_t tail_parent_control_offset{};
+    explicit Fixture(bool include_sound=false,bool leading_group=false,bool language_group=false,bool include_events=true,bool camera_row=false,bool second_window=false,bool full_second_scope=false,bool following_visual_scope=false,bool room_animation_scope=false,std::size_t synthetic_tail_count=3,std::size_t component_slot=1) : payload(1024) {
         if(language_group && !leading_group) throw std::runtime_error("language fixture requires leading group");
         if(camera_row && !language_group) throw std::runtime_error("camera row fixture requires language group");
         if(second_window && !camera_row) throw std::runtime_error("second Window fixture requires Camera row");
         if(full_second_scope && !second_window) throw std::runtime_error("full second scope requires second Window");
         if(following_visual_scope && !full_second_scope) throw std::runtime_error("following visual scope requires full second scope");
         if(room_animation_scope && !following_visual_scope) throw std::runtime_error("Room fixture requires preceding visual scope");
-        if(lens_flare_scope && !room_animation_scope) throw std::runtime_error("Lens fixture requires preceding Room scope");
-        if(remaining_scope && !lens_flare_scope) throw std::runtime_error("remaining fixture requires the preceding clean scope");
-        if(three_fade_targets && !remaining_scope) throw std::runtime_error("three fade targets require the complete fixture");
+        if(room_animation_scope && synthetic_tail_count==0) throw std::runtime_error("synthetic tail fixture must contain at least one record");
+        if(room_animation_scope && component_slot>=synthetic_tail_count) throw std::runtime_error("synthetic component slot must name a tail record");
         // Deliberately permuted directory roles; no retail source indices.
         set(payload, 0, 32); set(payload, 4, 128); set(payload, 12, 4); set(payload, 20, 176);
         set(payload, 32, include_sound?10:9); set(payload, 128, 1); set(payload, 132, 144);
@@ -295,7 +293,7 @@ struct Fixture {
                                   {"ZSNDOBJ_SoundSegment",1},{"ZGEOM_ZSetZDefine",0}});
         // All nonnull references emitted below target original rows after the
         // first window, so both inserted rows precede those referenced owners.
-        const FixtureReferenceMap bias{leading_group?(language_group?2U:1U):0U,language_group,camera_row,second_window,full_second_scope,following_visual_scope,room_animation_scope,lens_flare_scope};
+        const FixtureReferenceMap bias{leading_group?(language_group?2U:1U):0U,language_group,camera_row,second_window,full_second_scope,following_visual_scope};
         const std::array<Bytes, 10> blocks{camera(), picture(false), controller(bias), picture(true), member(bias), list({8, 8},bias), list({4, 2, 4},bias), first_cut(bias,include_events), window(bias),sound_owner(bias)};
         for (std::size_t i = 0; i < node_count; ++i) {
             block_offsets[i] = payload.size(); set(payload, 512 + 48 * i + 32, static_cast<std::uint32_t>(payload.size()));
@@ -394,200 +392,30 @@ struct Fixture {
                     set(payload,at+32,static_cast<std::uint32_t>(deferred));
                 }
             }
-            const auto room_scope_records=payload.size();
             if(room_animation_scope) {
-                payload.resize(payload.size()+21*48);
-                for(std::size_t row=48;row<=68;++row) {
-                    const auto at=room_scope_records+(row-48)*48;
-                    const bool group=row==48 || row==50 || row==63;
-                    const bool room=row==49;
-                    const bool camera_owner=row>=59 && row<=61;
-                    const bool light=row>=53 && row<=56;
-                    const bool mesh=row==51 || row==52 || row==57 || row==58 || row==62;
-                    const auto type=group?0x00100001U:room?0x00100021U:camera_owner?0x00400003U:
-                        light?0x00800024U:mesh?0x00200002U:row==64?0x002000e5U:0x0800001aU;
-                    set(payload,at,static_cast<std::uint32_t>(names.size()));text(names,"IndependentRoomOwner"+std::to_string(row));
-                    set(payload,at+4,384);set(payload,at+8,420);set(payload,at+16,type);
-                    const auto flags=row==48?0x03200000U:room?0x07044000U:row==50?0x03000000U:
-                        row==63?0x47000000U:light?0x80U:camera_owner?0x00280400U:
-                        row==51 || row==62?0x20073U:row==52?0x20071U:row==58?0x200f1U:
-                        row==57 || row==64?0x200f3U:0x00200000U;
-                    set(payload,at+24,flags);
-                    if(light || mesh || row==64) set(payload,at+12,static_cast<std::uint32_t>(0x2000+row*16));
-                    if(room) payload.at(at+45)=std::byte{2};
-                    if(row==49 || row==50 || row==63) set(payload,at+36,static_cast<std::uint32_t>(0x40000000U+row*16));
-                    if(row!=57 && row!=58 && row!=62) set(payload,at+32,static_cast<std::uint32_t>(deferred));
-                    if(row==50 || mesh || light || camera_owner) {
-                        set(payload,at+8,static_cast<std::uint32_t>(payload.size()));
-                        word(payload,std::bit_cast<std::uint32_t>(static_cast<float>(row-47)));
-                        word(payload,std::bit_cast<std::uint32_t>(2.F));word(payload,std::bit_cast<std::uint32_t>(-3.F));
-                    }
-                    if(row==53 || row==54 || camera_owner) {
-                        set(payload,at+4,static_cast<std::uint32_t>(payload.size()));
-                        for(const auto value:std::array<float,9>{1,0,0,0,1,0,0,0,-1}) word(payload,std::bit_cast<std::uint32_t>(value));
-                    }
-                    if(camera_owner) {
-                        const auto property=keys_property(names);
-                        set(payload,at+28,static_cast<std::uint32_t>(property));
-                    }
-                    const std::string_view attachment=row==51 || row==52?"ZSTDOBJ_VertAnim":
-                        camera_owner?"ZGEOM_MatPosAnim":row==65?"ZLIST_CutSequenceList":row>=66?"ZLIST_CutSequence":"";
-                    if(!attachment.empty()) {
-                        const auto table=payload.size();word(payload,1);word(payload,static_cast<std::uint32_t>(table+12));
-                        word(payload,row==65?0U:camera_owner?0x42c80000U:0x3f800000U);text(payload,attachment);
+                while(payload.size()%4) payload.push_back(std::byte{0});
+                for(std::size_t slot=0;slot<synthetic_tail_count;++slot) {
+                    while(payload.size()%4) payload.push_back(std::byte{0});
+                    const auto at=payload.size();
+                    tail_record_offsets.push_back(at);
+                    payload.resize(at+48);
+                    set(payload,at,static_cast<std::uint32_t>(names.size()));
+                    text(names,"SyntheticTail"+std::to_string(slot));
+                    set(payload,at+4,384);set(payload,at+8,420);
+                    set(payload,at+16,0x0020003aU);
+                    set(payload,at+24,0x00200000U);
+                    set(payload,at+32,static_cast<std::uint32_t>(block_offsets[5]));
+                    if(slot==component_slot) {
+                        const auto table=payload.size();word(payload,1);
+                        word(payload,static_cast<std::uint32_t>(table+12));
+                        word(payload,0);text(payload,"ZSTDOBJ_VertAnim");
                         set(payload,at+20,static_cast<std::uint32_t>(table));
                     }
-                }
-                while(payload.size()%4) payload.push_back(std::byte{0});
-            }
-            const auto lens_records=payload.size();
-            if(lens_flare_scope) {
-                payload.resize(payload.size()+131*48);
-                for(std::size_t row=69;row<=199;++row) {
-                    const auto at=lens_records+(row-69)*48;
-                    const bool group=row==69 || row==100 || row==108 || row==109 || row==124;
-                    const bool picture_owner=row>=73 && row<=97;
-                    const bool camera_owner=row==98 || row==179;
-                    const bool light=row==141 || row==157 || row==162 || row==194 || row==196;
-                    const auto type=group?0x00100001U:row==70?0x00100030U:row==71?0x0010002eU:row==72?0x00100031U:
-                        picture_owner?0x00200046U:camera_owner?0x00400003U:row==99?0x0080000dU:row<=107?0x002000e5U:
-                        row==110 || row==111?0x0020000bU:row==140 || row==142?0x00800023U:light?0x00800024U:
-                        row==178?0x04000022U:row>=197?0x0800001aU:0x00200002U;
-                    set(payload,at,static_cast<std::uint32_t>(names.size()));text(names,"IndependentFlareOwner"+std::to_string(row));
-                    set(payload,at+4,384);set(payload,at+8,420);set(payload,at+16,type);
-                    const bool hidden=(row>=125 && row<=139) || row==154 || row==157 || row==158 || row==160 || row==161 || row==164 || (row>=169 && row<=193);
-                    set(payload,at+24,row==154?0x00060471U:row==158?0x0004c4f1U:
-                        group || row==71 || row==72?0x43000000U:hidden?0x400U:row==111?0x80000U:0x200000U);
-                    if(row==110 || row==111 || row==154 || row==158) payload.at(at+45)=std::byte{static_cast<unsigned char>(row<112?1:2)};
-                    const bool no_reader=row==112 || row==113 || (row>=115 && row<=123) || (row>=143 && row<=153) || row==155 || row==156 || row==159 || row==163 || (row>=165 && row<=168) || row==195;
-                    if(!no_reader) set(payload,at+32,static_cast<std::uint32_t>(deferred));
-                    set(payload,at+12,static_cast<std::uint32_t>(0x8000+row*16));
-                    if(row==71 || row==100 || row==109 || row==124) set(payload,at+36,row==71?0x40000230U:row==100?0x400002a0U:row==109?0x400003f0U:0x40000310U);
-                    const bool property=row==111 || row==157 || row==160 || row==161 || (row>=169 && row<=177) || (row>=179 && row<=190) || row==192 || row==193;
-                    if(property) {
-                        const auto start=keys_property(names);
-                        set(payload,at+28,static_cast<std::uint32_t>(start));
-                    }
-                    std::vector<std::pair<std::string_view,std::uint32_t>> components;
-                    if(row==70) components.emplace_back("ZGEOM_FilmGrainCamSetup",0);
-                    if(row==72) components.emplace_back("ZWINDOW_LensFlareControl",0);
-                    if(picture_owner) components.emplace_back("ZWINPIC_LensFlare",0);
-                    if(row==114 || (row>=125 && row<=139) || row==154 || row==158 || row==191) components.emplace_back("ZSTDOBJ_VertAnim",0x3f800000U);
-                    if(property && row!=157) components.emplace_back("ZGEOM_MatPosAnim",row==179?0x42c80000U:0x3f800000U);
-                    if(row==157) components.emplace_back("ZGEOM_ParamAnim",0x3f800000U);
-                    if(row==164 || row==169 || row==172 || row==180) components.emplace_back("ZGEOM_ParticleEmitter",0x3f800000U);
-                    if(row>=197) components.emplace_back(row==197?"ZLIST_CutSequence":row==198?"ZLIST_CutSequenceList":"ZLIST_LensFlareLights",0);
-                    if(!components.empty()) {
-                        const auto table=payload.size();word(payload,static_cast<std::uint32_t>(components.size()));payload.resize(payload.size()+components.size()*8);
-                        for(std::size_t i=0;i<components.size();++i) {
-                            set(payload,table+4+i*8,static_cast<std::uint32_t>(payload.size()));set(payload,table+8+i*8,components[i].second);text(payload,components[i].first);
-                        }
-                        set(payload,at+20,static_cast<std::uint32_t>(table));
-                    }
-                }
-                while(payload.size()%4) payload.push_back(std::byte{0});
-            }
-            std::size_t remaining_controller_source{};
-            std::size_t remaining_sound_source{};
-            std::size_t remaining_member_source{};
-            std::size_t remaining_first_cut_source{};
-            std::size_t remaining_cut_list_source{};
-            if(remaining_scope) {
-                Bytes member_source=member(bias);
-                remaining_member_source=payload.size();
-                payload.insert(payload.end(),member_source.begin(),member_source.end());
-                while(payload.size()%4) payload.push_back(std::byte{0});
-                Bytes first_cut_source=first_cut(bias,true,three_fade_targets);
-                set(first_cut_source,9,460U);
-                remaining_first_cut_source=payload.size();
-                payload.insert(payload.end(),first_cut_source.begin(),first_cut_source.end());
-                while(payload.size()%4) payload.push_back(std::byte{0});
-                const Bytes cut_list_source=list({461U});
-                remaining_cut_list_source=payload.size();
-                payload.insert(payload.end(),cut_list_source.begin(),cut_list_source.end());
-                while(payload.size()%4) payload.push_back(std::byte{0});
-                Bytes controller_source=controller(bias);
-                set(controller_source,11,464U);set(controller_source,16,465U);
-                remaining_controller_source=payload.size();
-                payload.insert(payload.end(),controller_source.begin(),controller_source.end());
-                while(payload.size()%4) payload.push_back(std::byte{0});
-                remaining_sound_source=payload.size();
-                remaining_sound_source_offset=remaining_sound_source;
-                payload.insert(payload.end(),blocks[9].begin(),blocks[9].end());
-                while(payload.size()%4) payload.push_back(std::byte{0});
-            }
-            const auto remaining_records=payload.size();
-            if(remaining_scope) {
-                payload.resize(payload.size()+270*48);
-                const auto property_row=[](std::size_t row) {
-                    return (row>=216&&row<=223)||(row>=225&&row<=240)||(row>=243&&row<=275)||
-                      (row>=278&&row<=281)||(row>=293&&row<=386)||(row>=388&&row<=395)||
-                      (row>=408&&row<=421)||(row>=423&&row<=446)||(row>=448&&row<=456);
-                };
-                const auto no_reader=[](std::size_t row) {
-                    return (row>=202&&row<=214)||row==224||row==241||row==447;
-                };
-                const auto hidden=[](std::size_t row) {
-                    return (row>=215&&row<=223)||(row>=225&&row<=240)||(row>=243&&row<=276)||
-                      (row>=278&&row<=281)||(row>=293&&row<=386)||(row>=388&&row<=392)||row==395||
-                      (row>=408&&row<=421)||(row>=423&&row<=446)||(row>=448&&row<=455);
-                };
-                const auto group=[](std::size_t row) {
-                    return row==200||row==284||row==285||row==291||row==292||row==399||row==400||row==406||row==407||row==422;
-                };
-                const auto attachment=[&](std::size_t row) {
-                    std::vector<std::pair<std::string_view,std::uint32_t>> out;
-                    const auto add=[&](std::string_view n,std::uint32_t a=0x3f800000U){out.emplace_back(n,a);};
-                    if(row==215||row==223||row==278||row==373||row==380||row==381||row==388||row==389||row==454||row==455) add("ZGEOM_ParamAnim");
-                    const bool mat=(row>=216&&row<=222)||(row>=225&&row<=240)||(row>=243&&row<=275)||(row>=279&&row<=281)||
-                      (row>=293&&row<=372)||(row>=374&&row<=379)||(row>=382&&row<=386)||(row>=390&&row<=392)||row==395||
-                      (row>=408&&row<=421)||(row>=423&&row<=446)||(row>=448&&row<=453);
-                    if(mat) add("ZGEOM_MatPosAnim",row==220||row==374||row==448?0x42c80000U:0x3f800000U);
-                    if(row==219||row==242||row==371||row==377||row==440) add("ZSTDOBJ_ScrollTexture",0);
-                    if(row==222||row==451) add("ZSTDOBJ_VertAnim");
-                    if(row==282||row==397||row==457||row==459) add("ZLIST_CutSequence",row==397||row==457?0:0x3f800000U);
-                    if(row==283||row==398||row==458||row==460) add("ZLIST_CutSequenceList",0);
-                    if(row==386||row==392||row==395||row==406||row==443||row==444) add("ZGEOM_ParticleEmitter");
-                    if(row==460) for(unsigned i=0;i<5;++i) add("ZLIST_CutSequenceCommand");
-                    if(row==465) add("ZGEOM_MovieControl",0);
-                    if(row==466) { add("ZLIST_ExternCutSequenceCommand"); add("ZLIST_ExternCutSequenceCommand"); }
-                    if(row==467||row==468) { add("ZSNDOBJ_SoundExtend",0);add("ZSNDOBJ_SoundNotify",0);add("ZSNDOBJ_SoundSegment");add("ZGEOM_ZSetZDefine",0); }
-                    return out;
-                };
-                for(std::size_t row=200;row<=469;++row) {
-                    const auto at=remaining_records+(row-200)*48;
-                    const bool room=row==201;
-                    const bool list=(row==282||row==283||row==397||row==398||(row>=457&&row<=460)||(row>=463&&row<=466));
-                    const bool particle=(row>=286&&row<=290)||(row>=401&&row<=405);
-                    const bool light24=row==215||row==223||row==276||(row>=388&&row<=389)||(row>=393&&row<=394)||(row>=454&&row<=456);
-                    const auto type=group(row)?0x00100001U:room?0x00100021U:list?0x0800001aU:particle?0x002000e5U:
-                      (row==220||row==374||row==448||row==461)?0x00400003U:(light24?0x00800024U:(row==277||row==387||row==396)?0x0080000dU:row==278?0x00800023U:
-                      (row==373||row==380||row==381)?0x00800020U:row==462?0x08000049U:(row==467||row==468)?0x00200012U:row==469?0x002000e4U:0x00200002U);
-                    set(payload,at,static_cast<std::uint32_t>(names.size()));text(names,"SyntheticRemaining"+std::to_string(row));
-                    set(payload,at+4,384);set(payload,at+8,420);set(payload,at+16,type);
-                    set(payload,at+24,(group(row)?0x03000000U:0x00200000U)|(hidden(row)?0x400U:0U));
-                    if(row==215||row==223) set(payload,at+24,0x00344480U);
-                    if(row==215||row==223) payload.at(at+45)=std::byte{2};
-                    if(row==459) set(payload,at+32,static_cast<std::uint32_t>(remaining_member_source));
-                    else if(row==460) set(payload,at+32,static_cast<std::uint32_t>(remaining_first_cut_source));
-                    else if(row==463||row==464) set(payload,at+32,static_cast<std::uint32_t>(remaining_cut_list_source));
-                    else if(row==465) set(payload,at+32,static_cast<std::uint32_t>(remaining_controller_source));
-                    else if(row==467||row==468) set(payload,at+32,static_cast<std::uint32_t>(remaining_sound_source));
-                    else if(!no_reader(row)) set(payload,at+32,static_cast<std::uint32_t>(deferred));
-                    if(property_row(row)) { const auto p=keys_property(names);set(payload,at+28,static_cast<std::uint32_t>(p)); }
-                    const auto components=attachment(row);
-                    if(!components.empty()) { const auto table=payload.size();word(payload,static_cast<std::uint32_t>(components.size()));payload.resize(payload.size()+components.size()*8);for(std::size_t i=0;i<components.size();++i){set(payload,table+4+i*8,static_cast<std::uint32_t>(payload.size()));set(payload,table+8+i*8,components[i].second);text(payload,components[i].first);}set(payload,at+20,static_cast<std::uint32_t>(table)); }
-                    if(group(row)) set(payload,at+36,row==201?0x40000460U:row==285||row==400?0x40000770U:row==291?0x40000620U:row==292?0x40000690U:row==406?0x400007e0U:row==407?0x40000850U:row==422?0x400008c0U:0U);
                 }
                 while(payload.size()%4) payload.push_back(std::byte{0});
             }
             const auto directory=payload.size();
-            // The initial synthetic table reserves five directory slots that
-            // are not emitted once the nested full-scope layout is selected.
-            // Keep the declared count aligned with the entries actually
-            // written: rows 0 through 469, with no trailing placeholders.
-            const auto declared_nodes=node_count-(remaining_scope?5U:0U);
-            word(payload,static_cast<std::uint32_t>(declared_nodes+1+(language_group?1:0)+(second_window?2:0)+(full_second_scope?34:0)+(following_visual_scope?6:0)+(room_animation_scope?21:0)+(lens_flare_scope?131:0)+(remaining_scope?270:0)));
+            word(payload,0);
             word(payload,static_cast<std::uint32_t>(record/4));word(payload,0);
             const Bytes entries(payload.begin()+36,payload.begin()+static_cast<std::ptrdiff_t>(36+8*node_count));
             if(language_group) {
@@ -613,77 +441,118 @@ struct Fixture {
                         }
                     }
                     if(room_animation_scope) {
-                        for(std::size_t row=48;row<=68;++row) {
-                            const bool pop=row==48 || row==53 || row==63 || row==65;
-                            const bool enter=row==48 || row==49 || row==50 || row==63;
-                            word(payload,(pop?1U<<25U:0U)|(enter?1U<<24U:0U)|
-                                static_cast<std::uint32_t>((room_scope_records+(row-48)*48)/4));
-                            word(payload,row==53?0xfedcba98U:
-                                (row>=54 && row<=58) || row==64?static_cast<std::uint32_t>(0x3000+row):0U);
+                        for(std::size_t slot=0;slot<tail_record_offsets.size();++slot) {
+                            const auto pop=slot==0?1U:0U;
+                            if(slot==0) tail_parent_control_offset=payload.size();
+                            word(payload,(pop<<25U)|static_cast<std::uint32_t>(tail_record_offsets[slot]/4));
+                            word(payload,0);
                         }
-                    }
-                    if(lens_flare_scope) for(std::size_t row=69;row<=199;++row) {
-                        const auto pops=row==100 || row==124?2U:row==69 || row==98 || row==108 || row==197?1U:0U;
-                        const bool enter=row==69 || row==70 || row==71 || row==72 || row==100 || row==108 || row==109 || row==124;
-                        word(payload,(pops<<25U)|(enter?1U<<24U:0U)|static_cast<std::uint32_t>((lens_records+(row-69)*48)/4));
-                        word(payload,static_cast<std::uint32_t>(0x5000+row)); // Independent identifiers, deliberately unlike retained check vectors.
-                    }
-                    if(remaining_scope) for(std::size_t row=200;row<=469;++row) {
-                        const bool enter=row==200||row==201||row==284||row==285||row==291||row==292||row==399||row==400||row==406||row==407||row==422;
-                        const bool pop=row==200||row==282||row==284||row==291||row==371||row==396||row==399||row==406||row==422||row==438||row==457||row==459;
-                        word(payload,(pop?1U<<25U:0U)|(enter?1U<<24U:0U)|static_cast<std::uint32_t>((remaining_records+(row-200)*48)/4));word(payload,static_cast<std::uint32_t>(0x9000+row));
-                    }
-                    if(!remaining_scope) {
+                    } else {
                         word(payload,(1U<<25U)|static_cast<std::uint32_t>((512+48*2)/4));word(payload,0);
                     }
                 } else payload.insert(payload.end(),entries.begin()+16,entries.begin()+24);
-                if(camera_row && !(full_second_scope && remaining_scope)) {
+                if(camera_row) {
                     payload.insert(payload.end(),entries.begin()+32,entries.begin()+64);
                     payload.insert(payload.end(),entries.begin()+72,entries.end());
                 } else if(!camera_row) payload.insert(payload.end(),entries.begin()+32,entries.end());
+                if(full_second_scope && room_animation_scope)
+                    payload.insert(payload.end(),entries.begin()+16,entries.begin()+24);
             } else payload.insert(payload.end(),entries.begin(),entries.end());
+            const auto directory_count=(payload.size()-directory-sizeof(std::uint32_t))/8U;
+            if((payload.size()-directory-sizeof(std::uint32_t))%8U!=0U)
+                throw std::runtime_error("independent fixture directory entries are not word-pair aligned");
+            set(payload,directory,static_cast<std::uint32_t>(directory_count));
             set(payload,0,static_cast<std::uint32_t>(directory));
-            const auto pool_count=remaining_scope?29U:lens_flare_scope?18U:room_animation_scope?10U:following_visual_scope?6U:second_window?5U:language_group?4U:3U;
-            const auto pools=payload.size();word(payload,pool_count);
-            payload.resize(payload.size()+pool_count*24*4);
-            set(payload,pools+4,lens_flare_scope?6U:room_animation_scope?5U:following_visual_scope?4U:second_window?3U:2U); // ROOT's group/Window category.
-            // The continuation consumes three more ROOT category-zero slots:
-            // Group200 after its pop, then Groups284 and399 after their own
-            // returns. Rows459-469 add ROOT's one category-one and ten
-            // category-three direct children.
-            if(remaining_scope) { set(payload,pools+4,9); set(payload,pools+4+4,1); }
-            if(full_second_scope) set(payload,pools+4+12,include_sound?6U:5U);
-            if(remaining_scope) set(payload,pools+4+12,10);
-            set(payload,pools+4+2*24*4+4,language_group?1U:2U);
-            set(payload,pools+4+2*24*4+12,second_window?1U:include_sound?7U:6U);
-            if(language_group) {
-                set(payload,pools+4+2*24*4,1);
-                set(payload,pools+4+3*24*4+4,1);
+            const auto read_payload_word=[&](std::size_t offset) {
+                std::uint32_t value{};
+                for(unsigned shift=0;shift<32;shift+=8)
+                    value|=static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(payload.at(offset++)))<<shift;
+                return value;
+            };
+            const auto emitted_directory_count=read_payload_word(directory);
+            if(emitted_directory_count!=directory_count)
+                throw std::runtime_error("independent fixture directory count does not match emitted entries");
+            const auto directory_start=directory+4U;
+            const auto reference_for_record=[&](std::size_t record_offset) {
+                for(std::size_t index=0;index<directory_count;++index) {
+                    const auto packed=read_payload_word(directory_start+index*8U);
+                    if(static_cast<std::size_t>(packed&0x00ffffffU)*4U==record_offset)
+                        return static_cast<std::uint32_t>(index+1U);
+                }
+                throw std::runtime_error("independent fixture reference target is absent from its directory");
+            };
+            const auto bind_authored_reference=[&](std::size_t block,std::size_t field,
+                                                   std::uint32_t reference) {
+                if(reference==0U) { set(payload,block_offsets[block]+field,0U); return; }
+                const auto row=static_cast<std::size_t>(reference-1U);
+                if(row>=node_count)
+                    throw std::runtime_error("independent fixture authored reference has no source row");
+                const auto original_entry=36U+row*8U;
+                const auto target_record=static_cast<std::size_t>(read_payload_word(original_entry)&0x00ffffffU)*4U;
+                set(payload,block_offsets[block]+field,reference_for_record(target_record));
+            };
+            bind_authored_reference(2,11,6U);bind_authored_reference(2,16,7U);
+            bind_authored_reference(4,9,9U);bind_authored_reference(4,13,4U);
+            bind_authored_reference(4,17,0U);bind_authored_reference(4,21,2U);
+            bind_authored_reference(4,25,0U);bind_authored_reference(4,29,0U);
+            bind_authored_reference(5,9,8U);bind_authored_reference(5,13,8U);
+            bind_authored_reference(6,9,4U);bind_authored_reference(6,13,2U);
+            bind_authored_reference(6,17,4U);
+            bind_authored_reference(7,9,5U);
+            for(std::size_t command=0;command<5U;++command)
+                bind_authored_reference(7,66U+40U*command,2U);
+            bind_authored_reference(8,32,9U);bind_authored_reference(8,37,0U);
+            bind_authored_reference(8,42,2U);
+            std::size_t pool_count=1;
+            for(std::size_t index=0;index<directory_count;++index) {
+                const auto packed=read_payload_word(directory_start+index*8U);
+                const auto record=static_cast<std::size_t>(packed&0x00ffffffU)*4U;
+                if(record>payload.size() || 48U>payload.size()-record)
+                    throw std::runtime_error("independent fixture directory record exceeds its image");
+                const auto basis=read_payload_word(record+4U);
+                const auto position=read_payload_word(record+8U);
+                if(basis>payload.size() || 36U>payload.size()-basis ||
+                   position>payload.size() || 12U>payload.size()-position)
+                    throw std::runtime_error("independent fixture transform exceeds its image at directory entry "+
+                                             std::to_string(index));
+                if((read_payload_word(record+16U)&0x00100000U)!=0U) ++pool_count;
             }
-            if(second_window) {
-                set(payload,pools+4+4*24*4+4,full_second_scope?16U:1U);
-                set(payload,pools+4+4*24*4+12,full_second_scope?19U:include_sound?6U:5U);
+            std::vector<std::array<std::uint32_t,24>> pool_counts(pool_count);
+            std::vector<std::size_t> active_groups{0};
+            std::size_t next_group=1;
+            for(std::size_t index=0;index<directory_count;++index) {
+                const auto packed=read_payload_word(directory_start+index*8U);
+                const auto parent_steps=static_cast<std::size_t>(packed>>25U);
+                if(parent_steps>=active_groups.size())
+                    throw std::runtime_error("independent fixture parent stack underflows");
+                active_groups.resize(active_groups.size()-parent_steps);
+                const auto record=static_cast<std::size_t>(packed&0x00ffffffU)*4U;
+                const auto source_type=read_payload_word(record+16U);
+                const auto variant=std::to_integer<std::uint8_t>(payload.at(record+45U));
+                std::uint32_t source_class{};
+                if(source_type==0x04000022U) source_class=1U;
+                else if((source_type&0x00200000U)!=0U)
+                    source_class=(source_type==0x00200012U || source_type==0x00200015U || source_type==0x0020001cU)?3U:1U;
+                else if((source_type&0x00100000U)!=0U) source_class=0U;
+                else source_class=(source_type&0x00800000U)!=0U?2U:3U;
+                source_class+=static_cast<std::uint32_t>(variant)*8U;
+                if(source_class>=24U || active_groups.back()>=pool_counts.size())
+                    throw std::runtime_error("independent fixture source selects an invalid pool partition");
+                ++pool_counts[active_groups.back()][source_class];
+                if((source_type&0x00100000U)!=0U) ++next_group;
+                if((packed&0x01000000U)!=0U) {
+                    if(next_group==0U || next_group>pool_count)
+                        throw std::runtime_error("independent fixture enters an undeclared pool");
+                    active_groups.push_back(next_group-1U);
+                }
             }
-            if(following_visual_scope) set(payload,pools+4+5*24*4+4,5);
-            if(room_animation_scope) {
-                set(payload,pools+4+6*24*4,1);set(payload,pools+4+6*24*4+3*4,4);set(payload,pools+4+6*24*4+16*4,1);
-                for(const auto [category,count]:std::array<std::pair<std::size_t,std::uint32_t>,4>{{{0,1},{1,3},{2,4},{3,3}}})
-                    set(payload,pools+4+7*24*4+category*4,count);
-                set(payload,pools+4+8*24*4+4,2);set(payload,pools+4+9*24*4+4,1);
-            }
+            if(next_group!=pool_count)
+                throw std::runtime_error("independent fixture leaves a pool unused");
+            const auto pools=payload.size();
+            word(payload,static_cast<std::uint32_t>(pool_count));
+            for(const auto& group:pool_counts)
+                for(const auto count:group) word(payload,count);
             set(payload,20,static_cast<std::uint32_t>(pools));
-            if(lens_flare_scope) {
-                const auto count=[&](std::size_t selector,std::size_t category,std::uint32_t n){set(payload,pools+4+selector*96+category*4,n);};
-                count(10,0,4);count(10,3,3);count(11,0,1);count(12,0,1);count(12,2,1);count(12,3,1);
-                count(13,1,25);count(14,1,7);count(15,0,1);count(16,1,12);count(16,9,2);
-                count(17,1,62);count(17,2,7);count(17,3,1);count(17,17,2);
-            }
-            if(remaining_scope) {
-                const auto count=[&](std::size_t selector,std::size_t category,std::uint32_t n){set(payload,pools+4+selector*96+category*4,n);};
-                count(18,0,1);count(18,3,2);count(19,1,74);count(19,2,3);count(19,3,1);count(19,18,2);
-                count(20,0,2);count(20,2,1);count(20,3,2);count(21,1,5);count(22,0,1);count(22,1,16);count(22,2,8);count(22,3,1);count(23,1,78);
-                count(24,0,2);count(24,3,2);count(25,1,5);count(26,0,2);count(26,1,15);count(26,2,3);count(26,3,1);count(27,1,14);count(28,1,15);
-            }
         }
         prm.resize(16); word(prm, 1);
         for (float v : {3.F, 4.F, 9.F, 0.F, 1.F, 1.F, 0.F, 6.F, 8.F}) word(prm, std::bit_cast<std::uint32_t>(v));
@@ -696,7 +565,7 @@ struct Fixture {
         const auto end = tex.size(); tex.resize(end + 8192); set(tex, end, 16);
         const auto sequences = tex.size(); tex.resize(sequences + 8192);
         set(tex, 0, static_cast<std::uint32_t>(end)); set(tex, 4, static_cast<std::uint32_t>(sequences)); set(tex, 8, 3); set(tex, 12, 4);
-        if(include_sound || remaining_scope) {
+        if(include_sound) {
             snd.resize(16);
             text(snd,"Independent/Sound.asset"); snd.resize(144);
             set(snd,0,96); set(snd,4,144); set(snd,8,3); set(snd,12,4);
@@ -956,2127 +825,217 @@ static OFF_NOINLINE void test_prepared_runtime_scopes() {
     }
 }
 
-static OFF_NOINLINE void check_complete_runtime_post_directory(
-    off::graphics::IntroRuntime& host,
-    off::runtime::SceneComponentSequence& sequence) {
-      const auto before_components=host.components().construction_order().size();
-      const auto before_serial=sequence.next_identity();
-      const auto before_pending=host.ordinary_components()->pending().size();
-      host.construct_remaining_directory_without_engine_renderer();
-      std::size_t all_batches=0; for(const auto& scope:host.source_resource_scopes()) all_batches+=scope.resources.size();
-      check(host.resource_load_stage()==off::graphics::IntroResourceLoadStage::directory_construction_complete &&
-            host.loaded_resource_handles().size()==470 && host.directory_resource_mapping().size()==470 &&
-            host.deferred_reader_work().size()==420 && all_batches==470 && host.count_group_selector()==28 &&
-            host.current_source_parent()==host.root_handle(),
-            "synthetic rows200-469 close directory construction with 470 resources, 420 readers and no pending scope");
-      check(host.components().construction_order().size()==before_components+245 && sequence.next_identity()==before_serial+245 &&
-            host.ordinary_components()->pending().size()==before_pending+12,
-            "remaining attachment inventory advances exactly245 live serials and appends twelve ordinary pending entries");
-      check(host.saved_resource_flags().size()==5 && host.saved_resource_flags()[3].resource==host.resource_handle(host.source_handle(215)) &&
-            host.saved_resource_flags()[4].resource==host.resource_handle(host.source_handle(223)) &&
-            host.saved_resource_flags()[3].flags==0x0904c480U && host.saved_resource_flags()[4].flags==0x0904c480U &&
-            host.resource_state(host.source_handle(215))->flags==0x09008480U && host.resource_state(host.source_handle(223))->flags==0x09008480U,
-            "two synthetic bank-two saved flags append after established items without restoration");
-      const auto* room201=host.constructed_room_owner(201);
-      check(room201 && !room201->room_mode && !room201->enabled && room201->ordinary_members.size()==16 &&
-            host.root_owner_state()->rooms.size()==2 && host.root_owner_state()->rooms.back()==host.source_handle(201),
-            "Room201 retains root room membership and only its concrete ordinary member bucket");
-      for(const auto row:{215U,223U}) check(host.resources().sources().directory()[row].pool_class==18 &&
-            host.resources().sources().directory()[row].source_variant==2,
-            "saved sources select bank two/category two without a bank-one substitute");
-      std::size_t scope_properties=0,scope_attachments=0,reader_cursor=166;
-      for(std::size_t row=200;row<=469;++row) {
-        const auto& source=host.resources().sources().directory()[row];
-        const auto owner=host.source_handle(row);
-        check(host.directory_resource_mapping()[row]==host.resource_handle(owner) &&
-              host.resource_state(owner)->directory_auxiliary==0x9000U+row,
-              "each remaining source retains its synthetic auxiliary identity through attachment");
-        if(source.deferred_source_offset) {
-          check(host.deferred_reader_work()[reader_cursor].resource==host.resource_handle(owner) &&
-                host.deferred_reader_work()[reader_cursor].source_offset==source.deferred_source_offset,
-                "remaining deferred readers retain directory ordering while no-reader rows are skipped");
-          ++reader_cursor;
-        }
-        if(source.buf_auxiliary_offset) { ++scope_properties; const auto* aux=host.constructed_owner_auxiliary(row);
-          check(aux && aux->borrowed_property_data.data()==host.resources().source_names().data()+source.buf_auxiliary_offset && aux->borrowed_property_data.size()==64,
-                "property-bearing remaining owners retain their distinct synthetic auxiliary blob"); }
-        scope_attachments+=host.owner_components(owner).size();
-      }
-      check(reader_cursor==420 && scope_properties==210 && scope_attachments==245,"remaining source fixture preserves all210 property sections and245 ordered attachments");
-      const auto* owner462=host.constructed_list_owner(462);
-      const auto property462=host.scene_resource_property("rWINOBJSPRITEHOLDER");
-      const auto* owner469=host.constructed_object_owner(469);
-      check(owner462 && owner462->animation_storage && owner462->animation_storage->capacity==32 && owner462->animation_storage->growth==32 &&
-            !owner462->animation_storage->count && owner462->animation_storage->element_control==1 && property462 &&
-            property462->owner_handle==host.source_handle(462) && property462->setter_flags==4,
-            "owner462 retains an empty animation store and publishes its canonical scene owner handle");
-      check(owner469 && owner469->particle_usage && !owner469->particle_usage->diagnostic_enabled && owner469->particle_usage->pool &&
-            owner469->particle_usage->pool->available_count==64 && owner469->particle_usage->pool->available_slots.front()==0 &&
-            owner469->particle_usage->pool->available_slots.back()==63 && owner469->particle_usage->descriptor &&
-            owner469->particle_usage->descriptor->key=="particle_usage",
-            "owner469 keeps its disabled diagnostic control, ascending 64-slot pool and console descriptor");
-      host.prepare_scene_lifetime_keys_registry();
-      const auto* keys_registry=host.scene_lifetime_keys_registry();
-      std::size_t mat_pos_owners{};
-      std::uint64_t expected_keys_handle{1};
-      for(std::size_t row=0;row<host.resources().sources().directory().size();++row) {
-        const auto& source=host.resources().sources().directory()[row];
-        bool mat_pos=false;
-        for(std::size_t slot=0;slot<source.attachments.size();++slot)
-          mat_pos=mat_pos || host.resources().sources().attachment_identifier(row,slot)=="ZGEOM_MatPosAnim";
-        if(!mat_pos) continue;
-        ++mat_pos_owners;
-        const auto resolved=keys_registry->resolve_required_keys(host.source_handle(row).value,off::data::matpos_owner_child_selector);
-        check(resolved && resolved->opaque_handle==expected_keys_handle++ &&
-              resolved->owner==host.source_handle(row).value,
-              "scene KEYS preparation assigns opaque local handles through canonical MatPos owners");
-      }
-      check(keys_registry && keys_registry->size()==mat_pos_owners && mat_pos_owners>0,
-            "scene KEYS registry atomically retains every supported owner-local property");
-      const auto mat_pos_dispatch=host.matpos_deferred_dispatch_inventory();
-      check(mat_pos_dispatch.associated_records==mat_pos_dispatch.terminal_before_first_attachment_delimiter+
-                mat_pos_dispatch.attachment_delimiter_precedes_terminal &&
-                mat_pos_dispatch.associated_records>0,
-            "MatPos deferred audit retains only aggregate terminal-versus-delimiter observations");
-      const auto paramanim_dispatch=host.paramanim_deferred_dispatch_inventory();
-      check(paramanim_dispatch.attachment_owners==11U &&
-                paramanim_dispatch.attachment_instances==11U &&
-                paramanim_dispatch.owners_with_deferred_blocks==11U &&
-                paramanim_dispatch.shapes.size()==1U &&
-                paramanim_dispatch.shapes.front().count==11U &&
-                paramanim_dispatch.shapes.front().block_bytes>sizeof(std::uint32_t) &&
-                paramanim_dispatch.shapes.front().attachment_count==1U &&
-                paramanim_dispatch.shapes.front().attachment_delimiters==1U,
-            "synthetic ParamAnim owners produce one aggregate-only bounded deferred shape");
-      const auto particle_dispatch=host.particle_emitter_deferred_dispatch_inventory();
-      std::size_t profiled_particle_owners{};
-      bool valid_particle_shapes=!particle_dispatch.shapes.empty();
-      for(const auto& shape:particle_dispatch.shapes) {
-        profiled_particle_owners+=shape.count;
-        valid_particle_shapes=valid_particle_shapes && shape.count>0U &&
-            shape.block_bytes>sizeof(std::uint32_t) && shape.attachment_count>0U;
-      }
-      check(particle_dispatch.attachment_owners>0U &&
-                particle_dispatch.attachment_instances>=particle_dispatch.attachment_owners &&
-                particle_dispatch.owners_with_deferred_blocks==profiled_particle_owners &&
-                valid_particle_shapes,
-            "synthetic ParticleEmitter owners produce bounded aggregate-only deferred shapes");
-      const auto unimplemented_reader_coverage=
-          host.unimplemented_attachment_reader_coverage_inventory();
-      check(unimplemented_reader_coverage.entries.size()==6U &&
-                std::ranges::all_of(unimplemented_reader_coverage.entries,[](const auto& entry) {
-                  return entry.attachment_instances>=entry.attachment_owners &&
-                      entry.owners_with_deferred_blocks<=entry.attachment_owners &&
-                      entry.profiled_deferred_blocks+entry.unprofiled_deferred_blocks==
-                          entry.owners_with_deferred_blocks &&
-                      entry.distinct_bounded_shapes<=entry.profiled_deferred_blocks &&
-                      entry.largest_bounded_shape_population<=entry.profiled_deferred_blocks &&
-                      (!entry.has_repeated_bounded_shape() ||
-                          entry.largest_bounded_shape_population>=2U);
-                }),
-            "unimplemented attachment reader frontier retains only bounded aggregate populations and repeat metrics");
-      const auto paramanim_entry=std::ranges::find_if(
-          unimplemented_reader_coverage.entries,[](const auto& entry) {
-            return entry.family==off::graphics::IntroUnimplementedAttachmentReaderFamily::parameter_animation;
-          });
-      const auto particle_entry=std::ranges::find_if(
-          unimplemented_reader_coverage.entries,[](const auto& entry) {
-            return entry.family==off::graphics::IntroUnimplementedAttachmentReaderFamily::particle_emitter;
-          });
-      check(paramanim_entry!=unimplemented_reader_coverage.entries.end() &&
-                particle_entry!=unimplemented_reader_coverage.entries.end() &&
-                paramanim_entry->attachment_owners==paramanim_dispatch.attachment_owners &&
-                paramanim_entry->attachment_instances==paramanim_dispatch.attachment_instances &&
-                paramanim_entry->owners_with_deferred_blocks==paramanim_dispatch.owners_with_deferred_blocks &&
-                particle_entry->attachment_owners==particle_dispatch.attachment_owners &&
-                particle_entry->attachment_instances==particle_dispatch.attachment_instances &&
-                particle_entry->owners_with_deferred_blocks==particle_dispatch.owners_with_deferred_blocks,
-            "unimplemented reader frontier agrees with separately profiled ParamAnim and ParticleEmitter populations");
-      check(paramanim_entry->profiled_deferred_blocks==paramanim_dispatch.owners_with_deferred_blocks &&
-                paramanim_entry->unprofiled_deferred_blocks==0U &&
-                paramanim_entry->distinct_bounded_shapes==1U &&
-                paramanim_entry->largest_bounded_shape_population==
-                    paramanim_dispatch.owners_with_deferred_blocks &&
-                paramanim_entry->has_repeated_bounded_shape(),
-            "unimplemented reader frontier exposes ParamAnim's repeated bounded framing without reader admission");
-      rejects([&]{host.prepare_scene_lifetime_keys_registry();});
-      host.prepare_scene_lifetime_keys_backing();
-      const auto* keys_backing=host.scene_lifetime_keys_backing();
-      check(keys_backing && keys_backing->generation()==1U && !keys_backing->bytes().empty() &&
-                host.evaluate_scene_lifetime_keys(host.source_handle(59),0.F) &&
-                host.evaluate_scene_lifetime_keys(host.source_handle(59),1.F) &&
-                !host.evaluate_scene_lifetime_keys({},0.F),
-            "scene KEYS backing freezes one retained allocation and exposes only bound read-only owner samples");
-      rejects([&]{host.prepare_scene_lifetime_keys_backing();});
-      const auto components467=host.owner_components(host.source_handle(467));
-      const auto components468=host.owner_components(host.source_handle(468));
-      check(components467.size()==4 && components468.size()==4 &&
-            host.components().at(components467[0]).source().factory_name=="ZSNDOBJ_SoundExtend" &&
-            host.components().at(components467[1]).source().factory_name=="ZSNDOBJ_SoundNotify" &&
-            host.components().at(components467[2]).source().factory_name=="ZSNDOBJ_SoundSegment" &&
-            host.components().at(components467[3]).source().factory_name=="ZGEOM_ZSetZDefine",
-            "both sound owners preserve the authored Extend/Notify/Segment/ZSetZDefine attachment order");
-      const auto* extend=host.constructed_attachment(components467[0]);
-      const auto* notify=host.constructed_attachment(components467[1]);
-      const auto* segment=host.constructed_attachment(components467[2]);
-      check(extend && extend->sound_extend && extend->sound_extend->output_mode==2 &&
-            notify && notify->sound_notify && !notify->sound_notify->target.value && !notify->sound_notify->duration_snapshot &&
-            segment && segment->sound_segment && segment->sound_segment->controls==std::array<bool,5>{true,true,false,false,true} &&
-            segment->sound_segment->probability==1 && segment->sound_segment->subtitle.empty(),
-            "sound attachments retain cold constructor-only state without reader playback or duration work");
-}
-
-static OFF_NOINLINE void check_complete_restore_reader_route(
-    off::graphics::IntroRuntime& host) {
-      // Restore returns before ordinary service validation.  Keep this route in
-      // its own frame: MSVC otherwise reserves the ordinary reader and loader
-      // tail captures for a path which must not execute them.
-      host.run_postconstruction_reader_bracket(0x9aU,{});
-      check(host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::restore_mode_selected &&
-            host.reader_bracket_retained_saved_value()==0x9aU &&
-            host.deferred_reader_work().size()==420,
-            "restore chooses its distinct unresolved route without running ordinary services or readers");
-      rejects([&]{host.run_postconstruction_reader_bracket(0x9aU,{});});
-}
-
-static OFF_NOINLINE void check_complete_ordinary_reader_bracket(
-    off::graphics::IntroRuntime& host) {
-      std::vector<std::string> reader_events;
-      std::size_t prepared_reader_count{};
-      std::size_t translated_reference_list_count{};
-      std::size_t applied_window_readers{};
-      std::size_t applied_sound_readers{};
-      off::graphics::IntroPostconstructionReaderServices reader_services{
-          [&](std::uint64_t value){reader_events.push_back("external:"+std::to_string(value));},
-          [&](const off::graphics::IntroSourceScriptWork&){reader_events.push_back("script");},
-          [&]{reader_events.push_back("pre");},
-          [&](const off::graphics::IntroDeferredReaderWork& work){
-            reader_events.push_back("prepare");
-            ++prepared_reader_count;
-            check(work.processed,
-                  "deferred owner block is marked processed before its concrete reader boundary");
-            const auto& sources=host.resources().sources();
-            const auto sequence_source=sources.local_source_for_authored_reference(
-                host.resources().controller().sequence_reference);
-            const auto group_source=sources.local_source_for_authored_reference(
-                host.resources().controller().group_reference);
-            std::span<const std::uint32_t> raw;
-            if(sequence_source && *sequence_source==work.source_directory_index)
-              raw=host.resources().cut_references();
-            else if(group_source && *group_source==work.source_directory_index)
-              raw=host.resources().group_references();
-            else {
-              check(work.translated_references.empty(),
-                    "unsupported deferred grammar does not invent native reference translations");
-              return;
-            }
-            ++translated_reference_list_count;
-            check(work.translated_references.size()==raw.size(),
-                  "supported deferred list preserves authored reference count");
-            for(std::size_t reference=0;reference<raw.size();++reference) {
-              const auto target=sources.local_source_for_authored_reference(raw[reference]);
-              if(!target)
-                check(!work.translated_references[reference],
-                      "zero authored deferred reference remains native null");
-              else
-                check(work.translated_references[reference]==host.directory_resource_mapping()[*target],
-                      "deferred reference uses source-directory identity rather than an allocation ordinal");
-            }
-          },
-          [&](const off::graphics::IntroDeferredReaderWork& work){
-            reader_events.push_back("owner");
-            if(work.source_directory_index==host.resources().controller_index())
-              host.apply_supported_movie_control_deferred_reader(work);
-            if(work.source_directory_index==host.resources().member_index())
-              host.apply_supported_first_cut_sequence_deferred_reader(work);
-            if(work.source_directory_index==host.resources().first_cut_index())
-              host.apply_supported_first_cut_list_deferred_reader(work);
-            if(work.source_directory_index==host.resources().camera_index())
-              host.apply_supported_first_cut_camera_deferred_reader(work);
-            if(work.source_directory_index>=43U && work.source_directory_index<=47U)
-              host.apply_supported_following_visual_owner_deferred_reader(work);
-            const auto& group_source=host.resources().sources().directory().at(work.source_directory_index);
-            if(group_source.source_type==0x00100001U && group_source.attachments.empty()) {
-              const auto block=host.resources().sources().deferred_source_block(work.source_directory_index);
-              if(block.size()>sizeof(std::uint32_t) &&
-                 off::data::BasicGroupDeferredReaderShape::matches(
-                     block.subspan(sizeof(std::uint32_t))))
-                host.apply_supported_basic_group_owner_deferred_reader(work);
-            }
-            if(group_source.source_type==0x00200002U && !group_source.source_variant &&
-                group_source.attachments.size()==1U &&
-                host.resources().sources().attachment_identifier(work.source_directory_index,0U)==
-                    "ZGEOM_MatPosAnim") {
-              const auto block=host.resources().sources().deferred_source_block(work.source_directory_index);
-              if(block.size()==98U || block.size()==103U)
-                host.apply_supported_matpos_deferred_reader(work);
-            }
-            if(host.supports_vert_anim_deferred_reader(work))
-              host.apply_supported_vert_anim_deferred_reader(work);
-            if(host.supports_lens_flare_deferred_reader(work))
-              host.apply_supported_lens_flare_deferred_reader(work);
-            if(work.source_directory_index==466U) {
-              bool supported_external_payload{};
-              try {
-                static_cast<void>(host.resources().sources().intro_external_cut_commands_source(466U));
-                supported_external_payload=true;
-              } catch(const std::runtime_error&) {
-                // This aggregate fixture also exercises deliberately incomplete
-                // source variants. Their external-command payload is not a
-                // valid input for the restricted reader.
-              }
-              if(supported_external_payload)
-                host.apply_supported_external_cut_commands_deferred_reader(work);
-            }
-            const auto legal=host.resources().sources().local_source_for_authored_reference(
-                host.resources().member().references[1]);
-            if(legal && *legal==work.source_directory_index)
-              host.apply_supported_first_cut_legal_picture_deferred_reader(work);
-            if(host.resources().sources().directory().at(work.source_directory_index).source_type==0x00200012U) {
-              host.apply_supported_sound_owner_deferred_reader(work);
-              ++applied_sound_readers;
-            }
-            if(work.source_directory_index==host.resources().window_index()) {
-              host.apply_supported_window_deferred_reader(work);
-              ++applied_window_readers;
-            }
-            for(const auto& command:host.resources().first_cut().commands) {
-              const auto target=host.resources().sources().local_source_for_authored_reference(
-                  command.target_reference);
-              if(target && *target==work.source_directory_index) {
-                host.apply_supported_first_cut_fade_picture_deferred_reader(work);
-                break;
-              }
-            }
-          },
-          [&](const off::graphics::IntroDeferredReaderWork& work){
-            reader_events.push_back("component");
-            if(work.source_directory_index==host.resources().controller_index())
-              host.apply_supported_movie_control_component_reader(work);
-            if(work.source_directory_index==host.resources().first_cut_index() &&
-                host.resources().sources().deferred_source_block(work.source_directory_index).size()==171U)
-              host.apply_supported_first_cut_component_reader(work);
-            if(work.source_directory_index==host.resources().member_index())
-              host.apply_supported_first_cut_sequence_component_reader(work);
-            if(host.fade_picture_reader_states().contains(work.source_directory_index))
-              host.apply_supported_first_cut_fade_picture_component_reader(work);
-            if(host.legal_picture_reader_state() &&
-                host.legal_picture_reader_state()->owner==host.source_handle(work.source_directory_index))
-              host.apply_supported_first_cut_legal_picture_component_reader(work);
-            if(work.source_directory_index==host.resources().window_index()) {
-              const auto& window=host.window_for_owner(host.source_handle(work.source_directory_index));
-              check(host.window_camera_projection_applied() && window.cameras==std::vector{host.source_handle(host.resources().camera_index())} &&
-                    std::bit_cast<std::uint32_t>(window.pending_visibility)==std::bit_cast<std::uint32_t>(-1.0F),
-                    "Window owner reader completes its camera projection before that owner's component boundary");
-            }
-          },
-          [&]{reader_events.push_back("end");}};
-      host.run_postconstruction_reader_bracket(0x9aU,reader_services);
-        const auto coverage=host.reader_coverage_inventory();
-        check(host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete &&
-              host.reader_bracket_retained_saved_value()==0x9aU && reader_events.size()==4+420*3 &&
-              prepared_reader_count==420 && translated_reference_list_count==2 &&
-              reader_events[0]=="external:154" && reader_events[1]=="external:154" && reader_events[2]=="pre" &&
-              reader_events[3]=="prepare" && reader_events[4]=="owner" && reader_events[5]=="component" &&
-              reader_events.back()=="end" && host.deferred_reader_work().size()==420,
-              "ordinary reader bracket retains two external calls and forward owner-before-component boundaries without consuming work");
-        check(coverage.stage==off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete &&
-                  coverage.total_discovered==420 &&
-                  coverage.total_supported>=coverage.total_applied &&
-                  coverage.total_applied==host.preflight_global_lifecycle().covered_readers &&
-                  !coverage.entries.empty(),
-              "reader coverage inventory aggregates only reviewed applied boundaries");
-        check(coverage.unclassified_with_attachments==
-                  coverage.unclassified_terminal_before_attachment+
-                      coverage.unclassified_attachment_before_terminal+
-                      coverage.unclassified_unknown_dispatch_shape &&
-                  coverage.unclassified_max_attachment_delimiters<=
-                      coverage.unclassified_attachment_delimiters &&
-                  coverage.unclassified_without_attachments+
-                      coverage.unclassified_with_attachments<=coverage.total_discovered,
-              "unclassified reader coverage keeps attachment dispatch observations aggregate and bounded");
-        check(host.following_visual_owner_reader_receipts().size()==5U &&
-                  std::ranges::all_of(host.following_visual_owner_reader_receipts(),[&](const auto& entry) {
-                    const auto& [source,receipt]=entry;
-                    return source>=43U && source<=47U && receipt.source_directory_index==source &&
-                        receipt.owner==host.source_handle(source) &&
-                        receipt.resource==host.directory_resource_mapping()[source] &&
-                        receipt.source_offset==host.resources().sources().directory()[source].deferred_source_offset;
-                  }),
-              "following visual owner receipts retain only exact attachment-free reader provenance");
-        check(!host.basic_group_owner_reader_states().empty() &&
-              std::ranges::all_of(host.basic_group_owner_reader_states(),[&](const auto& entry) {
-                const auto& [source,receipt]=entry;
-                return host.resources().sources().directory()[source].source_type==0x00100001U &&
-                    receipt.source_directory_index==source && receipt.owner==host.source_handle(source) &&
-                    receipt.resource==host.directory_resource_mapping()[source] &&
-                    receipt.source_offset==host.resources().sources().directory()[source].deferred_source_offset &&
-                    host.constructed_group_owner(source) &&
-                    std::bit_cast<std::uint32_t>(host.constructed_group_owner(source)->scalar)==std::bit_cast<std::uint32_t>(1.0F) &&
-                    (host.constructed_group_owner(source)->flags&0x03000000U)==0x03000000U;
-              }),
-              "basic group readers apply only canonical scalar and flag state after proving an empty component tail");
-        check(host.matpos_deferred_reader_states().empty() ?
-                  host.matpos_owner_refresh_receipts().empty() :
-                  std::ranges::all_of(host.matpos_deferred_reader_states(),[&](const auto& entry) {
-                    const auto& [source,state]=entry;
-                    const auto found=host.matpos_owner_refresh_receipts().find(source);
-                    return host.resources().sources().directory()[source].source_type==0x00200002U &&
-                        state.source_directory_index==source && state.owner==host.source_handle(source) &&
-                        state.resource==host.directory_resource_mapping()[source] &&
-                        state.component_index==host.owner_components(state.owner).front() &&
-                        state.values.k==-1.0F &&
-                        ((state.refresh_count==0U && found==host.matpos_owner_refresh_receipts().end()) ||
-                         (state.refresh_count==1U && found!=host.matpos_owner_refresh_receipts().end() &&
-                          found->second.owner==state.owner && found->second.resource==state.resource &&
-                          found->second.source_offset==state.source_offset));
-                  }),
-              "MatPos reader fixtures preserve the source gate, or normalize K before one owner-scoped refresh receipt");
-        check(std::ranges::all_of(host.vert_anim_deferred_reader_states(),[&](const auto& entry) {
-                    const auto& [source,state]=entry;
-                    const auto& directory=host.resources().sources().directory()[source];
-                    return directory.source_type==0x00200002U && directory.attachments.size()==1U &&
-                        host.resources().sources().attachment_identifier(source,0U)=="ZSTDOBJ_VertAnim" &&
-                        state.source_directory_index==source && state.owner==host.source_handle(source) &&
-                        state.resource==host.directory_resource_mapping()[source] &&
-                        state.component_index==host.owner_components(state.owner).front() &&
-                        state.values.component_tail.component_extent==1U;
-                  }),
-              "VertAnim reader applies only the fixed source-backed state and retains no component suffix");
-        check(std::ranges::all_of(host.lens_flare_deferred_reader_states(),[&](const auto& entry) {
-                    const auto& [source,state]=entry;
-                    const auto& directory=host.resources().sources().directory()[source];
-                    const auto* owner=host.constructed_picture_owner(source);
-                    const auto* component=host.constructed_picture_component(state.component_index);
-                    return directory.source_type==0x00200046U && !directory.source_variant &&
-                        directory.class_data_value==0U && directory.object_flags==0U &&
-                        directory.attachments.size()==1U &&
-                        host.resources().sources().attachment_identifier(source,0U)=="ZWINPIC_LensFlare" &&
-                        std::bit_cast<std::uint32_t>(directory.attachments[0].parameter)==0U &&
-                        state.source_directory_index==source && state.owner==host.source_handle(source) &&
-                        state.resource==host.directory_resource_mapping()[source] &&
-                        state.component_index==host.owner_components(state.owner).front() && owner &&
-                        component && component->lens_flare &&
-                        owner->exponent_control==state.values.exponent_control &&
-                        owner->material_selector==state.values.base_property && owner->alpha==state.values.alpha &&
-                        owner->alignment==state.values.alignment &&
-                        owner->submission_control==state.values.extension_control &&
-                        owner->picture_asset_reference==state.values.picture_asset_reference &&
-                        component->lens_flare->scalars==state.values.scalars &&
-                        component->lens_flare->raw_words==state.values.raw_words;
-                  }),
-              "LensFlare reader atomically commits only the fixed Picture prefix, asset key and six local fields");
-        const auto& window=host.window_for_owner(host.source_handle(host.resources().window_index()));
-        const auto& camera=host.camera_for_owner(host.source_handle(host.resources().camera_index()));
-        const auto window_reference_resource=[&host](std::uint32_t reference)
-            ->std::optional<off::graphics::IntroRuntimeResourceHandle> {
-          if(reference==0U) return std::nullopt;
-          const auto source=host.resources().sources().local_source_for_authored_reference(reference);
-          if(!source) return std::nullopt;
-          return host.directory_resource_mapping()[*source];
-        };
-        check(applied_window_readers==1 && (window.group.flags&0x400U)!=0U &&
-              camera.associated_target()==host.source_handle(host.resources().window_index()).value &&
-              camera.render_control()==0U && (camera.flags()&0x8000U)==0U && (camera.flags()&0x210000U)==0x210000U &&
-              camera.enabled(),
-              "explicit first-cut Window reader applies ordered owner and canonical camera state without registration");
-        check(window.opaque_reference_resources[0]==window_reference_resource(host.resources().window().opaque_references[0]) &&
-              window.opaque_reference_resources[1]==window_reference_resource(host.resources().window().opaque_references[1]),
-              "Window reader atomically retains both opaque references as source-directory resource mappings");
-        check(applied_sound_readers==host.resources().sounds().size() &&
-              std::ranges::all_of(host.sounds(),[](const auto& sound) { return sound->source_applied(); }),
-              "sound owner readers consume both parsed source prefixes without preparing playback");
-        check(host.fade_picture_component_reader_states().size()==host.fade_picture_reader_states().size() &&
-              std::ranges::all_of(host.fade_picture_reader_states(),[&](const auto& entry) {
-                const auto found=host.fade_picture_component_reader_states().find(entry.first);
-                return found!=host.fade_picture_component_reader_states().end() &&
-                    found->second.owner==entry.second.owner && found->second.resource==entry.second.resource &&
-                    found->second.component_index==entry.second.component_index &&
-                    found->second.picture_asset_reference==entry.second.picture_asset_reference;
-              }),"FadeToBlack component boundaries retain only their completed owner provenance");
-        const auto reader_admission=host.preflight_global_lifecycle();
-        check(!reader_admission.ready() && reader_admission.expected_readers==420 &&
-              reader_admission.covered_readers>=6 && reader_admission.expected_components==383 &&
-              reader_admission.covered_components==0 && reader_admission.expected_owners==471 &&
-              reader_admission.covered_owners==0 &&
-              reader_admission.failure==off::graphics::IntroLifecyclePreflightFailure::reader_coverage,
-              "only completed typed reader boundaries contribute exact partial lifecycle coverage");
-        const auto* sequence_reader=host.first_cut_sequence_reader_state();
-        const auto* list_reader=host.first_cut_list_reader_state();
-        check(sequence_reader && sequence_reader->owner==host.source_handle(host.resources().member_index()) &&
-              sequence_reader->resource==host.directory_resource_mapping()[host.resources().member_index()] &&
-              sequence_reader->component_index==host.owner_components(sequence_reader->owner).front() &&
-              sequence_reader->authored.references==host.resources().member().references &&
-              sequence_reader->members[0]==host.directory_resource_mapping()[host.resources().camera_index()],
-              "first-cut sequence reader publishes immutable authored references without constructing a cut sequence");
-        const auto* sequence_component_reader=host.first_cut_sequence_component_reader_state();
-        const auto sequence_work=std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
-          return work.source_directory_index==host.resources().member_index();
-        });
-        check(sequence_component_reader && sequence_work!=host.deferred_reader_work().end() &&
-              sequence_component_reader->owner==sequence_reader->owner &&
-              sequence_component_reader->resource==sequence_reader->resource &&
-              sequence_component_reader->source_directory_index==host.resources().member_index() &&
-              sequence_component_reader->source_offset==sequence_work->source_offset &&
-              sequence_component_reader->component_index==sequence_reader->component_index &&
-              sequence_component_reader->authored.references==sequence_reader->authored.references &&
-              sequence_component_reader->members==sequence_reader->members,
-              "CutSequence component boundary retains owner-derived source provenance without lifecycle work");
-        if(sequence_work!=host.deferred_reader_work().end())
-          rejects([&]{host.apply_supported_first_cut_sequence_component_reader(*sequence_work);});
-        check(list_reader && list_reader->owner==host.source_handle(host.resources().first_cut_index()) &&
-              list_reader->resource==host.directory_resource_mapping()[host.resources().first_cut_index()] &&
-              list_reader->component_indices.size()==6 &&
-              list_reader->authored.sequence_reference==host.resources().first_cut().sequence_reference &&
-              list_reader->sequence_resource==host.directory_resource_mapping()[host.resources().member_index()] &&
-              list_reader->command_target_resources[0]==host.directory_resource_mapping()[host.resources().sources().local_source_for_authored_reference(host.resources().first_cut().commands[0].target_reference).value()],
-              "first-cut list reader resolves required immutable source resources without registering commands or events");
-        const auto legal_source=host.resources().sources().local_source_for_authored_reference(
-            host.resources().member().references[1]);
-        const auto* legal_reader=host.legal_picture_reader_state();
-        const auto legal_work=legal_source?std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
-          return work.source_directory_index==*legal_source;
-        }):host.deferred_reader_work().end();
-        const auto* legal_component_reader=host.legal_picture_component_reader_state();
-        if(legal_source && legal_work!=host.deferred_reader_work().end()) {
-          const auto& authored_legal=host.resources().sources().intro_legal_picture_source(*legal_source);
-          const auto legal_components=host.owner_components(host.source_handle(*legal_source));
-          check(legal_reader && legal_components.size()==1U &&
-                legal_reader->owner==host.source_handle(*legal_source) &&
-                legal_reader->resource==host.directory_resource_mapping()[*legal_source] &&
-                legal_reader->component_index==legal_components.front() &&
-                legal_reader->authored.authored_state_exponent==authored_legal.authored_state_exponent &&
-                legal_reader->authored.base_render_property==authored_legal.base_render_property &&
-                legal_reader->authored.authored_alpha==authored_legal.authored_alpha &&
-                legal_reader->authored.alignment_enum==authored_legal.alignment_enum &&
-                legal_reader->authored.extension_control==authored_legal.extension_control &&
-                legal_reader->picture_asset_reference==authored_legal.picture_asset_reference,
-                "legal-picture reader retains the resolved Center source and full picture key without activation");
-          rejects([&]{host.apply_supported_first_cut_legal_picture_deferred_reader(*legal_work);});
-          check(legal_component_reader && legal_component_reader->owner==legal_reader->owner &&
-                legal_component_reader->resource==legal_reader->resource &&
-                legal_component_reader->source_directory_index==*legal_source &&
-                legal_component_reader->source_offset==legal_work->source_offset &&
-                legal_component_reader->component_index==legal_reader->component_index &&
-                legal_component_reader->picture_asset_reference==legal_reader->picture_asset_reference,
-                "Center component boundary retains only the completed legal-picture provenance");
-          rejects([&]{host.apply_supported_first_cut_legal_picture_component_reader(*legal_work);});
-        }
-        const auto incomplete_fallback=off::graphics::build_incomplete_intro_fallback(
-            host,{1280U,720U});
-        check(legal_source && incomplete_fallback.draw.source_index==*legal_source &&
-                  !incomplete_fallback.draw.draw_plan.groups().empty() &&
-                  !incomplete_fallback.images.empty(),
-              "incomplete startup fallback selects only the reader-admitted legal picture");
-        const auto admitted_fades=off::graphics::build_admitted_first_cut_fade_previews(
-            host,{1280U,720U});
-        check(!admitted_fades.empty() &&
-                  admitted_fades.size()==host.fade_picture_reader_states().size() &&
-                  std::ranges::is_sorted(admitted_fades,{},[](const auto& preview) {
-                    return preview.draw.source_index;
-                  }) &&
-                  std::ranges::all_of(admitted_fades,[&](const auto& preview) {
-                    const auto owner=host.fade_picture_reader_states().find(preview.draw.source_index);
-                    const auto component=host.fade_picture_component_reader_states().find(preview.draw.source_index);
-                    return owner!=host.fade_picture_reader_states().end() &&
-                        component!=host.fade_picture_component_reader_states().end() &&
-                        owner->second.owner==component->second.owner &&
-                        owner->second.resource==component->second.resource &&
-                        owner->second.component_index==component->second.component_index &&
-                        owner->second.picture_asset_reference==component->second.picture_asset_reference &&
-                        !preview.draw.draw_plan.groups().empty() && !preview.images.empty();
-                  }),
-              "FadeToBlack preview inventory requires all exact reader/component receipts without selecting a cut frame");
-        const auto picture_steps=
-            off::graphics::admitted_first_cut_picture_preview_steps(host);
-        check(!picture_steps.empty() &&
-                  std::ranges::is_sorted(picture_steps,{},[](const auto& step) {
-                    return step.command_index;
-                  }) &&
-                  std::ranges::all_of(picture_steps,[&](const auto& step) {
-                    const auto& command=host.resources().first_cut().commands.at(step.command_index);
-                    const auto source=host.resources().sources().local_source_for_authored_reference(
-                        command.target_reference);
-                    return source && *source==step.source_index &&
-                        (step.policy==off::graphics::IntroPreviewPolicy::admitted_first_cut_legal_picture ||
-                         step.policy==off::graphics::IntroPreviewPolicy::admitted_first_cut_fade_picture);
-                  }),
-              "manual first-cut picture inventory preserves only admitted picture command indices");
-        const auto selected_step=picture_steps.front();
-        const auto selected_snapshot=off::graphics::build_admitted_first_cut_picture_step(
-            host,selected_step.command_index,{1280U,720U});
-        check(selected_snapshot.draw.source_index==selected_step.source_index &&
-                  !selected_snapshot.draw.draw_plan.groups().empty() &&
-                  !selected_snapshot.images.empty(),
-              "manual first-cut picture selection snapshots one admitted command target without playback");
-        rejects([&]{(void)off::graphics::build_admitted_first_cut_picture_step(
-            host,host.resources().first_cut().commands.size(),{1280U,720U});});
-        host.prepare_supported_first_cut_player();
-        const auto* player=host.first_cut_player_prepared_state();
-        check(player && player->list_owner==list_reader->owner && player->sequence_owner==sequence_reader->owner &&
-              player->legal_picture_owner==legal_reader->owner &&
-              player->list_resource==list_reader->resource && player->sequence_resource==sequence_reader->resource &&
-              player->legal_picture_resource==legal_reader->resource &&
-              player->list_component_index==list_reader->component_indices[0] &&
-              player->sequence_component_index==sequence_reader->component_index &&
-              player->legal_picture_component_index==legal_component_reader->component_index &&
-              player->legal_picture_asset_reference==legal_component_reader->picture_asset_reference &&
-              std::ranges::all_of(player->tail_members,[&](const auto& member) {
-                return !member || (member->owner==host.source_handle(member->source_directory_index) &&
-                    member->resource==host.directory_resource_mapping()[member->source_directory_index]);
-              }) &&
-              player->leading_controls==std::array<std::uint32_t,3>{list_reader->authored.settings_words[0],list_reader->authored.settings_words[1],list_reader->authored.settings_words[2]} &&
-              player->raw_scalar==list_reader->authored.settings_words[3] &&
-              player->trailing_controls==std::array<std::uint32_t,3>{list_reader->authored.settings_words[4],list_reader->authored.settings_words[5],list_reader->authored.settings_words[6]} &&
-              player->list_value==list_reader->authored.final_value && player->sequence_values==sequence_reader->authored.values &&
-              player->raw_enabled_option==sequence_reader->authored.authored_option &&
-              !player->started[0] && !player->completed[0],
-              "first-cut player preparation materializes checked reader state with a cold member and no playback");
-        const auto command_targets=host.first_cut_command_target_provenance();
-        std::vector<std::uint32_t> unique_command_target_references;
-        for(const auto& command:host.resources().first_cut().commands) {
-          if(command.target_reference!=0U &&
-              std::ranges::find(unique_command_target_references,command.target_reference)==
-                  unique_command_target_references.end())
-            unique_command_target_references.push_back(command.target_reference);
-        }
-        check(command_targets.size()==unique_command_target_references.size() &&
-              std::ranges::equal(command_targets,unique_command_target_references,{},
-                  [](const auto& target){return target.authored_reference;},
-                  [](const auto reference){return reference;}) &&
-              std::ranges::all_of(command_targets,[&](const auto& target) {
-                const auto source=host.resources().sources().local_source_for_authored_reference(
-                    target.authored_reference);
-                return source && target.source_directory_index==*source &&
-                    target.owner==host.source_handle(*source) &&
-                    target.resource==host.directory_resource_mapping()[*source];
-              }),
-              "first-cut command targets retain unique source-backed live owner provenance without dispatch");
-        const auto paramanim_join=host.paramanim_first_cut_join_inventory();
-        std::size_t expected_paramanim_owners{},expected_paramanim_instances{},expected_paramanim_deferred{};
-        std::vector<std::size_t> paramanim_sources;
-        for(std::size_t row=0;row<host.resources().sources().directory().size();++row) {
-          std::size_t instances{};
-          const auto& source=host.resources().sources().directory()[row];
-          for(std::size_t slot=0;slot<source.attachments.size();++slot)
-            instances+=host.resources().sources().attachment_identifier(row,slot)=="ZGEOM_ParamAnim";
-          if(instances==0U) continue;
-          ++expected_paramanim_owners;expected_paramanim_instances+=instances;
-          expected_paramanim_deferred+=source.deferred_source_offset!=0U;
-          paramanim_sources.push_back(row);
-        }
-        std::size_t expected_paramanim_command_records{},expected_paramanim_mapped_events{};
-        std::vector<std::uint32_t> expected_paramanim_targets;
-        for(const auto& command:host.resources().first_cut().commands) {
-          const auto source=host.resources().sources().local_source_for_authored_reference(command.target_reference);
-          if(!source || std::ranges::find(paramanim_sources,*source)==paramanim_sources.end()) continue;
-          ++expected_paramanim_command_records;
-          if(std::ranges::find(expected_paramanim_targets,command.target_reference)==expected_paramanim_targets.end())
-            expected_paramanim_targets.push_back(command.target_reference);
-          if(command.event_reference<host.source_event_name_mapping().size() &&
-              host.source_event_name_mapping()[command.event_reference] &&
-              *host.source_event_name_mapping()[command.event_reference]!=0U)
-            ++expected_paramanim_mapped_events;
-        }
-        check(paramanim_join.attachment_owners==expected_paramanim_owners &&
-                paramanim_join.attachment_instances==expected_paramanim_instances &&
-                paramanim_join.constructed_component_bindings==expected_paramanim_instances &&
-                paramanim_join.owners_with_deferred_blocks==expected_paramanim_deferred &&
-                paramanim_join.command_records_targeting_paramanim_owners==expected_paramanim_command_records &&
-                paramanim_join.unique_command_targets_targeting_paramanim_owners==expected_paramanim_targets.size() &&
-                paramanim_join.mapped_event_commands_targeting_paramanim_owners==expected_paramanim_mapped_events,
-              "ParamAnim first-cut join retains only checked aggregate owner-component and command-target associations");
-        const auto particle_emitter_join=host.particle_emitter_first_cut_join_inventory();
-        std::size_t expected_particle_emitter_owners{},expected_particle_emitter_instances{},
-            expected_particle_emitter_deferred{};
-        std::vector<std::size_t> particle_emitter_sources;
-        for(std::size_t row=0;row<host.resources().sources().directory().size();++row) {
-          std::size_t instances{};
-          const auto& source=host.resources().sources().directory()[row];
-          for(std::size_t slot=0;slot<source.attachments.size();++slot)
-            instances+=host.resources().sources().attachment_identifier(row,slot)=="ZGEOM_ParticleEmitter";
-          if(instances==0U) continue;
-          ++expected_particle_emitter_owners;expected_particle_emitter_instances+=instances;
-          expected_particle_emitter_deferred+=source.deferred_source_offset!=0U;
-          particle_emitter_sources.push_back(row);
-        }
-        std::size_t expected_particle_emitter_command_records{},expected_particle_emitter_mapped_events{};
-        std::vector<std::uint32_t> expected_particle_emitter_targets;
-        for(const auto& command:host.resources().first_cut().commands) {
-          const auto source=host.resources().sources().local_source_for_authored_reference(command.target_reference);
-          if(!source || std::ranges::find(particle_emitter_sources,*source)==particle_emitter_sources.end()) continue;
-          ++expected_particle_emitter_command_records;
-          if(std::ranges::find(expected_particle_emitter_targets,command.target_reference)==expected_particle_emitter_targets.end())
-            expected_particle_emitter_targets.push_back(command.target_reference);
-          if(command.event_reference<host.source_event_name_mapping().size() &&
-              host.source_event_name_mapping()[command.event_reference] &&
-              *host.source_event_name_mapping()[command.event_reference]!=0U)
-            ++expected_particle_emitter_mapped_events;
-        }
-        check(particle_emitter_join.attachment_owners==expected_particle_emitter_owners &&
-                particle_emitter_join.attachment_instances==expected_particle_emitter_instances &&
-                particle_emitter_join.constructed_component_bindings==expected_particle_emitter_instances &&
-                particle_emitter_join.owners_with_deferred_blocks==expected_particle_emitter_deferred &&
-                particle_emitter_join.command_records_targeting_particle_emitter_owners==expected_particle_emitter_command_records &&
-                particle_emitter_join.unique_command_targets_targeting_particle_emitter_owners==expected_particle_emitter_targets.size() &&
-                particle_emitter_join.mapped_event_commands_targeting_particle_emitter_owners==expected_particle_emitter_mapped_events,
-              "ParticleEmitter first-cut join retains only checked aggregate owner-component and command-target associations");
-        off::cutscene::FirstCutRuntimeCommandRouter command_router{host};
-        check(command_router.sender()==player->list_owner.value &&
-              std::ranges::all_of(command_targets,[&](const auto& target) {
-                return command_router.resolve_reference(target.authored_reference)==
-                    std::optional<std::uint64_t>{target.owner.value};
-              }),
-              "first-cut command router resolves only prepared source-backed live targets");
-        if(!command_targets.empty()) {
-          std::vector<std::uint64_t> routed_owners;
-          auto routing_services=command_router.command_session_services({
-              .direct_target=[&](std::uint64_t target,std::uint16_t,std::uint32_t,
-                                 std::uint64_t sender) {
-                routed_owners.push_back(target);
-                check(sender==command_router.sender(),
-                      "first-cut command router preserves the prepared list sender");
-              },
-              .direct_component=[](std::uint64_t,std::uint64_t,std::uint16_t,
-                                   std::uint32_t,std::uint64_t) {},
-          });
-          routing_services.direct_dispatch(command_targets.front().owner.value,0x401U,0U,
-                                           command_router.sender());
-          check(routed_owners==std::vector<std::uint64_t>{command_targets.front().owner.value},
-                "first-cut command router sends a resolved target through the supplied live boundary");
-        }
-        auto initialization=host.first_cut_player_initialization();
-        check(!initialization.phase_one_complete() && !initialization.phase_two_complete(),
-              "first-cut lifecycle boundary is built from live reader state but remains cold");
-        auto session=host.first_cut_player_session();
-        check(!session.initialization().phase_one_complete() && !session.receiver().open(),
-              "first-cut session is projected from the same live reader state but remains cold");
-        const auto& prepared=*host.first_cut_player_prepared_state();
-        off::cutscene::FirstCutPlayerSession substituted_session({
-            .list_component=prepared.list_component_index,
-            .command_components={list_reader->component_indices[1],list_reader->component_indices[2],
-                                 list_reader->component_indices[3],list_reader->component_indices[4],
-                                 list_reader->component_indices[5]},
-            .list={},.sequence={}});
-        rejects([&] { static_cast<void>(
-            off::graphics::MovieControlFirstCutRuntimeHandoff::from_runtime(host, substituted_session)); });
-        // The native bridge may only be formed from the checked live runtime;
-        // its first successful receiver delivery is synchronous with the
-        // admitted MovieControl update and is not a playback assertion.
-        auto handoff=off::graphics::MovieControlFirstCutRuntimeHandoff::from_runtime(host,session);
-        check(!session.initialization().phase_one_complete() &&
-                  !session.initialization().phase_two_complete() &&
-                  !session.receiver().open() && !session.receiver().closed(),
-              "forming the MovieControl handoff preserves the cold player state");
-        off::graphics::MovieControlFirstUpdate movie{
-            host.component_handle(host.controller_component_index()),
-            host.movie_controller_reader_state()->owner.value,1};
-        movie.run_phase_two({[] { return false; }, [] {}, [](bool) {}, [] {},
-                             [] { return 0; }, [] {}});
-        // The ordinary manager is supplied by the frame owner.  This isolated
-        // test binds the exact live MovieControl component into a stable
-        // manager so the adapter can capture its real admission state without
-        // traversing or dispatching that manager.
-        off::runtime::OrdinarySortingState frame_sorting;
-        const auto movie_handle=movie.component_handle();
-        auto& movie_component=host.components().at(host.controller_component_index());
-        off::runtime::OrdinaryComponentManager frame_manager{frame_sorting, {
-            [&](std::uint64_t handle) -> off::runtime::ComponentRecord* {
-              return handle==movie_handle ? &movie_component : nullptr;
-            },
-            [](std::uint64_t owner) -> std::optional<off::runtime::OrdinaryOwner> {
-              return off::runtime::OrdinaryOwner{owner, 0U};
-            }, {}}};
-        frame_manager.enqueue(movie_handle);
-        frame_manager.refresh();
-        auto adapter=off::graphics::MovieControlFirstCutSceneFrameAdapter::bind(
-            movie,std::move(handoff));
-        bool group_after_lifecycle{};
-        const auto frame_result=adapter.run_frame({frame_manager,movie_component,movie_handle,2,false,{}}, {
-                {.prepare_sequence_resources=[] {}, .send_cut_sequence_start={},
-                 .send_group_state_requests=[&](std::uint64_t) { group_after_lifecycle=true; }},
-                {.invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},
-                 .register_list_events=[] {}, .member_count=[] { return std::size_t{1}; },
-                 .write_queue_property=[](auto) {}},
-                {.invoke_command=[](auto,const auto&) {},
-                 .read_scene_reference=[](std::string_view) -> std::optional<std::uint64_t> { return std::nullopt; },
-                 .resolve_member=[](std::size_t) -> std::optional<std::uint64_t> { return std::nullopt; },
-                 .request_member_info=[](std::uint64_t) -> std::optional<off::cutscene::FirstCutMemberInfo> { return std::nullopt; },
-                 .member_name=[](std::uint64_t) { return std::string_view{}; },
-                 .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> { return std::nullopt; }}});
-        check(frame_result ==
-              off::graphics::MovieControlEvent16Result::phase_one_incomplete &&
-              !session.initialization().phase_one_complete() &&
-              !session.initialization().phase_two_complete() && !session.receiver().open() &&
-              !session.receiver().closed() && !group_after_lifecycle && !adapter.delivered(),
-              "scene-frame adapter keeps the first-cut lifecycle cold before observed MovieControl phase-one completion");
-        check(adapter.run_frame({frame_manager,movie_component,movie_handle,2,false,{}}, {}) ==
-                  off::graphics::MovieControlEvent16Result::phase_one_incomplete &&
-                  !adapter.delivered(),
-              "pre-phase-one event-16 frames do not require delivery services or exhaust the adapter");
-        // A lifecycle service can be host-owned, so the handoff must prove its
-        // reader/component relation again before phase two registers commands.
-        // This is deliberately a live-state mutation rather than a synthetic
-        // source descriptor: the cold session may retain its descriptor while
-        // the runtime relation it was admitted from has become stale.
-        auto stale_session=host.first_cut_player_session();
-        auto stale_handoff=off::graphics::MovieControlFirstCutRuntimeHandoff::from_runtime(
-            host,stale_session);
-        off::graphics::MovieControlFirstUpdate stale_movie{
-            host.component_handle(host.controller_component_index()),
-            host.movie_controller_reader_state()->owner.value,1};
-        stale_movie.run_phase_two({[] { return false; }, [] {}, [](bool) {}, [] {},
-                                   [] { return 0; }, [] {}});
-        const auto controller_owner=host.components().at(
-            host.controller_component_index()).state().attached_owner;
-        rejects([&] {
-          static_cast<void>(stale_handoff.deliver(stale_movie,{
-              [] { return true; }, [] { return true; }, [] { return false; },
-              [] { return std::optional<std::uint64_t>{}; }, [] { return true; },
-              [] { return 2; }, [] {}, {}, [](std::uint64_t) {}},
-              {.invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},
-               .register_list_events=[] {}, .member_count=[] { return std::size_t{1}; },
-               .write_queue_property=[&](auto) {
-                 host.components().at(host.controller_component_index()).state().attached_owner=0U;
-               }},
-              {.invoke_command=[](auto,const auto&) {},
-               .read_scene_reference=[](std::string_view) -> std::optional<std::uint64_t> { return std::nullopt; },
-               .resolve_member=[](std::size_t) -> std::optional<std::uint64_t> { return std::nullopt; },
-               .request_member_info=[](std::uint64_t) -> std::optional<off::cutscene::FirstCutMemberInfo> { return std::nullopt; },
-               .member_name=[](std::uint64_t) { return std::string_view{}; },
-               .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> { return std::nullopt; }}));
-        });
-        check(stale_session.initialization().phase_one_complete() &&
-                  !stale_session.initialization().phase_two_complete() &&
-                  stale_session.receiver().open() && !stale_session.receiver().closed() &&
-                  stale_session.receiver().commands().empty(),
-              "stale handoff does not admit phase-two command registration");
-        host.components().at(host.controller_component_index()).state().attached_owner=controller_owner;
-        auto lifecycle_session=host.first_cut_player_session();
-        lifecycle_session.run_phase_one({.invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},
-                               .register_list_events=[] {}, .member_count=[] { return std::size_t{1}; },
-                               .write_queue_property=[](auto) {}});
-        lifecycle_session.run_phase_two({
-            .invoke_command=[](auto,const auto&) {},
-            .read_scene_reference=[](std::string_view) -> std::optional<std::uint64_t> { return std::nullopt; },
-            .resolve_member=[](std::size_t) -> std::optional<std::uint64_t> { return std::nullopt; },
-            .request_member_info=[](std::uint64_t) -> std::optional<off::cutscene::FirstCutMemberInfo> { return std::nullopt; },
-            .member_name=[](std::uint64_t) { return std::string_view{}; },
-            .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> { return std::nullopt; }});
-        check(lifecycle_session.initialization().phase_two_complete() && lifecycle_session.receiver().closed(),
-              "first-cut session binds its receiver internally without scheduling playback");
-        initialization.run_phase_one({
-            .invoke_command=[](auto,const auto&) {}, .read_retained_source=[] {},
-            .register_list_events=[] {}, .member_count=[] {return std::size_t{1};},
-            .write_queue_property=[](auto) {}});
-        initialization.run_phase_two({
-            .invoke_command=[](auto,const auto&) {},
-            .read_scene_reference=[](std::string_view) -> std::optional<std::uint64_t> {return std::nullopt;},
-            .resolve_member=[](std::size_t) -> std::optional<std::uint64_t> {return std::nullopt;},
-            .request_member_info=[](std::uint64_t) -> std::optional<off::cutscene::FirstCutMemberInfo> {return std::nullopt;},
-            .member_name=[](std::uint64_t) {return std::string_view{};},
-            .resolve_scene_object=[](std::uint64_t) -> std::optional<std::uint64_t> {return std::nullopt;},
-            .register_ordered_command=[](std::size_t,const auto&) {},
-            .close_ordered_command_receiver=[](std::size_t) {}});
-        rejects([&]{host.prepare_supported_first_cut_player();});
-        if(!host.resources().sounds().empty()) {
-          const auto& authored_sound=host.resources().sounds().front();
-          const auto attachments=host.owner_components(host.source_handle(authored_sound.directory_index));
-          check(attachments.size()==4,"sound owner retains four reader-backed components");
-          const auto* extend=attachments.size()==4?host.constructed_attachment(attachments[0]):nullptr;
-          const auto* notify=attachments.size()==4?host.constructed_attachment(attachments[1]):nullptr;
-          const auto* segment=attachments.size()==4?host.constructed_attachment(attachments[2]):nullptr;
-          const auto* define=attachments.size()==4?host.constructed_attachment(attachments[3]):nullptr;
-          check(extend && extend->sound_extend && extend->sound_extend->scalars==authored_sound.attachments.extend.scalars &&
-                notify && notify->sound_notify && notify->sound_notify->raw_target_reference==authored_sound.attachments.notify.target_reference &&
-                segment && segment->sound_segment && segment->sound_segment->times==authored_sound.attachments.segment.times &&
-                define && define->sound_define && define->sound_define->property_key==authored_sound.attachments.property_key,
-                "sound owner reader retains parsed attachment fields without resolving events or dispatching playback");
-        }
-        const auto* controller=host.movie_controller_reader_state();
-        const auto* controller_component=host.movie_controller_component_reader_state();
-        const auto controller_reference_resource=[&host](std::uint32_t reference)
-            ->std::optional<off::graphics::IntroRuntimeResourceHandle> {
-          if(reference==0U) return std::nullopt;
-          const auto source=host.resources().sources().local_source_for_authored_reference(reference);
-          if(!source) return std::nullopt;
-          return host.directory_resource_mapping()[*source];
-        };
-        check(controller && controller->owner==host.source_handle(host.resources().controller_index()) &&
-              controller->resource==host.directory_resource_mapping()[host.resources().controller_index()] &&
-              controller->component_index==host.controller_component_index() &&
-              controller->authored.sequence_reference==host.resources().controller().sequence_reference &&
-              controller->authored.destination==host.resources().controller().destination &&
-              controller->additional_resource==controller_reference_resource(controller->authored.additional_reference) &&
-              controller->first_optional_resource==(controller->authored.first_optional_reference
-                  ?controller_reference_resource(*controller->authored.first_optional_reference):std::nullopt) &&
-              controller->second_optional_resource==(controller->authored.second_optional_reference
-                  ?controller_reference_resource(*controller->authored.second_optional_reference):std::nullopt) &&
-              controller->sequence_members.size()==host.resources().cut_references().size() &&
-              controller->group_members.size()==host.resources().group_references().size(),
-              "MovieControl owner reader retains real authored data and only proven list-resource mappings");
-        check(controller_component && controller &&
-              controller_component->owner==controller->owner &&
-              controller_component->component_index==controller->component_index &&
-              controller_component->events==host.constructed_attachment(controller->component_index)->movie_control->events,
-              "MovieControl component reader follows its owner reader without lifecycle admission");
-        const auto* external_commands=host.external_cut_commands_reader_state();
-        const auto external_resource=[&host](std::uint32_t reference)
-            ->std::optional<off::graphics::IntroRuntimeResourceHandle> {
-          const auto source=host.resources().sources().local_source_for_authored_reference(reference);
-          if(!source) return std::nullopt;
-          return host.directory_resource_mapping()[*source];
-        };
-        if(external_commands) check(external_commands->owner==host.source_handle(466U) &&
-              external_commands->resource==host.directory_resource_mapping()[466U] &&
-              external_commands->commands[0].target_reference==host.resources().sources().intro_external_cut_commands_source(466U).commands[0].target_reference &&
-              external_commands->commands[1].target_reference==host.resources().sources().intro_external_cut_commands_source(466U).commands[1].target_reference &&
-              external_commands->external_list_resources[0]==
-                  external_resource(host.resources().sources().intro_external_cut_commands_source(466U).external_list_references[0]) &&
-              external_commands->external_list_resources[1]==
-                  external_resource(host.resources().sources().intro_external_cut_commands_source(466U).external_list_references[1]),
-              "external cut command reader retains the checked source pair and live resource mappings only");
-        const auto external_work=std::ranges::find_if(host.deferred_reader_work(),[](const auto& work) {
-          return work.source_directory_index==466U;
-        });
-        check(external_work!=host.deferred_reader_work().end(),"external cut command pair retains deferred reader identity");
-        if(external_commands && external_work!=host.deferred_reader_work().end())
-          rejects([&]{host.apply_supported_external_cut_commands_deferred_reader(*external_work);});
-        const auto controller_work=std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
-          return work.source_directory_index==host.resources().controller_index();
-        });
-        check(controller_work!=host.deferred_reader_work().end(),"MovieControl retains its deferred reader identity");
-        if(controller_work!=host.deferred_reader_work().end())
-          rejects([&]{host.apply_supported_movie_control_deferred_reader(*controller_work);});
-        const auto window_work=std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
-          return work.source_directory_index==host.resources().window_index();
-        });
-        check(window_work!=host.deferred_reader_work().end(),"first-cut Window retains deferred reader identity");
-        if(window_work!=host.deferred_reader_work().end())
-          rejects([&]{host.apply_supported_window_deferred_reader(*window_work);});
-        const auto sound_work=std::ranges::find_if(host.deferred_reader_work(),[&](const auto& work) {
-          return host.resources().sources().directory().at(work.source_directory_index).source_type==0x00200012U;
-        });
-        check(sound_work!=host.deferred_reader_work().end(),"intro sound owner retains deferred reader identity");
-        if(sound_work!=host.deferred_reader_work().end()) {
-          const auto& sound=host.sound_for_source(sound_work->source_directory_index);
-          const auto authored=std::ranges::find_if(host.resources().sounds(),[&](const auto& candidate) {
-            return candidate.directory_index==sound_work->source_directory_index;
-          });
-          check(authored!=host.resources().sounds().end() && sound.source_applied() &&
-                sound.record().active_source==authored->source.sound_definition_reference,
-                "sound owner reader applies the parsed source to its canonical record only");
-          rejects([&]{host.apply_supported_sound_owner_deferred_reader(*sound_work);});
-        }
-        /* The loader tail has a separate frame below. */
-}
-
-struct CompleteOuterLoaderTailObservation final {
-    off::graphics::IntroRuntime& host;
-        std::vector<std::string> tail_events;
-        std::vector<off::graphics::IntroRuntimeResourceHandle> spatial,flag_4000;
-        const std::array<std::byte,15> named_payload{std::byte{'G'},std::byte{'l'},std::byte{'o'},
-            std::byte{'b'},std::byte{'a'},std::byte{'l'},std::byte{},std::byte{8},std::byte{},
-            std::byte{},std::byte{},std::byte{0x31},std::byte{0x32},std::byte{0x33},std::byte{0x34}};
-        std::array<std::byte,24> renderer_payload{std::byte{6},std::byte{},std::byte{},std::byte{},
-            std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},
-            std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},std::byte{},
-            std::byte{1},std::byte{1},std::byte{},std::byte{}};
-    [[nodiscard]] off::graphics::IntroOuterLoaderTailServices services() {
-        // This loader fixture gives previously arbitrary source identifiers a
-        // valid shared relation group. Full construction tests above retain
-        // their independent opaque-word preservation assertions.
-        for(const auto resource:host.loaded_resource_handles()) {
-          const auto owner=host.resource_owner(resource);
-          auto state=*host.resource_state(owner);
-          if(state.directory_auxiliary) state.directory_auxiliary=4U;
-          if(owner==host.source_handle(6) || owner==host.source_handle(8))
-            state.directory_auxiliary=4U;
-          host.assign_resource_state(owner,state);
-        }
-        const auto member_offset=host.resources().sources().directory()[8].local_slot_index*112U;
-        check(member_offset>=0x60U,"renderer member uses a bias-addressable source slot");
-        const auto member_word=(member_offset-0x60U)|1U;
-        for(unsigned byte=0;byte<4;++byte)
-          renderer_payload[20U+byte]=static_cast<std::byte>((member_word>>(8U*byte))&0xffU);
-        const auto association_raw=[this](std::size_t source) {
-          const auto offset=host.resources().sources().directory()[source].local_slot_index*112U;
-          check(offset>=0x70U,"association fixture requires a bias-addressable pool slot");
-          return static_cast<std::uint32_t>(offset-0x70U);
-        };
-        return {
-            .named_global_payload=off::graphics::IntroNamedGlobalPayload{named_payload},
-            .relocate_named_global_references=[this](off::graphics::IntroNamedGlobalPreparedReader& reader) {
-              check(reader.complete_block().size()==8 && reader.complete_block()[4]==std::byte{0x31},
-                  "named relocation receives a complete owned tagged block including its header");
-              reader.mutable_block()[5]=std::byte{0x77}; reader.cursor=reader.complete_block().size();
-              tail_events.push_back("relocate");},
-            .read_named_global_payload=[this](std::string_view subject,off::graphics::IntroNamedGlobalPreparedReader& reader) {
-              check(subject=="Global" && reader.cursor==0 && reader.complete_block().size()==8 &&
-                        reader.complete_block()[4]==std::byte{0x31} && reader.complete_block()[5]==std::byte{0x77},
-                    "named reader receives the original label plus reset, relocated complete block");
-              check(named_payload[12]==std::byte{0x32},"named relocation never mutates the source payload");
-              tail_events.push_back("named-reader");},
-            .renderer_resource_payload=off::graphics::IntroRendererResourcePayload{renderer_payload},
-            .select_renderer_allocation_state=[this] {
-              check(!host.renderer_resource_container(),"allocation state is selected before scene-owned construction");
-              tail_events.push_back("renderer-select"); return 0xa713U;},
-            .restore_renderer_allocation_state=[this](std::uint32_t token) {
-              check(token==0xa713U,"restore passes the saved service token, not a container identity");
-              const auto* container=host.renderer_resource_container();
-              check(container && container->loaded() && container->group_count()==1U &&
-                        container->member_count()==1U && container->workspace().bytes().data()!=renderer_payload.data(),
-                    "scene owns copied payload and concrete resource relations before state restoration");
-              const auto members=host.renderer_relation_members(*host.directory_resource_mapping()[6]);
-              check(members && *members==std::vector<off::graphics::IntroRuntimeResourceHandle>{*host.directory_resource_mapping()[8]} &&
-                        host.renderer_relation_members(*host.directory_resource_mapping()[8])==members &&
-                        !host.renderer_relation_members(*host.directory_resource_mapping()[0]),
-                    "exact selectors alias typed members while zero stays unassigned");
-              tail_events.push_back("renderer-restore");},
-            .resource_associations={{association_raw(6),association_raw(8)}},
-            .associate_live_resources=[this](auto first,auto second) {check(first==host.directory_resource_mapping()[6] && second==host.directory_resource_mapping()[8],"association receives both independently resolved live resources");tail_events.push_back("associate");},
-            .auxiliary_arrays={},
-            .release_loader_source_lease=[this]{tail_events.push_back("release");},
-            .camera_zero_present=[this]{tail_events.push_back("camera-query");return false;},
-            .single_allocation_mode=false,
-            .enqueue_transform=[this](auto resource){tail_events.push_back("transform");
-              check(resource==host.resource_handle(*host.default_camera_handle()),
-                    "DefaultCam queue preserves its canonical child resource");},
-            .fallback_camera_registration={[]{return 1280;},[]{return 720;},[]{return false;},{}},
-            .outer_scene_operation=[this]{tail_events.push_back("scene");},
-            .between_saved_scene_operation=[this]{tail_events.push_back("between");},
-            .intermediate_scene_finalization=[this]{tail_events.push_back("finalize");},
-            .spatial_admission=[this](auto resource,bool admitted){check(admitted,"saved spatial service receives true");spatial.push_back(resource);tail_events.push_back("spatial");},
-            .saved_0x4000_service=[this](auto resource,bool enabled){check(enabled,"saved 0x4000 service receives true");flag_4000.push_back(resource);tail_events.push_back("4000");}};
-    }
-};
-
-enum class NamedTailTestMode { callbacks, native, invalid_second, partial_reader, partial_relocator,
-                              invalid_selector, invalid_renderer, restore_failure };
-
-static OFF_NOINLINE void check_complete_outer_loader_tail(
-    off::graphics::IntroRuntime& host, NamedTailTestMode named_mode) {
-        const auto inputs=host.outer_loader_source_inputs();
-        const auto& retained=host.resources().outer_loader_sources();
-        const auto same_payload=[](const auto& supplied,const auto& source) {
-          return supplied.has_value()==source.has_value() &&
-              (!supplied || std::ranges::equal(supplied->bytes,*source));
-        };
-        check(same_payload(inputs.named_global_payload,retained.named_global) &&
-              same_payload(inputs.renderer_resource_payload,retained.renderer_resource) &&
-              inputs.resource_associations.size()==retained.resource_associations.size() &&
-              std::ranges::equal(inputs.resource_associations,retained.resource_associations,
-                  [](const auto& input,const auto& source) {
-                    return input.first_reference==source[0] &&
-                           input.second_reference==source[1];
-                  }),
-              "outer loader exposes only source-backed tail payloads and association pairs");
-        CompleteOuterLoaderTailObservation observation{host};
-        auto tail_services=observation.services();
-        Bytes native_named_payload;
-        bool native_renderer_reached{};
-        const auto root_resource=host.resource_handle(host.root_handle());
-        if(named_mode!=NamedTailTestMode::callbacks) {
-          text(native_named_payload,"FixtureCamera,FixtureListener");
-          const auto block_offset=native_named_payload.size();
-          Bytes block(4);
-          scalar(block,0x08,0U);scalar(block,0x08,0U);
-          block.push_back(std::byte{0x06});finish(block);
-          native_named_payload.insert(native_named_payload.end(),block.begin(),block.end());
-          if(named_mode==NamedTailTestMode::invalid_second)
-            native_named_payload[block_offset+10U]=std::byte{1};
-          tail_services.named_global_payload=off::graphics::IntroNamedGlobalPayload{native_named_payload};
-          if(named_mode!=NamedTailTestMode::partial_relocator)
-            tail_services.relocate_named_global_references={};
-          if(named_mode!=NamedTailTestMode::partial_reader)
-            tail_services.read_named_global_payload={};
-          host.set_scene_resource_property_native("FIXTURECAMERA",root_resource);
-          host.set_scene_resource_property_native("UnrelatedFixture",root_resource);
-          const auto original_select=tail_services.select_renderer_allocation_state;
-          tail_services.select_renderer_allocation_state=[&,original_select] {
-            native_renderer_reached=true;
-            for(const auto name:{"fixturecamera","FIXTURELISTENER"}) {
-              const auto property=host.scene_resource_property(name);
-              check(property && property->type==16U && property->scalar_reference_bits==0U &&
-                        !property->resource.value && !property->object_token && !property->owner_handle,
-                    "renderer parser sees both published typed null properties, not missing or live handles");
-            }
-            check(!host.scene_resource_property("FixtureCamer") &&
-                      host.scene_resource_property("UnrelatedFixture")->resource==root_resource,
-                  "native reader matches full ASCII names and preserves unrelated scene properties");
-            Bytes{}.swap(native_named_payload);
-            return original_select();
-          };
-        }
-        if(named_mode==NamedTailTestMode::invalid_second ||
-            named_mode==NamedTailTestMode::partial_reader ||
-            named_mode==NamedTailTestMode::partial_relocator) {
-          rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
-          const auto retained=host.scene_resource_property("fixturecamera");
-          check(retained && retained->resource==root_resource && !retained->scalar_reference_bits &&
-                    !host.scene_resource_property("FixtureListener") && !native_renderer_reached &&
-                    !host.loader_source_lease_released(),
-                "invalid named data or partial callbacks cannot publish a partial registry or advance loading");
-          check(host.outer_loader_tail_stage()==
-                    (named_mode==NamedTailTestMode::invalid_second ?
-                     off::graphics::IntroOuterLoaderTailStage::failed :
-                     off::graphics::IntroOuterLoaderTailStage::incomplete),
-                "invalid named source and incomplete callback pairs retain distinct failure stages");
-          return;
-        }
-        if(named_mode==NamedTailTestMode::invalid_selector ||
-            named_mode==NamedTailTestMode::invalid_renderer ||
-            named_mode==NamedTailTestMode::restore_failure) {
-          if(named_mode==NamedTailTestMode::invalid_selector) {
-            auto state=*host.resource_state(host.source_handle(6));
-            state.directory_auxiliary=5U; // Reference word, not the group head.
-            host.assign_resource_state(host.source_handle(6),state);
-          }
-          if(named_mode==NamedTailTestMode::invalid_renderer)
-            observation.renderer_payload[0]=std::byte{255};
-          unsigned restores{};
-          tail_services.restore_renderer_allocation_state=[&](std::uint32_t token) {
-            ++restores;
-            check(token==0xa713U,"failure cleanup restores the original diagnostic token");
-            if(named_mode==NamedTailTestMode::restore_failure)
-              throw std::runtime_error("independent restore failure");
-          };
-          rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
-          check(restores==1U && !host.renderer_resource_container() && !host.loader_source_lease_released() &&
-                    host.outer_loader_tail_stage()==off::graphics::IntroOuterLoaderTailStage::failed,
-                "invalid payload, selector or state restoration destroys container and fails without later effects");
-          rejects([&]{static_cast<void>(host.renderer_relation_members(*host.directory_resource_mapping()[6]));});
-          return;
-        }
-        const auto retained_select=tail_services.select_renderer_allocation_state;
-        const auto retained_restore=tail_services.restore_renderer_allocation_state;
-        unsigned rejected_reentries{};
-        tail_services.select_renderer_allocation_state=[&] {
-          rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
-          ++rejected_reentries;
-          tail_services.restore_renderer_allocation_state={};
-          return retained_select();
-        };
-        tail_services.restore_renderer_allocation_state=[&,retained_restore](std::uint32_t token) {
-          rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
-          ++rejected_reentries;
-          retained_restore(token);
-        };
-        host.run_outer_loader_tail_through_saved_services(tail_services);
-        check(rejected_reentries==2U,"outer tail rejects recursive calls and retains the original restoration callback");
-        if(named_mode==NamedTailTestMode::native)
-          check(native_renderer_reached && native_named_payload.empty() &&
-                    host.scene_resource_property("FixtureCamera")->scalar_reference_bits==0U &&
-                    host.scene_resource_property("FixtureListener")->scalar_reference_bits==0U,
-                "named properties retain copied names and null values after source destruction and loader release");
-        check(host.outer_loader_tail_stage()==off::graphics::IntroOuterLoaderTailStage::second_saved_pass_complete,
-              "outer tail reaches the second saved-resource pass");
-        check(host.loader_source_lease_released() && host.default_camera_handle() &&
-              host.registered_cameras().camera_at(0,[&](auto owner){return owner==host.default_camera_handle()->value;}),
-              "outer tail releases its lease and registers DefaultCam at zero");
-        check(host.renderer_resource_container() && host.renderer_resource_container()->loaded() &&
-              host.first_auxiliary_array().empty() && host.second_auxiliary_array().empty(),
-              "tail retains parsed renderer ownership and preserves absent auxiliary arrays as zero-count");
-        check(observation.spatial.size()==host.saved_resource_flags().size(),"first saved pass visits every saved entry");
-        std::vector<std::string> expected_tail{"relocate","named-reader","renderer-select","renderer-restore",
-            "associate","release","camera-query",
-            "transform","scene","scene","scene"};
-        if(named_mode==NamedTailTestMode::native) expected_tail.erase(expected_tail.begin(),expected_tail.begin()+2);
-        for(const auto& saved:host.saved_resource_flags()) expected_tail.push_back("spatial");
-        expected_tail.push_back("between");expected_tail.push_back("finalize");
-        std::vector<off::graphics::IntroRuntimeResourceHandle> expected_4000;
-        for(const auto& saved:host.saved_resource_flags()) if(saved.flags&0x4000U) {
-          expected_tail.push_back("4000");expected_4000.push_back(saved.resource);
-        }
-        check(observation.tail_events==expected_tail && observation.flag_4000==expected_4000,
-              "outer tail keeps concrete section boundaries, releases only its lease, registers camera zero and consumes saved entries through services");
-        const auto source_member=host.renderer_relation_members(*host.directory_resource_mapping()[6]);
-        observation.renderer_payload.fill(std::byte{});
-        check(host.renderer_relation_members(*host.directory_resource_mapping()[6])==source_member,
-              "relation storage survives destruction of temporary payload bytes");
-        auto state=*host.resource_state(host.source_handle(6));
-        state.directory_auxiliary=5U;
-        host.assign_resource_state(host.source_handle(6),state);
-        rejects([&]{static_cast<void>(host.renderer_relation_members(*host.directory_resource_mapping()[6]));});
-        state.directory_auxiliary=4U;
-        host.assign_resource_state(host.source_handle(6),state);
-        rejects([&]{static_cast<void>(host.renderer_relation_members({0}));});
-        rejects([&]{host.run_outer_loader_tail_through_saved_services(tail_services);});
-}
-
-static OFF_NOINLINE void test_complete_runtime_scopes() {
-    struct Case {bool restore; NamedTailTestMode named;};
-    constexpr std::array cases{
-        Case{false,NamedTailTestMode::callbacks}, Case{true,NamedTailTestMode::callbacks},
-        Case{false,NamedTailTestMode::native}, Case{false,NamedTailTestMode::invalid_second},
-        Case{false,NamedTailTestMode::partial_reader}, Case{false,NamedTailTestMode::partial_relocator},
-        Case{false,NamedTailTestMode::invalid_selector}, Case{false,NamedTailTestMode::invalid_renderer},
-        Case{false,NamedTailTestMode::restore_failure}};
-    for(const auto scenario:cases) {
-      const bool policy=scenario.restore;
-      Fixture complete(false,true,true,true,true,true,true,true,true,true,true);
-      if(!policy) {
-        // The complete scope fixture normally exercises a deliberately wider
-        // Extend grammar. This isolated phase-one route admits only the
-        // independently recovered unchanged form.
-        {
-          const auto extend=complete.remaining_sound_source_offset+70U;
-          for(std::size_t field=0;field<15;++field) set(complete.payload,extend+field*5U+1U,0U);
-          set(complete.payload,extend+1U,std::bit_cast<std::uint32_t>(-1.0F));
-          set(complete.payload,extend+11U*5U+1U,2U);
-          set(complete.payload,extend+12U*5U+1U,1U);
-          set(complete.payload,extend+13U*5U+1U,1U);
-          const auto segment_start=extend+76U+11U;
-          const auto property_start=segment_start+105U+1U+
-              std::string_view("Independent caption key").size()+1U+1U;
-          set(complete.payload,property_start+1U,0U);
-        }
-      }
-      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
-          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
-      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
-      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
-      app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
-      app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
-      app.initialize_native_remaining_intro_scope_registration();
-      app.set_particle_emitter_event(123);app.set_particle_emitter_event(456);
-      rejects([&]{app.initialize_native_lens_flare_animation_scope_registration();});
-      check(app.particle_emitter_event()==456 && app.class_notification_sequence(0x0010002eU)==0 &&
-            app.component_class_notification_sequence("ZWINDOW_LensFlareControl")==0,
-            "duplicate new registration rejects atomically and preserves replaceable shared emitter slot");
-      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
-      off::graphics::IntroRuntime host(complete.build(),app,sequence,"FF-Intro.gms",
-          off::graphics::IntroSoundLoadPolicy::directory_construction);
-      host.set_restore_mode(policy);
-      rejects([&]{host.prepare_scene_lifetime_keys_registry();});
-      check(!host.scene_lifetime_keys_registry(),
-            "scene KEYS preparation cannot publish a partial registry before every owner is constructed");
-      check(host.resources().controller_index()==465 && host.resources().first_cut_index()==460,
-            "complete synthetic scope moves selected controller and first-cut references beyond row199");
-      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
-      host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
-      host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
-      host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
-      host.construct_room_animation_scope_without_engine_renderer();host.set_light_policy(policy);
-      const auto serial=sequence.next_identity(),live=sequence.live_count();
-      auto expected_phase=sequence.scheduling_phase();
-      for(std::size_t step=0;step<81;++step) {
-        const volatile float next_phase=expected_phase+0.1F;
-        expected_phase=next_phase>=1.F?0.F:next_phase;
-      }
-      const auto pending=host.ordinary_components()->pending().size();
-      std::size_t batches=0;for(const auto& scope:host.source_resource_scopes()) batches+=scope.resources.size();
-      const auto token=*host.scene_resource_property("ParticleTemplates")->object_token;
-      const auto* lists=app.cut_sequence_lists();
-      std::vector<std::uint32_t> lookup_removals;
-      if(policy) host.components().set_optional_lookup_removal([&](std::uint32_t identity){
-        lookup_removals.push_back(identity);
-        check(sequence.live_count()==live+3 && host.components().construction_order().size()==live+2,
-              "temporary cleanup callback sees unlinked temporary before shared live-count decrement");
-      });
-      app.set_particle_emitter_event(9876);
-      host.construct_lens_flare_animation_scope_without_engine_renderer();
-      std::size_t final_batches=0;for(const auto& scope:host.source_resource_scopes()) final_batches+=scope.resources.size();
-      check(host.loaded_resource_handles().size()==200 && host.deferred_reader_work().size()==166 &&
-            !host.directory_resource_mapping()[200] && host.count_group_selector()==17 &&
-            host.current_source_parent()==host.source_handle(69) && final_batches==batches+130 &&
-            host.resource_load_stage()==off::graphics::IntroResourceLoadStage::lens_flare_animation_scope_ready,
-            "full scope adds131 owners,100 sparse readers and130 partitioned resources and stops constructing at199");
-      check(sequence.live_count()==live+80 && sequence.next_identity()==serial+81 && sequence.scheduling_phase()==expected_phase &&
-            host.components().construction_order().size()==live+80 && host.ordinary_components()->pending().size()==pending+4,
-            "eighty retained components consume81 shared serials with one cleaned temporary and four ordinary admissions");
-      const auto control=host.owner_components(host.source_handle(72)).front();
-      check(lookup_removals==(policy?std::vector<std::uint32_t>{*host.components().at(control).identity()+1}:std::vector<std::uint32_t>{}),
-            "existing optional lookup receives exactly temporary serial; absent service remains absent");
-      check(host.child_owners(host.source_handle(69))==std::vector<off::graphics::IntroRuntimeHandle>{host.source_handle(70),host.source_handle(100),host.source_handle(108),host.source_handle(124),host.source_handle(197),host.source_handle(198),host.source_handle(199)} &&
-            host.child_owners(host.source_handle(71))==std::vector<off::graphics::IntroRuntimeHandle>{host.source_handle(72),host.source_handle(98),host.source_handle(99)} &&
-            host.child_owners(host.source_handle(72)).size()==25 && host.child_owners(host.source_handle(124)).size()==72,
-            "entered groups and two-level pops preserve full source hierarchy");
-      std::size_t reader=66,properties=0,attachments=0;
-      for(std::size_t row=69;row<=199;++row) {
-        const auto owner=host.source_handle(row);const auto& source=host.resources().sources().directory()[row];
-        const auto& resource=host.resource_state(owner);
-        check(host.directory_resource_mapping()[row]==host.resource_handle(owner) && resource->directory_auxiliary==0x5000+row &&
-              !resource->context.value,"all new canonical resources preserve independent directory identifiers without context");
-        if(source.deferred_source_offset) {
-          check(host.deferred_reader_work()[reader].resource==host.resource_handle(owner) &&
-                host.deferred_reader_work()[reader].source_offset==source.deferred_source_offset,
-                "sparse full-scope reader order follows actual source identity");++reader;
-        }
-        if(source.buf_auxiliary_offset) {
-          ++properties;const auto* auxiliary=host.constructed_owner_auxiliary(row);
-          check(auxiliary && auxiliary->borrowed_property_data.data()==host.resources().source_names().data()+source.buf_auxiliary_offset &&
-                auxiliary->borrowed_property_data.size()==64 && auxiliary->attachments.size()==source.attachments.size(),
-                "all property-bearing ordinary and camera owners retain exact shared auxiliary data");
-        }
-        attachments+=host.owner_components(owner).size();
-        for(const auto index:host.owner_components(owner)) {
-          const auto& state=host.components().at(index).state();
-          check(state.status==0x20 && state.attached_owner==owner.value &&
-                state.admitted==((row==72 || row==111 || row==114 || row==198)?0x10U:0U),
-                "real constructor owner assignment and hide predicate determine admission independently of source readers");
-        }
-      }
-      check(reader==166 && properties==27 && attachments==80,"all property and component rows survive full construction");
-      check(host.resources().sources().directory()[110].pool_class==9 && host.resources().sources().directory()[111].pool_class==9 &&
-            host.resources().sources().directory()[154].pool_class==17 && host.resources().sources().directory()[158].pool_class==17,
-            "model bank one and saved-output bank two remain distinct source partitions");
-      check(host.saved_resource_flags().size()==3 && host.saved_resource_flags()[1].flags==0x09160471U &&
-            host.saved_resource_flags()[2].flags==0x0914c4f1U && host.resource_state(host.source_handle(154))->flags==0x09120471U &&
-            host.resource_state(host.source_handle(158))->flags==0x091084f1U,
-            "saved flags append in source order and remain unapplied until loader tail");
-      check(host.constructed_group_owner(71)->cached_window && !host.constructed_group_owner(71)->cached_window->value &&
-            host.constructed_group_owner(72)->derived_reference && !host.constructed_group_owner(72)->derived_reference->value,
-            "new group-derived classes initialize absent references explicitly");
-      const auto* sun=host.constructed_object_owner(99);const auto* scalar_owner=host.constructed_object_owner(178);
-      check(sun && sun->flags==(policy?1U:0U) && sun->local_control==0x3000U && sun->self_links &&
-            (*sun->self_links)[0]==host.source_handle(99) && (*sun->self_links)[1]==host.source_handle(99) &&
-            host.constructed_object_owner(110)->byte_control==false && host.constructed_object_owner(111)->byte_control==false &&
-            scalar_owner && scalar_owner->scalar_pair && (*scalar_owner->scalar_pair)[0]==-1.F &&
-            std::bit_cast<std::uint32_t>((*scalar_owner->scalar_pair)[1])==0x7e967699U,
-            "new concrete owner constructors retain self links, byte controls and exact binary32 state");
-      const auto* param=host.constructed_attachment(host.owner_components(host.source_handle(157)).front());
-      check(param && param->param_animation && param->param_animation->capacity==32 && param->param_animation->growth==32 &&
-            param->param_animation->count==0 && param->param_animation->element_control==1 &&
-            param->param_animation->local_words==std::array<std::uint32_t,2>{},"ParamAnim retains empty constructor storage");
-      for(const auto row:{164U,169U,172U,180U}) {
-        const auto* emitter=host.constructed_attachment(host.owner_components(host.source_handle(row)).back());
-        check(emitter && emitter->particle_emitter && !emitter->particle_emitter->local_reference && emitter->particle_emitter->handles.empty(),
-              "each ParticleEmitter retains its own empty handle wrapper after ordered attachment");
-      }
-      check(app.particle_emitter_event()==host.scene_event_names().find("FrameCurrent") &&
-            app.component_class_notification_sequence("ZGEOM_ParticleEmitter")==4 && app.cut_sequence_lists()==lists &&
-            host.constructed_attachment(host.owner_components(host.source_handle(198)).front())->list_index==1 &&
-            *host.scene_resource_property("ParticleTemplates")->object_token==token && app.resolve_handle_collection(token)->members.size()==8,
-            "shared event slot and existing particle and cut collections survive constructor notifications");
-      check(host.root_owner_state()->rooms.size()==1 && host.constructed_group_owner(71)->category_two.size()==1 &&
-            host.constructed_group_owner(124)->category_two.size()==7 && host.position_updates().pending_count()==0 &&
-            !host.directory_position_mode().collection_enabled && host.registered_cameras().entries().empty(),
-            "category-two ancestry does not invent Rooms, spatial updates or renderer lifecycle");
-      rejects([&]{host.construct_lens_flare_animation_scope_without_engine_renderer();});
-
-      check_complete_runtime_post_directory(host,sequence);
-      const auto lifecycle_preflight=host.preflight_global_lifecycle();
-      check(!lifecycle_preflight.ready() &&
-            lifecycle_preflight.expected_readers==420 && lifecycle_preflight.covered_readers==0 &&
-            lifecycle_preflight.expected_components==383 && lifecycle_preflight.covered_components==0 &&
-            lifecycle_preflight.expected_owners==471 && lifecycle_preflight.covered_owners==0 &&
-            lifecycle_preflight.failure==off::graphics::IntroLifecyclePreflightFailure::reader_coverage,
-            "global lifecycle preflight derives complete live identities but rejects placeholder coverage before any reader runs");
-      const auto legal_source=host.resources().sources().local_source_for_authored_reference(
-          host.resources().member().references[1]);
-      check(legal_source.has_value(),"first-cut member retains a legal-picture source identity");
-      if(legal_source) {
-        std::uint32_t legal_flags=0x400U,center_status{};
-        std::optional<std::uint32_t> parent_flags{0U};
-        std::array<float,3> legal_position{4,5,6};
-        std::vector<off::cutscene::PictureActivationPrefix::Stage> activation_trace;
-        std::size_t position_updates{};
-        auto activated=host.activate_first_cut_legal_picture({
-            true,true,true,legal_flags,parent_flags,legal_position,center_status,1280,720,
-            [&] { ++position_updates; },[&](auto stage) { activation_trace.push_back(stage); }});
-        const auto expected_center=host.owner_components(host.source_handle(*legal_source));
-        check(activated.source==*legal_source && activated.activation_prefix_complete &&
-              std::ranges::find(expected_center,activated.center_component)!=expected_center.end() &&
-              (legal_flags&0x400U)==0U && legal_position==std::array<float,3>{640,360,0} &&
-              center_status==1U && position_updates==1U &&
-              activation_trace.back()==off::cutscene::PictureActivationPrefix::Stage::record_requested,
-              "first-cut adapter resolves the legal member identity and runs only ordered activation plus Center");
-        [[maybe_unused]] auto activation_receipt=std::move(activated).take_receipt();
-        bool replay_rejected{};
-        try { [[maybe_unused]] auto replayed=std::move(activated).take_receipt(); }
-        catch (const std::runtime_error&) { replay_rejected=true; }
-        check(replay_rejected,
-              "a completed legal-picture activation mints one receipt only");
-        std::uint32_t inactive_flags{},inactive_center_status{};
-        std::array<float,3> inactive_position{4,5,6};
-        auto inactive_activation=host.activate_first_cut_legal_picture({
-            true,true,true,inactive_flags,std::uint32_t{0U},inactive_position,
-            inactive_center_status,1280,720,[] {},{}});
-        bool unavailable_rejected{};
-        try {
-          [[maybe_unused]] auto unavailable=
-              std::move(inactive_activation).take_receipt();
-        } catch (const std::runtime_error&) { unavailable_rejected=true; }
-        check(!inactive_activation.activation_prefix_complete && unavailable_rejected,
-              "an activation prefix without a requested record cannot mint a frame receipt");
-        off::graphics::IntroAcceptedPictureRecordRegistry accepted_records;
-        const off::graphics::PictureQueuedDrawRecord accepted{17,7,9,{},1};
-        const auto legal_owner=host.source_handle(*legal_source);
-        const auto legal_resource=host.resource_handle(legal_owner);
-        accepted_records.begin_frame(44);
-        accepted_records.register_accepted(accepted,legal_owner,legal_resource);
-        check(accepted_records.resolve(accepted) &&
-              accepted_records.resolve(accepted)->owner==legal_owner &&
-              accepted_records.resolve(accepted)->resource==legal_resource,
-              "frame-local accepted record keeps typed legal-picture provenance separate from generic fields");
-        auto changed=accepted;changed.owner_context_identity=8;
-        check(!accepted_records.resolve(changed),"changed generic provenance cannot reuse an accepted typed binding");
-        accepted_records.end_frame(44);
-        check(!accepted_records.resolve(accepted),"accepted picture bindings expire at their exact frame boundary");
-
-        off::graphics::IntroFirstCutAcceptedPictureRegistry first_cut_records(host);
-        first_cut_records.begin_frame(45);
-        rejects([&] { first_cut_records.register_after_generic_accept(
-            accepted,host.root_handle(),legal_resource); });
-        rejects([&] { first_cut_records.register_after_generic_accept(
-            accepted,legal_owner,host.resource_handle(host.root_handle())); });
-        check(first_cut_records.size()==0 && !first_cut_records.poisoned(),
-              "wrong first-cut typed bindings reject before the frame registry changes");
-        first_cut_records.register_after_generic_accept(accepted,legal_owner,legal_resource);
-        check(first_cut_records.resolve(accepted) &&
-              first_cut_records.resolve(accepted)->owner==legal_owner &&
-              first_cut_records.resolve(accepted)->resource==legal_resource,
-              "first-cut registry binds an accepted generic record to the live legal picture only");
-        auto changed_resource=accepted;changed_resource.runtime_resource=10;
-        check(!first_cut_records.resolve(changed_resource),
-              "first-cut registry retains generic renderer provenance without treating it as a typed resource");
-        first_cut_records.end_frame(45);
-        check(!first_cut_records.resolve(accepted),
-              "first-cut accepted bindings expire at the exact frame boundary");
-      }
-      if(policy)
-        check_complete_restore_reader_route(host);
-      else {
-        check_complete_ordinary_reader_bracket(host);
-        app.reset_clock();app.clock().assign_crt_mode(true);app.advance_crt();
-        const off::graphics::IntroSoundPreparationServices sound_services{
-            [&](auto handle) { return host.resource_state(handle)->flags; },
-            [&](auto) { return host.root_handle(); },
-            [](auto) { return off::graphics::IntroSoundSpatialState{{0,0,0},{0,0,1}}; },
-            [] { return false; },[](auto) { throw std::runtime_error("unexpected sound owner enable"); }};
-        host.prepare_sound_owner(467,sound_services);
-        host.prepare_sound_owner(468,sound_services);
-        const auto owner_admission=host.preflight_global_lifecycle();
-        check(!owner_admission.ready() && owner_admission.expected_readers==420 &&
-              owner_admission.covered_readers>=6 && owner_admission.expected_components==383 &&
-              owner_admission.covered_components==0 && owner_admission.expected_owners==471 &&
-              owner_admission.covered_owners==2 &&
-              owner_admission.failure==off::graphics::IntroLifecyclePreflightFailure::reader_coverage,
-              "completed typed sound pre-hooks contribute only their exact owner lifecycle coverage");
-        const auto ordinary_removals=host.ordinary_components()->removal_count();
-        const auto& sound_phase=host.run_isolated_sound_family_phase_one();
-        check(sound_phase.owners[0].source==468 && sound_phase.owners[1].source==467 &&
-              sound_phase.owners[0].notify_duration==host.sound_for_source(468).record().duration &&
-              sound_phase.owners[1].notify_duration==host.sound_for_source(467).record().duration &&
-              sound_phase.owners[0].extend_ordinary_removed && sound_phase.owners[1].extend_ordinary_removed &&
-              host.ordinary_components()->removal_count()==ordinary_removals+2U &&
-              !host.components().phases_completed(),
-              "isolated sound phase one preserves reverse owner order, live duration snapshots and no global completion");
-        const auto component_admission=host.preflight_global_lifecycle();
-        check(component_admission.covered_components==8 &&
-              (host.components().at(sound_phase.owners[0].define_component).state().status&4U) &&
-              (host.components().at(sound_phase.owners[0].segment_component).state().status&4U) &&
-              (host.components().at(sound_phase.owners[0].notify_component).state().status&4U) &&
-              (host.components().at(sound_phase.owners[0].extend_component).state().status&4U) &&
-              (host.components().at(sound_phase.owners[1].define_component).state().status&4U) &&
-              (host.components().at(sound_phase.owners[1].segment_component).state().status&4U) &&
-              (host.components().at(sound_phase.owners[1].notify_component).state().status&4U) &&
-              (host.components().at(sound_phase.owners[1].extend_component).state().status&4U),
-              "the scoped sound phase admits exactly its eight completed typed component callbacks");
-        rejects([&]{host.run_isolated_sound_family_phase_one();});
-        host.stop_sound_owner(468);
-        const auto stopped_admission=host.preflight_global_lifecycle();
-        check(stopped_admission.covered_components==4 && stopped_admission.covered_owners==1,
-              "stopped sound owners revoke their dependent component and owner lifecycle coverage");
-        check_complete_outer_loader_tail(host,scenario.named);
-
-        // Isolate the production SoundExtend phase-two callback after its real
-        // phase-one setup. This fixture suppresses every other phase request,
-        // so it does not claim full-scene lifecycle admission.
-        const auto extend_component=sound_phase.owners[1].extend_component;
-        for(std::size_t index=0;index<host.components().size();++index)
-          host.components().at(index).state().requested=0;
-        auto& extend=host.components().at(extend_component);
-        extend.state().requested=2U;
-        const auto status_before=extend.state().status;
-        const auto admitted_before=extend.state().admitted;
-        const auto& sound_record=host.sound_for_source(467).record();
-        const auto playback_before=sound_record.playback_state;
-        const auto source_before=sound_record.active_source;
-        const auto duration_before=sound_record.duration;
-        const auto progress_before=sound_record.progress;
-        const auto prepared_before=std::vector<std::uint64_t>(
-            app.sound_records().prepared().begin(),app.sound_records().prepared().end());
-        const auto pending_stops_before=std::vector<std::uint64_t>(
-            app.sound_records().pending_stops().begin(),app.sound_records().pending_stops().end());
-        host.components().run_global_phases({[](bool,auto&,std::size_t) {},
-            [](auto) { return std::optional<std::uint32_t>{0U}; },[](auto) {},
-            [](auto&) { throw std::runtime_error("unexpected SoundExtend retirement"); }});
-        check(extend.state().status==(status_before|8U) &&
-              extend.state().admitted==admitted_before &&
-              sound_record.playback_state==playback_before && sound_record.active_source==source_before &&
-              sound_record.duration==duration_before && sound_record.progress==progress_before &&
-              std::ranges::equal(app.sound_records().prepared(),prepared_before) &&
-              std::ranges::equal(app.sound_records().pending_stops(),pending_stops_before),
-              "SoundExtend phase two completes without changing component admission or sound state");
-      }
-      rejects([&]{host.construct_remaining_directory_without_engine_renderer();});
-    }
-}
-
-static OFF_NOINLINE void test_movie_control_runtime_phase_two() {
-    enum class Scenario { complete,missing_binding,missing_owner_reader,missing_component_reader,
-                          changed_owner,presentation_failure,changed_owner_during_present,phase_one_unsupported };
-    for(const auto scenario:{Scenario::complete,Scenario::missing_binding,Scenario::missing_owner_reader,
-                             Scenario::missing_component_reader,Scenario::changed_owner,
-                             Scenario::presentation_failure,Scenario::changed_owner_during_present,
-                             Scenario::phase_one_unsupported}) {
-      Fixture fixture(false,true,true,true,true,true,true,true,true,true,true);
-      std::int32_t clock_sample=1000;
-      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
-          {[]{return std::int64_t{0};},[&]{return clock_sample;}});
-      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
-      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
-      app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
-      app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
-      app.initialize_native_remaining_intro_scope_registration();
-      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
-      off::graphics::IntroRuntime host(fixture.build(),app,sequence,"FF-Intro.gms",
-          off::graphics::IntroSoundLoadPolicy::directory_construction);
-      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
-      host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
-      host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
-      host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
-      host.construct_room_animation_scope_without_engine_renderer();host.set_light_policy(false);
-      host.construct_lens_flare_animation_scope_without_engine_renderer();host.construct_remaining_directory_without_engine_renderer();
-      app.reset_clock();app.clock().assign_crt_mode(true);clock_sample=1250;
-      app.advance_crt();app.clock().publish_scene(false);
-      check(app.clock().scene_integer_word()==256U,
-            "controller fixture publishes its actual CRT-derived scene clock before binding");
-      const auto controller=host.controller_component_index();
-      auto& record=host.components().at(controller);
-      const auto owner=record.state().attached_owner;
-      unsigned presented{},cleared{},viewports{},input_queries{},action_maps{},property_queries{};
-      off::graphics::IntroControllerPhaseTwoServices services;
-      services.input_manager_exists=[&] {++input_queries;return true;};
-      services.register_movie_control_action_map=[&] {++action_maps;};
-      services.query_global_property=[&](std::string_view key,std::uint32_t& out) {
-        ++property_queries;
-        check(out==0,"bound MovieControl queries retain zero-initialized property outputs");
-        out=key=="SoundReadFromMem"?1U:60U;
-      };
-      services.first_renderer=[] {return 7U;};
-      services.renderer_height=[](auto renderer) {
-        check(renderer==7U,"bound MovieControl uses the supplied live renderer identity");return 480;
-      };
-      services.renderer_width=[](auto renderer) {check(renderer==7U,"same viewport renderer");return 640;};
-      services.set_viewport=[&](auto,const auto& viewport) {
-        ++viewports;
-        check(host.controller_initialization().deadline_assigned() && viewport.width==640U && viewport.height==480U,
-              "real factory commits the canonical deadline before viewport setup");
-      };
-      services.renderer_has_stencil=[](auto) {return false;};
-      services.clear=[&](auto,const auto& clear) {
-        ++cleared;check(clear.color && clear.depth && !clear.stencil,"bound controller clears the requested planes");
-      };
-      services.present=[&](auto) {
-        ++presented;
-        check(!host.controller_initialization().phase_two_completed(),
-              "canonical phase-two completion stays false until all presentation services return");
-        if(scenario==Scenario::changed_owner_during_present && presented==2U)
-          record.state().attached_owner=host.root_handle().value;
-        return scenario==Scenario::presentation_failure?off::graphics::IntroPresentationResult::device_lost:
-            off::graphics::IntroPresentationResult::presented;
-      };
-      // Caller-supplied clock/audio replacements must not displace the actual
-      // application services retained by the source-bound factory callback.
-      services.assign_engine_clock_mode=[](bool) {throw std::runtime_error("foreign clock used");};
-      services.scene_integer_clock=[]()->std::uint32_t {throw std::runtime_error("foreign deadline clock used");};
-      services.current_audio_volume=[]()->std::int32_t {throw std::runtime_error("foreign volume read");};
-      services.request_audio_volume=[](auto) {throw std::runtime_error("foreign volume write");};
-      rejects([&]{host.bind_movie_control_phase_two_services(services);});
-      host.run_postconstruction_reader_bracket(0,{
-          .external_loader_service=[](auto){},.source_script_work=[](const auto&){},.pre_reader_service=[]{},
-          .prepare_deferred_reader=[](const auto&){},
-          .owner_reader_boundary=[&](const auto& work) {
-            if(work.source_directory_index!=host.resources().controller_index()) return;
-            auto detached=work;
-            rejects([&]{host.apply_supported_movie_control_deferred_reader(detached);});
-            if(scenario!=Scenario::missing_owner_reader)
-              host.apply_supported_movie_control_deferred_reader(work);
-          },
-          .component_reader_boundary=[&](const auto& work) {
-            if(work.source_directory_index!=host.resources().controller_index()) return;
-            auto detached=work;
-            rejects([&]{host.apply_supported_movie_control_component_reader(detached);});
-            if(scenario==Scenario::missing_owner_reader)
-              rejects([&]{host.apply_supported_movie_control_component_reader(work);});
-            else if(scenario!=Scenario::missing_component_reader)
-              host.apply_supported_movie_control_component_reader(work);
-          },.end_reader_service=[]{}});
-      if(scenario==Scenario::missing_owner_reader || scenario==Scenario::missing_component_reader) {
-        rejects([&]{host.bind_movie_control_phase_two_services(services);});
-        check(input_queries==0U && !host.controller_initialization().deadline_assigned() && !host.components().failed(),
-              "missing exact controller reader rejects service binding before effects");
-        continue;
-      }
-      auto missing=services;missing.present={};
-      rejects([&]{host.bind_movie_control_phase_two_services(missing);});
-      missing=services;missing.set_viewport={};
-      rejects([&]{host.bind_movie_control_phase_two_services(missing);});
-      missing=services;missing.query_global_property={};
-      rejects([&]{host.bind_movie_control_phase_two_services(missing);});
-      record.state().attached_owner=host.root_handle().value;
-      rejects([&]{host.bind_movie_control_phase_two_services(services);});
-      record.state().attached_owner=owner;
-      ++record.state().priority;
-      rejects([&]{host.bind_movie_control_phase_two_services(services);});
-      --record.state().priority;
-      {
-        off::graphics::IntroRuntime other_scene(fixture.build(),app,sequence,"OtherSyntheticScene.gms",
-            off::graphics::IntroSoundLoadPolicy::directory_construction);
-        record.state().attached_owner=other_scene.source_handle(other_scene.resources().controller_index()).value;
-        check(record.state().attached_owner!=owner,"independent scene owns distinct controller handles");
-        rejects([&]{host.bind_movie_control_phase_two_services(services);});
-        rejects([&]{other_scene.bind_movie_control_phase_two_services(services);});
-        record.state().attached_owner=owner;
-      }
-      if(scenario!=Scenario::missing_binding) {
-        host.bind_movie_control_phase_two_services(services);
-        rejects([&]{host.bind_movie_control_phase_two_services(services);});
-        // Binding owns a function-table copy, not the caller's mutable table.
-        services={};
-      }
-      check(input_queries==0U && property_queries==0U && presented==0U &&
-                !host.controller_initialization().deadline_assigned() && !(record.state().status&0xcU),
-            "controller service binding does not initialize or complete the live component");
-      if(scenario==Scenario::changed_owner) record.state().attached_owner=host.root_handle().value;
-      // Test-only isolation: retain all actual factories and the exact
-      // MovieControl mask, but suppress other phase visits. Hide this owner
-      // during phase one, then expose it for phase two. This is not normal
-      // scene admission and supplies no replacement MovieControl phase one.
-      for(std::size_t index=0;index<host.components().size();++index)
-        if(index!=controller) host.components().at(index).state().requested&=~3U;
-      bool second_phase{};
-      const off::runtime::ComponentLifecycleServices dispatch{
-          [&](bool second,auto&,auto) {second_phase=second;},
-          [&](auto) {return std::optional<std::uint32_t>{
-              !second_phase && scenario!=Scenario::phase_one_unsupported?0x400U:0U};},
-          [](auto){},[](auto&) {throw std::runtime_error("unexpected isolated controller retirement");}};
-      if(scenario==Scenario::complete) {
-        host.components().run_global_phases(dispatch);
-        check(input_queries==1U && action_maps==1U && property_queries==2U &&
-                  cleared==2U && presented==2U && viewports==1U &&
-                  host.controller_initialization().deadline()==2304U &&
-                  host.controller_initialization().phase_two_completed() &&
-                  app.sound().volume()==60 && *app.configuration().find("SoundEffectsVolume")=="60" &&
-                  (record.state().status&8U) && !(record.state().status&4U),
-              "production MovieControl factory executes canonical initialization without a phase-one completion");
-        clock_sample=1500;app.advance_crt();app.clock().publish_scene(false);
-        host.components().run_global_phases(dispatch);
-        check(presented==4U && cleared==4U && viewports==2U &&
-                  host.controller_initialization().deadline()==2560U && !(record.state().status&4U),
-              "later explicit phase two repeats the real factory and updates the same canonical deadline");
-      } else {
-        rejects([&]{host.components().run_global_phases(dispatch);});
-        const bool effect_prefix=scenario==Scenario::presentation_failure ||
-            scenario==Scenario::changed_owner_during_present;
-        check(host.components().failed() && !host.controller_initialization().phase_two_completed() &&
-                  !(record.state().status&0xcU) && host.controller_initialization().deadline_assigned()==effect_prefix &&
-                  input_queries==(effect_prefix?1U:0U) &&
-                  presented==(scenario==Scenario::changed_owner_during_present?2U:
-                              scenario==Scenario::presentation_failure?1U:0U),
-              "binding, provenance, unsupported phase-one and renderer failures cannot complete the controller");
-        rejects([&]{host.components().run_global_phases(dispatch);});
-      }
-      check(!host.preflight_global_lifecycle().ready() && host.preflight_global_lifecycle().covered_components==0U &&
-                host.preflight_global_lifecycle().covered_owners==0U && host.registered_cameras().entries().empty() &&
-                !host.constructed_attachment(controller)->movie_control->activated,
-            "isolated real phase two supplies no scene admission, camera registration or event-16 activation");
-    }
-}
-
-static OFF_NOINLINE void test_first_cut_fade_runtime_phase_one() {
-    enum class Scenario { complete,missing_binding,missing_component_reader,invalid_dimensions,
-                          dimension_failure,invalidation_failure,changed_owner };
-    for(const auto scenario:{Scenario::complete,Scenario::missing_binding,Scenario::missing_component_reader,
-                             Scenario::invalid_dimensions,Scenario::dimension_failure,
-                             Scenario::invalidation_failure,Scenario::changed_owner}) {
-      Fixture fixture(false,true,true,true,true,true,true,true,true,true,true,true);
-      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
-          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
-      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
-      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
-      app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
-      app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
-      app.initialize_native_remaining_intro_scope_registration();
-      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
-      off::graphics::IntroRuntime host(fixture.build(),app,sequence,"FF-Intro.gms",
-          off::graphics::IntroSoundLoadPolicy::directory_construction);
-      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
-      host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
-      host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
-      host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
-      host.construct_room_animation_scope_without_engine_renderer();host.set_light_policy(false);
-      host.construct_lens_flare_animation_scope_without_engine_renderer();host.construct_remaining_directory_without_engine_renderer();
-
-      std::vector<std::size_t> sources;
-      for(const auto& command:host.resources().first_cut().commands) {
-        const auto source=host.resources().sources().local_source_for_authored_reference(command.target_reference);
-        if(source && std::ranges::find(sources,*source)==sources.end()) sources.push_back(*source);
-      }
-      std::ranges::sort(sources,std::greater{});
-      check(sources.size()==3U,"complete generated intro has three distinct authored first-cut fade targets");
-      std::vector<std::size_t> components;
-      std::vector<std::uint32_t> flags;
-      for(const auto source:sources) {
-        components.push_back(host.owner_components(host.source_handle(source)).front());
-        flags.push_back(host.resource_state(host.source_handle(source))->flags);
-      }
-      const auto prepare_cache=[&](std::size_t source) {
-        constexpr std::array<float,9> basis{0,0,1,0,1,0,1,0,0};
-        const auto scale=host.constructed_picture_owner(source)->size_scale;
-        const off::graphics::PictureCacheTransformInput input{
-            .submission_position={0,0,0},.aligned_local_position={0,0,0},
-            .virtual_window_scale={0,0,1,1},.cached_basis=basis,.object_matrix=basis,
-            .viewport_width=100,.viewport_height=80,.picture_width=scale[0],.picture_height=scale[1],
-            .owner_projection_scalar=2,.external_y_basis_scale=1};
-        host.picture_for_source(source).submission_cache().submit(
-            std::span<const off::data::BoundPictureDrawGroup>{},input,0,{});
-      };
-      for(const auto source:sources) prepare_cache(source);
-      std::array<std::int32_t,2> dimensions{640,480};
-      std::size_t dimension_calls{};
-      std::vector<std::size_t> notifications,coverage_at_notification;
-      const off::graphics::IntroFadePicturePhaseOneServices services{
-          [&] {
-            ++dimension_calls;
-            if(scenario==Scenario::dimension_failure) throw std::runtime_error("engine dimension service failed");
-            return scenario==Scenario::invalid_dimensions?std::array<std::int32_t,2>{0,480}:dimensions;
-          },
-          [&](auto owner,auto resource) {
-            const auto source=host.source_index(owner).value();
-            const auto component=host.owner_components(owner).front();
-            const auto* picture=host.constructed_picture_owner(source);
-            const auto expected=std::array<float,2>{static_cast<float>(dimensions[0]/16+1),
-                                                   static_cast<float>(dimensions[1]/16+1)};
-            check(picture && picture->owner==owner && picture->resource==resource &&
-                      picture->size_scale==expected && host.picture_for_source(source).submission_cache().dirty() &&
-                      !(host.components().at(component).state().status&4U),
-                  "real fade factory notification sees canonical size and dirty cache before lifecycle completion");
-            notifications.push_back(source);
-            coverage_at_notification.push_back(host.preflight_global_lifecycle().covered_components);
-            if(scenario==Scenario::invalidation_failure && source==sources[1])
-              throw std::runtime_error("native resource invalidation failed");
-          }};
-      rejects([&]{host.bind_first_cut_fade_phase_one_services(services);});
-      host.run_postconstruction_reader_bracket(0,{
-          .external_loader_service=[](auto){},.source_script_work=[](const auto&){},.pre_reader_service=[]{},
-          .prepare_deferred_reader=[](const auto&){},
-          .owner_reader_boundary=[&](const auto& work) {
-            if(std::ranges::find(sources,work.source_directory_index)!=sources.end())
-              host.apply_supported_first_cut_fade_picture_deferred_reader(work);
-          },
-          .component_reader_boundary=[&](const auto& work) {
-            if(host.fade_picture_reader_states().contains(work.source_directory_index) &&
-                !(scenario==Scenario::missing_component_reader && work.source_directory_index==sources[1]))
-              host.apply_supported_first_cut_fade_picture_component_reader(work);
-          },.end_reader_service=[]{}});
-      check(host.fade_picture_reader_states().size()==3U &&
-                host.preflight_global_lifecycle().covered_readers==3U &&
-                host.preflight_global_lifecycle().covered_components==0U,
-            "all three real fade owner readers remain cold and do not establish component completion");
-      if(scenario==Scenario::missing_component_reader) {
-        rejects([&]{host.bind_first_cut_fade_phase_one_services(services);});
-        check(dimension_calls==0U && notifications.empty() && !host.components().failed(),
-              "missing one component reader rejects complete-family binding before any service");
-        continue;
-      }
-      rejects([&]{host.bind_first_cut_fade_phase_one_services({{},services.invalidate_resource});});
-      rejects([&]{host.bind_first_cut_fade_phase_one_services({services.engine_dimensions,{}});});
-      auto& first=host.components().at(components.front());
-      const auto original_owner=first.state().attached_owner;
-      first.state().attached_owner=host.root_handle().value;
-      rejects([&]{host.bind_first_cut_fade_phase_one_services(services);});
-      first.state().attached_owner=original_owner;
-      if(scenario!=Scenario::missing_binding) {
-        host.bind_first_cut_fade_phase_one_services(services);
-        rejects([&]{host.bind_first_cut_fade_phase_one_services(services);});
-      }
-      check(dimension_calls==0U && notifications.empty() &&
-                std::ranges::all_of(sources,[&](auto source) {
-                  return host.constructed_picture_owner(source)->size_scale==std::array<float,2>{1,1} &&
-                      !host.picture_for_source(source).submission_cache().dirty();
-                }),"binding retains required services without initializing a picture or sampling dimensions");
-      if(scenario==Scenario::changed_owner)
-        host.components().at(components[1]).state().attached_owner=host.root_handle().value;
-      if(scenario==Scenario::complete) {
-        host.components().run_scoped_phase_one(components);
-        check(notifications==sources && coverage_at_notification==std::vector<std::size_t>{0,1,2} &&
-                  dimension_calls==3U && host.preflight_global_lifecycle().covered_components==3U,
-              "actual factory callbacks complete three source-backed fades in reverse construction order");
-        for(const auto source:sources) prepare_cache(source);
-        // Scoped dispatch intentionally has a once-only completion gate. Clear
-        // only that test gate to exercise the same factory body on a repeated
-        // explicit phase-one visit, as permitted by the global pass contract.
-        for(const auto component:components) host.components().at(component).state().status&=~4U;
-        dimensions={655,495};
-        host.components().run_scoped_phase_one(components);
-        check(notifications.size()==3U && dimension_calls==6U &&
-                  host.preflight_global_lifecycle().covered_components==3U &&
-                  std::ranges::all_of(sources,[&](auto source) {
-                    return !host.picture_for_source(source).submission_cache().dirty();
-                  }),"repeated equal dimensions preserve clean caches and do not duplicate completion identities");
-        for(const auto component:components) host.components().at(component).state().status&=~4U;
-        dimensions={656,496};
-        host.components().run_scoped_phase_one(components);
-        check(notifications.size()==6U && dimension_calls==9U &&
-                  host.preflight_global_lifecycle().covered_components==3U &&
-                  std::ranges::all_of(sources,[&](auto source) {
-                    return host.constructed_picture_owner(source)->size_scale==std::array<float,2>{42,32};
-                  }),"later changed dimensions update the same canonical stores through the same factory callbacks");
-        first.state().attached_owner=host.root_handle().value;
-        check(host.preflight_global_lifecycle().covered_components==2U,
-              "completed fade coverage rejects a later mismatched canonical component owner");
-        first.state().attached_owner=original_owner;
-      } else {
-        rejects([&]{host.components().run_scoped_phase_one(components);});
-        const bool prefix=scenario==Scenario::invalidation_failure || scenario==Scenario::changed_owner;
-        check(host.components().failed() && host.preflight_global_lifecycle().covered_components==(prefix?1U:0U),
-              "failed factory dispatch retains only the actually completed component prefix");
-        for(std::size_t index=0;index<sources.size();++index) {
-          const bool changed=prefix && (index==0U || (index==1U && scenario==Scenario::invalidation_failure));
-          check(host.constructed_picture_owner(sources[index])->size_scale==
-                    (changed?std::array<float,2>{41,31}:std::array<float,2>{1,1}) &&
-                    host.picture_for_source(sources[index]).submission_cache().dirty()==changed &&
-                    ((host.components().at(components[index]).state().status&4U)!=0U)==(prefix && index==0U),
-                "failed dimension/source/notification paths preserve precise size, cache and completion prefixes");
-        }
-      }
-      const auto report=host.preflight_global_lifecycle();
-      check(!report.ready() && report.covered_owners==0U && report.covered_readers==3U &&
-                !host.components().phases_completed() && host.registered_cameras().entries().empty(),
-            "fade component completion does not admit owners, global lifecycle, cameras or rendering");
-      for(std::size_t index=0;index<sources.size();++index)
-        check(host.resource_state(host.source_handle(sources[index]))->flags==flags[index],
-              "fade dimension initialization does not invent resource flag effects");
-    }
-}
-
-static OFF_NOINLINE void test_admitted_first_cut_phase_one_subset() {
-    // The reviewed subset needs the complete synthetic scene: it owns the
-    // three first-cut FadeToBlack readers and the two retained sound owners.
-    // Keep the grammar adjustment identical to the existing isolated sound
-    // phase-one fixture; this tests the composed dispatcher rather than a
-    // wider, unreviewed SoundExtend variant.
-    Fixture complete(false,true,true,true,true,true,true,true,true,true,true,true);
-    const auto extend=complete.remaining_sound_source_offset+70U;
-    for(std::size_t field=0;field<15;++field)
-      set(complete.payload,extend+field*5U+1U,0U);
-    set(complete.payload,extend+1U,std::bit_cast<std::uint32_t>(-1.0F));
-    set(complete.payload,extend+11U*5U+1U,2U);
-    set(complete.payload,extend+12U*5U+1U,1U);
-    set(complete.payload,extend+13U*5U+1U,1U);
-    const auto segment_start=extend+76U+11U;
-    const auto property_start=segment_start+105U+1U+
-        std::string_view("Independent caption key").size()+1U+1U;
-    set(complete.payload,property_start+1U,0U);
-
+static OFF_NOINLINE void test_generic_directory_tail_lifecycle() {
+    const auto initialize_app=[](off::runtime::ApplicationServices& target) {
+        target.initialize_native_group_registration();
+        target.initialize_native_window_language_registration();
+        target.initialize_native_picture_registration();
+        target.initialize_native_camera_registration();
+        target.initialize_native_second_window_scope_registration();
+        target.initialize_native_visual_registration();
+        target.initialize_native_room_animation_scope_registration();
+        target.initialize_native_lens_flare_animation_scope_registration();
+        target.initialize_native_remaining_intro_scope_registration();
+    };
+    const auto prepare_prefix=[](off::graphics::IntroRuntime& target) {
+        target.construct_root();
+        target.begin_source_loading_without_engine_renderer();
+        target.construct_first_authored_group();
+        target.construct_window_language_groups_without_engine_renderer();
+        target.construct_picture_component_prefix_without_engine_renderer();
+        target.construct_authored_camera_without_engine_renderer();
+        target.construct_second_window_picture_without_engine_renderer();
+        target.construct_second_window_scope_without_engine_renderer();
+        target.construct_following_visual_scope_without_engine_renderer();
+    };
+    Fixture fixture(false,true,true,true,true,true,true,true,true);
     off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
         {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
-    app.initialize_native_group_registration();app.initialize_native_window_language_registration();
-    app.initialize_native_picture_registration();app.initialize_native_camera_registration();
-    app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
-    app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
-    app.initialize_native_remaining_intro_scope_registration();
-    off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
-    off::graphics::IntroRuntime host(complete.build(),app,sequence,"FF-Intro.gms",
+    initialize_app(app);
+    off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+    auto prepared=fixture.build();
+    const auto& authored_sources=prepared.sources();
+    const auto source_index_for_node=[&](std::size_t node) {
+        const auto record_offset=512U+48U*node;
+        const auto found=std::ranges::find(authored_sources.directory(),record_offset,
+            &off::data::GmsDirectoryEntry::record_offset);
+        if(found==authored_sources.directory().end())
+            throw std::runtime_error("required synthetic role is absent from the parsed directory");
+        return static_cast<std::size_t>(std::distance(authored_sources.directory().begin(),found));
+    };
+    const auto camera_source=source_index_for_node(0);
+    const auto member_source=source_index_for_node(4);
+    const auto cut_source=source_index_for_node(7);
+    const auto window_source=source_index_for_node(8);
+    std::size_t controller_candidates=0;
+    for(std::size_t source=0;source<authored_sources.directory().size();++source) {
+        const auto& entry=authored_sources.directory()[source];
+        for(std::size_t attachment=0;attachment<entry.attachments.size();++attachment)
+            if(authored_sources.attachment_identifier(source,attachment)=="ZGEOM_MovieControl") {
+                static_cast<void>(authored_sources.intro_movie_controller_source(source));
+                ++controller_candidates;
+            }
+    }
+    check(authored_sources.directory()[camera_source].source_type==0x00400003U &&
+          authored_sources.directory()[member_source].source_type==0x0800001aU &&
+          authored_sources.directory()[cut_source].source_type==0x0800001aU &&
+          authored_sources.directory()[window_source].source_type==0x00100030U &&
+          controller_candidates==1,
+          "independent fixture resolves its camera, member, cut, window, and unique typed controller from source records");
+    off::graphics::IntroRuntime host(std::move(prepared),app,sequence,"synthetic-scene",
         off::graphics::IntroSoundLoadPolicy::directory_construction);
-    host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
-    host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
-    host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
-    host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
-    host.construct_room_animation_scope_without_engine_renderer();host.set_light_policy(false);
-    host.construct_lens_flare_animation_scope_without_engine_renderer();host.construct_remaining_directory_without_engine_renderer();
-    check_complete_ordinary_reader_bracket(host);
 
-    app.reset_clock();app.clock().assign_crt_mode(true);app.advance_crt();
-    const off::graphics::IntroSoundPreparationServices sound_services{
-        [&](auto handle) { return host.resource_state(handle)->flags; },
-        [&](auto) { return host.root_handle(); },
-        [](auto) { return off::graphics::IntroSoundSpatialState{{0,0,0},{0,0,1}}; },
-        [] { return false; },[](auto) { throw std::runtime_error("unexpected sound owner enable"); }};
-    host.prepare_sound_owner(467,sound_services);
-    host.prepare_sound_owner(468,sound_services);
+    prepare_prefix(host);
 
-    std::vector<std::size_t> invalidated;
-    const auto result=host.run_admitted_first_cut_phase_one_subset({
-        [] { return std::array<std::int32_t,2>{1280,720}; },
-        [&](auto owner,auto resource) {
-          const auto source=host.source_index(owner);
-          check(source && resource==host.resource_handle(owner),
-                "admitted first-cut subset invalidation retains the live owner/resource pair");
-          if(source) invalidated.push_back(*source);
-        }});
-    check(result.fade_components.size()==3U && result.sound.owners[0].source==468U &&
-              result.sound.owners[1].source==467U &&
-              result.sound.owners[0].extend_ordinary_removed &&
-              result.sound.owners[1].extend_ordinary_removed &&
-              invalidated==std::vector<std::size_t>{9U,7U,4U},
-          "admitted first-cut subset runs the two sound families before the three reviewed fades");
-    check(host.preflight_global_lifecycle().covered_components==11U &&
-              !host.components().phases_completed() && host.registered_cameras().entries().empty(),
-          "admitted first-cut subset completes only its eleven scoped callbacks without global admission");
-    rejects([&] { static_cast<void>(host.run_admitted_first_cut_phase_one_subset({
-        [] { return std::array<std::int32_t,2>{1280,720}; },[](auto,auto) {}})); });
-}
+    const auto& directory=host.resources().sources().directory();
+    const auto tail_count=fixture.tail_record_offsets.size();
+    const auto source_index_for_record=[&](std::size_t record_offset) {
+        const auto found=std::ranges::find(directory,record_offset,&off::data::GmsDirectoryEntry::record_offset);
+        if(found==directory.end()) throw std::runtime_error("synthetic fixture record is absent from parsed directory");
+        return static_cast<std::size_t>(std::distance(directory.begin(),found));
+    };
+    const auto component_source=source_index_for_record(fixture.tail_record_offsets[1]);
+    const auto unprocessed_begin=host.loaded_resource_handles().size();
+    const auto unprocessed_count=directory.size()-unprocessed_begin;
+    const auto readers_before=host.deferred_reader_work().size();
+    const auto identities_before=sequence.live_count();
+    host.construct_room_animation_scope_without_engine_renderer();
+    check(host.resource_load_stage()==off::graphics::IntroResourceLoadStage::room_animation_scope_ready &&
+          host.loaded_resource_handles().size()==directory.size() &&
+          host.directory_resource_mapping().size()==directory.size() &&
+          std::ranges::all_of(std::span{host.directory_resource_mapping()}.subspan(unprocessed_begin),
+                              [](const auto& resource){return resource.has_value();}),
+          "generic tail construction maps every supplied source record before advancing its lifecycle stage");
+    check(host.deferred_reader_work().size()==readers_before+unprocessed_count &&
+          sequence.live_count()>identities_before,
+          "remaining reader work and component ownership are derived from supplied fixture records");
 
-static OFF_NOINLINE void test_first_cut_fade_diagnostic_session() {
-    enum class Scenario { complete, service_failure };
-    for (const auto scenario : {Scenario::complete, Scenario::service_failure}) {
-      Fixture fixture(false,true,true,true,true,true,true,true,true,true,true,true);
-      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
-          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
-      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
-      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
-      app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
-      app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
-      app.initialize_native_remaining_intro_scope_registration();
-      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
-      auto scene=off::graphics::make_normal_intro_scene_session(
-          std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,"FF-Intro.gms",
-              off::graphics::IntroSoundLoadPolicy::directory_construction));
-      auto& host=scene->runtime();
-      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
-      host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
-      host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
-      host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
-      host.construct_room_animation_scope_without_engine_renderer();host.set_light_policy(false);
-      host.construct_lens_flare_animation_scope_without_engine_renderer();host.construct_remaining_directory_without_engine_renderer();
-      rejects([&] { static_cast<void>(scene->make_diagnostic_first_cut_fade_phase_one_session()); });
-      scene->complete_diagnostic_first_cut_fade_reader_bracket(0);
-      auto diagnostic=scene->make_diagnostic_first_cut_fade_phase_one_session();
-      rejects([&] { static_cast<void>(scene->make_diagnostic_first_cut_fade_phase_one_session()); });
-      rejects([&] { scene->prepare_supported_first_cut_player(); });
-      std::vector<std::size_t> dimensions_order, invalidations;
-      const off::graphics::IntroFadePicturePhaseOneServices services{
-          [&] { dimensions_order.push_back(dimensions_order.size()); return std::array<std::int32_t,2>{640,480}; },
-          [&](auto owner,auto resource) {
-            const auto source=host.source_index(owner);
-            const auto* picture=source ? host.constructed_picture_owner(*source) : nullptr;
-            check(picture && picture->owner==owner && picture->resource==resource,
-                  "diagnostic fade invalidation retains the exact source-bound owner/resource pair");
-            invalidations.push_back(*source);
-            if(scenario==Scenario::service_failure) throw std::runtime_error("diagnostic invalidation failure");
-          }};
-      if(scenario==Scenario::complete) {
-        diagnostic->execute(services);
-        check(diagnostic->stage()==off::graphics::FirstCutFadePhaseOneSessionStage::complete &&
-                  diagnostic->receipts().size()==3U && invalidations==std::vector<std::size_t>{9,7,4} &&
-                  dimensions_order.size()==3U,
-              "diagnostic fade phase one visits the three retained receipts in reviewed reverse construction order");
-        rejects([&] { diagnostic->execute(services); });
-      } else {
-        rejects([&] { diagnostic->execute(services); });
-        check(diagnostic->stage()==off::graphics::FirstCutFadePhaseOneSessionStage::failed &&
-                  diagnostic->receipts().empty() && invalidations==std::vector<std::size_t>{9} &&
-                  dimensions_order.size()==1U,
-              "a diagnostic fade service failure commits no session completion receipt and rejects the remaining targets");
-        rejects([&] { diagnostic->execute(services); });
-      }
-      const auto lifecycle=host.preflight_global_lifecycle();
-      check(!lifecycle.ready() && lifecycle.covered_components==0U && lifecycle.covered_owners==0U &&
-                !host.components().phases_completed() && host.registered_cameras().entries().empty(),
-            "diagnostic fade phase one never admits global lifecycle, owners, cameras, or rendering");
+    for(std::size_t source=unprocessed_begin;source<directory.size();++source) {
+        const auto owner=host.source_handle(source);
+        const auto& record=directory[source];
+        const auto resource=host.directory_resource_mapping()[source];
+        check(resource && *resource==host.resource_handle(owner) &&
+              host.resource_state(owner)->directory_auxiliary==record.auxiliary_value,
+              "constructed resource mapping retains its own source identity and record metadata");
+        const auto& work=host.deferred_reader_work()[readers_before+source-unprocessed_begin];
+        check(work.source_directory_index==source && work.resource==host.resource_handle(owner) &&
+              work.source_offset==record.deferred_source_offset,
+              "deferred work preserves owner, resource, source index, and source offset in fixture order");
     }
-}
 
-static OFF_NOINLINE void test_room_animation_runtime_scope() {
-    for(const bool existing_shared_state:{false,true}) {
-      Fixture room_fixture(false,true,true,true,true,true,true,true,true);
-      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
-          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
-      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
-      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
-      app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
-      app.initialize_native_room_animation_scope_registration();
-      if(existing_shared_state) {
-        for(int i=0;i<7;++i) static_cast<void>(app.register_component_class_instance("ZLIST_CutSequenceList"));
-        app.create_cut_sequence_list_collection();app.cut_sequence_lists()->members.push_back(789);
-        app.set_vert_anim_event(999);
-      }
-      const auto* shared_before=app.cut_sequence_lists();
-      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{100};}};
-      off::graphics::IntroRuntime host(room_fixture.build(),app,sequence);
-      check(host.resources().controller_index()==69 && host.resources().first_cut_index()==73 &&
-            host.resources().sources().directory().size()==74 && !host.light_policy(),
-            "independent nested Room fixture keeps selected controller references outside the constructed prefix");
-      host.construct_root();
-      check(app.class_notification_sequence(0x00100021U)==0,
-            "synthesized ROOT factory does not invent a directory class notification");
-      host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
-      host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
-      host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
-      host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
-      std::uint64_t particle_token=0;
-      if(existing_shared_state) {
-        host.set_light_policy(true);
-        particle_token=app.create_handle_collection();
-        app.resolve_handle_collection(particle_token)->members.push_back(host.source_handle(0).value);
-        host.set_scene_object_property_native("ParticleTemplates",particle_token);
-      }
-      const auto events=host.scene_event_names().counter();
-      host.construct_room_animation_scope_without_engine_renderer();
-      check(host.loaded_resource_handles().size()==69 && host.deferred_reader_work().size()==66 &&
-            !host.directory_resource_mapping()[69] && host.count_group_selector()==9 &&
-            host.current_source_parent()==host.source_handle(48) && host.source_resource_scopes().size()==9 &&
-            host.resource_load_stage()==off::graphics::IntroResourceLoadStage::room_animation_scope_ready,
-            "nested Room scope constructs every owner but queues no reader for the three absent source blobs");
-      const auto* room=host.constructed_room_owner(49);
-      check(room && room->group.owner==host.source_handle(49) && room->group.flags==0x07010000U &&
-            !room->room_mode && !room->enabled && host.constructed_group_owner(48)->flags==0x03010000U &&
-            host.root_owner_state()->aggregate_flags==0x10000U && host.constructed_group_owner(63)->flags==0x47000000U,
-            "category-two capability changes the real group-owner word without replacing its source high flags");
-      check(host.resource_state(host.root_handle())->flags==0x090000f3U &&
-            host.resource_state(host.source_handle(48))->flags==0x090000f3U &&
-            host.resource_state(host.source_handle(49))->flags==0x090000f3U &&
-            host.resource_state(host.source_handle(50))->flags==0x09100073U &&
-            host.resource_state(host.source_handle(63))->flags==0x090000f3U &&
-            host.saved_resource_flags().size()==1 &&
-            host.saved_resource_flags()[0].resource==host.resource_handle(host.source_handle(49)) &&
-            host.saved_resource_flags()[0].flags==0x09044000U,
-            "saved Room flags remain retained while actual child low-byte propagation updates resource ancestors");
-      std::vector<off::graphics::IntroRuntimeResourceHandle> ordinary;
-      for(const auto row:{51U,52U,57U,58U,62U}) ordinary.push_back(host.resource_handle(host.source_handle(row)));
-      check(room->ordinary_members==ordinary && room->group.category_two==std::vector<off::graphics::IntroRuntimeResourceHandle>{
-                host.resource_handle(host.source_handle(53)),host.resource_handle(host.source_handle(54)),
-                host.resource_handle(host.source_handle(55)),host.resource_handle(host.source_handle(56))},
-            "Room ordinary-resource bucket and category-two collection preserve distinct source-ordered membership");
-      check(host.root_owner_state()->rooms==std::vector<off::graphics::IntroRuntimeHandle>{host.source_handle(49)} &&
-            room->rooms.empty() && room->group.source_word==host.resources().sources().directory()[49].child_value &&
-            host.constructed_group_owner(50)->source_word==host.resources().sources().directory()[50].child_value &&
-            host.constructed_group_owner(63)->source_word==host.resources().sources().directory()[63].child_value &&
-            host.source_resource_scopes()[5].count_group==6 && host.source_resource_scopes()[5].next_in_partition[16]==6 &&
-            host.source_resource_scopes()[5].next_in_partition[0]==1,
-            "Room collection is distinct from hierarchy and bank-two cursor remains distinct from ordinary groups");
-      check(host.child_owners(host.source_handle(48))==std::vector<off::graphics::IntroRuntimeHandle>{
-                host.source_handle(49),host.source_handle(63),host.source_handle(65),host.source_handle(66),host.source_handle(67),host.source_handle(68)} &&
-            host.child_owners(host.source_handle(50))==std::vector<off::graphics::IntroRuntimeHandle>{host.source_handle(51),host.source_handle(52)} &&
-            host.child_owners(host.source_handle(63))==std::vector<off::graphics::IntroRuntimeHandle>{host.source_handle(64)},
-            "nested group pops restore the real retained parent without flattening Room hierarchy");
-      std::size_t reader=48;
-      for(std::size_t row=48;row<=68;++row) {
-        const auto owner=host.source_handle(row);
-        const auto& source=host.resources().sources().directory()[row];
-        check(host.directory_resource_mapping()[row]==host.resource_handle(owner) && !host.resource_state(owner)->context.value &&
-              host.resource_state(owner)->directory_auxiliary==source.auxiliary_value,
-              "every Room-scope resource maps canonically without inventing an inherited context");
-        if(source.deferred_source_offset) {
-          check(host.deferred_reader_work()[reader].resource==host.resource_handle(owner) &&
-                host.deferred_reader_work()[reader].source_offset==source.deferred_source_offset,
-                "sparse deferred queue preserves source order independently of directory index");
-          ++reader;
-        }
-        if(row>=53 && row<=56) {
-          const auto* light=host.constructed_object_owner(row);
-          check(light && light->class_identifier==0x00800024U && light->flags==(existing_shared_state?1U:0U) &&
-                !light->backing_available && host.resource_state(owner)->flags==0x09108080U,
-                "light constructor reads the live scene policy without replacing canonical resource flags");
-        }
-        if(row>=59 && row<=61) {
-          const auto* auxiliary=host.constructed_owner_auxiliary(row);
-          const auto property=host.resources().source_names().subspan(source.buf_auxiliary_offset,64);
-          check(auxiliary && auxiliary->borrowed_property_data.data()==property.data() &&
-                auxiliary->borrowed_property_data.size()==64 && auxiliary->owned_property_data.empty() &&
-                auxiliary->attachments.size()==1 && auxiliary->component_mask==0 && !auxiliary->work_available &&
-                host.resource_state(owner)->flags==0x09180400U,
-                "Camera properties borrow the exact retained BUF section and share auxiliary storage with hidden MatPosAnim");
-        }
-      }
-      check(reader==66 && sequence.live_count()==59 && host.components().construction_order().size()==59 &&
-            host.ordinary_components()->pending().size()==18 && app.class_notification_sequence(0x00100021U)==1 &&
-            app.class_notification_sequence(0x00200002U)==5 && app.class_notification_sequence(0x00800024U)==4 &&
-            app.class_notification_sequence(0x002000e5U)==1 &&
-            app.component_class_notification_sequence("ZSTDOBJ_VertAnim")==2 &&
-            app.component_class_notification_sequence("ZGEOM_MatPosAnim")==3 &&
-            app.component_class_notification_sequence("ZLIST_CutSequence")==3 &&
-            app.component_class_notification_sequence("ZLIST_CutSequenceList")==std::uint32_t{existing_shared_state?8U:1U},
-            "all concrete owner/component counters advance once and only three new ordinary additions are queued");
-      check(app.vert_anim_event()==host.scene_event_names().find("Msg_RunWhenPaused") &&
-            host.scene_event_names().counter()==events+1 && app.cut_sequence_lists() &&
-            app.cut_sequence_lists()->members==(existing_shared_state?std::vector<std::uint64_t>{789}:std::vector<std::uint64_t>{}) &&
-            (!existing_shared_state || app.cut_sequence_lists()==shared_before),
-            "VertAnim updates shared application event slot; CutSequenceList notification preserves shared collection without inserting members");
-      const auto property=host.scene_resource_property("ParticleTemplates");
-      check(property && property->type==16 && property->object_token && !property->resource.value,
-            "ParticleTemplates scene property carries an object token rather than a resource identity");
-      const auto* particles=app.resolve_handle_collection(*property->object_token);
-      check(particles && particles->members==(existing_shared_state?
-                std::vector<std::uint64_t>{host.source_handle(0).value,host.source_handle(64).value}:
-                std::vector<std::uint64_t>{host.source_handle(64).value}) &&
-            (!existing_shared_state || *property->object_token==particle_token),
-            "particle constructor reuses application-token collection and appends its real owner after prior members");
-      const auto list_index=host.owner_components(host.source_handle(65)).front();
-      const auto* list_payload=host.constructed_attachment(list_index);
-      check(list_payload && list_payload->list_index==std::uint32_t{existing_shared_state?7U:0U} &&
-            list_payload->list_sentinel==-1 && list_payload->commands && list_payload->commands->empty() &&
-            list_payload->auxiliary_list_a && list_payload->auxiliary_list_a->empty() &&
-            list_payload->auxiliary_list_b && list_payload->auxiliary_list_b->empty() &&
-            host.components().at(list_index).state().class_ordinal==97,
-            "CutSequenceList initializes real collections and stores captured class index, not common serial");
-      check(list_payload->cut_list && list_payload->cut_list->selected_references==std::array<std::uint64_t,3>{} &&
-            list_payload->cut_list->controls==std::array<bool,7>{} && list_payload->cut_list->playback_clock==0 &&
-            std::bit_cast<std::uint32_t>(list_payload->cut_list->derived_end)==0 &&
-            list_payload->cut_list->playback_tracking==0 && !list_payload->cut_list->optional_scalar &&
-            !list_payload->cut_list->current_command,
-            "CutSequenceList produces only its distinct cleared controls, references and derived time, leaving source fields unavailable");
-      for(const auto row:{51U,52U,59U,60U,61U,65U,66U,67U,68U}) {
-        const auto index=host.owner_components(host.source_handle(row)).front();
-        const auto& state=host.components().at(index).state();
-        const auto* payload=host.constructed_attachment(index);
-        const bool vertex=row==51 || row==52,material=row>=59 && row<=61;
-        check(payload && payload->owner==host.source_handle(row) && state.attached_owner==payload->owner.value &&
-              state.status==0x20 && state.registered_cache==0 &&
-              state.class_ordinal==(vertex?85:material?86:row==65?97:96) &&
-              state.priority==(vertex || material?100U:row==65?0U:1U) &&
-              state.requested==(vertex?0x35U:material?0x435U:row==65?0x837U:0x825U) &&
-              state.admitted==(vertex || row==65?0x10U:0U) &&
-              payload->raw_attachment_argument==(material?0x42c80000U:row==65?0U:0x3f800000U),
-              "animation and cut attachment metadata retain default priorities, raw arguments and real hide admission");
-        if(vertex || material) {
-          check(payload->animation && payload->animation->rate==25 &&
-                payload->animation->enabled_a && payload->animation->enabled_b && !payload->animation->extra_control &&
-                payload->animation->short_control==1,
-                "animation constructors preserve independent byte and integer defaults without source execution");
-          if(material) {
-            check(payload->animation->scalar==50 && payload->animation->word_control==1 &&
-                  payload->animation->enabled_c==true && payload->animation->mat && !payload->animation->vert &&
-                  payload->animation->mat->backing_words==std::array<std::uint32_t,3>{} &&
-                  payload->animation->mat->tracking_words==std::array<std::uint32_t,2>{} &&
-                  payload->animation->mat->tracking_short==0 &&
-                  payload->animation->basis==std::array<float,9>{0,0,1,0,1,0,1,0,0} &&
-                  payload->animation->transient_vector==std::array<float,3>{0,0,0},
-                  "MatPosAnim retains constructor basis, scalar and separate integer control");
-          } else check(!payload->animation->scalar && !payload->animation->word_control && !payload->animation->basis &&
-                       !payload->animation->enabled_c && payload->animation->vert && !payload->animation->mat &&
-                       payload->animation->vert->zero_words==std::array<std::uint32_t,2>{} &&
-                       payload->animation->vert->zero_shorts==std::array<std::uint16_t,2>{},
-                       "VertAnim does not borrow MatPosAnim-specific defaults");
-        }
-      }
-      const auto* auxiliary=host.constructed_owner_auxiliary(59);
-      const auto borrowed=auxiliary->borrowed_property_data;
-      Bytes external(borrowed.begin(),borrowed.end());
-      set(external,8,0x12345678U);
-      host.assign_owner_property_data(59,external);
-      const auto* copied=host.constructed_owner_auxiliary(59);
-      check(copied==auxiliary && copied->borrowed_property_data.empty() && copied->owned_property_data==external &&
-            copied->attachments.size()==1,"external property section is copied into the same owner auxiliary block without losing attachments");
-      const auto expected=external;
-      external[8]=std::byte{0};
-      check(copied->owned_property_data==expected,"owned property copy is independent of subsequent external mutations");
-      Bytes truncated(7);rejects([&]{host.assign_owner_property_data(59,truncated);});
-      Bytes oversized(8);set(oversized,4,0x3fffffffU);rejects([&]{host.assign_owner_property_data(59,oversized);});
-      const auto names=host.resources().source_names();
-      rejects([&]{host.assign_owner_property_data(59,names.subspan(names.size()));});
-      check(copied->owned_property_data==expected && copied->attachments.size()==1,
-            "invalid property bounds do not discard existing property or attachment storage");
-      check(host.position_updates().pending_count()==0 && !host.directory_position_mode().collection_enabled &&
-            host.directory_position_mode().suppression==1 && host.registered_cameras().entries().empty(),
-            "room construction does not enable position collection, register renderer cameras or execute loader tail");
-      rejects([&]{host.construct_room_animation_scope_without_engine_renderer();});
-    }
+    const auto component_indices=host.owner_components(host.source_handle(component_source));
+    check(component_indices.size()==1 &&
+          host.components().at(component_indices.front()).source().factory_name=="ZSTDOBJ_VertAnim" &&
+          host.components().at(component_indices.front()).state().attached_owner==
+              host.source_handle(component_source).value,
+          "a synthetic component stays attached to the canonical owner created for its source record");
+
+    const auto loaded_before_transitions=host.loaded_resource_handles().size();
+    host.construct_lens_flare_animation_scope_without_engine_renderer();
+    check(host.resource_load_stage()==off::graphics::IntroResourceLoadStage::lens_flare_animation_scope_ready &&
+          host.loaded_resource_handles().size()==loaded_before_transitions,
+          "the next lifecycle gate advances without inventing more directory records");
+    host.construct_remaining_directory_without_engine_renderer();
+    check(host.resource_load_stage()==off::graphics::IntroResourceLoadStage::directory_construction_complete &&
+          host.loaded_resource_handles().size()==loaded_before_transitions,
+          "the final local-record gate preserves the completed mapping");
+    check(!host.supports_external_cut_commands_deferred_reader(
+              host.deferred_reader_work().back()),
+          "a synthetic ordinary record does not qualify for an unrelated typed command reader");
+
+    std::vector<std::size_t> prepared_sources,owner_sources,component_sources;
+    std::vector<std::string> bracket_events;
+    off::graphics::IntroPostconstructionReaderServices reader_services{
+        [&](std::uint64_t){bracket_events.push_back("external");},
+        [&](const auto&){bracket_events.push_back("script");},
+        [&]{bracket_events.push_back("pre");},
+        [&](const auto& work){
+            check(work.processed,"reader boundary marks work before project-supplied parsing");
+            prepared_sources.push_back(work.source_directory_index);
+            bracket_events.push_back("prepare");
+        },
+        [&](const auto& work){owner_sources.push_back(work.source_directory_index);bracket_events.push_back("owner");},
+        [&](const auto& work){component_sources.push_back(work.source_directory_index);bracket_events.push_back("component");},
+        [&]{bracket_events.push_back("end");}};
+    std::vector<std::size_t> expected_reader_sources;
+    for(const auto& work:host.deferred_reader_work())
+        expected_reader_sources.push_back(work.source_directory_index);
+    host.run_postconstruction_reader_bracket(0x91U,reader_services);
+    check(host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete &&
+          prepared_sources==expected_reader_sources && owner_sources==expected_reader_sources &&
+          component_sources==expected_reader_sources && !bracket_events.empty() &&
+          bracket_events.front()=="external" && bracket_events.back()=="end",
+          "reader services retain source order and explicit prepare/owner/component boundaries");
+    rejects([&]{host.run_postconstruction_reader_bracket(0x91U,reader_services);});
+
+    const auto lifecycle=host.preflight_global_lifecycle();
+    check(!lifecycle.ready() && !host.components().phases_completed() &&
+          host.registered_cameras().entries().empty(),
+          "local source construction does not claim global lifecycle admission, camera registration, or presentation");
+    rejects([&]{host.construct_remaining_directory_without_engine_renderer();});
+
+    Fixture alternate(false,true,true,true,true,true,true,true,true,2,0);
+    off::runtime::ApplicationServices alternate_app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+        {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+    initialize_app(alternate_app);
+    off::runtime::SceneComponentSequence alternate_sequence{[]{return std::uint32_t{1};}};
+    off::graphics::IntroRuntime alternate_host(alternate.build(),alternate_app,alternate_sequence,
+        "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+    prepare_prefix(alternate_host);
+    const auto alternate_count=alternate.tail_record_offsets.size();
+    const auto& alternate_directory=alternate_host.resources().sources().directory();
+    const auto alternate_source_index=[&](std::size_t record_offset) {
+        const auto found=std::ranges::find(alternate_directory,record_offset,&off::data::GmsDirectoryEntry::record_offset);
+        if(found==alternate_directory.end()) throw std::runtime_error("alternate synthetic record is absent from parsed directory");
+        return static_cast<std::size_t>(std::distance(alternate_directory.begin(),found));
+    };
+    const auto alternate_component_source=alternate_source_index(alternate.tail_record_offsets.front());
+    const auto alternate_unprocessed=alternate_host.resources().sources().directory().size()-
+        alternate_host.loaded_resource_handles().size();
+    const auto alternate_reader_begin=alternate_host.deferred_reader_work().size();
+    alternate_host.construct_room_animation_scope_without_engine_renderer();
+    const auto alternate_component=alternate_host.owner_components(
+        alternate_host.source_handle(alternate_component_source));
+    check(alternate_count!=tail_count && alternate_host.loaded_resource_handles().size()==
+              alternate_host.resources().sources().directory().size() &&
+          alternate_host.deferred_reader_work().size()==alternate_reader_begin+alternate_unprocessed &&
+          alternate_component.size()==1 &&
+          alternate_host.components().at(alternate_component.front()).state().attached_owner==
+              alternate_host.source_handle(alternate_component_source).value,
+          "a differently sized synthetic tail preserves directory order and its independently placed component owner");
+    alternate_host.construct_lens_flare_animation_scope_without_engine_renderer();
+    alternate_host.construct_remaining_directory_without_engine_renderer();
+    check(alternate_host.resource_load_stage()==off::graphics::IntroResourceLoadStage::directory_construction_complete,
+          "a shorter tail reaches the same local construction boundary without padding records");
+
+    Fixture malformed(false,true,true,true,true,true,true,true,true);
+    const auto invalid_type=malformed.tail_record_offsets.back()+16;
+    set(malformed.payload,invalid_type,0x0020ffffU);
+    off::runtime::ApplicationServices failing_app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+        {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+    initialize_app(failing_app);
+    off::runtime::SceneComponentSequence failing_sequence{[]{return std::uint32_t{1};}};
+    off::graphics::IntroRuntime failing_host(malformed.build(),failing_app,failing_sequence,"synthetic-scene",
+        off::graphics::IntroSoundLoadPolicy::directory_construction);
+    prepare_prefix(failing_host);
+    const auto& malformed_directory=failing_host.resources().sources().directory();
+    const auto malformed_source_index=[&](std::size_t record_offset) {
+        const auto found=std::ranges::find(malformed_directory,record_offset,&off::data::GmsDirectoryEntry::record_offset);
+        if(found==malformed_directory.end()) throw std::runtime_error("malformed synthetic record is absent from parsed directory");
+        return static_cast<std::size_t>(std::distance(malformed_directory.begin(),found));
+    };
+    const auto invalid_source=malformed_source_index(malformed.tail_record_offsets.back());
+    rejects([&]{failing_host.construct_room_animation_scope_without_engine_renderer();});
+    check(failing_host.resource_load_stage()==off::graphics::IntroResourceLoadStage::failed &&
+          failing_host.loaded_resource_handles().size()==invalid_source &&
+          !failing_host.directory_resource_mapping()[invalid_source].has_value(),
+          "an unsupported tail record fails closed while retaining only the completed construction prefix");
+
+    Fixture parent_pop(false,true,true,true,true,true,true,true,true);
+    const auto first_record_offset=parent_pop.tail_record_offsets.front();
+    set(parent_pop.payload,parent_pop.tail_parent_control_offset,
+        (127U<<25U)|static_cast<std::uint32_t>(first_record_offset/4));
+    rejects([&]{parent_pop.image();});
 }
 
 static OFF_NOINLINE void test_visual_scope_lifecycle() {
@@ -3153,38 +1112,6 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
             host.resource_load_stage()==off::graphics::IntroResourceLoadStage::following_visual_scope_ready,
             "metadata-only scope preserves component clocks, events, pending queues and loader controls");
       rejects([&]{host.construct_following_visual_scope_without_engine_renderer();});
-    }
-    {
-      Fixture room_fixture(false,true,true,true,true,true,true,true,true);
-      off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
-          {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
-      app.initialize_native_group_registration();app.initialize_native_window_language_registration();
-      app.initialize_native_picture_registration();app.initialize_native_camera_registration();
-      app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
-      app.initialize_native_room_animation_scope_registration();
-      // Deliberately inconsistent first-notification state, not a substitute
-      // collection for the admitted native constructor path.
-      app.create_cut_sequence_list_collection();
-      app.cut_sequence_lists()->members.push_back(555);
-      auto* shared=app.cut_sequence_lists();
-      off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{5};}};
-      off::graphics::IntroRuntime host(room_fixture.build(),app,sequence);
-      host.construct_root();host.begin_source_loading_without_engine_renderer();host.construct_first_authored_group();
-      host.construct_window_language_groups_without_engine_renderer();host.construct_picture_component_prefix_without_engine_renderer();
-      host.construct_authored_camera_without_engine_renderer();host.construct_second_window_picture_without_engine_renderer();
-      host.construct_second_window_scope_without_engine_renderer();host.construct_following_visual_scope_without_engine_renderer();
-      rejects([&]{host.construct_room_animation_scope_without_engine_renderer();});
-      const auto index=host.owner_components(host.source_handle(65)).front();
-      const auto* payload=host.constructed_attachment(index);
-      check(host.resource_load_stage()==off::graphics::IntroResourceLoadStage::failed &&
-            host.loaded_resource_handles().size()==66 && host.deferred_reader_work().size()==62 &&
-            !host.directory_resource_mapping()[65] && host.constructed_list_owner(65) && !host.constructed_list_owner(66) &&
-            payload && payload->cut_list && !payload->list_index && host.components().at(index).state().admitted==0x10U &&
-            sequence.live_count()==56 && host.ordinary_components()->pending().size()==18 &&
-            app.component_class_notification_sequence("ZLIST_CutSequenceList")==1 &&
-            app.cut_sequence_lists()==shared && shared->members==std::vector<std::uint64_t>{555},
-            "first CutSequenceList notification diagnostic preserves real constructor/enrollment/counter prefix without resetting shared collection");
-      rejects([&]{host.construct_room_animation_scope_without_engine_renderer();});
     }
     {
       Fixture full_fixture(false,true,true,true,true,true,true);
@@ -4943,12 +2870,7 @@ int main(int argc, char* argv[]) {
         TestGroup{"outer-loader-tail-readiness", test_outer_loader_tail_readiness},
         TestGroup{"named-global-envelopes", test_named_global_envelopes},
         TestGroup{"prepared-runtime-scopes", test_prepared_runtime_scopes},
-        TestGroup{"complete-runtime-scopes", test_complete_runtime_scopes},
-        TestGroup{"first-cut-fade-phase-one", test_first_cut_fade_runtime_phase_one},
-        TestGroup{"admitted-first-cut-phase-one-subset", test_admitted_first_cut_phase_one_subset},
-        TestGroup{"first-cut-fade-diagnostic-session", test_first_cut_fade_diagnostic_session},
-        TestGroup{"movie-control-phase-two", test_movie_control_runtime_phase_two},
-        TestGroup{"room-animation-runtime-scope", test_room_animation_runtime_scope},
+        TestGroup{"generic-directory-tail-lifecycle", test_generic_directory_tail_lifecycle},
         TestGroup{"visual-scope-lifecycle", test_visual_scope_lifecycle},
         TestGroup{"prepared-resource-variants", test_prepared_resource_variants},
         TestGroup{"runtime-and-archive-lifecycle", test_runtime_and_archive_lifecycle},

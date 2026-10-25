@@ -47,8 +47,6 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                  runtime_->apply_supported_first_cut_list_deferred_reader(work);
                if (work.source_directory_index == r.camera_index())
                  runtime_->apply_supported_first_cut_camera_deferred_reader(work);
-               if (work.source_directory_index >= 43U && work.source_directory_index <= 47U)
-                 runtime_->apply_supported_following_visual_owner_deferred_reader(work);
                const auto &source = r.sources().directory().at(work.source_directory_index);
                if (source.source_type == 0x00100001U && source.attachments.empty()) {
                  const auto block = r.sources().deferred_source_block(work.source_directory_index);
@@ -85,7 +83,7 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                  runtime_->apply_supported_sound_owner_deferred_reader(work);
                if (work.source_directory_index == r.window_index())
                  runtime_->apply_supported_window_deferred_reader(work);
-               if (work.source_directory_index == 466U)
+               if (runtime_->supports_external_cut_commands_deferred_reader(work))
                  runtime_
                      ->apply_supported_external_cut_commands_deferred_reader(
                          work);
@@ -107,8 +105,7 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                    runtime_->resources().controller_index())
                  runtime_->apply_supported_movie_control_component_reader(work);
                if (work.source_directory_index ==
-                   runtime_->resources().first_cut_index() &&
-                   runtime_->resources().sources().deferred_source_block(work.source_directory_index).size()==171U)
+                   runtime_->resources().first_cut_index())
                  runtime_->apply_supported_first_cut_component_reader(work);
                if (work.source_directory_index == runtime_->resources().member_index())
                  runtime_->apply_supported_first_cut_sequence_component_reader(work);
