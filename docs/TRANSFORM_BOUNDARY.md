@@ -59,6 +59,12 @@ visibility selection. The culling path does not write the three matrix pointers
 later consumed by the traced BonesVS draw entry, so it does not establish that
 the active camera is applied to submitted geometry.
 
+A targeted trace of the BonesVS instance dispatch slot found resource
+allocation, cache-lifecycle, and generic callback routes, but no call edge from
+the per-view geometry list to that draw method. The draw method's matrix
+triplet therefore remains unjoined to both the view-side cache entry and the
+GMS runtime identity.
+
 These facts establish GMS runtime identity and hierarchy provenance. They do
 not establish the complete submitted object-to-world or world-to-clip transform.
 
