@@ -60,8 +60,16 @@ SceneGpuPlan make_startup_graphics_diagnostic_plan(
     const auto mesh_index = result.meshes.size();
     result.meshes.push_back(std::move(mesh));
     const auto instance_index = result.instances.size();
-    result.instances.push_back({instance_index, mesh_index,
-                                {1, 0, 0, 0, 1, 0, 0, 0, 1}, {0, 0, 0}});
+    result.instances.push_back({
+        .scene_instance_index = instance_index,
+        .mesh_index = mesh_index,
+        .source_directory_index = 0,
+        .parent_source_directory_index = std::nullopt,
+        .source_basis = {1, 0, 0, 0, 1, 0, 0, 0, 1},
+        .source_position = {0, 0, 0},
+        .map_orientation = {},
+        .map_position = {},
+    });
     double depth_sum = 0.0;
     for (const auto index : result.meshes[mesh_index].indices) {
       depth_sum += transform_scene_source_diagnostic_position(
