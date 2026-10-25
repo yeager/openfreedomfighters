@@ -42,6 +42,16 @@ record been joined to final backend submission and camera view/projection.
 Consequently this evidence does not yet authorize composing
 `SceneRenderInstance` fields or claiming a world-space scene result.
 
+The traced view traversal obtains candidate handles from a component-owned
+collection, resolves them, and applies component and object-flag filters. That
+collection has not been identified as the RMC/RMI tables or as an exhaustive
+enumeration of GMS rows. Eligible candidates retain their runtime object
+identity when wrapped, but this does not prove that every map-resolved direct
+PRM source reaches the view path. The view builder also writes intermediate
+pose records to local scratch storage that is not passed to its next list
+builder in the traced callsite. Treat those records as unconsumed there, not as
+a verified draw packet.
+
 These facts establish GMS runtime identity and hierarchy provenance. They do
 not establish the complete submitted object-to-world or world-to-clip transform.
 
