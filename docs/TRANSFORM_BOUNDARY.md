@@ -10,7 +10,7 @@ Scene object hierarchy follows authored containment. Objects nested beneath a gr
 
 This establishes parent/child ownership only. It does not establish which runtime object an RMC/RMI map reference selects, how map-derived transforms combine with the parent-aware pose, or which camera/view state applies to a given draw.
 
-On the reviewed Direct3D path, submitted geometry reflects each object's effective pose through its authored parent hierarchy. This establishes hierarchy-dependent geometry placement for that path only. It does not establish which runtime object an RMC/RMI map reference selects, how shaders interpret submitted data, or whether other backends behave equivalently.
+On one reviewed Direct3D draw path, submitted item positions derive from an object pose that incorporates its authored parent hierarchy. The role of this draw path is unresolved; it is not established as the normal world-scene geometry pass. This does not establish which runtime object an RMC/RMI map reference selects, how map-derived transforms combine with the parent-aware pose, how shaders interpret submitted data, or whether other backends behave equivalently.
 
 ## Work required
 
