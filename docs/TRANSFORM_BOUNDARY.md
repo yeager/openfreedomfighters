@@ -65,11 +65,12 @@ the per-view geometry list to that draw method. The draw method's matrix
 triplet therefore remains unjoined to both the view-side cache entry and the
 GMS runtime identity.
 
-A view-state object also owns three pointer fields at the same offsets. The
-BonesVS method reads its triplet from a record argument; matching offsets alone
-do not establish whether that argument is the view-state object or a different
-allocation. The caller's record identity and its relationship to active view
-state remain unresolved.
+The renderer's per-draw-entry factory creates an entry, passes that exact
+pointer to the D3D initializer that fills its three matrix pointers, and stores
+the entry in a caller-owned cache field. The BonesVS method reads the same
+three-field layout from its record argument, but the cache consumer has not yet
+been joined to that argument. The entry-to-submit pointer identity and its
+relationship to active view state remain unresolved.
 
 These facts establish GMS runtime identity and hierarchy provenance. They do
 not establish the complete submitted object-to-world or world-to-clip transform.
