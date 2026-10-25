@@ -3479,6 +3479,7 @@ void IntroRuntime::apply_supported_param_anim_deferred_reader(
       resources_.sources().deferred_source_block(work.source_directory_index));
   bool owner_flag{};
   data::ParamAnimComponentPayloadState values;
+  std::uint16_t event_id{};
   try {
     session.prepare(identity);
     session.read_owner([&](std::span<const std::byte> block) {
@@ -3494,6 +3495,8 @@ void IntroRuntime::apply_supported_param_anim_deferred_reader(
     const auto result = session.read_components(readers);
     if (result.continuation.size() != 1U || result.continuation.front() != std::byte{0xff})
       throw std::runtime_error("ParamAnim light reader requires an exact terminal continuation");
+    event_id = data::resolve_param_anim_event_reference(values, source_event_name_mapping(),
+        constructed_picture_components_.at(component_index).param_animation->event_id);
     session.deactivate();
   } catch (...) {
     if (session.state() != data::DeferredReaderSessionState::deactivated) session.deactivate();
@@ -3505,12 +3508,13 @@ void IntroRuntime::apply_supported_param_anim_deferred_reader(
   const auto [entry, inserted] = param_anim_deferred_reader_states_.emplace(
       work.source_directory_index, IntroParamAnimDeferredReaderState{
           owner, work.resource, work.source_directory_index, component_index,
-          work.source_offset, owner_flag, values});
+          work.source_offset, owner_flag, values, event_id});
   if (!inserted) throw std::runtime_error("ParamAnim light reader cannot retain duplicate state");
   try { record_supported_reader_admission(work); }
   catch (...) { param_anim_deferred_reader_states_.erase(entry); throw; }
   object.flags = (object.flags & ~0x4U) | (owner_flag ? 0x4U : 0U);
   component.param_animation_reader = values;
+  component.param_animation->event_id = event_id;
 }
 
 bool IntroRuntime::supports_lens_flare_deferred_reader(

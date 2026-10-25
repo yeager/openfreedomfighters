@@ -644,6 +644,9 @@ struct Fixture {
         }
     }
     void event_names(std::initializer_list<std::string_view> entries) {
+        // GMS header table pointers require four-byte alignment, while the
+        // preceding synthetic compact block can end at any byte offset.
+        while (payload.size()%4U) payload.push_back(std::byte{0});
         const auto table=payload.size();
         set(payload,4,static_cast<std::uint32_t>(table));
         word(payload,static_cast<std::uint32_t>(entries.size()));
@@ -1277,7 +1280,7 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
 }
 
 static OFF_NOINLINE void test_param_anim_light_runtime() {
-    for (unsigned scenario{}; scenario < 7U; ++scenario) {
+    for (unsigned scenario{}; scenario < 12U; ++scenario) {
         Fixture fixture(false,true,false,true,false,false,false,false,false,3U,1U,1U);
         const auto record = fixture.synthetic_external_record_offsets.front();
         // Repartition the original list owner's declared slot into the light
@@ -1311,12 +1314,17 @@ static OFF_NOINLINE void test_param_anim_light_runtime() {
         scalar(block,3U,7U);scalar(block,8U,9U);scalar(block,11U,scenario==1U?0U:1U);
         block.push_back(std::byte{0x46});block.push_back(std::byte{0x86});
         scalar(block,3U,1U);floating(block,2U,12.5F);scalar(block,3U,0U);
+        if (scenario >= 7U) {
+            constexpr std::array<std::uint32_t,5> references{1U, 0U, 3U, 0x10001U, 0xffffffffU};
+            scalar(block,0xcaU,references[scenario-7U]);
+        }
         scalar(block,3U,55U); // valid unconsumed component tail
         block.push_back(std::byte{6});finish(block);
         if (scenario==3U) { block.push_back(std::byte{0});set(block,0U,static_cast<std::uint32_t>(block.size())); }
         if (scenario==4U) { block[block.size()-2U]=std::byte{0xff}; }
         set(fixture.payload,record+32U,static_cast<std::uint32_t>(fixture.payload.size()));
         fixture.payload.insert(fixture.payload.end(),block.begin(),block.end());
+        fixture.event_names({"SyntheticParamEvent", "OtherSyntheticParamEvent"});
         off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
             {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
         app.initialize_native_group_registration();app.initialize_native_window_language_registration();
@@ -1327,6 +1335,11 @@ static OFF_NOINLINE void test_param_anim_light_runtime() {
         off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
         auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
             "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        check(runtime->declare_scene_event_name("SyntheticParamEvent",321U)==321U,
+              "synthetic registry reserves an event ID distinct from the authored index");
+        runtime->prepare_source_event_names();
+        check(runtime->source_event_name_mapping()[1U]==321U,
+              "production source event provider maps the authored name through the scene registry");
         runtime->construct_root();runtime->begin_source_loading_without_engine_renderer();
         runtime->construct_source_directory_without_engine_renderer();
         const auto& directory=runtime->resources().sources().directory();
@@ -1334,13 +1347,16 @@ static OFF_NOINLINE void test_param_anim_light_runtime() {
         const auto row=static_cast<std::size_t>(std::distance(directory.begin(),found));
         const auto owner=runtime->source_handle(row);
         const auto component=runtime->owner_components(owner).front();
+        check(!runtime->constructed_attachment(component)->param_animation ||
+              runtime->constructed_attachment(component)->param_animation->event_id==0U,
+              "fresh replacement ParamAnim explicitly initializes its event state to zero");
         const auto initial_flags=runtime->constructed_object_owner(row)->flags;
         const auto initial_admitted=runtime->components().at(component).state().admitted;
         auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
         auto& host=session->runtime();
-        if (scenario==3U || scenario==4U) rejects([&]{session->complete_postconstruction_reader_bracket(13U);});
+        if (scenario==3U || scenario==4U || scenario>=9U) rejects([&]{session->complete_postconstruction_reader_bracket(13U);});
         else session->complete_postconstruction_reader_bracket(13U);
-        if (scenario<3U) {
+        if (scenario<3U || scenario==7U || scenario==8U) {
             const auto& state=host.param_anim_deferred_reader_states().at(row);
             check(state.owner==owner && state.component_index==component && state.source_directory_index==row &&
                   state.resource==host.resource_handle(owner) && state.values.scalar_c==12.5F,
@@ -1348,10 +1364,17 @@ static OFF_NOINLINE void test_param_anim_light_runtime() {
             check(host.constructed_attachment(component)->param_animation_reader.has_value() &&
                   host.constructed_object_owner(row)->flags==((initial_flags&~4U)|(scenario==1U?0U:4U)),
                   "light flag and ParamAnim typed state publish after complete dispatch");
+            check(state.event_id==(scenario==7U?321U:0U) &&
+                  host.constructed_attachment(component)->param_animation->event_id==state.event_id &&
+                  (scenario>=7U ? state.values.event_reference==std::optional<std::uint32_t>{scenario==7U?1U:0U}
+                                : !state.values.event_reference),
+                  "production reader retains authored presence separately from registry-resolved event state");
         } else {
             check(host.param_anim_deferred_reader_states().empty() &&
                   !host.constructed_attachment(component)->param_animation_reader &&
-                  host.constructed_object_owner(row)->flags==initial_flags,
+                  host.constructed_object_owner(row)->flags==initial_flags &&
+                  (!host.constructed_attachment(component)->param_animation ||
+                   host.constructed_attachment(component)->param_animation->event_id==0U),
                   "late malformed dispatch and unsupported siblings leave light and component state untouched");
         }
         const auto work=std::ranges::find(host.deferred_reader_work(),row,
@@ -1366,7 +1389,7 @@ static OFF_NOINLINE void test_param_anim_light_runtime() {
         for (const auto& entry:coverage.entries)
             if (entry.family==off::graphics::IntroDeferredReaderFamily::param_anim_component &&
                 entry.state==off::graphics::IntroDeferredReaderImplementationState::applied) covered=true;
-        check(covered==(scenario<3U),"ParamAnim coverage reports applied only for committed readers");
+        check(covered==(scenario<3U || scenario==7U || scenario==8U),"ParamAnim coverage reports applied only for committed readers");
     }
 }
 

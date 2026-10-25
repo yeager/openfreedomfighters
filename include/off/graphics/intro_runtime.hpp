@@ -174,6 +174,8 @@ struct IntroConstructedPictureComponent {
   std::optional<std::int32_t> list_sentinel;
   std::optional<std::vector<std::uint64_t>> commands,auxiliary_list_a,auxiliary_list_b;
   struct ParamAnimationStorage {
+    // Explicit replacement initialization; detached parsing never supplies a default event.
+    std::uint16_t event_id{};
     std::array<std::uint32_t,2> local_words{};
     std::uint32_t capacity{32},growth{32},count{},element_control{1};
     std::array<std::uint64_t,2> backing_references{};
@@ -643,6 +645,7 @@ struct IntroParamAnimDeferredReaderState {
   std::uint32_t source_offset{};
   bool owner_flag_enabled{};
   data::ParamAnimComponentPayloadState values;
+  std::uint16_t event_id{};
 };
 // Completion evidence for the recovered no-argument MatPos owner refresh.
 // It is owner-scoped, occurs only after reader admission, and deliberately

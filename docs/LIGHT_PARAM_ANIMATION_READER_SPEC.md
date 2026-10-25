@@ -86,6 +86,11 @@ synthetic scanner tests before it can be used by component dispatch.
 
 ## ParamAnim component behavior
 
+The optional class-10 field and event preservation follow
+`PARAM_ANIM_EVENT_REFERENCE_SPEC.md`. Its correction takes precedence over
+the old parser's `mode_word` naming and default; resolve authored event
+references before publishing runtime component state.
+
 Dispatch the bounded suffix according to the parsed attachment identity and
 preserve the existing `ParamAnimComponentPayloadReader` contract, including
 its defaults, numeric conversions, and conditional reads. It returns the

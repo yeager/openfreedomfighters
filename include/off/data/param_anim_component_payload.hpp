@@ -7,24 +7,38 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <span>
 #include <stdexcept>
 
 namespace off::data {
 
-// Field names describe only the recovered reader roles. This is component
-// state, not proof that an enclosing owner or reader lifecycle is complete.
+// Detached authored fields, not resolved component event state or lifecycle evidence.
 struct ParamAnimComponentPayloadState final {
     bool initial_control{true};
     float scalar_a{0.0F};
     float scalar_b{-1.0F};
-    std::uint16_t mode_word{0x0100U};
+    std::optional<std::uint32_t> event_reference;
     bool control_a{false};
     bool control_b{true};
     float scalar_c{25.0F};
     std::size_t consumed_bytes{};
     std::size_t consumed_values{};
 };
+
+// Resolve separately so absence can preserve existing component state. Bounds
+// are checked on the full authored reference, before narrowing the mapped ID.
+[[nodiscard]] inline std::uint16_t resolve_param_anim_event_reference(
+    const ParamAnimComponentPayloadState& payload,
+    std::span<const std::optional<std::uint32_t>> mapping,
+    std::uint16_t prior_event_id) {
+    if (!payload.event_reference) return prior_event_id;
+    const auto reference = *payload.event_reference;
+    if (reference == 0U) return 0U;
+    if (reference >= mapping.size() || !mapping[reference])
+        throw std::runtime_error("ParamAnim event reference has no mapped event");
+    return static_cast<std::uint16_t>(*mapping[reference]);
+}
 
 class ParamAnimComponentPayloadReader final {
 public:
@@ -50,7 +64,7 @@ public:
         state.initial_control = read_boolean(cursor);
 
         if (cursor.peek_class() == 10U)
-            state.mode_word = static_cast<std::uint16_t>(read_integer(cursor));
+            state.event_reference = cursor.next().u32_bits();
 
         if (cursor.peek_class() == 2U) {
             state.scalar_a = read_float(cursor) / 25.0F;

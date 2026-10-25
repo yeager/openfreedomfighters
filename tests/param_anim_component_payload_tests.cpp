@@ -63,7 +63,7 @@ void test_defaults_and_empty_boundaries() {
     using off::data::ParamAnimComponentPayloadReader;
     const auto empty = ParamAnimComponentPayloadReader::read({});
     check(empty.initial_control && empty.scalar_a == 0.0F && empty.scalar_b == -1.0F &&
-              empty.mode_word == 0x0100U && !empty.control_a && empty.control_b &&
+              !empty.event_reference && !empty.control_a && empty.control_b &&
               empty.scalar_c == 25.0F && empty.consumed_bytes == 0U &&
               empty.consumed_values == 0U,
           "an empty component slice retains native reader defaults without admission");
@@ -75,14 +75,14 @@ void test_defaults_and_empty_boundaries() {
           "a terminal at the bounded slice start leaves defaults unchanged");
 }
 
-void test_optional_modes_and_component_extent() {
+void test_optional_event_and_component_extent() {
     using off::data::ParamAnimComponentPayloadReader;
     Bytes payload;
     append_i32(payload, 0x03, 1);       // initial control
     append_i32(payload, 0x83, 0);       // the first control is copied to control_a
     append_f64(payload, 12.5);          // scalar_c uses float32 after conversion
     append_f32(payload, 0.75F);          // integer conversion truncates toward zero
-    append_i32(payload, 0x0a, 0x12345); // optional low-word mode
+    append_i32(payload, 0x0a, 0x12345); // optional full-width authored event reference
     append_f32(payload, 50.0F);          // optional scaled pair
     append_f32(payload, -25.0F);
     append_i32(payload, 0x03, 77);      // unrelated trailing value remains unread
@@ -90,11 +90,33 @@ void test_optional_modes_and_component_extent() {
 
     check(result.control_a && !result.control_b && !result.initial_control,
           "ordinary mode preserves the native control overwrite order");
-    check(result.scalar_c == 12.5F && result.mode_word == 0x2345U &&
+    check(result.scalar_c == 12.5F && result.event_reference == 0x12345U &&
               result.scalar_a == 2.0F && result.scalar_b == -1.0F,
-          "optional word and scaled float pair retain their typed conversions");
+          "optional event reference and scaled float pair retain their typed conversions");
     check(result.consumed_values == 7U && result.consumed_bytes + 5U == payload.size(),
           "component reader reports its consumed prefix and leaves following values to its owner");
+}
+
+void test_event_resolution() {
+    using namespace off::data;
+    const std::vector<std::optional<std::uint32_t>> mapping{std::nullopt, 0x12345U, std::nullopt};
+    auto payload = ParamAnimComponentPayloadReader::read({});
+    check(resolve_param_anim_event_reference(payload, {}, 91U) == 91U,
+          "absent event preserves a supplied nonzero prior ID without a mapping");
+    Bytes bytes;
+    append_i32(bytes, 3U, 1); append_f32(bytes, 3.F); append_i32(bytes, 3U, 0);
+    append_i32(bytes, 0xcaU, 0);
+    payload = ParamAnimComponentPayloadReader::read(bytes);
+    check(payload.event_reference == 0U && resolve_param_anim_event_reference(payload, {}, 91U) == 0U,
+          "explicit zero clears prior event without consulting mapping entry zero");
+    payload.event_reference = 1U;
+    check(resolve_param_anim_event_reference(payload, mapping, 91U) == 0x2345U,
+          "mapped event differs from authored index and narrows only after lookup");
+    for (const auto reference : {2U, 3U, 0x10001U, 0xffffffffU}) {
+        payload.event_reference = reference;
+        rejects([&] { (void)resolve_param_anim_event_reference(payload, mapping, 91U); },
+                "missing entries and full-width out-of-range references reject");
+    }
 }
 
 void test_type_two_branch_and_low_six_bit_tags() {
@@ -159,8 +181,8 @@ void test_unsigned_integer_payload_float_conversion() {
             check(std::bit_cast<std::uint32_t>(value.scalar_c) == example.expected_float_bits,
                   "all integer classes convert unsigned payloads with binary32 rounding in float fields");
             check(value.control_a && !value.control_b && value.initial_control &&
-                  value.mode_word == 0xffffU,
-                  "negative and zero integer controls and signed low-word mode retain their behavior");
+                  value.event_reference == 0xffffffffU,
+                  "negative and zero integer controls and full-width event reference retain their behavior");
             check(value.consumed_values == 5U && value.consumed_bytes == payload.size(),
                   "unsigned float interpretation leaves field boundaries unchanged");
         }
@@ -263,7 +285,8 @@ void test_truncated_required_values_reject_without_partial_state() {
 
 int main() {
     test_defaults_and_empty_boundaries();
-    test_optional_modes_and_component_extent();
+    test_event_resolution();
+    test_optional_event_and_component_extent();
     test_type_two_branch_and_low_six_bit_tags();
     test_numeric_conversion_and_unread_nonnumeric_tail();
     test_unsigned_integer_payload_float_conversion();
