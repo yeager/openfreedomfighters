@@ -82,8 +82,10 @@ The initializer's `ZSysInterfaceWintel` dispatch resolves to a routine that
 sets a flag on the service-interface receiver. It ignores the pool-row
 argument, does not install a row vtable, and does not write row `+0x54`; the
 following matrix initializer also leaves those fields alone. The loader's
-later helper call passes three stack arguments through a secondary service
-subobject, but its concrete virtual target is unresolved. A previously
+later helper call reaches an object stored in the service's `+0x9b` member,
+then dispatches through that object's `+8` interface with the pool row, a
+class field, and a parsed offset as arguments. The concrete object, virtual
+target, and any side effects on row `+0x54` remain unresolved. A previously
 considered one-argument helper does not match that call's argument-cleanup
 shape and cannot be assigned to it. Therefore neither helper identifies the
 later writer to `+0x54`.
