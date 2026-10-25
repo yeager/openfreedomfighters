@@ -2,16 +2,22 @@
 
 ## Decision
 
-Modern+ targets NVIDIA DLSS 4.5 because it is the newest generation currently
-described by NVIDIA's public [DLSS developer page](https://developer.nvidia.com/rtx/dlss).
-The first integration target is Super Resolution. Ray Reconstruction is useful
+The public cross-engine integration target remains DLSS 4.5 Super Resolution
+through NVIDIA's official [DLSS developer resources](https://developer.nvidia.com/rtx/dlss)
+and [DLSS SDK](https://github.com/NVIDIA/DLSS). Ray Reconstruction is useful
 only if OpenFreedomFighters later gains a ray-traced lighting path, and Frame
 Generation remains independently selectable and later than a stable native
 renderer. DLSS is never required to run Modern+.
 
-DLSS 5 is not treated as a current product or API requirement. A future upgrade
-requires official NVIDIA documentation, an obtainable SDK, explicit native
-platform support, compatible redistribution terms, and image-quality validation.
+DLSS 5 is a current NVIDIA neural-rendering product: NVIDIA announced its
+[3D-guided neural-rendering stage and developer controls](https://developer.nvidia.com/blog/whats-new-for-game-developers-dlss-5-with-3d-guided-neural-rendering-nvidia-ace-updates-and-new-rtx-kit-capabilities/)
+in September 2026, including availability in a supported title. The public DLSS
+developer material reviewed for this plan does not provide enough SDK/API and redistribution detail
+to integrate that stage into this custom renderer. Treat DLSS 5 as an integration
+target only after NVIDIA provides an authorized SDK, custom-engine documentation,
+native API/platform requirements, and compatible distribution terms. Do not
+substitute community loaders, leaked binaries, or DLSS 4.x Super Resolution and
+label them DLSS 5.
 
 ## Renderer contract
 
@@ -82,8 +88,9 @@ permit the intended use, and must remain separate from the native FSR adapter.
 6. Compare disocclusion, foliage, particles, HUD edges, thin geometry, camera cuts,
    and ultrawide output against native and portable paths.
 7. Add latency instrumentation and only then evaluate Frame Generation.
-8. Re-evaluate later DLSS generations without changing the public renderer
-   contract or removing fallbacks.
+8. Re-evaluate DLSS 5 neural rendering separately from Super Resolution when
+   NVIDIA publishes an authorized custom-engine integration path, without
+   changing the public renderer contract or removing fallbacks.
 
 ## Acceptance gates
 

@@ -174,10 +174,10 @@ configuration intact but cannot survive a relaunch.
 | Modern+ replacement assets | Portable asset contract | Portable asset contract | Portable asset contract |
 | DLSS 4.5 Super Resolution | Planned for supported NVIDIA RTX, D3D12, driver, and licensed runtime combinations | Exposed only if an official NVIDIA SDK explicitly supports the active native stack | Not expected; current spatial/native path remains available |
 | Intel XeSS-SR | Planned for a verified D3D12 or Vulkan native backend, supported adapter, driver, and licensed SDK runtime | Planned only after the renderer owns the required native resources and temporal inputs | Not currently exposed; current spatial/native path remains available |
-| DLSS 5 | Not a current setting or deliverable | Not a current setting or deliverable | Not a current setting or deliverable |
+| DLSS 5 neural rendering | Not exposed; no renderer binding or verified custom-engine SDK/API | Not exposed; no renderer binding or verified custom-engine SDK/API | Not exposed; no renderer binding or verified custom-engine SDK/API |
 
 DLSS labels must name the API version actually loaded. The overlay must never
-label a shader, post-process filter, portable upscaler, or unavailable future SDK
+label a shader, post-process filter, portable upscaler, or unavailable SDK
 as DLSS. If DLSS 4.5 cannot load, the retained request resolves to the current
 spatial/native path with a visible reason. A future temporal resolver may add a
 portable temporal choice only after it is implemented.

@@ -123,13 +123,21 @@ trilinear sampler; Original always uses trilinear. This is currently exercised
 only by the explicit source-backed diagnostic scene, not normal gameplay,
 intro playback, or a vendor upscaler.
 
-Modern+ targets the documented DLSS 4.5 release as an optional NVIDIA RTX backend.
+Modern+ targets DLSS 4.5 Super Resolution as an optional NVIDIA RTX backend.
 The integration must use NVIDIA's official SDK and redistributable binaries, expose
 the supported quality presets, and report the loaded runtime version exactly.
 When implemented, capability checks will choose between DLSS 4.5, a portable
 temporal path, or spatial/native rendering at runtime. Original mode will not
 enable DLSS by default. macOS and non-RTX devices must not lose a quality or
 resolution option merely because DLSS is unavailable.
+
+NVIDIA announced [DLSS 5](https://developer.nvidia.com/blog/whats-new-for-game-developers-dlss-5-with-3d-guided-neural-rendering-nvidia-ace-updates-and-new-rtx-kit-capabilities/)
+as a separate 3D-guided neural-rendering stage in September 2026, including
+availability in a supported title. Its public
+developer material reviewed for this project does not establish a custom-engine
+SDK/API, supported native backends, or redistribution terms. DLSS 5 is therefore
+not exposed by this renderer until NVIDIA publishes or grants an authorized
+integration path. It must not be represented by a DLSS 4.5 or image-scaling pass.
 
 Intel XeSS-SR is the corresponding optional Intel super-resolution backend. Its
 F10 selection is retained as intent and currently resolves to the available
