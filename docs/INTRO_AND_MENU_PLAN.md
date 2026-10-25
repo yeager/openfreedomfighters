@@ -10,7 +10,8 @@ The production path does not yet play the timed intro or establish the complete 
 
 ## Delivery sequence
 
-- Complete the normal scene-loading and lifecycle path.
+- Complete the normal scene-loading and lifecycle path, including
+  [construction from local directory records](SCENE_DIRECTORY_LOADING.md).
 - Connect an owning scene session to update, input, rendering, audio, and teardown.
 - Implement intro timing, transitions, and the transition into the menu from reviewed behavior contracts.
 - Complete menu navigation, localization, and settings persistence.
