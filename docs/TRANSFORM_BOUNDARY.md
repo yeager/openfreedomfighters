@@ -59,18 +59,22 @@ visibility selection. The culling path does not write the three matrix pointers
 later consumed by the traced BonesVS draw entry, so it does not establish that
 the active camera is applied to submitted geometry.
 
-A targeted trace of the BonesVS instance dispatch slot found resource
-allocation, cache-lifecycle, and generic callback routes, but no call edge from
-the per-view geometry list to that draw method. The draw method's matrix
-triplet therefore remains unjoined to both the view-side cache entry and the
-GMS runtime identity.
+The per-draw cache path is now joined to the BonesVS consumer. Its factory
+creates an entry, initializes that entry's own three matrix pointers, and stores
+the entry in the caller-owned draw record. The matching cache consumer follows
+that record field to the entry's instance object and dispatches its draw method
+with the same caller-owned record. The BonesVS method reads a three-pointer
+layout from that record. Thus the cache entry selects the instance, while the
+record passed to the instance method owns the matrix triplet. The entry's own
+matrix fields are a distinct set and must not be treated as the submitted
+record's fields.
 
-The renderer's per-draw-entry factory creates an entry, passes that exact
-pointer to the D3D initializer that fills its three matrix pointers, and stores
-the entry in a caller-owned cache field. The BonesVS method reads the same
-three-field layout from its record argument, but the cache consumer has not yet
-been joined to that argument. The entry-to-submit pointer identity and its
-relationship to active view state remain unresolved.
+The producer of the caller-owned record's matrix triplet is still unresolved.
+The identified cache-entry initializer and backend state updater write to
+different objects; neither establishes the record's `+0x20/+0x24/+0x28`
+values. No camera/view input has been joined to those fields, nor has the
+producer record been tied to a GMS runtime object or the per-view geometry list.
+Consequently this dispatch join does not authorize world-space production.
 
 These facts establish GMS runtime identity and hierarchy provenance. They do
 not establish the complete submitted object-to-world or world-to-clip transform.
@@ -161,8 +165,10 @@ World-space scene rendering remains gated on all of the following:
    source behavior needed by sources without a direct PRM reference.
 5. Establish the exact relationship between dequantized spatial bounds and
    transformed render geometry.
-6. Recover camera view/projection, depth, winding, culling, and normal-transform
-   conventions independently of the diagnostic fit.
+6. Identify the producer of the caller-owned BonesVS draw record's matrix
+   triplet, join its inputs to the scene and active camera, then recover
+   view/projection, depth, winding, culling, and normal-transform conventions
+   independently of the diagnostic fit.
 7. Validate a candidate formula across the supported corpus and against
    deterministic runtime observations, then add synthetic arithmetic tests and
    cross-backend image comparisons.
