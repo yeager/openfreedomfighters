@@ -237,6 +237,23 @@ void IntroRuntime::apply_supported_sound_owner_deferred_reader(
   extend->output_mode=authored.extend.authored_output_mode;
   notify->raw_target_reference=authored.notify.target_reference;
   notify->raw_event_reference=authored.notify.event_reference;
+  if(authored.notify.target_reference!=0U) {
+    const auto target_source=resources_.sources().local_source_for_authored_reference(
+        authored.notify.target_reference);
+    if(!target_source || *target_source>=directory_resource_mapping_.size() ||
+        !directory_resource_mapping_[*target_source])
+      throw std::runtime_error("SoundNotify target has no constructed source mapping");
+    notify->target=source_handle(*target_source);
+  }
+  if(authored.notify.event_reference!=0U) {
+    if(authored.notify.event_reference>=source_event_name_mapping_.size() ||
+        !source_event_name_mapping_[authored.notify.event_reference])
+      throw std::runtime_error("SoundNotify event has no prepared scene identity");
+    const auto event=*source_event_name_mapping_[authored.notify.event_reference];
+    if(event==0U || event>std::numeric_limits<std::uint16_t>::max())
+      throw std::runtime_error("SoundNotify event identity is outside its native domain");
+    notify->event=static_cast<std::uint16_t>(event);
+  }
   segment->controls[0]=authored.segment.enabled;
   segment->times=authored.segment.times;
   segment->probability=authored.segment.probability;
