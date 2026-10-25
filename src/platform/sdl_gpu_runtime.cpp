@@ -100,8 +100,9 @@ struct OverlayBatch {
     std::optional<ui::UiRect> clip;
   };
   std::vector<PreviewVertex> vertices;
-  std::vector<std::uint8_t> atlas_rgba;
   std::vector<DrawRange> draws;
+  bool vertices_changed{true};
+  bool atlas_changed{true};
   bool valid{true};
 };
 
@@ -122,6 +123,9 @@ struct GpuOverlay {
   SDL_GPUGraphicsPipeline *pipeline{nullptr};
   std::vector<GpuOverlayFont> fonts;
   std::vector<GpuUiTexture> retail_textures;
+  std::optional<ui::GraphicsMenuDrawList> last_draw_list;
+  std::optional<OverlayBatch> cached_batch;
+  std::vector<std::uint8_t> atlas_rgba;
   bool ttf_initialized{false};
   std::size_t vertex_capacity{};
 };
@@ -461,14 +465,19 @@ void add_clipped_ui_quad(std::vector<PreviewVertex> &vertices,
 [[nodiscard]] OverlayBatch
 build_overlay_batch(const ui::GraphicsMenuDrawList &list,
                     const ui::RetailUiFontSet &sources,
-                    std::span<const GpuOverlayFont> fonts) {
+                    std::span<const GpuOverlayFont> fonts,
+                    std::vector<std::uint8_t> &atlas_rgba,
+                    bool rebuild_atlas) {
   OverlayBatch batch;
-  batch.atlas_rgba.assign(static_cast<std::size_t>(overlay_atlas_width) *
-                              overlay_atlas_height * 4U,
-                          255U);
-  for (std::size_t pixel = 0; pixel < batch.atlas_rgba.size() / 4U; ++pixel)
-    batch.atlas_rgba[pixel * 4U + 3U] = 0;
-  batch.atlas_rgba[3] = 255U;
+  const auto atlas_bytes = static_cast<std::size_t>(overlay_atlas_width) *
+                           overlay_atlas_height * 4U;
+  if (rebuild_atlas || atlas_rgba.size() != atlas_bytes) {
+    atlas_rgba.assign(atlas_bytes, 0U);
+    atlas_rgba[3] = 255U;
+    batch.atlas_changed = true;
+  } else {
+    batch.atlas_changed = false;
+  }
   batch.vertices.reserve((list.rectangles.size() + list.textures.size() +
                           ui::maximum_ui_text_bytes) *
                          6U);
@@ -531,7 +540,7 @@ build_overlay_batch(const ui::GraphicsMenuDrawList &list,
       const auto *source = static_cast<const std::uint8_t *>(surface->pixels);
       for (Uint32 y = 0; y < height; ++y) {
         auto *destination =
-            batch.atlas_rgba.data() +
+            atlas_rgba.data() +
             (static_cast<std::size_t>(cursor_y + y) * overlay_atlas_width +
              cursor_x) *
                 4U;
@@ -610,46 +619,57 @@ build_overlay_batch(const ui::GraphicsMenuDrawList &list,
     return true;
   if (batch.vertices.size() > gpu.vertex_capacity)
     return false;
+  if (!batch.vertices_changed && !batch.atlas_changed)
+    return true;
   const auto bytes = batch.vertices.size() * sizeof(PreviewVertex);
-  const SDL_GPUTransferBufferCreateInfo info{
-      .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-      .size = static_cast<Uint32>(bytes)};
-  transfer = SDL_CreateGPUTransferBuffer(device, &info);
-  if (transfer == nullptr)
-    return false;
-  void *mapped = SDL_MapGPUTransferBuffer(device, transfer, false);
-  if (mapped == nullptr)
-    return false;
-  std::memcpy(mapped, batch.vertices.data(), bytes);
-  SDL_UnmapGPUTransferBuffer(device, transfer);
-  const SDL_GPUTransferBufferCreateInfo atlas_info{
-      .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-      .size = static_cast<Uint32>(batch.atlas_rgba.size())};
-  atlas_transfer = SDL_CreateGPUTransferBuffer(device, &atlas_info);
-  if (atlas_transfer == nullptr)
-    return false;
-  mapped = SDL_MapGPUTransferBuffer(device, atlas_transfer, false);
-  if (mapped == nullptr)
-    return false;
-  std::memcpy(mapped, batch.atlas_rgba.data(), batch.atlas_rgba.size());
-  SDL_UnmapGPUTransferBuffer(device, atlas_transfer);
+  void *mapped = nullptr;
+  if (batch.vertices_changed) {
+    const SDL_GPUTransferBufferCreateInfo info{
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = static_cast<Uint32>(bytes)};
+    transfer = SDL_CreateGPUTransferBuffer(device, &info);
+    if (transfer == nullptr)
+      return false;
+    mapped = SDL_MapGPUTransferBuffer(device, transfer, false);
+    if (mapped == nullptr)
+      return false;
+    std::memcpy(mapped, batch.vertices.data(), bytes);
+    SDL_UnmapGPUTransferBuffer(device, transfer);
+  }
+  if (batch.atlas_changed) {
+    const SDL_GPUTransferBufferCreateInfo atlas_info{
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = static_cast<Uint32>(gpu.atlas_rgba.size())};
+    atlas_transfer = SDL_CreateGPUTransferBuffer(device, &atlas_info);
+    if (atlas_transfer == nullptr)
+      return false;
+    mapped = SDL_MapGPUTransferBuffer(device, atlas_transfer, false);
+    if (mapped == nullptr)
+      return false;
+    std::memcpy(mapped, gpu.atlas_rgba.data(), gpu.atlas_rgba.size());
+    SDL_UnmapGPUTransferBuffer(device, atlas_transfer);
+  }
   SDL_GPUCopyPass *copy = SDL_BeginGPUCopyPass(command);
   if (copy == nullptr)
     return false;
-  const SDL_GPUTransferBufferLocation source{.transfer_buffer = transfer};
-  const SDL_GPUBufferRegion destination{.buffer = gpu.vertex_buffer,
-                                        .offset = 0,
-                                        .size = static_cast<Uint32>(bytes)};
-  SDL_UploadToGPUBuffer(copy, &source, &destination, true);
-  const SDL_GPUTextureTransferInfo texture_source{
-      .transfer_buffer = atlas_transfer,
-      .pixels_per_row = overlay_atlas_width,
-      .rows_per_layer = overlay_atlas_height};
-  const SDL_GPUTextureRegion texture_destination{.texture = gpu.atlas,
-                                                 .w = overlay_atlas_width,
-                                                 .h = overlay_atlas_height,
-                                                 .d = 1};
-  SDL_UploadToGPUTexture(copy, &texture_source, &texture_destination, true);
+  if (batch.vertices_changed) {
+    const SDL_GPUTransferBufferLocation source{.transfer_buffer = transfer};
+    const SDL_GPUBufferRegion destination{.buffer = gpu.vertex_buffer,
+                                          .offset = 0,
+                                          .size = static_cast<Uint32>(bytes)};
+    SDL_UploadToGPUBuffer(copy, &source, &destination, true);
+  }
+  if (batch.atlas_changed) {
+    const SDL_GPUTextureTransferInfo texture_source{
+        .transfer_buffer = atlas_transfer,
+        .pixels_per_row = overlay_atlas_width,
+        .rows_per_layer = overlay_atlas_height};
+    const SDL_GPUTextureRegion texture_destination{.texture = gpu.atlas,
+                                                   .w = overlay_atlas_width,
+                                                   .h = overlay_atlas_height,
+                                                   .d = 1};
+    SDL_UploadToGPUTexture(copy, &texture_source, &texture_destination, true);
+  }
   SDL_EndGPUCopyPass(copy);
   return true;
 }
@@ -1676,10 +1696,18 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       SDL_SubmitGPUCommandBuffer(command);
       break;
     }
-    const auto overlay_batch =
-        draw_list.status == ui::UiBuildStatus::ok
-            ? build_overlay_batch(draw_list, ui_fonts, overlay.fonts)
-            : OverlayBatch{};
+    if (draw_list.status == ui::UiBuildStatus::ok &&
+        (!overlay.last_draw_list || *overlay.last_draw_list != draw_list ||
+         !overlay.cached_batch)) {
+      overlay.cached_batch.emplace(build_overlay_batch(
+          draw_list, ui_fonts, overlay.fonts, overlay.atlas_rgba, true));
+      overlay.last_draw_list = draw_list;
+    }
+    const OverlayBatch empty_overlay_batch{};
+    const auto &overlay_batch =
+        draw_list.status == ui::UiBuildStatus::ok && overlay.cached_batch
+            ? *overlay.cached_batch
+            : empty_overlay_batch;
     SDL_GPUTransferBuffer *overlay_transfer = nullptr;
     SDL_GPUTransferBuffer *overlay_atlas_transfer = nullptr;
     const auto release_overlay_transfers = [&]() {
@@ -1700,6 +1728,10 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       release_overlay_transfers();
       break;
     }
+    if (overlay.cached_batch)
+      overlay.cached_batch->vertices_changed = false;
+    if (overlay.cached_batch)
+      overlay.cached_batch->atlas_changed = false;
     std::optional<IntroPreviewDiagnosticSubmission> static_fallback_submission;
     std::unique_ptr<SdlIntroFrame> static_intro_fallback_frame;
     if (intro_static_fallback != nullptr) {
