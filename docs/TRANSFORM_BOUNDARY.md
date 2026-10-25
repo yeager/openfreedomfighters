@@ -14,6 +14,8 @@ On one reviewed Direct3D draw path, submitted item positions derive from an obje
 
 Geometry candidates are collected from an already constructed runtime scene hierarchy. The relationship between authored map references and those candidates remains unverified; this does not establish that the collection is exhaustive or represents the normal gameplay scene.
 
+`bind_scene_instances_to_runtime` now provides a narrow identity/resource receipt after complete runtime directory construction. It checks the source-index resource mapping, canonical owner association, source-pose agreement, and any authored parent recorded by the asset against the live runtime parent. The caller must supply an asset built from the same GMS directory as the runtime and call before gameplay updates change source poses. This receipt does not establish map placement, world transforms, camera/view selection, visibility, draw order, or backend acceptance.
+
 ## Work required
 
 - Join map entries to live scene-object identities and their established parent ancestry.

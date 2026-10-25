@@ -306,6 +306,7 @@ add_library(off_core
     src/graphics/render_scale.cpp
     src/graphics/temporal_history.cpp
     src/graphics/scene_instance_history.cpp
+    src/graphics/scene_runtime_binding.cpp
     src/graphics/temporal_jitter.cpp
     src/graphics/temporal_resolve_inputs.cpp
     src/graphics/temporal_resolve_baseline.cpp
