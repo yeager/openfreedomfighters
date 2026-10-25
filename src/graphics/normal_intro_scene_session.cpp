@@ -66,6 +66,8 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                  runtime_->apply_supported_vert_anim_deferred_reader(work);
                if (runtime_->supports_basic_light_owner_deferred_reader(work))
                  runtime_->apply_supported_basic_light_owner_deferred_reader(work);
+               if (runtime_->supports_particle_emitter_deferred_reader(work))
+                 runtime_->apply_supported_particle_emitter_deferred_reader(work);
                if (runtime_->supports_param_anim_deferred_reader(work))
                  runtime_->apply_supported_param_anim_deferred_reader(work);
                // LensFlare is a separate complete-envelope reader gate. It

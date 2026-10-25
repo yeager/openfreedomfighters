@@ -1538,6 +1538,9 @@ IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() c
     if(basic_light_owner_deferred_reader_states_.contains(work.source_directory_index) ||
        supports_basic_light_owner_deferred_reader(work))
       return IntroDeferredReaderFamily::basic_light_owner;
+    if(particle_emitter_deferred_reader_states_.contains(work.source_directory_index) ||
+       supports_particle_emitter_deferred_reader(work))
+      return IntroDeferredReaderFamily::particle_emitter_component;
     if(param_anim_deferred_reader_states_.contains(work.source_directory_index) ||
        supports_param_anim_deferred_reader(work))
       return IntroDeferredReaderFamily::param_anim_component;
@@ -1941,6 +1944,8 @@ IntroRuntime::unimplemented_attachment_reader_coverage_inventory() const {
       if (candidate.family == IntroUnimplementedAttachmentReaderFamily::parameter_animation &&
           param_anim_deferred_reader_states_.contains(row))
         continue;
+      if (candidate.family == IntroUnimplementedAttachmentReaderFamily::particle_emitter &&
+          particle_emitter_deferred_reader_states_.contains(row)) continue;
       ++entry.attachment_owners;
       entry.attachment_instances += instances;
       if (directory[row].deferred_source_offset != 0U)
@@ -3442,6 +3447,96 @@ void IntroRuntime::apply_supported_basic_light_owner_deferred_reader(
   try { record_supported_reader_admission(work); }
   catch (...) { basic_light_owner_deferred_reader_states_.erase(entry); throw; }
   object.flags = (object.flags & ~0x4U) | (owner_flag ? 0x4U : 0U);
+}
+
+IntroConstructedPictureComponent::ParticleEmitterReaderState
+IntroRuntime::parse_particle_emitter_references(const IntroDeferredReaderWork& work) const {
+  IntroConstructedPictureComponent::ParticleEmitterReaderState state;
+  state.values = data::ParticleEmitterComponentPayloadReader::read_block(
+      resources_.sources().deferred_source_block(work.source_directory_index));
+  for(std::size_t index=0;index<state.values.consumed_references.size();++index) {
+    const auto field=state.values.consumed_references[index];
+    if(field.bits && (field.value_class==8U || field.value_class==10U) &&
+       !(index==0U && field.value_class==8U) && !(index==14U && field.value_class==10U))
+      throw std::runtime_error("ParticleEmitter consumed field has an unsupported relocated reference domain");
+  }
+  const auto reference=state.values.template_reference;
+  if(reference.bits) {
+    if(reference.value_class!=8U) throw std::runtime_error("ParticleEmitter template reference domain is unsupported");
+    const auto row=resources_.sources().local_source_for_authored_reference(reference.bits);
+    if(!row || *row>=directory_resource_mapping_.size() || !directory_resource_mapping_[*row])
+      throw std::runtime_error("ParticleEmitter template reference has no constructed resource");
+    state.template_resource=*directory_resource_mapping_[*row];
+    state.template_owner=associated_resource_owner(state.template_resource);
+    if(state.template_owner && resource_handle(*state.template_owner)!=state.template_resource)
+      throw std::runtime_error("ParticleEmitter template resource association is inconsistent");
+  }
+  const auto event=state.values.event_reference;
+  state.event_id=data::resolve_particle_emitter_event_reference(
+      event,source_event_name_mapping());
+  return state;
+}
+
+bool IntroRuntime::supports_particle_emitter_deferred_reader(const IntroDeferredReaderWork& work) const noexcept {
+  try {
+    if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !work.processed ||
+       particle_emitter_deferred_reader_states_.contains(work.source_directory_index) ||
+       std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate){return &candidate==&work;})==deferred_reader_work_.end()) return false;
+    const auto row=work.source_directory_index;
+    const auto& source=resources_.sources().directory().at(row);
+    const auto owner=source_handle(row);
+    const auto attached=owner_components(owner);
+    const auto object=constructed_object_owners_.find(row);
+    if(source.source_type!=0x00200002U || source.source_variant ||
+       source.attachments.size()!=1U || attached.size()!=1U ||
+       resources_.sources().attachment_identifier(row,0U)!="ZGEOM_ParticleEmitter" ||
+       source.deferred_source_offset!=work.source_offset || directory_resource_mapping_.at(row)!=work.resource ||
+       associated_resource_owner(work.resource)!=owner || resource_handle(owner)!=work.resource ||
+       !resource_state_for_handle(work.resource) || object==constructed_object_owners_.end() ||
+       object->second.owner!=owner || object->second.resource!=work.resource || object->second.class_identifier!=source.source_type) return false;
+    const auto index=attached.front();const auto& component=components_.at(index);
+    const auto payload=constructed_picture_components_.find(index);
+    if(!component.constructed() || component.removed() || component.source().directory_index!=row ||
+       component.source().attachment_index!=0U || component.source().factory_name!="ZGEOM_ParticleEmitter" ||
+       component.state().attached_owner!=owner.value || payload==constructed_picture_components_.end() ||
+       payload->second.owner!=owner || !payload->second.particle_emitter || payload->second.particle_emitter_reader) return false;
+    static_cast<void>(parse_particle_emitter_references(work));
+    return true;
+  } catch(const std::exception&) {return false;}
+}
+
+void IntroRuntime::apply_supported_particle_emitter_deferred_reader(const IntroDeferredReaderWork& work) {
+  if(!supports_particle_emitter_deferred_reader(work)) throw std::runtime_error("ParticleEmitter reader requires supported canonical work");
+  auto state=parse_particle_emitter_references(work);
+  // All bounded fields and reference domains are validated before registry effects.
+  if(!state.template_owner && !state.values.template_name.empty()) {
+    const auto property=scene_resource_property("ParticleTemplates");
+    auto* collection=property && property->object_token?application_.resolve_handle_collection(*property->object_token):nullptr;
+    if(!collection) {
+      const auto token=application_.create_handle_collection();
+      collection=application_.resolve_handle_collection(token);
+      if(!collection) throw std::runtime_error("ParticleTemplates collection token is not live");
+      set_scene_object_property_native("ParticleTemplates",token);
+    }
+    state.template_resource={};
+    for(const auto token:collection->members) {
+      try {
+        const IntroRuntimeHandle owner{token};
+        const auto resource=resource_handle(owner);
+        if(associated_resource_owner(resource)!=owner) continue;
+        const auto object=std::ranges::find_if(constructed_object_owners_,[&](const auto& pair){return pair.second.owner==owner && pair.second.resource==resource;});
+        if(object==constructed_object_owners_.end() || object->second.name!=state.values.template_name) continue;
+        state.template_resource=resource;state.template_owner=owner;break;
+      } catch(const std::exception&) {continue;}
+    }
+  }
+  const auto index=owner_components(source_handle(work.source_directory_index)).front();
+  auto& component=constructed_picture_components_.at(index);
+  const auto [entry,inserted]=particle_emitter_deferred_reader_states_.emplace(work.source_directory_index,state);
+  if(!inserted) throw std::runtime_error("duplicate ParticleEmitter reader state");
+  try {record_supported_reader_admission(work);}
+  catch(...) {particle_emitter_deferred_reader_states_.erase(entry);throw;}
+  component.particle_emitter_reader=std::move(state);
 }
 
 bool IntroRuntime::supports_param_anim_deferred_reader(

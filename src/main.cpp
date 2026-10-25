@@ -595,6 +595,7 @@ void write_startup_route_cold_probe(const std::filesystem::path &root,
   case Family::vert_anim_component: return "vert-anim-component";
   case Family::basic_light_owner: return "basic-light-owner";
   case Family::param_anim_component: return "param-anim-component";
+  case Family::particle_emitter_component: return "particle-emitter-component";
   case Family::lens_flare_component: return "lens-flare-component";
   case Family::matpos_component: return "matpos-component";
   case Family::count: break;

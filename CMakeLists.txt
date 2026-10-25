@@ -628,6 +628,9 @@ if(BUILD_TESTING)
     target_compile_definitions(off_vfs_file_reader_tests PRIVATE
         OFF_VFS_READER_TEST_WORK_DIR="${CMAKE_BINARY_DIR}/vfs-reader-test-work")
     add_test(NAME off_vfs_file_reader_tests COMMAND off_vfs_file_reader_tests)
+    add_executable(off_particle_emitter_component_payload_tests tests/particle_emitter_component_payload_tests.cpp)
+    target_link_libraries(off_particle_emitter_component_payload_tests PRIVATE off_core)
+    add_test(NAME off_particle_emitter_component_payload_tests COMMAND off_particle_emitter_component_payload_tests)
     add_executable(off_param_anim_component_payload_tests
         tests/param_anim_component_payload_tests.cpp)
     target_link_libraries(off_param_anim_component_payload_tests PRIVATE off_core)

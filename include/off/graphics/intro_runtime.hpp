@@ -10,6 +10,7 @@
 #include "off/data/vert_anim_deferred_component_reader.hpp"
 #include "off/data/lens_flare_deferred_reader.hpp"
 #include "off/data/param_anim_component_payload.hpp"
+#include "off/data/particle_emitter_component_payload.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_named_global_references.hpp"
 #include "off/graphics/intro_renderer_relocation_prefix.hpp"
@@ -188,6 +189,13 @@ struct IntroConstructedPictureComponent {
   std::optional<ParamAnimationStorage> param_animation;
   std::optional<data::ParamAnimComponentPayloadState> param_animation_reader;
   std::optional<ParticleEmitterStorage> particle_emitter;
+  struct ParticleEmitterReaderState {
+    data::ParticleEmitterComponentPayloadState values;
+    IntroRuntimeResourceHandle template_resource;
+    std::optional<IntroRuntimeHandle> template_owner;
+    std::uint16_t event_id{};
+  };
+  std::optional<ParticleEmitterReaderState> particle_emitter_reader;
   struct ScrollTextureState {std::uint16_t start_event{},stop_event{};};
   // Local LensFlare reader storage. It is intentionally inert: rendering and
   // all component callbacks remain outside this bounded reader boundary.
@@ -346,7 +354,7 @@ enum class IntroDeferredReaderFamily : std::uint8_t {
   first_cut_sequence, first_cut_list, first_cut_legal_picture,
   external_cut_commands, first_cut_fade_picture, first_cut_camera,
   basic_group_owner, vert_anim_component,
-  lens_flare_component, matpos_component, param_anim_component, basic_light_owner,
+  lens_flare_component, matpos_component, param_anim_component, particle_emitter_component, basic_light_owner,
   count,
 };
 enum class IntroDeferredReaderImplementationState : std::uint8_t {
@@ -1215,6 +1223,8 @@ public:
   [[nodiscard]] bool supports_basic_light_owner_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
   void apply_supported_basic_light_owner_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroBasicLightOwnerDeferredReaderState>& basic_light_owner_deferred_reader_states() const noexcept { return basic_light_owner_deferred_reader_states_; }
+  [[nodiscard]] bool supports_particle_emitter_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
+  void apply_supported_particle_emitter_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] bool supports_param_anim_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
   void apply_supported_param_anim_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroParamAnimDeferredReaderState>& param_anim_deferred_reader_states() const noexcept { return param_anim_deferred_reader_states_; }
@@ -1395,6 +1405,8 @@ private:
   std::map<std::size_t,IntroVertAnimDeferredReaderState> vert_anim_deferred_reader_states_;
   std::map<std::size_t,IntroLensFlareDeferredReaderState> lens_flare_deferred_reader_states_;
   std::map<std::size_t,IntroParamAnimDeferredReaderState> param_anim_deferred_reader_states_;
+  std::map<std::size_t,IntroConstructedPictureComponent::ParticleEmitterReaderState> particle_emitter_deferred_reader_states_;
+  [[nodiscard]] IntroConstructedPictureComponent::ParticleEmitterReaderState parse_particle_emitter_references(const IntroDeferredReaderWork& work) const;
   std::map<std::size_t,IntroBasicLightOwnerDeferredReaderState> basic_light_owner_deferred_reader_states_;
   [[nodiscard]] bool supports_light_owner_deferred_identity(const IntroDeferredReaderWork& work) const noexcept;
   std::optional<IntroFirstCutPlayerPreparedState> first_cut_player_prepared_state_;

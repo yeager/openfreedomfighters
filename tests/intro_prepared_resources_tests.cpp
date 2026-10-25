@@ -1347,6 +1347,83 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
           "live MovieControl activation delivers both first-cut lifecycle phases before group-state requests");
 }
 
+static OFF_NOINLINE void test_particle_emitter_runtime() {
+    for(unsigned scenario=0;scenario<13U;++scenario) {
+        Fixture fixture(false,true,false,true,false,false,false,false,false,3U,1U,3U);
+        const auto original=fixture.image();
+        std::uint32_t table{};for(unsigned i=0;i<4U;++i)table|=std::to_integer<std::uint32_t>(fixture.payload[20U+i])<<(8U*i);
+        const auto record=fixture.synthetic_external_record_offsets[0];
+        const auto entry=std::ranges::find(original.directory(),record,&off::data::GmsDirectoryEntry::record_offset);
+        const auto counts=table+4U+entry->pool_group*96U;
+        const auto& old=original.pool_groups()[entry->pool_group].class_counts;
+        set(fixture.payload,counts+entry->pool_class*4U,old[entry->pool_class]-3U);
+        set(fixture.payload,counts+4U,old[1]+3U);
+        for(unsigned i=0;i<3U;++i) {
+            const auto at=fixture.synthetic_external_record_offsets[i];
+            set(fixture.payload,at+16U,i?0x002000e5U:0x00200002U);
+            set(fixture.payload,at+20U,0U);set(fixture.payload,at+32U,0U);
+        }
+        // Both template rows retain the same exact constructed name.
+        for(unsigned i=0;i<4U;++i) fixture.payload[fixture.synthetic_external_record_offsets[2]+i]=fixture.payload[fixture.synthetic_external_record_offsets[1]+i];
+        const auto attachments=fixture.payload.size();word(fixture.payload,1U);
+        word(fixture.payload,static_cast<std::uint32_t>(attachments+12U));word(fixture.payload,0U);text(fixture.payload,"ZGEOM_ParticleEmitter");
+        set(fixture.payload,record+20U,static_cast<std::uint32_t>(attachments));
+        const auto template_it=std::ranges::find(original.directory(),fixture.synthetic_external_record_offsets[2],&off::data::GmsDirectoryEntry::record_offset);
+        const auto template_row=static_cast<std::size_t>(template_it-original.directory().begin());
+        Bytes block(4U);
+        scalar(block,scenario==8U?10U:8U,scenario==0U?static_cast<std::uint32_t>(template_row+1U)|0x80000000U:scenario==7U?0xffffffffU:scenario==8U?1U:0U);
+        scalar(block,scenario==12U?8U:3U,1U);scalar(block,3U,0U);floating(block,2U,2.0F);floating(block,2U,3.0F);
+        for(unsigned group=0;group<2U;++group) {
+            floating(block,0x82U,1.0F);floating(block,0x42U,2.0F);floating(block,0xc2U,3.0F);
+            if(group==0U){floating(block,2U,-90.0F);floating(block,2U,180.0F);}
+        }
+        floating(block,2U,4.0F);scalar(block,10U,scenario==9U?0x10001U:1U);
+        scalar(block,3U,0U);scalar(block,3U,1U);floating(block,2U,5.0F);
+        block.push_back(std::byte{4});text(block,scenario==4U?"syntheticExternalOwner1":"SyntheticExternalOwner1");
+        block.push_back(std::byte{6});finish(block);
+        if(scenario==6U){block.push_back(std::byte{0});set(block,0U,static_cast<std::uint32_t>(block.size()));}
+        set(fixture.payload,record+32U,static_cast<std::uint32_t>(fixture.payload.size()));fixture.payload.insert(fixture.payload.end(),block.begin(),block.end());
+        fixture.event_names({"EmitterEvent"});
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,{[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        app.initialize_native_group_registration();app.initialize_native_window_language_registration();app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+        app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();app.initialize_native_remaining_intro_scope_registration();
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,"synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        static_cast<void>(runtime->declare_scene_event_name("EmitterEvent",0x345U));runtime->prepare_source_event_names();runtime->construct_root();runtime->begin_source_loading_without_engine_renderer();runtime->construct_source_directory_without_engine_renderer();
+        const auto& directory=runtime->resources().sources().directory();
+        const auto row=static_cast<std::size_t>(std::ranges::find(directory,record,&off::data::GmsDirectoryEntry::record_offset)-directory.begin());
+        const auto component=runtime->owner_components(runtime->source_handle(row)).front();
+        const auto property=runtime->scene_resource_property("ParticleTemplates");
+        auto* registry=app.resolve_handle_collection(*property->object_token);
+        const auto first=registry->members[0],second=registry->members[1];
+        if(scenario==2U) registry->members.insert(registry->members.begin(),0xffffffffffffffffULL);
+        if(scenario==3U) registry->members={second,first};
+        if(scenario==5U || scenario==6U || scenario==10U || scenario==0U) runtime->set_scene_object_property_native("ParticleTemplates",app.create_handle_collection());
+        if(scenario==0U || scenario==6U || scenario==10U) runtime->set_scene_owner_property_native("ParticleTemplates",runtime->source_handle(row),0U);
+        if(scenario==11U) registry->members={0xffffffffffffffffULL};
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));auto& host=session->runtime();
+        session->complete_postconstruction_reader_bracket(13U);
+        const auto& state=host.constructed_attachment(component)->particle_emitter_reader;
+        if(scenario==0U || scenario==6U) check(!host.scene_resource_property("ParticleTemplates")->object_token,"numeric success and malformed input do not invoke fallback registry mutation");
+        if(scenario==10U) {
+            const auto created=host.scene_resource_property("ParticleTemplates")->object_token;
+            check(created && app.resolve_handle_collection(*created) && app.resolve_handle_collection(*created)->members.empty(),"valid fallback miss lazily publishes a persistent empty registry");
+        }
+        const bool valid=scenario!=6U && scenario!=7U && scenario!=8U && scenario!=9U && scenario!=12U;
+        check(state.has_value()==valid,"ParticleEmitter publishes only fully valid runtime fields");
+        if(valid) {
+            const auto expected=scenario==0U||scenario==3U?second:scenario==4U||scenario==5U||scenario==10U||scenario==11U?0U:first;
+            check(state->template_owner==(expected?std::optional<off::graphics::IntroRuntimeHandle>{{expected}}:std::nullopt),"ParticleEmitter uses numeric mapping and ordered exact registry lookup");
+            check(state->template_resource==(expected?host.resource_handle({expected}):off::graphics::IntroRuntimeResourceHandle{}),"ParticleEmitter retains resource handle rather than owner token");
+            check(state->event_id==0x345U && state->values.event_reference.bits==1U,"ParticleEmitter maps full event index before narrowing ID");
+            check(host.constructed_attachment(component)->particle_emitter->local_reference==0U,"opaque constructor word remains untouched");
+        }
+        const auto work=std::ranges::find(host.deferred_reader_work(),row,&off::graphics::IntroDeferredReaderWork::source_directory_index);
+        auto copy=*work;check(!host.supports_particle_emitter_deferred_reader(copy),"ParticleEmitter rejects foreign work identity");
+        rejects([&]{host.apply_supported_particle_emitter_deferred_reader(copy);});
+    }
+}
+
 static OFF_NOINLINE void test_param_anim_light_runtime() {
     for (unsigned scenario{}; scenario < 12U; ++scenario) {
         Fixture fixture(false,true,false,true,false,false,false,false,false,3U,1U,1U);
@@ -2592,6 +2669,7 @@ int main(int argc, char* argv[]) {
         TestGroup{"typed-deferred-reader-targets", test_visual_scope_lifecycle},
         TestGroup{"basic-light-owner-runtime", test_basic_light_owner_runtime},
         TestGroup{"param-anim-light-runtime", test_param_anim_light_runtime},
+        TestGroup{"particle-emitter-runtime", test_particle_emitter_runtime},
         TestGroup{"prepared-resource-variants", test_prepared_resource_variants},
         TestGroup{"sound-source-transforms", test_sound_source_transforms},
         TestGroup{"runtime-and-archive-lifecycle", test_runtime_and_archive_lifecycle},
