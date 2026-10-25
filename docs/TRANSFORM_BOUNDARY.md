@@ -47,13 +47,16 @@ then calls virtual candidate enumerators on each active view object. It filters
 the returned runtime candidates, derives per-candidate pose records from the
 candidate and view state, and passes accepted candidates into renderer-local
 cache and view-list materialization. The active-object array is populated by
-runtime scene-object activation: the activation path walks an object's own
-child array and queues or registers each child for renderer-view processing.
-This establishes a normal per-view candidate producer, beyond the conditional
-shadow-carrier route described below. The candidate enumerators' concrete
-implementations and the producer of the scene object's child array remain
-unknown. The candidate collection has not been
-identified as the RMC/RMI tables or as an exhaustive enumeration of GMS rows.
+renderer-owned child registration: a renderer base object calls a virtual
+factory, stores the returned child in its indexed slots and child list, then
+walks that list to queue or register children for active-view processing. This
+establishes a normal per-view candidate producer, beyond the conditional
+shadow-carrier route described below. The callers of child registration and
+the factory's concrete implementations remain unknown, so this renderer child
+list is not yet joined to the parsed scene hierarchy. The candidate
+enumerators' concrete implementations also remain unknown. The candidate
+collection has not been identified as the RMC/RMI tables or as an exhaustive
+enumeration of GMS rows.
 Eligible candidates retain their runtime object identity when wrapped, but
 this does not prove that every map-resolved direct PRM source reaches the view
 path. The view builder also writes intermediate pose records to local scratch
@@ -65,15 +68,15 @@ construction and calls a runtime setter that writes a link field at offset
 `+0x6c`. The view child-list builder reads `+0x6c` through the runtime object
 pointer stored at offset `+0x38` in its renderer wrapper. The traced wrapper
 factory stores its runtime input pointer at that same `+0x38` field, so this
-view-side link is tied to the wrapper's exact runtime input object. The GMS
-setter's receiver is a loader-constructed pool object and writes the same field
-offset, which supports interpreting the traversed links as runtime hierarchy
-links. However, the candidate input pointer has not been joined to a specific
-GMS loader row or shown to be a selected ordinary-gameplay object. The view
-path also does not read or carry the GMS ordinal. Thus the traces narrow the
-gap to candidate-population and scene-selection provenance; they do not prove
-that any particular parsed GMS row reaches this view traversal. Matching
-offsets or ordinals alone would not prove identity.
+view-side link is tied to the wrapper's exact runtime input object. Separately,
+the GMS setter's receiver is a loader-constructed pool object and writes a
+field at the same offset. The matching offset is consistent with a hierarchy
+link, but does not join these objects; the view candidate has not been joined
+to a specific GMS loader row or shown to be a selected ordinary-gameplay
+object. The view path also does not read or carry the GMS ordinal. Thus the
+traces establish an ordinary view candidate path and a separate GMS hierarchy
+write, but do not prove that any parsed GMS row reaches this traversal.
+Matching offsets or ordinals alone would not prove identity.
 
 The view-side geometry builders also derive frustum planes from view state and
 test geometry bounds against those planes, updating visibility masks before
