@@ -4,6 +4,7 @@
 #include "off/graphics/picture_expansion.hpp"
 #include "off/platform/picture_stage_shader.hpp"
 #include <memory>
+#include "off/graphics/camera_display.hpp"
 
 namespace off::platform {
 
@@ -66,6 +67,12 @@ public:
   ~SdlIntroRenderer();
   SdlIntroRenderer(const SdlIntroRenderer&) = delete;
   SdlIntroRenderer& operator=(const SdlIntroRenderer&) = delete;
+  // List and every selected camera are borrowed and must outlive this renderer.
+  // Prepared frames copy viewport state and do not borrow the camera.
+  void attach_camera_display(graphics::CameraRendererList& list,
+                             const graphics::CameraDisplayDimensions& display);
+  void set_camera_parent(graphics::CameraPixelRectangle parent) { camera_parent_=parent; }
+  [[nodiscard]] std::optional<SDL_GPUViewport> selected_camera_viewport() const;
   [[nodiscard]] std::size_t image_count() const noexcept;
   // No active pass may exist. Validates CPU inputs before encoding commands;
   // uploads indexed expanded geometry in one copy pass. Input spans are copied.
@@ -75,10 +82,15 @@ public:
   // Waiting for GPU idle cannot make an unsubmitted command safe. On exception,
   // cancel the caller-owned command; no implicit submission/retry is performed.
   [[nodiscard]] std::unique_ptr<SdlIntroFrame> prepare(
-      SDL_GPUCommandBuffer* command, std::span<const SdlIntroDraw> draws) const;
+      SDL_GPUCommandBuffer* command, std::span<const SdlIntroDraw> draws, bool diagnostic_viewport = false) const;
 private:
   friend struct SdlIntroFrame::Impl;
   struct Impl;
   std::shared_ptr<Impl> impl_;
+  graphics::FreshIntroCamera* selected_camera_{};
+  float selected_priority_{};
+  std::uint32_t selected_color_{};
+  graphics::CameraPixelRectangle camera_parent_{};
+  std::unique_ptr<graphics::CameraRendererNode> camera_node_;
 };
 } // namespace off::platform

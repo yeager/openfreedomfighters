@@ -1,3 +1,4 @@
+#include <cmath>
 #include "off/graphics/fresh_intro_camera.hpp"
 #include <bit>
 #include <stdexcept>
@@ -24,10 +25,26 @@ FreshIntroCamera::FreshIntroCamera()
       enabled_state_(0x20U) {}
 
 FreshIntroCamera::FreshIntroCamera(const data::GmsIntroCameraSource &source)
-    : parameters_(convert_intro_camera_mode_zero(source)),
+    : parameters_(convert_intro_camera_authored(source)),
       enabled_state_(fresh_source_flags(source)),
       priority_(std::bit_cast<std::int32_t>(source.priority)) {}
 
+void FreshIntroCamera::apply_authored_parameters(const data::GmsIntroCameraSource& source) {
+  if(enabled_state_.changing_) throw std::runtime_error("camera reader cannot reenter state transition");
+  auto converted=convert_intro_camera_authored(source);
+  parameters_=std::move(converted);
+  priority_=std::bit_cast<std::int32_t>(source.priority);
+  if(source.flag_option_a==0U) enabled_state_.flags_|=0x80000U;
+  if(source.flag_option_b!=0U) enabled_state_.flags_|=0x10000U;
+}
+void FreshIntroCamera::set_display_tuple(std::array<float,4> tuple, bool write_marker) {
+  for(float v:tuple) if(!std::isfinite(v)) throw std::runtime_error("nonfinite camera tuple");
+  if(tuple[2]==0) throw std::runtime_error("zero camera tuple width");
+  volatile float ratio=tuple[3]/tuple[2];
+  if(!std::isfinite(ratio)) throw std::runtime_error("nonfinite camera tuple ratio");
+  parameters_.viewport=tuple; parameters_.viewport_ratio=ratio;
+  if(write_marker) render_control_=4;
+}
 void FreshIntroCamera::set_priority(std::int32_t priority) noexcept {
   const volatile float rounded=static_cast<float>(priority);
   priority_=priority;

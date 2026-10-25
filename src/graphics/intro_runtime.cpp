@@ -1,3 +1,4 @@
+#include "off/graphics/camera_display.hpp"
 #include "off/graphics/intro_runtime.hpp"
 #include "off/data/deferred_attachment_dispatch_shape.hpp"
 #include "off/data/deferred_compact_block_profile.hpp"
@@ -3093,7 +3094,7 @@ void IntroRuntime::apply_supported_first_cut_component_reader(
 }
 
 void IntroRuntime::apply_supported_first_cut_camera_deferred_reader(
-    const IntroDeferredReaderWork& work) {
+    const IntroDeferredReaderWork& work, const CameraDisplayServices* display) {
   const auto source_index=resources_.camera_index();
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !work.processed ||
       work.source_directory_index!=source_index || first_cut_camera_reader_state_)
@@ -3115,6 +3116,9 @@ void IntroRuntime::apply_supported_first_cut_camera_deferred_reader(
       authored.angle_degrees!=resources_.camera().angle_degrees ||
       authored.viewport!=resources_.camera().viewport)
     throw std::runtime_error("First-cut camera reader does not match prepared camera source");
+  auto& canonical_camera=camera_for_owner(source_handle(source_index));
+  canonical_camera.apply_authored_parameters(authored);
+  if(display) apply_camera_display(canonical_camera, *display);
   first_cut_camera_reader_state_={.owner=source_handle(source_index),.resource=work.resource,
                                   .authored=authored};
   try { record_supported_reader_admission(work); }

@@ -60,4 +60,6 @@ struct IntroCameraState {
 [[nodiscard]] IntroCameraState
 convert_intro_camera_mode_zero(const data::GmsIntroCameraSource& source);
 
+[[nodiscard]] IntroCameraState convert_intro_camera_authored(const data::GmsIntroCameraSource& source);
+
 } // namespace off::graphics

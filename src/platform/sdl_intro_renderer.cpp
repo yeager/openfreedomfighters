@@ -140,15 +140,32 @@ SdlIntroRenderer::SdlIntroRenderer(SDL_GPUDevice* device,std::span<const graphic
   }
 }
 SdlIntroRenderer::~SdlIntroRenderer()=default;
+void SdlIntroRenderer::attach_camera_display(graphics::CameraRendererList& list,
+    const graphics::CameraDisplayDimensions& display) {
+  if(camera_node_) throw std::runtime_error("renderer display already attached");
+  camera_parent_={0,0,static_cast<std::uint32_t>(display.width),static_cast<std::uint32_t>(display.height)};
+  camera_node_=std::make_unique<graphics::CameraRendererNode>(list,display,
+      [this](graphics::FreshIntroCamera& camera,float priority) { selected_camera_=&camera; selected_priority_=priority; },
+      [this](std::uint32_t color) { selected_color_=color; });
+}
+std::optional<SDL_GPUViewport> SdlIntroRenderer::selected_camera_viewport() const {
+  if(!selected_camera_) return std::nullopt;
+  const auto v=graphics::camera_pixel_viewport(selected_camera_->parameters().viewport,camera_parent_);
+  if(v.x<0 || v.y<0 || v.width<=0 || v.height<=0)
+    throw std::runtime_error("camera viewport is unsupported by SDL backend");
+  return SDL_GPUViewport{float(v.x),float(v.y),float(v.width),float(v.height),0,1};
+}
 std::size_t SdlIntroRenderer::image_count() const noexcept { return impl_->images.size(); }
 SdlIntroFrame::SdlIntroFrame(std::unique_ptr<Impl> p):impl_(std::move(p)) {}
 SdlIntroFrame::~SdlIntroFrame()=default;
 
-std::unique_ptr<SdlIntroFrame> SdlIntroRenderer::prepare(SDL_GPUCommandBuffer* command,std::span<const SdlIntroDraw> draws) const {
+std::unique_ptr<SdlIntroFrame> SdlIntroRenderer::prepare(SDL_GPUCommandBuffer* command,std::span<const SdlIntroDraw> draws, bool diagnostic_viewport) const {
   if(!command) throw std::runtime_error("intro prepare requires command buffer");
   auto p=std::make_unique<SdlIntroFrame::Impl>(); p->owner=impl_; p->command=command;
   std::vector<Vertex> vertices; std::vector<Uint16> indices;
-  for(const auto& draw:draws) {
+  const auto camera_viewport=diagnostic_viewport ? std::optional<SDL_GPUViewport>{} : selected_camera_viewport();
+  for(auto draw:draws) {
+    if(camera_viewport) draw.viewport=*camera_viewport;
     const auto& s=draw.state; const auto& v=draw.viewport; const auto& r=draw.scissor;
     if(!valid_state(s)||s.fog_enabled||s.alpha_test_enabled||s.active_later_stages||!impl_->images.contains(draw.catalog_image_index)||
        s.color_format==SDL_GPU_TEXTUREFORMAT_INVALID||

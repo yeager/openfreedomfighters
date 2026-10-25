@@ -43,6 +43,7 @@
 #include <vector>
 
 namespace off::graphics {
+struct CameraDisplayServices;
 
 class IntroRuntime;
 class FirstCutFadePhaseOneSession;
@@ -1194,7 +1195,7 @@ public:
   // reader. This retains parsed source values only; it cannot schedule a cut
   // or cause a lifecycle, audio, or renderer effect.
   void apply_supported_first_cut_component_reader(const IntroDeferredReaderWork& work);
-  void apply_supported_first_cut_camera_deferred_reader(const IntroDeferredReaderWork& work);
+  void apply_supported_first_cut_camera_deferred_reader(const IntroDeferredReaderWork& work, const CameraDisplayServices* display = nullptr);
   [[nodiscard]] const IntroFirstCutSequenceReaderState* first_cut_sequence_reader_state() const noexcept {return first_cut_sequence_reader_state_?&*first_cut_sequence_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutSequenceComponentReaderState* first_cut_sequence_component_reader_state() const noexcept {return first_cut_sequence_component_reader_state_?&*first_cut_sequence_component_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutListReaderState* first_cut_list_reader_state() const noexcept {return first_cut_list_reader_state_?&*first_cut_list_reader_state_:nullptr;}

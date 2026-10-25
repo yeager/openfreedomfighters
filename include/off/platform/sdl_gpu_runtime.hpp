@@ -29,6 +29,9 @@ struct RuntimeResult {
 // this call returns; GPU resources are released before the window is destroyed.
 // A null scene is normal startup: no world uploads, depth target, diagnostic
 // projection or scene draws. Non-null opts into the separate diagnostic path.
+// Normal startup transfers the postconstructed CPU session to this window thread;
+// its reader bracket runs after graphics settings and real backend creation.
+// CPU diagnostic reader receipts are rebound without replaying admission.
 // Normal startup requires the one manager-owned retained intro session;
 // diagnostic scene and intro session are mutually exclusive. GPU ownership
 // ends before this borrow ends. The renderer intentionally cannot receive a
@@ -39,6 +42,8 @@ struct RuntimeResult {
 // produced by a NormalIntroSceneHost only after its lifecycle, event, camera,
 // view and picture-frame gates have admitted a frame.  The retained session
 // remains separate: it owns the authored images uploaded by the renderer.
+// WideScreen defaults false as replacement host policy, independently of display
+// aspect; the --wide-screen launch option supplies true explicitly.
 // A null bridge leaves cutscene playback inactive.  `intro_static_fallback`
 // may independently display one source-backed legal picture using generic
 // fit projection while the runtime labels it as incomplete startup. It cannot
@@ -51,13 +56,15 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     const graphics::StartupGraphicsAsset &startup_graphics,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,
-                    const graphics::NormalIntroSceneSession *intro_session,
+                    graphics::NormalIntroSceneSession *intro_session,
                     const graphics::IntroPreviewSnapshot *intro_static_fallback,
                     const NormalIntroSceneHostFrameBridge *admitted_intro_frame = nullptr,
                     std::size_t frame_limit = 0,
                     bool show_graphics_menu = false,
                     const std::filesystem::path &screenshot_path = {},
                     std::string_view explicit_locale = {},
-                    bool startup_graphics_scene_diagnostic = false);
+                    bool startup_graphics_scene_diagnostic = false,
+                    bool wide_screen = false,
+                    std::optional<std::size_t> diagnostic_picture_step = std::nullopt);
 
 } // namespace off::platform

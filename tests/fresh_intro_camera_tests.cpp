@@ -137,8 +137,12 @@ int main() {
         auto s = source(); mutate(s);
         rejects([&] { FreshIntroCamera camera(s); });
     };
-    invalid([](auto& s) { s.aspect_mode = 1; });
-    invalid([](auto& s) { s.renderer_list_selector = 1; });
+    {
+        auto s=source(); s.aspect_mode=1; s.renderer_list_selector=1;
+        FreshIntroCamera deferred(s);
+        check(deferred.parameters().authored->aspect_mode==1 && deferred.render_control()==0,
+              "CPU construction retains display-dependent authored options without binding");
+    }
     invalid([](auto& s) { s.viewport[2] = 0; });
     invalid([](auto& s) { s.viewport[3] = -1; });
     invalid([](auto& s) { s.near_distance = std::numeric_limits<double>::infinity(); });

@@ -1115,19 +1115,21 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                     const graphics::StartupGraphicsAsset &startup_graphics,
                     const ui::RetailUiFontSet &ui_fonts,
                     const ui::RetailUiTextureSet &ui_textures,
-                    const graphics::NormalIntroSceneSession *intro_session,
+                    graphics::NormalIntroSceneSession *intro_session,
                     const graphics::IntroPreviewSnapshot *intro_static_fallback,
                     const NormalIntroSceneHostFrameBridge *admitted_intro_frame,
                     std::size_t frame_limit, bool show_graphics_menu,
                     const std::filesystem::path &screenshot_path,
                     std::string_view explicit_locale,
-                    bool startup_graphics_scene_diagnostic) {
+                    bool startup_graphics_scene_diagnostic, bool wide_screen,
+                    std::optional<std::size_t> diagnostic_picture_step) {
   if (ui_fonts.fonts.empty())
     return failure("retail UI font set is empty");
   if ((scene != nullptr) == (intro_session != nullptr))
     return {.success = false,
             .message = "Select exactly one retained intro session or diagnostic scene"};
   if (intro_session != nullptr &&
+      intro_session->stage() != graphics::NormalIntroSceneSessionStage::postconstructed &&
       intro_session->stage() != graphics::NormalIntroSceneSessionStage::reader_bracket_complete &&
       intro_session->stage() != graphics::NormalIntroSceneSessionStage::outer_loader_tail_complete) {
     return {.success = false,
@@ -1264,6 +1266,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   // These are the retained FF-Intro images, not the separate startup UI set.
   // Keep allocation/image identities through the entire window lifetime. Upload
   // is not scene admission: unresolved cut start must not become a fake draw.
+  graphics::CameraRendererList camera_renderers;
+  std::optional<graphics::IntroPreviewSnapshot> deferred_fallback;
   std::unique_ptr<SdlIntroRenderer> gpu_intro;
   try {
     if (intro) {
@@ -1334,6 +1338,38 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     SDL_ReleaseWindowFromGPUDevice(device, window);
     SDL_DestroyGPUDevice(device);
     return result;
+  }
+  try {
+    if(gpu_intro) {
+      int pixel_width{},pixel_height{};
+      if(!SDL_GetWindowSizeInPixels(window,&pixel_width,&pixel_height))
+        throw std::runtime_error("camera display pixel dimensions unavailable");
+      const graphics::CameraDisplayDimensions display{pixel_width,pixel_height,
+          (SDL_GetWindowFlags(window)&SDL_WINDOW_FULLSCREEN)!=0,wide_screen};
+      gpu_intro->attach_camera_display(camera_renderers,display);
+      const graphics::CameraDisplayServices services{camera_renderers,display,[wide_screen] { return wide_screen; }};
+      if(intro_session->stage()==graphics::NormalIntroSceneSessionStage::postconstructed) {
+        intro_session->complete_postconstruction_reader_bracket(0U,&services);
+        intro_session->prepare_supported_first_cut_player();
+        if(!admitted_intro_frame && !intro_static_fallback) {
+          const graphics::IntroPreviewTarget target{static_cast<std::uint32_t>(pixel_width),static_cast<std::uint32_t>(pixel_height)};
+          deferred_fallback=diagnostic_picture_step
+              ? graphics::build_admitted_first_cut_picture_step(*intro,*diagnostic_picture_step,target)
+              : graphics::build_incomplete_intro_fallback(*intro,target);
+          intro_static_fallback=&*deferred_fallback;
+          const auto title=ui::l10n::intro_fallback_window_title(explicit_locale,platform_locales);
+          SDL_SetWindowTitle(window,title.c_str());
+        }
+      } else {
+        // A CPU diagnostic reader receipt cannot bind a backend that did not
+        // exist. Establish the real display binding for retained sessions now.
+        graphics::apply_camera_display(intro_session->runtime().camera(),services);
+      }
+    }
+  } catch(const std::exception& error) {
+    const RuntimeResult failed{false,std::string("camera display reader initialization failed: ")+error.what()};
+    gpu_intro.reset(); startup_textures.reset(); release_overlay(device,overlay); release_scene(device,gpu);
+    SDL_ReleaseWindowFromGPUDevice(device,window); SDL_DestroyGPUDevice(device); return failed;
   }
   menu.set_confirmed(initial_graphics.requested, *initial_resolution.effective);
   if (show_graphics_menu) {
@@ -1672,7 +1708,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
             *intro_static_fallback, content_width, content_height,
             SDL_GetGPUSwapchainTextureFormat(device, window)));
         static_intro_fallback_frame = gpu_intro->prepare(command,
-            static_fallback_submission->draws());
+            static_fallback_submission->draws(), true);
       } catch (const std::exception &error) {
         result = {.success = false,
                   .message = std::string("incomplete intro fallback preparation failed: ") +
@@ -1689,6 +1725,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     std::unique_ptr<SdlIntroFrame> admitted_intro_host_frame;
     if (admitted_intro_frame != nullptr) {
       try {
+        gpu_intro->set_camera_parent({0,0,content_width,content_height});
         admitted_intro_host_frame = admitted_intro_frame->prepare(*gpu_intro, command);
       } catch (const std::exception &error) {
         result = {.success = false,

@@ -12,6 +12,7 @@
 #include <vector>
 
 namespace off::graphics {
+struct CameraDisplayServices;
 class IntroRuntime;
 struct IntroOuterLoaderTailServices;
 
@@ -42,7 +43,7 @@ public:
   ~NormalIntroSceneSession();
   NormalIntroSceneSession(const NormalIntroSceneSession &) = delete;
   NormalIntroSceneSession &operator=(const NormalIntroSceneSession &) = delete;
-  void complete_postconstruction_reader_bracket(std::uint64_t saved);
+  void complete_postconstruction_reader_bracket(std::uint64_t saved, const CameraDisplayServices* display = nullptr);
   // Diagnostic/test-only restricted bracket for the already source-bound
   // first-cut FadeToBlack reader pair. It must never be treated as the normal
   // all-reader bracket or used to unlock lifecycle, loader-tail, or cut paths.

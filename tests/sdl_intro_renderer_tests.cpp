@@ -30,6 +30,10 @@ int main() {
   using namespace off::graphics; using namespace off::platform;
   try {
     rejects([] { SdlIntroRenderer renderer(nullptr,{}); });
+    CameraRendererList camera_renderers;
+    off::data::GmsIntroCameraSource camera_source{};
+    camera_source.viewport={0,0,.5F,1}; camera_source.renderer_list_selector=1;
+    FreshIntroCamera camera(camera_source);
     Gpu gpu;
     if(!SDL_Init(SDL_INIT_VIDEO)) { std::cout<<"SKIP: video unavailable\n"; return 77; }
     const char* driver=SDL_getenv("OFF_PICTURE_SHADER_TEST_DRIVER");
@@ -98,11 +102,17 @@ int main() {
     second_batches[0].indices.erase(second_batches[0].indices.begin(),
                                    second_batches[0].indices.begin()+6);
     auto second=draw; second.batches=second_batches;
-    second.catalog_image_index=9; second.scissor={4,0,3,8};
+    second.catalog_image_index=9; second.scissor={2,0,1,8};
     const std::array draws{draw,second};
+    // The selected camera overrides the deliberately full-target draw viewport.
+    // Its lifetime ends at renderer destruction, while the frame owns the copy.
+    const CameraDisplayDimensions display{8,8,false,false};
+    gpu.renderer->attach_camera_display(camera_renderers,display);
+    apply_camera_display(camera,{camera_renderers,display,[]{return false;}});
     gpu.frame=gpu.renderer->prepare(gpu.command,draws);
     require(gpu.frame->indexed_draw_count()==2,"two indexed draws");
     batches.clear(); second_batches.clear(); gpu.renderer.reset(); // frame retains geometry and image owner
+    require(camera_renderers.head()==nullptr,"backend destruction unlinks renderer node");
     SDL_GPUColorTargetInfo color{}; color.texture=gpu.target; color.load_op=SDL_GPU_LOADOP_CLEAR; color.store_op=SDL_GPU_STOREOP_STORE;
     color.clear_color={0,0,0,1};
     auto* pass=SDL_BeginGPURenderPass(gpu.command,&color,1,nullptr); require(pass,"begin render pass");
@@ -116,8 +126,8 @@ int main() {
     auto* pixels=static_cast<unsigned char*>(SDL_MapGPUTransferBuffer(gpu.device,gpu.download,false)); require(pixels,"map readback");
     unsigned mismatches=0;
     for(unsigned y=0;y<8;++y) for(unsigned x=0;x<8;++x) {
-      const bool red=x>=2&&x<6&&y>=2&&y<6;
-      const bool green=x>=4&&x<7&&y>=3&&y<5;
+      const bool red=x>=1&&x<3&&y>=2&&y<6;
+      const bool green=x==2&&y>=3&&y<5;
       std::array<unsigned char,4> expected{static_cast<unsigned char>(red&&!green?255:0),static_cast<unsigned char>(green?255:0),0,255};
       for(unsigned c=0;c<4;++c) if(pixels[(y*64+x)*4+c]!=expected[c]) ++mismatches;
     }

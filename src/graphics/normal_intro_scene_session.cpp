@@ -15,7 +15,7 @@ NormalIntroSceneSession::NormalIntroSceneSession(
 NormalIntroSceneSession::~NormalIntroSceneSession() = default;
 
 void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
-    std::uint64_t saved) {
+    std::uint64_t saved, const CameraDisplayServices* display) {
   if (stage_ != NormalIntroSceneSessionStage::postconstructed)
     throw std::runtime_error(
         "normal intro scene reader bracket is unavailable");
@@ -36,7 +36,7 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
            ++reader_bracket_observation_.prepared_reader_calls;
          },
          .owner_reader_boundary =
-             [this](const IntroDeferredReaderWork &work) {
+             [this, display](const IntroDeferredReaderWork &work) {
                const auto &r = runtime_->resources();
                if (work.source_directory_index == r.controller_index())
                  runtime_->apply_supported_movie_control_deferred_reader(work);
@@ -46,7 +46,7 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                if (work.source_directory_index == r.first_cut_index())
                  runtime_->apply_supported_first_cut_list_deferred_reader(work);
                if (work.source_directory_index == r.camera_index())
-                 runtime_->apply_supported_first_cut_camera_deferred_reader(work);
+                 runtime_->apply_supported_first_cut_camera_deferred_reader(work, display);
                const auto &source = r.sources().directory().at(work.source_directory_index);
                if (source.source_type == 0x00100001U && source.attachments.empty()) {
                  const auto block = r.sources().deferred_source_block(work.source_directory_index);

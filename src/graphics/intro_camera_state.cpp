@@ -84,4 +84,8 @@ IntroCameraState convert_intro_camera_mode_zero(const data::GmsIntroCameraSource
             source.auxiliary_floats[0], source.auxiliary_floats[1]};
 }
 
+IntroCameraState convert_intro_camera_authored(const data::GmsIntroCameraSource& source) {
+    auto neutral=source; neutral.aspect_mode=0; neutral.renderer_list_selector=0;
+    auto state=convert_intro_camera_mode_zero(neutral); state.authored=source; return state;
+}
 } // namespace off::graphics

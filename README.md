@@ -195,6 +195,10 @@ buttons move between rows; D-pad, left stick, arrows, and pointer controls also
 work. Close the window to exit. For development:
 
 - `--frame-limit N` exits after a bounded number of rendered frames.
+- `--wide-screen` enables the explicit camera WideScreen setting for that launch.
+  Its default is false, independent of fullscreen and window aspect. Camera
+  display setup runs after SDL backend creation; this does not admit intro
+  playback or supply the missing projection-matrix integration.
 - `--show-graphics-menu` opens settings immediately.
 - `--diagnostic-scene` opens the geometry preview instead of normal startup.
 - `--diagnostic-scene relative/archive.ZIP` inspects one owned scene archive

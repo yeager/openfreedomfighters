@@ -947,6 +947,10 @@ if(BUILD_TESTING)
     target_link_libraries(off_picture_color_state_tests PRIVATE off_core)
     add_test(NAME off_picture_color_state_tests COMMAND off_picture_color_state_tests)
 
+    add_executable(off_camera_display_tests tests/camera_display_tests.cpp)
+    target_link_libraries(off_camera_display_tests PRIVATE off_core)
+    add_test(NAME off_camera_display_tests COMMAND off_camera_display_tests)
+
     add_executable(off_intro_camera_state_tests tests/intro_camera_state_tests.cpp)
     target_link_libraries(off_intro_camera_state_tests PRIVATE off_core)
     add_test(NAME off_intro_camera_state_tests COMMAND off_intro_camera_state_tests)

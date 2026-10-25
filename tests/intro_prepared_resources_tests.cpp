@@ -1,3 +1,4 @@
+#include "off/graphics/camera_display.hpp"
 #include "off/graphics/intro_prepared_resources.hpp"
 #include "off/graphics/intro_outer_loader_tail_readiness.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
@@ -1216,6 +1217,69 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
     check_fade_fixture(2U,false);  // Two distinct owners are complete and admissible.
     check_fade_fixture(2U,true);   // Missing one component boundary fails closed.
 
+    for(const bool throw_callback : {false,true}) {
+        Fixture display_fixture(false,true);
+        // Synthetic scalar fields in the camera block: selector one, mode two.
+        set(display_fixture.payload,display_fixture.block_offsets[0]+61U,1U);
+        set(display_fixture.payload,display_fixture.block_offsets[0]+71U,2U);
+        off::runtime::ApplicationServices display_app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(display_app);
+        off::runtime::SceneComponentSequence display_sequence{[]{return std::uint32_t{1};}};
+        auto display_runtime=std::make_unique<off::graphics::IntroRuntime>(display_fixture.build(),display_app,
+            display_sequence,"synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*display_runtime);
+        auto& canonical=display_runtime->camera();
+        check(!canonical.parameters().authored,"directory creates canonical fresh camera before source reader");
+        canonical.set_enabled(false,false,{});
+        canonical.begin_window_state_projection(true,false);
+        const auto flags_before=canonical.flags();
+        const auto context_before=display_runtime->camera_context();
+        {
+            off::graphics::FreshIntroCamera isolated;
+            isolated.set_enabled(false,false,{});
+            isolated.begin_window_state_projection(true,false);
+            const auto prior=isolated.flags();
+            isolated.apply_authored_parameters(display_runtime->resources().camera());
+            check(isolated.flags()==(prior|0x10000U) && !isolated.enabled() && isolated.render_control()==5U,
+                  "authored parameter application alone preserves runtime flags and render control");
+        }
+        auto display_session=off::graphics::make_normal_intro_scene_session(std::move(display_runtime));
+        off::graphics::CameraRendererList renderers;
+        const off::graphics::CameraDisplayDimensions dimensions{1600,900,false,false};
+        unsigned callbacks=0;
+        off::graphics::CameraRendererNode backend(renderers,dimensions,
+            [&](auto& bound,float priority) {
+                ++callbacks;
+                check(&bound==&canonical && bound.parameters().authored &&
+                      bound.parameters().authored->renderer_list_selector==1U && priority==4 &&
+                      bound.parameters().viewport[1]==.122F && bound.render_control()==4U,
+                      "reader applies authored state and display tuple to canonical camera before backend callback");
+                check(!bound.enabled(),"camera reader preserves the disabled state");
+                check(display_session->runtime().camera_context()==context_before,
+                      "camera reader preserves canonical context");
+                // Fixture directory order puts Window before Camera. Its two
+                // true options clear 0x8000 and its completion ORs 0x210000;
+                // the later camera source's option B additionally ORs 0x10000.
+                check(display_session->runtime().window_camera_projection_applied() &&
+                      bound.flags()==((flags_before&~0x8000U)|0x210000U|0x10000U),
+                      "camera reader retains the preceding Window flag mutations and applies source option ORs");
+                if(throw_callback) throw std::runtime_error("synthetic backend failure");
+            },[](auto){});
+        const off::graphics::CameraDisplayServices display_services{renderers,dimensions,[]{return false;}};
+        if(throw_callback) {
+            rejects([&]{display_session->complete_postconstruction_reader_bracket(0U,&display_services);});
+            check(display_session->stage()==off::graphics::NormalIntroSceneSessionStage::failed &&
+                  !display_session->runtime().first_cut_camera_reader_state(),
+                  "throwing backend stops reader without camera admission receipt");
+        } else {
+            display_session->complete_postconstruction_reader_bracket(0U,&display_services);
+            check(display_session->runtime().first_cut_camera_reader_state()!=nullptr,
+                  "successful canonical backend callback precedes camera reader receipt");
+        }
+        check(callbacks==1U,"directory then reader invokes the actual selected backend exactly once");
+    }
+
     Fixture handoff_fixture(false,true);
     off::runtime::ApplicationServices handoff_app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
         {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
@@ -1227,6 +1291,10 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
     auto handoff_session=off::graphics::make_normal_intro_scene_session(std::move(handoff_runtime));
     handoff_session->complete_postconstruction_reader_bracket(0x52U);
     auto& handoff_host=handoff_session->runtime();
+    check(handoff_host.camera().parameters().authored.has_value() &&
+          handoff_host.camera().parameters().near_distance==2.5F &&
+          handoff_host.camera().priority()==4,
+          "CPU reader applies source parameters to canonical camera without backend services");
     const auto* keys_registry=handoff_host.scene_lifetime_keys_registry();
     check(keys_registry && keys_registry->size()==0U &&
           !keys_registry->resolve_required_keys(

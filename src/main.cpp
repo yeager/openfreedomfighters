@@ -132,7 +132,7 @@ void usage(std::ostream &output) {
   output << "Usage: openfreedomfighters [--data PATH] [--mode original|modern] "
             "[--verify-only] [--frame-limit COUNT] [--show-graphics-menu] "
             "[--screenshot FILE.bmp] [--locale TAG] [--startup-progress-receipt FILE] "
-            "[--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] [--diagnostic-first-cut-picture-step COMMAND_INDEX] "
+            "[--wide-screen] [--diagnostic-scene [RELATIVE_ARCHIVE.ZIP]] [--diagnostic-startup-graphics] [--diagnostic-intro-picture] [--diagnostic-first-cut-picture-step COMMAND_INDEX] "
             "[--probe-startup-boot] [--probe-startup-boot-profile] [--probe-startup-route-cold] [--probe-soundtrack] [--probe-intro-audio] [--probe-intro-audio-decode] [--probe-localization] [--probe-movie-cuts] [--probe-intro-readiness] [--probe-first-cut-cold] [--probe-first-cut-initialization] [--probe-intro-renderer-payload] [--probe-intro-named-global]\n";
 }
 
@@ -1294,6 +1294,7 @@ int main(int argc, char **argv) {
   bool diagnostic_startup_graphics = false;
   bool diagnostic_intro_picture = false;
   std::optional<std::size_t> diagnostic_first_cut_picture_step;
+  bool wide_screen=false; // Explicit replacement host default, not an aspect inference.
   bool probe_startup_boot = false;
   bool probe_startup_boot_profile = false;
   bool probe_startup_route_cold = false;
@@ -1324,6 +1325,8 @@ int main(int argc, char **argv) {
         return 2;
       }
       mode = *parsed;
+    } else if (argument == "--wide-screen") {
+      wide_screen = true;
     } else if (argument == "--verify-only") {
       verify_only = true;
     } else if (argument == "--frame-limit" && index + 1 < argc) {
@@ -1437,6 +1440,10 @@ int main(int argc, char **argv) {
       static_cast<unsigned>(probe_first_cut_initialization) +
       static_cast<unsigned>(probe_intro_renderer_payload) +
       static_cast<unsigned>(probe_intro_named_global);
+  if (wide_screen && (probe_count != 0U || verify_only)) {
+    std::cerr << "WideScreen requires the SDL runtime.\n";
+    return 2;
+  }
   if (probe_count > 1U) {
     std::cerr << "Select only one source probe.\n";
     return 2;
@@ -1813,29 +1820,12 @@ int main(int argc, char **argv) {
             // source from its parsed hierarchy and class record.
             intro.begin_source_loading_without_engine_renderer();
             intro.construct_source_directory_without_engine_renderer();
-            // The reviewed cold-load reader bracket establishes source-backed
-            // first-cut ownership and reference translation.  It deliberately
-            // does not admit a global lifecycle, schedule an event, activate a
-            // cut, or claim that the engine renderer has consumed these
-            // records.
+            // Transfer the CPU directory to the window-thread reader bracket.
             intro_session = off::graphics::make_normal_intro_scene_session(
                 std::move(intro_runtime));
-            intro_session->complete_postconstruction_reader_bracket(0U);
-            intro_session->prepare_supported_first_cut_player();
-            // A retained intro runtime is not a cutscene admission.  The
-            // one legal-picture receipt is nevertheless sufficient to show
-            // a labelled static fallback while MovieControl and loader-tail
-            // evidence remains incomplete. It never activates this session.
-            if (diagnostic_first_cut_picture_step) {
-              intro_static_fallback.emplace(
-                  off::graphics::build_admitted_first_cut_picture_step(
-                      intro, *diagnostic_first_cut_picture_step,
-                      {.width = 1280U, .height = 720U}));
-            } else {
-              intro_static_fallback.emplace(
-                  off::graphics::build_incomplete_intro_fallback(
-                      intro, {.width = 1280U, .height = 720U}));
-            }
+            // The real renderer must exist before display-dependent camera
+            // readers run. Continue this session on the SDL window thread.
+
           }
           startup_graphics.emplace(off::graphics::load_startup_graphics_asset(
               data_path / "Scenes" / "FF-StartUp.ZIP"));
@@ -1995,7 +1985,7 @@ int main(int argc, char **argv) {
   if (intro) {
     const auto reader_preflight = intro->preflight_global_lifecycle();
     std::cout << "Deferred readers: " << reader_preflight.covered_readers
-              << " source-backed readers admitted of "
+              << " source-backed readers admitted during CPU preparation of "
               << reader_preflight.expected_readers
               << "; remaining lifecycle and playback work is pending.\n";
   }
@@ -2018,7 +2008,8 @@ int main(int argc, char **argv) {
       intro_static_fallback ? &*intro_static_fallback : nullptr,
       nullptr,
       frame_limit, show_graphics_menu,
-      screenshot_path, locale, diagnostic_startup_graphics);
+      screenshot_path, locale, diagnostic_startup_graphics, wide_screen,
+      diagnostic_first_cut_picture_step);
   if (startup_progress_receipt)
     startup_progress_receipt->record("gpu_runtime_finished");
   if (!runtime.success) {

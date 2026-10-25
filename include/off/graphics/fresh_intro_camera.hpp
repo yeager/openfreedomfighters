@@ -9,7 +9,7 @@
 namespace off::graphics {
 
 // Constructed normally without a source, or from a supported fresh
-// mode-zero/selector-zero authored source.
+// authored source. Display-dependent fields are applied by the reader later.
 // Owns the reviewed CPU fields, not a complete engine owner or registered view.
 // In particular, the separate scene-root owner pointer is not represented here.
 class FreshIntroCamera final {
@@ -27,6 +27,9 @@ public:
   [[nodiscard]] std::uint32_t render_control() const noexcept { return render_control_; }
   [[nodiscard]] std::int32_t priority() const noexcept { return priority_; }
   // Camera priority is independent of the renderer registry's insertion key.
+  // Deferred reader updates this canonical instance; runtime state is preserved.
+  void apply_authored_parameters(const data::GmsIntroCameraSource& source);
+  void set_display_tuple(std::array<float,4> tuple, bool write_marker);
   void set_priority(std::int32_t priority) noexcept;
   // Preview Y-key direct camera-owner flag mutation, with no renderer or
   // resource/transform side effects. This is not an enabled-state transition.

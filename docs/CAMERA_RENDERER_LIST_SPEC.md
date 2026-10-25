@@ -49,6 +49,12 @@ Pass (e, 0, 1 - (e + e), 1) to the setter. This branch does not write marker 4.
 
 The downstream pixel-viewport mapping is specified in `CAMERA_VIEWPORT_SPEC.md`.
 
+The marker written as 4 by display modes 1 and 2 is the same render-control
+state written as 0 or 5 by the existing window-state projection operations.
+Keep a single authority: the most recent operation determines its value.
+Mode 3 and unknown modes preserve that state. Do not introduce a separate
+display marker that can disagree with the window's render control.
+
 The four inputs are stored as camera state and the setter also derives another field as input-four divided by input-three. Treat them as the native camera tuple, not as proven literal left/right/top/bottom clip planes. Mode 3 uses a distinct tuple layout and must not be normalized into the mode-1/2 form.
 
 ## Validation plan for an independent implementation
@@ -63,6 +69,15 @@ Use synthetic inputs and a mock renderer list/configuration provider; do not dep
 - Confirm the selected renderer receives the authored camera and priority only when its one-based entry exists; color propagation is separate.
 
 ## Host integration constraints
+
+Directory construction creates the canonical camera with constructor defaults.
+Its deferred reader must apply the validated authored camera parameters to that
+same instance before display setup. A separate parsed receipt is not the live
+camera state. Reuse the existing authored numeric conversion and priority
+semantics. Preserve owner identity, context and existing render control; apply
+the source option flag ORs to existing flags rather than resetting the full
+flag word as a constructor would. CPU-only readers may apply those parameters
+without claiming backend registration.
 
 A renderer-list entry must belong to a real window/rendering backend lifetime.
 Its camera callback updates that backend's camera state. The existing
