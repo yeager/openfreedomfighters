@@ -25,8 +25,19 @@ basis into runtime matrix storage, copies the source position, and passes both
 values to the newly allocated runtime object's transform setter before
 registration. The same loading path maintains hierarchy context and creates
 attachment links. This proves transform consumption and ordering within object
-creation, but not the matrix layout exposed to rendering, parent-relative or
-attachment propagation, world-space composition, or the final submitted matrix.
+creation, but not the matrix layout exposed to rendering, the relationship
+between parsed parent identities and runtime parent links, world-space
+composition, or the final submitted matrix.
+
+A separate renderer-path trace now establishes that a render batch resolves a
+runtime object's local transform, walks its parent links until a root-marked
+ancestor, and composes basis and position along that chain. The resolved batch
+record also carries a separately transformed per-object vector and additional
+object fields. This closes the generic runtime parent-walk question, but it does
+not establish how those runtime inputs map to the parsed GMS and RMC/RMI fields,
+how the base pose is produced, or what the extra vector means. It therefore
+does not authorize composing `SceneRenderInstance` fields or claiming a
+world-space scene result.
 
 These facts establish identity and provenance. They do not establish a final
 object-to-world matrix.
@@ -89,9 +100,10 @@ World-space scene rendering remains gated on all of the following:
 
 1. Trace the separate RMC and RMI descriptor-consumer paths for both observed
    object kinds and for primary and secondary handles.
-2. Trace the established runtime-object transform through hierarchy updates and
-   render submission, including matrix layout, multiplication direction,
-   handedness, units, and parent-relative behavior.
+2. Map parsed scene records to the established runtime transform inputs and
+   base pose, including matrix layout, multiplication direction, handedness,
+   units, the separately transformed per-object vector, and parent-relative
+   behavior.
 3. Establish the meaning and coordinate space of map orientation, position,
    auxiliary position, and extents, and whether they replace, compose with, or
    only describe the referenced object.

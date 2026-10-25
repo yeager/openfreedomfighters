@@ -29,10 +29,11 @@ map views. It:
 Executable tracing confirms that the original loader copies the GMS basis into
 runtime matrix storage, copies the GMS position, and passes both to the newly
 allocated runtime object's transform setter before registration. It does not
-yet establish the matrix
-layout consumed by rendering, hierarchy or attachment propagation, world-space
-composition, or final draw-matrix provenance. The asset therefore continues to
-retain source and map transforms separately.
+establish how the parsed scene records map to the render path's base pose or
+extra per-object vector. A separate renderer trace establishes generic runtime
+parent composition, but not that its runtime inputs correspond directly to
+these parsed values. The asset therefore continues to retain source and map
+transforms separately.
 
 Container expansion is preorder in retained authored child order. It keeps the
 root map reference and descendant source identity, but uses only the
@@ -139,9 +140,10 @@ local non-primitive references; independent maxima need not occur in one scene.
 
 This model prepares the complete set of currently understood direct local scene
 primitives, and the SDL GPU runtime uploads and submits every retained
-source-only diagnostic draw. Applying evidenced transform composition,
-reconstructing materials, selecting the scene camera, and resolving indirect or
-non-primitive GMS sources are later milestones. Modern and Modern+ render paths
+source-only diagnostic draw. Mapping the runtime hierarchy composition to
+parsed scene inputs, reconstructing materials, selecting the scene camera, and
+resolving indirect or non-primitive GMS sources are later milestones. Modern
+and Modern+ render paths
 must consume the same instance identity and gameplay snapshot as Original mode.
 The current source-only diagnostic transform is a presentation convention, not a
 recovered world-space formula. Aggregate overlap experiments are useful for
