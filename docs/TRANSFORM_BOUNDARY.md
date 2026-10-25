@@ -23,24 +23,27 @@ retail content into the project:
 Executable tracing further establishes that the GMS loader copies the source
 basis into runtime matrix storage, copies the source position, and passes both
 values to the newly allocated runtime object's transform setter before
-registration. The same loading path maintains hierarchy context and creates
-attachment links. This proves transform consumption and ordering within object
-creation, but not the matrix layout exposed to rendering, the relationship
-between parsed parent identities and runtime parent links, world-space
-composition, or the final submitted matrix.
+registration. The loader processes each serialized row into a class-pool object,
+stores that object's handle at the same row index, and uses the row's hierarchy
+controls to select and attach it to its runtime parent. The generic attach path
+writes the parent link later followed by renderer traversal. This establishes
+the parsed GMS row, local transform, and authored parent chain as identities in
+the constructed runtime hierarchy.
 
 A separate renderer-path trace now establishes that a render batch resolves a
 runtime object's local transform, walks its parent links until a root-marked
 ancestor, and composes basis and position along that chain. The resolved batch
 record also carries a separately transformed per-object vector and additional
-object fields. This closes the generic runtime parent-walk question, but it does
-not establish how those runtime inputs map to the parsed GMS and RMC/RMI fields,
-how the base pose is produced, or what the extra vector means. It therefore
-does not authorize composing `SceneRenderInstance` fields or claiming a
-world-space scene result.
+object fields. The current trace also shows a separate owner base pose before
+that parent walk and an object-local offset transformed by the resulting basis.
+The relationship between parsed RMC/RMI entries, the renderer's geometry-entry
+objects, and that owner pose has not been established. Nor has the renderer pose
+record been joined to final backend submission and camera view/projection.
+Consequently this evidence does not yet authorize composing
+`SceneRenderInstance` fields or claiming a world-space scene result.
 
-These facts establish identity and provenance. They do not establish a final
-object-to-world matrix.
+These facts establish GMS runtime identity and hierarchy provenance. They do
+not establish the complete submitted object-to-world or world-to-clip transform.
 
 ## Runtime scene-root selection
 
@@ -53,12 +56,11 @@ key as empty, and the key can later be set or copied from another camera.
 
 This establishes the shared root and fallback behavior, but not which camera is
 active, whether normal scene initialization populates the optional key, or
-whether that key resolves to a particular parsed GMS object. Parsed GMS parent
-identities also have not yet been joined to the runtime parent links consumed
-by the renderer. Therefore this root relationship does not authorize a normal
-world-scene draw producer, transform composition, or camera selection. Keep the
-normal path disconnected until those joins and the submitted view/projection
-are established.
+whether that key resolves to a particular parsed GMS object. Therefore this
+root relationship does not authorize a normal world-scene draw producer or
+camera selection. Keep the normal path disconnected until scene geometry
+entries join to the GMS runtime objects and the composed poses reach a verified
+view/projection submission path.
 
 ## Source-only diagnostic convention
 
