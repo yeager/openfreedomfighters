@@ -349,6 +349,9 @@ void validate_scene_render_asset(const SceneRenderAsset &asset) {
     if (instance.resolution_index >= asset.resolutions.size() ||
         instance.mesh_index >= asset.meshes.size() ||
         instance.map_layer_index >= maximum_map_layers ||
+        (instance.parent_source_directory_index.has_value() &&
+         *instance.parent_source_directory_index ==
+             instance.source_directory_index) ||
         !finite(instance.source_basis) || !finite(instance.source_position) ||
         !finite(instance.map_orientation) || !finite(instance.map_position) ||
         !finite(instance.map_auxiliary_position) ||
@@ -525,6 +528,14 @@ SceneRenderAsset build_scene_render_asset(
       const auto source_index = *geometry.source_directory_index;
       const auto &source = object_sources[source_index];
       const auto &entry = map.entries[geometry.map_entry_index];
+      std::optional<std::size_t> parent_source_directory_index;
+      if (!hierarchy.empty()) {
+        if (source_index >= hierarchy.size() ||
+            hierarchy[source_index].directory_index != source_index)
+          throw std::runtime_error("scene render source hierarchy is inconsistent");
+        parent_source_directory_index =
+            hierarchy[source_index].parent_directory_index;
+      }
       if (!finite(source.basis) || !finite(source.position) ||
           !finite(entry.object.orientation) || !finite(entry.object.position) ||
           !finite(entry.object.auxiliary_position) ||
@@ -542,6 +553,7 @@ SceneRenderAsset build_scene_render_asset(
           .map_descriptor_offset = geometry.map_descriptor_offset,
           .geometry_reference = geometry.geometry_reference,
           .source_directory_index = source_index,
+          .parent_source_directory_index = parent_source_directory_index,
           .source_local_slot_index = *geometry.source_local_slot_index,
           .source_type = source.source_type,
           .source_basis = source.basis,

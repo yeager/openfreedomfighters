@@ -47,6 +47,9 @@ struct SceneGpuMesh {
 struct SceneGpuInstance {
   std::size_t scene_instance_index{0};
   std::size_t mesh_index{0};
+  std::size_t source_directory_index{0};
+  // Authored source hierarchy identity; not a GPU resource or composed pose.
+  std::optional<std::size_t> parent_source_directory_index;
   // Retained verbatim for submission history.  The diagnostic renderer still
   // uses only the source record and does not compose these transforms.
   std::array<float, 9> source_basis{};

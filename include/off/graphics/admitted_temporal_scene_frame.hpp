@@ -4,6 +4,8 @@
 #include "off/graphics/temporal_resolve_inputs.hpp"
 
 #include <array>
+#include <functional>
+#include <map>
 #include <optional>
 #include <span>
 
@@ -70,6 +72,27 @@ private:
       : input_(input) {}
 
   AdmittedTemporalSceneFrameInput input_;
+};
+
+// Synchronous producer-to-backend dispatch for a fully admitted live frame.
+// The input and its instance span stay caller-owned, so they must remain valid
+// until the callback returns. History is committed only when the backend
+// confirms that it accepted the frame for submission; rejection and exceptions
+// leave the prior committed transforms intact.
+class TemporalSceneFrameDispatcher final {
+public:
+  using Submit = std::function<bool(const AdmittedTemporalSceneFrame&)>;
+
+  [[nodiscard]] bool dispatch(const AdmittedTemporalSceneFrameInput& input,
+                              const Submit& submit);
+  void invalidate();
+  [[nodiscard]] bool history_valid() const noexcept { return history_valid_; }
+
+private:
+  std::map<std::uint64_t, SceneInstanceTransformSnapshot> committed_instances_;
+  std::array<float, 16> committed_camera_{};
+  bool history_valid_{};
+  bool dispatching_{};
 };
 
 } // namespace off::graphics

@@ -21,7 +21,8 @@ map views. It:
 - deduplicates mesh storage by PRM catalog entry and texture storage by TEX
   catalog entry while never deduplicating instances;
 - preserves RMC/RMI kind, layer, descriptor, role, handle, GMS source identity,
-  topology, alpha evidence, and map/GMS transforms; and
+  topology, alpha evidence, authored GMS parent identity when the hierarchy
+  overload is used, and map/GMS transforms; and
 - keeps the GMS and map transforms separate because their composition has not
   yet been established from evidence.
 
@@ -36,7 +37,10 @@ retain source and map transforms separately.
 Container expansion is preorder in retained authored child order. It keeps the
 root map reference and descendant source identity, but uses only the
 descendant's existing GMS diagnostic transform. It does not compose container,
-map, or child transforms.
+map, or child transforms. The renderer-facing instance and SDL-free GPU plan
+now retain each source node's optional parent directory identity so a future
+transform producer can traverse the authored hierarchy. This is structural
+provenance only; it is not a parent-space matrix or evidence of composition.
 
 The asset includes line lists, untextured meshes, and transparent geometry. The
 diagnostic single-mesh preview's selection rules do not apply to scene assets.
@@ -158,8 +162,10 @@ commands remain in stable instance order and use depth test/write; non-opaque
 commands follow in stable order with blending and depth test but no depth writes.
 Untextured commands retain an empty texture index so the backend can bind one
 explicit shared white fallback. Every GPU instance also retains its expected
-mesh index, and independent validation rejects draws that pair an otherwise
-valid instance with the wrong mesh resource.
+mesh index plus source-directory and optional authored parent-directory
+identities; independent validation rejects draws that pair an otherwise valid
+instance with the wrong mesh resource. These directory identities do not
+encode a composed transform.
 
 The diagnostic projection preserves a real third coordinate in SDL GPU's
 `[0, 1]` clip-depth convention rather than flattening every object to one plane.

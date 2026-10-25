@@ -1,6 +1,7 @@
 #include "off/graphics/admitted_temporal_scene_frame.hpp"
 
 #include <cmath>
+#include <stdexcept>
 
 namespace off::graphics {
 namespace {
@@ -96,6 +97,71 @@ AdmittedTemporalSceneFrame::admit(AdmittedTemporalSceneFrameInput input) noexcep
   if (!complete(input))
     return std::nullopt;
   return AdmittedTemporalSceneFrame{input};
+}
+
+bool TemporalSceneFrameDispatcher::dispatch(
+    const AdmittedTemporalSceneFrameInput& input, const Submit& submit) {
+  if (dispatching_)
+    throw std::runtime_error("temporal scene frame dispatch reentrancy is unsupported");
+  if (!submit)
+    throw std::runtime_error("temporal scene frame submit callback is required");
+
+  std::vector<SceneInstanceSubmissionTransform> prepared_instances(
+      input.instances.begin(), input.instances.end());
+  AdmittedTemporalSceneFrameInput prepared = input;
+  prepared.instances = prepared_instances;
+
+  const auto first_frame = !history_valid_;
+  if (first_frame) {
+    prepared.camera.previous_view_projection = prepared.camera.current_view_projection;
+    prepared.camera.previous_valid = false;
+    for (auto& instance : prepared_instances) {
+      instance.previous = instance.current;
+      instance.previous_valid = false;
+    }
+  } else {
+    for (auto& instance : prepared_instances) {
+      const auto previous = committed_instances_.find(instance.identity);
+      if (previous != committed_instances_.end()) {
+        instance.previous = previous->second;
+        instance.previous_valid = true;
+      } else {
+        instance.previous = instance.current;
+        instance.previous_valid = false;
+      }
+    }
+    prepared.camera.previous_view_projection = committed_camera_;
+    prepared.camera.previous_valid = true;
+  }
+
+  const auto admitted = AdmittedTemporalSceneFrame::admit(prepared);
+  if (!admitted)
+    return false;
+
+  std::map<std::uint64_t, SceneInstanceTransformSnapshot> next_instances;
+  for (const auto& instance : prepared_instances)
+    next_instances.emplace(instance.identity, instance.current);
+
+  struct Guard final {
+    bool& active;
+    explicit Guard(bool& value) : active(value) { active = true; }
+    ~Guard() { active = false; }
+  } guard(dispatching_);
+  if (!submit(*admitted))
+    return false;
+
+  committed_instances_ = std::move(next_instances);
+  committed_camera_ = prepared.camera.current_view_projection;
+  history_valid_ = true;
+  return true;
+}
+
+void TemporalSceneFrameDispatcher::invalidate() {
+  if (dispatching_)
+    throw std::runtime_error("temporal scene frame history cannot be invalidated during dispatch");
+  committed_instances_.clear();
+  committed_camera_ = {};
+  history_valid_ = false;
 }
 
 } // namespace off::graphics

@@ -58,6 +58,10 @@ struct SceneRenderInstance {
   std::uint32_t map_descriptor_offset{0};
   std::uint32_t geometry_reference{0};
   std::size_t source_directory_index{0};
+  // Authored GMS hierarchy provenance. This is a directory identity only; it
+  // does not imply a composed parent/world transform. It is absent for callers
+  // using the hierarchy-free builder overload.
+  std::optional<std::size_t> parent_source_directory_index;
   std::uint32_t source_local_slot_index{0};
   std::uint32_t source_type{0};
   std::array<float, 9> source_basis{};
