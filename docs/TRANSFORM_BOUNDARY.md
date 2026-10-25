@@ -78,15 +78,14 @@ subobject pointer, so a subsequent runtime path must populate it. The traced
 parent-link setter writes `+0x6c`, not `+0x54`; the later writer and the
 subobject's concrete class remain unidentified.
 
-The loader's earlier `ZSysInterfaceWintel` helper dispatch (vtable slot `+0x0`
-at the subobject reached through the global `+0x9b` field) resolves to
-`FUN_00423980`, which forwards the current pool row to `FUN_0042f8c0` for row
-state application. `FUN_0042f8c0` passes scalar state fields to the row's
-virtual setters at slots `+0x3c`, `+0x4c`, `+0x54`, `+0x58`, `+0x60`, and
-`+0x8`; the setter implementations depend on the row's concrete class. This
-helper chain contains no direct store to row `+0x54`, and the setter at slot
-`+0x54` is not established as a producer for that field. The later writer
-remains unidentified.
+The initializer's `ZSysInterfaceWintel` dispatch resolves to a routine that
+sets the row's `+0x60` flag. It does not install a row vtable or write `+0x54`;
+the following matrix initializer also leaves those fields alone. The loader's
+later helper call passes three stack arguments through a secondary service
+subobject, but its concrete virtual target is unresolved. A previously
+considered one-argument helper does not match that call's argument-cleanup
+shape and cannot be assigned to it. Therefore neither helper identifies the
+later writer to `+0x54`.
 
 The GMS loader also records each geometry object's local pool ordinal during
 construction and calls a runtime setter that writes a link field at offset
