@@ -167,12 +167,12 @@ std::array<float, 3> transform_source_diagnostic_position(
     const std::array<float, 3> &local_position) {
   const auto &basis = instance.basis;
   return {
-      basis[0] * local_position[0] + basis[1] * local_position[1] +
-          basis[2] * local_position[2] + instance.position[0],
-      basis[3] * local_position[0] + basis[4] * local_position[1] +
-          basis[5] * local_position[2] + instance.position[1],
-      basis[6] * local_position[0] + basis[7] * local_position[1] +
-          basis[8] * local_position[2] + instance.position[2],
+      local_position[0] * basis[0] + local_position[1] * basis[3] +
+          local_position[2] * basis[6] + instance.position[0],
+      local_position[0] * basis[1] + local_position[1] * basis[4] +
+          local_position[2] * basis[7] + instance.position[1],
+      local_position[0] * basis[2] + local_position[1] * basis[5] +
+          local_position[2] * basis[8] + instance.position[2],
   };
 }
 

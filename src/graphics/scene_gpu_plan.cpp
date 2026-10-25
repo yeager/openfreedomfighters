@@ -267,18 +267,18 @@ std::array<float, 3> transform_scene_source_diagnostic_position(
     const std::array<float, 3> &local_position) {
   const auto &basis = instance.source_basis;
   std::array<float, 3> result;
-  for (std::size_t row = 0; row < 3; ++row) {
+  for (std::size_t column = 0; column < 3; ++column) {
     const auto value =
-        static_cast<double>(basis[row * 3]) * local_position[0] +
-        static_cast<double>(basis[row * 3 + 1]) * local_position[1] +
-        static_cast<double>(basis[row * 3 + 2]) * local_position[2] +
-        instance.source_position[row];
+        static_cast<double>(local_position[0]) * basis[column] +
+        static_cast<double>(local_position[1]) * basis[3 + column] +
+        static_cast<double>(local_position[2]) * basis[6 + column] +
+        instance.source_position[column];
     if (!std::isfinite(value) ||
         std::abs(value) > std::numeric_limits<float>::max()) {
       throw std::invalid_argument(
           "scene diagnostic transform produced an invalid position");
     }
-    result[row] = static_cast<float>(value);
+    result[column] = static_cast<float>(value);
   }
   if (!finite(result)) {
     throw std::invalid_argument(
@@ -572,7 +572,8 @@ SceneDiagnosticMatrices make_scene_diagnostic_matrices(
   const auto &instance = plan.instances[instance_index];
   for (std::size_t row = 0; row < 3; ++row) {
     for (std::size_t column = 0; column < 3; ++column) {
-      result.model[column * 4 + row] = instance.source_basis[row * 3 + column];
+      result.model[row * 4 + column] =
+          instance.source_basis[row * 3 + column];
     }
     result.model[3 * 4 + row] = instance.source_position[row];
   }

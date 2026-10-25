@@ -34,12 +34,14 @@ struct PictureResolvedView {
   float half_extent_0;
   float half_extent_1;
   PictureProjection projection;
+  PictureProjection alternate_depth_projection;
 };
 
 // Explicit camera/view producer, not final startup camera selection. Finite
 // inputs and intermediates are required; divisors must be nonzero. Near is
 // bounded from below by 5. Only this projection helper substitutes 1 for zero
-// rectangle dimensions; signed dimensions otherwise retain their sign.
+// rectangle dimensions and uses absolute nonzero dimensions. Viewport requests
+// keep signed sizes.
 // Equations use sequenced double intermediates, then checked binary32 resolved
 // values and prepare_picture_projection's valid-frustum safety policy. This
 // does not promise bit-exact retail floating-point evaluation.

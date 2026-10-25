@@ -1078,6 +1078,17 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
         runtime::ComponentCallback phase_two=[](auto&) {
           throw std::runtime_error("Constructed attachment requires its live second-phase services");
         };
+        if(sound_extend) phase_two=[this,row,component_index](runtime::ComponentRecord& callback_record) {
+          auto& component=components_.at(component_index);
+          auto& sound=sound_for_source(row);
+          const auto payload=constructed_picture_components_.find(component_index);
+          if(&callback_record!=&component || component.source().factory_name!="ZSNDOBJ_SoundExtend" ||
+              component.state().attached_owner!=sound.handle().value || !sound.source_applied_ ||
+              payload==constructed_picture_components_.end() || !payload->second.sound_extend)
+            throw std::runtime_error("SoundExtend phase two requires its prepared typed sound owner");
+          // This phase completes without mutating sound state or calling services.
+          // Its successful completion still belongs to the enclosing lifecycle pass.
+        };
         if(movie) phase_two=[this,component_index](runtime::ComponentRecord& record) {
           run_movie_control_phase_two(component_index,record);
         };

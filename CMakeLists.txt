@@ -25,8 +25,172 @@ find_package(Vorbis REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(Threads REQUIRED)
 
-find_package(SDL3 3.2 CONFIG QUIET)
+option(OFF_ENABLE_SDL_VULKAN_INTEROP
+    "Build the pinned SDL Vulkan external-pass extension for vendor upscaler adapters"
+    OFF)
+
+option(OFF_BUILD_FSR3_SHADER_HEADERS
+    "Generate pinned FSR 3.1.4 Vulkan shader blobs and headers in the build tree"
+    OFF)
+option(OFF_BUILD_FSR3_VULKAN_HOST
+    "Build the pinned FSR 3.1.4 host API and Vulkan backend as static libraries"
+    OFF)
+set(OFF_FIDELITYFX_SDK_ROOT "" CACHE PATH
+    "FidelityFX SDK v1.1.4 sdk/ directory at the audited commit")
+
+if(OFF_BUILD_FSR3_SHADER_HEADERS OR OFF_BUILD_FSR3_VULKAN_HOST)
+    if(NOT IS_DIRECTORY "${OFF_FIDELITYFX_SDK_ROOT}/src/backends/vk/shaders/fsr3upscaler"
+       OR NOT IS_DIRECTORY "${OFF_FIDELITYFX_SDK_ROOT}/include/FidelityFX/gpu/fsr3upscaler")
+        message(FATAL_ERROR
+            "OFF_FIDELITYFX_SDK_ROOT must name the pinned SDK's sdk/ directory")
+    endif()
+
+    find_package(Git REQUIRED)
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" -C "${OFF_FIDELITYFX_SDK_ROOT}" rev-parse HEAD
+        RESULT_VARIABLE OFF_FSR3_SDK_GIT_RESULT
+        OUTPUT_VARIABLE OFF_FSR3_SDK_GIT_REVISION
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT OFF_FSR3_SDK_GIT_RESULT EQUAL 0
+       OR NOT OFF_FSR3_SDK_GIT_REVISION STREQUAL "c6efa6bf7f2027b3ec94f28578bb5965eabb9e55")
+        message(FATAL_ERROR
+            "FSR3 shader generation requires FidelityFX SDK commit c6efa6bf7f2027b3ec94f28578bb5965eabb9e55")
+    endif()
+
+    find_package(Python3 3.9 REQUIRED COMPONENTS Interpreter)
+    find_program(OFF_GLSLANG_VALIDATOR NAMES glslangValidator REQUIRED)
+    find_program(OFF_SPIRV_CROSS NAMES spirv-cross REQUIRED)
+
+    file(GLOB_RECURSE OFF_FSR3_SHADER_INPUTS CONFIGURE_DEPENDS
+        "${OFF_FIDELITYFX_SDK_ROOT}/src/backends/vk/shaders/fsr3upscaler/*.glsl"
+        "${OFF_FIDELITYFX_SDK_ROOT}/include/FidelityFX/gpu/*.glsl"
+        "${OFF_FIDELITYFX_SDK_ROOT}/include/FidelityFX/gpu/*.h")
+    set(OFF_FSR3_CODEGEN_ROOT "${CMAKE_CURRENT_BINARY_DIR}/fsr3-shader-codegen")
+    set(OFF_FSR3_MANIFEST "${OFF_FSR3_CODEGEN_ROOT}/manifest.json")
+    set(OFF_FSR3_HEADERS_STAMP "${OFF_FSR3_CODEGEN_ROOT}/headers.stamp")
+
+    add_custom_command(
+        OUTPUT "${OFF_FSR3_MANIFEST}"
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/fsr3_shader_compile_manifest.py"
+            --sdk-root "${OFF_FIDELITYFX_SDK_ROOT}"
+            --output-root "${OFF_FSR3_CODEGEN_ROOT}"
+            --glslang "${OFF_GLSLANG_VALIDATOR}"
+            --spirv-cross "${OFF_SPIRV_CROSS}"
+        DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/fsr3_shader_permutation_plan.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/fsr3_shader_compile_manifest.py"
+            ${OFF_FSR3_SHADER_INPUTS}
+        COMMENT "Compile and reflect pinned FSR3 Vulkan shader permutations"
+        VERBATIM)
+
+    add_custom_command(
+        OUTPUT "${OFF_FSR3_HEADERS_STAMP}"
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/fsr3_shader_emit_headers.py"
+            --manifest "${OFF_FSR3_MANIFEST}"
+            --output-root "${OFF_FSR3_CODEGEN_ROOT}/headers"
+        COMMAND "${CMAKE_COMMAND}" -E touch "${OFF_FSR3_HEADERS_STAMP}"
+        DEPENDS
+            "${OFF_FSR3_MANIFEST}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/fsr3_shader_emit_headers.py"
+        COMMENT "Emit FidelityFX-compatible FSR3 shader headers"
+        VERBATIM)
+
+    add_custom_target(off_fsr3_shader_codegen DEPENDS "${OFF_FSR3_HEADERS_STAMP}")
+endif()
+
+if(OFF_BUILD_FSR3_VULKAN_HOST)
+    if(NOT OFF_BUILD_FSR3_SHADER_HEADERS)
+        message(FATAL_ERROR
+            "OFF_BUILD_FSR3_VULKAN_HOST requires OFF_BUILD_FSR3_SHADER_HEADERS=ON")
+    endif()
+
+    find_package(Vulkan 1.3.250 REQUIRED)
+    file(READ
+        "${OFF_FIDELITYFX_SDK_ROOT}/include/FidelityFX/host/ffx_fsr3upscaler.h"
+        OFF_FFX_FSR3_PUBLIC_HEADER)
+    file(READ
+        "${OFF_FIDELITYFX_SDK_ROOT}/include/FidelityFX/host/ffx_types.h"
+        OFF_FFX_TYPES_PUBLIC_HEADER)
+    string(FIND "${OFF_FFX_FSR3_PUBLIC_HEADER}"
+        "#define FFX_FSR3UPSCALER_CONTEXT_SIZE (FFX_SDK_DEFAULT_CONTEXT_SIZE)"
+        OFF_FFX_PUBLIC_CONTEXT_ALIAS)
+    string(REGEX MATCH
+        "#define[ \t]+FFX_SDK_DEFAULT_CONTEXT_SIZE[ \t]+\\([0-9]+[ \t]*\\*[ \t]*[0-9]+\\)"
+        OFF_FFX_DEFAULT_CONTEXT_LINE
+        "${OFF_FFX_TYPES_PUBLIC_HEADER}")
+    if(OFF_FFX_PUBLIC_CONTEXT_ALIAS EQUAL -1 OR
+       NOT OFF_FFX_DEFAULT_CONTEXT_LINE)
+        message(FATAL_ERROR
+            "Could not verify the public FSR3 Upscaler context size")
+    endif()
+    string(REGEX MATCHALL "[0-9]+"
+        OFF_FFX_DEFAULT_CONTEXT_FACTORS
+        "${OFF_FFX_DEFAULT_CONTEXT_LINE}")
+    list(GET OFF_FFX_DEFAULT_CONTEXT_FACTORS 0 OFF_FFX_CONTEXT_WORDS)
+    list(GET OFF_FFX_DEFAULT_CONTEXT_FACTORS 1 OFF_FFX_CONTEXT_WORD_BYTES)
+    math(EXPR OFF_FFX_FSR3_CONTEXT_BYTES
+        "${OFF_FFX_CONTEXT_WORDS} * ${OFF_FFX_CONTEXT_WORD_BYTES}")
+    math(EXPR OFF_FFX_FSR3_CONTEXT_BYTES
+        "${OFF_FFX_FSR3_CONTEXT_BYTES} * 4")
+    if(OFF_FFX_FSR3_CONTEXT_BYTES LESS 837848)
+        message(FATAL_ERROR
+            "Pinned public FSR3 header reserves ${OFF_FFX_FSR3_CONTEXT_BYTES} bytes, below the audited 837848-byte private context; refusing an ABI-unsafe host target")
+    endif()
+
+    set(OFF_FFX_SHARED "${OFF_FIDELITYFX_SDK_ROOT}/src/shared")
+    set(OFF_FFX_HOST "${OFF_FIDELITYFX_SDK_ROOT}/include/FidelityFX/host")
+    set(OFF_FFX_BACKENDS_SHARED
+        "${OFF_FIDELITYFX_SDK_ROOT}/src/backends/shared")
+    set(OFF_FFX_COMPONENTS "${OFF_FIDELITYFX_SDK_ROOT}/src/components")
+    set(OFF_FFX_VK "${OFF_FIDELITYFX_SDK_ROOT}/src/backends/vk")
+    set(OFF_FFX_GENERATED_HEADERS "${OFF_FSR3_CODEGEN_ROOT}/headers")
+
+    file(GLOB OFF_FFX_SHARED_SOURCES CONFIGURE_DEPENDS
+        "${OFF_FFX_SHARED}/*.cpp")
+    file(GLOB OFF_FFX_FSR3_HOST_SOURCES CONFIGURE_DEPENDS
+        "${OFF_FFX_COMPONENTS}/fsr3upscaler/*.cpp")
+    file(GLOB OFF_FFX_VK_SOURCES CONFIGURE_DEPENDS
+        "${OFF_FFX_VK}/*.cpp"
+        "${OFF_FFX_BACKENDS_SHARED}/*.cpp")
+    list(APPEND OFF_FFX_VK_SOURCES
+        "${OFF_FFX_BACKENDS_SHARED}/blob_accessors/ffx_fsr3upscaler_shaderblobs.cpp")
+    list(REMOVE_DUPLICATES OFF_FFX_VK_SOURCES)
+
+    add_library(off_fsr3upscaler_host STATIC
+        ${OFF_FFX_SHARED_SOURCES}
+        ${OFF_FFX_FSR3_HOST_SOURCES})
+    target_include_directories(off_fsr3upscaler_host PUBLIC
+        "${OFF_FIDELITYFX_SDK_ROOT}/include"
+        "${OFF_FFX_SHARED}")
+
+    add_library(off_fsr3upscaler_vk STATIC ${OFF_FFX_VK_SOURCES})
+    target_include_directories(off_fsr3upscaler_vk
+        PUBLIC
+            "${OFF_FIDELITYFX_SDK_ROOT}/include"
+            "${OFF_FIDELITYFX_SDK_ROOT}/libs"
+            "${OFF_FFX_GENERATED_HEADERS}"
+        PRIVATE
+            "${OFF_FFX_COMPONENTS}"
+            "${OFF_FFX_SHARED}"
+            "${OFF_FFX_BACKENDS_SHARED}")
+    target_compile_definitions(off_fsr3upscaler_vk PRIVATE FFX_FSR3UPSCALER)
+    target_link_libraries(off_fsr3upscaler_vk PUBLIC Vulkan::Vulkan)
+    add_dependencies(off_fsr3upscaler_vk off_fsr3_shader_codegen)
+endif()
+
+if(OFF_ENABLE_SDL_VULKAN_INTEROP)
+    # The extension changes SDL's GPU API and is pinned to the source version
+    # below. An arbitrary system SDL cannot provide that contract.
+    set(SDL3_FOUND FALSE)
+else()
+    find_package(SDL3 3.2 CONFIG QUIET)
+endif()
 if(NOT SDL3_FOUND)
+    if(OFF_ENABLE_SDL_VULKAN_INTEROP)
+        find_program(OFF_PATCH_EXECUTABLE NAMES patch REQUIRED)
+    endif()
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
     set(SDL_STATIC ON CACHE BOOL "" FORCE)
     set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
@@ -39,6 +203,19 @@ if(NOT SDL3_FOUND)
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     FetchContent_MakeAvailable(SDL3)
+    if(OFF_ENABLE_SDL_VULKAN_INTEROP)
+        execute_process(
+            COMMAND "${CMAKE_COMMAND}"
+                "-DSDL3_SOURCE_DIR=${sdl3_SOURCE_DIR}"
+                "-DPATCH_EXECUTABLE=${OFF_PATCH_EXECUTABLE}"
+                "-DPATCH_FILE=${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/sdl3-3.4.10-vulkan-external-pass.patch"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/ApplySDLVulkanInteropPatch.cmake"
+            RESULT_VARIABLE OFF_SDL_PATCH_RESULT
+        )
+        if(NOT OFF_SDL_PATCH_RESULT EQUAL 0)
+            message(FATAL_ERROR "Could not apply the pinned SDL Vulkan interop patch")
+        endif()
+    endif()
 endif()
 
 # SDL_ttf provides both the portable in-memory retail-font rasterizer and one
@@ -323,6 +500,9 @@ target_link_libraries(
     off_core off_sdl_audio_output off_sdl_picture_clear off_sdl_picture_stage_shader off_sdl_intro_renderer off_sdl_intro_presentation ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
 )
 target_compile_definitions(openfreedomfighters PRIVATE OFF_VERSION="${PROJECT_VERSION}")
+if(OFF_ENABLE_SDL_VULKAN_INTEROP)
+    target_compile_definitions(openfreedomfighters PRIVATE OFF_HAS_SDL_VULKAN_INTEROP=1)
+endif()
 target_include_directories(
     openfreedomfighters PRIVATE
     "${off_shader_assets_SOURCE_DIR}/examples"

@@ -385,8 +385,8 @@ int main() {
             !gpu_plan.draws[2].texture_index.has_value(),
         "prepare stable multi-instance draws with shared resources and an "
         "untextured line");
-  check(gpu_plan.projection.minimum == std::array{9.0F, 17.0F, 27.0F} &&
-            gpu_plan.projection.maximum == std::array{71.0F, 82.0F, 94.0F},
+  check(gpu_plan.projection.minimum == std::array{5.0F, 18.0F, 27.0F} &&
+            gpu_plan.projection.maximum == std::array{71.0F, 83.0F, 94.0F},
         "fit one diagnostic projection to every indexed scene instance");
   const auto first_depth = off::graphics::project_scene_diagnostic_position(
       gpu_plan, 0, scene_asset.meshes[0].vertices[0].position);
@@ -451,8 +451,8 @@ int main() {
         "match CPU diagnostic projection with row-major shader matrices");
   const auto diagnostic_matrices =
       off::graphics::make_scene_diagnostic_matrices(gpu_plan, 0, 1600, 900);
-  check(diagnostic_matrices.model[1] == object_source.basis[3] &&
-            diagnostic_matrices.model[4] == object_source.basis[1] &&
+  check(diagnostic_matrices.model[1] == object_source.basis[1] &&
+            diagnostic_matrices.model[4] == object_source.basis[3] &&
             diagnostic_matrices.model[12] == object_source.position[0] &&
             diagnostic_matrices.model[13] == object_source.position[1] &&
             diagnostic_matrices.model[14] == object_source.position[2] &&
@@ -608,8 +608,8 @@ int main() {
       "resolve the scene handle to its exact GMS source and retain identities");
   check(off::graphics::transform_source_diagnostic_position(
             *instanced.object_instance, {2.0F, 3.0F, 4.0F}) ==
-            std::array{13.0F, 18.0F, 34.0F},
-        "apply the explicit source-only diagnostic transform convention");
+            std::array{7.0F, 22.0F, 34.0F},
+        "match the active source-only diagnostic matrix convention");
   bool valid_preview_accepted = true;
   try {
     off::graphics::validate_render_preview(instanced);

@@ -42,13 +42,13 @@ int main() {
         "alternate scalar equations and doubled selected far");
   check(project_picture_position(alt.projection, {1, 2, 8})[3] == 8,
         "alternate camera branch still produces perspective clip W=Z");
-  auto signed_common = common;
-  signed_common.rectangle.right = -190;
-  const auto signed_view =
-      prepare_picture_view_parameters(signed_common, ordinary);
-  check(close(signed_view.half_extent_0, 5) &&
-            close(signed_view.half_extent_1, -15),
-        "signed rectangle dimensions retain sign");
+  auto reversed_common = common;
+  reversed_common.rectangle.right = -190;
+  const auto reversed_view =
+      prepare_picture_view_parameters(reversed_common, ordinary);
+  check(close(reversed_view.half_extent_0, 5) &&
+            close(reversed_view.half_extent_1, 15),
+        "projection uses absolute reversed rectangle dimensions");
   auto no_clamp = common;
   no_clamp.raw_near = 10;
   check(prepare_picture_view_parameters(no_clamp, ordinary).near_distance == 10,

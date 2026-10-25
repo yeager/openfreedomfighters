@@ -44,8 +44,11 @@ Common prepare_common(const PictureViewCommonInput &input) {
     static_cast<void>(finite(value));
   auto size = dimensions(input.rectangle);
   for (auto &value : size)
-    if (value == 0)
+    if (value == 0) {
       value = 1;
+    } else {
+      value = std::abs(value);
+    }
   const double ratio =
       divide(input.renderer_dimension_0, input.renderer_dimension_1);
   const double viewport_ratio = divide(size[0], size[1]);
@@ -60,7 +63,8 @@ PictureResolvedView finish(double n, double f, double h0, double h1) {
   const float half0 = resolved(h0);
   const float half1 = resolved(h1);
   return {near, far, half0, half1,
-          prepare_picture_projection(near, far, half0, half1)};
+          prepare_picture_projection(near, far, half0, half1),
+          prepare_picture_projection_alternate_depth(near, half0, half1)};
 }
 } // namespace
 

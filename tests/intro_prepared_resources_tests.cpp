@@ -2380,6 +2380,36 @@ static OFF_NOINLINE void test_complete_runtime_scopes() {
         check(stopped_admission.covered_components==4 && stopped_admission.covered_owners==1,
               "stopped sound owners revoke their dependent component and owner lifecycle coverage");
         check_complete_outer_loader_tail(host,scenario.named);
+
+        // Isolate the production SoundExtend phase-two callback after its real
+        // phase-one setup. This fixture suppresses every other phase request,
+        // so it does not claim full-scene lifecycle admission.
+        const auto extend_component=sound_phase.owners[1].extend_component;
+        for(std::size_t index=0;index<host.components().size();++index)
+          host.components().at(index).state().requested=0;
+        auto& extend=host.components().at(extend_component);
+        extend.state().requested=2U;
+        const auto status_before=extend.state().status;
+        const auto admitted_before=extend.state().admitted;
+        const auto& sound_record=host.sound_for_source(467).record();
+        const auto playback_before=sound_record.playback_state;
+        const auto source_before=sound_record.active_source;
+        const auto duration_before=sound_record.duration;
+        const auto progress_before=sound_record.progress;
+        const auto prepared_before=std::vector<std::uint64_t>(
+            app.sound_records().prepared().begin(),app.sound_records().prepared().end());
+        const auto pending_stops_before=std::vector<std::uint64_t>(
+            app.sound_records().pending_stops().begin(),app.sound_records().pending_stops().end());
+        host.components().run_global_phases({[](bool,auto&,std::size_t) {},
+            [](auto) { return std::optional<std::uint32_t>{0U}; },[](auto) {},
+            [](auto&) { throw std::runtime_error("unexpected SoundExtend retirement"); }});
+        check(extend.state().status==(status_before|8U) &&
+              extend.state().admitted==admitted_before &&
+              sound_record.playback_state==playback_before && sound_record.active_source==source_before &&
+              sound_record.duration==duration_before && sound_record.progress==progress_before &&
+              std::ranges::equal(app.sound_records().prepared(),prepared_before) &&
+              std::ranges::equal(app.sound_records().pending_stops(),pending_stops_before),
+              "SoundExtend phase two completes without changing component admission or sound state");
       }
       rejects([&]{host.construct_remaining_directory_without_engine_renderer();});
     }

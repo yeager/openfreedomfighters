@@ -15,6 +15,8 @@ private:
   PictureProjection() = default;
   friend PictureProjection prepare_picture_projection(float, float, float,
                                                       float);
+  friend PictureProjection prepare_picture_projection_alternate_depth(
+      float, float, float);
   std::array<float, 16> matrix_{};
 };
 
@@ -41,6 +43,14 @@ convert_picture_viewport_request(const std::array<float, 4> &request);
                                                            float far_distance,
                                                            float half_extent_0,
                                                            float half_extent_1);
+
+// Recovered alternate camera-view depth block. It preserves the same
+// perspective X/Y scales and clip W=Z while mapping depth as Z-near. This is
+// a separate source-free matrix variant, not a selectable runtime mode.
+[[nodiscard]] PictureProjection
+prepare_picture_projection_alternate_depth(float near_distance,
+                                           float half_extent_0,
+                                           float half_extent_1);
 
 // WORLD/VIEW are identity here: input is already expanded picture XYZ. Do not
 // apply the picture basis a second time. Clip W equals input Z.

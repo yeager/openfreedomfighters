@@ -2,3 +2,4 @@
 assets/shaders/** text eol=lf
 include/off/platform/generated/** text eol=lf
 third_party/dr_libs/*.h -whitespace
+cmake/patches/*.patch -whitespace

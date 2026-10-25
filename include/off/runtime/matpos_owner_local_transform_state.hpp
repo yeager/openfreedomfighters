@@ -15,8 +15,10 @@ public:
     virtual void invalidate_matpos_owner_local_transform() noexcept = 0;
 };
 
-// A detached owner-local state model. The runtime does not yet bind this model
-// to the recovered MatPos resource-local setter or its scene service.
+// A detached owner-local transform state model.
+// Equality follows its fast path (three translation words plus the first six
+// basis words); a changed pose still copies the full 3x3 basis. The runtime
+// does not bind this value object to a live hierarchy or position service.
 class MatPosOwnerLocalTransformState final {
 public:
     using Basis = std::array<float, 9>;
@@ -46,7 +48,9 @@ public:
 
 private:
     [[nodiscard]] static bool same_basis(const Basis& left, const Basis& right) noexcept {
-        for (std::size_t index = 0; index < left.size(); ++index) {
+        // Compare the leading basis terms; accepted changes retain the full
+        // basis so downstream consumers see a complete transform.
+        for (std::size_t index = 0; index < 6; ++index) {
             if (std::bit_cast<std::uint32_t>(left[index]) !=
                 std::bit_cast<std::uint32_t>(right[index])) {
                 return false;
@@ -58,7 +62,8 @@ private:
     [[nodiscard]] static bool same_translation(const Translation& left,
                                                const Translation& right) noexcept {
         for (std::size_t index = 0; index < left.size(); ++index) {
-            if (left[index] != right[index]) {
+            if (std::bit_cast<std::uint32_t>(left[index]) !=
+                std::bit_cast<std::uint32_t>(right[index])) {
                 return false;
             }
         }

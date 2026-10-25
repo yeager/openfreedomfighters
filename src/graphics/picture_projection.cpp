@@ -56,6 +56,23 @@ PictureProjection prepare_picture_projection(float near_distance,
   return result;
 }
 
+PictureProjection prepare_picture_projection_alternate_depth(
+    float near_distance, float half_extent_0, float half_extent_1) {
+  for (float value : {near_distance, half_extent_0, half_extent_1})
+    finite(value);
+  if (near_distance < 5 || half_extent_0 == 0 || half_extent_1 == 0)
+    throw std::runtime_error(
+        "Alternate picture projection requires resolved valid inputs");
+  const double n = near_distance;
+  PictureProjection result;
+  result.matrix_[0] = checked(n / half_extent_0);
+  result.matrix_[5] = checked(n / half_extent_1);
+  result.matrix_[10] = 1;
+  result.matrix_[11] = 1;
+  result.matrix_[14] = checked(-n);
+  return result;
+}
+
 std::array<float, 4>
 project_picture_position(const PictureProjection &projection,
                          const std::array<float, 3> &position) {

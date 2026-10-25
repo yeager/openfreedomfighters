@@ -1,0 +1,1112 @@
+diff --git a/include/SDL3/SDL_gpu.h b/include/SDL3/SDL_gpu.h
+index dfe5994..6bd9d23 100644
+--- a/include/SDL3/SDL_gpu.h
++++ b/include/SDL3/SDL_gpu.h
+@@ -2399,6 +2399,40 @@ extern SDL_DECLSPEC SDL_GPUDevice * SDLCALL SDL_CreateGPUDeviceWithProperties(
+  *
+  * \since This struct is available since SDL 3.4.0.
+  */
++typedef enum SDL_GPUVulkanExtensionStage
++{
++    SDL_GPU_VULKAN_EXTENSION_STAGE_INSTANCE,
++    SDL_GPU_VULKAN_EXTENSION_STAGE_DEVICE_CANDIDATE
++} SDL_GPUVulkanExtensionStage;
++
++typedef struct SDL_GPUVulkanExtensionList SDL_GPUVulkanExtensionList;
++
++/**
++ * Callback to discover required Vulkan extensions before SDL creates Vulkan
++ * objects. SDL calls INSTANCE before vkCreateInstance, then calls
++ * DEVICE_CANDIDATE for each Vulkan physical-device candidate while selecting
++ * the adapter. SDL may repeat these calls during driver-support probing and
++ * device creation, so callbacks must be deterministic and side-effect safe.
++ * The list is SDL-owned; add names with SDL_AddGPUVulkanExtension.
++ * The collector and names it stores are valid only during the callback.
++ * Instance and physical-device handles are borrowed and callback-scoped.
++ * SDL may call the callback repeatedly during device preflight and creation,
++ * including once per physical-device candidate; it must be idempotent and
++ * release any SDK-owned query results on each call. Return false to reject
++ * this query/candidate.
++ */
++typedef bool (SDLCALL *SDL_GPUVulkanExtensionRequirementsCallback)(
++    void *userdata,
++    SDL_GPUVulkanExtensionStage stage,
++    void *instance,
++    void *physical_device,
++    SDL_GPUVulkanExtensionList *extensions);
++
++/** Adds a copied, deduplicated Vulkan extension name to a discovery result. */
++extern SDL_DECLSPEC bool SDLCALL SDL_AddGPUVulkanExtension(
++    SDL_GPUVulkanExtensionList *extensions,
++    const char *extension_name);
++
+ typedef struct SDL_GPUVulkanOptions
+ {
+     Uint32 vulkan_api_version; /**< The Vulkan API version to request for the instance. Use Vulkan's VK_MAKE_VERSION or VK_MAKE_API_VERSION. */
+@@ -2408,6 +2442,8 @@ typedef struct SDL_GPUVulkanOptions
+ 	const char **device_extension_names; /**< Pointer to a list of additional device extensions to require. */
+ 	Uint32 instance_extension_count; /**< Number of additional instance extensions to require. */
+ 	const char **instance_extension_names; /**< Pointer to a list of additional instance extensions to require. */
++    SDL_GPUVulkanExtensionRequirementsCallback extension_requirements_callback; /**< Optional callback-scoped extension discovery. */
++    void *extension_requirements_userdata; /**< User data passed to extension_requirements_callback. */
+ } SDL_GPUVulkanOptions;
+ 
+ /**
+@@ -2576,6 +2612,125 @@ extern SDL_DECLSPEC SDL_GPUShaderFormat SDLCALL SDL_GetGPUShaderFormats(SDL_GPUD
+  */
+ extern SDL_DECLSPEC SDL_PropertiesID SDLCALL SDL_GetGPUDeviceProperties(SDL_GPUDevice *device);
+ 
++/**
++ * A texture access mode for a scoped Vulkan external pass.
++ *
++ * The texture must have been created with the matching SDL GPU usage flag.
++ * SDL transitions it from its backend-default layout to this layout before
++ * the callback, then transitions it back after the callback returns.
++ */
++#define SDL_GPU_VULKAN_EXTERNAL_PASS_API_VERSION 2
++
++typedef enum SDL_GPUVulkanExternalTextureAccess
++{
++    SDL_GPU_VULKAN_EXTERNAL_TEXTURE_SAMPLED,
++    SDL_GPU_VULKAN_EXTERNAL_TEXTURE_STORAGE_READ,
++    SDL_GPU_VULKAN_EXTERNAL_TEXTURE_STORAGE_WRITE,
++    SDL_GPU_VULKAN_EXTERNAL_TEXTURE_STORAGE_READ_WRITE
++} SDL_GPUVulkanExternalTextureAccess;
++
++/**
++ * Vulkan view of one SDL GPU texture, valid only during the external-pass
++ * callback. Handles are represented without including Vulkan headers.
++ */
++/* Vulkan function pointers are intentionally opaque but remain function pointers,
++ * avoiding nonportable function-pointer/object-pointer conversions.
++ */
++typedef void (SDLCALL *SDL_GPUVulkanFunctionPointer)(void);
++/* Call this SDL-call-convention thunk to obtain a Vulkan entry point. Convert
++ * the returned opaque function pointer back to the matching PFN_vk* type
++ * before calling it; never call through SDL_GPUVulkanFunctionPointer itself.
++ */
++typedef SDL_GPUVulkanFunctionPointer (SDLCALL *SDL_GPUVulkanGetDeviceProcAddr)(
++    void *userdata,
++    void *device,
++    const char *name);
++
++typedef struct SDL_GPUVulkanExternalTexture
++{
++    Uint64 image;
++    Uint64 image_view;
++    Uint32 format;
++    Uint32 aspect_mask;
++    Uint32 width;
++    Uint32 height;
++    Uint32 depth;
++    Uint32 image_type;
++    Uint32 image_create_flags;
++    Uint32 image_usage;
++    Uint32 image_tiling;
++    Uint32 sample_count;
++    Uint32 mip_levels;
++    Uint32 array_layers;
++    Uint32 view_type;
++    Uint32 view_base_mip_level;
++    Uint32 view_level_count;
++    Uint32 view_base_array_layer;
++    Uint32 view_layer_count;
++    Uint32 component_swizzle_r;
++    Uint32 component_swizzle_g;
++    Uint32 component_swizzle_b;
++    Uint32 component_swizzle_a;
++    Sint32 image_layout;
++} SDL_GPUVulkanExternalTexture;
++
++/**
++ * Vulkan objects and textures for one synchronous external pass.
++ *
++ * Device handles (instance, physical_device, device, queue, proc lookup and
++ * userdata) remain valid until SDL_DestroyGPUDevice returns. An adapter may
++ * retain them only while that device lives and must be destroyed first. The
++ * command_buffer and texture array/metadata are callback-scoped; callbacks
++ * may not submit, retain them, or change any supplied texture image layout. If
++ * the callback returns false, SDL marks the command buffer unusable for submission; cancel
++ * it with SDL_CancelGPUCommandBuffer. SDL invalidates its cached pipeline and
++ * descriptor bindings and re-emits initialized SDL viewport, scissor, blend
++ * constant, and stencil-reference state. Other Vulkan dynamic state changed
++ * by a callback must be preserved by the callback.
++ */
++typedef struct SDL_GPUVulkanExternalPassContext
++{
++    void *instance;
++    void *physical_device;
++    void *device;
++    SDL_GPUVulkanGetDeviceProcAddr get_device_proc_addr;
++    void *get_device_proc_addr_userdata;
++    void *graphics_queue;
++    void *command_buffer;
++    Uint32 graphics_queue_family_index;
++    Uint32 graphics_queue_family_flags; /**< VkQueueFlagBits for the selected graphics family. */
++    const SDL_GPUVulkanExternalTexture *textures;
++    Uint32 texture_count;
++} SDL_GPUVulkanExternalPassContext;
++
++typedef struct SDL_GPUVulkanExternalTextureUse
++{
++    SDL_GPUTexture *texture;
++    SDL_GPUVulkanExternalTextureAccess access;
++} SDL_GPUVulkanExternalTextureUse;
++
++typedef bool (SDLCALL *SDL_GPUVulkanExternalPassCallback)(
++    const SDL_GPUVulkanExternalPassContext *context,
++    void *userdata);
++
++/**
++ * Records a scoped Vulkan-only pass into an acquired SDL GPU command buffer.
++ *
++ * This is supported only by SDL's Vulkan GPU backend. It rejects command
++ * buffers with an active render, compute, or copy pass, validates texture
++ * ownership, types, unique entries and access flags, retains their Vulkan
++ * allocations through command submission, and uses SDL's image-layout
++ * barriers around the callback. The callback must preserve the supplied image
++ * layouts; SDL cannot infer arbitrary post-callback image layouts.
++ * The callback records work only; SDL remains responsible for submission.
++ */
++extern SDL_DECLSPEC bool SDLCALL SDL_RunGPUVulkanExternalPass(
++    SDL_GPUCommandBuffer *command_buffer,
++    const SDL_GPUVulkanExternalTextureUse *texture_uses,
++    Uint32 texture_use_count,
++    SDL_GPUVulkanExternalPassCallback callback,
++    void *userdata);
++
+ #define SDL_PROP_GPU_DEVICE_NAME_STRING               "SDL.gpu.device.name"
+ #define SDL_PROP_GPU_DEVICE_DRIVER_NAME_STRING        "SDL.gpu.device.driver_name"
+ #define SDL_PROP_GPU_DEVICE_DRIVER_VERSION_STRING     "SDL.gpu.device.driver_version"
+diff --git a/src/dynapi/SDL_dynapi_procs.h b/src/dynapi/SDL_dynapi_procs.h
+index 78a896a..49a933a 100644
+--- a/src/dynapi/SDL_dynapi_procs.h
++++ b/src/dynapi/SDL_dynapi_procs.h
+@@ -1305,3 +1305,5 @@ SDL_DYNAPI_PROC(SDL_Surface*,SDL_RotateSurface,(SDL_Surface *a,float b),(a,b),re
+ SDL_DYNAPI_PROC(SDL_Surface*,SDL_LoadSurface_IO,(SDL_IOStream *a,bool b),(a,b),return)
+ SDL_DYNAPI_PROC(SDL_Surface*,SDL_LoadSurface,(const char *a),(a),return)
+ SDL_DYNAPI_PROC(bool,SDL_SetWindowFillDocument,(SDL_Window *a,bool b),(a,b),return)
++SDL_DYNAPI_PROC(bool,SDL_RunGPUVulkanExternalPass,(SDL_GPUCommandBuffer *a,const SDL_GPUVulkanExternalTextureUse *b,Uint32 c,SDL_GPUVulkanExternalPassCallback d,void *e),(a,b,c,d,e),return)
++SDL_DYNAPI_PROC(bool,SDL_AddGPUVulkanExtension,(SDL_GPUVulkanExtensionList *a,const char *b),(a,b),return)
+diff --git a/src/dynapi/SDL_dynapi_overrides.h b/src/dynapi/SDL_dynapi_overrides.h
+index c5b0e44..d2f03a1 100644
+--- a/src/dynapi/SDL_dynapi_overrides.h
++++ b/src/dynapi/SDL_dynapi_overrides.h
+@@ -1299,0 +1299,2 @@
++#define SDL_RunGPUVulkanExternalPass SDL_RunGPUVulkanExternalPass_REAL
++#define SDL_AddGPUVulkanExtension SDL_AddGPUVulkanExtension_REAL
+diff --git a/src/gpu/SDL_gpu.c b/src/gpu/SDL_gpu.c
+index 5e6d2aa..9441800 100644
+--- a/src/gpu/SDL_gpu.c
++++ b/src/gpu/SDL_gpu.c
+@@ -792,6 +792,67 @@ SDL_PropertiesID SDL_GetGPUDeviceProperties(SDL_GPUDevice *device)
+     return device->GetDeviceProperties(device);
+ }
+ 
++bool SDL_AddGPUVulkanExtension(SDL_GPUVulkanExtensionList *extensions, const char *extension_name)
++{
++    CHECK_PARAM(extensions == NULL) {
++        return SDL_InvalidParamError("extensions");
++    }
++    CHECK_PARAM(extension_name == NULL || extension_name[0] == '\0') {
++        return SDL_InvalidParamError("extension_name");
++    }
++    for (Uint32 i = 0; i < extensions->count; ++i) {
++        if (SDL_strcmp(extensions->names[i], extension_name) == 0) {
++            return true;
++        }
++    }
++    if (extensions->count == extensions->capacity) {
++        Uint32 newCapacity = extensions->capacity ? extensions->capacity * 2 : 8;
++        if (newCapacity < extensions->capacity || newCapacity > SDL_SIZE_MAX / sizeof(char *)) {
++            return SDL_SetError("Vulkan extension list is too large");
++        }
++        char **newNames = (char **)SDL_realloc(extensions->names, newCapacity * sizeof(char *));
++        if (newNames == NULL) {
++            return SDL_OutOfMemory();
++        }
++        extensions->names = newNames;
++        extensions->capacity = newCapacity;
++    }
++    extensions->names[extensions->count] = SDL_strdup(extension_name);
++    if (extensions->names[extensions->count] == NULL) {
++        return SDL_OutOfMemory();
++    }
++    extensions->count += 1;
++    return true;
++}
++
++bool SDL_RunGPUVulkanExternalPass(
++    SDL_GPUCommandBuffer *command_buffer,
++    const SDL_GPUVulkanExternalTextureUse *texture_uses,
++    Uint32 texture_use_count,
++    SDL_GPUVulkanExternalPassCallback callback,
++    void *userdata)
++{
++    CHECK_PARAM(command_buffer == NULL) {
++        return SDL_InvalidParamError("command_buffer");
++    }
++    CHECK_PARAM(texture_uses == NULL || texture_use_count == 0) {
++        return SDL_InvalidParamError("texture_uses");
++    }
++    CHECK_PARAM(callback == NULL) {
++        return SDL_InvalidParamError("callback");
++    }
++    CHECK_COMMAND_BUFFER_RETURN_FALSE;
++    CHECK_ANY_PASS_IN_PROGRESS("Cannot run a Vulkan external pass inside an SDL GPU pass!", false);
++
++    SDL_GPUDevice *device = ((CommandBufferCommonHeader *)command_buffer)->device;
++    CHECK_DEVICE_MAGIC(device, false);
++    if (device->RunGPUVulkanExternalPass == NULL) {
++        return SDL_SetError("Vulkan external passes require SDL's Vulkan GPU backend");
++    }
++    return device->RunGPUVulkanExternalPass(
++        command_buffer, texture_uses, texture_use_count, callback, userdata);
++}
++
+ Uint32 SDL_GPUTextureFormatTexelBlockSize(
+     SDL_GPUTextureFormat format)
+ {
+@@ -1369,9 +1430,11 @@ SDL_GPUTexture *SDL_CreateGPUTexture(
+         }
+     }
+ 
+-    return device->CreateTexture(
+-        device->driverData,
+-        createinfo);
++    SDL_GPUTexture *texture = device->CreateTexture(device->driverData, createinfo);
++    if (texture) {
++        ((TextureCommonHeader *)texture)->device = device;
++    }
++    return texture;
+ }
+ 
+ SDL_GPUBuffer *SDL_CreateGPUBuffer(
+@@ -3378,6 +3441,11 @@ bool SDL_SubmitGPUCommandBuffer(
+         }
+     }
+ 
++    if (commandBufferHeader->invalidated) {
++        SDL_SetError("Cannot submit a command buffer invalidated by a failed Vulkan external pass; cancel it instead");
++        return false;
++    }
++
+     commandBufferHeader->submitted = true;
+ 
+     return COMMAND_BUFFER_DEVICE->Submit(
+@@ -3405,6 +3473,11 @@ SDL_GPUFence *SDL_SubmitGPUCommandBufferAndAcquireFence(
+         }
+     }
+ 
++    if (commandBufferHeader->invalidated) {
++        SDL_SetError("Cannot submit a command buffer invalidated by a failed Vulkan external pass; cancel it instead");
++        return NULL;
++    }
++
+     commandBufferHeader->submitted = true;
+ 
+     return COMMAND_BUFFER_DEVICE->SubmitAndAcquireFence(
+diff --git a/src/gpu/SDL_sysgpu.h b/src/gpu/SDL_sysgpu.h
+index 8e0e349..d157046 100644
+--- a/src/gpu/SDL_sysgpu.h
++++ b/src/gpu/SDL_sysgpu.h
+@@ -90,12 +90,21 @@ typedef struct CommandBufferCommonHeader
+     Pass copy_pass;
+     bool swapchain_texture_acquired;
+     bool submitted;
++    bool invalidated; // poisoned by failed native interop; cancel instead of submit
+     // used to avoid tripping assert on GenerateMipmaps
+     bool ignore_render_pass_texture_validation;
+ } CommandBufferCommonHeader;
+ 
++struct SDL_GPUVulkanExtensionList
++{
++    char **names;
++    Uint32 count;
++    Uint32 capacity;
++};
++
+ typedef struct TextureCommonHeader
+ {
++    SDL_GPUDevice *device; // assigned by SDL_CreateGPUTexture; null for swapchain textures
+     SDL_GPUTextureCreateInfo info;
+ } TextureCommonHeader;
+ 
+@@ -671,6 +680,14 @@ struct SDL_GPUDevice
+ 
+     SDL_PropertiesID (*GetDeviceProperties)(SDL_GPUDevice *device);
+ 
++    // Optional native Vulkan interop. Other backends leave this null.
++    bool (*RunGPUVulkanExternalPass)(
++        SDL_GPUCommandBuffer *command_buffer,
++        const SDL_GPUVulkanExternalTextureUse *texture_uses,
++        Uint32 texture_use_count,
++        SDL_GPUVulkanExternalPassCallback callback,
++        void *userdata);
++
+     // State Creation
+ 
+     SDL_GPUComputePipeline *(*CreateComputePipeline)(
+diff --git a/src/gpu/vulkan/SDL_gpu_vulkan.c b/src/gpu/vulkan/SDL_gpu_vulkan.c
+index ae19a13..b0447d6 100644
+--- a/src/gpu/vulkan/SDL_gpu_vulkan.c
++++ b/src/gpu/vulkan/SDL_gpu_vulkan.c
+@@ -599,6 +599,8 @@ struct VulkanTexture
+ 
+     VkImage image;
+     VkImageView fullView; // used for samplers and storage reads
++    VkImageUsageFlags imageUsage;
++    VkImageCreateFlags imageCreateFlags;
+     VkComponentMapping swizzle;
+     VkImageAspectFlags aspectFlags;
+     Uint32 depth; // used for cleanup only
+@@ -976,6 +978,10 @@ typedef struct VulkanCommandBuffer
+     VkRect2D currentScissor;
+     float blendConstants[4];
+     Uint8 stencilRef;
++    bool hasCurrentViewport;
++    bool hasCurrentScissor;
++    bool hasBlendConstants;
++    bool hasStencilRef;
+ 
+     // Resource bind state
+ 
+@@ -1111,6 +1117,9 @@ typedef struct VulkanFeatures
+     const char **additionalDeviceExtensionNames;
+     Uint32 additionalInstanceExtensionCount;
+     const char **additionalInstanceExtensionNames;
++    SDL_GPUVulkanExtensionRequirementsCallback extensionRequirementsCallback;
++    void *extensionRequirementsUserdata;
++    SDL_GPUVulkanExtensionList selectedDeviceExtensions;
+ } VulkanFeatures;
+ 
+ // Context
+@@ -5078,6 +5087,291 @@ static SDL_PropertiesID VULKAN_GetDeviceProperties(
+     return renderer->props;
+ }
+ 
++static SDL_GPUVulkanFunctionPointer SDLCALL VULKAN_ExternalGetDeviceProcAddr(void *userdata, void *device, const char *name)
++{
++    VulkanRenderer *renderer = (VulkanRenderer *)userdata;
++    return (SDL_GPUVulkanFunctionPointer)renderer->vkGetDeviceProcAddr((VkDevice)device, name);
++}
++
++static bool VULKAN_RunGPUVulkanExternalPass(
++    SDL_GPUCommandBuffer *command_buffer,
++    const SDL_GPUVulkanExternalTextureUse *texture_uses,
++    Uint32 texture_use_count,
++    SDL_GPUVulkanExternalPassCallback callback,
++    void *userdata)
++{
++    VulkanCommandBuffer *vulkan_command_buffer = (VulkanCommandBuffer *)command_buffer;
++    VulkanRenderer *renderer = vulkan_command_buffer->renderer;
++    VulkanTexture **textures = NULL;
++    VulkanTextureUsageMode *access_modes = NULL;
++    SDL_GPUVulkanExternalTexture *external_textures = NULL;
++    SDL_GPUVulkanExternalPassContext context;
++    bool callback_result;
++    Uint32 i, j;
++    VkQueueFlags graphics_queue_family_flags = 0;
++
++    if (vulkan_command_buffer->common.submitted ||
++        vulkan_command_buffer->common.swapchain_texture_acquired ||
++        vulkan_command_buffer->common.render_pass.in_progress ||
++        vulkan_command_buffer->common.compute_pass.in_progress ||
++        vulkan_command_buffer->common.copy_pass.in_progress) {
++        return SDL_SetError("Vulkan external pass requires an acquired command buffer outside an SDL GPU pass");
++    }
++
++    if (texture_use_count > SDL_SIZE_MAX / sizeof(*textures) ||
++        texture_use_count > SDL_SIZE_MAX / sizeof(*access_modes) ||
++        texture_use_count > SDL_SIZE_MAX / sizeof(*external_textures)) {
++        return SDL_SetError("Vulkan external pass texture list is too large");
++    }
++
++    textures = (VulkanTexture **)SDL_calloc(texture_use_count, sizeof(*textures));
++    access_modes = (VulkanTextureUsageMode *)SDL_calloc(texture_use_count, sizeof(*access_modes));
++    external_textures = (SDL_GPUVulkanExternalTexture *)SDL_calloc(texture_use_count, sizeof(*external_textures));
++    if (textures == NULL || access_modes == NULL || external_textures == NULL) {
++        SDL_free(textures);
++        SDL_free(access_modes);
++        SDL_free(external_textures);
++        return SDL_OutOfMemory();
++    }
++
++    /* Validate the whole set before recording any barriers. */
++    Uint32 queue_family_count = 0;
++    renderer->vkGetPhysicalDeviceQueueFamilyProperties(
++        renderer->physicalDevice, &queue_family_count, NULL);
++    if (renderer->queueFamilyIndex >= queue_family_count) {
++        SDL_SetError("Selected Vulkan queue family is unavailable");
++        goto fail;
++    }
++    VkQueueFamilyProperties *queue_family_properties = SDL_stack_alloc(
++        VkQueueFamilyProperties, queue_family_count);
++    if (queue_family_properties == NULL) {
++        SDL_OutOfMemory();
++        goto fail;
++    }
++    renderer->vkGetPhysicalDeviceQueueFamilyProperties(
++        renderer->physicalDevice, &queue_family_count, queue_family_properties);
++    graphics_queue_family_flags =
++        queue_family_properties[renderer->queueFamilyIndex].queueFlags;
++    SDL_stack_free(queue_family_properties);
++
++    for (i = 0; i < texture_use_count; i += 1) {
++        VulkanTextureContainer *container;
++        Uint32 format;
++
++        if (texture_uses[i].texture == NULL) {
++            SDL_SetError("Vulkan external pass contains a null texture");
++            goto fail;
++        }
++        if (((TextureCommonHeader *)texture_uses[i].texture)->device != vulkan_command_buffer->common.device) {
++            SDL_SetError("Vulkan external pass texture is not owned by this device; swapchain textures are unsupported");
++            goto fail;
++        }
++        container = (VulkanTextureContainer *)texture_uses[i].texture;
++        textures[i] = container->activeTexture;
++        if (textures[i] == NULL ||
++            textures[i]->type != SDL_GPU_TEXTURETYPE_2D ||
++            textures[i]->levelCount != 1 ||
++            textures[i]->layerCount != 1) {
++            SDL_SetError("Vulkan external pass requires live single-level 2D textures");
++            goto fail;
++        }
++
++        switch (texture_uses[i].access) {
++        case SDL_GPU_VULKAN_EXTERNAL_TEXTURE_SAMPLED:
++            if ((textures[i]->usage & SDL_GPU_TEXTUREUSAGE_SAMPLER) == 0) {
++                SDL_SetError("Sampled external texture lacks SDL_GPU_TEXTUREUSAGE_SAMPLER");
++                goto fail;
++            }
++            access_modes[i] = VULKAN_TEXTURE_USAGE_MODE_SAMPLER;
++            break;
++        case SDL_GPU_VULKAN_EXTERNAL_TEXTURE_STORAGE_READ:
++            if ((textures[i]->usage & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ) == 0) {
++                SDL_SetError("Read-only external texture lacks SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_READ");
++                goto fail;
++            }
++            access_modes[i] = VULKAN_TEXTURE_USAGE_MODE_COMPUTE_STORAGE_READ;
++            break;
++        case SDL_GPU_VULKAN_EXTERNAL_TEXTURE_STORAGE_WRITE:
++            if ((textures[i]->usage & (SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE | SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_SIMULTANEOUS_READ_WRITE)) == 0) {
++                SDL_SetError("Write-only external texture lacks SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE");
++                goto fail;
++            }
++            access_modes[i] = VULKAN_TEXTURE_USAGE_MODE_COMPUTE_STORAGE_READ_WRITE;
++            break;
++        case SDL_GPU_VULKAN_EXTERNAL_TEXTURE_STORAGE_READ_WRITE:
++            if ((textures[i]->usage & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_SIMULTANEOUS_READ_WRITE) == 0) {
++                SDL_SetError("Read-write external texture lacks SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_SIMULTANEOUS_READ_WRITE");
++                goto fail;
++            }
++            access_modes[i] = VULKAN_TEXTURE_USAGE_MODE_COMPUTE_STORAGE_READ_WRITE;
++            break;
++        default:
++            SDL_SetError("Vulkan external pass contains an invalid texture access mode");
++            goto fail;
++        }
++
++        for (j = 0; j < i; j += 1) {
++            if (textures[j] == textures[i]) {
++                SDL_SetError("Vulkan external pass texture list contains duplicates");
++                goto fail;
++            }
++        }
++
++        format = (Uint32)container->header.info.format;
++        if (format >= SDL_arraysize(SDLToVK_TextureFormat)) {
++            SDL_SetError("Vulkan external pass texture format is invalid");
++            goto fail;
++        }
++
++        VkImageView externalView = access_modes[i] == VULKAN_TEXTURE_USAGE_MODE_COMPUTE_STORAGE_READ_WRITE
++                                       ? textures[i]->subresources[0].computeWriteView
++                                       : textures[i]->fullView;
++        if (externalView == VK_NULL_HANDLE) {
++            SDL_SetError("Vulkan external pass texture has no view compatible with requested access");
++            goto fail;
++        }
++        external_textures[i].image = (Uint64)(uintptr_t)textures[i]->image;
++        external_textures[i].image_view = (Uint64)(uintptr_t)externalView;
++        external_textures[i].format = (Uint32)SDLToVK_TextureFormat[format];
++        external_textures[i].aspect_mask = access_modes[i] == VULKAN_TEXTURE_USAGE_MODE_COMPUTE_STORAGE_READ_WRITE
++                                               ? (Uint32)textures[i]->aspectFlags
++                                               : (Uint32)(textures[i]->aspectFlags & ~VK_IMAGE_ASPECT_STENCIL_BIT);
++        external_textures[i].width = container->header.info.width;
++        external_textures[i].height = container->header.info.height;
++        external_textures[i].depth = 1;
++        external_textures[i].image_type = VK_IMAGE_TYPE_2D;
++        external_textures[i].image_create_flags = (Uint32)textures[i]->imageCreateFlags;
++        external_textures[i].image_usage = (Uint32)textures[i]->imageUsage;
++        external_textures[i].image_tiling = VK_IMAGE_TILING_OPTIMAL;
++        external_textures[i].sample_count = (Uint32)SDLToVK_SampleCount[container->header.info.sample_count];
++        external_textures[i].mip_levels = textures[i]->levelCount;
++        external_textures[i].array_layers = textures[i]->layerCount;
++        external_textures[i].view_type = VK_IMAGE_VIEW_TYPE_2D;
++        external_textures[i].view_base_mip_level = 0;
++        external_textures[i].view_level_count = 1;
++        external_textures[i].view_base_array_layer = 0;
++        external_textures[i].view_layer_count = 1;
++        external_textures[i].component_swizzle_r = (Uint32)textures[i]->swizzle.r;
++        external_textures[i].component_swizzle_g = (Uint32)textures[i]->swizzle.g;
++        external_textures[i].component_swizzle_b = (Uint32)textures[i]->swizzle.b;
++        external_textures[i].component_swizzle_a = (Uint32)textures[i]->swizzle.a;
++        external_textures[i].image_layout =
++            access_modes[i] == VULKAN_TEXTURE_USAGE_MODE_SAMPLER
++                ? (Sint32)VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
++                : (Sint32)VK_IMAGE_LAYOUT_GENERAL;
++    }
++
++    if ((Uint64)vulkan_command_buffer->usedTextureCount + texture_use_count > SDL_MAX_SINT32) {
++        SDL_free(textures);
++        SDL_free(access_modes);
++        SDL_free(external_textures);
++        return SDL_SetError("Vulkan external pass texture count exceeds SDL's command-buffer limit");
++    }
++    if ((Uint64)vulkan_command_buffer->usedTextureCount + texture_use_count > SDL_SIZE_MAX / sizeof(VulkanTexture *)) {
++        SDL_free(textures);
++        SDL_free(access_modes);
++        SDL_free(external_textures);
++        return SDL_SetError("Vulkan external pass texture list is too large");
++    }
++    if (vulkan_command_buffer->usedTextureCount + (Sint32)texture_use_count > vulkan_command_buffer->usedTextureCapacity) {
++        Sint32 neededCapacity = vulkan_command_buffer->usedTextureCount + (Sint32)texture_use_count;
++        VulkanTexture **newUsedTextures = (VulkanTexture **)SDL_realloc(vulkan_command_buffer->usedTextures, (size_t)neededCapacity * sizeof(VulkanTexture *));
++        if (newUsedTextures == NULL) {
++            SDL_free(textures);
++            SDL_free(access_modes);
++            SDL_free(external_textures);
++            return SDL_OutOfMemory();
++        }
++        vulkan_command_buffer->usedTextures = newUsedTextures;
++        vulkan_command_buffer->usedTextureCapacity = neededCapacity;
++    }
++
++    for (i = 0; i < texture_use_count; i += 1) {
++        VULKAN_INTERNAL_TrackTexture(vulkan_command_buffer, textures[i]);
++        VULKAN_INTERNAL_FullTextureMemoryBarrier(
++            renderer,
++            vulkan_command_buffer,
++            VULKAN_INTERNAL_DefaultTextureUsageMode(textures[i]),
++            access_modes[i],
++            textures[i]);
++    }
++
++    context.instance = (void *)renderer->instance;
++    context.physical_device = (void *)renderer->physicalDevice;
++    context.device = (void *)renderer->logicalDevice;
++    context.get_device_proc_addr = VULKAN_ExternalGetDeviceProcAddr;
++    context.get_device_proc_addr_userdata = renderer;
++    context.graphics_queue = (void *)renderer->unifiedQueue;
++    context.command_buffer = (void *)vulkan_command_buffer->commandBuffer;
++    context.graphics_queue_family_index = renderer->queueFamilyIndex;
++    context.graphics_queue_family_flags = (Uint32)graphics_queue_family_flags;
++    context.textures = external_textures;
++    context.texture_count = texture_use_count;
++
++    callback_result = callback(&context, userdata);
++
++    /*
++     * The callback may have changed Vulkan pipeline and descriptor state.
++     * Invalidate SDL's bindings and re-emit every initialized SDL-cached
++     * dynamic state after a successful callback below.
++     */
++    vulkan_command_buffer->currentGraphicsPipeline = NULL;
++    vulkan_command_buffer->currentComputePipeline = NULL;
++    vulkan_command_buffer->needVertexBufferBind = true;
++    vulkan_command_buffer->needNewVertexResourceDescriptorSet = true;
++    vulkan_command_buffer->needNewVertexUniformDescriptorSet = true;
++    vulkan_command_buffer->needNewVertexUniformOffsets = true;
++    vulkan_command_buffer->needNewFragmentResourceDescriptorSet = true;
++    vulkan_command_buffer->needNewFragmentUniformDescriptorSet = true;
++    vulkan_command_buffer->needNewFragmentUniformOffsets = true;
++    vulkan_command_buffer->needNewComputeReadOnlyDescriptorSet = true;
++    vulkan_command_buffer->needNewComputeReadWriteDescriptorSet = true;
++    vulkan_command_buffer->needNewComputeUniformDescriptorSet = true;
++    vulkan_command_buffer->needNewComputeUniformOffsets = true;
++
++    if (!callback_result) {
++        vulkan_command_buffer->common.invalidated = true;
++        SDL_SetError("Vulkan external pass callback failed; command buffer must be canceled");
++        SDL_free(textures);
++        SDL_free(access_modes);
++        SDL_free(external_textures);
++        return false;
++    }
++
++    if (vulkan_command_buffer->hasCurrentViewport) {
++        renderer->vkCmdSetViewport(vulkan_command_buffer->commandBuffer, 0, 1, &vulkan_command_buffer->currentViewport);
++    }
++    if (vulkan_command_buffer->hasCurrentScissor) {
++        renderer->vkCmdSetScissor(vulkan_command_buffer->commandBuffer, 0, 1, &vulkan_command_buffer->currentScissor);
++    }
++    if (vulkan_command_buffer->hasBlendConstants) {
++        renderer->vkCmdSetBlendConstants(vulkan_command_buffer->commandBuffer, vulkan_command_buffer->blendConstants);
++    }
++    if (vulkan_command_buffer->hasStencilRef) {
++        renderer->vkCmdSetStencilReference(vulkan_command_buffer->commandBuffer, VK_STENCIL_FACE_FRONT_AND_BACK, vulkan_command_buffer->stencilRef);
++    }
++
++    for (i = 0; i < texture_use_count; i += 1) {
++        VULKAN_INTERNAL_FullTextureMemoryBarrier(
++            renderer,
++            vulkan_command_buffer,
++            access_modes[i],
++            VULKAN_INTERNAL_DefaultTextureUsageMode(textures[i]),
++            textures[i]);
++    }
++
++    SDL_free(textures);
++    SDL_free(access_modes);
++    SDL_free(external_textures);
++    return true;
++
++fail:
++    SDL_free(textures);
++    SDL_free(access_modes);
++    SDL_free(external_textures);
++    return false;
++}
++
+ static DescriptorSetCache *VULKAN_INTERNAL_AcquireDescriptorSetCache(
+     VulkanRenderer *renderer)
+ {
+@@ -5776,6 +6063,9 @@ static VulkanTexture *VULKAN_INTERNAL_CreateTexture(
+         vkUsageFlags |= VK_IMAGE_USAGE_STORAGE_BIT;
+     }
+ 
++    texture->imageUsage = vkUsageFlags;
++    texture->imageCreateFlags = imageCreateFlags;
++
+     imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+     imageCreateInfo.pNext = NULL;
+     imageCreateInfo.flags = imageCreateFlags;
+@@ -7489,6 +7779,7 @@ static void VULKAN_INTERNAL_SetCurrentViewport(
+     // Viewport flip for consistency with other backends
+     vulkanCommandBuffer->currentViewport.y = viewport->y + viewport->h;
+     vulkanCommandBuffer->currentViewport.height = -viewport->h;
++    vulkanCommandBuffer->hasCurrentViewport = true;
+ 
+     renderer->vkCmdSetViewport(
+         vulkanCommandBuffer->commandBuffer,
+@@ -7518,6 +7809,7 @@ static void VULKAN_INTERNAL_SetCurrentScissor(
+     vulkanCommandBuffer->currentScissor.offset.y = scissor->y;
+     vulkanCommandBuffer->currentScissor.extent.width = scissor->w;
+     vulkanCommandBuffer->currentScissor.extent.height = scissor->h;
++    vulkanCommandBuffer->hasCurrentScissor = true;
+ 
+     renderer->vkCmdSetScissor(
+         vulkanCommandBuffer->commandBuffer,
+@@ -7547,6 +7839,7 @@ static void VULKAN_INTERNAL_SetCurrentBlendConstants(
+     vulkanCommandBuffer->blendConstants[1] = blendConstants.g;
+     vulkanCommandBuffer->blendConstants[2] = blendConstants.b;
+     vulkanCommandBuffer->blendConstants[3] = blendConstants.a;
++    vulkanCommandBuffer->hasBlendConstants = true;
+ 
+     renderer->vkCmdSetBlendConstants(
+         vulkanCommandBuffer->commandBuffer,
+@@ -7571,6 +7864,7 @@ static void VULKAN_INTERNAL_SetCurrentStencilReference(
+     VulkanRenderer *renderer = vulkanCommandBuffer->renderer;
+ 
+     vulkanCommandBuffer->stencilRef = reference;
++    vulkanCommandBuffer->hasStencilRef = true;
+ 
+     renderer->vkCmdSetStencilReference(
+         vulkanCommandBuffer->commandBuffer,
+@@ -9686,6 +9980,10 @@ static SDL_GPUCommandBuffer *VULKAN_AcquireCommandBuffer(
+ 
+     commandBuffer->currentComputePipeline = NULL;
+     commandBuffer->currentGraphicsPipeline = NULL;
++    commandBuffer->hasCurrentViewport = false;
++    commandBuffer->hasCurrentScissor = false;
++    commandBuffer->hasBlendConstants = false;
++    commandBuffer->hasStencilRef = false;
+ 
+     SDL_zeroa(commandBuffer->colorAttachmentSubresources);
+     SDL_zeroa(commandBuffer->resolveAttachmentSubresources);
+@@ -11379,6 +11677,7 @@ static Uint8 VULKAN_INTERNAL_CheckInstanceExtensions(
+ }
+ 
+ static Uint8 CheckOptInDeviceExtensions(VulkanFeatures *features,
++                                        const SDL_GPUVulkanExtensionList *callbackExtensions,
+                                         Uint32 numExtensions,
+                                         VkExtensionProperties *availableExtensions,
+                                         const char **missingExtensionName) {
+@@ -11398,12 +11697,27 @@ static Uint8 CheckOptInDeviceExtensions(VulkanFeatures *features,
+         }
+     }
+ 
++    for (Uint32 extensionIdx = 0; callbackExtensions && extensionIdx < callbackExtensions->count; extensionIdx++) {
++        bool found = false;
++        for (Uint32 searchIdx = 0; searchIdx < numExtensions; searchIdx++) {
++            if (SDL_strcmp(callbackExtensions->names[extensionIdx], availableExtensions[searchIdx].extensionName) == 0) {
++                found = true;
++                break;
++            }
++        }
++        if (!found) {
++            supportsAll = 0;
++            *missingExtensionName = callbackExtensions->names[extensionIdx];
++            break;
++        }
++    }
+     return supportsAll;
+ }
+ 
+ static Uint8 VULKAN_INTERNAL_CheckDeviceExtensions(
+     VulkanRenderer *renderer,
+     VulkanFeatures *features,
++    const SDL_GPUVulkanExtensionList *callbackExtensions,
+     VkPhysicalDevice physicalDevice,
+     VulkanExtensions *physicalDeviceExtensions)
+ {
+@@ -11431,7 +11745,7 @@ static Uint8 VULKAN_INTERNAL_CheckDeviceExtensions(
+ 
+     if (features->usesCustomVulkanOptions) {
+         const char *missingExtensionName;
+-        if (!CheckOptInDeviceExtensions(features, extensionCount, availableExtensions, &missingExtensionName)) {
++        if (!CheckOptInDeviceExtensions(features, callbackExtensions, extensionCount, availableExtensions, &missingExtensionName)) {
+             SDL_assert(missingExtensionName);
+             if (renderer->debugMode) {
+                 SDL_LogError(SDL_LOG_CATEGORY_GPU,
+@@ -11936,6 +12250,8 @@ static void VULKAN_INTERNAL_AddOptInVulkanOptions(SDL_PropertiesID props, Vulkan
+             features->additionalDeviceExtensionNames = options->device_extension_names;
+             features->additionalInstanceExtensionCount = options->instance_extension_count;
+             features->additionalInstanceExtensionNames = options->instance_extension_names;
++            features->extensionRequirementsCallback = options->extension_requirements_callback;
++            features->extensionRequirementsUserdata = options->extension_requirements_userdata;
+         } else if (renderer->debugMode) {
+             SDL_LogWarn(SDL_LOG_CATEGORY_GPU,
+                         "VULKAN_INTERNAL_AddOptInVulkanOptions: Additional options property was set, but value was null. This may be a bug.");
+@@ -11943,6 +12259,40 @@ static void VULKAN_INTERNAL_AddOptInVulkanOptions(SDL_PropertiesID props, Vulkan
+     }
+ }
+ 
++static void VULKAN_INTERNAL_FreeExtensionList(SDL_GPUVulkanExtensionList *extensions)
++{
++    if (extensions) {
++        for (Uint32 i = 0; i < extensions->count; ++i) {
++            SDL_free(extensions->names[i]);
++        }
++        SDL_free(extensions->names);
++        SDL_zero(*extensions);
++    }
++}
++
++static bool VULKAN_INTERNAL_CopyExtensionList(SDL_GPUVulkanExtensionList *dst, const SDL_GPUVulkanExtensionList *src)
++{
++    VULKAN_INTERNAL_FreeExtensionList(dst);
++    for (Uint32 i = 0; i < src->count; ++i) {
++        if (!SDL_AddGPUVulkanExtension(dst, src->names[i])) {
++            VULKAN_INTERNAL_FreeExtensionList(dst);
++            return false;
++        }
++    }
++    return true;
++}
++
++static bool VULKAN_INTERNAL_AppendUniqueExtension(const char *name, const char **names, Uint32 *count)
++{
++    for (Uint32 i = 0; i < *count; ++i) {
++        if (SDL_strcmp(name, names[i]) == 0) {
++            return true;
++        }
++    }
++    names[(*count)++] = name;
++    return true;
++}
++
+ static Uint8 VULKAN_INTERNAL_CreateInstance(VulkanRenderer *renderer, VulkanFeatures *features)
+ {
+     VkResult vulkanResult;
+@@ -11976,33 +12326,44 @@ static Uint8 VULKAN_INTERNAL_CreateInstance(VulkanRenderer *renderer, VulkanFeat
+         return 0;
+     }
+ 
+-    Uint32 extraInstanceExtensionCount = features->additionalInstanceExtensionCount;
+-    const char** extraInstanceExtensionNames = features->additionalInstanceExtensionNames;
+-
+-    /* Extra space for the following extensions:
+-     * VK_KHR_get_physical_device_properties2
+-     * VK_EXT_swapchain_colorspace
+-     * VK_EXT_debug_utils
+-     * VK_KHR_portability_enumeration
+-     *
+-     * Plus additional opt-in extensions.
+-     */
+-    instanceExtensionNames = SDL_stack_alloc(
+-        const char *,
+-        instanceExtensionCount + 4 + extraInstanceExtensionCount);
+-    const char** nextInstanceExtensionNamePtr = instanceExtensionNames;
+-    SDL_memcpy((void *)nextInstanceExtensionNamePtr, originalInstanceExtensionNames, instanceExtensionCount * sizeof(const char *));
+-    nextInstanceExtensionNamePtr += instanceExtensionCount;
++    SDL_GPUVulkanExtensionList callbackExtensions = { 0 };
++    if (features->extensionRequirementsCallback &&
++        !features->extensionRequirementsCallback(features->extensionRequirementsUserdata,
++                                                  SDL_GPU_VULKAN_EXTENSION_STAGE_INSTANCE,
++                                                  NULL,
++                                                  NULL,
++                                                  &callbackExtensions)) {
++        VULKAN_INTERNAL_FreeExtensionList(&callbackExtensions);
++        SDL_SetError("Vulkan instance extension discovery callback failed");
++        return 0;
++    }
+ 
+-    if (extraInstanceExtensionCount > 0) {
+-        SDL_memcpy((void *)nextInstanceExtensionNamePtr, extraInstanceExtensionNames, extraInstanceExtensionCount * sizeof(const char *));
+-        nextInstanceExtensionNamePtr += extraInstanceExtensionCount;
++    Uint64 maxInstanceExtensionCount64 = (Uint64)instanceExtensionCount +
++                                         (Uint64)features->additionalInstanceExtensionCount +
++                                         (Uint64)callbackExtensions.count + 4;
++    if (maxInstanceExtensionCount64 > SDL_MAX_UINT32) {
++        VULKAN_INTERNAL_FreeExtensionList(&callbackExtensions);
++        return SDL_SetError("Vulkan instance extension list is too large"), 0;
++    }
++    Uint32 maxInstanceExtensionCount = (Uint32)maxInstanceExtensionCount64;
++    instanceExtensionNames = SDL_stack_alloc(const char *, maxInstanceExtensionCount);
++    Uint32 requiredInstanceExtensionCount = 0;
++    for (Uint32 i = 0; i < instanceExtensionCount; ++i) {
++        VULKAN_INTERNAL_AppendUniqueExtension(originalInstanceExtensionNames[i], instanceExtensionNames, &requiredInstanceExtensionCount);
+     }
++    for (Uint32 i = 0; i < features->additionalInstanceExtensionCount; ++i) {
++        VULKAN_INTERNAL_AppendUniqueExtension(features->additionalInstanceExtensionNames[i], instanceExtensionNames, &requiredInstanceExtensionCount);
++    }
++    for (Uint32 i = 0; i < callbackExtensions.count; ++i) {
++        VULKAN_INTERNAL_AppendUniqueExtension(callbackExtensions.names[i], instanceExtensionNames, &requiredInstanceExtensionCount);
++    }
++    instanceExtensionCount = requiredInstanceExtensionCount;
+ 
++    /* Extra space for optional SDL extensions added below. */
+     int firstUnsupportedExtensionIndex = 0;
+     if (!VULKAN_INTERNAL_CheckInstanceExtensions(
+             instanceExtensionNames,
+-            instanceExtensionCount + extraInstanceExtensionCount,
++            instanceExtensionCount,
+             &renderer->supportsDebugUtils,
+             &renderer->supportsColorspace,
+             &renderer->supportsPhysicalDeviceProperties2,
+@@ -12016,13 +12377,12 @@ static Uint8 VULKAN_INTERNAL_CreateInstance(VulkanRenderer *renderer, VulkanFeat
+         SDL_SetError("Required Vulkan instance extension '%s' not supported",
+                      instanceExtensionNames[firstUnsupportedExtensionIndex]);
+         SDL_stack_free((char *)instanceExtensionNames);
++        VULKAN_INTERNAL_FreeExtensionList(&callbackExtensions);
+         return false;
+     }
+ 
+     if (renderer->supportsDebugUtils) {
+-        // Append the debug extension
+-        *nextInstanceExtensionNamePtr++ = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+-        instanceExtensionCount++;
++        VULKAN_INTERNAL_AppendUniqueExtension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME, instanceExtensionNames, &instanceExtensionCount);
+     } else {
+         SDL_LogWarn(
+             SDL_LOG_CATEGORY_GPU,
+@@ -12031,20 +12391,15 @@ static Uint8 VULKAN_INTERNAL_CreateInstance(VulkanRenderer *renderer, VulkanFeat
+     }
+ 
+     if (renderer->supportsColorspace) {
+-        // Append colorspace extension
+-        *nextInstanceExtensionNamePtr++ = VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME;
+-        instanceExtensionCount++;
++        VULKAN_INTERNAL_AppendUniqueExtension(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, instanceExtensionNames, &instanceExtensionCount);
+     }
+ 
+     if (renderer->supportsPhysicalDeviceProperties2) {
+-        // Append KHR_physical_device_properties2 extension
+-        *nextInstanceExtensionNamePtr++ = VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME;
+-        instanceExtensionCount++;
++        VULKAN_INTERNAL_AppendUniqueExtension(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME, instanceExtensionNames, &instanceExtensionCount);
+     }
+ 
+     if (renderer->supportsPortabilityEnumeration) {
+-        *nextInstanceExtensionNamePtr++ = VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME;
+-        instanceExtensionCount++;
++        VULKAN_INTERNAL_AppendUniqueExtension(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME, instanceExtensionNames, &instanceExtensionCount);
+         createFlags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+     }
+ 
+@@ -12053,7 +12408,7 @@ static Uint8 VULKAN_INTERNAL_CreateInstance(VulkanRenderer *renderer, VulkanFeat
+     createInfo.flags = createFlags;
+     createInfo.pApplicationInfo = &appInfo;
+     createInfo.ppEnabledLayerNames = layerNames;
+-    createInfo.enabledExtensionCount = instanceExtensionCount + extraInstanceExtensionCount;
++    createInfo.enabledExtensionCount = instanceExtensionCount;
+     createInfo.ppEnabledExtensionNames = instanceExtensionNames;
+     if (renderer->debugMode) {
+         createInfo.enabledLayerCount = SDL_arraysize(layerNames);
+@@ -12071,6 +12426,7 @@ static Uint8 VULKAN_INTERNAL_CreateInstance(VulkanRenderer *renderer, VulkanFeat
+ 
+     vulkanResult = vkCreateInstance(&createInfo, NULL, &renderer->instance);
+     SDL_stack_free((char *)instanceExtensionNames);
++    VULKAN_INTERNAL_FreeExtensionList(&callbackExtensions);
+ 
+     if (vulkanResult != VK_SUCCESS) {
+         CHECK_VULKAN_ERROR_AND_RETURN(vulkanResult, vkCreateInstance, 0);
+@@ -12231,6 +12587,7 @@ static bool VULKAN_INTERNAL_GetDeviceRank(
+ static Uint8 VULKAN_INTERNAL_IsDeviceSuitable(
+     VulkanRenderer *renderer,
+     VulkanFeatures *features,
++    const SDL_GPUVulkanExtensionList *callbackExtensions,
+     VkPhysicalDevice physicalDevice,
+     VulkanExtensions *physicalDeviceExtensions,
+     Uint32 *queueFamilyIndex)
+@@ -12266,6 +12624,7 @@ static Uint8 VULKAN_INTERNAL_IsDeviceSuitable(
+     if (!VULKAN_INTERNAL_CheckDeviceExtensions(
+             renderer,
+             features,
++            callbackExtensions,
+             physicalDevice,
+             physicalDeviceExtensions)) {
+         return 0;
+@@ -12402,17 +12760,31 @@ static Uint8 VULKAN_INTERNAL_DeterminePhysicalDevice(VulkanRenderer *renderer, V
+     suitableIndex = -1;
+     suitableQueueFamilyIndex = 0;
+     highestRank = 0;
++    VULKAN_INTERNAL_FreeExtensionList(&features->selectedDeviceExtensions);
+     for (i = 0; i < physicalDeviceCount; i += 1) {
+         Uint32 queueFamilyIndex;
+         Uint64 deviceRank;
++        SDL_GPUVulkanExtensionList candidateExtensions = { 0 };
++
++        if (features->extensionRequirementsCallback &&
++            !features->extensionRequirementsCallback(features->extensionRequirementsUserdata,
++                                                      SDL_GPU_VULKAN_EXTENSION_STAGE_DEVICE_CANDIDATE,
++                                                      (void *)renderer->instance,
++                                                      (void *)physicalDevices[i],
++                                                      &candidateExtensions)) {
++            VULKAN_INTERNAL_FreeExtensionList(&candidateExtensions);
++            continue; /* The requested external feature cannot use this adapter. */
++        }
+ 
+         if (!VULKAN_INTERNAL_IsDeviceSuitable(
+                 renderer,
+                 features,
++                &candidateExtensions,
+                 physicalDevices[i],
+                 &physicalDeviceExtensions[i],
+                 &queueFamilyIndex)) {
+             // Device does not meet the minimum requirements, skip it entirely
++            VULKAN_INTERNAL_FreeExtensionList(&candidateExtensions);
+             continue;
+         }
+ 
+@@ -12429,7 +12801,14 @@ static Uint8 VULKAN_INTERNAL_DeterminePhysicalDevice(VulkanRenderer *renderer, V
+             suitableIndex = i;
+             suitableQueueFamilyIndex = queueFamilyIndex;
+             highestRank = deviceRank;
++            if (!VULKAN_INTERNAL_CopyExtensionList(&features->selectedDeviceExtensions, &candidateExtensions)) {
++                VULKAN_INTERNAL_FreeExtensionList(&candidateExtensions);
++                SDL_stack_free(physicalDevices);
++                SDL_stack_free(physicalDeviceExtensions);
++                return 0;
++            }
+         }
++        VULKAN_INTERNAL_FreeExtensionList(&candidateExtensions);
+     }
+ 
+     if (suitableIndex != -1) {
+@@ -12437,8 +12816,10 @@ static Uint8 VULKAN_INTERNAL_DeterminePhysicalDevice(VulkanRenderer *renderer, V
+         renderer->physicalDevice = physicalDevices[suitableIndex];
+         renderer->queueFamilyIndex = suitableQueueFamilyIndex;
+     } else {
++        VULKAN_INTERNAL_FreeExtensionList(&features->selectedDeviceExtensions);
+         SDL_stack_free(physicalDevices);
+         SDL_stack_free(physicalDeviceExtensions);
++        SDL_SetError("No Vulkan adapter satisfies SDL and extension discovery requirements");
+         return 0;
+     }
+ 
+@@ -12541,12 +12922,24 @@ static Uint8 VULKAN_INTERNAL_CreateLogicalDevice(
+     deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
+     deviceCreateInfo.enabledLayerCount = 0;
+     deviceCreateInfo.ppEnabledLayerNames = NULL;
+-    deviceCreateInfo.enabledExtensionCount = GetDeviceExtensionCount(
+-        &renderer->supports);
+-    deviceExtensions = SDL_stack_alloc(
+-        const char *,
+-        deviceCreateInfo.enabledExtensionCount);
++    Uint64 deviceExtensionCapacity64 = (Uint64)GetDeviceExtensionCount(&renderer->supports) +
++                                       (Uint64)features->additionalDeviceExtensionCount +
++                                       (Uint64)features->selectedDeviceExtensions.count;
++    if (deviceExtensionCapacity64 > SDL_MAX_UINT32) {
++        SDL_SetError("Vulkan device extension list is too large");
++        return 0;
++    }
++    Uint32 deviceExtensionCapacity = (Uint32)deviceExtensionCapacity64;
++    deviceExtensions = SDL_stack_alloc(const char *, deviceExtensionCapacity);
++    Uint32 enabledDeviceExtensionCount = GetDeviceExtensionCount(&renderer->supports);
+     CreateDeviceExtensionArray(&renderer->supports, deviceExtensions);
++    for (Uint32 i = 0; i < features->additionalDeviceExtensionCount; ++i) {
++        VULKAN_INTERNAL_AppendUniqueExtension(features->additionalDeviceExtensionNames[i], deviceExtensions, &enabledDeviceExtensionCount);
++    }
++    for (Uint32 i = 0; i < features->selectedDeviceExtensions.count; ++i) {
++        VULKAN_INTERNAL_AppendUniqueExtension(features->selectedDeviceExtensions.names[i], deviceExtensions, &enabledDeviceExtensionCount);
++    }
++    deviceCreateInfo.enabledExtensionCount = enabledDeviceExtensionCount;
+     deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions;
+ 
+     VkPhysicalDeviceFeatures2 featureList;
+@@ -12713,6 +13106,17 @@ static bool VULKAN_INTERNAL_PrepareVulkan(
+     return true;
+ }
+ 
++static void VULKAN_INTERNAL_CleanupPartialRenderer(VulkanRenderer *renderer, VulkanFeatures *features)
++{
++    if (features) {
++        VULKAN_INTERNAL_FreeExtensionList(&features->selectedDeviceExtensions);
++    }
++    if (renderer && renderer->instance != VK_NULL_HANDLE && renderer->vkDestroyInstance) {
++        renderer->vkDestroyInstance(renderer->instance, NULL);
++        renderer->instance = VK_NULL_HANDLE;
++    }
++}
++
+ static bool VULKAN_PrepareDriver(SDL_VideoDevice *_this, SDL_PropertiesID props)
+ {
+     // Set up dummy VulkanRenderer
+@@ -12739,11 +13143,9 @@ static bool VULKAN_PrepareDriver(SDL_VideoDevice *_this, SDL_PropertiesID props)
+ 
+         renderer->preferLowPower = SDL_GetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, false);
+ 
++        SDL_zero(features);
+         result = VULKAN_INTERNAL_PrepareVulkan(renderer, &features, props);
+-        if (result) {
+-            renderer->vkDestroyInstance(renderer->instance, NULL);
+-        }
+-
++        VULKAN_INTERNAL_CleanupPartialRenderer(renderer, &features);
+         SDL_free(renderer);
+     }
+     SDL_Vulkan_UnloadLibrary();
+@@ -12779,7 +13181,9 @@ static SDL_GPUDevice *VULKAN_CreateDevice(bool debugMode, bool preferLowPower, S
+     renderer->preferLowPower = preferLowPower;
+     renderer->allowedFramesInFlight = 2;
+ 
++    SDL_zero(features);
+     if (!VULKAN_INTERNAL_PrepareVulkan(renderer, &features, props)) {
++        VULKAN_INTERNAL_CleanupPartialRenderer(renderer, &features);
+         SET_STRING_ERROR("Failed to initialize Vulkan!");
+         SDL_free(renderer);
+         SDL_Vulkan_UnloadLibrary();
+@@ -12887,15 +13291,19 @@ static SDL_GPUDevice *VULKAN_CreateDevice(bool debugMode, bool preferLowPower, S
+     }
+ 
+     if (!VULKAN_INTERNAL_CreateLogicalDevice(renderer, &features)) {
++        VULKAN_INTERNAL_CleanupPartialRenderer(renderer, &features);
+         SET_STRING_ERROR("Failed to create logical device!");
+         SDL_free(renderer);
+         SDL_Vulkan_UnloadLibrary();
+         return NULL;
+     }
+ 
++    VULKAN_INTERNAL_FreeExtensionList(&features.selectedDeviceExtensions);
++
+     // FIXME: just move this into this function
+     result = (SDL_GPUDevice *)SDL_calloc(1, sizeof(SDL_GPUDevice));
+     ASSIGN_DRIVER(VULKAN)
++    result->RunGPUVulkanExternalPass = VULKAN_RunGPUVulkanExternalPass;
+ 
+     result->driverData = (SDL_GPURenderer *)renderer;
+     result->shader_formats = SDL_GPU_SHADERFORMAT_SPIRV;

@@ -1,6 +1,7 @@
 #include "off/runtime/matpos_owner_local_transform_state.hpp"
 
 #include <array>
+#include <bit>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -51,21 +52,25 @@ int main() {
         auto signed_zero_translation = origin;
         signed_zero_translation[1] = -0.0F;
         state.apply(identity, signed_zero_translation, invalidation);
-        check(invalidation.calls == 0 && state.translation() == origin,
-              "translation comparison treats signed zero as numerically equal");
+        check(invalidation.calls == 1 && state.transform_dirty() &&
+                  std::bit_cast<std::uint32_t>(state.translation()[1]) ==
+                      std::bit_cast<std::uint32_t>(-0.0F),
+              "translation comparison preserves the native bitwise signed-zero distinction");
 
         auto signed_zero_basis = identity;
         signed_zero_basis[1] = -0.0F;
-        state.apply(signed_zero_basis, origin, invalidation);
-        check(invalidation.calls == 1 && state.transform_dirty() &&
-                  state.basis() == signed_zero_basis && state.translation() == origin &&
+        state.apply(signed_zero_basis, signed_zero_translation, invalidation);
+        check(invalidation.calls == 2 && state.transform_dirty() &&
+                  state.basis() == signed_zero_basis &&
+                  std::bit_cast<std::uint32_t>(state.translation()[1]) ==
+                      std::bit_cast<std::uint32_t>(-0.0F) &&
                   invalidation.observed_dirty && invalidation.observed_basis == signed_zero_basis &&
-                  invalidation.observed_translation == origin,
+                  invalidation.observed_translation == signed_zero_translation,
               "basis word changes commit complete state and dirty it before notification");
 
         const State::Translation moved{2, 4, 8};
         state.apply(signed_zero_basis, moved, invalidation);
-        check(invalidation.calls == 2 && state.basis() == signed_zero_basis &&
+        check(invalidation.calls == 3 && state.basis() == signed_zero_basis &&
                   state.translation() == moved && invalidation.observed_translation == moved,
               "translation changes copy the complete retained owner-local transform");
 
@@ -77,13 +82,13 @@ int main() {
         auto non_finite_translation = moved;
         non_finite_translation[0] = std::numeric_limits<float>::quiet_NaN();
         state.apply(retained_basis, non_finite_translation, invalidation);
-        check(invalidation.calls == 2 && state.basis() == retained_basis &&
+        check(invalidation.calls == 3 && state.basis() == retained_basis &&
                   state.translation() == retained_translation,
               "non-finite samples cannot write owner-local state or notify");
 
         const State::Basis second_basis{0, 1, 0, 1, 0, 0, 0, 0, 1};
         state.apply(second_basis, moved, invalidation);
-        check(invalidation.calls == 3 && invalidation.observed_basis == second_basis,
+        check(invalidation.calls == 4 && invalidation.observed_basis == second_basis,
               "each distinct accepted transform synchronously notifies once");
         std::cout << "Detached owner-local transform state commits and dirties without renderer admission.\n";
     } catch (const std::exception& error) {

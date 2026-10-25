@@ -27,11 +27,16 @@ std::optional<TemporalResolveInputs> TemporalResolveBaseline::begin_frame(
     bool modern_mode, TemporalResolveExtent output_extent,
     TemporalResolveExtent internal_extent,
     const TemporalResolveResourceSet &resources) noexcept {
+  // Reject overlapping attempts without perturbing the already pending frame,
+  // history slot or jitter sequence. The owner must commit or cancel it first.
+  if (frame_in_flight())
+    return std::nullopt;
   if (!modern_mode || !valid(output_extent) || !valid(internal_extent) ||
       !identified(resources.color) || !identified(resources.depth) ||
       !identified(resources.motion_vectors) || !identified(resources.exposure) ||
       !identified(resources.reactive_mask) || !identified(resources.hudless_color) ||
-      !identified(resources.history[0]) || !identified(resources.history[1])) {
+      !identified(resources.history[0]) || !identified(resources.history[1]) ||
+      !resources.motion_vectors_written) {
     cancel_submission();
     return std::nullopt;
   }
@@ -44,7 +49,7 @@ std::optional<TemporalResolveInputs> TemporalResolveBaseline::begin_frame(
       true, {output_extent.width, output_extent.height},
       {internal_extent.width, internal_extent.height});
   if (!frame || !jitter) {
-    history_.cancel_frame();
+    cancel_submission();
     return std::nullopt;
   }
   const auto history_resource = resources.history[frame->history_slot];
@@ -65,7 +70,7 @@ std::optional<TemporalResolveInputs> TemporalResolveBaseline::begin_frame(
       .jitter_internal_extent = internal_extent,
       .jitter_output_extent = output_extent};
   if (!inputs_.begin(inputs)) {
-    history_.cancel_frame();
+    cancel_submission();
     return std::nullopt;
   }
   return inputs;
@@ -88,12 +93,12 @@ bool TemporalResolveBaseline::commit_submission() noexcept {
 void TemporalResolveBaseline::cancel_submission() noexcept {
   inputs_.cancel();
   history_.cancel_frame();
+  jitter_.reset();
 }
 
 void TemporalResolveBaseline::invalidate() noexcept {
   cancel_submission();
   history_.invalidate();
-  jitter_.reset();
   submitted_resolve_ = false;
 }
 
