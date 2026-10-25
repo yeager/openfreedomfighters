@@ -47,6 +47,8 @@ Pass (e, 0, 1 - (e + e), 1) to the setter. This branch does not write marker 4.
 
 ### Setter interpretation
 
+The downstream pixel-viewport mapping is specified in `CAMERA_VIEWPORT_SPEC.md`.
+
 The four inputs are stored as camera state and the setter also derives another field as input-four divided by input-three. Treat them as the native camera tuple, not as proven literal left/right/top/bottom clip planes. Mode 3 uses a distinct tuple layout and must not be normalized into the mode-1/2 form.
 
 ## Validation plan for an independent implementation
