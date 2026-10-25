@@ -66,10 +66,12 @@ carrier contains an identity matrix, a generated shadow matrix, and renderer
 state. Its three-pointer layout is compatible with the layout consumed by the
 BonesVS method in the separate cached-entry path below. However, the shadow
 child is selected dynamically; it has not been proven to be a BonesVS instance.
-The shadow/resource record has not been mapped to a parsed GMS row, and its
-matrix sources have not been joined to the active gameplay camera. This
-shadow-rendering route therefore does not establish a normal world-scene draw
-producer.
+The shadow/resource record's handle resolves through the runtime object table,
+and that object's transform contributes to the generated shadow matrix together
+with shadow/view state. The handle has not been joined to a specific parsed GMS
+row or its parent chain, and the view-state input has not been identified as
+the active gameplay camera. This shadow-rendering route therefore does not
+establish a normal world-scene draw producer.
 
 The per-draw cache path is now joined to the BonesVS consumer. Its factory
 creates an entry, initializes that entry's own three matrix pointers, and stores
@@ -186,11 +188,11 @@ World-space scene rendering remains gated on all of the following:
 5. Establish the exact relationship between dequantized spatial bounds and
    transformed render geometry.
 6. Determine whether the shadow-rendering route participates in normal scene
-   drawing. Join relevant draw/resource records to parsed GMS runtime
-   identities, prove which child instances are dispatched, and establish how
-   draw-carrier matrices incorporate object and active-camera transforms. Then
-   recover view/projection, depth, winding, culling, and normal-transform
-   conventions independently of the diagnostic fit.
+   drawing. Join its runtime-object handle to a parsed GMS row and parent chain,
+   prove which child instances are dispatched, and identify the view-state input
+   relative to the active gameplay camera. Then recover view/projection, depth,
+   winding, culling, and normal-transform conventions independently of the
+   diagnostic fit.
 7. Validate a candidate formula across the supported corpus and against
    deterministic runtime observations, then add synthetic arithmetic tests and
    cross-backend image comparisons.
