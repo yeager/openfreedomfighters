@@ -152,21 +152,15 @@ int main() {
   check(unsupported_chinese_startup_error.title == "Speldata krävs",
         "startup error does not mislabel an unsupported Chinese script");
   check(off::platform::startup_data_error_message_id(
-            off::data::InstallError::unsupported_executable_hash) ==
-            MessageId::game_executable_unsupported,
-        "executable hash failure has a stable presentation mapping");
+            off::data::InstallError::incomplete_game_data) ==
+            MessageId::game_data_incomplete,
+        "local structural failure has a stable presentation mapping");
   check(off::platform::startup_data_error_message_id(
             off::data::InstallError::none) ==
             MessageId::game_data_verification_failed,
         "unexpected verification result has a safe presentation mapping");
   check(off::platform::startup_data_error_support_code(
             off::data::InstallError::missing_root) == "OFF-DATA-01" &&
-            off::platform::startup_data_error_support_code(
-                off::data::InstallError::unsupported_executable_size) ==
-                "OFF-DATA-03" &&
-            off::platform::startup_data_error_support_code(
-                off::data::InstallError::unsupported_executable_hash) ==
-                "OFF-DATA-03" &&
             off::platform::startup_data_error_support_code(
                 off::data::InstallError::incomplete_game_data) ==
                 "OFF-DATA-04" &&

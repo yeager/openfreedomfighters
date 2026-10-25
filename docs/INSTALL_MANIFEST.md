@@ -1,109 +1,42 @@
-# Installation hashes and optional soundtrack
+# Local installation validation
 
-Every startup, including `--verify-only`, checks immutable game files against
-the compiled SHA-256 reference in `src/data/install_manifest_reference.inc`.
-Files with the expected size are read in full. Modification times are not a
-shortcut for a successful hash. After that full hash pass, a successful deep
-structural audit may be reused from an application-owned, disposable cache.
-The cache contains only a versioned success certificate keyed to the compiled
-supported manifest; it never contains game bytes, paths, actual hashes, or
-decoded assets. A missing, corrupt, stale, unreadable, or symlinked entry is a
-cache miss and reruns the structural audit. The splash stays responsive while
-verification runs; a cold audit can take longer than its three-second minimum
-display time.
+The application reads game files only from the user's installed copy. Archive,
+path, and resource parsers validate structure before data reaches runtime code.
+Original files, filenames, hashes, and decoded content are not published by
+this document.
 
-Independent file hashes use at most four workers after the single-threaded
-path-safety and inventory pass. This is a fixed resource bound, not a cache:
-every enrolled immutable file is still opened, read in full, SHA-256 hashed,
-and checked on every launch. Reports remain in manifest order regardless of
-worker completion order.
+Optional soundtrack files are independent of startup. Missing or unreadable
+optional audio must leave the original game-audio path available.
 
-The application first uses SDL's per-user preference location. Headless tools
-fall back to the platform cache location: `%LOCALAPPDATA%` on Windows,
-`~/Library/Caches` on macOS, and an absolute `$XDG_CACHE_HOME` or `~/.cache` on
-Linux and Steam Deck. A relative or unavailable environment value disables the
-fallback rather than creating cache files beside the game or current directory.
+Any future local integrity baseline must be created and stored outside the
+repository from the user's own installation. It must clearly distinguish local
+consistency checking from an official publisher authenticity manifest. This
+document intentionally omits installation inventories, file sizes, hashes,
+resource names, cue mappings, and private analysis results.
 
-## Reference snapshot
+## Required behavior
 
-The reference was measured from the locally owned Steam installation on
-2026-09-06. It includes the user's repaired C03A archive. It is a supported local
-snapshot, not an official Steam manifest or proof of an unmodified release.
-Only relative paths, sizes, hashes and roles are published, not game contents.
+The local content fingerprint must include each required file's relative path,
+observed byte length, and full-byte digest in a deterministic order. Directory
+enumeration order and optional soundtrack changes must not alter required-data
+identity. Required-content changes must invalidate dependent structural-audit
+caches and prevent silently reusing saves bound to different content.
 
-The 226 immutable files total 1,198,025,711 bytes:
+Hashing and structural validation establish local identity and supported
+structure. They do not establish publisher authenticity or complete gameplay
+compatibility. User-facing status must preserve that distinction.
 
-- 184 required files: `Freedom.Exe`, `streams.wav`, and 182 files under `Scenes`.
-- 36 optional soundtrack files: 18 FLAC and 18 MP3.
-- Six optional support files: two covers, launcher, two DLLs and Steam app ID.
+Interior symbolic links, ambiguous path spellings, and failed required-file
+reads must fail validation. Optional-file failures must produce diagnostics
+without blocking required data. Cancellation must stop discovery and hashing
+without returning a successful partial inventory. The installation must remain
+stable while it is validated and used.
 
-The known `Freedom_Fighters_OST/FF_OST_MP3_320/Thumbs.db` thumbnail cache is
-excluded. Unrelated root files, future saves and configuration are not enrolled.
-Unrecognized files under `Scenes` fail verification; unrecognized soundtrack
-files are reported and never automatically trusted. Startup never rewrites the
-reference to accept changed files.
+## Verification
 
-The installation root may resolve through a symbolic link. Links within checked
-paths are not followed. Case-insensitive path collisions are rejected for the
-affected files. Files must remain unchanged during the session: startup hashing
-does not provide tamper-proof handles for subsequent reads.
-
-## Optional soundtrack
-
-Missing soundtrack files never prevent startup. Validation is per file: a
-partial album, FLAC-only installation or MP3-only installation is allowed.
-Corrupt, unreadable, ambiguous or unrecognized optional files are skipped and
-reported without invalidating required game data. The soundtrack directory is
-excluded from the game VFS, so its size does not consume the game-data mount
-limit. Optional distribution support files are excluded too.
-
-The measured FLAC files are stereo 16-bit/44.1 kHz; the MP3 files are stereo
-320 kbit/s/44.1 kHz. The original global bank contains Vorbis payloads at
-44.1 kHz and 22.05 kHz. FLAC avoids lossy codec degradation, but album edits,
-mastering, loop boundaries and in-game cues still need comparison. File format
-alone does not establish that an album track is a drop-in replacement.
-The complete 36-file optional reference set decodes successfully with the
-native FLAC and MP3 decoders; this verifies decodability, not cue equivalence.
-`--probe-soundtrack` additionally profiles all verified scene audio headers as
-aggregate codec, sample-rate and channel metadata. It retains no payload or
-path and has all-scene scope, so it must not be used as a music-cue match.
-
-Playback policy: use a verified, decodable soundtrack version only when its cue
-mapping and required timing/loop behavior are known. Prefer FLAC, then a usable
-MP3 version, otherwise the game's original music. Missing or unusable album
-tracks must never disable original music or create a startup requirement.
-
-`SoundtrackCueResolver` is the local admission boundary for a future reviewed
-mapping. A mapping supplies only an opaque cue token, album ordinal, edition
-format, and the complete expected SHA-256 of that exact enrolled file. It is
-accepted only when all four values match a catalog edition; resolution hashes
-the file again and rejects symlinks, unreadable files, changed bytes, absent
-tokens, and every mismatch. Each rejection selects the game-audio path. The
-repository contains no cue bindings, titles, filenames, samples, timing, or
-retail text, and this resolver does not start playback.
-
-The private, fresh-isolated observation and import boundary for future reviewed
-cue mappings is documented in `PRIVATE_SOUNDTRACK_CUE_EVIDENCE.md`. It is
-offline-only: no private receipt is loaded by the current runtime.
-
-**Current implementation:** startup exposes hash-verified soundtrack candidates
-and reports optional failures. The candidate catalog groups album editions by
-their filename ordinal, preferring FLAC and retaining MP3 as a fallback; an
-album ordinal is not a game-cue mapping. A bounded sequential file stream can
-read local FLAC and MP3 PCM in caller-provided chunks. A separate bounded
-one-track transport can submit those chunks to a real SDL stereo output device, but is not
-connected to the cue resolver or an audio lifecycle. A bounded standalone decoder accepts local
-FLAC and MP3 files and produces 16-bit PCM after validating file size, channels,
-sample rate, decoded length and complete input read. It is not connected to an
-audio lifecycle. There is still no shipped verified cue mapping, soundtrack
-substitution, or audible fallback. Hash verification and successful
-decode are not playback-suitability tests.
-
-Private comparison currently finds title-only correspondences for Main Title
-and Final Battle. That is insufficient to establish payload identity, looping,
-gain, transitions, or adaptive-music behavior, so it does not authorize a
-soundtrack substitution for either cue.
-
-Tests use independent fixtures for missing/partial/corrupt optional files,
-same-size edits with unchanged timestamps, collisions, symlinks and cancellation.
-Retail contents are not needed by CI.
+Use independently authored temporary trees to check deterministic identity,
+required-file mutations, optional-file isolation, unsafe paths, cancellation,
+and structural failures. Fixtures must vary their sizes and ordering without
+reconstructing a retail inventory. A private owned-installation run is also
+needed to establish that normal startup still accepts supported local data;
+synthetic manifest tests alone do not prove that.

@@ -12,9 +12,6 @@
 
 namespace off::data {
 namespace {
-constexpr ManifestFile reference_files[]{
-#include "install_manifest_reference.inc"
-};
 std::string folded(std::string_view path) {
   std::string result(path);
   for (auto& c : result) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c + ('a' - 'A'));
@@ -24,19 +21,19 @@ bool soundtrack_path(std::string_view p) {
   return p == "freedom_fighters_ost" || p.starts_with("freedom_fighters_ost/");
 }
 bool game_path(std::string_view p) { return p == "scenes" || p.starts_with("scenes/"); }
-bool ignored_cache(std::string_view p) {
-  return p == "freedom_fighters_ost/ff_ost_mp3_320/thumbs.db";
-}
 bool safe(std::string_view p) {
   return is_safe_archive_path(p) && p.find('\\') == std::string_view::npos;
 }
 void validate_manifest(std::span<const ManifestFile> manifest) {
   std::unordered_map<std::string, const ManifestFile*> expected;
   for (const auto& entry : manifest) {
-    if (!safe(entry.path) || entry.sha256.size() != 64 ||
+    const bool invalid_digest = !entry.sha256.empty() &&
+        (entry.sha256.size() != 64 ||
         !std::all_of(entry.sha256.begin(), entry.sha256.end(), [](char c) {
           return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
-        }) || !expected.emplace(folded(entry.path), &entry).second)
+        }));
+    if (!safe(entry.path) || invalid_digest ||
+        !expected.emplace(folded(entry.path), &entry).second)
       throw std::runtime_error("invalid or duplicate file-manifest entry");
     if (entry.role != ManifestFileRole::required_game &&
         entry.role != ManifestFileRole::optional_soundtrack &&
@@ -86,7 +83,80 @@ bool regular_chain(const std::filesystem::path& root, const std::filesystem::pat
 }
 }
 
-std::span<const ManifestFile> supported_install_manifest() noexcept { return reference_files; }
+std::vector<ManifestFile> discover_local_install_manifest(
+    const std::filesystem::path& requested_root,
+    const std::filesystem::path& requested_executable,
+    const std::function<bool()>& cancelled) {
+  bool cancelled_latched = false;
+  const auto stop = [&] {
+    if (cancelled_latched || (cancelled && cancelled())) {
+      cancelled_latched = true;
+      throw std::runtime_error("local inventory discovery cancelled");
+    }
+  };
+  stop();
+  const auto root = std::filesystem::canonical(requested_root);
+  const auto executable = std::filesystem::canonical(requested_executable);
+  const auto executable_relative = executable.lexically_relative(root).generic_string();
+  if (executable_relative.empty() || executable_relative == ".." ||
+      executable_relative.starts_with("../"))
+    throw std::runtime_error("executable is outside the selected data directory");
+  std::vector<ManifestFile> result;
+  const auto add = [&](const std::filesystem::path& path, ManifestFileRole role) {
+    stop();
+    const auto status = std::filesystem::symlink_status(path);
+    if (std::filesystem::is_symlink(status) || !std::filesystem::is_regular_file(status))
+      throw std::runtime_error("required inventory item is not a regular local file");
+    const auto relative = path.lexically_relative(root).generic_string();
+    if (!safe(relative)) throw std::runtime_error("unsafe local inventory path");
+    result.push_back({relative, std::filesystem::file_size(path), {}, role});
+  };
+  add(executable, ManifestFileRole::required_game);
+  add(root / "streams.wav", ManifestFileRole::required_game);
+  const auto collect = [&](const std::filesystem::path& subtree, ManifestFileRole role,
+                           bool required) {
+    std::error_code ec;
+    const auto status = std::filesystem::symlink_status(subtree, ec);
+    if (ec || !std::filesystem::exists(status)) {
+      if (required) throw std::runtime_error("required local resource directory is missing");
+      return;
+    }
+    if (std::filesystem::is_symlink(status) || !std::filesystem::is_directory(status)) {
+      if (!required) return;
+      throw std::runtime_error("local resource root must be a directory, not a link");
+    }
+    std::filesystem::recursive_directory_iterator it(
+        subtree, std::filesystem::directory_options::none, ec), end;
+    if (ec) {
+      if (required) throw std::runtime_error("could not enumerate local resource directory");
+      return;
+    }
+    for (; it != end; it.increment(ec)) {
+      stop();
+      if (ec) {
+        if (required) throw std::runtime_error("local resource enumeration failed");
+        break;
+      }
+      const auto entry_status = it->symlink_status(ec);
+      if (ec || std::filesystem::is_symlink(entry_status)) {
+        it.disable_recursion_pending();
+        if (required) throw std::runtime_error("unsafe or unreadable entry in required local resources");
+        ec.clear();
+        continue;
+      }
+      if (std::filesystem::is_regular_file(entry_status)) {
+        try { add(it->path(), role); }
+        catch (...) { if (required || cancelled_latched) throw; }
+      }
+      else if (!std::filesystem::is_directory(entry_status))
+        if (required) throw std::runtime_error("non-file object found in local resources");
+    }
+    if (ec && required) throw std::runtime_error("local resource enumeration failed");
+  };
+  collect(root / "Scenes", ManifestFileRole::required_game, true);
+  collect(root / "Freedom_Fighters_OST", ManifestFileRole::optional_soundtrack, false);
+  return result;
+}
 
 std::string verified_data_manifest_fingerprint(
     std::span<const ManifestFile> manifest) {
@@ -98,8 +168,14 @@ std::string verified_data_manifest_fingerprint(
   std::vector<RequiredEntry> required;
   required.reserve(manifest.size());
   for (const auto& file : manifest) {
-    if (file.role == ManifestFileRole::required_game)
+    if (file.role == ManifestFileRole::required_game) {
+      if (file.sha256.size() != 64 ||
+          !std::all_of(file.sha256.begin(), file.sha256.end(), [](char c) {
+            return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+          }))
+        throw std::runtime_error("required local file has no observed digest");
       required.push_back({folded(file.path), &file});
+    }
   }
   if (required.empty())
     throw std::runtime_error("verified-data fingerprint requires required game files");
@@ -114,15 +190,6 @@ std::string verified_data_manifest_fingerprint(
     input += '\n';
   }
   return crypto::to_hex(crypto::sha256(input));
-}
-
-std::string supported_data_manifest_fingerprint() {
-  // The compiled reference is immutable for the lifetime of this process.
-  // Cache only this content-free derived identifier; installation bytes are
-  // still fully read and hashed by verify_file_manifest on every startup.
-  static const std::string fingerprint =
-      verified_data_manifest_fingerprint(supported_install_manifest());
-  return fingerprint;
 }
 
 bool ManifestVerification::required_ok() const noexcept {
@@ -184,7 +251,7 @@ ManifestVerification verify_file_manifest(const std::filesystem::path& requested
     if (ec) {
       result.files.push_back({directory_key, directory,
           role_for(directory_key),
-          ManifestFileStatus::io_error, "could not list directory"});
+          ManifestFileStatus::io_error, "could not list directory", {}});
       continue;
     }
     for (; iterator != end; iterator.increment(ec)) {
@@ -193,33 +260,32 @@ ManifestVerification verify_file_manifest(const std::filesystem::path& requested
       const auto path = iterator->path();
       const auto relative = path.lexically_relative(root).generic_string();
       const auto key = folded(relative);
-      if (ignored_cache(key)) continue;
       const bool relevant = expected.contains(key) || ancestors.contains(key) || game_path(key) || soundtrack_path(key);
       if (!relevant) continue;
       const auto role = role_for(key);
       const auto status = iterator->symlink_status(ec);
       if (ec || !safe(relative)) {
-        result.files.push_back({relative, path, role, ManifestFileStatus::unsafe, "unsafe or unreadable path"});
+        result.files.push_back({relative, path, role, ManifestFileStatus::unsafe, "unsafe or unreadable path", {}});
         ec.clear(); continue;
       }
       auto [found, inserted] = located.emplace(key, Located{path, status});
       if (!inserted) {
         found->second.duplicate = true;
-        result.files.push_back({relative, path, role, ManifestFileStatus::ambiguous, "case-insensitive path collision"});
+        result.files.push_back({relative, path, role, ManifestFileStatus::ambiguous, "case-insensitive path collision", {}});
       }
       if (std::filesystem::is_symlink(status)) {
-        result.files.push_back({relative, path, role, ManifestFileStatus::unsafe, "symbolic link is not a verified source"});
+        result.files.push_back({relative, path, role, ManifestFileStatus::unsafe, "symbolic link is not a verified source", {}});
       } else if (std::filesystem::is_directory(status)) {
         directories.push_back(path);
       } else if (!std::filesystem::is_regular_file(status)) {
-        result.files.push_back({relative, path, role, ManifestFileStatus::unsafe, "not a regular file"});
+        result.files.push_back({relative, path, role, ManifestFileStatus::unsafe, "not a regular file", {}});
       } else if (!expected.contains(key)) {
-        result.files.push_back({relative, path, role, ManifestFileStatus::unexpected, "unrecognized file; not enrolled or selected"});
+        result.files.push_back({relative, path, role, ManifestFileStatus::unexpected, "unrecognized file; not enrolled or selected", {}});
       }
     }
     if (ec) result.files.push_back({directory_key, directory,
         role_for(directory_key),
-        ManifestFileStatus::io_error, "directory enumeration failed"});
+        ManifestFileStatus::io_error, "directory enumeration failed", {}});
   }
   std::vector<ManifestFileCheck> checks;
   checks.reserve(manifest.size());
@@ -227,7 +293,7 @@ ManifestVerification verify_file_manifest(const std::filesystem::path& requested
   hash_tasks.reserve(manifest.size());
   for (const auto& entry : manifest) {
     if (stop()) { result.cancelled = true; return result; }
-    ManifestFileCheck check{std::string(entry.path), {}, entry.role, ManifestFileStatus::missing, "file is absent"};
+    ManifestFileCheck check{std::string(entry.path), {}, entry.role, ManifestFileStatus::missing, "file is absent", {}};
     const auto key = folded(entry.path);
     bool ambiguous_chain = false;
     for (auto end = key.find('/'); ; end = key.find('/', end + 1)) {
@@ -277,13 +343,13 @@ ManifestVerification verify_file_manifest(const std::filesystem::path& requested
           task.time != std::filesystem::last_write_time(task.path)) {
         check.status = ManifestFileStatus::io_error;
         check.detail = "file changed during verification";
-      } else if (digest != task.entry->sha256) {
+      } else if (!task.entry->sha256.empty() && digest != task.entry->sha256) {
         check.status = ManifestFileStatus::hash_mismatch;
-        check.detail = "SHA-256 mismatch: expected " + std::string(task.entry->sha256) +
-                       ", found " + digest;
+        check.detail = "SHA-256 mismatch";
       } else {
         check.status = ManifestFileStatus::verified;
         check.detail.clear();
+        check.sha256 = digest;
       }
     } catch (const std::exception& error) {
       if (!stop()) {

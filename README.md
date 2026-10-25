@@ -28,129 +28,38 @@ for a portable installation.
 
 ## Current state
 
-- Archive, texture, geometry and supported audio formats have working readers.
-- Startup shows the project splash for three seconds. Missing or invalid game
-  data produces an error dialog over it.
-- Game files are fully checked against a SHA-256 manifest at every startup.
-  A local, disposable deep-audit certificate avoids repeating the much slower
-  archive parse after a successful hash pass; it never replaces hashing.
-  The Steam soundtrack's optional MP3 and FLAC files are detected separately:
-  FLAC is preferred and MP3 is retained only as a fallback. Both editions have
-  the same 44.1 kHz stereo layout, but their exact decoded lengths differ, so
-  they cannot be interchanged for time-based cue synchronization. Cue mapping
-  and music playback are not implemented yet. Their absence never blocks startup.
-- The first intro sequence's camera, pictures and textures load from game data.
-  One retained runtime owns their hierarchy and mutable picture state; intro
-  textures upload to the GPU. The source-backed picture path is available only
-  through an explicit diagnostic; scene activation and timed playback are not
-  connected yet.
-  [Camera membership and listener selection](docs/CAMERA_REGISTRATION.md) now
-  share the scene's runtime identities, including across scene reloads.
-  [Preview-camera controls](docs/PREVIEW_CAMERA.md) handle keyboard and pointer
-  updates in tests; their normal input and component dispatch are not connected.
-- The native SDL/Vulkan startup path validates the supported owned data and
-  uploads six startup images and 26 intro images. Bounded smoke runs verify
-  startup, not intro presentation, playback, or a rendered main menu.
-- A normal Original launch from the supported Steam installation has completed
-  a bounded GPU frame run and private screenshot capture under an isolated
-  display test. The retained world scene pass is intentionally clear-only;
-  normal output separately presents the labelled reader-admitted static
-  fallback. This verifies startup-to-GPU handoff, not timed intro playback or
-  menu rendering.
-- `--diagnostic-intro-picture` can render one source-backed first-cut picture
-  with its decoded images and quad geometry. It uses an explicitly project-owned
-  fit projection and baseline GPU state, so it is a visual diagnostic—not
-  cutscene playback or a recovered camera path.
-- Clock and sound preferences now share application-lifetime state across intro
-  scenes. This does not add intro playback or audible sound.
-- The two intro sound definitions resolve to their original audio-bank streams
-  and can be decoded incrementally on a worker. A
-  [channel service](docs/STEREO_STREAM_PLAYBACK.md) now handles bounded refill,
-  start/stop and pending notifications. Its SDL stereo-output adapter accepts
-  the complete reviewed 100--100,000 Hz control range without pitch clamping;
-  an unbound SDL test verifies its duration and pitch composition. Normal
-  startup does not use it yet; continuous output on a physical device remains
-  unverified.
-- Their mutable sound records now share an application-owned backend with volume
-  settings. Typed attachment loading, owner preparation, stop and the verified
-  SoundExtend parameter operation are implemented. The complete
-  [startup audio lifecycle](docs/INTRO_AUDIO_STARTUP_ORDER.md) is not connected.
-- Normal startup constructs ROOT, RootGroup, and all 470 authored intro owners
-  from the supported scene directory. It allocates all 470 authored resources,
-  retains 383 constructed attachment instances, queues 420 deferred readers,
-  and preserves the authored hierarchy, event names, saved flags, and supported
-  sound-owner state. Normal startup runs the ordinary deferred-reader bracket,
-  but only a subset has implemented source-backed readers. A scene-owned session
-  retains this runtime and owns the exactly-once reader bracket instead of
-  leaving its callback wiring in `main`. The checked loader-tail transition is
-  implemented, including the supported [named-reference reader](docs/INTRO_NAMED_GLOBAL.md)
-  and [renderer resource relations](docs/INTRO_RENDERER_RELATIONS.md). The latter
-  owns copied payloads and resolves ordered members to real scene resources;
-  it does not produce draw records. Remaining tail services and the normal-startup
-  call are missing. Source-bound first-cut fade initialization and MovieControl's
-  factory-owned phase-two callback are tested separately; neither completes
-  owner or global initialization. Global lifecycle admission, draw-record production, scene updates,
-  admitted scene rendering, audio playback, menus, and gameplay remain
-  unimplemented.
-- ParamAnim deferred-reader work remains evidence-gated. The private
-  [repeat-observation protocol](docs/INTRO_DEFERRED_READER_COVERAGE.md#private-repeat-observation-runner)
-  retains only two sanitized structural records and their repeat-gated result;
-  it neither starts the game nor adds a reader.
-- Retail localization lookup behavior is also evidence-gated. Its private
-  [two-process repeat-observation protocol](docs/LOCALIZATION.md#private-lookup-and-formatting-observation)
-  retains only matching source-free structural records; it does not open game
-  data or enable Original text presentation.
-  Window console/property bindings and the scene event-name table are live.
-  None of the cameras is registered for normal rendering yet.
-  DefaultCam and its PreviewCamera now share an [ordinary update queue](docs/ORDINARY_COMPONENTS.md)
-  with real admission and sorting. This path still requires the preceding loader
-  state and is not called by normal startup yet.
-- The remaining bridge is specified as a [normal startup scene host](docs/NORMAL_STARTUP_SCENE_HOST.md):
-  it must admit lifecycle, the first cut, camera/view, drawing and audio in one
-  ordinary-frame order. Its reader-stage session is connected; later lifecycle
-  and rendering stages are not implemented yet.
-- F10 opens a working graphics-settings panel. It also supports Page Up/Page
-  Down on a keyboard and left/right shoulder buttons on a controller for
-  previous/next row navigation. Its 50--200% render-scale row
-  uses an internal GPU target and full-resolution UI composition. It uses a project-authored,
-  letterboxed menu composition and restrained text focus, informed by private
-  observation without copying retail UI pixels or wording. Text follows the
-  system locale and uses in-memory retail UI fonts when coverage is available,
-  including mixed-script LTR runs aligned to one baseline. Confirmed requested
-  settings are saved in SDL's per-user application-preferences location when it
-  is available. An explicit `--mode` selects the profile for that launch; it
-  takes precedence over a saved profile without rewriting preferences at startup. See
-  [graphics-settings persistence](docs/GRAPHICS_SETTINGS_PERSISTENCE.md).
-- A separate geometry preview is available with `--diagnostic-scene`. It is not
-  a loaded level or a gameplay demo.
-- Project-authored deterministic simulation replays have a versioned `OFRP`
-  envelope with strict limits and a SHA-256 corruption check. They are tooling
-  data, not compatible with retail saves or recordings.
+Normal startup loads the user's local resources and presents a labelled static
+intro image. Animated intro playback, its audio, the original menus, and gameplay
+are still incomplete. The GPU runtime receives no active intro frame bridge.
 
-The picture renderer has passed GPU tests on Linux/Vulkan, Windows/Direct3D 12
-and macOS/Metal. CI uses independent fixtures, not retail assets; these tests
-do not establish complete intro playback.
+Archive, texture, geometry, and supported audio readers are implemented. A
+retained scene session owns resources and the deferred-reader bracket. Remaining
+reader coverage, loader services, lifecycle activation, scene updates, and draw
+production must be connected before normal intro playback can begin. See the
+[normal startup scene host](docs/NORMAL_STARTUP_SCENE_HOST.md).
 
-On 2026-09-11, a native Linux ARM64 build passed both first-cut cold probes
-against a verified owned installation, including the source-bound loader-tail
-input handoff. This verifies the implemented data path on ARM64 without an
-emulator; it does not establish intro playback, menu behavior, or gameplay.
-A bounded native startup completed a local capture after preparing the retained
-intro resources without exporting game assets.
+Installation validation discovers local files and hashes their contents. The resulting fingerprint identifies
+local content for cache and save compatibility; it does not certify publisher
+authenticity. Optional soundtrack discovery must remain independent of required
+game data. Soundtrack cue mapping and playback remain incomplete. See
+[installation validation](docs/INSTALL_MANIFEST.md).
 
-On 2026-09-14, a clean native Linux x86-64 build of v0.1.0 completed from
-`main` and passed `--probe-intro-readiness` against a verified owned
-installation. The source-free receipt confirms the reader bracket completed
-while lifecycle, renderer, audio, and playback remained cold; incomplete reader
-coverage therefore continues to block normal intro admission as intended.
+The SDL GPU renderer supports diagnostic picture and geometry presentation.
+`--diagnostic-intro-picture` selects the static intro presentation, while
+`--diagnostic-scene` opens a geometry preview. Neither establishes intro or
+world-scene parity. Private installation observations and captures remain
+outside this repository; synthetic renderer checks cannot prove complete game
+playback.
 
-The current Linux x86-64 suite passes all 127 tests with software Vulkan;
-14 targeted tests also pass ASan/UBSan with leak detection. A
-separate owned-data run validates the 470-resource intro's relation lists and
-MovieControl service binding without activating the scene. Required Steam data
-and all 36 optional soundtrack candidates passed their hash checks. A two-frame
-SDL/Vulkan startup run also completed successfully, uploading 26 intro images
-without presenting an intro picture or playing the intro.
+F10 opens the project-authored graphics settings panel. Keyboard and controller
+navigation, render scaling, and saved preferences are implemented. An explicit
+`--mode` overrides saved preferences for that launch. See
+[graphics-settings persistence](docs/GRAPHICS_SETTINGS_PERSISTENCE.md).
+
+Audio decoding, channel services, and an SDL output adapter exist, but the normal
+startup audio lifecycle remains disconnected. Localization lookup and camera
+registration also need their remaining runtime connections. Project-authored
+simulation replays are tooling data and are not retail save files.
 
 Next: connect the scene's component lifecycle and update loop so normal startup
 renders the original intro and reaches its main menu. This takes priority over
@@ -238,7 +147,7 @@ OFF_LOC_DATA_ROOT=/path/to/FreedomFighters ./build/off_loc_string_index_tests
 # not construct a scene, present a menu, or admit lifecycle, rendering, or input.
 ./build/openfreedomfighters --probe-startup-route-cold
 
-# Inspect hash-verified optional MP3/FLAC soundtrack editions without playing
+# Inspect locally hashed optional MP3/FLAC soundtrack editions without playing
 # or naming a game cue. The probe reports aggregate layout and duration facts,
 # plus a duration-only candidate count against unique game Vorbis streams.
 ./build/openfreedomfighters --probe-soundtrack
@@ -291,7 +200,7 @@ work. Close the window to exit. For development:
 - `--diagnostic-scene relative/archive.ZIP` inspects one owned scene archive
   below `Scenes/` through the source-only diagnostic renderer. It is not
   gameplay, original camera behavior, or a faithful level renderer.
-- `--diagnostic-startup-graphics` draws the retained startup archive's six
+- `--diagnostic-startup-graphics` draws the retained startup archive's
   decoded images and 77 source-backed quads through the same source-only GPU
   diagnostic path. Its fit projection is a comparison aid, not recovered menu
   camera, material, or layout behavior.
@@ -327,7 +236,7 @@ menu transition. See
   construction, lifecycle, rendering, and input as unavailable. It is not a
   title-screen or playable-menu test. See
   [SCENE_TRANSITIONS.md](docs/SCENE_TRANSITIONS.md).
-- `--probe-soundtrack` opens every hash-verified optional soundtrack edition
+- `--probe-soundtrack` opens every locally hashed optional soundtrack edition
   selected by the catalog and reports aggregate format, sample-rate and channel
   coverage. It also profiles metadata from every verified scene audio header,
   without retaining paths or audio payload. It compares only duration against

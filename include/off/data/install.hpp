@@ -7,22 +7,15 @@
 
 namespace off::data {
 
-inline constexpr std::uintmax_t supported_executable_size = 3'353'592;
-inline constexpr auto supported_executable_sha256 =
-    "b05ca73c44474320e1b7321c24be66270f1de2a0686b063b6cb18e9ed21de9c9";
-
 enum class InstallError {
     none,
     missing_root,
     missing_executable,
-    unsupported_executable_size,
-    unsupported_executable_hash,
     incomplete_game_data,
     io_error,
 };
 
-// This is an enrolled optional file identity, not a cue identity.  The digest
-// comes from the immutable install manifest after a complete hash check.
+// A locally observed optional file identity, not a cue identity.
 struct VerifiedSoundtrackCandidate {
     std::filesystem::path path;
     std::string expected_sha256;
@@ -33,8 +26,8 @@ struct InstallVerification {
     std::filesystem::path root;
     std::filesystem::path executable;
     std::string executable_sha256;
-    // Present only after every required file and the deep structural audit
-    // pass. This is an opaque required-data manifest identifier, never a
+    // Present after required local files and the structural audit pass. This
+    // opaque fingerprint is not an authenticity claim and never a
     // directory, mission, asset, or payload fingerprint.
     std::string data_manifest_fingerprint;
     std::string message;
@@ -48,8 +41,8 @@ struct InstallVerification {
 };
 
 struct InstallVerificationOptions {
-    // Empty disables the derived deep-audit cache. The full immutable manifest
-    // is always hash-verified before this cache can be consulted.
+    // Empty disables the derived deep-audit cache. The discovered local
+    // inventory is fully hashed before this cache can be consulted.
     std::filesystem::path deep_audit_cache_root;
 };
 

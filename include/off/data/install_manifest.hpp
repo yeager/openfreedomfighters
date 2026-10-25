@@ -12,9 +12,11 @@ namespace off::data {
 
 enum class ManifestFileRole { required_game, optional_soundtrack, optional_support };
 struct ManifestFile {
-  std::string_view path;
+  std::string path;
   std::uintmax_t size;
-  std::string_view sha256;
+  // Empty means capture the current local digest during discovery. Nonempty
+  // values are retained for synthetic verifier callers only.
+  std::string sha256;
   ManifestFileRole role;
 };
 enum class ManifestFileStatus { verified, missing, unsafe, ambiguous, size_mismatch, hash_mismatch, io_error, unexpected };
@@ -24,6 +26,7 @@ struct ManifestFileCheck {
   ManifestFileRole role;
   ManifestFileStatus status;
   std::string detail;
+  std::string sha256;
 };
 struct ManifestVerification {
   std::vector<ManifestFileCheck> files;
@@ -31,25 +34,19 @@ struct ManifestVerification {
   [[nodiscard]] bool required_ok() const noexcept;
 };
 
-// Fixed local reference snapshot, not an official Steam authenticity manifest.
-[[nodiscard]] std::span<const ManifestFile> supported_install_manifest() noexcept;
+// Discover the current user-owned tree. The inventory contains the executable,
+// required stream bank, files below Scenes, and locally present soundtrack files.
+[[nodiscard]] std::vector<ManifestFile> discover_local_install_manifest(
+    const std::filesystem::path& root, const std::filesystem::path& executable,
+    const std::function<bool()>& cancelled = {});
 
-// A content-free, versioned identifier for the required portion of a verified
-// install manifest.  It is suitable for private observation summaries: it
-// never reads an installation, emits a path, or incorporates optional media.
-// Invalid, ambiguous, or required-data-empty manifests are rejected.
+// A content-free, versioned identifier for locally observed required files.
+// This is a consistency identity, not publisher authenticity.
 [[nodiscard]] std::string verified_data_manifest_fingerprint(
     std::span<const ManifestFile> manifest);
 
-// The fingerprint for the compiled supported-install reference.  This is an
-// identifier for a data build, not proof that a particular directory has been
-// verified; callers must still run verify_file_manifest first.
-[[nodiscard]] std::string supported_data_manifest_fingerprint();
-
-// Full-byte hashes on every call; never enroll/rebaseline or trust timestamps.
-// Optional failures remain reports, not required-data failures. Unknown files
-// in Scenes reject; unknown OST files remain unverified optional sources. Saves,
-// configuration and unrelated root files are outside the immutable inventory.
+// Full-byte hashes on every call; never trust timestamps. Hash worker count is
+// bounded. Unknown files outside discovered roots are not part of the identity.
 // Root symlink is canonicalized; interior symlinks are never followed. The
 // installation must remain stable during verification and subsequent use.
 [[nodiscard]] ManifestVerification verify_file_manifest(

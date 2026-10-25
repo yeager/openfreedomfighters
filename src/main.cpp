@@ -557,7 +557,6 @@ void write_startup_route_cold_probe(const std::filesystem::path &root,
   case Family::first_cut_fade_picture: return "first-cut-fade-picture";
   case Family::first_cut_camera: return "first-cut-camera";
   case Family::basic_group_owner: return "basic-group-owner";
-  case Family::following_visual_owner: return "following-visual-owner";
   case Family::vert_anim_component: return "vert-anim-component";
   case Family::lens_flare_component: return "lens-flare-component";
   case Family::matpos_component: return "matpos-component";
@@ -1221,7 +1220,7 @@ initialize_private_owned_localization_session(
     if (cache_root.empty()) return std::nullopt;
     const auto source_set = off::data::verified_owned_loc_source_set(verification.root);
     if (!source_set) return std::nullopt;
-    const auto installation_identity = "steam-pc-" + verification.executable_sha256;
+    const auto installation_identity = "local-install-" + verification.executable_sha256;
     const auto packs_directory =
         off::platform::application_translation_packs_directory();
     const auto lookup_directory =
@@ -1871,13 +1870,13 @@ int main(int argc, char **argv) {
   }
   std::cout << verification->message << '\n'
             << "Mode: " << off::mode_name(mode) << '\n'
-            << "Verified data manifest: "
+            << "Local content fingerprint: "
             << verification->data_manifest_fingerprint << '\n';
   for (const auto &warning : verification->optional_file_warnings)
     std::cerr << "Optional file skipped: " << warning << '\n';
   std::cout << "Optional soundtrack: "
             << verification->soundtrack_candidates.size()
-            << " hash-verified candidates; playback remains disabled until "
+            << " locally hashed candidates; playback remains disabled until "
                "cue mapping is verified, so game music is retained.\n";
   if (verify_only) {
     return 0;

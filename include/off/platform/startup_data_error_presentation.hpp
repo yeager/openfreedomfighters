@@ -46,9 +46,6 @@ startup_data_error_message_id(data::InstallError error) noexcept {
     return MessageId::game_data_folder_unavailable;
   case InstallError::missing_executable:
     return MessageId::game_executable_missing;
-  case InstallError::unsupported_executable_size:
-  case InstallError::unsupported_executable_hash:
-    return MessageId::game_executable_unsupported;
   case InstallError::incomplete_game_data:
     return MessageId::game_data_incomplete;
   case InstallError::io_error:
@@ -69,9 +66,6 @@ startup_data_error_support_code(data::InstallError error) noexcept {
     return "OFF-DATA-01";
   case InstallError::missing_executable:
     return "OFF-DATA-02";
-  case InstallError::unsupported_executable_size:
-  case InstallError::unsupported_executable_hash:
-    return "OFF-DATA-03";
   case InstallError::incomplete_game_data:
     return "OFF-DATA-04";
   case InstallError::io_error:

@@ -80,7 +80,6 @@ int main() {
   // game-data loader to open an asset.
   constexpr std::array invalid_install_errors{
       off::data::InstallError::missing_executable,
-      off::data::InstallError::unsupported_executable_hash,
       off::data::InstallError::incomplete_game_data,
       off::data::InstallError::io_error,
   };

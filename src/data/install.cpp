@@ -71,6 +71,23 @@ bool is_direct_regular_file(const std::filesystem::path& path,
          std::filesystem::is_regular_file(status);
 }
 
+bool is_local_soundtrack_track(const std::filesystem::path& path) {
+  const auto extension = lowercase(path.extension().string());
+  if (extension != ".flac" && extension != ".mp3") return false;
+  const auto stem = path.stem().string();
+  for (std::size_t index = 0; index + 4U < stem.size(); ++index) {
+    if (stem[index] != '-' || stem[index + 1U] != ' ' ||
+        !std::isdigit(static_cast<unsigned char>(stem[index + 2U])) ||
+        !std::isdigit(static_cast<unsigned char>(stem[index + 3U])) ||
+        stem[index + 4U] != ' ')
+      continue;
+    const auto ordinal = static_cast<unsigned>(stem[index + 2U] - '0') * 10U +
+                         static_cast<unsigned>(stem[index + 3U] - '0');
+    if (ordinal != 0U && ordinal <= 255U) return true;
+  }
+  return false;
+}
+
 } // namespace
 
 InstallVerification verify_install(const std::filesystem::path &requested_root,
@@ -131,30 +148,17 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
                      "ambiguous Freedom.Exe spellings");
     }
   }
-  const auto size = std::filesystem::file_size(executable, error);
+  static_cast<void>(std::filesystem::file_size(executable, error));
   if (error) {
     return failure(InstallError::io_error, root,
                    "could not read Freedom.Exe metadata");
   }
-  if (size != supported_executable_size) {
-    return failure(InstallError::unsupported_executable_size, root,
-                   "Freedom.Exe is not the supported Steam build");
-  }
-
   std::string digest;
   try {
     digest = crypto::to_hex(crypto::sha256_file(executable, cancelled));
   } catch (const std::exception &) {
     return failure(InstallError::io_error, root, "could not hash Freedom.Exe");
   }
-  if (digest != supported_executable_sha256) {
-    auto result = failure(InstallError::unsupported_executable_hash, root,
-                          "Freedom.Exe hash is not supported");
-    result.executable = executable;
-    result.executable_sha256 = digest;
-    return result;
-  }
-
   std::string archive_context;
   std::string member_context;
   std::string audit_identity;
@@ -162,39 +166,39 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
   std::vector<VerifiedSoundtrackCandidate> soundtrack_candidates;
   std::vector<std::string> optional_file_warnings;
   try {
-    const auto inventory = verify_file_manifest(root, supported_install_manifest(), cancelled);
+    auto local_manifest = discover_local_install_manifest(root, executable, cancelled);
+    const auto inventory = verify_file_manifest(root, local_manifest, cancelled);
     if (inventory.cancelled)
       return failure(InstallError::io_error, root, "game-data verification cancelled");
-    const auto manifest = supported_install_manifest();
+    std::vector<ManifestFile> observed_required;
     for (const auto& file : inventory.files) {
       if (file.role == ManifestFileRole::required_game && file.status != ManifestFileStatus::verified)
         return failure(InstallError::incomplete_game_data, root,
                        file.path + ": " + file.detail);
       if (file.role == ManifestFileRole::optional_soundtrack &&
-          file.status == ManifestFileStatus::verified) {
-        const auto expected = std::ranges::find_if(
-            manifest, [&file](const ManifestFile& entry) {
-              return entry.role == ManifestFileRole::optional_soundtrack &&
-                     entry.path == file.path;
-            });
-        if (expected == manifest.end())
-          return failure(InstallError::incomplete_game_data, root,
-                         "verified soundtrack file is absent from manifest");
+          file.status == ManifestFileStatus::verified &&
+          is_local_soundtrack_track(file.actual_path)) {
         soundtrack_candidates.push_back(
-            {.path = file.actual_path,
-             .expected_sha256 = std::string(expected->sha256)});
+            {.path = file.actual_path, .expected_sha256 = file.sha256});
+      }
+      if (file.role == ManifestFileRole::required_game &&
+          file.status == ManifestFileStatus::verified) {
+        const auto observed = std::ranges::find_if(local_manifest,
+            [&file](const ManifestFile& item) { return item.path == file.path; });
+        if (observed == local_manifest.end())
+          return failure(InstallError::incomplete_game_data, root,
+                         "verified local file is absent from the discovered inventory");
+        observed_required.push_back({file.path, observed->size, file.sha256,
+                                     ManifestFileRole::required_game});
       }
       if (file.role != ManifestFileRole::required_game && file.status != ManifestFileStatus::verified &&
           file.status != ManifestFileStatus::missing)
         optional_file_warnings.push_back(file.path + ": " + file.detail);
     }
-    data_manifest_fingerprint = supported_data_manifest_fingerprint();
-    // The cache only skips structural parsing after the immutable required
-    // corpus has been hashed in full above.  Bind its key to the canonical
-    // manifest identity rather than reproducing a second, order-dependent
-    // manifest serialization here.
-    std::string audit_identity_input{"openfreedomfighters-deep-audit-v4\n"};
-    audit_identity_input += supported_executable_sha256;
+    data_manifest_fingerprint = verified_data_manifest_fingerprint(observed_required);
+    // The cache identity is derived from the fully hashed current local files.
+    std::string audit_identity_input{"openfreedomfighters-deep-audit-v5\n"};
+    audit_identity_input += digest;
     audit_identity_input += '\n';
     audit_identity_input += data_manifest_fingerprint;
     audit_identity = crypto::to_hex(crypto::sha256(audit_identity_input));
@@ -275,97 +279,27 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
       ++audio_header_count;
       audio_record_count += header.records().size();
     }
-    if (audio_header_count != 45 || audio_record_count != 121'187 ||
+    if (audio_header_count == 0 || audio_record_count == 0 ||
         !decoded_pcm_reference || !decoded_ima_reference ||
         !decoded_vorbis_reference) {
       return failure(InstallError::incomplete_game_data, root,
-                     "audio header corpus does not match the supported build");
+                     "audio resources failed structural validation");
     }
 
     std::size_t scene_archive_count = 0;
     std::size_t scene_support_count = 0;
     std::size_t scene_graph_count = 0;
-    std::size_t scene_graph_payload_bytes = 0;
-    std::size_t stored_scene_graph_count = 0;
-    std::size_t scene_graph_entry_count = 0;
-    std::size_t scene_graph_entry_payload_bytes = 0;
-    std::size_t ttf_entry_count = 0;
-    std::size_t ppo_entry_count = 0;
-    std::size_t decoded_gms_object_handle_count = 0;
-    std::size_t local_gms_object_handle_count = 0;
-    std::size_t external_gms_object_handle_count = 0;
     std::size_t gms_resource_count = 0;
-    std::size_t animation_image_count = 0;
     std::size_t oct_image_count = 0;
-    std::size_t oct_structural_bounds_count = 0;
-    std::size_t animation_reference_table_count = 0;
-    std::size_t animation_descriptor_count = 0;
-    std::size_t animation_section_count = 0;
-    std::size_t animation_component_count = 0;
-    std::size_t gms_payload_bytes = 0;
-    std::size_t gms_directory_entry_count = 0;
-    std::size_t gms_identifier_count = 0;
-    std::size_t gms_pool_group_count = 0;
-    std::size_t gms_named_global_count = 0;
-    std::size_t gms_renderer_payload_bytes = 0;
-    std::size_t gms_resource_association_count = 0;
-    std::size_t gms_allocation_sizing_row_count = 0;
-    std::size_t gms_renderer_relocation_group_count = 0;
-    std::size_t gms_renderer_tagged_reference_count = 0;
-    std::size_t gms_renderer_eight_byte_slot_count = 0;
-    std::size_t gms_renderer_sixteen_byte_slot_count = 0;
-    std::size_t gms_renderer_workspace_trailing_bytes = 0;
-    std::size_t buf_resource_count = 0;
-    std::size_t gms_attachment_table_count = 0;
-    std::size_t gms_attachment_count = 0;
-    std::size_t gms_buf_auxiliary_count = 0;
     std::size_t texture_catalog_count = 0;
-    std::size_t texture_image_count = 0;
-    std::size_t texture_sequence_count = 0;
     std::size_t primitive_catalog_count = 0;
-    std::size_t primitive_entry_count = 0;
-    std::size_t primitive_reference_count = 0;
-    std::size_t primitive_texture_reference_count = 0;
-    std::size_t flagged_texture_selector_count = 0;
-    std::size_t opaque_vertex_alpha_count = 0;
-    std::size_t variable_vertex_alpha_count = 0;
-    std::size_t fully_transparent_vertex_alpha_count = 0;
-    std::size_t unflagged_variable_vertex_alpha_count = 0;
-    std::size_t triangle_strip_primitive_count = 0;
-    std::size_t line_list_primitive_count = 0;
-    std::size_t render_draw_count = 0;
-    std::size_t render_index_count = 0;
-    std::size_t gms_primitive_reference_count = 0;
-    std::size_t primitive_vertex_count = 0;
-    std::size_t primitive_batch_count = 0;
-    std::size_t primitive_index_count = 0;
-    std::size_t startup_picture_resource_count = 0;
     std::size_t startup_picture_draw_group_texture_resource_count = 0;
     std::unordered_set<std::uint32_t> startup_picture_references;
     std::unordered_set<std::uint32_t>
         startup_picture_draw_group_texture_references;
     std::size_t startup_picture_texture_join_count = 0;
-    std::size_t startup_picture_draw_plan_group_count = 0;
-    std::size_t startup_picture_draw_plan_quad_count = 0;
-    std::unordered_set<std::uint16_t> startup_picture_manager_keys;
-    std::unordered_set<std::uint16_t> startup_picture_texture_ids;
-    std::unordered_set<std::size_t> startup_picture_texture_image_indices;
-    std::size_t startup_graphics_composition_instance_count = 0;
-    std::size_t startup_graphics_composition_group_count = 0;
-    std::size_t startup_graphics_composition_quad_count = 0;
-    std::unordered_set<std::size_t> startup_graphics_composition_image_indices;
     std::size_t render_map_count = 0;
-    std::size_t render_map_entry_count = 0;
-    std::size_t render_map_node_count = 0;
     std::size_t render_instance_map_count = 0;
-    std::size_t render_instance_entry_count = 0;
-    std::size_t render_instance_node_count = 0;
-    std::size_t scene_resolution_count = 0;
-    std::size_t primary_scene_resolution_count = 0;
-    std::size_t secondary_scene_resolution_count = 0;
-    std::size_t local_primitive_resolution_count = 0;
-    std::size_t no_local_source_resolution_count = 0;
-    std::size_t source_without_primitive_resolution_count = 0;
     std::size_t missing_primitive_resolution_count = 0;
     std::size_t unresolved_alias_resolution_count = 0;
     bool decoded_dxt1_reference = false;
@@ -419,71 +353,29 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
           }
           buf_resource = archive.read(member);
           ++buf_files_in_archive;
-          ++buf_resource_count;
         } else if (extension == ".zgf" || extension == ".gms") {
           auto resource = PackedResource::parse(archive.read(member));
           if (extension == ".zgf") {
-            scene_graph_payload_bytes += resource.payload().size();
-            stored_scene_graph_count +=
-                resource.encoding() == PackedResourceEncoding::stored ? 1U : 0U;
-            auto bundle = ZgfBundle::parse(std::move(resource));
-            for (std::size_t index = 0; index < bundle.entries().size();
-                 ++index) {
-              const auto &bundled_entry = bundle.entries()[index];
-              scene_graph_entry_payload_bytes +=
-                  bundle.entry_payload(index).size();
-              const auto bundled_extension =
-                  lowercase(std::filesystem::path(bundled_entry.name)
-                                .extension()
-                                .string());
-              ttf_entry_count += bundled_extension == ".ttf" ? 1U : 0U;
-              ppo_entry_count += bundled_extension == ".ppo" ? 1U : 0U;
-            }
-            scene_graph_entry_count += bundle.entries().size();
+            static_cast<void>(ZgfBundle::parse(std::move(resource)));
             ++scene_graph_files_in_archive;
             ++scene_graph_count;
           } else {
-            gms_payload_bytes += resource.payload().size();
             gms_image = GmsImage::parse(std::move(resource));
-            gms_directory_entry_count += gms_image->directory().size();
             for (const auto &source : gms_image->directory()) {
               if (!GmsImage::source_class_name(source.source_type)
                        .has_value()) {
                 throw std::runtime_error(
                     "GMS object source has an unknown geometry class");
               }
-              if (!source.attachments.empty()) {
-                ++gms_attachment_table_count;
-                gms_attachment_count += source.attachments.size();
-              }
-              gms_buf_auxiliary_count +=
-                  source.buf_auxiliary_offset != 0U ? 1U : 0U;
             }
-            gms_identifier_count += gms_image->identifier_count();
-            gms_pool_group_count += gms_image->pool_groups().size();
             const auto outer_sources = gms_image->outer_loader_sources();
-            gms_named_global_count += outer_sources.named_global ? 1U : 0U;
-            gms_renderer_payload_bytes += outer_sources.renderer_resource
-                                              ? outer_sources.renderer_resource->size()
-                                              : 0U;
-            gms_resource_association_count +=
-                outer_sources.resource_associations.size();
-            gms_allocation_sizing_row_count +=
-                outer_sources.allocation_sizing_rows.size();
             if (outer_sources.renderer_resource) {
-              const auto prefix =
+              static_cast<void>(
                   graphics::parse_intro_renderer_relocation_prefix(
-                      *outer_sources.renderer_resource);
-              gms_renderer_relocation_group_count += prefix.groups.size();
-              for (const auto &group : prefix.groups)
-                gms_renderer_tagged_reference_count += group.references.size();
-              const auto workspace =
+                      *outer_sources.renderer_resource));
+              static_cast<void>(
                   graphics::parse_intro_renderer_workspace_layout(
-                      *outer_sources.renderer_resource);
-              gms_renderer_eight_byte_slot_count += workspace.eight_byte_slot_count;
-              gms_renderer_sixteen_byte_slot_count += workspace.sixteen_byte_slot_count;
-              gms_renderer_workspace_trailing_bytes +=
-                  workspace.sixteen_byte_trailing_bytes;
+                      *outer_sources.renderer_resource));
             }
             ++gms_files_in_archive;
             ++gms_resource_count;
@@ -518,48 +410,27 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
             }
             *decoded_reference = true;
           }
-          texture_image_count += catalog.images().size();
-          texture_sequence_count += catalog.sequences().size();
           texture_catalog = std::move(catalog);
           ++texture_files_in_archive;
           ++texture_catalog_count;
         } else if (extension == ".snd") {
-          // Every supported scene has one complete SND definition member.
-          // Its envelope is independently corpus-validated; do not leave it
-          // opaque merely because this verifier does not select a sound owner.
+          // Validate each local sound-definition resource even though startup
+          // does not select a sound owner here.
           static_cast<void>(SoundDefinitionBank::parse(archive.read(member),
                                                        1024U * 1024U));
           ++sound_definition_files_in_archive;
         } else if (extension == ".anm") {
-          const auto animation = AnimationImage::parse(archive.read(member));
-          ++animation_image_count;
-          animation_reference_table_count += animation.reference_tables().size();
-          animation_descriptor_count += animation.descriptors().size();
-          animation_section_count += animation.sections().size();
-          for (const auto &section : animation.sections())
-            animation_component_count += section.components.size();
+          static_cast<void>(AnimationImage::parse(archive.read(member)));
         } else if (extension == ".oct") {
-          const auto oct = OctImage::parse(archive.read(member));
+          static_cast<void>(OctImage::parse(archive.read(member)));
           ++oct_image_count;
-          oct_structural_bounds_count +=
-              oct.envelope().structural_bounds.has_value() ? 1U : 0U;
           ++oct_image_files_in_archive;
         } else if (extension == ".prm") {
           auto bytes = archive.read(member);
           auto catalog = PrimitiveCatalog::parse(bytes);
           for (const auto &primitive : catalog.entries()) {
             primitive_indices.insert(primitive.packed_index);
-            if (primitive.flagged_reference) {
-              ++primitive_reference_count;
-              continue;
-            }
-            primitive_vertex_count += primitive.vertices.size();
-            primitive_batch_count += primitive.batches.size();
-            for (const auto &batch : primitive.batches) {
-              primitive_index_count += batch.indices.size();
-            }
           }
-          primitive_entry_count += catalog.entries().size();
           primitive_catalog = std::move(catalog);
           primitive_resource = std::move(bytes);
           ++primitive_files_in_archive;
@@ -575,14 +446,10 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
             }
           }
           if (extension == ".rmc") {
-            render_map_entry_count += map.entries().size();
-            render_map_node_count += map.nodes().size();
             ++render_map_files_in_archive;
             ++render_map_count;
             render_map = std::move(map);
           } else {
-            render_instance_entry_count += map.entries().size();
-            render_instance_node_count += map.nodes().size();
             ++render_instance_files_in_archive;
             ++render_instance_map_count;
             render_instance_map = std::move(map);
@@ -649,17 +516,8 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
               picture.texture_resources(), *texture_catalog, true);
           const auto picture_draw_plan =
               PictureDrawPlan::build(picture, picture_textures);
-          startup_picture_draw_plan_group_count +=
-              picture_draw_plan.groups().size();
-          for (const auto& group : picture_draw_plan.groups()) {
-            startup_picture_draw_plan_quad_count += group.quads.size();
-          }
+          static_cast<void>(picture_draw_plan);
           startup_picture_texture_join_count += picture_textures.entries().size();
-          for (const auto& binding : picture_textures.entries()) {
-            startup_picture_manager_keys.insert(binding.manager_key);
-            startup_picture_texture_ids.insert(binding.texture_id);
-            startup_picture_texture_image_indices.insert(binding.image_index);
-          }
           startup_picture_draw_group_texture_resource_count +=
               picture.texture_resources().size();
           for (const auto &texture_resource :
@@ -667,20 +525,10 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
             startup_picture_draw_group_texture_references.insert(
                 texture_resource.prm_offset);
           }
-          ++startup_picture_resource_count;
         }
         const auto graphics_composition = StartupGraphicsComposition::build(
             *gms_image, *primitive_resource, *texture_catalog);
-        for (const auto& row : graphics_composition.rows()) {
-          for (const auto& instance : row.pictures) {
-            ++startup_graphics_composition_instance_count;
-            startup_graphics_composition_group_count += instance.draw_plan.groups().size();
-            for (const auto& group : instance.draw_plan.groups()) {
-              startup_graphics_composition_quad_count += group.quads.size();
-              startup_graphics_composition_image_indices.insert(group.texture.image_index);
-            }
-          }
-        }
+        static_cast<void>(graphics_composition);
       }
       for (const auto &source : gms_image->directory()) {
         if (!source.primitive_reference.has_value()) {
@@ -690,30 +538,20 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
           throw std::runtime_error(
               "GMS object source references a missing PRM primitive");
         }
-        ++gms_primitive_reference_count;
       }
-      const auto render_assets = graphics::RenderAssetBindings::build(
-          primitive_catalog->entries(), texture_catalog->images());
+      static_cast<void>(graphics::RenderAssetBindings::build(
+          primitive_catalog->entries(), texture_catalog->images()));
       const auto count_scene_resolutions = [&](const RenderMap &map) {
         const auto resolutions = graphics::resolve_scene_geometry_references(
             primitive_catalog->entries(), gms_image->directory(),
             map.entries());
-        scene_resolution_count += resolutions.size();
         for (const auto &resolution : resolutions) {
-          if (resolution.role == graphics::SceneGeometryRole::primary) {
-            ++primary_scene_resolution_count;
-          } else {
-            ++secondary_scene_resolution_count;
-          }
           switch (resolution.status) {
           case graphics::SceneGeometryStatus::local_primitive:
-            ++local_primitive_resolution_count;
             break;
           case graphics::SceneGeometryStatus::no_local_source:
-            ++no_local_source_resolution_count;
             break;
           case graphics::SceneGeometryStatus::source_without_primitive:
-            ++source_without_primitive_resolution_count;
             break;
           case graphics::SceneGeometryStatus::missing_primitive:
             ++missing_primitive_resolution_count;
@@ -726,124 +564,31 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
       };
       count_scene_resolutions(*render_map);
       count_scene_resolutions(*render_instance_map);
-      for (const auto &binding : render_assets.primitives()) {
-        primitive_texture_reference_count +=
-            binding.texture_image_index.has_value() ? 1U : 0U;
-        flagged_texture_selector_count +=
-            binding.texture_selector_flagged ? 1U : 0U;
-        switch (binding.vertex_alpha_class) {
-        case graphics::VertexAlphaClass::opaque:
-          ++opaque_vertex_alpha_count;
-          break;
-        case graphics::VertexAlphaClass::variable:
-          ++variable_vertex_alpha_count;
-          unflagged_variable_vertex_alpha_count +=
-              binding.texture_selector_flagged ? 0U : 1U;
-          break;
-        case graphics::VertexAlphaClass::fully_transparent:
-          ++fully_transparent_vertex_alpha_count;
-          break;
-        }
-        if (binding.topology == graphics::PrimitiveTopology::triangle_strip) {
-          ++triangle_strip_primitive_count;
-        } else {
-          ++line_list_primitive_count;
-        }
-        render_draw_count += binding.draws.size();
-        render_index_count += binding.indices.size();
-      }
       for (const auto reference : scene_geometry_references) {
         static_cast<void>(GmsImage::decode_object_handle(reference));
-        ++decoded_gms_object_handle_count;
-        if (gms_image->local_source_for_handle(reference).has_value()) {
-          ++local_gms_object_handle_count;
-        } else {
-          ++external_gms_object_handle_count;
-        }
       }
       ++scene_archive_count;
       archive_context.clear();
     }
-    if (scene_archive_count != 90 ||
+    if (scene_archive_count == 0 ||
         scene_support_count != scene_archive_count ||
         scene_graph_count != scene_archive_count ||
-        scene_graph_payload_bytes != 34'221'064 ||
-        stored_scene_graph_count != 2 || scene_graph_entry_count != 1'019 ||
-        scene_graph_entry_payload_bytes != 34'161'792 ||
-        ttf_entry_count != 430 || ppo_entry_count != 589 ||
-        decoded_gms_object_handle_count != 3'002 ||
-        local_gms_object_handle_count != 2'998 ||
-        external_gms_object_handle_count != 4 ||
         gms_resource_count != scene_archive_count ||
         oct_image_count != scene_archive_count ||
-        oct_structural_bounds_count != 44 ||
-        animation_image_count != 42 || animation_reference_table_count != 112 ||
-        animation_descriptor_count != 457 || animation_section_count != 336 ||
-        animation_component_count != 546 ||
-        gms_payload_bytes != 33'436'872 ||
-        gms_directory_entry_count != 179'838 ||
-        gms_identifier_count != 154'941 || gms_pool_group_count != 29'450 ||
-        gms_named_global_count != 40 ||
-        gms_renderer_payload_bytes != 6'341'932 ||
-        gms_resource_association_count != 590 ||
-        gms_allocation_sizing_row_count != 2'227 ||
-        gms_renderer_relocation_group_count != 79'577 ||
-        gms_renderer_tagged_reference_count != 198'234 ||
-        gms_renderer_eight_byte_slot_count != 180'000 ||
-        gms_renderer_sixteen_byte_slot_count != 236'824 ||
-        gms_renderer_workspace_trailing_bytes != 64 ||
-        buf_resource_count != 88 || gms_attachment_table_count != 34'218 ||
-        gms_attachment_count != 39'885 || gms_buf_auxiliary_count != 5'765 ||
         texture_catalog_count != scene_archive_count ||
-        texture_image_count != 23'522 || texture_sequence_count != 19 ||
-        !decoded_dxt1_reference || !decoded_dxt3_reference ||
-        !decoded_abgr_reference || !decoded_palette_reference ||
         primitive_catalog_count != scene_archive_count ||
-        primitive_entry_count != 61'451 || primitive_reference_count != 27 ||
-        primitive_texture_reference_count != 40'071 ||
-        flagged_texture_selector_count != 18'731 ||
-        opaque_vertex_alpha_count != 46'140 ||
-        variable_vertex_alpha_count != 12'751 ||
-        fully_transparent_vertex_alpha_count != 2'533 ||
-        unflagged_variable_vertex_alpha_count != 0 ||
-        triangle_strip_primitive_count != 57'284 ||
-        line_list_primitive_count != 4'140 || render_draw_count != 461'344 ||
-        render_index_count != 4'412'738 ||
-        gms_primitive_reference_count != 115'977 ||
-        primitive_vertex_count != 2'820'961 ||
-        primitive_batch_count != 461'344 ||
-        primitive_index_count != 4'412'738 ||
-        startup_picture_resource_count != 124 ||
-        startup_picture_references.size() != startup_picture_resource_count ||
-        startup_picture_draw_group_texture_resource_count != 1'144 ||
-        startup_picture_texture_join_count != 1'144 ||
-        startup_picture_draw_plan_group_count != 1'144 ||
-        startup_picture_draw_plan_quad_count != 1'840 ||
-        startup_picture_manager_keys.size() != 334 ||
-        startup_picture_texture_ids.size() != 334 ||
-        startup_picture_texture_image_indices.size() != 334 ||
-        startup_graphics_composition_instance_count != 24 ||
-        startup_graphics_composition_group_count != 88 ||
-        startup_graphics_composition_quad_count != 88 ||
-        startup_graphics_composition_image_indices.size() != 6 ||
+        render_map_count != scene_archive_count ||
+        render_instance_map_count != scene_archive_count ||
+        startup_picture_texture_join_count !=
+            startup_picture_draw_group_texture_resource_count ||
         startup_picture_draw_group_texture_references.size() !=
             startup_picture_draw_group_texture_resource_count ||
-        render_map_count != scene_archive_count ||
-        render_map_entry_count != 1'612 || render_map_node_count != 2'587 ||
-        render_instance_map_count != scene_archive_count ||
-        render_instance_entry_count != 1'189 ||
-        render_instance_node_count != 1'359 ||
-        scene_resolution_count != 3'002 ||
-        primary_scene_resolution_count != 2'801 ||
-        secondary_scene_resolution_count != 201 ||
-        local_primitive_resolution_count != 220 ||
-        no_local_source_resolution_count != 4 ||
-        source_without_primitive_resolution_count != 2'778 ||
+        !decoded_dxt1_reference || !decoded_dxt3_reference ||
+        !decoded_abgr_reference || !decoded_palette_reference ||
         missing_primitive_resolution_count != 0 ||
         unresolved_alias_resolution_count != 0) {
-      return failure(
-          InstallError::incomplete_game_data, root,
-          "scene resource corpus does not match the supported build");
+      return failure(InstallError::incomplete_game_data, root,
+                     "scene resources failed structural validation");
     }
 
     archive_context = "Scenes/StartLoader.ZIP";
@@ -851,11 +596,10 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
         ZipArchive::open(root / "Scenes/StartLoader.ZIP");
     const auto *scene_graph = startup_archive.find("SCENES/StartLoader.ZGF");
     const auto *scene_source = startup_archive.find("SCENES/StartLoader.GMS");
-    if (startup_archive.entries().size() != 12 || scene_graph == nullptr ||
-        scene_source == nullptr) {
+    if (scene_graph == nullptr || scene_source == nullptr) {
       return failure(
           InstallError::incomplete_game_data, root,
-          "startup archive does not match the supported resource layout");
+          "startup archive is missing required structural resources");
     }
     member_context = scene_graph->name;
     const auto payload = startup_archive.read(*scene_graph);
@@ -866,6 +610,8 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
                           .startloader_load_screen_source());
     }
   } catch (const std::exception &exception) {
+    if (cancelled && cancelled())
+      return failure(InstallError::io_error, root, "game-data verification cancelled");
     const auto context = archive_context.empty()
                              ? std::string{}
                              : archive_context +
@@ -874,7 +620,7 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
                                         : " [" + member_context + "]") +
                                    ": ";
     return failure(InstallError::incomplete_game_data, root,
-                   std::string{"game data failed integrity validation: "} +
+                   std::string{"game data failed local structural validation: "} +
                        context + exception.what());
   }
 
@@ -888,7 +634,7 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
       .executable = executable,
       .executable_sha256 = digest,
       .data_manifest_fingerprint = std::move(data_manifest_fingerprint),
-      .message = "supported Steam installation verified",
+      .message = "local game-data structure verified; publisher authenticity is not checked",
       .soundtrack_candidates = std::move(soundtrack_candidates),
       .optional_file_warnings = std::move(optional_file_warnings),
   };

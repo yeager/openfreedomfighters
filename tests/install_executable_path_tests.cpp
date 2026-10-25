@@ -50,7 +50,7 @@ int main() {
   const auto single_spelling_root = work / "single-spelling";
   write(single_spelling_root / "Freedom.Exe");
   const auto single_spelling = off::data::verify_install(single_spelling_root);
-  check(single_spelling.error == off::data::InstallError::unsupported_executable_size,
+  check(single_spelling.error == off::data::InstallError::incomplete_game_data,
         "a missing alternate executable spelling is not an I/O failure");
 
   const auto case_root = work / "case-spellings";

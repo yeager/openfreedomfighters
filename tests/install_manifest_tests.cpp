@@ -37,7 +37,7 @@ bool same_checks(const ManifestVerification& left, const ManifestVerification& r
     const auto& a = left.files[index];
     const auto& b = right.files[index];
     if (a.path != b.path || a.actual_path != b.actual_path || a.role != b.role ||
-        a.status != b.status || a.detail != b.detail) return false;
+        a.status != b.status || a.detail != b.detail || a.sha256 != b.sha256) return false;
   }
   return true;
 }
@@ -48,13 +48,13 @@ int main() {
   if (work.empty() || work == work.root_path()) throw std::runtime_error("invalid manifest fixture directory");
   std::filesystem::remove_all(work);
   std::filesystem::create_directories(work);
-  // Owning digest strings outlive every manifest string_view in this test.
+  // Synthetic manifest entries own their paths and expected digests.
   const auto game_hash = off::crypto::to_hex(off::crypto::sha256("game-data"));
   const auto bank_hash = off::crypto::to_hex(off::crypto::sha256("bank"));
   const auto music_hash = off::crypto::to_hex(off::crypto::sha256("music"));
   const auto support_hash = off::crypto::to_hex(off::crypto::sha256("support"));
-  constexpr std::string_view track_a = "Freedom_Fighters_OST/FLAC/a.flac";
-  constexpr std::string_view track_b = "Freedom_Fighters_OST/MP3/b.mp3";
+  const std::string track_a = "Freedom_Fighters_OST/FLAC/a.flac";
+  const std::string track_b = "Freedom_Fighters_OST/MP3/b.mp3";
   const std::array<ManifestFile, 5> manifest{{
       {"Scenes/payload.bin", 9, game_hash, ManifestFileRole::required_game},
       {"streams.wav", 4, bank_hash, ManifestFileRole::required_game},
@@ -80,9 +80,6 @@ int main() {
         {"support.txt", 7, support_hash, ManifestFileRole::optional_support}}};
     rejects([&] { (void)verified_data_manifest_fingerprint(no_required); },
             "fingerprint rejects a manifest without required game data");
-    check(supported_data_manifest_fingerprint() ==
-              verified_data_manifest_fingerprint(supported_install_manifest()),
-          "compiled supported manifest has the same fingerprint through both entry points");
   }
   const auto fixture = [&](std::string_view name) {
     const auto root = work / name;
@@ -131,13 +128,102 @@ int main() {
     write(root / "streams.wav", "bank");
     write(root / "Freedom_Fighters_OST/extra.flac", "unrecognized");
     write(root / "savegame.bin", "mutable");
-    write(root / "Freedom_Fighters_OST/FF_OST_MP3_320/Thumbs.db", "cache");
     const auto unknown = verify_file_manifest(root, manifest);
     check(unknown.required_ok() && has(unknown, "Freedom_Fighters_OST/extra.flac", ManifestFileStatus::unexpected),
           "unknown soundtrack is reported without enrollment or mandatory failure");
     check(std::none_of(unknown.files.begin(), unknown.files.end(), [](const auto& f) {
       return f.path == "savegame.bin" || f.path.ends_with("Thumbs.db");
-    }), "unrelated mutable root files and explicit thumbnail cache stay outside inventory");
+    }), "unrelated mutable root files stay outside the verified inventory");
+  }
+  {
+    const auto root = work / "runtime-discovery";
+    write(root / "game.exe", "local executable");
+    write(root / "streams.wav", "local stream bank");
+    write(root / "Scenes/start.zip", "local scene archive");
+    const auto capture_fingerprint = [&](const std::vector<ManifestFile>& inventory) {
+      const auto verified = verify_file_manifest(root, inventory);
+      check(verified.required_ok(), "runtime-discovered required files hash successfully");
+      auto observed = inventory;
+      for (auto& item : observed) {
+        if (item.role != ManifestFileRole::required_game) continue;
+        const auto found = std::find_if(verified.files.begin(), verified.files.end(),
+            [&](const auto& row) { return row.path == item.path; });
+        if (found == verified.files.end() || found->status != ManifestFileStatus::verified)
+          throw std::runtime_error("discovered required test file was not verified");
+        item.sha256 = found->sha256;
+      }
+      return verified_data_manifest_fingerprint(observed);
+    };
+    const auto initial = discover_local_install_manifest(root, root / "game.exe");
+    const auto original_fingerprint = capture_fingerprint(initial);
+    bool discovery_cancelled = false;
+    try {
+      static_cast<void>(discover_local_install_manifest(root, root / "game.exe",
+          [] { return true; }));
+    } catch (const std::runtime_error&) {
+      discovery_cancelled = true;
+    }
+    check(discovery_cancelled,
+          "runtime discovery honors cancellation before enumerating local files");
+    write(root / "Scenes/start.zip", "LOCAL scene archive");
+    const auto changed = discover_local_install_manifest(root, root / "game.exe");
+    check(original_fingerprint != capture_fingerprint(changed),
+          "runtime fingerprint changes when locally installed required bytes change");
+
+    write(root / "Freedom_Fighters_OST/track.flac", "optional soundtrack");
+    const auto outside = work / "outside-optional";
+    write(outside / "link.flac", "outside bytes");
+    std::error_code link_error;
+    std::filesystem::create_directories(root / "Freedom_Fighters_OST/nested");
+    std::filesystem::create_symlink(std::filesystem::absolute(outside / "link.flac"),
+        root / "Freedom_Fighters_OST/nested/link.flac", link_error);
+    const auto with_optional = discover_local_install_manifest(root, root / "game.exe");
+    const auto verified_optional = verify_file_manifest(root, with_optional);
+    check(verified_optional.required_ok(),
+          "optional soundtrack enumeration failures cannot block required local data");
+    check(std::any_of(with_optional.begin(), with_optional.end(), [](const auto& item) {
+      return item.role == ManifestFileRole::optional_soundtrack &&
+             item.path.ends_with("track.flac") && item.sha256.empty();
+    }), "optional soundtrack discovery records paths without shipping a digest");
+    if (!link_error)
+      check(std::any_of(verified_optional.files.begin(), verified_optional.files.end(),
+          [](const auto& item) { return item.role == ManifestFileRole::optional_soundtrack &&
+                                       item.status == ManifestFileStatus::unsafe; }),
+          "optional symlink is reported but never followed or promoted to required data");
+    else std::cout << "SKIP: optional symlink fixture unavailable: " << link_error.message() << '\n';
+    const auto optional_root_link = work / "optional-root-link";
+    write(optional_root_link / "game.exe", "local executable");
+    write(optional_root_link / "streams.wav", "local stream bank");
+    write(optional_root_link / "Scenes/start.zip", "local scene archive");
+    link_error.clear();
+    std::filesystem::create_directory_symlink(std::filesystem::absolute(outside),
+        optional_root_link / "Freedom_Fighters_OST", link_error);
+    if (!link_error) {
+      const auto isolated = discover_local_install_manifest(optional_root_link,
+          optional_root_link / "game.exe");
+      check(verify_file_manifest(optional_root_link, isolated).required_ok(),
+            "an optional soundtrack root symlink is isolated from required verification");
+    } else std::cout << "SKIP: optional root symlink fixture unavailable: " << link_error.message() << '\n';
+    const auto pulse_root = work / "optional-cancel-pulse";
+    write(pulse_root / "game.exe", "local executable");
+    write(pulse_root / "streams.wav", "local stream bank");
+    write(pulse_root / "Scenes/start.zip", "local scene archive");
+    write(pulse_root / "Freedom_Fighters_OST/track.flac", "optional soundtrack");
+    unsigned discovery_calls = 0;
+    bool pulse_cancelled = false;
+    try {
+      static_cast<void>(discover_local_install_manifest(pulse_root,
+          pulse_root / "game.exe", [&] { return ++discovery_calls == 7; }));
+    } catch (const std::runtime_error&) {
+      pulse_cancelled = true;
+    }
+    check(pulse_cancelled && discovery_calls == 7,
+          "one-shot cancellation during optional-file discovery remains latched");
+    unsigned calls = 0;
+    const auto cancelled = verify_file_manifest(root, with_optional,
+        [&] { ++calls; return true; });
+    check(cancelled.cancelled && !cancelled.required_ok() && calls == 1,
+          "runtime-discovered inventory honors cancellation before hashing");
   }
   {
     const auto root = fixture("required-changes");
@@ -207,10 +293,10 @@ int main() {
     for (const auto path : std::array<std::string_view, 10>{
         "", ".", "..", "../outside", "/absolute", "C:/drive", "Scenes\\payload.bin",
         "Scenes//payload.bin", "Scenes/../payload.bin", std::string_view{"a\0b", 3}}) {
-      const std::array<ManifestFile, 1> invalid{{{path, 9, game_hash, ManifestFileRole::required_game}}};
+      const std::array<ManifestFile, 1> invalid{{{std::string(path), 9, game_hash, ManifestFileRole::required_game}}};
       rejects([&] { (void)verify_file_manifest(root, invalid); }, "unsafe manifest path rejects");
     }
-    for (const auto digest : {std::string{}, std::string(63, 'a'), std::string(65, 'a'),
+    for (const auto digest : {std::string(63, 'a'), std::string(65, 'a'),
                               std::string(64, 'g'), std::string(64, 'A')}) {
       const std::array<ManifestFile, 1> invalid{{{"streams.wav", 4, digest, ManifestFileRole::required_game}}};
       rejects([&] { (void)verify_file_manifest(root, invalid); }, "invalid digest rejects before checking files");
