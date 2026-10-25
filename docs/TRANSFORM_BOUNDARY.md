@@ -79,8 +79,9 @@ parent-link setter writes `+0x6c`, not `+0x54`; the later writer and the
 subobject's concrete class remain unidentified.
 
 The initializer's `ZSysInterfaceWintel` dispatch resolves to a routine that
-sets the row's `+0x60` flag. It does not install a row vtable or write `+0x54`;
-the following matrix initializer also leaves those fields alone. The loader's
+sets a flag on the service-interface receiver. It ignores the pool-row
+argument, does not install a row vtable, and does not write row `+0x54`; the
+following matrix initializer also leaves those fields alone. The loader's
 later helper call passes three stack arguments through a secondary service
 subobject, but its concrete virtual target is unresolved. A previously
 considered one-argument helper does not match that call's argument-cleanup
