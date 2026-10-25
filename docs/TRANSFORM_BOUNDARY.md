@@ -42,6 +42,24 @@ world-space scene result.
 These facts establish identity and provenance. They do not establish a final
 object-to-world matrix.
 
+## Runtime scene-root selection
+
+Bounded static tracing establishes that GMS construction obtains a
+database-owned scene root and begins recursive object insertion beneath it.
+The runtime camera's root accessor first attempts to resolve its optional
+object-reference key; when that lookup has no result, it returns the same
+database-owned root used by GMS construction. The camera base initializes this
+key as empty, and the key can later be set or copied from another camera.
+
+This establishes the shared root and fallback behavior, but not which camera is
+active, whether normal scene initialization populates the optional key, or
+whether that key resolves to a particular parsed GMS object. Parsed GMS parent
+identities also have not yet been joined to the runtime parent links consumed
+by the renderer. Therefore this root relationship does not authorize a normal
+world-scene draw producer, transform composition, or camera selection. Keep the
+normal path disconnected until those joins and the submitted view/projection
+are established.
+
 ## Source-only diagnostic convention
 
 The current diagnostic renderer deliberately uses only the GMS source record.
