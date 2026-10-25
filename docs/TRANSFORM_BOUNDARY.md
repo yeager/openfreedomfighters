@@ -59,19 +59,24 @@ visibility selection. The culling path does not write the three matrix pointers
 later consumed by the traced BonesVS draw entry, so it does not establish that
 the active camera is applied to submitted geometry.
 
-The post-cull view list also reaches a separate shadow-rendering path. That path
-uses a view-list entry to resolve a shadow/resource record, walks that record's
-child instances, and dispatches them with a stack-local draw carrier. The
-carrier contains an identity matrix, a generated shadow matrix, and renderer
-state. Its three-pointer layout is compatible with the layout consumed by the
-BonesVS method in the separate cached-entry path below. However, the shadow
-child is selected dynamically; it has not been proven to be a BonesVS instance.
-The shadow/resource record's handle resolves through the runtime object table,
-and that object's transform contributes to the generated shadow matrix together
-with shadow/view state. The handle has not been joined to a specific parsed GMS
-row or its parent chain, and the view-state input has not been identified as
-the active gameplay camera. This shadow-rendering route therefore does not
-establish a normal world-scene draw producer.
+The post-cull view list reaches the per-view submission path after its shadow
+preparation stage. For each ordinary prepared group, the renderer resolves a
+local draw entry and builds a stack-local carrier. The entry's child array is
+populated from filtered runtime child rows, but each pair initially contains a
+null draw-record pointer and the child-row pointer. Submission dispatches only
+when a separate draw-record pointer is present; the writer that populates that
+pointer has not been identified. The carrier contains an identity matrix, a
+generated object/view matrix, and renderer state. Its three-pointer layout
+matches what the BonesVS method consumes, but no concrete BonesVS child has
+been proven on this route. The view builder's runtime candidate pointer is
+preserved into the draw entry; a renderer-generated handle indexes a local
+table to recover that same runtime object, whose transform contributes to the
+carrier matrix together with view state. The renderer handle is not a GMS row
+index. The candidate collection and its runtime child chain have not been
+joined to a specific parsed GMS row and parent chain, and the view-state input
+has not been identified as the active gameplay camera. Thus the normal submit
+path is identified, but its fidelity to parsed scene identity and the active
+camera remains unresolved.
 
 The per-draw cache path is now joined to the BonesVS consumer. Its factory
 creates an entry, initializes that entry's own three matrix pointers, and stores
@@ -187,12 +192,12 @@ World-space scene rendering remains gated on all of the following:
    source behavior needed by sources without a direct PRM reference.
 5. Establish the exact relationship between dequantized spatial bounds and
    transformed render geometry.
-6. Determine whether the shadow-rendering route participates in normal scene
-   drawing. Join its runtime-object handle to a parsed GMS row and parent chain,
-   prove which child instances are dispatched, and identify the view-state input
-   relative to the active gameplay camera. Then recover view/projection, depth,
-   winding, culling, and normal-transform conventions independently of the
-   diagnostic fit.
+6. Join the ordinary per-view draw entry's runtime-object handle to a parsed
+   GMS row and parent chain, identify the writer of its child draw-record
+   pointers and prove which instances are dispatched, and identify the
+   view-state input relative to the active gameplay camera. Then recover
+   view/projection, depth, winding, culling, and normal-transform conventions
+   independently of the diagnostic fit.
 7. Validate a candidate formula across the supported corpus and against
    deterministic runtime observations, then add synthetic arithmetic tests and
    cross-backend image comparisons.
