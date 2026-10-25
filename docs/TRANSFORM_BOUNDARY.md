@@ -42,15 +42,20 @@ record been joined to final backend submission and camera view/projection.
 Consequently this evidence does not yet authorize composing
 `SceneRenderInstance` fields or claiming a world-space scene result.
 
-The traced view traversal obtains candidate handles from a component-owned
-collection, resolves them, and applies component and object-flag filters. That
-collection has not been identified as the RMC/RMI tables or as an exhaustive
-enumeration of GMS rows. Eligible candidates retain their runtime object
-identity when wrapped, but this does not prove that every map-resolved direct
-PRM source reaches the view path. The view builder also writes intermediate
-pose records to local scratch storage that is not passed to its next list
-builder in the traced callsite. Treat those records as unconsumed there, not as
-a verified draw packet.
+The ordinary active-view traversal walks the renderer's active-object array,
+then calls virtual candidate enumerators on each active view object. It filters
+the returned runtime candidates, derives per-candidate pose records from the
+candidate and view state, and passes accepted candidates into renderer-local
+cache and view-list materialization. This establishes a normal per-view
+candidate producer, beyond the conditional shadow-carrier route described
+below. The enumerators' concrete implementations and the active-object array's
+population source remain unknown. The candidate collection has not been
+identified as the RMC/RMI tables or as an exhaustive enumeration of GMS rows.
+Eligible candidates retain their runtime object identity when wrapped, but
+this does not prove that every map-resolved direct PRM source reaches the view
+path. The view builder also writes intermediate pose records to local scratch
+storage that is not passed to its next list builder in the traced callsite.
+Treat those records as unconsumed there, not as a verified draw packet.
 
 The GMS loader also records each geometry object's local pool ordinal during
 construction and calls a runtime setter that writes a link field at offset
