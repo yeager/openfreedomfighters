@@ -8,7 +8,9 @@ Map records, runtime object identity, parent relationships, camera state, accept
 
 Scene object hierarchy follows authored containment. Objects nested beneath a group are attached to that group; nested groups own their descendants. Returning to an enclosing level resumes that enclosing group as the parent.
 
-This establishes parent/child ownership only. It does not establish which runtime object a map reference selects, how object transforms compose, which camera is active, or how the active view reaches accepted draw records and backend submission.
+This establishes parent/child ownership only. It does not establish which runtime object a map reference selects, how candidate transforms for geometry submission compose, which camera is active, or how the active view reaches accepted draw records and backend submission.
+
+View-based visibility preparation evaluates candidate-object transforms in the context of the view and the candidate's enclosing hierarchy. This establishes a visibility relationship only; it does not establish that the resulting transform reaches geometry submission or the shader draw matrix.
 
 ## Work required
 
