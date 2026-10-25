@@ -59,9 +59,10 @@ visibility selection. The culling path does not write the three matrix pointers
 later consumed by the traced BonesVS draw entry, so it does not establish that
 the active camera is applied to submitted geometry.
 
-The post-cull view list reaches the per-view submission path after its shadow
-preparation stage. For each ordinary prepared group, the renderer resolves a
-local draw entry and builds a stack-local carrier. The entry's child array is
+The post-cull view list reaches a draw path after its shadow preparation stage.
+The traced call is on this post-cull route; reuse of the same carrier builder
+for a normal gameplay draw has not been established. For each prepared group,
+the renderer resolves a local draw entry and builds a stack-local carrier. The entry's child array is
 populated from filtered runtime child rows as pairs containing a null draw
 record pointer and the child-row pointer. A later per-view update allocates a
 draw record for an eligible child and passes that exact record, child row, and
@@ -69,38 +70,34 @@ owner to renderer virtual slot 42. RTTI-identified D3D and X86 renderer
 vtables both resolve this slot to the same record-processing method. That
 method sends the same record through the draw-cache creation path and then the
 cache consumer. The cache setup writes the record's `+0x10` runtime-child
-pointer; its consumer resolves that child instance and passes the same record
-to the instance's virtual draw method, caching the result at `+0x18`. This
-identifies the writer and dispatch chain for the child draw-record pointer.
-The concrete child-instance virtual target has not been shown to be BonesVS,
-so the chain does not yet prove that the carrier's three-pointer layout is
-consumed on this route. The view builder's runtime candidate pointer is
-preserved into the draw entry; a renderer-generated handle indexes a local
-table to recover that same runtime object, whose transform contributes to the
-carrier matrix together with view state. The renderer handle is not a GMS row
-index. The candidate collection and its runtime child chain have not been
-joined to a specific parsed GMS row and parent chain, and the view-state input
-has not been identified as the active gameplay camera. Thus the ordinary
-child-record submit chain is established, while its fidelity to parsed scene
-identity and the active camera remains unresolved.
+pointer; the cache consumer invokes the resolved row-root factory with that
+record and stores the resulting concrete instance at `+0x18`. The traced draw
+obtains that instance and calls its draw method with the separate stack-local
+carrier. In the renderer factory branch for child-row type 1 when
+the renderer feature check passes, this instance is the BonesVS implementation;
+its draw method consumes the carrier's three matrix pointers. This proves that
+the traced route can reach BonesVS under that branch, but the row type and
+feature value for a particular scene entry have not been established. The
+child row's handle resolves through a renderer-local table; no identity link
+ties this child row to a parsed GMS row. The view builder's runtime candidate
+pointer is preserved into its draw entry, and a renderer-generated handle
+indexes a local table to recover that same runtime object, whose transform
+contributes to the carrier matrix together with view state. The renderer
+handle is not a GMS row index. The candidate collection and its runtime child
+chain have not been joined to a specific parsed GMS row and parent chain, and
+the view-state input has not been identified as the active gameplay camera.
+No separate normal-gameplay carrier writer has been proven. Thus this
+conditional submit chain does not yet establish the normal world-scene draw
+path, its fidelity to parsed scene identity, or the active camera.
 
-The per-draw cache path is now joined to the BonesVS consumer. Its factory
-creates an entry, initializes that entry's own three matrix pointers, and stores
-the entry in the caller-owned draw record. The matching cache consumer follows
-that record field to the entry's instance object and dispatches its draw method
-with the same caller-owned record. The BonesVS method reads a three-pointer
-layout from that record. Thus the cache entry selects the instance, while the
-record passed to the instance method owns the matrix triplet. The entry's own
-matrix fields are a distinct set and must not be treated as the submitted
-record's fields.
-
-The producer of the caller-owned record's matrix triplet is still unresolved.
-The child-record factory/dispatch chain above proves record identity through
-the cache consumer, but does not establish the record's
-`+0x20/+0x24/+0x28` values. No camera/view input has been joined to those
-fields, nor has this producer record been tied to a GMS runtime object or the
-per-view geometry list. Consequently the dispatch join does not authorize
-world-space production.
+The draw-record metadata and the stack carrier are distinct: the record
+selects and caches the child instance, while the carrier supplies the matrix
+triplet to its draw method. The traced carrier contains a constant matrix
+reference, a locally composed matrix derived in part from a runtime object
+field, and a renderer-owned buffer. Their full meanings and the contribution
+of the active camera have not been established. Nor has this producer carrier
+been tied to a parsed GMS runtime object and parent chain. Consequently the
+conditional dispatch join does not authorize world-space production.
 
 These facts establish GMS runtime identity and hierarchy provenance. They do
 not establish the complete submitted object-to-world or world-to-clip transform.
