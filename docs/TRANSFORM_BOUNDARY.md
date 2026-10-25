@@ -54,13 +54,18 @@ a verified draw packet.
 
 The GMS loader also records each geometry object's local pool ordinal during
 construction and calls a runtime setter that writes a link field at offset
-`+0x6c`. The traced view child-row path reads a `+0x6c` link through a
-component-owned object, then follows renderer-local handles. The setter
-callsite's receiver is a loader-local object, but the available trace does not
-prove that it is the same object or list node read by the view path. The view
-path also does not read or carry the GMS ordinal. No pointer or value-flow join
-from the loader's geometry object to those view rows has been established;
-matching offsets or ordinals alone would not prove identity.
+`+0x6c`. The view child-list builder reads `+0x6c` through the runtime object
+pointer stored at offset `+0x38` in its renderer wrapper. The traced wrapper
+factory stores its runtime input pointer at that same `+0x38` field, so this
+view-side link is tied to the wrapper's exact runtime input object. The GMS
+setter's receiver is a loader-constructed pool object and writes the same field
+offset, which supports interpreting the traversed links as runtime hierarchy
+links. However, the candidate input pointer has not been joined to a specific
+GMS loader row or shown to be a selected ordinary-gameplay object. The view
+path also does not read or carry the GMS ordinal. Thus the traces narrow the
+gap to candidate-population and scene-selection provenance; they do not prove
+that any particular parsed GMS row reaches this view traversal. Matching
+offsets or ordinals alone would not prove identity.
 
 The view-side geometry builders also derive frustum planes from view state and
 test geometry bounds against those planes, updating visibility masks before
