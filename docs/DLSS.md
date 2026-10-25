@@ -52,6 +52,21 @@ falling back. NVIDIA's open-source
 adapter boundary, but its presence does not prove that every plugin or native
 target is available or redistributable.
 
+## External compatibility projects
+
+[DLSS-NR on AMD](https://github.com/danielblnc/DLSS-NR-on-AMD) is not an
+integration dependency or a supported runtime for OpenFreedomFighters. Its
+published instructions describe a Windows 11, DirectX 12 mod loader for AMD
+GPUs; Vulkan and Linux are listed as planned. The project also requires users
+to supply NVIDIA DLSS DLLs. Its repository license prohibits redistribution,
+commercial use, modification, and reverse engineering of that software.
+Accordingly, OpenFreedomFighters must not bundle, link, copy, or adapt its
+loader or binaries. The repository can be treated only as a pointer to an
+external user-managed compatibility experiment, not as evidence that this
+project supports DLSS on AMD or DLSS Neural Rendering. Any future AMD support
+must use an independently integrable SDK or implementation with terms that
+permit the intended use, and must remain separate from the native FSR adapter.
+
 ## Delivery order
 
 1. Ship correct native rendering, depth, exposure, and resolution-independent UI.
