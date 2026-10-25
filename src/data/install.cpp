@@ -206,8 +206,22 @@ InstallVerification verify_install(const std::filesystem::path &requested_root,
         !install_audit_cache_hit(options.deep_audit_cache_root, audit_identity);
     if (deep_audit_required) {
     ArchiveVfs installation_vfs;
-    constexpr std::array<std::string_view, 5> excluded{
-        "Freedom_Fighters_OST", "Launcher.exe", "eax.dll", "steam_api.dll", "steam_appid.txt"};
+    // Match the structural mount to the inventory we actually hashed. Tools,
+    // optional media, and other neighboring files are not required game data.
+    std::unordered_set<std::string> required_top_level;
+    for (const auto& file : observed_required)
+      required_top_level.insert(lowercase(file.path.substr(0, file.path.find('/'))));
+    std::vector<std::string> excluded_names;
+    for (const auto& entry : std::filesystem::directory_iterator(root)) {
+      if (cancelled && cancelled())
+        return failure(InstallError::io_error, root, "game-data verification cancelled");
+      const auto name = entry.path().filename().string();
+      if (!required_top_level.contains(lowercase(name)))
+        excluded_names.push_back(name);
+    }
+    std::vector<std::string_view> excluded;
+    excluded.reserve(excluded_names.size());
+    for (const auto& name : excluded_names) excluded.emplace_back(name);
     const auto installation_mount = installation_vfs.mount_directory(root, excluded);
     static_cast<void>(installation_mount);
     constexpr std::array required_paths{
