@@ -12,6 +12,8 @@ This establishes parent/child ownership only. It does not establish which runtim
 
 On one reviewed Direct3D draw path, submitted item positions derive from an object pose that incorporates its authored parent hierarchy. The role of this draw path is unresolved; it is not established as the normal world-scene geometry pass. This does not establish which runtime object an RMC/RMI map reference selects, how map-derived transforms combine with the parent-aware pose, how shaders interpret submitted data, or whether other backends behave equivalently.
 
+Geometry candidates are collected from an already constructed runtime scene hierarchy. The relationship between authored map references and those candidates remains unverified; this does not establish that the collection is exhaustive or represents the normal gameplay scene.
+
 ## Work required
 
 - Join map entries to live scene-object identities and their established parent ancestry.
