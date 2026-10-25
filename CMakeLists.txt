@@ -633,6 +633,11 @@ if(BUILD_TESTING)
     target_link_libraries(off_param_anim_component_payload_tests PRIVATE off_core)
     add_test(NAME off_param_anim_component_payload_tests
         COMMAND off_param_anim_component_payload_tests)
+    add_executable(off_light_param_animation_deferred_reader_tests
+        tests/light_param_animation_deferred_reader_tests.cpp)
+    target_link_libraries(off_light_param_animation_deferred_reader_tests PRIVATE off_core)
+    add_test(NAME off_light_param_animation_deferred_reader_tests
+        COMMAND off_light_param_animation_deferred_reader_tests)
     add_executable(off_sound_records_tests tests/sound_records_tests.cpp)
     target_link_libraries(off_sound_records_tests PRIVATE off_core)
     add_test(NAME off_sound_records_tests COMMAND off_sound_records_tests)
@@ -1123,6 +1128,7 @@ if(BUILD_TESTING)
             prepared-runtime-scopes
             generic-directory-lifecycle
             typed-deferred-reader-targets
+            param-anim-light-runtime
             prepared-resource-variants
             runtime-and-archive-lifecycle
             runtime-scene-identity-and-later

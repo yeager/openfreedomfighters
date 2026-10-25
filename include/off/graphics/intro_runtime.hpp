@@ -9,6 +9,7 @@
 #include "off/data/matpos_deferred_component_reader.hpp"
 #include "off/data/vert_anim_deferred_component_reader.hpp"
 #include "off/data/lens_flare_deferred_reader.hpp"
+#include "off/data/param_anim_component_payload.hpp"
 #include "off/graphics/intro_named_global_section_envelope.hpp"
 #include "off/graphics/intro_named_global_references.hpp"
 #include "off/graphics/intro_renderer_relocation_prefix.hpp"
@@ -182,6 +183,7 @@ struct IntroConstructedPictureComponent {
     std::vector<std::uint64_t> handles;
   };
   std::optional<ParamAnimationStorage> param_animation;
+  std::optional<data::ParamAnimComponentPayloadState> param_animation_reader;
   std::optional<ParticleEmitterStorage> particle_emitter;
   struct ScrollTextureState {std::uint16_t start_event{},stop_event{};};
   // Local LensFlare reader storage. It is intentionally inert: rendering and
@@ -341,7 +343,7 @@ enum class IntroDeferredReaderFamily : std::uint8_t {
   first_cut_sequence, first_cut_list, first_cut_legal_picture,
   external_cut_commands, first_cut_fade_picture, first_cut_camera,
   basic_group_owner, vert_anim_component,
-  lens_flare_component, matpos_component,
+  lens_flare_component, matpos_component, param_anim_component,
 };
 enum class IntroDeferredReaderImplementationState : std::uint8_t {
   unimplemented, implemented_not_applied, applied,
@@ -623,6 +625,15 @@ struct IntroLensFlareDeferredReaderState {
   std::size_t source_directory_index{}, component_index{};
   std::uint32_t source_offset{};
   data::LensFlareDeferredReaderValues values;
+};
+// Inert typed light/ParamAnim state. No lifecycle or playback evidence.
+struct IntroParamAnimDeferredReaderState {
+  IntroRuntimeHandle owner;
+  IntroRuntimeResourceHandle resource;
+  std::size_t source_directory_index{}, component_index{};
+  std::uint32_t source_offset{};
+  bool owner_flag_enabled{};
+  data::ParamAnimComponentPayloadState values;
 };
 // Completion evidence for the recovered no-argument MatPos owner refresh.
 // It is owner-scoped, occurs only after reader admission, and deliberately
@@ -1187,6 +1198,9 @@ public:
   [[nodiscard]] bool supports_vert_anim_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
   void apply_supported_vert_anim_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroVertAnimDeferredReaderState>& vert_anim_deferred_reader_states() const noexcept { return vert_anim_deferred_reader_states_; }
+  [[nodiscard]] bool supports_param_anim_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
+  void apply_supported_param_anim_deferred_reader(const IntroDeferredReaderWork& work);
+  [[nodiscard]] const std::map<std::size_t,IntroParamAnimDeferredReaderState>& param_anim_deferred_reader_states() const noexcept { return param_anim_deferred_reader_states_; }
   [[nodiscard]] bool supports_lens_flare_deferred_reader(const IntroDeferredReaderWork& work) const noexcept;
   void apply_supported_lens_flare_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroLensFlareDeferredReaderState>& lens_flare_deferred_reader_states() const noexcept { return lens_flare_deferred_reader_states_; }
@@ -1359,6 +1373,7 @@ private:
   std::map<std::size_t,IntroMatPosOwnerRefreshReceipt> matpos_owner_refresh_receipts_;
   std::map<std::size_t,IntroVertAnimDeferredReaderState> vert_anim_deferred_reader_states_;
   std::map<std::size_t,IntroLensFlareDeferredReaderState> lens_flare_deferred_reader_states_;
+  std::map<std::size_t,IntroParamAnimDeferredReaderState> param_anim_deferred_reader_states_;
   std::optional<IntroFirstCutPlayerPreparedState> first_cut_player_prepared_state_;
   std::optional<IntroExternalCutCommandsReaderState> external_cut_commands_reader_state_;
   std::map<std::size_t,IntroFadePictureReaderState> fade_picture_reader_states_;

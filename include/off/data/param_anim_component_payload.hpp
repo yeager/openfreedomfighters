@@ -83,8 +83,6 @@ private:
             if (empty_or_terminal())
                 fail("ParamAnim payload is truncated before a required value");
             const auto remaining = input_.subspan(position_);
-            const auto raw_tag = std::to_integer<std::uint8_t>(remaining.front());
-            const auto value_class = static_cast<std::uint8_t>(raw_tag & 0x3fU);
             CompactTypedValueDecoder decoder(remaining);
             auto value = decoder.next();
             if (value.kind == CompactTypedValueKind::terminator ||

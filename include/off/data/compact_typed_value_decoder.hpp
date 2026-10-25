@@ -80,7 +80,7 @@ public:
 
     // Decodes one value without interpreting its schema role.  Unknown class
     // values and class 6 are rejected without advancement because their byte
-    // extent is not recovered by the generic contract. Class 7 carries a u32
+    // extent is not recovered by the typed contract. Classes 7, 9 and 12 carry a u32
     // extent that includes that word and the opaque bytes following it.
     [[nodiscard]] CompactTypedValue next() {
         if (empty()) fail("compact typed value stream is truncated");
@@ -138,7 +138,9 @@ private:
         case 11U: return CompactTypedValueKind::signed32;
         case 4U:
         case 5U: return CompactTypedValueKind::nul_terminated_string;
-        case 7U: return CompactTypedValueKind::length_u32;
+        case 7U:
+        case 9U:
+        case 12U: return CompactTypedValueKind::length_u32;
         default: fail("compact typed value class has no recovered generic extent");
         }
     }

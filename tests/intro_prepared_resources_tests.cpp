@@ -1275,6 +1275,100 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
           "live MovieControl activation delivers both first-cut lifecycle phases before group-state requests");
 }
 
+static OFF_NOINLINE void test_param_anim_light_runtime() {
+    for (unsigned scenario{}; scenario < 7U; ++scenario) {
+        Fixture fixture(false,true,false,true,false,false,false,false,false,3U,1U,1U);
+        const auto record = fixture.synthetic_external_record_offsets.front();
+        // Repartition the original list owner's declared slot into the light
+        // class in that same parsed parent pool; total allocation is unchanged.
+        const auto original_image = fixture.image();
+        const auto original = std::ranges::find(original_image.directory(),record,
+            &off::data::GmsDirectoryEntry::record_offset);
+        if (original == original_image.directory().end())
+            throw std::runtime_error("synthetic light replacement has no original owner");
+        std::uint32_t pool_table{};
+        for (unsigned byte{}; byte<4U; ++byte)
+            pool_table |= static_cast<std::uint32_t>(std::to_integer<std::uint8_t>(fixture.payload[20U+byte])) << (8U*byte);
+        const auto counts = pool_table + 4U + original->pool_group*24U*4U;
+        const auto& old_counts = original_image.pool_groups().at(original->pool_group).class_counts;
+        if (old_counts[original->pool_class] == 0U)
+            throw std::runtime_error("synthetic light replacement has no declared slot");
+        set(fixture.payload,counts+original->pool_class*4U,old_counts[original->pool_class]-1U);
+        set(fixture.payload,counts+2U*4U,old_counts[2U]+1U);
+        constexpr std::array<std::uint32_t,3> types{0x00800023U,0x00800020U,0x00800024U};
+        set(fixture.payload,record+16U,types[scenario%3U]);
+        const auto table = fixture.payload.size();
+        const auto count = scenario == 5U ? 2U : 1U;
+        word(fixture.payload,count); fixture.payload.resize(fixture.payload.size()+count*8U);
+        for (unsigned slot{}; slot<count; ++slot) {
+            set(fixture.payload,table+4U+slot*8U,static_cast<std::uint32_t>(fixture.payload.size()));
+            set(fixture.payload,table+8U+slot*8U,0U);
+            text(fixture.payload,slot || scenario==6U ? "ZGEOM_ParticleEmitter" : "ZGEOM_ParamAnim");
+        }
+        set(fixture.payload,record+20U,static_cast<std::uint32_t>(table));
+        Bytes block(4U);
+        scalar(block,3U,7U);scalar(block,8U,9U);scalar(block,11U,scenario==1U?0U:1U);
+        block.push_back(std::byte{0x46});block.push_back(std::byte{0x86});
+        scalar(block,3U,1U);floating(block,2U,12.5F);scalar(block,3U,0U);
+        scalar(block,3U,55U); // valid unconsumed component tail
+        block.push_back(std::byte{6});finish(block);
+        if (scenario==3U) { block.push_back(std::byte{0});set(block,0U,static_cast<std::uint32_t>(block.size())); }
+        if (scenario==4U) { block[block.size()-2U]=std::byte{0xff}; }
+        set(fixture.payload,record+32U,static_cast<std::uint32_t>(fixture.payload.size()));
+        fixture.payload.insert(fixture.payload.end(),block.begin(),block.end());
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        app.initialize_native_group_registration();app.initialize_native_window_language_registration();
+        app.initialize_native_picture_registration();app.initialize_native_camera_registration();
+        app.initialize_native_second_window_scope_registration();app.initialize_native_visual_registration();
+        app.initialize_native_room_animation_scope_registration();app.initialize_native_lens_flare_animation_scope_registration();
+        app.initialize_native_remaining_intro_scope_registration();
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        runtime->construct_root();runtime->begin_source_loading_without_engine_renderer();
+        runtime->construct_source_directory_without_engine_renderer();
+        const auto& directory=runtime->resources().sources().directory();
+        const auto found=std::ranges::find(directory,record,&off::data::GmsDirectoryEntry::record_offset);
+        const auto row=static_cast<std::size_t>(std::distance(directory.begin(),found));
+        const auto owner=runtime->source_handle(row);
+        const auto component=runtime->owner_components(owner).front();
+        const auto initial_flags=runtime->constructed_object_owner(row)->flags;
+        const auto initial_admitted=runtime->components().at(component).state().admitted;
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        auto& host=session->runtime();
+        if (scenario==3U || scenario==4U) rejects([&]{session->complete_postconstruction_reader_bracket(13U);});
+        else session->complete_postconstruction_reader_bracket(13U);
+        if (scenario<3U) {
+            const auto& state=host.param_anim_deferred_reader_states().at(row);
+            check(state.owner==owner && state.component_index==component && state.source_directory_index==row &&
+                  state.resource==host.resource_handle(owner) && state.values.scalar_c==12.5F,
+                  "normal scene dispatch binds ParamAnim typed fields to canonical light identity");
+            check(host.constructed_attachment(component)->param_animation_reader.has_value() &&
+                  host.constructed_object_owner(row)->flags==((initial_flags&~4U)|(scenario==1U?0U:4U)),
+                  "light flag and ParamAnim typed state publish after complete dispatch");
+        } else {
+            check(host.param_anim_deferred_reader_states().empty() &&
+                  !host.constructed_attachment(component)->param_animation_reader &&
+                  host.constructed_object_owner(row)->flags==initial_flags,
+                  "late malformed dispatch and unsupported siblings leave light and component state untouched");
+        }
+        const auto work=std::ranges::find(host.deferred_reader_work(),row,
+            &off::graphics::IntroDeferredReaderWork::source_directory_index);
+        auto foreign=*work;
+        check(!host.supports_param_anim_deferred_reader(foreign),"ParamAnim rejects copied noncanonical work");
+        rejects([&]{host.apply_supported_param_anim_deferred_reader(foreign);});
+        check(host.components().at(component).state().admitted==initial_admitted,
+              "ParamAnim reader completion does not admit component lifecycle");
+        const auto coverage=host.reader_coverage_inventory();
+        bool covered{};
+        for (const auto& entry:coverage.entries)
+            if (entry.family==off::graphics::IntroDeferredReaderFamily::param_anim_component &&
+                entry.state==off::graphics::IntroDeferredReaderImplementationState::applied) covered=true;
+        check(covered==(scenario<3U),"ParamAnim coverage reports applied only for committed readers");
+    }
+}
+
 static OFF_NOINLINE void test_prepared_resource_variants() {
     const auto initialize_app=[](off::runtime::ApplicationServices& target) {
         target.initialize_native_group_registration();
@@ -2152,6 +2246,7 @@ int main(int argc, char* argv[]) {
         TestGroup{"prepared-runtime-scopes", test_prepared_runtime_scopes},
         TestGroup{"generic-directory-lifecycle", test_generic_directory_tail_lifecycle},
         TestGroup{"typed-deferred-reader-targets", test_visual_scope_lifecycle},
+        TestGroup{"param-anim-light-runtime", test_param_anim_light_runtime},
         TestGroup{"prepared-resource-variants", test_prepared_resource_variants},
         TestGroup{"runtime-and-archive-lifecycle", test_runtime_and_archive_lifecycle},
         TestGroup{"runtime-scene-identity-and-later", test_runtime_scene_identity_and_later},

@@ -9,6 +9,20 @@
 
 namespace off::data {
 
+// Framing alone permits an unknown tag to advance one byte. Typed decoders
+// remain strict; known framed values are validated and skipped atomically.
+[[nodiscard]] inline std::size_t compact_delimiter_scan_extent(
+    std::span<const std::byte> input) {
+    if (input.empty()) throw std::runtime_error("compact delimiter scan is truncated");
+    const auto cls = std::to_integer<std::uint8_t>(input.front()) & 0x3fU;
+    if (cls >= 1U && cls <= 12U && cls != 6U) {
+        CompactTypedValueDecoder decoder(input);
+        return decoder.next().encoded.size();
+    }
+    return 1U;
+}
+
+
 // A mutable view given to one deferred attachment.  Its end is the end of the
 // caller-supplied compact block, never the end of an enclosing source stream.
 // The view owns its cursor, so consuming it cannot alter the block scanner.
@@ -80,13 +94,9 @@ public:
                 return true;
             }
 
-            CompactTypedValueDecoder decoder(block_remaining());
-            const auto value = decoder.next();
-            if (value.kind == CompactTypedValueKind::terminator) {
-                fail("deferred component scanner lost its terminator boundary");
-            }
-            shared_cursor_ = shared_cursor_.subspan(value.encoded.size());
-            remaining_block_bytes_ -= value.encoded.size();
+            const auto extent = compact_delimiter_scan_extent(block_remaining());
+            shared_cursor_ = shared_cursor_.subspan(extent);
+            remaining_block_bytes_ -= extent;
         }
         fail("deferred component block is truncated before its terminator");
     }

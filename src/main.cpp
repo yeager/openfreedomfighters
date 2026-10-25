@@ -593,6 +593,7 @@ void write_startup_route_cold_probe(const std::filesystem::path &root,
   case Family::first_cut_camera: return "first-cut-camera";
   case Family::basic_group_owner: return "basic-group-owner";
   case Family::vert_anim_component: return "vert-anim-component";
+  case Family::param_anim_component: return "param-anim-component";
   case Family::lens_flare_component: return "lens-flare-component";
   case Family::matpos_component: return "matpos-component";
   }

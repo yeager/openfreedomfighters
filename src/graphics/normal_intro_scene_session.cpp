@@ -64,6 +64,8 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                // records with the same component name remain unclassified.
                if (runtime_->supports_vert_anim_deferred_reader(work))
                  runtime_->apply_supported_vert_anim_deferred_reader(work);
+               if (runtime_->supports_param_anim_deferred_reader(work))
+                 runtime_->apply_supported_param_anim_deferred_reader(work);
                // LensFlare is a separate complete-envelope reader gate. It
                // excludes the adjacent control/light components and every
                // other Picture attachment form.

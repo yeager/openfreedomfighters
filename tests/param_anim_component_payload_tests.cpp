@@ -131,7 +131,8 @@ void test_numeric_conversion_and_unread_nonnumeric_tail() {
 
 void test_length_class_advances_over_its_bounded_payload() {
     using off::data::ParamAnimComponentPayloadReader;
-    Bytes payload{std::byte{0x07}};
+    for (const auto tag : {std::byte{0x07}, std::byte{0x09}, std::byte{0x0c}}) {
+    Bytes payload{tag};
     append_u32(payload, 7U); // four-byte extent word and three opaque bytes
     payload.insert(payload.end(), {std::byte{0xff}, std::byte{0x02}, std::byte{0x03}});
     append_f32(payload, 7.5F);
@@ -144,11 +145,24 @@ void test_length_class_advances_over_its_bounded_payload() {
     check(result.consumed_values == 3U && result.consumed_bytes == payload.size(),
           "length-delimited bytes are not mistaken for additional compact values");
 
-    Bytes truncated{std::byte{0x07}};
+    Bytes numeric_zero;
+    append_i32(numeric_zero, 3U, 1);
+    append_i32(numeric_zero, 3U, 0);
+    numeric_zero.push_back(tag);
+    append_u32(numeric_zero, 6U);
+    numeric_zero.insert(numeric_zero.end(), {std::byte{6}, std::byte{0xff}});
+    append_string(numeric_zero, "zero");
+    const auto zero = ParamAnimComponentPayloadReader::read(numeric_zero);
+    check(zero.scalar_c == 0.F && !zero.initial_control &&
+          zero.consumed_bytes == numeric_zero.size(),
+          "length float and string integer fields yield zero after bounded advancement");
+
+    Bytes truncated{tag};
     append_u32(truncated, 8U);
     truncated.insert(truncated.end(), {std::byte{0x00}, std::byte{0x00}, std::byte{0x00}});
     rejects([&] { (void)ParamAnimComponentPayloadReader::read(truncated); },
             "a length class extending beyond the component slice must be rejected");
+    }
 }
 
 void test_x86_truncation_invalid_results() {

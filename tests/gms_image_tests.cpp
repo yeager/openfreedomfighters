@@ -1161,10 +1161,17 @@ int main() {
         check_rejected([&] { static_cast<void>(off::data::BasicGroupDeferredReader::read(
             std::span<const std::byte>{basic_group_record}.first(30U))); },
             "basic group reader rejects a truncated fixed-form record");
-        check_rejected([] {
+        {
             const std::array<std::byte, 2> unknown{std::byte{0x7f}, std::byte{0xff}};
-            static_cast<void>(DeferredAttachmentDispatchClassifier::observe(unknown));
-        }, "read-only dispatch classification rejects unrecovered classes before its terminal");
+            const auto observation=DeferredAttachmentDispatchClassifier::observe(unknown);
+            check(observation.delimiter_count==0U && observation.shape==
+                      off::data::DeferredAttachmentDispatchShape::terminal_before_first_attachment_delimiter,
+                  "read-only framing skips an unknown one-byte tag before its terminal");
+            check_rejected([&] {
+                off::data::CompactTypedValueDecoder decoder(unknown);
+                static_cast<void>(decoder.next());
+            }, "framing fallback does not admit unknown typed values");
+        }
     }
     {
         using off::data::DeferredComponentDispatcher;
@@ -1255,7 +1262,7 @@ int main() {
             const std::array bad{std::byte{0x09}, std::byte{0xff}};
             const std::array<DeferredComponentReader, 0> none{};
             static_cast<void>(DeferredComponentDispatcher::dispatch(bad, none));
-        }, "component dispatcher rejects unknown advancing tags");
+        }, "component dispatcher rejects a truncated length-delimited field");
         check_rejected([&] {
             const std::array bad{std::byte{0x03}, std::byte{0x00}};
             const std::array<DeferredComponentReader, 0> none{};
