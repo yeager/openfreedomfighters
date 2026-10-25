@@ -79,13 +79,15 @@ feature check passes, this instance is the BonesVS implementation; its draw
 method consumes the carrier's three matrix pointers. This proves that the
 traced route can reach BonesVS under that branch, but the row type and
 feature value for a particular scene entry have not been established. The
-child row's handle resolves through a renderer-local table; no identity link
-ties this child row to a parsed GMS row. The view builder's runtime candidate
-pointer is preserved into its draw entry, and a renderer-generated handle
-indexes a local table to recover that same runtime object, whose transform
-contributes to the carrier matrix together with view state. The renderer
-handle is not a GMS row index. The candidate collection and its runtime child
-chain have not been joined to a specific parsed GMS row and parent chain, and
+child row's optional handle resolves through a renderer-local table; when no
+handle is present, the factory creates a resource and writes its assigned
+handle back into the row. This establishes the row as part of renderer-local
+resource caching, but no identity link ties it to a parsed GMS row. The view
+builder's runtime candidate pointer is preserved into its draw entry, and a
+renderer-generated handle indexes a local table to recover that same runtime
+object, whose transform contributes to the carrier matrix together with view
+state. The renderer handle is not a GMS row index. The candidate collection
+and its runtime child chain have not been joined to a specific parsed GMS row and parent chain, and
 the view-state input has not been identified as the active gameplay camera.
 No separate normal-gameplay carrier writer has been proven. Thus this
 conditional submit chain does not yet establish the normal world-scene draw
