@@ -76,6 +76,14 @@ values. No camera/view input has been joined to those fields, nor has the
 producer record been tied to a GMS runtime object or the per-view geometry list.
 Consequently this dispatch join does not authorize world-space production.
 
+A bounded whole-program static pass found no direct code reference to the
+renderer method that receives this record. It examined all decoded indirect
+calls using that method's virtual-slot offset; none could be tied to the
+renderer receiver and the same record pointer. This leaves the record creator
+and matrix-triplet writer unproven. The pass narrows the next evidence target
+to a caller/owner identity join; matching field offsets or a generic indirect
+call alone are insufficient.
+
 These facts establish GMS runtime identity and hierarchy provenance. They do
 not establish the complete submitted object-to-world or world-to-clip transform.
 
