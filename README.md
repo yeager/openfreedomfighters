@@ -28,11 +28,17 @@ for a portable installation.
 
 ## Current state
 
+Status reviewed 2026-10-26: the project is a native prototype, not a playable
+game. The latest verified build is a macOS arm64 executable, compiled with the
+optional SDL Vulkan interop adapter enabled. That build does not verify the
+other platform targets or runtime rendering parity.
+
 Normal startup loads the user's local resources and presents a labelled static
 intro image. Animated intro playback, its audio, the original menus, and gameplay
 are still incomplete. The GPU runtime receives no active intro frame bridge.
-Selected ordinary cameras now supply viewport and perspective matrices to SDL
-draws. The static startup image retains its separate diagnostic fit projection.
+Camera projection and viewport utilities exist, but no admitted gameplay camera,
+world transform, and normal geometry draw are joined into a parity frame. The
+static startup image retains its separate diagnostic fit projection.
 
 Archive, texture, geometry, and supported audio readers are implemented. A
 retained scene session owns resources and the deferred-reader bracket. Remaining
@@ -52,6 +58,12 @@ The SDL GPU renderer supports diagnostic picture and geometry presentation.
 world-scene parity. Private installation observations and captures remain
 outside this repository; synthetic renderer checks cannot prove complete game
 playback.
+
+The optional `OFF_ENABLE_SDL_VULKAN_INTEROP` build adds an SDL external-pass
+boundary for future native GPU integrations. No gameplay pass currently uses
+it, and it is not a DLSS, FSR, or XeSS implementation. Temporal and vendor
+upscaler capabilities remain unavailable until normal scene inputs and a real
+backend submission path are connected.
 
 F10 opens the project-authored graphics settings panel. Keyboard and controller
 navigation, render scaling, and saved preferences are implemented. An explicit
