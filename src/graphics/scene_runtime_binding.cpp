@@ -85,9 +85,9 @@ std::vector<SceneRuntimeInstanceBinding> bind_scene_instances_to_runtime(
           "Scene instance source has no canonical runtime hierarchy row");
     }
     const auto &source_node = source_hierarchy[source_index];
-    if (instance.parent_source_directory_index !=
-        source_node.parent_directory_index &&
-        instance.parent_source_directory_index.has_value()) {
+    if (!detail::scene_parent_provenance_matches(
+            instance.parent_source_directory_index,
+            source_node.parent_directory_index)) {
       throw std::runtime_error(
           "Scene instance authored parent differs from runtime GMS hierarchy");
     }

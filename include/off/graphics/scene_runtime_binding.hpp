@@ -11,6 +11,18 @@
 
 namespace off::graphics {
 
+namespace detail {
+
+// Shared by the runtime join and its focused provenance contract test. A
+// missing parent is meaningful: it only matches a top-level source row.
+[[nodiscard]] constexpr bool scene_parent_provenance_matches(
+    std::optional<std::size_t> asset_parent,
+    std::optional<std::size_t> runtime_parent) noexcept {
+  return asset_parent == runtime_parent;
+}
+
+} // namespace detail
+
 // Binds each canonical diagnostic scene instance to both the source selected
 // by its map handle and the source providing its primitive. These identities
 // may differ for expanded group descendants. The binding proves parsed
@@ -35,8 +47,10 @@ struct SceneRuntimeInstanceBinding {
 
 // The asset must have been built from the same authored GMS directory used to
 // construct runtime. The source-pose comparison catches mismatched rows but is
-// not a substitute for that provenance requirement. Call after directory
-// construction and before gameplay updates mutate source poses.
+// not a substitute for that provenance requirement. Child instances must
+// carry hierarchy provenance; hierarchy-free assets can bind only top-level
+// source rows. Call after directory construction and before gameplay updates
+// mutate source poses.
 [[nodiscard]] std::vector<SceneRuntimeInstanceBinding>
 bind_scene_instances_to_runtime(const SceneRenderAsset &asset,
                                 const IntroRuntime &runtime);

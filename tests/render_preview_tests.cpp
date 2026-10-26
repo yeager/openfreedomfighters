@@ -1,6 +1,7 @@
 #include "off/graphics/render_preview.hpp"
 #include "off/graphics/scene_gpu_plan.hpp"
 #include "off/graphics/scene_render.hpp"
+#include "off/graphics/scene_runtime_binding.hpp"
 
 #include <array>
 #include <cmath>
@@ -25,6 +26,17 @@ void check(bool condition, const char *message) {
 } // namespace
 
 int main() {
+  check(off::graphics::detail::scene_parent_provenance_matches(std::nullopt,
+                                                               std::nullopt) &&
+            off::graphics::detail::scene_parent_provenance_matches(3U, 3U),
+        "scene parent provenance accepts matching root and child identities");
+  check(!off::graphics::detail::scene_parent_provenance_matches(std::nullopt,
+                                                                3U) &&
+            !off::graphics::detail::scene_parent_provenance_matches(2U, 3U) &&
+            !off::graphics::detail::scene_parent_provenance_matches(3U,
+                                                                    std::nullopt),
+        "scene parent provenance rejects missing, wrong, and unexpected parents");
+
   off::data::TextureImage texture;
   texture.id = 7;
   texture.encoding = off::data::TextureEncoding::abgr32;
