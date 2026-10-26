@@ -26,6 +26,14 @@ The provider path is branch-dependent. When the camera provider returns null, th
 
 The reviewed normal candidate path reaches resource and callback/state processing, and view maintenance can prepare renderer callback instances for candidates. The source-row data has not been identity-joined to those candidate descriptors or to an instance selected for ordinary visible drawing. The static trace has not joined normal records to the renderer's accepted-entry drain and a visible device draw. A separate shadow submission route does reach a concrete backend draw, but it is not evidence for the normal world geometry pass. Therefore camera participation and candidate preparation are partially established; camera-to-normal-draw parity is not.
 
+A later bounded review closes the ordinary frame into a per-view command
+consumer that dispatches callbacks attached to view-local commands. That command
+route remains distinct from the inspected scene-geometry records: its callback
+has not been identity-joined to a map-selected geometry resource or a visible
+device draw. Reaching this callback consumer therefore does not establish
+normal-scene parity or provide temporal-upscaler inputs. The known shadow
+submission remains a separate route.
+
 ## Work required
 
 - Join RMC/RMI map entries to the live scene-owner identities and established parent ancestry; the conditional GMS hierarchy path alone does not establish map-row selection.
