@@ -57,9 +57,12 @@ game data. Soundtrack cue mapping and playback remain incomplete. See
 The SDL GPU renderer supports diagnostic picture and geometry presentation.
 `--diagnostic-intro-picture` selects the static intro presentation, while
 `--diagnostic-scene` opens a geometry preview. Neither establishes intro or
-world-scene parity. Private installation observations and captures remain
-outside this repository; synthetic renderer checks cannot prove complete game
-playback.
+world-scene parity. Static review now establishes a conditional path from an
+accepted normal-view candidate through supported draw callbacks to backend
+submissions. It does not establish that a specific scene candidate passes the
+runtime gates or produces visible output. Private installation observations
+and captures remain outside this repository; synthetic renderer checks cannot
+prove complete game playback.
 
 The optional `OFF_ENABLE_SDL_VULKAN_INTEROP` build adds an SDL external-pass
 boundary for future native GPU integrations. No gameplay pass currently uses

@@ -83,9 +83,12 @@ requirements. A legacy D3D component from another title would be useful only if
 it provides independently verified behavioral or interface evidence; it is
 not a runtime dependency for macOS, Linux, Windows, or Steam Deck.
 
-The current normal-scene investigation also has a separate unresolved boundary:
-the candidate active-view path has not been joined to a visible device draw.
-This Hitman lead does not close that gap or establish scene-rendering parity.
+The current normal-scene investigation has established a conditional path from
+an accepted normal-view candidate through supported callbacks to backend draw
+submissions. Candidate admission depends on visibility, view compatibility,
+resource creation, and callback availability. No specific candidate is known
+to pass those runtime gates, and no visible frame or scene-rendering parity has
+been established. This Hitman lead does not close that gap.
 
 ## Evidence and limits
 
