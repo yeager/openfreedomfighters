@@ -28,7 +28,7 @@ for a portable installation.
 
 ## Current state
 
-Status reviewed 2026-10-26: the project is a native prototype, not a playable
+Status reviewed 2026-10-27: the project is a native prototype, not a playable
 game. A local macOS arm64 Debug executable is available; its current build has
 the optional SDL Vulkan interop adapter disabled. This confirms neither the
 other platform targets nor runtime rendering parity. The Steam installation
