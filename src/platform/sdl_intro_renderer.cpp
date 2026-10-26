@@ -3,6 +3,7 @@
 #include "testgputext/shaders/shader.vert.spv.h"
 #include "testgputext/shaders/shader.vert.msl.h"
 #include "testgputext/shaders/shader.vert.dxil.h"
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -11,6 +12,7 @@
 
 namespace off::platform {
 namespace {
+constexpr std::size_t max_cached_gpu_state_objects=64;
 [[noreturn]] void fail(const char* text) { throw std::runtime_error(std::string(text)+": "+SDL_GetError()); }
 struct Vertex { std::array<float,3> position; std::array<float,4> color; std::array<float,2> uv; };
 Uint32 bytes(std::size_t count, std::size_t stride) {
@@ -48,16 +50,76 @@ bool valid_state(const SdlIntroDrawState& s) {
     compare(d.compare_op)&&(!d.enable_depth_test||d.compare_op!=SDL_GPU_COMPAREOP_INVALID)&&stencil(d.front_stencil_state)&&stencil(d.back_stencil_state)&&
     std::isfinite(s.blend_constants.r)&&std::isfinite(s.blend_constants.g)&&std::isfinite(s.blend_constants.b)&&std::isfinite(s.blend_constants.a);
 }
+bool same_sampler(const SDL_GPUSamplerCreateInfo& a, const SDL_GPUSamplerCreateInfo& b) {
+  return a.min_filter==b.min_filter&&a.mag_filter==b.mag_filter&&a.mipmap_mode==b.mipmap_mode&&
+    a.address_mode_u==b.address_mode_u&&a.address_mode_v==b.address_mode_v&&a.address_mode_w==b.address_mode_w&&
+    a.mip_lod_bias==b.mip_lod_bias&&a.max_anisotropy==b.max_anisotropy&&a.compare_op==b.compare_op&&
+    a.min_lod==b.min_lod&&a.max_lod==b.max_lod&&a.enable_anisotropy==b.enable_anisotropy&&
+    a.enable_compare==b.enable_compare&&a.props==b.props;
+}
+bool same_stencil(const SDL_GPUStencilOpState& a, const SDL_GPUStencilOpState& b) {
+  return a.fail_op==b.fail_op&&a.pass_op==b.pass_op&&a.depth_fail_op==b.depth_fail_op&&a.compare_op==b.compare_op;
+}
+bool same_pipeline(const SdlIntroDrawState& a, const SdlIntroDrawState& b) {
+  const auto& ar=a.rasterizer; const auto& br=b.rasterizer;
+  const auto& ab=a.blend; const auto& bb=b.blend;
+  const auto& ad=a.depth_stencil; const auto& bd=b.depth_stencil;
+  return a.color_format==b.color_format&&a.depth_stencil_format==b.depth_stencil_format&&
+    ar.fill_mode==br.fill_mode&&ar.cull_mode==br.cull_mode&&ar.front_face==br.front_face&&
+    ar.depth_bias_constant_factor==br.depth_bias_constant_factor&&ar.depth_bias_clamp==br.depth_bias_clamp&&
+    ar.depth_bias_slope_factor==br.depth_bias_slope_factor&&ar.enable_depth_bias==br.enable_depth_bias&&ar.enable_depth_clip==br.enable_depth_clip&&
+    ab.src_color_blendfactor==bb.src_color_blendfactor&&ab.dst_color_blendfactor==bb.dst_color_blendfactor&&ab.color_blend_op==bb.color_blend_op&&
+    ab.src_alpha_blendfactor==bb.src_alpha_blendfactor&&ab.dst_alpha_blendfactor==bb.dst_alpha_blendfactor&&ab.alpha_blend_op==bb.alpha_blend_op&&
+    ab.color_write_mask==bb.color_write_mask&&ab.enable_blend==bb.enable_blend&&ab.enable_color_write_mask==bb.enable_color_write_mask&&
+    ad.compare_op==bd.compare_op&&same_stencil(ad.back_stencil_state,bd.back_stencil_state)&&
+    same_stencil(ad.front_stencil_state,bd.front_stencil_state)&&ad.compare_mask==bd.compare_mask&&ad.write_mask==bd.write_mask&&
+    ad.enable_depth_test==bd.enable_depth_test&&ad.enable_depth_write==bd.enable_depth_write&&ad.enable_stencil_test==bd.enable_stencil_test;
+}
 }
 struct SdlIntroRenderer::Impl {
   SDL_GPUDevice* device;
   SDL_GPUShader *vertex{}, *fragment{};
   std::unordered_map<std::size_t,SDL_GPUTexture*> images;
+  struct SamplerEntry { SDL_GPUSamplerCreateInfo description; SDL_GPUSampler* handle; };
+  struct PipelineEntry { SdlIntroDrawState description; SDL_GPUGraphicsPipeline* handle; };
+  std::vector<SamplerEntry> samplers;
+  std::vector<PipelineEntry> pipelines;
   explicit Impl(SDL_GPUDevice* d):device(d) {}
   ~Impl() {
+    for(const auto& entry:pipelines) if(entry.handle) SDL_ReleaseGPUGraphicsPipeline(device,entry.handle);
+    for(const auto& entry:samplers) if(entry.handle) SDL_ReleaseGPUSampler(device,entry.handle);
     for (auto [key,image]:images) { (void)key; if(image) SDL_ReleaseGPUTexture(device,image); }
     if(vertex) SDL_ReleaseGPUShader(device,vertex);
     if(fragment) SDL_ReleaseGPUShader(device,fragment);
+  }
+  SDL_GPUSampler* sampler_for(const SDL_GPUSamplerCreateInfo& description) {
+    for(const auto& entry:samplers) if(same_sampler(entry.description,description)) return entry.handle;
+    auto* handle=SDL_CreateGPUSampler(device,&description);
+    if(!handle) fail("create intro sampler");
+    if(samplers.size()>=max_cached_gpu_state_objects) return handle;
+    try { samplers.push_back({description,handle}); }
+    catch(...) { SDL_ReleaseGPUSampler(device,handle); throw; }
+    return handle;
+  }
+  SDL_GPUGraphicsPipeline* pipeline_for(const SdlIntroDrawState& s) {
+    for(const auto& entry:pipelines) if(same_pipeline(entry.description,s)) return entry.handle;
+    SDL_GPUVertexBufferDescription buffer{0,sizeof(Vertex),SDL_GPU_VERTEXINPUTRATE_VERTEX,0};
+    const std::array attrs{SDL_GPUVertexAttribute{0,0,SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,offsetof(Vertex,position)},SDL_GPUVertexAttribute{1,0,SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,offsetof(Vertex,color)},SDL_GPUVertexAttribute{2,0,SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,offsetof(Vertex,uv)}};
+    SDL_GPUColorTargetDescription color{s.color_format,s.blend};
+    SDL_GPUGraphicsPipelineCreateInfo info{};
+    info.vertex_shader=vertex; info.fragment_shader=fragment;
+    info.vertex_input_state={&buffer,1,attrs.data(),static_cast<Uint32>(attrs.size())};
+    info.primitive_type=SDL_GPU_PRIMITIVETYPE_TRIANGLELIST; info.rasterizer_state=s.rasterizer;
+    info.depth_stencil_state=s.depth_stencil; info.multisample_state.sample_count=SDL_GPU_SAMPLECOUNT_1;
+    info.target_info.color_target_descriptions=&color; info.target_info.num_color_targets=1;
+    info.target_info.depth_stencil_format=s.depth_stencil_format;
+    info.target_info.has_depth_stencil_target=s.depth_stencil_format!=SDL_GPU_TEXTUREFORMAT_INVALID;
+    auto* handle=SDL_CreateGPUGraphicsPipeline(device,&info);
+    if(!handle) fail("create intro draw pipeline");
+    if(pipelines.size()>=max_cached_gpu_state_objects) return handle;
+    try { pipelines.push_back({s,handle}); }
+    catch(...) { SDL_ReleaseGPUGraphicsPipeline(device,handle); throw; }
+    return handle;
   }
 };
 struct SdlIntroFrame::Impl {
@@ -67,8 +129,10 @@ struct SdlIntroFrame::Impl {
   struct Draw {
     SdlIntroDraw description;
     PictureStageShaderUniforms uniforms;
-    SDL_GPUGraphicsPipeline* pipeline{};
-    SDL_GPUSampler* sampler{};
+    SDL_GPUGraphicsPipeline* pipeline{}; // borrowed from owner cache
+    SDL_GPUSampler* sampler{}; // borrowed from owner cache
+    bool owns_pipeline{};
+    bool owns_sampler{};
     SDL_GPUTexture* texture{};
     std::vector<Batch> batches;
   };
@@ -77,9 +141,9 @@ struct SdlIntroFrame::Impl {
   SDL_GPUTransferBuffer* upload{};
   ~Impl() {
     auto* d=owner->device;
-    for(auto& draw:draws) {
-      if(draw.pipeline) SDL_ReleaseGPUGraphicsPipeline(d,draw.pipeline);
-      if(draw.sampler) SDL_ReleaseGPUSampler(d,draw.sampler);
+    for(const auto& draw:draws) {
+      if(draw.owns_pipeline&&draw.pipeline) SDL_ReleaseGPUGraphicsPipeline(d,draw.pipeline);
+      if(draw.owns_sampler&&draw.sampler) SDL_ReleaseGPUSampler(d,draw.sampler);
     }
     if(upload) SDL_ReleaseGPUTransferBuffer(d,upload);
     if(vertices) SDL_ReleaseGPUBuffer(d,vertices);
@@ -165,6 +229,8 @@ std::optional<SDL_GPUViewport> SdlIntroRenderer::selected_camera_viewport() cons
   return SDL_GPUViewport{float(v.x),float(v.y),float(v.width),float(v.height),0,1};
 }
 std::size_t SdlIntroRenderer::image_count() const noexcept { return impl_->images.size(); }
+std::size_t SdlIntroRenderer::cached_sampler_count() const noexcept { return impl_->samplers.size(); }
+std::size_t SdlIntroRenderer::cached_pipeline_count() const noexcept { return impl_->pipelines.size(); }
 SdlIntroFrame::SdlIntroFrame(std::unique_ptr<Impl> p):impl_(std::move(p)) {}
 SdlIntroFrame::~SdlIntroFrame()=default;
 
@@ -212,20 +278,12 @@ std::unique_ptr<SdlIntroFrame> SdlIntroRenderer::prepare(SDL_GPUCommandBuffer* c
   if(std::uint64_t(vb)+ib>std::numeric_limits<Uint32>::max()) throw std::runtime_error("intro upload exceeds Uint32 size");
   for(auto& draw:p->draws) {
     const auto& s=draw.description.state;
-    draw.sampler=SDL_CreateGPUSampler(impl_->device,&s.sampler); if(!draw.sampler) fail("create intro sampler");
-    SDL_GPUVertexBufferDescription buffer{0,sizeof(Vertex),SDL_GPU_VERTEXINPUTRATE_VERTEX,0};
-    const std::array attrs{SDL_GPUVertexAttribute{0,0,SDL_GPU_VERTEXELEMENTFORMAT_FLOAT3,offsetof(Vertex,position)},SDL_GPUVertexAttribute{1,0,SDL_GPU_VERTEXELEMENTFORMAT_FLOAT4,offsetof(Vertex,color)},SDL_GPUVertexAttribute{2,0,SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,offsetof(Vertex,uv)}};
-    SDL_GPUColorTargetDescription color{s.color_format,s.blend};
-    SDL_GPUGraphicsPipelineCreateInfo info{};
-    info.vertex_shader=impl_->vertex; info.fragment_shader=impl_->fragment;
-    info.vertex_input_state={&buffer,1,attrs.data(),static_cast<Uint32>(attrs.size())};
-    info.primitive_type=SDL_GPU_PRIMITIVETYPE_TRIANGLELIST; info.rasterizer_state=s.rasterizer;
-    info.depth_stencil_state=s.depth_stencil; info.multisample_state.sample_count=SDL_GPU_SAMPLECOUNT_1;
-    info.target_info.color_target_descriptions=&color;
-    info.target_info.num_color_targets=1;
-    info.target_info.depth_stencil_format=s.depth_stencil_format;
-    info.target_info.has_depth_stencil_target=s.depth_stencil_format!=SDL_GPU_TEXTUREFORMAT_INVALID;
-    draw.pipeline=SDL_CreateGPUGraphicsPipeline(impl_->device,&info); if(!draw.pipeline) fail("create intro draw pipeline");
+    draw.owns_sampler=impl_->samplers.size()>=max_cached_gpu_state_objects&&
+      std::none_of(impl_->samplers.begin(),impl_->samplers.end(),[&](const auto& entry){return same_sampler(entry.description,s.sampler);});
+    draw.sampler=impl_->sampler_for(s.sampler);
+    draw.owns_pipeline=impl_->pipelines.size()>=max_cached_gpu_state_objects&&
+      std::none_of(impl_->pipelines.begin(),impl_->pipelines.end(),[&](const auto& entry){return same_pipeline(entry.description,s);});
+    draw.pipeline=impl_->pipeline_for(s);
   }
   if(vb) {
     SDL_GPUBufferCreateInfo vi{SDL_GPU_BUFFERUSAGE_VERTEX,vb,0}, ii{SDL_GPU_BUFFERUSAGE_INDEX,ib,0};

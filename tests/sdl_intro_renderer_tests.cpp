@@ -122,6 +122,18 @@ int main() {
     camera.apply_authored_parameters(camera_source);
     gpu.frame=gpu.renderer->prepare(gpu.command,draws);
     require(gpu.frame->indexed_draw_count()==2,"two indexed draws");
+    require(gpu.renderer->cached_sampler_count()==1,"identical draws share a cached sampler");
+    require(gpu.renderer->cached_pipeline_count()==1,"identical draws share a cached pipeline");
+    auto repeated_frame=gpu.renderer->prepare(gpu.command,draws);
+    require(gpu.renderer->cached_sampler_count()==1,"same sampler state reuses cache across frames");
+    require(gpu.renderer->cached_pipeline_count()==1,"same pipeline state reuses cache across frames");
+    auto alternate_state=draw;
+    alternate_state.state.sampler.min_filter=alternate_state.state.sampler.mag_filter=SDL_GPU_FILTER_LINEAR;
+    alternate_state.state.blend.enable_color_write_mask=true;
+    alternate_state.state.blend.color_write_mask=0x0f;
+    auto alternate_frame=gpu.renderer->prepare(gpu.command,std::span(&alternate_state,1));
+    require(gpu.renderer->cached_sampler_count()==2,"distinct sampler state gets its own cached handle");
+    require(gpu.renderer->cached_pipeline_count()==2,"distinct pipeline state gets its own cached handle");
     batches.clear(); second_batches.clear(); gpu.renderer.reset(); // frame retains geometry and image owner
     require(camera_renderers.head()==nullptr,"backend destruction unlinks renderer node");
     SDL_GPUColorTargetInfo color{}; color.texture=gpu.target; color.load_op=SDL_GPU_LOADOP_CLEAR; color.store_op=SDL_GPU_STOREOP_STORE;

@@ -77,6 +77,9 @@ public:
   void set_camera_parent(graphics::CameraPixelRectangle parent) { camera_parent_=parent; }
   [[nodiscard]] std::optional<SDL_GPUViewport> selected_camera_viewport() const;
   [[nodiscard]] std::size_t image_count() const noexcept;
+  // Resource-cache counts are exposed for diagnostics and renderer tests.
+  [[nodiscard]] std::size_t cached_sampler_count() const noexcept;
+  [[nodiscard]] std::size_t cached_pipeline_count() const noexcept;
   // Selected camera resolves both viewport and perspective before GPU work.
   // Diagnostic bypass keeps both explicitly supplied draw values unchanged.
   // No active pass may exist. Validates CPU inputs before encoding commands;
