@@ -155,6 +155,7 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
     const auto &instance = plan.instances[index];
     if (instance.scene_instance_index != index ||
         instance.mesh_index >= plan.meshes.size() ||
+        !instance.map_source_directory_index.has_value() ||
         (instance.parent_source_directory_index.has_value() &&
          *instance.parent_source_directory_index ==
              instance.source_directory_index) ||
@@ -344,6 +345,8 @@ std::array<float, 3> transform_scene_source_diagnostic_position(
     result.instances.push_back({
         .scene_instance_index = index,
         .mesh_index = asset.instances[index].mesh_index,
+        .map_source_directory_index =
+            asset.instances[index].map_source_directory_index,
         .source_directory_index =
             asset.instances[index].source_directory_index,
         .parent_source_directory_index =

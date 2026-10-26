@@ -47,6 +47,9 @@ struct SceneGpuMesh {
 struct SceneGpuInstance {
   std::size_t scene_instance_index{0};
   std::size_t mesh_index{0};
+  // Source selected by the map handle; distinct from the geometry-bearing
+  // source for instances expanded from a container.
+  std::optional<std::size_t> map_source_directory_index;
   std::size_t source_directory_index{0};
   // Authored source hierarchy identity; not a GPU resource or composed pose.
   std::optional<std::size_t> parent_source_directory_index;
