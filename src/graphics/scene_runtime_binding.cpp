@@ -32,6 +32,15 @@ std::vector<SceneRuntimeInstanceBinding> bind_scene_instances_to_runtime(
           "Scene instance source has no constructed runtime resource");
     }
 
+    const auto &source_entry =
+        runtime.resources().sources().directory().at(source_index);
+    if (source_entry.local_slot_index != instance.source_local_slot_index ||
+        source_entry.source_type != instance.source_type) {
+      throw std::runtime_error(
+          "Scene instance source metadata differs from its "
+          "runtime directory row");
+    }
+
     const auto owner = runtime.source_handle(source_index);
     const auto resource = *mapping[source_index];
     if (runtime.associated_resource_owner(resource) != owner ||
