@@ -65,10 +65,12 @@ that information support the cross-platform renderer work in this repository?
   for *Freedom Fighters* parity; at most, its public build/research notes are
   general context. Do not import its code or binary-derived findings into this
   project.
-- The current local installation did not provide a separate renderer module
-  for a cross-title comparison. This does not establish that another edition
-  lacks one, that the renderer is not embedded in another module, or that
-  components are shared between the games.
+- Static review of the local executable finds that it constructs a renderer
+  wrapper and render instance in-process. A renderer-selection token with a
+  DLL-like name does not establish an operating-system DLL load. No separate
+  companion implementation was identified in the checked local installation;
+  this does not establish that another edition lacks one or that a companion
+  component is not provided through a different interface.
 - A matching name or shared publisher/developer lineage would not by itself
   establish compatible interfaces. Any future comparison should use legally
   obtained local files and private analysis, and report only a concise,
@@ -87,7 +89,9 @@ The current normal-scene investigation has established a conditional path from
 an accepted normal-view candidate through supported callbacks to backend draw
 submissions. The callback path preserves the identity of the object supplied
 to it, but no map-derived GMS/PRM candidate has been joined to that object or
-callback. The provider that supplies candidates remains unresolved. Candidate
+callback. A GMS link-object factory is a conditional candidate, but the checked
+startup and intro sources do not select it; its getter returns a separately
+stored renderer-service result whose identity is unresolved. Candidate
 admission depends on visibility, view compatibility, resource creation, and
 callback availability. No specific candidate is known to pass those runtime
 gates, and no visible frame or scene-rendering parity has been established.
