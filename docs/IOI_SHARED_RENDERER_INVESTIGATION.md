@@ -58,15 +58,10 @@ that information support the cross-platform renderer work in this repository?
   for *Freedom Fighters* parity; at most, its public build/research notes are
   general context. Do not import its code or binary-derived findings into this
   project.
-- The locally available *Freedom Fighters* Steam directory was inspected by
-  filename. Its top-level executable/library files include `Freedom.Exe`,
-  `Launcher.exe`, `steam_api.dll`, and `eax.dll`. No `RenderD3D.dll` or
-  similarly named D3D renderer DLL was found in that installation or elsewhere
-  under the local Steam directory at the time of inspection.
-- This is a filename-level observation only. No binary contents, exports,
-  hashes, or ABI compatibility were compared. It does not prove that the
-  renderer is absent under another name, embedded in another module, or shared
-  in code between the two games.
+- The current local installation did not provide a separate renderer module
+  for a cross-title comparison. This does not establish that another edition
+  lacks one, that the renderer is not embedded in another module, or that
+  components are shared between the games.
 - A matching name or shared publisher/developer lineage would not by itself
   establish compatible interfaces. Any future comparison should use legally
   obtained local files and private analysis, and report only a concise,
@@ -103,12 +98,10 @@ Evidence recorded for this note:
    reference's configuration contents.
 3. The official Microsoft DirectX End-User Runtimes [download page](https://www.microsoft.com/en-us/download/details.aspx?id=8109),
    which identifies this as the June 2010 optional legacy-runtime package.
-4. A read-only filename inventory of `/Users/bosse/steam/Freedom_Fighters`
-   and a search for `RenderD3D.dll` under `/Users/bosse/steam`.
+4. A local check for a separate renderer module; no cross-title binary
+   comparison was performed.
 
-No Hitman executable or DLL was present in the inspected local Steam tree, so
-there is no local cross-title file comparison to report. No public web claim
-about identical binaries is made here.
+No public claim about identical binaries or compatible interfaces is made.
 
 ## Next useful evidence
 
