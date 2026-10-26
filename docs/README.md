@@ -63,6 +63,7 @@
 - [LOC localization boundary](LOC_FORMAT.md)
 - [RMC/RMI spatial-map format](RENDER_MAP_FORMAT.md)
 - [Scene-transform evidence boundary](TRANSFORM_BOUNDARY.md)
+- [IO Interactive shared-renderer investigation](IOI_SHARED_RENDERER_INVESTIGATION.md)
 - [Camera and projection evidence boundary](CAMERA_EVIDENCE.md)
 - [Timing evidence and portable simulation policy](TIMING_EVIDENCE.md)
 - [Input and controller runtime specification](INPUT_RUNTIME.md)
