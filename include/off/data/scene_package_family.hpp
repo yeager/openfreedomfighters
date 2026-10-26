@@ -21,9 +21,12 @@ namespace off::data {
 // common input merely because one consumer happened to need fewer members.
 class ScenePackageFamily final {
 public:
+  // The expected scene path is relative to SCENES and omits the resource
+  // extension. Nested campaign package paths are allowed; archive members
+  // must match that full path exactly after case and separator normalization.
   [[nodiscard]] static ScenePackageFamily
   open_complete_checked(const std::filesystem::path &archive_path,
-                        std::string_view expected_stem);
+                        std::string_view expected_scene_path);
 
   [[nodiscard]] const ZipEntry &member(SceneResourceKind kind) const;
   [[nodiscard]] const ZipEntry *

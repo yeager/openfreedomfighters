@@ -266,9 +266,12 @@ WorldSceneSession WorldSceneSession::load_owned_checked(
     const std::filesystem::path &relative_archive_path) {
   const auto archive_path =
       checked_owned_archive_path(install_root, relative_archive_path);
-  const auto expected_stem = relative_archive_path.stem().string();
+  const auto expected_scene_path =
+      (relative_archive_path.parent_path() / relative_archive_path.stem())
+          .lexically_normal()
+          .generic_string();
   auto package = data::ScenePackageFamily::open_complete_checked(
-      archive_path, expected_stem);
+      archive_path, expected_scene_path);
 
   const auto zgf_bytes = package.read(data::SceneResourceKind::zgf);
   static_cast<void>(data::ZgfBundle::parse(

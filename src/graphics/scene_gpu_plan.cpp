@@ -46,14 +46,16 @@ void add_bounded(std::size_t &total, std::size_t value, std::size_t limit,
       value, [](float component) { return std::isfinite(component); });
 }
 
+template <typename MeshRange>
 [[nodiscard]] float source_diagnostic_draw_depth(
-    const SceneGpuPlan &plan, const SceneGpuDraw &draw) {
+    const SceneGpuPlan &plan, const SceneGpuDraw &draw,
+    const MeshRange &source_meshes) {
   if (draw.instance_index >= plan.instances.size() ||
-      draw.mesh_index >= plan.meshes.size() ||
+      draw.mesh_index >= source_meshes.size() ||
       draw.mesh_index != plan.instances[draw.instance_index].mesh_index) {
     throw std::invalid_argument("scene GPU draw reference is invalid");
   }
-  const auto &mesh = plan.meshes[draw.mesh_index];
+  const auto &mesh = source_meshes[draw.mesh_index];
   if (draw.index_count == 0U || draw.first_index > mesh.indices.size() ||
       draw.index_count > mesh.indices.size() - draw.first_index) {
     throw std::invalid_argument("scene GPU mesh draw range is invalid");
@@ -77,6 +79,11 @@ void add_bounded(std::size_t &total, std::size_t value, std::size_t limit,
     throw std::invalid_argument("scene GPU draw depth is invalid");
   }
   return static_cast<float>(mean);
+}
+
+[[nodiscard]] float source_diagnostic_draw_depth(
+    const SceneGpuPlan &plan, const SceneGpuDraw &draw) {
+  return source_diagnostic_draw_depth(plan, draw, plan.meshes);
 }
 
 } // namespace
@@ -531,7 +538,8 @@ std::array<float, 3> transform_scene_source_diagnostic_position(
   append_draws(VertexAlphaClass::fully_transparent);
   for (auto &draw : result.draws) {
     if (draw.alpha_class == VertexAlphaClass::variable) {
-      draw.source_diagnostic_depth = source_diagnostic_draw_depth(result, draw);
+      draw.source_diagnostic_depth =
+          source_diagnostic_draw_depth(result, draw, asset.meshes);
     }
   }
   const auto transparent_begin = std::find_if(

@@ -65,8 +65,17 @@ ScenePackageFamily::ScenePackageFamily(
     : archive_(std::move(archive)), catalog_(std::move(catalog)) {}
 
 ScenePackageFamily ScenePackageFamily::open_complete_checked(
-    const std::filesystem::path &archive_path, std::string_view expected_stem) {
-  if (expected_stem.empty()) {
+    const std::filesystem::path &archive_path,
+    std::string_view expected_scene_path) {
+  const auto normalized_scene_path = normalized(expected_scene_path);
+  const std::filesystem::path scene_path{normalized_scene_path};
+  if (normalized_scene_path.empty() || normalized_scene_path.front() == '/' ||
+      normalized_scene_path.find(':') != std::string::npos ||
+      scene_path.is_absolute() ||
+      scene_path.has_root_name() || scene_path.has_root_directory() ||
+      std::ranges::any_of(scene_path, [](const auto &component) {
+        return component == ".." || component == ".";
+      })) {
     throw std::runtime_error("scene package has no expected source identity");
   }
   require_regular_archive(archive_path);
@@ -76,7 +85,7 @@ ScenePackageFamily ScenePackageFamily::open_complete_checked(
     throw std::runtime_error("scene package does not have a complete resource family");
   }
   auto catalog = SceneResourceCatalog::from_archive(*archive);
-  const auto prefix = normalized("scenes/" + std::string(expected_stem));
+  const auto prefix = normalized("scenes/" + scene_path.generic_string());
   for (const auto kind : all_kinds) {
     const auto expected = prefix + std::string(extension(kind));
     const auto *entry = kind == SceneResourceKind::buf ||

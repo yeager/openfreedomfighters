@@ -66,17 +66,19 @@ The SDL GPU renderer supports diagnostic picture and geometry presentation.
 `--diagnostic-intro-picture` selects the static intro presentation, while
 `--diagnostic-scene` opens a geometry preview. An explicitly selected scene
 archive is retained by a package-scoped world-scene session that carries map,
-geometry-provider, and GMS-parent identities into that diagnostic plan. It
-remains a preview: neither the session nor the renderer establishes intro or
-world-scene parity. Static review follows a top-level GMS child conditionally
-through the shared database-root fallback, its PRM candidate reference, D3D
-factory initialization, and the same pooled slot consumed by the ordinary
-view command. For supported ordinary, unflagged descriptor categories, the
-typed callbacks have device draw endpoints. It does not establish that a
-selected scene candidate has one of those categories, passes its runtime
-gates, or produces visible output. No map-derived GMS/PRM candidate is
-identity-joined to the active view, and the provider that supplies candidate
-objects remains unresolved. Private installation observations and captures
+geometry-provider, and GMS-parent identities into that diagnostic plan.
+Campaign packages nested below `Scenes/` are matched against their full
+relative archive path, and room/group map owners can expand to source-derived
+diagnostic geometry. It remains a preview: neither the session nor the renderer
+establishes intro or world-scene parity. Static review follows a top-level GMS
+child conditionally through the shared database-root fallback, its PRM
+candidate reference, D3D factory initialization, and the same pooled slot
+consumed by the ordinary view command. For supported ordinary, unflagged
+descriptor categories, the typed callbacks have device draw endpoints. It does
+not establish that a selected scene candidate has one of those categories,
+passes its runtime gates, or produces visible output. No map-derived GMS/PRM
+candidate is identity-joined to the active view, and the provider that
+supplies candidate objects remains unresolved. Private installation observations and captures
 remain outside this repository; synthetic renderer checks cannot prove
 complete game playback.
 
