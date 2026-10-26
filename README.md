@@ -29,9 +29,12 @@ for a portable installation.
 ## Current state
 
 Status reviewed 2026-10-26: the project is a native prototype, not a playable
-game. The latest verified build is a macOS arm64 executable, compiled with the
-optional SDL Vulkan interop adapter enabled. That build does not verify the
-other platform targets or runtime rendering parity.
+game. A local macOS arm64 Debug executable is available; its current build has
+the optional SDL Vulkan interop adapter disabled. This confirms neither the
+other platform targets nor runtime rendering parity. The Steam installation
+is available locally and contains the Windows x86 `Freedom.Exe` and
+`Launcher.exe`; the native prototype has not been verified against that
+installation in this review.
 
 Normal startup loads the user's local resources and presents a labelled static
 intro image. Animated intro playback, its audio, the original menus, and gameplay
@@ -80,11 +83,12 @@ continues to publish Windows DirectDraw/Direct3D compatibility fixes; its
 `v1.9.8700.25`. The local Steam executable imports
 Direct3D 8, making dxwrapper's `d3d8.dll` stub the relevant starting point for
 a Windows compatibility experiment. That experiment has not been run, and the
-Steam files inspected here do not include `RenderD3D.dll`, `RenderOpenGL.dll`,
-or dxwrapper files. The published *Hitman 2: Silent Assassin* guide is title-
-specific and does not verify a Freedom Fighters fix. dxwrapper could help run
-the legacy Windows game; it is not a dependency or backend for this project's
-native SDL renderer and does not provide macOS, Linux, or Steam Deck parity.
+Steam install has no `RenderD3D.dll`, `RenderOpenGL.dll`, or dxwrapper files in
+its checked top-level directory. The published *Hitman 2: Silent Assassin*
+guide is title-specific and does not verify a Freedom Fighters fix. dxwrapper
+could help run the legacy Windows game; it is not a dependency or backend for
+this project's native SDL renderer and does not provide macOS, Linux, or Steam
+Deck parity.
 
 The optional `OFF_ENABLE_SDL_VULKAN_INTEROP` build adds an SDL external-pass
 boundary for future native GPU integrations. No gameplay pass currently uses
