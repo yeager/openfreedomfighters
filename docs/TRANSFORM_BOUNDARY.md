@@ -35,6 +35,12 @@ consumption; other receiver paths and modules remain outside this result. This
 does not establish normal-scene parity or provide temporal-upscaler inputs. The
 known shadow submission remains a separate route.
 
+Some particle/effect component overrides can conditionally pass records to an
+embedded view buffer callback. Their record identity and layout have not been
+joined to an ordinary view consumer that reaches a geometry callback and
+device submission, so this separate branch does not close the world-scene draw
+path either.
+
 ## Work required
 
 - Join RMC/RMI map entries to the live scene-owner identities and established parent ancestry; the conditional GMS hierarchy path alone does not establish map-row selection.
