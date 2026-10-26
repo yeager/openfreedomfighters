@@ -4,17 +4,25 @@
 #include "off/graphics/scene_render.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <span>
 #include <vector>
 
 namespace off::graphics {
 
-// Binds each canonical diagnostic scene instance to its constructed runtime
-// owner. This proves identity/resource association only; it does not produce a
-// world transform, camera state, visibility decision, or draw submission.
+// Binds each canonical diagnostic scene instance to its map identity and
+// constructed runtime owner. This proves identity/resource association and
+// authored parent ancestry only; it does not produce a world transform,
+// camera state, visibility decision, or draw submission.
 struct SceneRuntimeInstanceBinding {
   std::size_t scene_instance_index{};
+  SceneRenderMapKind map_kind{SceneRenderMapKind::rmc};
+  std::size_t map_layer_index{};
+  std::size_t map_entry_index{};
+  SceneGeometryRole geometry_role{SceneGeometryRole::primary};
+  std::uint32_t map_descriptor_offset{};
+  std::uint32_t geometry_reference{};
   std::size_t source_directory_index{};
   IntroRuntimeHandle owner{};
   IntroRuntimeResourceHandle resource{};
