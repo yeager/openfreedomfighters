@@ -68,15 +68,17 @@ The SDL GPU renderer supports diagnostic picture and geometry presentation.
 archive is retained by a package-scoped world-scene session that carries map,
 geometry-provider, and GMS-parent identities into that diagnostic plan. It
 remains a preview: neither the session nor the renderer establishes intro or
-world-scene parity. Static review establishes a conditional route for ordinary,
-unflagged GMS primitive references of supported descriptor categories through
-callback construction and a non-shadow view callback to device draw endpoints.
-It does not establish that a selected scene candidate has those categories,
-passes its runtime gates, or produces visible output. No map-derived GMS/PRM
-candidate is identity-joined to the active view, and the provider that supplies
-candidate objects remains unresolved. Private installation observations and
-captures remain outside this repository; synthetic renderer checks cannot
-prove complete game playback.
+world-scene parity. Static review follows a top-level GMS child conditionally
+through the shared database-root fallback, its PRM candidate reference, D3D
+factory initialization, and the same pooled slot consumed by the ordinary
+view command. For supported ordinary, unflagged descriptor categories, the
+typed callbacks have device draw endpoints. It does not establish that a
+selected scene candidate has one of those categories, passes its runtime
+gates, or produces visible output. No map-derived GMS/PRM candidate is
+identity-joined to the active view, and the provider that supplies candidate
+objects remains unresolved. Private installation observations and captures
+remain outside this repository; synthetic renderer checks cannot prove
+complete game playback.
 
 The external [dxwrapper project](https://github.com/elishacloud/dxwrapper)
 continues to publish Windows DirectDraw/Direct3D compatibility fixes; its
