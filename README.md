@@ -80,15 +80,17 @@ prove complete game playback.
 The external [dxwrapper project](https://github.com/elishacloud/dxwrapper)
 continues to publish Windows DirectDraw/Direct3D compatibility fixes; its
 [latest listed release](https://github.com/elishacloud/dxwrapper/releases) is
-`v1.9.8700.25`. The local Steam executable imports
-Direct3D 8, making dxwrapper's `d3d8.dll` stub the relevant starting point for
-a Windows compatibility experiment. That experiment has not been run, and the
-Steam install has no `RenderD3D.dll`, `RenderOpenGL.dll`, or dxwrapper files in
-its checked top-level directory. The published *Hitman 2: Silent Assassin*
-guide is title-specific and does not verify a Freedom Fighters fix. dxwrapper
-could help run the legacy Windows game; it is not a dependency or backend for
-this project's native SDL renderer and does not provide macOS, Linux, or Steam
-Deck parity.
+`v1.9.8700.25`. Its release instructions say to choose one proxy stub DLL and
+place it with `dxwrapper.dll` and `dxwrapper.ini` beside the Windows game
+executable. The local Steam executable imports Direct3D 8, so `d3d8.dll` is
+the relevant stub for a compatibility experiment. No such experiment has been
+run. The checked Steam installation currently contains no `RenderD3D.dll`,
+`RenderOpenGL.dll`, or dxwrapper files. The published *Hitman 2: Silent
+Assassin* guide is title-specific and does not verify a Freedom Fighters fix.
+dxwrapper could help run the legacy Windows game; it is not a dependency or
+backend for this project's native SDL renderer and does not provide macOS,
+Linux, or Steam Deck parity. See the [release instructions and notes](https://github.com/elishacloud/dxwrapper/releases)
+and the project's [IOI shared-renderer investigation](docs/IOI_SHARED_RENDERER_INVESTIGATION.md).
 
 The optional `OFF_ENABLE_SDL_VULKAN_INTEROP` build adds an SDL external-pass
 boundary for future native GPU integrations. No gameplay pass currently uses
