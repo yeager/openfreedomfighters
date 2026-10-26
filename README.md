@@ -42,6 +42,11 @@ static startup image retains its separate diagnostic fit projection. Static
 analysis confirms a per-view rendering callback consumer, but has not established
 a normal visible world-geometry draw.
 
+The diagnostic scene preview now composes authored GMS source poses through
+their parent hierarchy. Map-entry placement and camera/view transforms remain
+separate, so this improves diagnostic placement without establishing gameplay
+world-transform or rendering parity. See the [transform boundary](docs/TRANSFORM_BOUNDARY.md).
+
 Archive, texture, geometry, and supported audio readers are implemented. A
 retained scene session owns resources and the deferred-reader bracket. Remaining
 reader coverage, loader services, lifecycle activation, scene updates, and draw
