@@ -38,7 +38,9 @@ intro image. Animated intro playback, its audio, the original menus, and gamepla
 are still incomplete. The GPU runtime receives no active intro frame bridge.
 Camera projection and viewport utilities exist, but no admitted gameplay camera,
 world transform, and normal geometry draw are joined into a parity frame. The
-static startup image retains its separate diagnostic fit projection.
+static startup image retains its separate diagnostic fit projection. Static
+analysis confirms a per-view rendering callback consumer, but has not established
+a normal visible world-geometry draw.
 
 Archive, texture, geometry, and supported audio readers are implemented. A
 retained scene session owns resources and the deferred-reader bracket. Remaining
