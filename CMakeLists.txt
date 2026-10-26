@@ -496,10 +496,28 @@ if(MSVC)
 else()
     target_compile_options(off_sdl_intro_renderer PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
 endif()
+if(OFF_ENABLE_SDL_VULKAN_INTEROP)
+    add_library(off_sdl_vulkan_interop STATIC
+        src/platform/sdl_vulkan_external_pass.cpp)
+    target_compile_features(off_sdl_vulkan_interop PUBLIC cxx_std_23)
+    target_include_directories(off_sdl_vulkan_interop PUBLIC include)
+    target_link_libraries(off_sdl_vulkan_interop PUBLIC ${OFF_SDL3_TARGET})
+    target_compile_definitions(off_sdl_vulkan_interop PUBLIC
+        OFF_HAS_SDL_VULKAN_INTEROP=1)
+    if(MSVC)
+        target_compile_options(off_sdl_vulkan_interop PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(off_sdl_vulkan_interop PRIVATE
+            -Wall -Wextra -Wpedantic -Wconversion)
+    endif()
+endif()
 target_link_libraries(
     openfreedomfighters PRIVATE
     off_core off_sdl_audio_output off_sdl_picture_clear off_sdl_picture_stage_shader off_sdl_intro_renderer off_sdl_intro_presentation ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
 )
+if(OFF_ENABLE_SDL_VULKAN_INTEROP)
+    target_link_libraries(openfreedomfighters PRIVATE off_sdl_vulkan_interop)
+endif()
 target_compile_definitions(openfreedomfighters PRIVATE OFF_VERSION="${PROJECT_VERSION}")
 if(OFF_ENABLE_SDL_VULKAN_INTEROP)
     target_compile_definitions(openfreedomfighters PRIVATE OFF_HAS_SDL_VULKAN_INTEROP=1)
