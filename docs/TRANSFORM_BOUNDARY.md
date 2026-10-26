@@ -36,10 +36,12 @@ does not establish normal-scene parity or provide temporal-upscaler inputs. The
 known shadow submission remains a separate route.
 
 Some particle/effect component overrides can conditionally pass records to an
-embedded view buffer callback. Their record identity and layout have not been
-joined to an ordinary view consumer that reaches a geometry callback and
-device submission, so this separate branch does not close the world-scene draw
-path either.
+embedded view buffer callback. A static class-registration trace identifies a
+particle-controller type registration and a virtual registration call, but does
+not recover the concrete runtime owner or join a created instance to an
+ordinary view consumer. The record identity and layout have not been joined to
+a consumer that reaches a geometry callback and device submission, so this
+separate branch does not close the world-scene draw path either.
 
 ## Work required
 
