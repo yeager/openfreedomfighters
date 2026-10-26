@@ -4,6 +4,14 @@ The normal application path does not yet play the authored intro. It can present
 
 The intro runtime and startup coordinator contain project-owned loading and lifecycle interfaces. Their presence does not prove that all required scene data, callbacks, camera state, audio, updates, or draw submission are connected. Keep startup fail-closed until one owning session can complete those operations and unwind failures safely.
 
+## Current production-path audit
+
+Normal startup constructs and retains an `IntroRuntime`/`NormalIntroSceneSession`, then continues through SDL startup without constructing or activating a `NormalIntroSceneHost`. The SDL GPU runtime accepts a `NormalIntroSceneHostFrameBridge`, but the normal call site supplies no bridge. It therefore draws only the labelled static fallback when that fallback is available; it does not display an admitted authored intro frame.
+
+The missing work is the production-owned service chain, not a renderer submission call: reader and loader-tail completion, global lifecycle admission, MovieControl phase two and event delivery, requested-camera routing, renderer view admission, legal-picture activation, and frame assembly must all be supplied by their real owners. Static source inspection has not found a production call site that supplies this chain. In particular, MovieControl's event selector is not yet joined to a concrete initialized global event dispatcher, and the dispatcher service receiver's runtime producer remains unresolved. Do not turn diagnostic preview data into an admitted frame or fabricate these callbacks to make the bridge non-null.
+
+This audit is source-only and intentionally contains no executable offsets, retail payload data, or decompiled listings. It verifies why the current build cannot be claimed to play the intro; it does not prove what a future fully connected build will render.
+
 ## Remaining project work
 
 - Complete the normal scene's source-backed loading and lifecycle admission.
