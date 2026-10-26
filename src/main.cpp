@@ -28,6 +28,7 @@
 #include "off/graphics/normal_intro_scene_session.hpp"
 #include "off/graphics/scene_gpu_plan.hpp"
 #include "off/graphics/scene_render.hpp"
+#include "off/graphics/world_scene_session.hpp"
 #include "off/graphics/startup_graphics_asset.hpp"
 #include "off/graphics/startup_graphics_diagnostic_plan.hpp"
 #include "off/graphics/startup_graphics_expanded_plan.hpp"
@@ -1720,6 +1721,7 @@ int main(int argc, char **argv) {
     application.initialize_native_remaining_intro_scope_registration();
   }
   std::optional<off::graphics::SceneGpuPlan> scene;
+  std::optional<off::graphics::WorldSceneSession> selected_world_scene;
   std::optional<off::graphics::SceneRenderResolutionSummary> scene_summary;
   // Scene-manager identity lifetime, independent of source archive catalogs.
   off::runtime::SceneComponentSequence component_sequence{[&application] {
@@ -1749,16 +1751,20 @@ int main(int argc, char **argv) {
         data_path,
         [&] {
           if (diagnostic_scene) {
-            const auto asset =
-                diagnostic_scene_archive
-                    ? off::graphics::load_owned_diagnostic_scene_render_asset(
-                          data_path, *diagnostic_scene_archive)
-                    : off::graphics::load_diagnostic_scene_render_asset(
-                          data_path);
-            scene_summary.emplace(
-                off::graphics::summarize_scene_render_resolutions(asset));
-            scene.emplace(
-                off::graphics::prepare_scene_gpu_plan(std::move(asset)));
+            if (diagnostic_scene_archive) {
+              selected_world_scene.emplace(
+                  off::graphics::WorldSceneSession::load_owned_checked(
+                      data_path, *diagnostic_scene_archive));
+              scene_summary.emplace(
+                  selected_world_scene->resolution_summary());
+            } else {
+              const auto asset =
+                  off::graphics::load_diagnostic_scene_render_asset(data_path);
+              scene_summary.emplace(
+                  off::graphics::summarize_scene_render_resolutions(asset));
+              scene.emplace(
+                  off::graphics::prepare_scene_gpu_plan(std::move(asset)));
+            }
           } else if (!diagnostic_startup_graphics) {
             // Supported normal (non-restore) cold-load boundary, before
             // resources. Native monotonic samples are an explicit CRT
@@ -2001,10 +2007,13 @@ int main(int argc, char **argv) {
                  "not activated.\n";
   if (startup_progress_receipt)
     startup_progress_receipt->record("gpu_runtime_started");
+  const auto *scene_plan = selected_world_scene
+                               ? &selected_world_scene->diagnostic_plan()
+                               : (scene ? &*scene : nullptr);
   const auto runtime = off::platform::run_sdl_gpu_runtime(
       startup_window, mode, mode_specified,
       off::platform::application_graphics_settings_path(),
-      scene ? &*scene : nullptr, *startup_graphics,
+      scene_plan, *startup_graphics,
       ui_fonts, ui_textures, intro_session.get(),
       intro_static_fallback ? &*intro_static_fallback : nullptr,
       nullptr,

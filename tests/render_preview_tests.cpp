@@ -2,6 +2,7 @@
 #include "off/graphics/scene_gpu_plan.hpp"
 #include "off/graphics/scene_render.hpp"
 #include "off/graphics/scene_runtime_binding.hpp"
+#include "off/graphics/world_scene_session.hpp"
 
 #include <array>
 #include <cmath>
@@ -262,6 +263,74 @@ int main() {
                 container_map.object.primary_geometry_reference,
         "expand a mapped ZROOM and compose the source pose through its GMS "
         "parent without applying the separate map transform");
+  off::graphics::validate_world_scene_asset_provenance(
+      expanded_container_asset, container_sources, container_hierarchy);
+  auto expanded_candidate_plan =
+      off::graphics::prepare_scene_gpu_plan(expanded_container_asset);
+  check(expanded_candidate_plan.instances.size() == 1 &&
+            expanded_candidate_plan.instances[0].map_kind ==
+                off::graphics::SceneRenderMapKind::rmc &&
+            expanded_candidate_plan.instances[0].map_layer_index == 0 &&
+            expanded_candidate_plan.instances[0].map_entry_index == 0 &&
+            expanded_candidate_plan.instances[0].geometry_role ==
+                off::graphics::SceneGeometryRole::primary &&
+            expanded_candidate_plan.instances[0].map_descriptor_offset ==
+                container_map.descriptor_offset &&
+            expanded_candidate_plan.instances[0].geometry_reference ==
+                container_map.object.primary_geometry_reference &&
+            expanded_candidate_plan.instances[0]
+                    .map_source_directory_index == 0 &&
+            expanded_candidate_plan.instances[0].source_directory_index == 2 &&
+            expanded_candidate_plan.instances[0]
+                    .parent_source_directory_index == 1,
+        "carry the checked map owner, geometry owner, map identity, and parent "
+        "through the SDL diagnostic plan");
+  const off::graphics::WorldSceneSessionId owner_scope{.value = 41U};
+  const auto owner_table = off::graphics::build_world_scene_source_owner_table(
+      container_sources, container_hierarchy, owner_scope);
+  off::graphics::bind_world_scene_candidate_owners(
+      expanded_candidate_plan, owner_table, owner_scope);
+  check(owner_table.size() == container_sources.size() &&
+            owner_table[2].id == off::graphics::WorldSceneOwnerId{
+                                     .session = owner_scope,
+                                     .source_directory_index = 2} &&
+            owner_table[2].parent_owner ==
+                off::graphics::WorldSceneOwnerId{
+                    .session = owner_scope,
+                    .source_directory_index = 1} &&
+            expanded_candidate_plan.instances[0].map_owner_id ==
+                off::graphics::WorldSceneOwnerId{
+                    .session = owner_scope,
+                    .source_directory_index = 0} &&
+            expanded_candidate_plan.instances[0].geometry_owner_id ==
+                off::graphics::WorldSceneOwnerId{
+                    .session = owner_scope,
+                    .source_directory_index = 2} &&
+            expanded_candidate_plan.instances[0].geometry_parent_owner_id ==
+                off::graphics::WorldSceneOwnerId{
+                    .session = owner_scope,
+                    .source_directory_index = 1},
+        "bind session-scoped typed owner IDs for map owner, geometry provider, "
+        "and parent");
+  const off::graphics::WorldSceneSessionId other_owner_scope{.value = 42U};
+  const auto other_owner_table =
+      off::graphics::build_world_scene_source_owner_table(
+          container_sources, container_hierarchy, other_owner_scope);
+  check(other_owner_table[2].id != owner_table[2].id,
+        "same GMS row receives a distinct identity in a different scene session");
+  auto mismatched_candidate_hierarchy = container_hierarchy;
+  mismatched_candidate_hierarchy[2].parent_directory_index = 0;
+  bool mismatched_candidate_hierarchy_rejected = false;
+  try {
+    off::graphics::validate_world_scene_asset_provenance(
+        expanded_container_asset, container_sources,
+        mismatched_candidate_hierarchy);
+  } catch (const std::runtime_error &) {
+    mismatched_candidate_hierarchy_rejected = true;
+  }
+  check(mismatched_candidate_hierarchy_rejected,
+        "reject a world-scene candidate whose GMS parent differs from its "
+        "checked source directory");
   const auto expanded_container_plan =
       off::graphics::prepare_scene_gpu_plan(expanded_container_asset);
   check(off::graphics::transform_scene_source_diagnostic_position(
@@ -379,6 +448,18 @@ int main() {
                 std::vector<std::uint8_t>{0x40, 0x50, 0x60, 0xff} &&
             gpu_plan.source_only_diagnostic,
         "own every normalized source mip independently of parser storage");
+  check(gpu_plan.instances[0].map_kind == scene_asset.instances[0].map_kind &&
+            gpu_plan.instances[0].map_layer_index ==
+                scene_asset.instances[0].map_layer_index &&
+            gpu_plan.instances[0].map_entry_index ==
+                scene_asset.instances[0].map_entry_index &&
+            gpu_plan.instances[0].geometry_role ==
+                scene_asset.instances[0].role &&
+            gpu_plan.instances[0].map_descriptor_offset ==
+                scene_asset.instances[0].map_descriptor_offset &&
+            gpu_plan.instances[0].geometry_reference ==
+                scene_asset.instances[0].geometry_reference,
+        "preserve source map identity in the actual SDL scene-plan input");
   bool valid_gpu_plan_accepted = true;
   try {
     off::graphics::validate_scene_gpu_plan(gpu_plan);

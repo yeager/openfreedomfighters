@@ -153,9 +153,36 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
   }
   for (std::size_t index = 0; index < plan.instances.size(); ++index) {
     const auto &instance = plan.instances[index];
+    const bool has_world_owner_identity =
+        instance.map_owner_id.has_value() ||
+        instance.geometry_owner_id.has_value() ||
+        instance.geometry_parent_owner_id.has_value();
+    const bool owner_identity_valid =
+        !has_world_owner_identity ||
+        (instance.map_owner_id && instance.geometry_owner_id &&
+         instance.map_source_directory_index &&
+         instance.map_owner_id->session.value != 0U &&
+         instance.geometry_owner_id->session ==
+             instance.map_owner_id->session &&
+         instance.map_owner_id->source_directory_index ==
+             *instance.map_source_directory_index &&
+         instance.geometry_owner_id->source_directory_index ==
+             instance.source_directory_index &&
+         instance.geometry_parent_owner_id ==
+             (instance.parent_source_directory_index
+                  ? std::optional<WorldSceneOwnerId>{WorldSceneOwnerId{
+                        .session = instance.geometry_owner_id->session,
+                        .source_directory_index =
+                            *instance.parent_source_directory_index}}
+                  : std::optional<WorldSceneOwnerId>{}));
     if (instance.scene_instance_index != index ||
         instance.mesh_index >= plan.meshes.size() ||
-        !instance.map_source_directory_index.has_value() ||
+        static_cast<std::uint8_t>(instance.map_kind) >
+            static_cast<std::uint8_t>(SceneRenderMapKind::rmi) ||
+        static_cast<std::uint8_t>(instance.geometry_role) >
+            static_cast<std::uint8_t>(SceneGeometryRole::secondary) ||
+        !owner_identity_valid ||
+        (instance.map_owner_id && !instance.map_source_directory_index) ||
         (instance.parent_source_directory_index.has_value() &&
          *instance.parent_source_directory_index ==
              instance.source_directory_index) ||
@@ -354,6 +381,13 @@ std::array<float, 3> transform_scene_source_diagnostic_position(
     result.instances.push_back({
         .scene_instance_index = index,
         .mesh_index = asset.instances[index].mesh_index,
+        .map_kind = asset.instances[index].map_kind,
+        .map_layer_index = asset.instances[index].map_layer_index,
+        .map_entry_index = asset.instances[index].map_entry_index,
+        .geometry_role = asset.instances[index].role,
+        .map_descriptor_offset =
+            asset.instances[index].map_descriptor_offset,
+        .geometry_reference = asset.instances[index].geometry_reference,
         .map_source_directory_index =
             asset.instances[index].map_source_directory_index,
         .source_directory_index =

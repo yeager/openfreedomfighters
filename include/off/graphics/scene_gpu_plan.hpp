@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/graphics/scene_render.hpp"
+#include "off/graphics/world_scene_identity.hpp"
 
 #include <array>
 #include <cstddef>
@@ -47,6 +48,19 @@ struct SceneGpuMesh {
 struct SceneGpuInstance {
   std::size_t scene_instance_index{0};
   std::size_t mesh_index{0};
+  // Source-owned map/candidate identity carried into the SDL diagnostic plan.
+  // It is not a recovered original draw order or gameplay admission record.
+  SceneRenderMapKind map_kind{SceneRenderMapKind::rmc};
+  std::size_t map_layer_index{0};
+  std::size_t map_entry_index{0};
+  SceneGeometryRole geometry_role{SceneGeometryRole::primary};
+  std::uint32_t map_descriptor_offset{0};
+  std::uint32_t geometry_reference{0};
+  // Set only by a WorldSceneSession. These are project-owned package-scoped
+  // source IDs, not recovered original runtime handles.
+  std::optional<WorldSceneOwnerId> map_owner_id;
+  std::optional<WorldSceneOwnerId> geometry_owner_id;
+  std::optional<WorldSceneOwnerId> geometry_parent_owner_id;
   // Source selected by the map handle; distinct from the geometry-bearing
   // source for instances expanded from a container.
   std::optional<std::size_t> map_source_directory_index;

@@ -61,7 +61,10 @@ game data. Soundtrack cue mapping and playback remain incomplete. See
 
 The SDL GPU renderer supports diagnostic picture and geometry presentation.
 `--diagnostic-intro-picture` selects the static intro presentation, while
-`--diagnostic-scene` opens a geometry preview. Neither establishes intro or
+`--diagnostic-scene` opens a geometry preview. An explicitly selected scene
+archive is retained by a package-scoped world-scene session that carries map,
+geometry-provider, and GMS-parent identities into that diagnostic plan. It
+remains a preview: neither the session nor the renderer establishes intro or
 world-scene parity. Static review now establishes a conditional path from an
 accepted normal-view candidate through supported draw callbacks to backend
 submissions. It does not establish that a specific scene candidate passes the
@@ -70,6 +73,12 @@ identity-joined to that callback path, and the provider that supplies its
 candidate objects remains unresolved. Private installation observations and
 captures remain outside this repository; synthetic renderer checks cannot
 prove complete game playback.
+
+The external [dxwrapper project](https://github.com/elishacloud/dxwrapper)
+continues to publish Windows DirectDraw/Direct3D compatibility fixes. Its
+*Hitman 2: Silent Assassin* guide is title-specific and does not verify a
+Freedom Fighters fix. dxwrapper is not a dependency or backend for this
+project's SDL renderer.
 
 The optional `OFF_ENABLE_SDL_VULKAN_INTEROP` build adds an SDL external-pass
 boundary for future native GPU integrations. No gameplay pass currently uses

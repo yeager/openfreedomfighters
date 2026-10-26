@@ -26,6 +26,8 @@ public:
                         std::string_view expected_stem);
 
   [[nodiscard]] const ZipEntry &member(SceneResourceKind kind) const;
+  [[nodiscard]] const ZipEntry *
+  optional_member(SceneResourceKind kind) const noexcept;
   [[nodiscard]] std::vector<std::byte> read(SceneResourceKind kind) const;
   [[nodiscard]] std::size_t member_count() const noexcept;
 

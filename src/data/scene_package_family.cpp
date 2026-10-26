@@ -97,6 +97,11 @@ const ZipEntry &ScenePackageFamily::member(SceneResourceKind kind) const {
   return catalog_.member(kind);
 }
 
+const ZipEntry *
+ScenePackageFamily::optional_member(SceneResourceKind kind) const noexcept {
+  return catalog_.optional_member(kind);
+}
+
 std::vector<std::byte> ScenePackageFamily::read(SceneResourceKind kind) const {
   return archive_->read(member(kind));
 }

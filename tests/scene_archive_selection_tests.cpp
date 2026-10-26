@@ -1,4 +1,5 @@
 #include "off/graphics/scene_render.hpp"
+#include "off/graphics/world_scene_session.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -121,6 +122,18 @@ complete_members(bool duplicate_primitive = false) {
   if (duplicate_primitive) {
     members.emplace_back("synthetic/duplicate.prm", "d");
   }
+  return members;
+}
+
+std::vector<std::pair<std::string, std::string>>
+complete_named_scene_members() {
+  auto members = complete_members();
+  for (auto &[name, payload] : members) {
+    static_cast<void>(payload);
+    name.replace(0, std::string("synthetic/").size(), "Scenes/");
+  }
+  members.emplace_back("Scenes/bootstrap.BUF", "b");
+  members.emplace_back("Scenes/bootstrap.LOC", "l");
   return members;
 }
 
@@ -300,6 +313,38 @@ int main() {
     check(owned_selection_error(explicit_root, "nested-link/ordinary.ZIP") ==
               "diagnostic scene archive is unavailable",
           "explicit diagnostic archive rejects a symlinked parent directory");
+  }
+
+  const auto world_session_root = work / "world-session";
+  const auto world_session_scenes = world_session_root / "Scenes" / "nested";
+  std::filesystem::create_directories(world_session_scenes);
+  const auto renamed_package = world_session_scenes / "renamed.ZIP";
+  write_zip(renamed_package, complete_named_scene_members());
+  std::string world_session_identity_error;
+  try {
+    static_cast<void>(off::graphics::WorldSceneSession::load_owned_checked(
+        world_session_root, "nested/renamed.ZIP"));
+  } catch (const std::exception &failure) {
+    world_session_identity_error = failure.what();
+  }
+  check(world_session_identity_error ==
+            "scene package has an unexpected resource family",
+        "world-scene session rejects a checked archive whose internal scene "
+        "identity does not match the selected package");
+
+  std::filesystem::create_symlink(
+      renamed_package, world_session_root / "Scenes" / "nested" / "linked.ZIP",
+      error);
+  if (!error) {
+    std::string world_session_symlink_error;
+    try {
+      static_cast<void>(off::graphics::WorldSceneSession::load_owned_checked(
+          world_session_root, "nested/linked.ZIP"));
+    } catch (const std::exception &failure) {
+      world_session_symlink_error = failure.what();
+    }
+    check(world_session_symlink_error == "world scene archive is unavailable",
+          "world-scene session rejects a symlinked selected archive");
   }
 
   std::filesystem::remove_all(work, error);
