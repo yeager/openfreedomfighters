@@ -30,9 +30,29 @@ std::vector<SceneRuntimeInstanceBinding> bind_scene_instances_to_runtime(
        instance_index < asset.instances.size(); ++instance_index) {
     const auto &instance = asset.instances[instance_index];
     const auto source_index = instance.source_directory_index;
-    if (source_index >= mapping.size() || !mapping[source_index]) {
+    if (!instance.map_source_directory_index ||
+        *instance.map_source_directory_index >= mapping.size() ||
+        !mapping[*instance.map_source_directory_index] ||
+        source_index >= mapping.size() || !mapping[source_index]) {
       throw std::runtime_error(
-          "Scene instance source has no constructed runtime resource");
+          "Scene instance map or geometry owner has no runtime resource");
+    }
+
+    const auto map_source_index = *instance.map_source_directory_index;
+    const auto &map_source_entry =
+        runtime.resources().sources().directory().at(map_source_index);
+    if (map_source_entry.local_slot_index !=
+        asset.resolutions.at(instance.resolution_index)
+            .geometry.requested_handle_slot_index) {
+      throw std::runtime_error(
+          "Scene map-selected source does not match the packed map handle");
+    }
+    const auto map_owner = runtime.source_handle(map_source_index);
+    const auto map_resource = *mapping[map_source_index];
+    if (runtime.associated_resource_owner(map_resource) != map_owner ||
+        runtime.resource_handle(map_owner) != map_resource) {
+      throw std::runtime_error(
+          "Scene map-selected source is not bound to its canonical runtime owner");
     }
 
     const auto &source_entry =
@@ -75,6 +95,7 @@ std::vector<SceneRuntimeInstanceBinding> bind_scene_instances_to_runtime(
     std::optional<IntroRuntimeHandle> parent_owner;
     auto ancestor_index = source_index;
     std::size_t ancestry_steps = 0;
+    bool map_owner_is_geometry_ancestor = false;
     while (true) {
       if (ancestor_index >= source_hierarchy.size() ||
           source_hierarchy[ancestor_index].directory_index != ancestor_index ||
@@ -83,6 +104,8 @@ std::vector<SceneRuntimeInstanceBinding> bind_scene_instances_to_runtime(
             "Scene instance runtime GMS hierarchy is invalid");
       }
       const auto &ancestor = source_hierarchy[ancestor_index];
+      if (ancestor_index == map_source_index)
+        map_owner_is_geometry_ancestor = true;
       if (ancestor.parent_directory_index &&
           *ancestor.parent_directory_index >= source_hierarchy.size()) {
         throw std::runtime_error(
@@ -111,6 +134,10 @@ std::vector<SceneRuntimeInstanceBinding> bind_scene_instances_to_runtime(
       }
       ancestor_index = *ancestor.parent_directory_index;
     }
+    if (!map_owner_is_geometry_ancestor) {
+      throw std::runtime_error(
+          "Scene map-selected owner is not an ancestor of its geometry source");
+    }
 
     result.push_back({.scene_instance_index = instance_index,
                       .map_kind = instance.map_kind,
@@ -120,6 +147,8 @@ std::vector<SceneRuntimeInstanceBinding> bind_scene_instances_to_runtime(
                       .map_descriptor_offset =
                           instance.map_descriptor_offset,
                       .geometry_reference = instance.geometry_reference,
+                      .map_source_directory_index = map_source_index,
+                      .map_owner = map_owner,
                       .source_directory_index = source_index,
                       .owner = owner,
                       .resource = resource,

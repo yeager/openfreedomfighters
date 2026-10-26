@@ -11,10 +11,12 @@
 
 namespace off::graphics {
 
-// Binds each canonical diagnostic scene instance to its map identity and
-// constructed runtime owner. This proves identity/resource association and
-// authored parent ancestry only; it does not produce a world transform,
-// camera state, visibility decision, or draw submission.
+// Binds each canonical diagnostic scene instance to both the source selected
+// by its map handle and the source providing its primitive. These identities
+// may differ for expanded group descendants. The binding proves parsed
+// map-to-GMS-slot identity and runtime resource association only; it does not
+// establish original renderer selection, world transforms, camera state,
+// visibility, or draw submission.
 struct SceneRuntimeInstanceBinding {
   std::size_t scene_instance_index{};
   SceneRenderMapKind map_kind{SceneRenderMapKind::rmc};
@@ -23,6 +25,8 @@ struct SceneRuntimeInstanceBinding {
   SceneGeometryRole geometry_role{SceneGeometryRole::primary};
   std::uint32_t map_descriptor_offset{};
   std::uint32_t geometry_reference{};
+  std::optional<std::size_t> map_source_directory_index;
+  std::optional<IntroRuntimeHandle> map_owner;
   std::size_t source_directory_index{};
   IntroRuntimeHandle owner{};
   IntroRuntimeResourceHandle resource{};

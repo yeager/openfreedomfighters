@@ -57,6 +57,9 @@ struct SceneRenderInstance {
   std::size_t map_entry_index{0};
   std::uint32_t map_descriptor_offset{0};
   std::uint32_t geometry_reference{0};
+  // Owner selected by the map handle. This can differ from the source owner
+  // below when a mapped group expands to direct-primitive descendants.
+  std::optional<std::size_t> map_source_directory_index;
   std::size_t source_directory_index{0};
   // Authored GMS hierarchy provenance. This is a directory identity only; it
   // does not imply a composed parent/world transform. It is absent for callers

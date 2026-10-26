@@ -369,6 +369,8 @@ void validate_scene_render_asset(const SceneRenderAsset &asset) {
         resolution.geometry.map_descriptor_offset !=
             instance.map_descriptor_offset ||
         resolution.geometry.geometry_reference != instance.geometry_reference ||
+        resolution.geometry.map_source_directory_index !=
+            instance.map_source_directory_index ||
         !resolution.geometry.source_directory_index.has_value() ||
         *resolution.geometry.source_directory_index !=
             instance.source_directory_index ||
@@ -380,7 +382,8 @@ void validate_scene_render_asset(const SceneRenderAsset &asset) {
             mesh.primitive_packed_index ||
         !resolution.geometry.primitive_entry_index.has_value() ||
         *resolution.geometry.primitive_entry_index !=
-            mesh.primitive_entry_index) {
+            mesh.primitive_entry_index ||
+        !resolution.geometry.map_source_directory_index.has_value()) {
       throw std::invalid_argument(
           "scene render instance provenance is inconsistent");
     }
@@ -552,6 +555,7 @@ SceneRenderAsset build_scene_render_asset(
           .map_entry_index = geometry.map_entry_index,
           .map_descriptor_offset = geometry.map_descriptor_offset,
           .geometry_reference = geometry.geometry_reference,
+          .map_source_directory_index = geometry.map_source_directory_index,
           .source_directory_index = source_index,
           .parent_source_directory_index = parent_source_directory_index,
           .source_local_slot_index = *geometry.source_local_slot_index,

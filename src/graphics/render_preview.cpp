@@ -286,6 +286,7 @@ std::vector<SceneGeometryResolution> resolve_scene_geometry_references(
           .geometry_reference = reference,
           .requested_handle_slot_index = 0,
           .status = SceneGeometryStatus::no_local_source,
+          .map_source_directory_index = std::nullopt,
           .source_directory_index = std::nullopt,
           .source_local_slot_index = std::nullopt,
           .primitive_reference = std::nullopt,
@@ -300,6 +301,7 @@ std::vector<SceneGeometryResolution> resolve_scene_geometry_references(
       }
       const auto source_index = source_lookup->second;
       const auto &source = object_sources[source_index];
+      resolution.map_source_directory_index = source_index;
       resolution.source_directory_index = source_index;
       resolution.source_local_slot_index = source.local_slot_index;
       if (!source.primitive_reference.has_value()) {

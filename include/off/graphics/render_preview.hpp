@@ -50,6 +50,10 @@ struct SceneGeometryResolution {
   std::uint32_t geometry_reference{0};
   std::uint32_t requested_handle_slot_index{0};
   SceneGeometryStatus status{SceneGeometryStatus::no_local_source};
+  // GMS row selected directly by the map's packed handle. For expanded
+  // container descendants this remains the container while
+  // source_directory_index identifies the geometry-bearing child.
+  std::optional<std::size_t> map_source_directory_index;
   std::optional<std::size_t> source_directory_index;
   std::optional<std::uint32_t> source_local_slot_index;
   std::optional<std::uint32_t> primitive_reference;
