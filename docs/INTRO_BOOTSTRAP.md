@@ -8,15 +8,15 @@ The intro runtime and startup coordinator contain project-owned loading and life
 
 Normal startup constructs and retains an `IntroRuntime`/`NormalIntroSceneSession`, then continues through SDL startup without constructing or activating a `NormalIntroSceneHost`. The SDL GPU runtime accepts a `NormalIntroSceneHostFrameBridge`, but the normal call site supplies no bridge. It therefore draws only the labelled static fallback when that fallback is available; it does not display an admitted authored intro frame.
 
-The missing work is the production-owned service chain, not a renderer submission call: reader and loader-tail completion, global lifecycle admission, MovieControl phase two and event delivery, requested-camera routing, renderer view admission, legal-picture activation, and frame assembly must all be supplied by their real owners. Static source inspection has not found a production call site that supplies this chain. A bounded trace shows that MovieControl calls through a nested service receiver stored by the system object; its concrete runtime producer and vtable remain unresolved. A separate global class/method metadata registry is present in the executable, but no pointer-identity join connects it to MovieControl's receiver. Event 16 delivery to a live instance is unproven. Do not turn diagnostic preview data into an admitted frame or fabricate these callbacks to make the bridge non-null.
+The missing work is in the normal application path: create the scene host from the supported intro session, bind it to the SDL frame bridge, and advance its lifecycle from the normal frame loop. The repository has diagnostic preview and readiness paths, but they do not activate an authored intro scene. Keep those paths separate from normal playback and fail startup cleanly when required scene services are unavailable.
 
-This audit is source-only and intentionally contains no executable offsets, retail payload data, or decompiled listings. It verifies why the current build cannot be claimed to play the intro; it does not prove what a future fully connected build will render.
+This is a source-level application status. It does not claim that a future connected build has been verified to render the intro.
 
 ## Remaining project work
 
-- Complete the normal scene's source-backed loading and lifecycle admission.
-- Connect the active camera, ordinary update, audio, and ordered renderer submission to the owning scene session.
-- Replace the one-frame fallback with a repeatable scene lifecycle and a verified menu transition.
+- Construct and activate `NormalIntroSceneHost` in normal startup after the supported intro session is ready.
+- Bind an admitted frame bridge to SDL and advance the scene from the normal frame loop.
+- Connect camera updates, audio, ordered renderer submission, and the menu transition to the owning session.
 - Preserve the Original path and capability-gate optional Modern features.
 
 This document omits private decompilation, retail payloads, binary offsets, and corpus measurements. See [CLEAN_ROOM.md](../CLEAN_ROOM.md), [INTRO_AND_MENU_PLAN.md](INTRO_AND_MENU_PLAN.md), and [MODERN_GRAPHICS.md](MODERN_GRAPHICS.md).
