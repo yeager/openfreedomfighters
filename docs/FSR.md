@@ -34,6 +34,29 @@ Until these gates are complete, FSR intent is safely retained and the spatial
 path stays available on Windows, Linux, Steam Deck, and macOS. A portable
 temporal path is a separate future deliverable, not a current fallback.
 
+## Optional SDK build
+
+The pinned FidelityFX SDK 1.1.4 host and Vulkan backend can be built without
+enabling FSR in the game. Configure with
+`OFF_BUILD_FSR3_SHADER_HEADERS=ON`, `OFF_BUILD_FSR3_VULKAN_HOST=ON`, and
+`OFF_FIDELITYFX_SDK_ROOT` pointing to the SDK's `sdk/` directory, then build
+`off_fsr3upscaler_host` and `off_fsr3upscaler_vk`. Shader permutations are
+generated in the build directory; no SDK shader blobs or binaries are checked
+into the repository.
+
+The pinned SDK's public opaque context is smaller than its private FSR3 context.
+The build creates a private header overlay with a larger opaque allocation and
+uses the SDK's own compile-time size assertion before producing the libraries.
+It also supplies the Microsoft CRT helpers assumed by the SDK source on
+non-Windows compilers. Neither workaround modifies the SDK checkout. This is
+build support only: it does not create an FSR runtime adapter, validated frame
+inputs, or an enabled Modern capability.
+
+This optional host and Vulkan library build completed on TRV2 with GCC 15,
+Vulkan 1.4, and FidelityFX SDK commit
+`c6efa6bf7f2027b3ec94f28578bb5965eabb9e55` on 2026-10-26. Other platforms and
+the end-to-end renderer path remain unverified.
+
 ## Primary references
 
 - [AMD FidelityFX SDK manual](https://gpuopen.com/manuals/fidelityfx_sdk/)

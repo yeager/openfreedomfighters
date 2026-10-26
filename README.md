@@ -45,6 +45,11 @@ static startup image retains its separate diagnostic fit projection. Static
 analysis confirms a per-view rendering callback consumer, but has not established
 a normal visible world-geometry draw.
 
+An optional build on TRV2 now compiles the pinned FidelityFX FSR 3.1.4 host
+and Vulkan backend. This is SDK build support only; the SDL renderer still has
+no FSR frame adapter or validated gameplay color, depth, and motion inputs, so
+FSR remains unavailable at runtime. See the [FSR integration status](docs/FSR.md).
+
 The diagnostic scene preview now composes authored GMS source poses through
 their parent hierarchy. Map-entry placement and camera/view transforms remain
 separate, so this improves diagnostic placement without establishing gameplay

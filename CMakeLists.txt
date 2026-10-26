@@ -134,9 +134,33 @@ if(OFF_BUILD_FSR3_VULKAN_HOST)
         "${OFF_FFX_CONTEXT_WORDS} * ${OFF_FFX_CONTEXT_WORD_BYTES}")
     math(EXPR OFF_FFX_FSR3_CONTEXT_BYTES
         "${OFF_FFX_FSR3_CONTEXT_BYTES} * 4")
+    # FidelityFX SDK 1.1.4's public opaque context is smaller than the private
+    # FSR3 upscaler context compiled from the same pinned source. Keep the SDK
+    # checkout immutable and enlarge only the generated build-tree copy of
+    # ffx_types.h. The SDK's own sizeof(static) assertion remains the authority
+    # that the resulting public context can contain its private implementation.
     if(OFF_FFX_FSR3_CONTEXT_BYTES LESS 837848)
-        message(FATAL_ERROR
-            "Pinned public FSR3 header reserves ${OFF_FFX_FSR3_CONTEXT_BYTES} bytes, below the audited 837848-byte private context; refusing an ABI-unsafe host target")
+        set(OFF_FFX_CONTEXT_OVERLAY
+            "${CMAKE_CURRENT_BINARY_DIR}/fsr3-sdk-header-overlay")
+        set(OFF_FFX_TYPES_OVERLAY
+            "${OFF_FFX_CONTEXT_OVERLAY}/FidelityFX/host/ffx_types.h")
+        file(MAKE_DIRECTORY "${OFF_FFX_CONTEXT_OVERLAY}/FidelityFX/host")
+        file(READ
+            "${OFF_FIDELITYFX_SDK_ROOT}/include/FidelityFX/host/ffx_types.h"
+            OFF_FFX_TYPES_OVERLAY_CONTENT)
+        string(REGEX REPLACE
+            "#define[ \t]+FFX_SDK_DEFAULT_CONTEXT_SIZE[ \t]+\\([0-9]+[ \t]*\\*[ \t]*[0-9]+\\)"
+            "#define FFX_SDK_DEFAULT_CONTEXT_SIZE (1024 * 256)"
+            OFF_FFX_TYPES_OVERLAY_CONTENT
+            "${OFF_FFX_TYPES_OVERLAY_CONTENT}")
+        string(FIND "${OFF_FFX_TYPES_OVERLAY_CONTENT}"
+            "#define FFX_SDK_DEFAULT_CONTEXT_SIZE (1024 * 256)"
+            OFF_FFX_CONTEXT_OVERLAY_MARKER)
+        if(OFF_FFX_CONTEXT_OVERLAY_MARKER EQUAL -1)
+            message(FATAL_ERROR "Could not prepare the FSR3 context header overlay")
+        endif()
+        file(WRITE "${OFF_FFX_TYPES_OVERLAY}" "${OFF_FFX_TYPES_OVERLAY_CONTENT}")
+        set(OFF_FFX_CONTEXT_OVERLAY_INCLUDE "${OFF_FFX_CONTEXT_OVERLAY}")
     endif()
 
     set(OFF_FFX_SHARED "${OFF_FIDELITYFX_SDK_ROOT}/src/shared")
@@ -162,12 +186,14 @@ if(OFF_BUILD_FSR3_VULKAN_HOST)
         ${OFF_FFX_SHARED_SOURCES}
         ${OFF_FFX_FSR3_HOST_SOURCES})
     target_include_directories(off_fsr3upscaler_host PUBLIC
+        ${OFF_FFX_CONTEXT_OVERLAY_INCLUDE}
         "${OFF_FIDELITYFX_SDK_ROOT}/include"
         "${OFF_FFX_SHARED}")
 
     add_library(off_fsr3upscaler_vk STATIC ${OFF_FFX_VK_SOURCES})
     target_include_directories(off_fsr3upscaler_vk
         PUBLIC
+            ${OFF_FFX_CONTEXT_OVERLAY_INCLUDE}
             "${OFF_FIDELITYFX_SDK_ROOT}/include"
             "${OFF_FIDELITYFX_SDK_ROOT}/libs"
             "${OFF_FFX_GENERATED_HEADERS}"
@@ -175,6 +201,10 @@ if(OFF_BUILD_FSR3_VULKAN_HOST)
             "${OFF_FFX_COMPONENTS}"
             "${OFF_FFX_SHARED}"
             "${OFF_FFX_BACKENDS_SHARED}")
+    target_precompile_headers(off_fsr3upscaler_host PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/FfxSdkPortability.hpp")
+    target_precompile_headers(off_fsr3upscaler_vk PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/FfxSdkPortability.hpp")
     target_compile_definitions(off_fsr3upscaler_vk PRIVATE FFX_FSR3UPSCALER)
     target_link_libraries(off_fsr3upscaler_vk PUBLIC Vulkan::Vulkan)
     add_dependencies(off_fsr3upscaler_vk off_fsr3_shader_codegen)
