@@ -51,6 +51,13 @@ that information support the cross-platform renderer work in this repository?
   Direct3D 8-to-9 translation enabled. This is community troubleshooting
   guidance for *Hitman 2*; it does not diagnose a *Freedom Fighters* launch or
   confirm whether DxWrapper is installed correctly on another machine.
+- The official [DxWrapper releases](https://github.com/elishacloud/dxwrapper/releases)
+  page currently lists `v1.9.8700.25` as its latest release. Its notes include
+  continuing DirectDraw/Direct3D compatibility and rendering fixes, and the
+  release instructions use a selected Windows API stub DLL beside the target
+  executable. This may be useful for troubleshooting a Windows copy of an
+  original game; it is not a backend for this SDL renderer and does not provide
+  a cross-platform implementation or parity evidence.
 - The additional [`0danny/re47` project](https://github.com/0danny/re47) is a
   decompilation of *Hitman: Codename 47* (2000), a different title. Its own
   status page marks `renderd3d.dll` as untouched and the project as no longer
