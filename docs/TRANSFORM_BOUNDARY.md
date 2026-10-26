@@ -24,16 +24,17 @@ The named `MainCamera` source is registered through the active-view queue with t
 
 The provider path is branch-dependent. When the camera provider returns null, the view uses the registered database root; the GMS loader and view read that same registered object. GMS-attached children can therefore be traversed into candidate registration on this branch, subject to component, flag, and culling checks. This proves a conditional GMS-owner-to-candidate path, but not that every authored row qualifies or that an RMC/RMI row selects a particular owner. On a non-null provider return, the exact provider object's class and its identity with the named camera remain unproven. The shared queue/wrapper path does not justify treating all entries as camera objects or assuming that provider output and GMS geometry identity are interchangeable.
 
-The renderer has class-specific callback factories and device-submit methods on some branches, but their existence does not prove that an ordinary scene candidate receives one of those callback instances. The source-row data has not been identity-joined to the candidate descriptor and callback kind selected for visible drawing. On the identity-followed provider-null fallback path, the normal view command consumer reaches the same pooled child record but finds no callback instance and skips that callback. A separate shadow submission route does reach a concrete backend draw, but it is not evidence for the normal world geometry pass. Camera participation and candidate preparation are therefore partial; normal visible geometry submission remains unproven.
+The renderer has class-specific callback factories and device-submit methods on some branches, but their existence does not prove that an ordinary scene candidate receives one of those callback instances. The source-row data has not been identity-joined to the candidate descriptor and callback kind selected for visible drawing. For the identity-followed pool child, a bounded trace proves that the Direct3D initializer branch writes its callback into that same child before the normal view consumer reads it. The alternate wrapper-renderer branch forwards the child through membership/removal without that initialization, so the consumer's callback is still null on that branch. The runtime receiver branch for the selected source candidate remains unresolved. A separate shadow submission route does reach a concrete backend draw, but it is not evidence for the normal world geometry pass. Camera participation and candidate preparation are therefore partial; normal visible geometry submission remains unproven.
 
 A later bounded review closes the ordinary frame into a per-view command
 consumer and preserves the identity of its candidate child through command
-ordering. On that reviewed producer path, the child has no non-null geometry
-callback when consumed, so the nested geometry callback and visible device draw
-are not reached. No later writer has been joined to this exact child before
-consumption; other receiver paths and modules remain outside this result. This
-does not establish normal-scene parity or provide temporal-upscaler inputs. The
-known shadow submission remains a separate route.
+ordering. The Direct3D initialization branch joins to that exact child and can
+provide a non-null callback before consumption. The alternate wrapper-renderer
+branch does not initialize it and still reaches the null-callback guard. The
+available evidence does not select which receiver branch the source candidate
+uses, nor does it yet prove the callback reaches a visible device draw for that
+candidate. This does not establish normal-scene parity or provide
+temporal-upscaler inputs. The known shadow submission remains a separate route.
 
 Some particle/effect component overrides can conditionally pass records to an
 embedded view buffer callback. A static class-registration trace identifies a
