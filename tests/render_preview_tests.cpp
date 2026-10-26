@@ -199,15 +199,30 @@ int main() {
   container.class_data_value = 0;
   container.primitive_reference.reset();
   container.local_slot_index = 0;
+  container.basis = {0.0F, 0.0F, 1.0F, 0.0F, 1.0F, 0.0F,
+                     -1.0F, 0.0F, 0.0F};
+  container.position = {4.0F, 5.0F, 6.0F};
+  auto nested_container = object_source;
+  nested_container.source_type = 0x00100001U;
+  nested_container.class_data_value = 0;
+  nested_container.primitive_reference.reset();
+  nested_container.local_slot_index = 1;
+  nested_container.basis = {1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F,
+                            0.0F, -1.0F, 0.0F};
+  nested_container.position = {1.0F, 2.0F, 3.0F};
   auto contained_primitive = object_source;
-  contained_primitive.local_slot_index = 1;
-  const std::array container_sources{container, contained_primitive};
+  contained_primitive.local_slot_index = 2;
+  const std::array container_sources{container, nested_container,
+                                     contained_primitive};
   const std::array container_hierarchy{
       off::data::GmsHierarchyNode{.directory_index = 0,
                                   .parent_directory_index = std::nullopt,
                                   .children_in_directory_order = {1}},
       off::data::GmsHierarchyNode{.directory_index = 1,
                                   .parent_directory_index = 0,
+                                  .children_in_directory_order = {2}},
+      off::data::GmsHierarchyNode{.directory_index = 2,
+                                  .parent_directory_index = 1,
                                   .children_in_directory_order = {}},
   };
   auto container_map = map_entry;
@@ -223,13 +238,25 @@ int main() {
             expanded_container_asset.resolutions[0].geometry.status ==
                 off::graphics::SceneGeometryStatus::source_without_primitive &&
             expanded_container_asset.instances.size() == 1 &&
-            expanded_container_asset.instances[0].source_directory_index == 1 &&
+            expanded_container_asset.instances[0].source_directory_index == 2 &&
             expanded_container_asset.instances[0].source_position ==
                 contained_primitive.position &&
+            expanded_container_asset.instances[0]
+                    .source_hierarchy_composed &&
+            expanded_container_asset.instances[0]
+                    .hierarchical_source_position ==
+                std::array{-19.0F, -23.0F, 17.0F} &&
             expanded_container_asset.instances[0].geometry_reference ==
                 container_map.object.primary_geometry_reference,
-        "expand a mapped ZROOM through authored hierarchy without composing "
-        "transforms");
+        "expand a mapped ZROOM and compose the source pose through its GMS "
+        "parent without applying the separate map transform");
+  const auto expanded_container_plan =
+      off::graphics::prepare_scene_gpu_plan(expanded_container_asset);
+  check(off::graphics::transform_scene_source_diagnostic_position(
+            expanded_container_plan.instances[0], {1.0F, 2.0F, 3.0F}) ==
+            std::array{-20.0F, -26.0F, 15.0F},
+        "apply multi-level GMS parent basis and translation composition to "
+        "diagnostic vertices");
 
   auto cyclic_container_hierarchy = container_hierarchy;
   cyclic_container_hierarchy[1].children_in_directory_order = {0};

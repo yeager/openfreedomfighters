@@ -66,6 +66,106 @@ void add_bounded(std::size_t &total, std::size_t value, std::size_t limit,
                              [](float value) { return std::isfinite(value); });
 }
 
+using Basis3 = std::array<float, 9>;
+using Position3 = std::array<float, 3>;
+
+[[nodiscard]] Basis3 compose_row_bases(const Basis3 &child,
+                                      const Basis3 &parent) {
+  Basis3 result{};
+  for (std::size_t row = 0; row < 3; ++row) {
+    for (std::size_t column = 0; column < 3; ++column) {
+      double value = 0.0;
+      for (std::size_t inner = 0; inner < 3; ++inner) {
+        value += static_cast<double>(child[row * 3 + inner]) *
+                 parent[inner * 3 + column];
+      }
+      if (!std::isfinite(value) ||
+          std::abs(value) > std::numeric_limits<float>::max()) {
+        throw std::runtime_error(
+            "scene hierarchy basis composition is invalid");
+      }
+      result[row * 3 + column] = static_cast<float>(value);
+    }
+  }
+  return result;
+}
+
+[[nodiscard]] Position3 transform_row_position(const Position3 &position,
+                                               const Basis3 &basis) {
+  Position3 result{};
+  for (std::size_t column = 0; column < 3; ++column) {
+    const double value =
+        static_cast<double>(position[0]) * basis[column] +
+        static_cast<double>(position[1]) * basis[3 + column] +
+        static_cast<double>(position[2]) * basis[6 + column];
+    if (!std::isfinite(value) ||
+        std::abs(value) > std::numeric_limits<float>::max()) {
+      throw std::runtime_error(
+          "scene hierarchy position rotation is invalid");
+    }
+    result[column] = static_cast<float>(value);
+  }
+  return result;
+}
+
+struct HierarchicalSourcePose {
+  Basis3 basis{};
+  Position3 position{};
+  bool composed{false};
+};
+
+[[nodiscard]] HierarchicalSourcePose compose_source_hierarchy_pose(
+    std::span<const data::GmsDirectoryEntry> sources,
+    std::span<const data::GmsHierarchyNode> hierarchy,
+    std::size_t source_index) {
+  if (source_index >= sources.size()) {
+    throw std::runtime_error("scene hierarchy source is out of range");
+  }
+  HierarchicalSourcePose result{.basis = sources[source_index].basis,
+                                .position = sources[source_index].position,
+                                .composed = !hierarchy.empty()};
+  if (hierarchy.empty()) {
+    return result;
+  }
+  if (source_index >= hierarchy.size() ||
+      hierarchy[source_index].directory_index != source_index) {
+    throw std::runtime_error("scene source hierarchy is inconsistent");
+  }
+
+  auto current = source_index;
+  std::size_t ancestry_steps = 0;
+  while (hierarchy[current].parent_directory_index) {
+    if (ancestry_steps++ >= hierarchy.size()) {
+      throw std::runtime_error("scene source hierarchy contains a cycle");
+    }
+    const auto parent_index = *hierarchy[current].parent_directory_index;
+    if (parent_index >= sources.size() || parent_index >= hierarchy.size() ||
+        hierarchy[parent_index].directory_index != parent_index) {
+      throw std::runtime_error(
+          "scene source hierarchy parent is out of range");
+    }
+    const auto &parent = sources[parent_index];
+    auto position = transform_row_position(result.position, parent.basis);
+    for (std::size_t axis = 0; axis < position.size(); ++axis) {
+      const double translated =
+          static_cast<double>(position[axis]) + parent.position[axis];
+      if (!std::isfinite(translated) ||
+          std::abs(translated) > std::numeric_limits<float>::max()) {
+        throw std::runtime_error(
+            "scene hierarchy position composition is invalid");
+      }
+      position[axis] = static_cast<float>(translated);
+    }
+    result.basis = compose_row_bases(result.basis, parent.basis);
+    result.position = position;
+    current = parent_index;
+  }
+  if (!finite(result.basis) || !finite(result.position)) {
+    throw std::runtime_error("scene hierarchy pose is non-finite");
+  }
+  return result;
+}
+
 [[nodiscard]] std::string lowercase(std::string value) {
   std::transform(value.begin(), value.end(), value.begin(),
                  [](unsigned char character) {
@@ -353,6 +453,8 @@ void validate_scene_render_asset(const SceneRenderAsset &asset) {
          *instance.parent_source_directory_index ==
              instance.source_directory_index) ||
         !finite(instance.source_basis) || !finite(instance.source_position) ||
+        !finite(instance.hierarchical_source_basis) ||
+        !finite(instance.hierarchical_source_position) ||
         !finite(instance.map_orientation) || !finite(instance.map_position) ||
         !finite(instance.map_auxiliary_position) ||
         !finite(instance.map_extents)) {
@@ -423,6 +525,8 @@ SceneRenderAsset build_scene_render_asset(
   std::size_t total_indices = 0;
   std::size_t total_draws = 0;
   std::size_t total_rgba_bytes = 0;
+  std::vector<std::optional<HierarchicalSourcePose>> hierarchy_pose_cache(
+      object_sources.size());
 
   for (std::size_t map_layer_index = 0; map_layer_index < maps.size();
        ++map_layer_index) {
@@ -531,6 +635,12 @@ SceneRenderAsset build_scene_render_asset(
       const auto source_index = *geometry.source_directory_index;
       const auto &source = object_sources[source_index];
       const auto &entry = map.entries[geometry.map_entry_index];
+      auto &cached_hierarchical_pose = hierarchy_pose_cache[source_index];
+      if (!cached_hierarchical_pose) {
+        cached_hierarchical_pose = compose_source_hierarchy_pose(
+            object_sources, hierarchy, source_index);
+      }
+      const auto &hierarchical_pose = *cached_hierarchical_pose;
       std::optional<std::size_t> parent_source_directory_index;
       if (!hierarchy.empty()) {
         if (source_index >= hierarchy.size() ||
@@ -562,6 +672,9 @@ SceneRenderAsset build_scene_render_asset(
           .source_type = source.source_type,
           .source_basis = source.basis,
           .source_position = source.position,
+          .hierarchical_source_basis = hierarchical_pose.basis,
+          .hierarchical_source_position = hierarchical_pose.position,
+          .source_hierarchy_composed = hierarchical_pose.composed,
           .map_object_kind = entry.object.kind,
           .map_orientation = entry.object.orientation,
           .map_position = entry.object.position,

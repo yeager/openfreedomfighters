@@ -53,10 +53,15 @@ struct SceneGpuInstance {
   std::size_t source_directory_index{0};
   // Authored source hierarchy identity; not a GPU resource or composed pose.
   std::optional<std::size_t> parent_source_directory_index;
-  // Retained verbatim for submission history.  The diagnostic renderer still
-  // uses only the source record and does not compose these transforms.
+  // Retained verbatim for provenance. The diagnostic transform composes this
+  // source pose through GMS parents when source_hierarchy_composed is true;
+  // map-entry transforms remain separate.
   std::array<float, 9> source_basis{};
   std::array<float, 3> source_position{};
+  // GMS-only ancestor composition. Map placement remains an independent input.
+  std::array<float, 9> hierarchical_source_basis{};
+  std::array<float, 3> hierarchical_source_position{};
+  bool source_hierarchy_composed{false};
   std::array<float, 9> map_orientation{};
   std::array<float, 3> map_position{};
 };

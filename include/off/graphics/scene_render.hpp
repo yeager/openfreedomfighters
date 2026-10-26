@@ -61,14 +61,18 @@ struct SceneRenderInstance {
   // below when a mapped group expands to direct-primitive descendants.
   std::optional<std::size_t> map_source_directory_index;
   std::size_t source_directory_index{0};
-  // Authored GMS hierarchy provenance. This is a directory identity only; it
-  // does not imply a composed parent/world transform. It is absent for callers
-  // using the hierarchy-free builder overload.
+  // Authored GMS hierarchy provenance. This direct-parent identity is absent
+  // for callers using the hierarchy-free builder overload.
   std::optional<std::size_t> parent_source_directory_index;
   std::uint32_t source_local_slot_index{0};
   std::uint32_t source_type{0};
   std::array<float, 9> source_basis{};
   std::array<float, 3> source_position{};
+  // Source pose composed through authored GMS ancestors. This excludes the
+  // separate map-entry transform and any camera/view projection.
+  std::array<float, 9> hierarchical_source_basis{};
+  std::array<float, 3> hierarchical_source_position{};
+  bool source_hierarchy_composed{false};
   std::uint32_t map_object_kind{0};
   std::array<float, 9> map_orientation{};
   std::array<float, 3> map_position{};
@@ -106,8 +110,9 @@ summarize_scene_render_resolutions(const SceneRenderAsset &asset) noexcept;
     std::span<const SceneRenderMapView> maps);
 
 // The hierarchy overload expands only map-resolved ZGROUP/ZROOM containers
-// into already proven direct-primitive descendants. It remains a source-only
-// diagnostic: no container, map or child transforms are composed.
+// into direct-primitive descendants and composes their GMS source poses up the
+// parent chain. It remains source-only diagnostic data: map-entry transforms
+// and camera/view transforms are not composed.
 [[nodiscard]] SceneRenderAsset build_scene_render_asset(
     std::span<const data::PrimitiveEntry> primitives,
     std::span<const data::TextureImage> textures,

@@ -164,6 +164,10 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
             [](float value) { return std::isfinite(value); }) ||
         !finite(instance.source_position) ||
         !std::ranges::all_of(
+            instance.hierarchical_source_basis,
+            [](float value) { return std::isfinite(value); }) ||
+        !finite(instance.hierarchical_source_position) ||
+        !std::ranges::all_of(
             instance.map_orientation,
             [](float value) { return std::isfinite(value); }) ||
         !finite(instance.map_position)) {
@@ -269,14 +273,19 @@ void validate_scene_gpu_plan(const SceneGpuPlan &plan) {
 std::array<float, 3> transform_scene_source_diagnostic_position(
     const SceneGpuInstance &instance,
     const std::array<float, 3> &local_position) {
-  const auto &basis = instance.source_basis;
+  const auto &basis = instance.source_hierarchy_composed
+                          ? instance.hierarchical_source_basis
+                          : instance.source_basis;
+  const auto &translation = instance.source_hierarchy_composed
+                                ? instance.hierarchical_source_position
+                                : instance.source_position;
   std::array<float, 3> result;
   for (std::size_t column = 0; column < 3; ++column) {
     const auto value =
         static_cast<double>(local_position[0]) * basis[column] +
         static_cast<double>(local_position[1]) * basis[3 + column] +
         static_cast<double>(local_position[2]) * basis[6 + column] +
-        instance.source_position[column];
+        translation[column];
     if (!std::isfinite(value) ||
         std::abs(value) > std::numeric_limits<float>::max()) {
       throw std::invalid_argument(
@@ -353,6 +362,12 @@ std::array<float, 3> transform_scene_source_diagnostic_position(
             asset.instances[index].parent_source_directory_index,
         .source_basis = asset.instances[index].source_basis,
         .source_position = asset.instances[index].source_position,
+        .hierarchical_source_basis =
+            asset.instances[index].hierarchical_source_basis,
+        .hierarchical_source_position =
+            asset.instances[index].hierarchical_source_position,
+        .source_hierarchy_composed =
+            asset.instances[index].source_hierarchy_composed,
         .map_orientation = asset.instances[index].map_orientation,
         .map_position = asset.instances[index].map_position,
     });
@@ -580,12 +595,18 @@ SceneDiagnosticMatrices make_scene_diagnostic_matrices(
       make_scene_diagnostic_uniform(plan.projection, pixel_width, pixel_height);
   SceneDiagnosticMatrices result;
   const auto &instance = plan.instances[instance_index];
+  const auto &basis = instance.source_hierarchy_composed
+                          ? instance.hierarchical_source_basis
+                          : instance.source_basis;
+  const auto &translation = instance.source_hierarchy_composed
+                                ? instance.hierarchical_source_position
+                                : instance.source_position;
   for (std::size_t row = 0; row < 3; ++row) {
     for (std::size_t column = 0; column < 3; ++column) {
       result.model[row * 4 + column] =
-          instance.source_basis[row * 3 + column];
+          basis[row * 3 + column];
     }
-    result.model[3 * 4 + row] = instance.source_position[row];
+    result.model[3 * 4 + row] = translation[row];
   }
   result.model[15] = 1.0F;
 

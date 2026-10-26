@@ -2,7 +2,7 @@
 
 The normal world-scene producer is not yet connected to an admitted runtime scene. The diagnostic renderer must remain labelled as diagnostic; it is not a gameplay transform or a parity reference.
 
-Map records, runtime object identity, parent relationships, camera state, accepted draw records, and backend submission must be joined by explicit project-owned interfaces before a normal world frame can be produced. The current renderer keeps source and map transform inputs separate and does not claim that their composition matches the game.
+Map records, runtime object identity, parent relationships, camera state, accepted draw records, and backend submission must be joined by explicit project-owned interfaces before a normal world frame can be produced. The diagnostic renderer composes authored GMS source poses through their parent chain, while keeping source and map transforms separate; that composition is not a complete gameplay/world transform and does not establish parity.
 
 ## Authored scene ownership
 
@@ -16,7 +16,7 @@ Geometry candidates are collected from an already constructed runtime scene hier
 
 `bind_scene_instances_to_runtime` provides a narrow identity/resource receipt after complete runtime directory construction. Each receipt carries the scene-instance index and its map layer, entry, role, descriptor offset, and geometry reference alongside the map-selected owner and geometry-providing owner. Those owners can differ when a map handle selects a container whose descendants provide primitive geometry. The binding checks the decoded map-handle slot against the selected GMS row and its canonical runtime resource, then checks the geometry owner's resource, source pose, and authored parent links. If the asset carries authored parent provenance, that direct parent must also match the runtime GMS hierarchy. The caller must supply an asset built from the same GMS directory as the runtime and call before gameplay updates change source poses. This is a structural parser-to-runtime identity join; it does not establish that the original renderer selects the same owner, or establish map placement, world transforms, camera/view selection, visibility, draw order, or backend acceptance.
 
-The source-only diagnostic GPU plan preserves both the map-selected source index and geometry-provider source index when copying scene instances. This keeps identity provenance available through that diagnostic conversion; the GPU plan still does not establish world transforms or normal-scene draw admission.
+The diagnostic GPU plan preserves both the map-selected source index and geometry-provider source index when copying scene instances, and uses the composed GMS source pose for diagnostic placement. Map-entry placement and camera/view transforms remain separate. This keeps identity provenance available through that diagnostic conversion; the GPU plan still does not establish complete world transforms or normal-scene draw admission.
 
 ## Active view and draw boundary
 
