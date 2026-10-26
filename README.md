@@ -60,8 +60,10 @@ The SDL GPU renderer supports diagnostic picture and geometry presentation.
 world-scene parity. Static review now establishes a conditional path from an
 accepted normal-view candidate through supported draw callbacks to backend
 submissions. It does not establish that a specific scene candidate passes the
-runtime gates or produces visible output. Private installation observations
-and captures remain outside this repository; synthetic renderer checks cannot
+runtime gates or produces visible output. No map-derived GMS/PRM candidate is
+identity-joined to that callback path, and the provider that supplies its
+candidate objects remains unresolved. Private installation observations and
+captures remain outside this repository; synthetic renderer checks cannot
 prove complete game playback.
 
 The optional `OFF_ENABLE_SDL_VULKAN_INTEROP` build adds an SDL external-pass
