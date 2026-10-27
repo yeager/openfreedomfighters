@@ -599,18 +599,27 @@ target_include_directories(
     openfreedomfighters PRIVATE
     "${off_shader_assets_SOURCE_DIR}/examples"
 )
-add_custom_target(off_startup_assets
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-            "$<TARGET_FILE_DIR:openfreedomfighters>/assets"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/assets/branding/openfreedomfighters-splash.bmp"
-            "$<TARGET_FILE_DIR:openfreedomfighters>/assets/openfreedomfighters-splash.bmp"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/Rajdhani-SemiBold.ttf"
-            "$<TARGET_FILE_DIR:openfreedomfighters>/assets/Rajdhani-SemiBold.ttf"
-    VERBATIM
-)
-add_dependencies(openfreedomfighters off_startup_assets)
+if(APPLE)
+    target_sources(openfreedomfighters PRIVATE
+        assets/branding/openfreedomfighters-splash.bmp
+        assets/fonts/Rajdhani-SemiBold.ttf)
+    set_source_files_properties(
+        assets/branding/openfreedomfighters-splash.bmp
+        assets/fonts/Rajdhani-SemiBold.ttf
+        PROPERTIES MACOSX_PACKAGE_LOCATION "Resources/assets")
+else()
+    add_custom_target(off_startup_assets
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:openfreedomfighters>/assets"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/branding/openfreedomfighters-splash.bmp"
+                "$<TARGET_FILE_DIR:openfreedomfighters>/assets/openfreedomfighters-splash.bmp"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/Rajdhani-SemiBold.ttf"
+                "$<TARGET_FILE_DIR:openfreedomfighters>/assets/Rajdhani-SemiBold.ttf"
+        VERBATIM)
+    add_dependencies(openfreedomfighters off_startup_assets)
+endif()
 if(MSVC)
     target_compile_options(openfreedomfighters PRIVATE /W4 /permissive-)
 else()

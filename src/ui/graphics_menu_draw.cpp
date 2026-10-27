@@ -400,7 +400,7 @@ bool append_intro_fallback_status(GraphicsMenuDrawList &list,
     return false;
   list.rectangles.push_back({UiLayer::modal, bounds, UiColor{0, 0, 0, 190}});
   list.texts.push_back({UiLayer::modal, bounds, bounds.x + 10.0F * scale,
-                        bounds.y + 27.0F * scale,
+                        bounds.y + 7.0F * scale,
                         UiColor{240, 243, 248, 255}, text});
   return true;
 }
