@@ -29,6 +29,19 @@ option(OFF_ENABLE_SDL_VULKAN_INTEROP
     "Build the pinned SDL Vulkan external-pass extension for vendor upscaler adapters"
     OFF)
 
+# SDL GPU exposes Vulkan on Windows and Linux/Steam Deck, while macOS uses
+# SDL's native Metal backend. Keep the optional Vulkan interop seam off Apple
+# targets even when a shared multi-platform preset requests it globally.
+set(OFF_SDL_VULKAN_INTEROP_ENABLED OFF)
+if(OFF_ENABLE_SDL_VULKAN_INTEROP)
+    if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set(OFF_SDL_VULKAN_INTEROP_ENABLED ON)
+    else()
+        message(STATUS
+            "SDL Vulkan interop is unavailable on ${CMAKE_SYSTEM_NAME}; keeping SDL GPU backend selection")
+    endif()
+endif()
+
 option(OFF_BUILD_FSR3_SHADER_HEADERS
     "Generate pinned FSR 3.1.4 Vulkan shader blobs and headers in the build tree"
     OFF)
@@ -210,7 +223,7 @@ if(OFF_BUILD_FSR3_VULKAN_HOST)
     add_dependencies(off_fsr3upscaler_vk off_fsr3_shader_codegen)
 endif()
 
-if(OFF_ENABLE_SDL_VULKAN_INTEROP)
+if(OFF_SDL_VULKAN_INTEROP_ENABLED)
     # The extension changes SDL's GPU API and is pinned to the source version
     # below. An arbitrary system SDL cannot provide that contract.
     set(SDL3_FOUND FALSE)
@@ -218,7 +231,7 @@ else()
     find_package(SDL3 3.2 CONFIG QUIET)
 endif()
 if(NOT SDL3_FOUND)
-    if(OFF_ENABLE_SDL_VULKAN_INTEROP)
+    if(OFF_SDL_VULKAN_INTEROP_ENABLED)
         find_program(OFF_PATCH_EXECUTABLE NAMES patch REQUIRED)
     endif()
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
@@ -233,7 +246,7 @@ if(NOT SDL3_FOUND)
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     FetchContent_MakeAvailable(SDL3)
-    if(OFF_ENABLE_SDL_VULKAN_INTEROP)
+    if(OFF_SDL_VULKAN_INTEROP_ENABLED)
         execute_process(
             COMMAND "${CMAKE_COMMAND}"
                 "-DSDL3_SOURCE_DIR=${sdl3_SOURCE_DIR}"
@@ -527,7 +540,7 @@ if(MSVC)
 else()
     target_compile_options(off_sdl_intro_renderer PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
 endif()
-if(OFF_ENABLE_SDL_VULKAN_INTEROP)
+if(OFF_SDL_VULKAN_INTEROP_ENABLED)
     add_library(off_sdl_vulkan_interop STATIC
         src/platform/sdl_vulkan_external_pass.cpp)
     target_compile_features(off_sdl_vulkan_interop PUBLIC cxx_std_23)
@@ -546,11 +559,11 @@ target_link_libraries(
     openfreedomfighters PRIVATE
     off_core off_sdl_audio_output off_sdl_picture_clear off_sdl_picture_stage_shader off_sdl_intro_renderer off_sdl_intro_presentation ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
 )
-if(OFF_ENABLE_SDL_VULKAN_INTEROP)
+if(OFF_SDL_VULKAN_INTEROP_ENABLED)
     target_link_libraries(openfreedomfighters PRIVATE off_sdl_vulkan_interop)
 endif()
 target_compile_definitions(openfreedomfighters PRIVATE OFF_VERSION="${PROJECT_VERSION}")
-if(OFF_ENABLE_SDL_VULKAN_INTEROP)
+if(OFF_SDL_VULKAN_INTEROP_ENABLED)
     target_compile_definitions(openfreedomfighters PRIVATE OFF_HAS_SDL_VULKAN_INTEROP=1)
 endif()
 target_include_directories(
