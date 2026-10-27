@@ -20,4 +20,11 @@ including Steam Deck. macOS keeps SDL's native Metal backend even when a shared
 build preset requests Vulkan interop. This bridge supplies an interop boundary;
 it does not by itself enable a vendor upscaler or change runtime capabilities.
 
+The current SDL runtime still lacks a concrete active-view host and normal
+scene-frame producer. The project's display-camera binding and diagnostic
+presentation are not frame admission. Therefore, no normal color/depth/motion
+vector set is submitted to DLSS, FSR, or XeSS, and those options must remain
+unavailable as runtime features until a complete scene pass and backend adapter
+exist. SDK discovery or successful compilation alone is not runtime support.
+
 Any diagnostic rendering must remain labeled diagnostic. Do not publish retail assets, private captures, executable analysis, or source-derived corpus data.

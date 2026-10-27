@@ -36,12 +36,16 @@ intro fallback. This does not confirm animated intro playback, intro audio,
 original menus, or gameplay, which remain incomplete. The GPU runtime receives
 no active intro frame bridge.
 
-The latest status review leaves this unchanged: normal startup has no verified
-path that carries an active intro scene through draw submission and presentation.
-Diagnostic pictures, geometry previews, and isolated renderer checks do not
-verify animated playback. The intro remains a prerequisite for the original
-main menu and playable-game milestones. No normal world-scene frame has been
-verified.
+The source audit confirms that normal startup retains a
+`NormalIntroSceneSession`, and the SDL GPU runtime binds display dimensions,
+camera display-list state, and the static presentation adapter. It does not
+construct or activate a `NormalIntroSceneHost`, provide a live frame bridge, or
+admit an active intro frame for draw submission. Diagnostic pictures, geometry
+previews, and isolated renderer checks do not verify animated playback. The
+intro remains a prerequisite for the original main menu and playable-game
+milestones. No normal world-scene frame has been verified. See the
+[normal startup scene host](docs/NORMAL_STARTUP_SCENE_HOST.md) for the missing
+integration boundaries.
 
 Optional FSR SDK build support exists, but the SDL renderer has no FSR frame
 adapter or validated gameplay inputs, so FSR remains unavailable at runtime.
@@ -70,9 +74,11 @@ captures, and executable analysis remain outside this repository.
 
 The optional `OFF_ENABLE_SDL_VULKAN_INTEROP` build adds an SDL external-pass
 boundary for future native GPU integrations. No gameplay pass currently uses
-it, and it is not a DLSS, FSR, or XeSS implementation. Temporal and vendor
-upscaler capabilities remain unavailable until normal scene inputs and a real
-backend submission path are connected.
+it, and it is not a DLSS, FSR, or XeSS implementation. The SDL backend also
+lacks a concrete active-view host and normal scene frame producer, so no
+color/depth/motion-vector input reaches a temporal resolver. DLSS, FSR, and XeSS
+remain unavailable at runtime until normal scene inputs and native submission
+are connected.
 
 F10 opens the project-authored graphics settings panel. Keyboard and controller
 navigation, render scaling, and saved preferences are implemented. An explicit
