@@ -36,11 +36,11 @@ is available locally and contains the Windows x86 `Freedom.Exe` and
 `Launcher.exe`; the native prototype has not been verified against that
 installation in this review.
 
-Normal startup loads the user's local resources and attempts to present a
-labelled static intro fallback. The latest bounded macOS run reached the GPU
-runtime but did not produce its requested screenshot, so visible fallback
-presentation is not confirmed. Animated intro playback, its audio, the original
-menus, and gameplay are still incomplete. The GPU runtime receives no active
+Normal startup loads the user's local resources and presents a labelled static
+intro fallback. A bounded macOS arm64 Modern run captured that fallback at
+1280x720 on the SDL GPU/Metal renderer. This confirms the static title image is
+visible; it does not confirm animated intro playback, intro audio, original
+menus, or gameplay, which remain incomplete. The GPU runtime receives no active
 intro frame bridge.
 Camera projection and viewport utilities exist, but no admitted gameplay camera,
 world transform, and normal geometry draw are joined into a parity frame. The
