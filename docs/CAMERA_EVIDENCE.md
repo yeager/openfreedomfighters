@@ -1,5 +1,5 @@
-# Camera and projection boundary
+# Camera and projection status
 
-Camera projection and viewport placement are separate operations. The reviewed perspective route uses camera-authored optical and clipping state together with the camera's stored aspect relationship and the target aspect; viewport origin does not shift projection. The normalized viewport rectangle maps relative to its parent pixel rectangle without rewriting the camera's stored aspect relationship. Positive camera-space Z is forward, and the near and far clipping boundaries map to the normalized depth endpoints.
+Camera and projection utilities exist in the project, but no active gameplay camera has been joined to a normally submitted world-scene frame. Diagnostic camera controls are project tools and do not establish original camera behavior.
 
-This contract covers perspective projection and viewport math only. It does not identify the active gameplay camera, establish a world/view transform, or connect a camera to accepted generic draws or backend submission. It makes no bit-exact cross-platform math claim. Invalid-input handling is host policy, viewport clearing or letterboxing is unspecified, and the alternate extent projection route remains unreviewed. No temporal inputs or live world-frame producer are established. Diagnostic camera fits are not evidence of gameplay camera selection.
+Original executable analysis and installation-derived observations remain private. Public implementation work uses project-owned interfaces and synthetic fixtures.

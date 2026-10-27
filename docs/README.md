@@ -97,7 +97,7 @@ These commands inspect an owned installation without extracting assets:
 ```sh
 python3 tools/inspect_install.py /path/to/FreedomFighters
 python3 tools/resource_census.py /path/to/FreedomFighters
-python3 tools/code_census.py /path/to/FreedomFighters/Freedom.Exe
+python3 tools/code_census.py /path/to/owned/game.exe
 ```
 
 Run them from the repository root. The code census needs its optional analysis
