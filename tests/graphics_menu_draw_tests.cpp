@@ -56,6 +56,13 @@ int main() {
       off::ui::build_graphics_menu_draw_list(menu, {0, 720}, now);
   check(!off::ui::append_intro_fallback_status(invalid_fallback_status),
         "static intro fallback status rejects an invalid render target");
+  auto tiny_fallback_status =
+      off::ui::build_graphics_menu_draw_list(menu, {64, 32}, now);
+  check(off::ui::append_intro_fallback_status(tiny_fallback_status, "sv-SE",
+                                               fallback_locales) &&
+            off::ui::validate_graphics_menu_draw_list(tiny_fallback_status) &&
+            off::ui::validate_graphics_menu_text_layout(tiny_fallback_status),
+        "static intro fallback status remains within a tiny output extent");
   check(off::ui::build_graphics_menu_draw_list(menu, {0, 720}, now).status ==
             off::ui::UiBuildStatus::invalid_viewport,
         "zero swapchain extent is rejected");

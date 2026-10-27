@@ -378,16 +378,26 @@ bool append_intro_fallback_status(GraphicsMenuDrawList &list,
   if (used_bytes > maximum_ui_text_bytes)
     return false;
 
-  const float scale = std::min(list.ui_scale, 1.0F);
+  const float target_width = static_cast<float>(list.target.width);
+  const float target_height = static_cast<float>(list.target.height);
+  // Keep the status panel inside tiny and unusually shaped output extents.
+  // At normal sizes this remains exactly the existing 360x42 panel with a
+  // 12-unit inset.
+  const float scale = std::min(
+      {list.ui_scale, 1.0F, target_width / 384.0F, target_height / 54.0F});
+  if (!(scale > 0.0F))
+    return false;
   const float padding = 12.0F * scale;
   const float height = 42.0F * scale;
-  const float width = std::min(static_cast<float>(list.target.width) - padding * 2.0F,
+  const float width = std::min(target_width - padding * 2.0F,
                                360.0F * scale);
   if (!(width > 0.0F) || !(height > 0.0F))
     return false;
   const UiRect bounds{padding,
-                      static_cast<float>(list.target.height) - height - padding,
+                      target_height - height - padding,
                       width, height};
+  if (!inside(bounds, list.target))
+    return false;
   list.rectangles.push_back({UiLayer::modal, bounds, UiColor{0, 0, 0, 190}});
   list.texts.push_back({UiLayer::modal, bounds, bounds.x + 10.0F * scale,
                         bounds.y + 27.0F * scale,
