@@ -26,6 +26,22 @@ std::vector<SceneRuntimeInstanceBinding> bind_scene_instances_to_runtime(
   std::vector<SceneRuntimeInstanceBinding> result;
   result.reserve(asset.instances.size());
   const auto &source_hierarchy = runtime.resources().sources().hierarchy();
+  const auto nearest_room_ancestor = [&runtime, &source_hierarchy](
+                                         std::size_t source_index)
+      -> std::optional<std::size_t> {
+    constexpr std::uint32_t room_source_type = 0x00100021U;
+    for (std::size_t steps = 0; steps <= source_hierarchy.size(); ++steps) {
+      if (source_index >= source_hierarchy.size())
+        throw std::runtime_error("Scene Room ancestry row is out of range");
+      if (runtime.resources().sources().directory().at(source_index).source_type ==
+          room_source_type)
+        return source_index;
+      const auto parent = source_hierarchy[source_index].parent_directory_index;
+      if (!parent) return std::nullopt;
+      source_index = *parent;
+    }
+    throw std::runtime_error("Scene Room ancestry is not rooted");
+  };
   for (std::size_t instance_index = 0;
        instance_index < asset.instances.size(); ++instance_index) {
     const auto &instance = asset.instances[instance_index];
@@ -148,8 +164,12 @@ std::vector<SceneRuntimeInstanceBinding> bind_scene_instances_to_runtime(
                           instance.map_descriptor_offset,
                       .geometry_reference = instance.geometry_reference,
                       .map_source_directory_index = map_source_index,
+                      .map_room_ancestor_directory_index =
+                          nearest_room_ancestor(map_source_index),
                       .map_owner = map_owner,
                       .source_directory_index = source_index,
+                      .geometry_room_ancestor_directory_index =
+                          nearest_room_ancestor(source_index),
                       .owner = owner,
                       .resource = resource,
                       .parent_owner = parent_owner});

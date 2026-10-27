@@ -38,8 +38,12 @@ struct SceneRuntimeInstanceBinding {
   std::uint32_t map_descriptor_offset{};
   std::uint32_t geometry_reference{};
   std::optional<std::size_t> map_source_directory_index;
+  // Nearest authored Room rows for each provenance owner. These preserve the
+  // source hierarchy relation; they are not spatial candidates or admissions.
+  std::optional<std::size_t> map_room_ancestor_directory_index;
   std::optional<IntroRuntimeHandle> map_owner;
   std::size_t source_directory_index{};
+  std::optional<std::size_t> geometry_room_ancestor_directory_index;
   IntroRuntimeHandle owner{};
   IntroRuntimeResourceHandle resource{};
   std::optional<IntroRuntimeHandle> parent_owner;
