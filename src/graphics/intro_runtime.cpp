@@ -2304,7 +2304,13 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
     services.between_saved_scene_operation();
     services.intermediate_scene_finalization();
     for(const auto& saved:saved_resource_flags_)
-      if(saved.flags&0x4000U) services.saved_0x4000_service(resolve_saved(saved),true);
+      if(saved.flags&0x4000U) {
+        const auto resource=resolve_saved(saved);
+        const auto owner=resource_owner(resource);
+        if(!live_owner(owner.value))
+          throw std::runtime_error("Saved 0x4000 resource has no live owner");
+        services.saved_0x4000_service(owner,true);
+      }
     outer_loader_tail_stage_=IntroOuterLoaderTailStage::second_saved_pass_complete;
   } catch(...) {
     if(outer_loader_tail_stage_!=IntroOuterLoaderTailStage::incomplete) {
