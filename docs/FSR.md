@@ -57,6 +57,15 @@ Vulkan 1.4, and FidelityFX SDK commit
 `c6efa6bf7f2027b3ec94f28578bb5965eabb9e55` on 2026-10-26. Other platforms and
 the end-to-end renderer path remain unverified.
 
+The SDL Vulkan external-pass API is a separate interop seam. The current SDL
+frame loop does not call it, and the FSR host/Vulkan libraries are not linked
+to a renderer adapter. The SDL pass can provide Vulkan handles and scoped
+texture access, but this alone does not create an FSR context, collect the
+SDK's device extensions, bind runtime capabilities, or dispatch a resolve.
+Normal scene rendering also does not yet produce the depth and motion-vector
+inputs required by FSR. Keep FSR unavailable until those inputs and the full
+create/dispatch/destroy path are connected to a real scene frame.
+
 ## Primary references
 
 - [AMD FidelityFX SDK manual](https://gpuopen.com/manuals/fidelityfx_sdk/)
