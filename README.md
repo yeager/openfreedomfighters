@@ -94,10 +94,9 @@ startup audio lifecycle remains disconnected. Localization lookup and camera
 registration also need their remaining runtime connections. Project-authored
 simulation replays are tooling data and are not retail save files.
 
-The current private startup investigation still lacks a proven link from the
-first-cut selector through native component dispatch to the active scene owner.
-This analysis is kept outside the public repository. No retail executable data,
-decompilation output, or private captures are included here.
+The normal startup code still lacks a live scene-owner and frame path for the
+intro. Private executable analysis, retail data, and captures stay outside this
+repository.
 
 Next: connect the scene's component lifecycle and update loop so normal startup
 renders the original intro and reaches its main menu. This takes priority over
