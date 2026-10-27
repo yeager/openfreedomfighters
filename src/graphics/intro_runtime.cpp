@@ -2188,6 +2188,12 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
       throw std::runtime_error("Saved resource has no current live identity");
     return saved.resource;
   };
+  const auto resolve_saved_owner=[this,&resolve_saved](const IntroSavedResourceFlags& saved) {
+    const auto owner=resource_owner(resolve_saved(saved));
+    if(!live_owner(owner.value))
+      throw std::runtime_error("Saved resource has no live owner");
+    return owner;
+  };
   try {
     if(const auto& named=services.named_global_payload) {
       const auto envelope=parse_intro_named_global_section_envelope(named->bytes);
@@ -2298,19 +2304,14 @@ void IntroRuntime::run_outer_loader_tail_through_saved_services(
     // They must precede spatial admission; no native scene state is fabricated.
     for(unsigned operation=0;operation<3;++operation) services.outer_scene_operation();
     for(const auto& saved:saved_resource_flags_)
-      services.spatial_admission(resolve_saved(saved),true);
+      services.spatial_admission(resolve_saved_owner(saved),true);
     outer_loader_tail_stage_=IntroOuterLoaderTailStage::first_saved_pass_complete;
 
     services.between_saved_scene_operation();
     services.intermediate_scene_finalization();
     for(const auto& saved:saved_resource_flags_)
-      if(saved.flags&0x4000U) {
-        const auto resource=resolve_saved(saved);
-        const auto owner=resource_owner(resource);
-        if(!live_owner(owner.value))
-          throw std::runtime_error("Saved 0x4000 resource has no live owner");
-        services.saved_0x4000_service(owner,true);
-      }
+      if(saved.flags&0x4000U)
+        services.saved_0x4000_service(resolve_saved_owner(saved),true);
     outer_loader_tail_stage_=IntroOuterLoaderTailStage::second_saved_pass_complete;
   } catch(...) {
     if(outer_loader_tail_stage_!=IntroOuterLoaderTailStage::incomplete) {

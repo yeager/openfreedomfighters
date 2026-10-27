@@ -839,10 +839,12 @@ struct IntroOuterLoaderTailServices {
   std::function<void()> outer_scene_operation;
   std::function<void()> between_saved_scene_operation;
   std::function<void()> intermediate_scene_finalization;
-  std::function<void(IntroRuntimeResourceHandle,bool)> spatial_admission;
+  // Both saved-list passes resolve their key to the live owner before the
+  // native scene/spatial service runs. Keep this owner domain explicit.
+  std::function<void(IntroRuntimeHandle,bool)> spatial_admission;
   // The saved 0x4000 route resolves the saved resource key to its live owner
-  // before invoking auto-room assignment. Keep this receiver domain distinct
-  // from spatial_admission until that first-pass route is independently joined.
+  // before invoking auto-room assignment. It remains a separate conditional
+  // pass from spatial_admission even though both services receive an owner.
   std::function<void(IntroRuntimeHandle,bool)> saved_0x4000_service;
 };
 struct IntroWindowOwner {
