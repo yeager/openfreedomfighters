@@ -42,6 +42,12 @@ intro fallback. A bounded macOS arm64 Modern run captured that fallback at
 visible; it does not confirm animated intro playback, intro audio, original
 menus, or gameplay, which remain incomplete. The GPU runtime receives no active
 intro frame bridge.
+
+The latest status review leaves this unchanged: normal startup has no verified
+path that carries an active intro scene through draw submission and presentation.
+Diagnostic pictures, geometry previews, and isolated renderer checks do not
+verify animated playback. The intro remains a prerequisite for the original
+main menu and playable-game milestones.
 Camera projection and viewport utilities exist, but no admitted gameplay camera,
 world transform, and normal geometry draw are joined into a parity frame. The
 static startup image retains its separate diagnostic fit projection. Static
