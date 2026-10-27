@@ -309,8 +309,10 @@ menu transition. See
   the reviewed first-cut reader bracket. It checks aggregate bracket ordering,
   the source-backed MovieControl owner/component boundary and its retained
   cut/group reference translations, then runs due source-backed commands
-  through observer-only target callbacks. Cutscene lifecycle, gameplay effects,
-  audio and rendering remain cold. See
+  through observer-only target callbacks. Its aggregate target-owner counts
+  distinguish the already-bound legal picture from admitted FadeToBlack picture
+  owners without printing authored references or resource data. Cutscene
+  lifecycle, gameplay effects, audio and rendering remain cold. See
   [INTRO_BOOTSTRAP.md](docs/INTRO_BOOTSTRAP.md).
 - `--probe-intro-readiness` is the narrower owned-data readiness report. It
   prints only aggregate reader, unresolved-reader-family, and lifecycle

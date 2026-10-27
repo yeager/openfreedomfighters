@@ -959,12 +959,16 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool readiness_o
   std::size_t command_delivery_attempts{};
   std::size_t command_component_delivery_attempts{};
   std::size_t expected_command_target_deliveries{};
+  std::size_t legal_picture_target_deliveries{};
+  std::size_t fade_picture_target_deliveries{};
   if(latest_command_position) {
     const auto* prepared_player=intro.first_cut_player_prepared_state();
     if(!prepared_player || !std::isfinite(prepared_player->sequence_values[1]))
       throw std::runtime_error("first-cut cold probe found no finite command-derived end");
+    const auto command_target_provenance =
+        intro.first_cut_command_target_provenance();
     std::vector<std::uint64_t> source_backed_targets;
-    for(const auto& target:intro.first_cut_command_target_provenance())
+    for(const auto& target:command_target_provenance)
       source_backed_targets.push_back(target.owner.value);
     for(const auto& command:first_cut_source_data.commands) {
       const auto position=std::bit_cast<std::int32_t>(command.timeline_position);
@@ -974,13 +978,21 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool readiness_o
           *intro.source_event_name_mapping()[command.event_reference]!=0U &&
           *intro.source_event_name_mapping()[command.event_reference]<=
               std::numeric_limits<std::uint16_t>::max();
-      const auto target_is_source_backed=std::ranges::any_of(
-          intro.first_cut_command_target_provenance(),[&](const auto& target) {
-            return target.authored_reference==command.target_reference;
+      const auto target = std::ranges::find_if(
+          command_target_provenance, [&](const auto& candidate) {
+            return candidate.authored_reference == command.target_reference;
           });
       if(position>=0 && event_is_mapped && command.target_reference!=0U &&
-          target_is_source_backed)
+          target != command_target_provenance.end()) {
         ++expected_command_target_deliveries;
+        if(target->owner == prepared_player->legal_picture_owner)
+          ++legal_picture_target_deliveries;
+        if(std::ranges::any_of(intro.fade_picture_component_reader_states(),
+               [&](const auto& entry) {
+                 return entry.second.owner == target->owner;
+               }))
+          ++fade_picture_target_deliveries;
+      }
     }
     off::cutscene::FirstCutRuntimeCommandRouter command_router{intro};
     off::cutscene::FirstCutCommandSession command_session{
@@ -1101,6 +1113,10 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool readiness_o
             << command_delivery_attempts << '\n'
             << "first-cut-command-target-deliveries-expected="
             << expected_command_target_deliveries << '\n'
+            << "first-cut-command-target-deliveries-to-legal-picture-owner="
+            << legal_picture_target_deliveries << '\n'
+            << "first-cut-command-target-deliveries-to-fade-picture-owners="
+            << fade_picture_target_deliveries << '\n'
             << "first-cut-command-component-delivery-attempts="
             << command_component_delivery_attempts << '\n'
             << "first-cut-command-control-records=" << command_controls.command_records << '\n'
