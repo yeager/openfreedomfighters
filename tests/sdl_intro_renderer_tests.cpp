@@ -110,6 +110,9 @@ int main() {
     // Its lifetime ends at renderer destruction, while the frame owns the copy.
     const CameraDisplayDimensions display{8,8,false,false};
     gpu.renderer->attach_camera_display(camera_renderers,display);
+    auto* const camera_node=camera_renderers.select(1);
+    require(camera_node!=nullptr,"camera renderer node registration");
+    camera_node->bind(camera,static_cast<float>(camera.priority()));
     gpu.renderer->set_camera_display_pixels(16,8);
     require(!camera_renderers.head()->aspect(),"display refresh preserves construction metadata snapshot");
     gpu.renderer->set_camera_display_pixels(8,8);
