@@ -9,6 +9,7 @@
 #include <limits>
 #include <stdexcept>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace off::platform {
 namespace {
@@ -173,11 +174,15 @@ void SdlIntroRenderer::upload_images(
   if(!impl_) throw std::runtime_error("intro renderer is not initialized");
   auto* const device=impl_->device;
   auto total=impl_->uploaded_image_bytes;
+  std::unordered_set<std::uint32_t> requested_image_indices;
+  requested_image_indices.reserve(images.size());
   for(const auto& image:images) {
     const auto& p=image.mip_zero;
     const auto pixels=std::uint64_t(p.width)*p.height;
     if(!p.width||!p.height||pixels>graphics::intro_decoded_byte_budget/4||pixels*4!=p.pixels.size()||
        p.pixels.size()>graphics::intro_decoded_byte_budget-total||impl_->images.contains(image.catalog_image_index))
+      throw std::runtime_error("invalid or duplicate intro GPU image");
+    if(!requested_image_indices.insert(image.catalog_image_index).second)
       throw std::runtime_error("invalid or duplicate intro GPU image");
     total+=p.pixels.size();
   }
