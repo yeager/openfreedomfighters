@@ -430,9 +430,9 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
   std::atomic_bool cancelled{false};
   std::atomic<StartupPreparationStage> preparation_stage{
       StartupPreparationStage::verifying_game_data};
-  const auto loading_status = [&] {
+  const auto loading_status = [&](StartupPreparationStage stage) {
     const auto id =
-        preparation_stage.load() == StartupPreparationStage::preparing_assets
+        stage == StartupPreparationStage::preparing_assets
             ? ui::l10n::MessageId::preparing_startup
             : ui::l10n::MessageId::verifying_game_data;
     return ui::l10n::f10_catalog()
@@ -472,6 +472,7 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
                 "Could not start game-data verification and preparation"};
   }
   bool loading_surface_presented = false;
+  auto loading_surface_stage = StartupPreparationStage::verifying_game_data;
   while (lifecycle.phase() != StartupPhase::ready &&
          lifecycle.phase() != StartupPhase::cancelled) {
     SDL_Event event;
@@ -486,16 +487,22 @@ run_sdl_startup_preflight_impl(const std::filesystem::path &data_path,
                  event.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
         if (lifecycle.phase() == StartupPhase::splash)
           static_cast<void>(draw_splash(window.get(), image.get()));
-        else
-          draw_loading_surface(window.get(), loading_status());
+        else {
+          loading_surface_stage = preparation_stage.load();
+          draw_loading_surface(window.get(), loading_status(loading_surface_stage));
+          loading_surface_presented = true;
+        }
       }
     }
     const bool ready = verification_future.wait_for(std::chrono::seconds{0}) ==
                        std::future_status::ready;
     const auto phase = lifecycle.tick(StartupClock::now(), ready);
-    if (phase == StartupPhase::loading && !loading_surface_presented) {
-      draw_loading_surface(window.get(), loading_status());
+    const auto current_stage = preparation_stage.load();
+    if (phase == StartupPhase::loading &&
+        (!loading_surface_presented || current_stage != loading_surface_stage)) {
+      draw_loading_surface(window.get(), loading_status(current_stage));
       loading_surface_presented = true;
+      loading_surface_stage = current_stage;
     }
     if (phase != StartupPhase::ready && phase != StartupPhase::cancelled)
       SDL_Delay(4);
