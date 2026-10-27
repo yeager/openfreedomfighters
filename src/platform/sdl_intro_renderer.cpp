@@ -80,6 +80,7 @@ struct SdlIntroRenderer::Impl {
   SDL_GPUDevice* device;
   SDL_GPUShader *vertex{}, *fragment{};
   std::unordered_map<std::size_t,SDL_GPUTexture*> images;
+  std::size_t uploaded_image_bytes{};
   struct SamplerEntry { SDL_GPUSamplerCreateInfo description; SDL_GPUSampler* handle; };
   struct PipelineEntry { SdlIntroDrawState description; SDL_GPUGraphicsPipeline* handle; };
   std::vector<SamplerEntry> samplers;
@@ -154,16 +155,6 @@ struct SdlIntroFrame::Impl {
 SdlIntroRenderer::SdlIntroRenderer(SDL_GPUDevice* device,std::span<const graphics::IntroPreparedImage> images) {
   if(!device) throw std::runtime_error("intro renderer requires GPU device");
   impl_=std::make_shared<Impl>(device);
-  std::size_t total=0;
-  for(const auto& image:images) {
-    const auto& p=image.mip_zero;
-    const auto pixels=std::uint64_t(p.width)*p.height;
-    if(!p.width||!p.height||pixels>graphics::intro_decoded_byte_budget/4||pixels*4!=p.pixels.size()||
-       p.pixels.size()>graphics::intro_decoded_byte_budget-total||impl_->images.contains(image.catalog_image_index))
-      throw std::runtime_error("invalid or duplicate intro GPU image");
-    total+=p.pixels.size();
-    impl_->images.emplace(image.catalog_image_index,nullptr);
-  }
   const auto formats=SDL_GetGPUShaderFormats(device);
   SDL_GPUShaderCreateInfo shader{};
   shader.stage=SDL_GPU_SHADERSTAGE_VERTEX; shader.num_uniform_buffers=1;
@@ -174,6 +165,25 @@ SdlIntroRenderer::SdlIntroRenderer(SDL_GPUDevice* device,std::span<const graphic
   impl_->vertex=SDL_CreateGPUShader(device,&shader);
   if(!impl_->vertex) fail("create intro vertex shader");
   impl_->fragment=create_picture_stage_fragment_shader(device);
+  upload_images(images);
+}
+
+void SdlIntroRenderer::upload_images(
+    std::span<const graphics::IntroPreparedImage> images) {
+  if(!impl_) throw std::runtime_error("intro renderer is not initialized");
+  auto* const device=impl_->device;
+  auto total=impl_->uploaded_image_bytes;
+  for(const auto& image:images) {
+    const auto& p=image.mip_zero;
+    const auto pixels=std::uint64_t(p.width)*p.height;
+    if(!p.width||!p.height||pixels>graphics::intro_decoded_byte_budget/4||pixels*4!=p.pixels.size()||
+       p.pixels.size()>graphics::intro_decoded_byte_budget-total||impl_->images.contains(image.catalog_image_index))
+      throw std::runtime_error("invalid or duplicate intro GPU image");
+    total+=p.pixels.size();
+  }
+  for(const auto& image:images)
+    impl_->images.emplace(image.catalog_image_index,nullptr);
+  impl_->uploaded_image_bytes=total;
   // A dedicated, completed upload keeps construction independent of frame commands.
   for(const auto& image:images) {
     const auto& p=image.mip_zero;

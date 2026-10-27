@@ -1290,11 +1290,9 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   std::optional<graphics::IntroPreviewSnapshot> deferred_fallback;
   std::unique_ptr<SdlIntroRenderer> gpu_intro;
   try {
-    if (intro) {
-      const auto images = graphics::select_intro_gpu_upload_images(
-          intro->resources().images(), intro_static_fallback);
-      gpu_intro = std::make_unique<SdlIntroRenderer>(device, images);
-    }
+    if (intro)
+      gpu_intro = std::make_unique<SdlIntroRenderer>(
+          device, std::span<const graphics::IntroPreparedImage>{});
   } catch (const std::exception& error) {
     const RuntimeResult result{false, std::string("intro renderer initialization failed: ") + error.what()};
     startup_textures.reset();
@@ -1385,6 +1383,11 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         // exist. Establish the real display binding for retained sessions now.
         graphics::apply_camera_display(intro_session->runtime().camera(),services);
       }
+      const auto *const diagnostic_upload =
+          admitted_intro_frame == nullptr ? intro_static_fallback : nullptr;
+      const auto images = graphics::select_intro_gpu_upload_images(
+          intro->resources().images(), diagnostic_upload);
+      gpu_intro->upload_images(images);
     }
   } catch(const std::exception& error) {
     const RuntimeResult failed{false,std::string("camera display reader initialization failed: ")+error.what()};

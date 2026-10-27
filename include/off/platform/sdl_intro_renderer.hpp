@@ -67,6 +67,9 @@ public:
   ~SdlIntroRenderer();
   SdlIntroRenderer(const SdlIntroRenderer&) = delete;
   SdlIntroRenderer& operator=(const SdlIntroRenderer&) = delete;
+  // Adds decoded images after renderer/display setup. Existing identities may
+  // not be replaced; each accepted image is uploaded once.
+  void upload_images(std::span<const graphics::IntroPreparedImage> images);
   // List and every selected camera are borrowed and must outlive this renderer.
   // Prepared frames copy viewport/projection state and do not borrow the camera.
   void attach_camera_display(graphics::CameraRendererList& list,
