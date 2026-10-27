@@ -20,7 +20,8 @@ state-zero/view lifetimes and supplies `RendererCameraViewAdmissionServices`
 from live device, window, and render-pass objects. It must preserve the
 `CameraRendererList` lifetime and provide real view ordering, use accounting,
 backend-record registration, and frame-traversal identity. No-op callbacks do
-not satisfy the admission contract.
+not satisfy the admission contract. The source-free behavior requirements for
+this seam are recorded in [the active-view host specification](SDL_ACTIVE_VIEW_HOST_SPEC.md).
 
 That host alone is not sufficient to activate normal startup. The loader-tail
 path still lacks implementations for its required allocation diagnostics,
