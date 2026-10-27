@@ -325,22 +325,30 @@ void draw_splash_overlays(SDL_Surface *target) {
 
 void draw_loading_surface(SDL_Window *window, std::string_view status) {
   SDL_Surface *target = SDL_GetWindowSurface(window);
-  if (target == nullptr)
+  if (target == nullptr || target->w <= 0 || target->h <= 0)
     return;
   static_cast<void>(SDL_FillSurfaceRect(target, nullptr,
                                         SDL_MapSurfaceRGB(target, 10, 13, 18)));
   if (TTF_Init()) {
     const auto font_path_text = splash_font_path().u8string();
+    const int desired_font_size = std::clamp(target->h / 25, 10, 28);
     TTF_Font *font =
         TTF_OpenFont(reinterpret_cast<const char *>(font_path_text.c_str()),
-                     static_cast<float>(std::max(20, target->h / 25)));
+                     static_cast<float>(desired_font_size));
     if (font != nullptr) {
-      int text_width{};
-      if (TTF_GetStringSize(font, status.data(), status.size(), &text_width,
-                            nullptr)) {
-        static_cast<void>(
-            draw_splash_text(target, font, status, (target->w - text_width) / 2,
-                             target->h / 2, SDL_Color{238, 238, 232, 255}));
+      const int requested_margin =
+          std::max(4, std::min(target->w, target->h) / 30);
+      const int margin =
+          std::min(requested_margin, std::max(0, (target->w - 1) / 2));
+      const int wrap_width = std::max(1, target->w - 2 * margin);
+      Surface rendered{TTF_RenderText_Blended_Wrapped(
+          font, status.data(), status.size(), SDL_Color{238, 238, 232, 255},
+          wrap_width)};
+      if (rendered != nullptr) {
+        const int top = std::max(0, target->h - margin - rendered->h);
+        const SDL_Rect destination{margin, top, rendered->w, rendered->h};
+        static_cast<void>(SDL_BlitSurface(rendered.get(), nullptr, target,
+                                          &destination));
       }
       // SDL_ttf owns the backing FreeType library. Close the font while that
       // library is still alive, before TTF_Quit().
