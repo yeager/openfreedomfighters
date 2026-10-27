@@ -59,18 +59,18 @@ the end-to-end renderer path remain unverified.
 
 ## Current AMD SDK split
 
-As checked on 2026-10-27, AMD's newer FSR SDK 2.3 includes FSR Upscaling 4.1.1
-and FSR 3.1.5 fallback, but its published integration targets are DirectX 12
-and Windows 10/11. It does not replace the pinned FidelityFX SDK 1.1.4 for this
-project's Vulkan/Linux/Steam Deck route: that SDK includes the FSR 3.1 Vulkan
-implementation. Keep the older Vulkan-capable integration as the candidate for
-the portable adapter until AMD publishes the required Vulkan and platform
-support for the newer SDK. Neither SDK provides a macOS Metal adapter here, so
-macOS continues on the native/spatial path.
+As checked on 2026-10-27, AMD's current FSR SDK 2.3 provides FSR Upscaling
+4.1.1 and FSR 3.1.5, but AMD documents this SDK for DirectX 12 on Windows 10/11.
+It requires AMD's signed runtime DLLs and is not a drop-in Vulkan backend. The
+separate FidelityFX SDK 1.1.4 remains the candidate for the project's Vulkan
+route: AMD documents FSR 3 with both DirectX 12 and Vulkan. The project pins
+FSR 3.1.4 from that SDK. Neither path supplies a macOS Metal adapter here, so
+macOS remains on the native/spatial renderer until a supported backend exists.
 
 References: [AMD FSR SDK 2.3](https://gpuopen.com/amd-fsr-sdk/),
 [FidelityFX SDK 1.1.4](https://gpuopen.com/amd-fidelityfx-sdk-1/),
-[FSR 3.1 Vulkan support](https://gpuopen.com/fidelityfx-super-resolution-3/).
+[AMD FSR 3 API support](https://gpuopen.com/fidelityfx-super-resolution-3/),
+[AMD Vulkan backend](https://gpuopen.com/manuals/fidelityfx_sdk/reference_documentation/sdk/backends/vulkan_backend/v_k_backend/).
 
 The SDL Vulkan external-pass API is a separate interop seam. The current SDL
 frame loop does not call it, and the FSR host/Vulkan libraries are not linked

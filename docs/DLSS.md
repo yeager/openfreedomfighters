@@ -19,6 +19,12 @@ native API/platform requirements, and compatible distribution terms. Do not
 substitute community loaders, leaked binaries, or DLSS 4.x Super Resolution and
 label them DLSS 5.
 
+NVIDIA's developer forum also says that DLSS 5 customization details have not
+been publicly disclosed. That supports keeping DLSS 5 out of the implementation
+until an authorized integration contract is published; it is not evidence that
+the capability is unavailable in supported commercial titles. See the
+[NVIDIA developer response](https://forums.developer.nvidia.com/t/will-you-be-able-to-train-custom-models-for-dlss5/378886/2).
+
 As checked on 2026-10-27, NVIDIA's public DLSS SDK releases list 310.9.16
 (released 2026-10-16), while NVIDIA's developer page identifies DLSS 4.5 as the
 current Super Resolution integration target. The DLSS 5 product announcement
