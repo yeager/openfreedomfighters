@@ -29,7 +29,11 @@ for a portable installation.
 ## Current state
 
 Status reviewed 2026-10-27: the project is a native prototype, not a playable
-game. Normal startup has no verified path through the intro, menus, or gameplay.
+game. The latest local macOS build was observed running at 19:42 Stockholm
+time, but the visible intro remained a static title/legal card; two captures
+five seconds apart were identical. Animated intro playback, intro audio, the
+original menu, and gameplay are still unverified and unavailable through normal
+startup.
 
 Normal startup loads the user's local resources and presents a labelled static
 intro fallback. This does not confirm animated intro playback, intro audio,
@@ -89,6 +93,11 @@ Audio decoding, channel services, and an SDL output adapter exist, but the norma
 startup audio lifecycle remains disconnected. Localization lookup and camera
 registration also need their remaining runtime connections. Project-authored
 simulation replays are tooling data and are not retail save files.
+
+The current private startup investigation still lacks a proven link from the
+first-cut selector through native component dispatch to the active scene owner.
+This analysis is kept outside the public repository. No retail executable data,
+decompilation output, or private captures are included here.
 
 Next: connect the scene's component lifecycle and update loop so normal startup
 renders the original intro and reaches its main menu. This takes priority over
