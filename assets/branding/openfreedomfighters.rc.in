@@ -1,0 +1,2 @@
+#define IDI_OPENFREEDOMFIGHTERS 101
+IDI_OPENFREEDOMFIGHTERS ICON "@CMAKE_CURRENT_SOURCE_DIR@/assets/branding/openfreedomfighters.ico"

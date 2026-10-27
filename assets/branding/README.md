@@ -36,3 +36,14 @@ high-contrast composition, elegant negative space, clean safe margins. No
 other text, no fake UI, no loading bar, no publisher logos, no watermark.
 This is actual project splash artwork, not a screenshot or game-render
 fidelity claim. Return the highest-resolution landscape output available.
+
+## Application icon
+
+`openfreedomfighters-icon.png` is original square icon artwork generated for
+the project. It uses an original red star, concrete frame, and urban skyline;
+it contains no retail-game artwork or text. The 256×256
+`openfreedomfighters.png` is installed as the Linux hicolor application icon.
+`openfreedomfighters.icns` packages the same art for the macOS app bundle, and
+`openfreedomfighters.ico` is embedded in the Windows executable. All platform
+files are resized from the 1024×1024 PNG master with Pillow 11.3.0 and macOS
+`iconutil`.

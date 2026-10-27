@@ -2,6 +2,14 @@ cmake_minimum_required(VERSION 3.25)
 
 project(OpenFreedomFighters VERSION 0.1.0 LANGUAGES C CXX)
 
+if(WIN32)
+    enable_language(RC)
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/branding/openfreedomfighters.rc.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/openfreedomfighters.rc"
+        @ONLY)
+endif()
+
 # The native release matrix is deliberately narrow: x86-64 on Windows, Linux,
 # and Steam Deck, plus arm64/x86-64 on macOS. Refuse unsupported targets before
 # resolving or downloading dependencies so a mismatched prefix cannot produce a
@@ -480,14 +488,35 @@ else()
                            -Wno-missing-field-initializers)
 endif()
 
+set(OFF_MACOS_BUNDLE_ARGUMENT)
+if(APPLE)
+    list(APPEND OFF_MACOS_BUNDLE_ARGUMENT MACOSX_BUNDLE)
+endif()
 add_executable(
     openfreedomfighters
+    ${OFF_MACOS_BUNDLE_ARGUMENT}
     src/main.cpp
     src/platform/sdl_gpu_runtime.cpp
     src/platform/sdl_menu_gamepad.cpp
     src/platform/sdl_menu_keyboard.cpp
     src/platform/sdl_startup.cpp
 )
+if(APPLE)
+    target_sources(openfreedomfighters PRIVATE
+        assets/branding/openfreedomfighters.icns)
+    set_source_files_properties(assets/branding/openfreedomfighters.icns
+        PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+    set_target_properties(openfreedomfighters PROPERTIES
+        MACOSX_BUNDLE_ICON_FILE "openfreedomfighters.icns"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "org.openfreedomfighters.game"
+        MACOSX_BUNDLE_BUNDLE_NAME "OpenFreedomFighters"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
+endif()
+if(WIN32)
+    target_sources(openfreedomfighters PRIVATE
+        "${CMAKE_CURRENT_BINARY_DIR}/openfreedomfighters.rc")
+endif()
 add_library(off_sdl_picture_stage_shader STATIC src/platform/picture_stage_shader.cpp)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/picture_stage.frag"
@@ -591,13 +620,19 @@ else()
     )
 endif()
 
-install(TARGETS openfreedomfighters RUNTIME DESTINATION bin)
-install(FILES assets/branding/openfreedomfighters-splash.bmp
-              assets/fonts/Rajdhani-SemiBold.ttf
-        DESTINATION bin/assets)
+if(APPLE)
+    install(TARGETS openfreedomfighters BUNDLE DESTINATION .)
+else()
+    install(TARGETS openfreedomfighters RUNTIME DESTINATION bin)
+    install(FILES assets/branding/openfreedomfighters-splash.bmp
+                  assets/fonts/Rajdhani-SemiBold.ttf
+            DESTINATION bin/assets)
+endif()
 if(UNIX AND NOT APPLE)
     install(FILES assets/openfreedomfighters.desktop
             DESTINATION share/applications)
+    install(FILES assets/branding/openfreedomfighters.png
+            DESTINATION share/icons/hicolor/256x256/apps)
 endif()
 
 # Fuzzing is intentionally opt-in.  It needs a Clang toolchain with the

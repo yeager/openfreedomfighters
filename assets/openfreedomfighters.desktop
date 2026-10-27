@@ -2,6 +2,7 @@
 Type=Application
 Name=OpenFreedomFighters
 Comment=Native clean-room reimplementation of Freedom Fighters
+Icon=openfreedomfighters
 Exec=openfreedomfighters
 Terminal=false
 Categories=Game;ActionGame;

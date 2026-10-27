@@ -108,6 +108,8 @@ jobs:
           test -f install-check/bin/assets/openfreedomfighters-splash.bmp
           test -f install-check/bin/assets/Rajdhani-SemiBold.ttf
           test -f install-check/share/applications/openfreedomfighters.desktop
+          test -f install-check/share/icons/hicolor/256x256/apps/openfreedomfighters.png
+          grep -qx 'Icon=openfreedomfighters' install-check/share/applications/openfreedomfighters.desktop
           project_version=$(sed -n 's/^project(OpenFreedomFighters VERSION \([^ ]*\) LANGUAGES .*)/\1/p' CMakeLists.txt)
           test -n "$project_version"
           test "$(install-check/bin/openfreedomfighters --version)" = "OpenFreedomFighters $project_version"
@@ -169,18 +171,21 @@ jobs:
         run: |
           set -euo pipefail
           cmake --install build --prefix install-check
-          test -x install-check/bin/openfreedomfighters
-          test -f install-check/bin/assets/openfreedomfighters-splash.bmp
-          test -f install-check/bin/assets/Rajdhani-SemiBold.ttf
+          app=install-check/openfreedomfighters.app
+          app_binary="$app/Contents/MacOS/openfreedomfighters"
+          test -x "$app_binary"
+          test -f "$app/Contents/Resources/openfreedomfighters.icns"
+          test -f "$app/Contents/MacOS/assets/openfreedomfighters-splash.bmp"
+          test -f "$app/Contents/MacOS/assets/Rajdhani-SemiBold.ttf"
           project_version=$(sed -n 's/^project(OpenFreedomFighters VERSION \([^ ]*\) LANGUAGES .*)/\1/p' CMakeLists.txt)
           test -n "$project_version"
-          test "$(install-check/bin/openfreedomfighters --version)" = "OpenFreedomFighters $project_version"
+          test "$("$app_binary" --version)" = "OpenFreedomFighters $project_version"
           missing_data_root="$PWD/install-check/absent-game-data"
           test ! -e "$missing_data_root"
           missing_data_stdout="$PWD/missing-data.stdout"
           missing_data_stderr="$PWD/missing-data.stderr"
           status=0
-          SDL_VIDEODRIVER=dummy install-check/bin/openfreedomfighters \
+          SDL_VIDEODRIVER=dummy "$app_binary" \
             --data "$missing_data_root" --locale en \
             >"$missing_data_stdout" 2>"$missing_data_stderr" || status=$?
           if [ "$status" -ne 3 ]; then
