@@ -118,7 +118,7 @@ jobs:
           missing_data_stdout="$PWD/missing-data.stdout"
           missing_data_stderr="$PWD/missing-data.stderr"
           status=0
-          SDL_VIDEODRIVER=dummy install-check/bin/openfreedomfighters \
+          install-check/bin/openfreedomfighters --verify-only \
             --data "$missing_data_root" --locale en \
             >"$missing_data_stdout" 2>"$missing_data_stderr" || status=$?
           if [ "$status" -ne 3 ]; then
@@ -185,7 +185,7 @@ jobs:
           missing_data_stdout="$PWD/missing-data.stdout"
           missing_data_stderr="$PWD/missing-data.stderr"
           status=0
-          SDL_VIDEODRIVER=dummy "$app_binary" \
+          "$app_binary" --verify-only \
             --data "$missing_data_root" --locale en \
             >"$missing_data_stdout" 2>"$missing_data_stderr" || status=$?
           if [ "$status" -ne 3 ]; then

@@ -49,7 +49,7 @@ jobs:
           missing_data_stdout="$PWD/missing-data.stdout"
           missing_data_stderr="$PWD/missing-data.stderr"
           status=0
-          SDL_VIDEODRIVER=dummy package/bin/openfreedomfighters \
+          package/bin/openfreedomfighters --verify-only \
             --data "$missing_data_root" --locale en \
             >"$missing_data_stdout" 2>"$missing_data_stderr" || status=$?
           if [ "$status" -ne 3 ]; then
@@ -102,7 +102,7 @@ jobs:
           missing_data_stdout="$PWD/missing-data.stdout"
           missing_data_stderr="$PWD/missing-data.stderr"
           status=0
-          SDL_VIDEODRIVER=dummy package/bin/openfreedomfighters \
+          package/bin/openfreedomfighters --verify-only \
             --data "$missing_data_root" --locale en \
             >"$missing_data_stdout" 2>"$missing_data_stderr" || status=$?
           if [ "$status" -ne 3 ]; then
@@ -145,7 +145,7 @@ jobs:
           if (Test-Path -LiteralPath $missingDataRoot) { throw 'missing-data fixture root unexpectedly exists' }
           $missingDataStdout = Join-Path (Get-Location) 'missing-data.stdout'
           $missingDataStderr = Join-Path (Get-Location) 'missing-data.stderr'
-          & package/bin/openfreedomfighters.exe --data $missingDataRoot --locale en 1> $missingDataStdout 2> $missingDataStderr
+          & package/bin/openfreedomfighters.exe --verify-only --data $missingDataRoot --locale en 1> $missingDataStdout 2> $missingDataStderr
           $missingDataStatus = $LASTEXITCODE
           if ($missingDataStatus -ne 3) { throw "installed missing-data launch exited with $missingDataStatus, expected 3" }
           if ((Get-Item -LiteralPath $missingDataStdout).Length -ne 0) { throw 'installed missing-data launch wrote unexpected stdout' }
