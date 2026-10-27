@@ -91,7 +91,7 @@ int main() {
     bad=draw; bad.catalog_image_index=1234;
     rejects([&] { (void)gpu.renderer->prepare(gpu.command,std::span(&bad,1)); });
     bad=draw; bad.projection[0]=std::numeric_limits<float>::quiet_NaN();
-    rejects([&] { (void)gpu.renderer->prepare(gpu.command,std::span(&bad,1)); });
+    rejects([&] { (void)gpu.renderer->prepare(gpu.command,std::span(&bad,1),true); });
     auto corrupt=batches; corrupt[0].indices[0]=99; bad=draw; bad.batches=corrupt;
     rejects([&] { (void)gpu.renderer->prepare(gpu.command,std::span(&bad,1)); });
     // The second batch has distinct geometry AND indices. Its unused first
