@@ -39,11 +39,11 @@ fidelity claim. Return the highest-resolution landscape output available.
 
 ## Application icon
 
-`openfreedomfighters-icon.png` is original square icon artwork generated for
-the project. It uses an original red star, concrete frame, and urban skyline;
-it contains no retail-game artwork or text. The 256×256
+`openfreedomfighters-icon.png` is original 1024×1024 app-icon artwork generated
+for this project. It uses a bold red star, broken ivory arch, and a dark urban
+silhouette; it contains no retail-game artwork or text. The 256×256
 `openfreedomfighters.png` is installed as the Linux hicolor application icon.
 `openfreedomfighters.icns` packages the same art for the macOS app bundle, and
-`openfreedomfighters.ico` is embedded in the Windows executable. All platform
-files are resized from the 1024×1024 PNG master with Pillow 11.3.0 and macOS
-`iconutil`.
+`openfreedomfighters.ico` embeds it in the Windows executable. Platform files
+are resized from the PNG master with Pillow 11.3.0; `iconutil` assembles the
+multi-resolution macOS icon.
