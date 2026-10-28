@@ -143,4 +143,6 @@ The cases cover selected edges, clipping, subpixel positions, and culling.
 They do not establish behavior for every accepted coordinate, blending,
 interpolation, double coverage, physical presentation, or native Windows.
 The path remains a local opt-in experiment; the default device rejects draws
-and the game is not rendered by it.
+and the game is not rendered by it. On Linux, the complete synthetic HLE
+self-test suite passed both with the triangle experiment disabled and with it
+enabled (23 tests in each configuration).
