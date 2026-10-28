@@ -46,10 +46,14 @@ namespace off::platform {
 namespace {
 
 struct GamepadSession {
-  GamepadSession() = default;
+  GamepadSession() : initialized(SDL_InitSubSystem(SDL_INIT_GAMEPAD)) {}
   GamepadSession(const GamepadSession &) = delete;
   GamepadSession &operator=(const GamepadSession &) = delete;
-  ~GamepadSession() { SDL_QuitSubSystem(SDL_INIT_GAMEPAD); }
+  ~GamepadSession() {
+    if (initialized)
+      SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
+  }
+  bool initialized{};
 };
 
 struct PreviewVertex {
@@ -1174,8 +1178,6 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   SDL_Window *window = startup_window.get();
   if (window == nullptr)
     return {.success = false, .message = "Startup window is missing"};
-  if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
-    return failure("SDL gamepad initialization failed");
   const GamepadSession gamepad_session;
   // Preserve the host's language preference order unless an explicit locale
   // override was supplied.
@@ -1423,14 +1425,20 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   bool running = true;
   bool screenshot_captured = screenshot_path.empty();
   std::size_t frames = 0;
-  SdlMenuGamepad menu_gamepad{
-      SDL_GetWindowID(window),
-      (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0};
+  std::optional<SdlMenuGamepad> menu_gamepad;
+  if (gamepad_session.initialized) {
+    menu_gamepad.emplace(
+        SDL_GetWindowID(window),
+        (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0);
+  }
   while (running) {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-      const auto gamepad_key = menu_gamepad.handle_event(
-          event, menu.phase() != ui::GraphicsMenuPhase::closed);
+      const auto gamepad_key = menu_gamepad
+                                   ? menu_gamepad->handle_event(
+                                         event, menu.phase() !=
+                                                    ui::GraphicsMenuPhase::closed)
+                                   : std::optional<ui::GraphicsMenuKey>{};
       if (event.type == SDL_EVENT_QUIT) {
         running = false;
         continue;
