@@ -121,3 +121,7 @@ recovery, and GDI fallback; the corresponding HLE suite passed 21 of 21 tests
 on Linux. It is not connected to a D3D8 device or the game. Screen opening
 requires serialized initialization and renderer-owner thread use; general
 shutdown and full guest framebuffer concurrency are not implemented.
+The local checkout also has a screen-owned offscreen-buffer experiment. Its
+synthetic SDL2 software-renderer tests cover clear, triangle rendering, resize,
+repeated presentation, owner-thread checks, and selected failure recovery.
+This does not establish D3D8 swap semantics or physical display behavior.
