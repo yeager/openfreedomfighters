@@ -128,3 +128,10 @@ The local checkout also has a screen-owned offscreen-buffer experiment. Its
 synthetic SDL2 software-renderer tests cover clear, triangle rendering, resize,
 repeated presentation, owner-thread checks, and selected failure recovery.
 This does not establish D3D8 swap semantics or physical display behavior.
+
+A synthetic 16×16 triangle comparison on Linux found pixel differences
+between SDL2's software renderer and WineD3D with llvmpipe. Trying ±0.5-pixel
+coordinate offsets did not consistently match the reference across the tested
+edges, culling, interpolation, and blending cases. WineD3D is not a native
+Windows or hardware oracle; the local device still rejects drawing until its
+raster semantics are verified.
