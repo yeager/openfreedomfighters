@@ -103,3 +103,11 @@ establish general D3D8 behavior or a production frame-lifetime integration.
 The prototype now derives that format's offsets from an explicit synthetic
 FVF and checks the selected fill and cull states. Other formats, shader handles,
 and render states are not supported by the experiment.
+
+The local pcrecomp checkout has a separate opt-in D3D8 root HLE interface,
+tested through synthetic PE import binding and COM calls. It does not create
+a device or render the game. It requires an experimental safe-file-view
+policy that rejects shared file-backed mappings and uses private snapshots for
+copy-on-write views; this is not full Windows mapping semantics. Synthetic
+default and opt-in HLE suites each passed 18 of 18 tests on Linux, and targeted
+tests also passed alongside the later window-class changes.
