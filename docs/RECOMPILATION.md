@@ -114,3 +114,10 @@ policy that rejects shared file-backed mappings and uses private snapshots for
 copy-on-write views; this is not full Windows mapping semantics. Synthetic
 default and opt-in HLE suites each passed 18 of 18 tests on Linux, and targeted
 tests also passed alongside the later window-class changes.
+
+The local checkout also provides an experimental screen-owned SDL2 rendering
+path. Its synthetic software-renderer test checks draw, ownership, failure
+recovery, and GDI fallback; the corresponding HLE suite passed 21 of 21 tests
+on Linux. It is not connected to a D3D8 device or the game. Screen opening
+requires serialized initialization and renderer-owner thread use; general
+shutdown and full guest framebuffer concurrency are not implemented.
