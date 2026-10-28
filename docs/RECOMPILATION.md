@@ -146,3 +146,10 @@ The path remains a local opt-in experiment; the default device rejects draws
 and the game is not rendered by it. On Linux, the complete synthetic HLE
 self-test suite passed both with the triangle experiment disabled and with it
 enabled (23 tests in each configuration).
+
+The local D3D8 root can also report the current SDL window's display mode when
+the display is available and its format matches the supported X8R8G8B8 profile.
+It does not advertise fullscreen modes. Synthetic Linux tests cover headless
+and unsupported cases, checked guest writes, display lookup failure, and
+concurrent snapshot access. macOS and Windows have not been verified for this
+change.
