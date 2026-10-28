@@ -72,3 +72,8 @@ render pass. The host drew a synthetic image using `SdlIntroRenderer` and
 verified the resulting pixels by readback. The host supplied the active GPU
 resources and inserted the draw itself: the experiment did not test swapchain
 presentation, D3D8 rendering semantics, real guest draw calls, or the game.
+Another synthetic experiment dispatched `DrawPrimitiveUP` from lifted x86
+through a limited provider and drew a triangle with `SdlIntroRenderer`. Metal
+offscreen readback matched the expected pixels, and four invalid input cases
+were rejected. This covers one deliberately limited vertex format and does not
+establish general D3D8 behavior or a production frame-lifetime integration.
