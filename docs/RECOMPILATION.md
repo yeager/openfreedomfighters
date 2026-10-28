@@ -55,9 +55,13 @@ Win32 imports, Direct3D, or an end-to-end host runtime; the unmodified
 revision's full differential suite did not pass.
 
 A local pcrecomp experiment subsequently added default-mode `sqrtps` and
-`sqrtss` result handling and SSE2 `paddw` lifting. Its synthetic differential
-suite passed 386 of 386 cases on macOS arm64. The square-root change does not
+`sqrtss` result handling and SSE2 `paddw`, `punpcklwd`, and `punpckldq`
+lifting. Its synthetic differential suite passed 394 of 394 cases on macOS
+arm64. The unpack tests do not validate alignment or exception behavior. The
+square-root change does not
 model MXCSR exception flags, DAZ/FTZ, or guest rounding modes. These changes
 remain local to the external tool checkout and are not an upstream release.
 A separate synthetic lifted guest also reached a host COM provider via an
-indirect vtable call; this did not test D3D8 or the game's renderer.
+indirect vtable call. A further synthetic test exercised public D3D8 COM slots
+and x86 calling conventions for CreateDevice, Clear, and Present with stub
+providers. It did not create a graphics device or test the game's renderer.
