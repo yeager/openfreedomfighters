@@ -1,3 +1,13 @@
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 #include "off/data/install.hpp"
 #include "off/data/archive_vfs.hpp"
 #include "off/data/audio_bank_header.hpp"
@@ -71,12 +81,38 @@
 #include <system_error>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #ifndef OFF_VERSION
 #error "OFF_VERSION must be supplied by the CMake release version"
 #endif
 
 namespace {
+
+[[nodiscard]] std::filesystem::path path_from_utf8(std::string_view value) {
+  std::u8string encoded;
+  encoded.reserve(value.size());
+  for (const char byte : value)
+    encoded.push_back(static_cast<char8_t>(static_cast<unsigned char>(byte)));
+  return std::filesystem::path{encoded};
+}
+
+#if defined(_WIN32)
+[[nodiscard]] std::optional<std::string> utf8_from_wide(
+    const wchar_t *value) {
+  if (value == nullptr) return std::nullopt;
+  const int required = ::WideCharToMultiByte(
+      CP_UTF8, WC_ERR_INVALID_CHARS, value, -1, nullptr, 0, nullptr, nullptr);
+  if (required <= 0) return std::nullopt;
+  std::string result(static_cast<std::size_t>(required), '\0');
+  if (::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, -1,
+                            result.data(), required, nullptr, nullptr) !=
+      required)
+    return std::nullopt;
+  result.pop_back();
+  return result;
+}
+#endif
 
 [[nodiscard]] bool equal_ascii_case_insensitive(std::string_view left,
                                                 std::string_view right) noexcept {
@@ -1246,17 +1282,21 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool readiness_o
 [[nodiscard]] std::filesystem::path default_game_data_path() {
   // An explicit environment value is useful for portable installs and test
   // systems. It never overrides --data.
+#if defined(_WIN32)
+  if (const wchar_t *value = _wgetenv(L"OPENFREEDOMFIGHTERS_DATA");
+      value != nullptr && *value != L'\0')
+    return std::filesystem::path{value};
+  const wchar_t *home = _wgetenv(L"USERPROFILE");
+  if (home == nullptr || *home == L'\0') return {};
+  return std::filesystem::path{home} / L".openfreedomfighters";
+#else
   if (const char *value = std::getenv("OPENFREEDOMFIGHTERS_DATA");
       value != nullptr && *value != '\0')
-    return std::filesystem::path{value};
-#if defined(_WIN32)
-  const char *home = std::getenv("USERPROFILE");
-#else
+    return path_from_utf8(value);
   const char *home = std::getenv("HOME");
+  if (home == nullptr || *home == '\0') return {};
+  return path_from_utf8(home) / ".openfreedomfighters";
 #endif
-  if (home == nullptr || *home == '\0')
-    return {};
-  return std::filesystem::path{home} / ".openfreedomfighters";
 }
 
 [[nodiscard]] std::optional<off::ui::l10n::RetailLocalizationSession>
@@ -1302,7 +1342,7 @@ initialize_private_owned_localization_session(
 
 } // namespace
 
-int main(int argc, char **argv) {
+static int run_application(int argc, char **argv) {
   std::filesystem::path data_path;
   auto mode = off::Mode::original;
   bool verify_only = false;
@@ -1334,7 +1374,7 @@ int main(int argc, char **argv) {
   for (int index = 1; index < argc; ++index) {
     const std::string_view argument{argv[index]};
     if (argument == "--data" && index + 1 < argc) {
-      data_path = argv[++index];
+      data_path = path_from_utf8(argv[++index]);
     } else if (argument == "--mode" && index + 1 < argc) {
       mode_specified = true;
       const auto parsed = off::parse_mode(argv[++index]);
@@ -1361,7 +1401,7 @@ int main(int argc, char **argv) {
     } else if (argument == "--diagnostic-scene") {
       diagnostic_scene = true;
       if (index + 1 < argc && std::string_view{argv[index + 1]}.front() != '-')
-        diagnostic_scene_archive = argv[++index];
+        diagnostic_scene_archive = path_from_utf8(argv[++index]);
     } else if (argument == "--diagnostic-startup-graphics") {
       diagnostic_startup_graphics = true;
     } else if (argument == "--diagnostic-intro-picture") {
@@ -1403,9 +1443,9 @@ int main(int argc, char **argv) {
     } else if (argument == "--probe-intro-named-global") {
       probe_intro_named_global = true;
     } else if (argument == "--screenshot" && index + 1 < argc) {
-      screenshot_path = argv[++index];
+      screenshot_path = path_from_utf8(argv[++index]);
     } else if (argument == "--startup-progress-receipt" && index + 1 < argc) {
-      startup_progress_receipt_path = argv[++index];
+      startup_progress_receipt_path = path_from_utf8(argv[++index]);
     } else if (argument == "--locale" && index + 1 < argc) {
       locale = argv[++index];
       if (locale.empty() || locale.size() > 35U) {
@@ -2045,3 +2085,27 @@ int main(int argc, char **argv) {
   std::cout << runtime.message << '\n';
   return 0;
 }
+
+#if defined(_WIN32)
+int wmain(int argc, wchar_t **wide_argv) {
+  std::vector<std::string> utf8_arguments;
+  utf8_arguments.reserve(static_cast<std::size_t>(argc));
+  for (int index = 0; index < argc; ++index) {
+    const auto converted = utf8_from_wide(wide_argv[index]);
+    if (!converted) {
+      std::cerr << "Unable to convert a command-line argument to UTF-8.\n";
+      return 2;
+    }
+    utf8_arguments.push_back(*converted);
+  }
+
+  std::vector<char *> arguments;
+  arguments.reserve(utf8_arguments.size() + 1);
+  for (auto &argument : utf8_arguments)
+    arguments.push_back(argument.data());
+  arguments.push_back(nullptr);
+  return run_application(argc, arguments.data());
+}
+#else
+int main(int argc, char **argv) { return run_application(argc, argv); }
+#endif
