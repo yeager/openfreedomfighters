@@ -7,7 +7,14 @@
 #include <cstdint>
 #include <optional>
 
+namespace off::cutscene {
+struct FirstCutPlayerPhaseOneServices;
+struct FirstCutPlayerSessionPhaseTwoServices;
+}
+
 namespace off::graphics {
+
+class MovieControlFirstCutRuntimeHandoff;
 
 // Owns only ordering evidence for a future normal first-cut scene. It supplies
 // no lifecycle, camera, view, picture, audio, or renderer fallback.
@@ -35,6 +42,16 @@ class NormalIntroSceneHost final {
       const IntroPostReaderActivationServices& services);
   [[nodiscard]] MovieControlEvent16Result dispatch_event16(
       const MovieControlEvent16Services& services);
+  // Dispatches through this host's exact MovieControlFirstUpdate and uses the
+  // checked runtime handoff to run the cold first-cut player's typed lifecycle
+  // phases only after MovieControl admits its event 16. The handoff replaces
+  // only the supplied CutSequence-start operation; the caller still supplies
+  // manager gates, sequence preparation, and group-state service behavior.
+  [[nodiscard]] MovieControlEvent16Result dispatch_first_cut_event16(
+      MovieControlFirstCutRuntimeHandoff& handoff,
+      MovieControlEvent16Services services,
+      const cutscene::FirstCutPlayerPhaseOneServices& phase_one,
+      const cutscene::FirstCutPlayerSessionPhaseTwoServices& phase_two);
   [[nodiscard]] FirstCutRequestedCameraResult route_first_cut(
       const FirstCutRequestedCameraServices& services);
   [[nodiscard]] FirstCutViewAdmissionResult admit_first_cut_view(

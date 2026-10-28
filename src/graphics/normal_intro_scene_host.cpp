@@ -1,4 +1,5 @@
 #include "off/graphics/normal_intro_scene_host.hpp"
+#include "off/graphics/movie_control_first_cut_runtime_handoff.hpp"
 
 #include <stdexcept>
 #include <utility>
@@ -50,6 +51,30 @@ MovieControlEvent16Result NormalIntroSceneHost::dispatch_event16(
                  : NormalIntroSceneHostStage::event16_not_activated;
     return result;
   } catch (...) { stage_ = NormalIntroSceneHostStage::failed; throw; }
+}
+
+MovieControlEvent16Result NormalIntroSceneHost::dispatch_first_cut_event16(
+    MovieControlFirstCutRuntimeHandoff& handoff,
+    MovieControlEvent16Services services,
+    const cutscene::FirstCutPlayerPhaseOneServices& phase_one,
+    const cutscene::FirstCutPlayerSessionPhaseTwoServices& phase_two) {
+  if (stage_ != NormalIntroSceneHostStage::awaiting_event16 &&
+      stage_ != NormalIntroSceneHostStage::event16_not_activated)
+    throw std::runtime_error(
+        "normal intro scene host first-cut event 16 is unavailable");
+  try {
+    const auto result = handoff.deliver(movie_control_, std::move(services),
+                                        phase_one, phase_two);
+    event_ = result;
+    stage_ = result == MovieControlEvent16Result::activated ||
+                     result == MovieControlEvent16Result::already_active
+                 ? NormalIntroSceneHostStage::first_cut_routed
+                 : NormalIntroSceneHostStage::event16_not_activated;
+    return result;
+  } catch (...) {
+    stage_ = NormalIntroSceneHostStage::failed;
+    throw;
+  }
 }
 
 FirstCutRequestedCameraResult NormalIntroSceneHost::route_first_cut(

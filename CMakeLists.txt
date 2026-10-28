@@ -363,6 +363,7 @@ add_library(off_core
     src/graphics/temporal_resolve_inputs.cpp
     src/graphics/temporal_resolve_baseline.cpp
     src/graphics/admitted_temporal_scene_frame.cpp
+    src/graphics/active_view_coordinator.cpp
     src/platform/runtime_presentation_settings.cpp
     src/graphics/scene_render.cpp
     src/graphics/scene_gpu_plan.cpp
