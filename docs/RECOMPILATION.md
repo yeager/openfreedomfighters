@@ -76,6 +76,9 @@ The local Win32 HLE experiment also implements COM task-memory allocation,
 reallocation, and freeing using its guest heap. Synthetic tests cover zero-size
 operations and allocation failures; external COM allocators and invalid-pointer
 exceptions are not modeled.
+An additional local `CreateEventW` implementation supports unnamed events
+with default security only. Named events and explicit security attributes are
+rejected; the existing wait-all and cross-process models remain incomplete.
 Local HLE changes also add limited window-class metadata queries and
 unregistration. The model does not implement complete module-local or global
 class scope, system-class metadata, or unlimited reuse of class slots.
