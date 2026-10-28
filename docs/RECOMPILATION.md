@@ -64,6 +64,10 @@ remain local to the external tool checkout and are not an upstream release.
 A later local fix prevents the Win32 host from retaining a successful boot
 state after strict import binding fails. A synthetic regression test passed on
 macOS arm64 and Linux; missing imports still need actual implementations.
+The local host also has limited wide-character startup and module queries:
+startup data is synthetic, module names are restricted to ASCII in UTF-16,
+and pseudo-system modules do not support lookup by full path. Invalid guest
+pointer exceptions are not modeled. These are not full Win32 implementations.
 A separate synthetic lifted guest also reached a host COM provider via an
 indirect vtable call. A further synthetic test exercised public D3D8 COM slots
 and x86 calling conventions for CreateDevice, Clear, and Present with stub
