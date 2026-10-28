@@ -12,12 +12,8 @@ void check(bool condition, const char* message) {
   if (!condition) { std::cerr << "FAIL: " << message << '\n'; std::exit(1); }
 }
 
-off::graphics::NormalIntroSceneHost admitted_host() {
+void admit_host(off::graphics::NormalIntroSceneHost &host) {
   using namespace off::graphics;
-  NormalIntroSceneHost host{17, 91, 1,
-      {.reader_bracket = [] {}, .outer_loader_tail = [] {},
-       .enter_global_lifecycle = [] {}},
-      {false, false, 44}};
   host.activate({.movie_control_phase_two = {
       [] { return false; }, [] {}, [](bool) {}, [] {}, [] { return 0; }, [] {}}});
   check(host.dispatch_event16({
@@ -60,7 +56,6 @@ off::graphics::NormalIntroSceneHost admitted_host() {
       .groups = std::span(&group, 1),
       .transform = {.basis = {0, 0, 1, 0, 1, 0, 1, 0, 0}}};
   (void)picture;
-  return host;
 }
 }  // namespace
 
@@ -72,7 +67,11 @@ int main() {
   catch (const std::runtime_error&) { rejected = true; }
   check(rejected, "unstarted host cannot hand a frame to SDL");
 
-  auto host = admitted_host();
+  graphics::NormalIntroSceneHost host{17, 91, 1,
+      {.reader_bracket = [] {}, .outer_loader_tail = [] {},
+       .enter_global_lifecycle = [] {}},
+      {false, false, 44}};
+  admit_host(host);
   rejected = false;
   try { static_cast<void>(platform::NormalIntroSceneHostFrameBridge::bind(host)); }
   catch (const std::runtime_error&) { rejected = true; }

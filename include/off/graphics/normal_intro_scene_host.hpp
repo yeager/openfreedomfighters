@@ -36,6 +36,12 @@ class NormalIntroSceneHost final {
                        IntroStartupActivationBoundaries activation_boundaries,
                        NormalIntroSceneHostFirstCutConfig first_cut,
                        MovieControlRuntimeIdentity runtime_identity = {});
+  // activation_ retains a reference to movie_control_, and renderer bridges
+  // retain this host's address. Keep both bindings stable for the host's life.
+  NormalIntroSceneHost(const NormalIntroSceneHost &) = delete;
+  NormalIntroSceneHost &operator=(const NormalIntroSceneHost &) = delete;
+  NormalIntroSceneHost(NormalIntroSceneHost &&) = delete;
+  NormalIntroSceneHost &operator=(NormalIntroSceneHost &&) = delete;
   void activate(const IntroStartupActivationServices& services);
   // This is only for a retained normal scene with a completed reader receipt.
   // It cannot invoke, replace, or replay the reader bracket.

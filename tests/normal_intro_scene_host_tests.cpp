@@ -5,7 +5,13 @@
 #include <optional>
 #include <stdexcept>
 #include <string_view>
+#include <type_traits>
 #include <vector>
+
+static_assert(!std::is_copy_constructible_v<off::graphics::NormalIntroSceneHost>);
+static_assert(!std::is_copy_assignable_v<off::graphics::NormalIntroSceneHost>);
+static_assert(!std::is_move_constructible_v<off::graphics::NormalIntroSceneHost>);
+static_assert(!std::is_move_assignable_v<off::graphics::NormalIntroSceneHost>);
 
 namespace {
 void check(bool condition, const char *message) {
