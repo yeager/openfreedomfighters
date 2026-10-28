@@ -61,6 +61,9 @@ arm64. The unpack tests do not validate alignment or exception behavior. The
 square-root change does not
 model MXCSR exception flags, DAZ/FTZ, or guest rounding modes. These changes
 remain local to the external tool checkout and are not an upstream release.
+A later local fix prevents the Win32 host from retaining a successful boot
+state after strict import binding fails. A synthetic regression test passed on
+macOS arm64 and Linux; missing imports still need actual implementations.
 A separate synthetic lifted guest also reached a host COM provider via an
 indirect vtable call. A further synthetic test exercised public D3D8 COM slots
 and x86 calling conventions for CreateDevice, Clear, and Present with stub
