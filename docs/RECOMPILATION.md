@@ -51,5 +51,13 @@ passed. Separately, an original synthetic PE32 program with no imports
 was analyzed and lifted to C. Its generated entry function compiled and ran
 on macOS arm64 in a small harness with synthetic registers and guest memory,
 returning the expected result. This did not test game code, a PE loader,
-Win32 imports, Direct3D, or an end-to-end host runtime; the full differential
-suite cannot be considered passing.
+Win32 imports, Direct3D, or an end-to-end host runtime; the unmodified
+revision's full differential suite did not pass.
+
+A local pcrecomp experiment subsequently added default-mode `sqrtps` and
+`sqrtss` result handling and SSE2 `paddw` lifting. Its synthetic differential
+suite passed 386 of 386 cases on macOS arm64. The square-root change does not
+model MXCSR exception flags, DAZ/FTZ, or guest rounding modes. These changes
+remain local to the external tool checkout and are not an upstream release.
+A separate synthetic lifted guest also reached a host COM provider via an
+indirect vtable call; this did not test D3D8 or the game's renderer.
