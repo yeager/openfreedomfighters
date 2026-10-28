@@ -28,12 +28,17 @@ for a portable installation.
 
 ## Current state
 
-Status reviewed 2026-10-27: the project is a native prototype, not a playable
+Status reviewed 2026-10-28: the project is a native prototype, not a playable
 game. The latest local macOS build was observed running at 19:42 Stockholm
 time, but the visible intro remained a static title/legal card; two captures
 five seconds apart were identical. Animated intro playback, intro audio, the
 original menu, and gameplay are still unverified and unavailable through normal
 startup.
+
+The GitHub Build workflow for commit `1ac6f42` passed on Windows, Linux,
+macOS arm64, and macOS Intel, including install-layout checks. This confirms
+cross-platform build and packaging checks; it does not verify normal intro or
+gameplay rendering.
 
 Normal startup loads the user's local resources and presents a labelled static
 intro fallback. This does not confirm animated intro playback, intro audio,
