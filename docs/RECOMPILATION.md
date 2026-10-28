@@ -107,18 +107,21 @@ The prototype now derives that format's offsets from an explicit synthetic
 FVF and checks the selected fill and cull states. Other formats, shader handles,
 and render states are not supported by the experiment.
 
-The local pcrecomp checkout has a separate opt-in D3D8 root HLE interface,
-tested through synthetic PE import binding and COM calls. It does not create
-a device or render the game. It requires an experimental safe-file-view
+The local pcrecomp checkout has an opt-in D3D8 HLE root and a limited
+SDL-backed device, tested through synthetic PE import binding and COM calls.
+The device handles a restricted create, clear, and present path; drawing and
+many normal D3D8 methods remain unsupported. It does not render the game.
+It requires an experimental safe-file-view
 policy that rejects shared file-backed mappings and uses private snapshots for
 copy-on-write views; this is not full Windows mapping semantics. Synthetic
-default and opt-in HLE suites each passed 18 of 18 tests on Linux, and targeted
-tests also passed alongside the later window-class changes.
+default and opt-in HLE suites each passed 23 of 23 tests on Linux. Deferred
+device cleanup requires the owner thread's pump to continue running.
 
 The local checkout also provides an experimental screen-owned SDL2 rendering
 path. Its synthetic software-renderer test checks draw, ownership, failure
 recovery, and GDI fallback; the corresponding HLE suite passed 21 of 21 tests
-on Linux. It is not connected to a D3D8 device or the game. Screen opening
+on Linux. The limited local D3D8 device uses its offscreen buffer, but it is
+not connected to the game. Screen opening
 requires serialized initialization and renderer-owner thread use; general
 shutdown and full guest framebuffer concurrency are not implemented.
 The local checkout also has a screen-owned offscreen-buffer experiment. Its
