@@ -175,8 +175,8 @@ jobs:
           app_binary="$app/Contents/MacOS/openfreedomfighters"
           test -x "$app_binary"
           test -f "$app/Contents/Resources/openfreedomfighters.icns"
-          test -f "$app/Contents/MacOS/assets/openfreedomfighters-splash.bmp"
-          test -f "$app/Contents/MacOS/assets/Rajdhani-SemiBold.ttf"
+          test -f "$app/Contents/Resources/assets/openfreedomfighters-splash.bmp"
+          test -f "$app/Contents/Resources/assets/Rajdhani-SemiBold.ttf"
           project_version=$(sed -n 's/^project(OpenFreedomFighters VERSION \([^ ]*\) LANGUAGES .*)/\1/p' CMakeLists.txt)
           test -n "$project_version"
           test "$("$app_binary" --version)" = "OpenFreedomFighters $project_version"
