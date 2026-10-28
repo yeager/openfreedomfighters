@@ -77,3 +77,6 @@ through a limited provider and drew a triangle with `SdlIntroRenderer`. Metal
 offscreen readback matched the expected pixels, and four invalid input cases
 were rejected. This covers one deliberately limited vertex format and does not
 establish general D3D8 behavior or a production frame-lifetime integration.
+The prototype now derives that format's offsets from an explicit synthetic
+FVF and checks the selected fill and cull states. Other formats, shader handles,
+and render states are not supported by the experiment.
