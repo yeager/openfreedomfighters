@@ -38,3 +38,11 @@ work must follow [CLEAN_ROOM.md](../CLEAN_ROOM.md); an independently written
 implementation requires a reviewed behavior-only specification. A synthetic
 program can be used to assess a tool without publishing game-derived output.
 No recompilation tool has yet been validated as a working route for this game.
+
+## Synthetic feasibility check
+
+On macOS arm64, pcrecomp revision `a85ea970f9e0640ab6546d2ca7a01fccb132973d`
+ran its synthetic x86-32 differential suite against Unicorn: 371 of 372 tests
+matched, with a `sqrtps` mismatch and a nonzero exit status. A filtered shift
+test passed. This did not test a Windows PE executable, game code, Direct3D,
+or an end-to-end host runtime; the full suite cannot be considered passing.
