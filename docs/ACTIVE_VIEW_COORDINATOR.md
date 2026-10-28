@@ -58,10 +58,16 @@ requires. Host activation can now adopt a one-use MovieControl phase-two
 receipt minted after the real component lifecycle; this preserves the exact
 runtime deadline and prevents the host from repeating phase-two side effects.
 It removes a future wiring hazard but does not create the missing production
-services. World startup likewise lacks a
-live active-root producer; the existing world frame input is diagnostic and
-is not a normal scene-manager result. Intro and world frame inputs are also
-currently mutually exclusive in `run_sdl_gpu_runtime`.
+services. The application clock exposes advance and scene-publication operations,
+but the production loop does not call them. Component construction stores an
+interval and scheduling clock, yet no production scheduler consumes those
+values. The existing ordinary intro dispatcher is also disconnected from the
+loop and currently supplies a concrete update only for the default preview
+camera; it does not dispatch MovieControl.
+
+World startup likewise lacks a live active-root producer; the existing world
+frame input is diagnostic and is not a normal scene-manager result. Intro and
+world frame inputs are currently mutually exclusive in `run_sdl_gpu_runtime`.
 
 These are required integration inputs for parity, not claims of completed
 rendering. Keep the incomplete fallback visible until real lifecycle,
