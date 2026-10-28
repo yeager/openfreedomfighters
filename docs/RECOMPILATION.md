@@ -76,6 +76,11 @@ The local Win32 HLE experiment also implements COM task-memory allocation,
 reallocation, and freeing using its guest heap. Synthetic tests cover zero-size
 operations and allocation failures; external COM allocators and invalid-pointer
 exceptions are not modeled.
+The local based-memory runtime now tracks logical guest virtual-memory regions
+under a shared lock for checked copies, allocation, decommit, and release. Its
+synthetic HLE suite passed 15 of 15 tests on Linux. This remains a simplified
+model: Windows per-page commit/protection state and safe concurrent use of raw
+guest pointers are not modeled, and checked copies are unavailable in flat mode.
 A separate synthetic lifted guest also reached a host COM provider via an
 indirect vtable call. A further synthetic test exercised public D3D8 COM slots
 and x86 calling conventions for CreateDevice, Clear, and Present with stub
