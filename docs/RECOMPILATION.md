@@ -136,9 +136,11 @@ edges, culling, interpolation, and blending cases. WineD3D is not a native
 Windows or hardware oracle; the local device still rejects drawing until its
 raster semantics are verified.
 
-A separate synthetic CPU raster model matched 15 additional opaque,
-constant-color geometry cases against WineD3D/llvmpipe on Linux, comparing
-complete 16×16 RGBA buffers. This checks a limited set of edges, clipping,
-subpixel positions, and culling; it does not verify blending, interpolation,
-double coverage, presentation, or native Windows behavior. The model has not
-yet been validated through the actual D3D8 device implementation.
+A separate experimental CPU raster path has been exercised through synthetic
+PE import binding and D3D8 device COM calls. Its complete 16×16 RGBA buffers
+matched WineD3D/llvmpipe on Linux for 17 opaque, constant-color triangle cases.
+The cases cover selected edges, clipping, subpixel positions, and culling.
+They do not establish behavior for every accepted coordinate, blending,
+interpolation, double coverage, physical presentation, or native Windows.
+The path remains a local opt-in experiment; the default device rejects draws
+and the game is not rendered by it.
