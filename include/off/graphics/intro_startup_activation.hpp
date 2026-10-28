@@ -163,9 +163,19 @@ private:
     if (runtime_ && boundaries_.take_movie_control_phase_two_receipt)
       throw std::runtime_error(
           "intro activation has two MovieControl phase-two receipt sources");
-    const bool receipt_source =
-        runtime_ != nullptr ||
-        static_cast<bool>(boundaries_.take_movie_control_phase_two_receipt);
+    if (runtime_ &&
+        (!movie_control_.has_runtime_identity() ||
+         !movie_control_.runtime_identity_matches(
+             runtime_->movie_control_runtime_identity())))
+      throw std::runtime_error(
+          "intro runtime and MovieControl host have different session identities");
+    if (!runtime_ && boundaries_.take_movie_control_phase_two_receipt &&
+        !movie_control_.has_runtime_identity())
+      throw std::runtime_error(
+          "MovieControl phase-two receipt provider requires a runtime-bound host identity");
+    const bool receipt_source = runtime_ != nullptr ||
+        (movie_control_.has_runtime_identity() &&
+         static_cast<bool>(boundaries_.take_movie_control_phase_two_receipt));
     if (receipt_source) {
       if (!standalone_services.empty())
         throw std::runtime_error(
@@ -181,7 +191,8 @@ private:
     if (runtime_) {
       auto receipt = runtime_->issue_movie_control_phase_two_receipt();
       movie_control_.adopt_phase_two_receipt(std::move(receipt));
-    } else if (boundaries_.take_movie_control_phase_two_receipt) {
+    } else if (movie_control_.has_runtime_identity() &&
+               boundaries_.take_movie_control_phase_two_receipt) {
       auto receipt = boundaries_.take_movie_control_phase_two_receipt();
       movie_control_.adopt_phase_two_receipt(std::move(receipt));
     } else {
@@ -190,6 +201,7 @@ private:
     if (!movie_control_.phase_two_callback_returned())
       throw std::runtime_error("MovieControl phase two did not complete");
   }
+
 
   IntroRuntime* runtime_{};
   IntroStartupActivationBoundaries boundaries_{};

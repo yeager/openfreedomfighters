@@ -54,7 +54,10 @@ MovieControlHostEvidence MovieControlHostEvidence::from_runtime(
   if (!owner || !component ||
       owner->component_index != runtime.controller_component_index())
     throw std::runtime_error("MovieControl host evidence requires both controller reader receipts");
-  return from_reader_receipts(owner_receipt(*owner), component_receipt(*component),
-                              runtime.component_handle(owner->component_index));
+  auto evidence = from_reader_receipts(
+      owner_receipt(*owner), component_receipt(*component),
+      runtime.component_handle(owner->component_index));
+  evidence.runtime_identity_ = runtime.movie_control_runtime_identity();
+  return evidence;
 }
 }  // namespace off::graphics

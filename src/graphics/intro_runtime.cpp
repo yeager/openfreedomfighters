@@ -2873,7 +2873,8 @@ IntroRuntime::issue_movie_control_phase_two_receipt() {
   MovieControlPhaseTwoReceipt receipt{
       component_handle(controller_component_), controller->owner.value,
       std::bit_cast<std::int32_t>(
-          *movie_control_lifecycle_phase_two_deadline_)};
+          *movie_control_lifecycle_phase_two_deadline_),
+      movie_control_runtime_identity_};
   movie_control_phase_two_receipt_issued_ = true;
   return receipt;
 }

@@ -8,8 +8,10 @@ namespace off::graphics {
 NormalIntroSceneHost::NormalIntroSceneHost(
     std::uint64_t movie_component_handle, std::uint64_t movie_owner_handle,
     std::int32_t movie_delay, IntroStartupActivationBoundaries boundaries,
-    NormalIntroSceneHostFirstCutConfig first_cut)
-    : movie_control_(movie_component_handle, movie_owner_handle, movie_delay),
+    NormalIntroSceneHostFirstCutConfig first_cut,
+    MovieControlRuntimeIdentity runtime_identity)
+    : movie_control_(movie_component_handle, movie_owner_handle, movie_delay,
+                     std::move(runtime_identity)),
       activation_(std::move(boundaries), movie_control_),
       route_(first_cut.first_option, first_cut.optional_renderer_flag,
              first_cut.requested_camera_reference) {}

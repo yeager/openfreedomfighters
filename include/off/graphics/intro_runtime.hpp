@@ -16,6 +16,7 @@
 #include "off/graphics/intro_renderer_relocation_prefix.hpp"
 #include "off/graphics/intro_renderer_resource_relations.hpp"
 #include "off/graphics/intro_controller_initialization.hpp"
+#include "off/graphics/movie_control_runtime_identity.hpp"
 #include "off/graphics/intro_lifecycle_admission.hpp"
 #include "off/runtime/application_services.hpp"
 #include "off/runtime/component_lifecycle.hpp"
@@ -1289,6 +1290,10 @@ public:
   // component phase two and the enclosing component lifecycle both completed.
   [[nodiscard]] MovieControlPhaseTwoReceipt
   issue_movie_control_phase_two_receipt();
+  [[nodiscard]] MovieControlRuntimeIdentity
+  movie_control_runtime_identity() const noexcept {
+    return movie_control_runtime_identity_;
+  }
   // Compatibility helper for independently constructed lifecycle fixtures;
   // production construction installs its source-checked callback directly.
   [[nodiscard]] runtime::ComponentCallback controller_phase_two_callback(
@@ -1426,6 +1431,8 @@ private:
   std::optional<IntroLegalPictureReaderState> legal_picture_reader_state_;
   std::optional<IntroLegalPictureComponentReaderState> legal_picture_component_reader_state_;
   IntroControllerInitialization controller_initialization_;
+  MovieControlRuntimeIdentity movie_control_runtime_identity_{
+      std::make_shared<const std::uint8_t>(0U)};
   std::optional<IntroControllerPhaseTwoServices> movie_control_phase_two_services_;
   std::optional<std::uint32_t> movie_control_lifecycle_phase_two_deadline_;
   std::optional<std::uint64_t> movie_control_lifecycle_phase_two_generation_;

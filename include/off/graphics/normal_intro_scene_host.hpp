@@ -34,7 +34,8 @@ class NormalIntroSceneHost final {
   NormalIntroSceneHost(std::uint64_t movie_component_handle,
                        std::uint64_t movie_owner_handle, std::int32_t movie_delay,
                        IntroStartupActivationBoundaries activation_boundaries,
-                       NormalIntroSceneHostFirstCutConfig first_cut);
+                       NormalIntroSceneHostFirstCutConfig first_cut,
+                       MovieControlRuntimeIdentity runtime_identity = {});
   void activate(const IntroStartupActivationServices& services);
   // This is only for a retained normal scene with a completed reader receipt.
   // It cannot invoke, replace, or replay the reader bracket.

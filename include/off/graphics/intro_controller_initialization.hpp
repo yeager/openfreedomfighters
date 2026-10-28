@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/graphics/picture_view_transition.hpp"
+#include "off/graphics/movie_control_runtime_identity.hpp"
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -26,12 +27,14 @@ public:
       : component_(std::exchange(other.component_, 0U)),
         owner_(std::exchange(other.owner_, 0U)),
         deadline_(std::exchange(other.deadline_, 0)),
+        runtime_identity_(std::move(other.runtime_identity_)),
         valid_(std::exchange(other.valid_, false)) {}
   MovieControlPhaseTwoReceipt& operator=(MovieControlPhaseTwoReceipt&& other) noexcept {
     if (this != &other) {
       component_ = std::exchange(other.component_, 0U);
       owner_ = std::exchange(other.owner_, 0U);
       deadline_ = std::exchange(other.deadline_, 0);
+      runtime_identity_ = std::move(other.runtime_identity_);
       valid_ = std::exchange(other.valid_, false);
     }
     return *this;
@@ -41,12 +44,15 @@ private:
   friend class IntroRuntime;
   friend class MovieControlFirstUpdate;
   MovieControlPhaseTwoReceipt(std::uint64_t component, std::uint64_t owner,
-                              std::int32_t deadline) noexcept
-      : component_(component), owner_(owner), deadline_(deadline), valid_(true) {}
+                              std::int32_t deadline,
+                              MovieControlRuntimeIdentity runtime_identity) noexcept
+      : component_(component), owner_(owner), deadline_(deadline),
+        runtime_identity_(std::move(runtime_identity)), valid_(true) {}
 
   std::uint64_t component_{};
   std::uint64_t owner_{};
   std::int32_t deadline_{};
+  MovieControlRuntimeIdentity runtime_identity_;
   bool valid_{};
 };
 
@@ -173,7 +179,8 @@ enum class MovieControlEvent16Result {
 class MovieControlFirstUpdate final {
 public:
   MovieControlFirstUpdate(std::uint64_t component_handle,std::uint64_t owner_handle,
-                          std::int32_t delay);
+                          std::int32_t delay,
+                          MovieControlRuntimeIdentity runtime_identity = {});
   void run_phase_two(const MovieControlPhaseTwoServices& services);
   void adopt_phase_two_receipt(MovieControlPhaseTwoReceipt&& receipt);
   [[nodiscard]] MovieControlEvent16Result dispatch_event16(
@@ -185,8 +192,16 @@ public:
   [[nodiscard]] bool activated() const noexcept { return activated_; }
   [[nodiscard]] std::optional<std::int32_t> playback_baseline() const noexcept { return playback_baseline_; }
   [[nodiscard]] bool failed() const noexcept { return failed_; }
+  [[nodiscard]] bool has_runtime_identity() const noexcept {
+    return runtime_identity_.valid();
+  }
+  [[nodiscard]] bool runtime_identity_matches(
+      const MovieControlRuntimeIdentity& identity) const noexcept {
+    return runtime_identity_.same_owner(identity);
+  }
 private:
   std::uint64_t component_handle_{},owner_handle_{};
+  MovieControlRuntimeIdentity runtime_identity_;
   std::int32_t delay_{},deadline_{};
   std::optional<std::int32_t> playback_baseline_;
   bool deadline_assigned_{},phase_two_returned_{},activated_{},phase_two_running_{},event_running_{},failed_{};

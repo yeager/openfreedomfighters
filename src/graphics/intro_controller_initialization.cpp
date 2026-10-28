@@ -73,8 +73,10 @@ namespace {
 }
 
 MovieControlFirstUpdate::MovieControlFirstUpdate(std::uint64_t component_handle,
-    std::uint64_t owner_handle,std::int32_t delay)
-  :component_handle_(component_handle),owner_handle_(owner_handle),delay_(delay) {
+    std::uint64_t owner_handle,std::int32_t delay,
+    MovieControlRuntimeIdentity runtime_identity)
+  :component_handle_(component_handle),owner_handle_(owner_handle),
+   runtime_identity_(std::move(runtime_identity)),delay_(delay) {
   if(!component_handle_ || !owner_handle_)
     throw std::runtime_error("MovieControl requires live component and owner handles");
 }
@@ -111,6 +113,8 @@ void MovieControlFirstUpdate::adopt_phase_two_receipt(
   const auto component = receipt.component_;
   const auto owner = receipt.owner_;
   const auto deadline = receipt.deadline_;
+  auto runtime_identity = std::move(receipt.runtime_identity_);
+  receipt.runtime_identity_ = {};
   receipt.valid_ = false;
   receipt.component_ = 0U;
   receipt.owner_ = 0U;
@@ -118,7 +122,9 @@ void MovieControlFirstUpdate::adopt_phase_two_receipt(
 
   if (phase_two_running_ || event_running_ || failed_ || phase_two_returned_ ||
       phase_two_adopted_ || activated_ || !was_valid ||
-      component != component_handle_ || owner != owner_handle_) {
+      component != component_handle_ || owner != owner_handle_ ||
+      !runtime_identity.valid() ||
+      !runtime_identity.same_owner(runtime_identity_)) {
     failed_ = true;
     throw std::runtime_error(
         "MovieControl phase-two receipt is invalid, mismatched, or already consumed");

@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include "off/graphics/movie_control_runtime_identity.hpp"
 
 namespace off::graphics {
 class IntroRuntime;
@@ -56,15 +57,21 @@ class MovieControlHostEvidence final {
   [[nodiscard]] std::size_t source_directory_index() const noexcept {
     return source_directory_index_;
   }
+  [[nodiscard]] MovieControlRuntimeIdentity runtime_identity() const noexcept {
+    return runtime_identity_;
+  }
 
  private:
   MovieControlHostEvidence(std::uint64_t component, std::uint64_t owner,
-                           std::uint64_t resource, std::size_t directory)
+                           std::uint64_t resource, std::size_t directory,
+                           MovieControlRuntimeIdentity runtime_identity = {})
       : movie_component_handle_(component), movie_owner_handle_(owner),
-        source_resource_handle_(resource), source_directory_index_(directory) {}
+        source_resource_handle_(resource), source_directory_index_(directory),
+        runtime_identity_(std::move(runtime_identity)) {}
   std::uint64_t movie_component_handle_{};
   std::uint64_t movie_owner_handle_{};
   std::uint64_t source_resource_handle_{};
   std::size_t source_directory_index_{};
+  MovieControlRuntimeIdentity runtime_identity_;
 };
 }  // namespace off::graphics

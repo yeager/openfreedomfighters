@@ -19,7 +19,7 @@ NormalIntroSceneHost construct(const MovieControlHostEvidence &evidence,
        .enter_global_lifecycle = std::move(lifecycle.enter_global_lifecycle),
        .take_movie_control_phase_two_receipt =
            std::move(lifecycle.take_movie_control_phase_two_receipt)},
-      first_cut};
+      first_cut, evidence.runtime_identity()};
 }
 } // namespace
 
