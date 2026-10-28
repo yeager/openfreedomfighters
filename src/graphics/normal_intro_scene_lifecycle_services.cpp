@@ -100,12 +100,31 @@ public:
     }
   }
 
+  MovieControlPhaseTwoReceipt take_movie_control_phase_two_receipt() {
+    try {
+      require(Stage::global_complete, "MovieControl phase-two receipt");
+      if (session_->stage() !=
+              NormalIntroSceneSessionStage::outer_loader_tail_complete ||
+          !session_->runtime().components().phases_completed() ||
+          session_->runtime().components().failed())
+        throw std::runtime_error(
+            "normal intro lifecycle adapter has no completed global lifecycle receipt");
+      auto receipt = session_->runtime().issue_movie_control_phase_two_receipt();
+      stage_ = Stage::phase_two_receipt_issued;
+      return receipt;
+    } catch (...) {
+      stage_ = Stage::failed;
+      throw;
+    }
+  }
+
 private:
   enum class Stage {
     awaiting_reader,
     reader_complete,
     tail_complete,
     global_complete,
+    phase_two_receipt_issued,
     failed
   };
   void require(Stage expected, const char *boundary) const {
@@ -129,7 +148,9 @@ NormalIntroSceneLifecycleServiceAdapters::bind(
   return {
       .reader_bracket = [bound] { bound->reader_bracket(); },
       .outer_loader_tail = [bound] { bound->outer_loader_tail(); },
-      .enter_global_lifecycle = [bound] { bound->enter_global_lifecycle(); }};
+      .enter_global_lifecycle = [bound] { bound->enter_global_lifecycle(); },
+      .take_movie_control_phase_two_receipt =
+          [bound] { return bound->take_movie_control_phase_two_receipt(); }};
 }
 
 NormalIntroScenePostReaderHostLifecycleServices
@@ -139,7 +160,8 @@ NormalIntroSceneLifecycleServiceAdapters::bind_after_reader_bracket(
   auto bound = std::make_shared<BoundLifecycleServices>(
       std::move(session), std::move(config), true);
   return {[bound] { bound->outer_loader_tail(); },
-          [bound] { bound->enter_global_lifecycle(); }};
+          [bound] { bound->enter_global_lifecycle(); },
+          [bound] { return bound->take_movie_control_phase_two_receipt(); }};
 }
 
 } // namespace off::graphics

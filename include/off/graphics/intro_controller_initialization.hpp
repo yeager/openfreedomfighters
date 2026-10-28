@@ -6,9 +6,49 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace off::graphics {
+
+class IntroRuntime;
+class MovieControlFirstUpdate;
+
+// One-use proof that the retained MovieControl component completed its
+// canonical phase-two callback inside the scene's completed component
+// lifecycle. Only IntroRuntime can mint a receipt; the matching first-update
+// controller can consume it.
+class MovieControlPhaseTwoReceipt final {
+public:
+  MovieControlPhaseTwoReceipt(const MovieControlPhaseTwoReceipt&) = delete;
+  MovieControlPhaseTwoReceipt& operator=(const MovieControlPhaseTwoReceipt&) = delete;
+  MovieControlPhaseTwoReceipt(MovieControlPhaseTwoReceipt&& other) noexcept
+      : component_(std::exchange(other.component_, 0U)),
+        owner_(std::exchange(other.owner_, 0U)),
+        deadline_(std::exchange(other.deadline_, 0)),
+        valid_(std::exchange(other.valid_, false)) {}
+  MovieControlPhaseTwoReceipt& operator=(MovieControlPhaseTwoReceipt&& other) noexcept {
+    if (this != &other) {
+      component_ = std::exchange(other.component_, 0U);
+      owner_ = std::exchange(other.owner_, 0U);
+      deadline_ = std::exchange(other.deadline_, 0);
+      valid_ = std::exchange(other.valid_, false);
+    }
+    return *this;
+  }
+
+private:
+  friend class IntroRuntime;
+  friend class MovieControlFirstUpdate;
+  MovieControlPhaseTwoReceipt(std::uint64_t component, std::uint64_t owner,
+                              std::int32_t deadline) noexcept
+      : component_(component), owner_(owner), deadline_(deadline), valid_(true) {}
+
+  std::uint64_t component_{};
+  std::uint64_t owner_{};
+  std::int32_t deadline_{};
+  bool valid_{};
+};
 
 enum class IntroPresentationResult { presented, device_lost, configuration_reset_required };
 
@@ -46,6 +86,9 @@ public:
   // Constructor deadline is zero, not proof phase two ran or update is admitted.
   [[nodiscard]] std::uint32_t deadline() const noexcept { return deadline_; }
   [[nodiscard]] bool deadline_assigned() const noexcept { return deadline_assigned_; }
+  [[nodiscard]] std::uint64_t phase_two_completion_generation() const noexcept {
+    return phase_two_completion_generation_;
+  }
   // Records successful assignment through the global engine service, not the
   // current global mode: other engine callers may subsequently change it.
   [[nodiscard]] bool clock_mode_assignment_completed() const noexcept { return mode_assigned_; }
@@ -64,6 +107,7 @@ public:
   void run_phase_two(const IntroControllerPhaseTwoServices& services);
 private:
   std::uint32_t deadline_{};
+  std::uint64_t phase_two_completion_generation_{};
   bool deadline_assigned_{}, mode_assigned_{}, completed_{}, running_{}, failed_{};
 };
 
@@ -81,6 +125,17 @@ struct MovieControlPhaseTwoServices {
   // This boundary owns the first-renderer lookup, dimensions, and reviewed
   // setup/clear calls.  It does not promise a device, frame, or presentation.
   std::function<void()> setup_and_clear_first_renderer;
+
+  [[nodiscard]] bool empty() const noexcept {
+    return !input_manager_exists && !register_action_map &&
+           !assign_engine_clock_mode && !setup_audio_volume &&
+           !scene_integer_clock && !setup_and_clear_first_renderer;
+  }
+  [[nodiscard]] bool complete() const noexcept {
+    return input_manager_exists && register_action_map &&
+           assign_engine_clock_mode && setup_audio_volume &&
+           scene_integer_clock && setup_and_clear_first_renderer;
+  }
 };
 
 struct MovieControlEvent16Services {
@@ -120,6 +175,7 @@ public:
   MovieControlFirstUpdate(std::uint64_t component_handle,std::uint64_t owner_handle,
                           std::int32_t delay);
   void run_phase_two(const MovieControlPhaseTwoServices& services);
+  void adopt_phase_two_receipt(MovieControlPhaseTwoReceipt&& receipt);
   [[nodiscard]] MovieControlEvent16Result dispatch_event16(
       const MovieControlEvent16Services& services);
   [[nodiscard]] std::uint64_t component_handle() const noexcept { return component_handle_; }
@@ -134,6 +190,7 @@ private:
   std::int32_t delay_{},deadline_{};
   std::optional<std::int32_t> playback_baseline_;
   bool deadline_assigned_{},phase_two_returned_{},activated_{},phase_two_running_{},event_running_{},failed_{};
+  bool phase_two_adopted_{};
 };
 
 // The first cut's camera path is intentionally independent of MovieControl's

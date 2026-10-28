@@ -1285,6 +1285,10 @@ public:
   // service and supplies no phase-one, owner or global lifecycle completion.
   // Captured external service state must outlive this scene host.
   void bind_movie_control_phase_two_services(IntroControllerPhaseTwoServices services);
+  // Issues a one-use completion proof only after the canonical MovieControl
+  // component phase two and the enclosing component lifecycle both completed.
+  [[nodiscard]] MovieControlPhaseTwoReceipt
+  issue_movie_control_phase_two_receipt();
   // Compatibility helper for independently constructed lifecycle fixtures;
   // production construction installs its source-checked callback directly.
   [[nodiscard]] runtime::ComponentCallback controller_phase_two_callback(
@@ -1423,6 +1427,9 @@ private:
   std::optional<IntroLegalPictureComponentReaderState> legal_picture_component_reader_state_;
   IntroControllerInitialization controller_initialization_;
   std::optional<IntroControllerPhaseTwoServices> movie_control_phase_two_services_;
+  std::optional<std::uint32_t> movie_control_lifecycle_phase_two_deadline_;
+  std::optional<std::uint64_t> movie_control_lifecycle_phase_two_generation_;
+  bool movie_control_phase_two_receipt_issued_{};
   FreshIntroCamera prepared_camera_;
   std::map<std::size_t,std::unique_ptr<IntroLiveCameraOwner>> live_cameras_;
   RendererCameraRegistry registered_cameras_;

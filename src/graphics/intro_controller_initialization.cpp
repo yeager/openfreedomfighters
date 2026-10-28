@@ -1,6 +1,7 @@
 #include "off/graphics/intro_controller_initialization.hpp"
 #include <bit>
 #include <cctype>
+#include <limits>
 #include <stdexcept>
 
 namespace off::graphics {
@@ -13,6 +14,8 @@ void IntroControllerInitialization::validate_services(const IntroControllerPhase
 
 void IntroControllerInitialization::run_phase_two(const IntroControllerPhaseTwoServices& supplied) {
   if(running_||failed_) throw std::runtime_error("intro phase two is reentrant or previously failed");
+  if(phase_two_completion_generation_==std::numeric_limits<std::uint64_t>::max())
+    throw std::runtime_error("intro phase-two completion generation is exhausted");
   // Snapshot function objects before effects; callbacks may replace the caller's
   // service table without invalidating the currently executing callable.
   const auto s=supplied;
@@ -58,6 +61,7 @@ void IntroControllerInitialization::run_phase_two(const IntroControllerPhaseTwoS
       if(s.present(renderer())!=IntroPresentationResult::presented)
         throw std::runtime_error("intro phase two presentation recovery is unsupported");
     }
+    ++phase_two_completion_generation_;
     completed_=true; running_=false;
   } catch(...) { running_=false; failed_=true; throw; }
 }
@@ -76,7 +80,7 @@ MovieControlFirstUpdate::MovieControlFirstUpdate(std::uint64_t component_handle,
 }
 
 void MovieControlFirstUpdate::run_phase_two(const MovieControlPhaseTwoServices& supplied) {
-  if(phase_two_running_ || event_running_ || failed_)
+  if(phase_two_running_ || event_running_ || failed_ || phase_two_adopted_)
     throw std::runtime_error("MovieControl phase two is reentrant or previously failed");
   const auto services=supplied;
   if(!services.input_manager_exists || !services.register_action_map ||
@@ -99,6 +103,30 @@ void MovieControlFirstUpdate::run_phase_two(const MovieControlPhaseTwoServices& 
     failed_=true;
     throw;
   }
+}
+
+void MovieControlFirstUpdate::adopt_phase_two_receipt(
+    MovieControlPhaseTwoReceipt&& receipt) {
+  const bool was_valid = receipt.valid_;
+  const auto component = receipt.component_;
+  const auto owner = receipt.owner_;
+  const auto deadline = receipt.deadline_;
+  receipt.valid_ = false;
+  receipt.component_ = 0U;
+  receipt.owner_ = 0U;
+  receipt.deadline_ = 0;
+
+  if (phase_two_running_ || event_running_ || failed_ || phase_two_returned_ ||
+      phase_two_adopted_ || activated_ || !was_valid ||
+      component != component_handle_ || owner != owner_handle_) {
+    failed_ = true;
+    throw std::runtime_error(
+        "MovieControl phase-two receipt is invalid, mismatched, or already consumed");
+  }
+  deadline_ = deadline;
+  deadline_assigned_ = true;
+  phase_two_returned_ = true;
+  phase_two_adopted_ = true;
 }
 
 MovieControlEvent16Result MovieControlFirstUpdate::dispatch_event16(

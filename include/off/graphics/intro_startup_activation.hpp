@@ -30,13 +30,15 @@ struct IntroStartupActivationServices {
   // It must return only after root/additional pre- and post-hooks and both
   // reverse component phases succeeded.
   std::function<void()> enter_global_lifecycle;
+  // Standalone path only. Leave this empty when the selected activation
+  // boundaries supply a receipt from the canonical component lifecycle.
   MovieControlPhaseTwoServices movie_control_phase_two;
 };
 
 // Continuation for a retained scene whose ordinary postconstruction reader
-// bracket has already completed.  Keeping this separate makes replaying that
-// bracket impossible: callers may continue only with the outer loader tail,
-// the global lifecycle, and the one canonical MovieControl phase-two call.
+// bracket has already completed. Keeping this separate makes replaying that
+// bracket impossible. Phase two either adopts the runtime's one-use lifecycle
+// receipt or uses the standalone service table; the two paths are exclusive.
 struct IntroPostReaderActivationServices {
   IntroOuterLoaderTailServices outer_loader_tail;
   std::function<void()> enter_global_lifecycle;
@@ -50,6 +52,9 @@ struct IntroStartupActivationBoundaries {
   std::function<void()> reader_bracket;
   std::function<void()> outer_loader_tail;
   std::function<void()> enter_global_lifecycle;
+  // If present, this returns the one-use completion receipt after global
+  // lifecycle. Standalone MovieControlPhaseTwoServices must then be empty.
+  std::function<MovieControlPhaseTwoReceipt()> take_movie_control_phase_two_receipt;
 };
 
 class IntroStartupActivation final {
@@ -68,6 +73,7 @@ public:
                        !boundaries_.enter_global_lifecycle)) ||
         (runtime_ && !services.enter_global_lifecycle))
       throw std::runtime_error("intro startup activation requires global lifecycle service");
+    validate_phase_two_source(services.movie_control_phase_two);
     running_ = true;
     try {
       if (runtime_) {
@@ -92,7 +98,7 @@ public:
       else boundaries_.enter_global_lifecycle();
       stage_ = IntroStartupActivationStage::global_lifecycle_complete;
 
-      movie_control_.run_phase_two(services.movie_control_phase_two);
+      complete_movie_control_phase_two(services.movie_control_phase_two);
       if (!movie_control_.phase_two_callback_returned())
         throw std::runtime_error("MovieControl phase two returned without completion");
       stage_ = IntroStartupActivationStage::movie_control_phase_two_complete;
@@ -111,6 +117,7 @@ public:
     if ((!runtime_ && (!boundaries_.outer_loader_tail || !boundaries_.enter_global_lifecycle)) ||
         (runtime_ && !services.enter_global_lifecycle))
       throw std::runtime_error("intro post-reader activation requires global lifecycle service");
+    validate_phase_two_source(services.movie_control_phase_two);
     running_ = true;
     try {
       if (runtime_) {
@@ -130,7 +137,7 @@ public:
       else boundaries_.enter_global_lifecycle();
       stage_ = IntroStartupActivationStage::global_lifecycle_complete;
 
-      movie_control_.run_phase_two(services.movie_control_phase_two);
+      complete_movie_control_phase_two(services.movie_control_phase_two);
       if (!movie_control_.phase_two_callback_returned())
         throw std::runtime_error("MovieControl phase two returned without completion");
       stage_ = IntroStartupActivationStage::movie_control_phase_two_complete;
@@ -151,6 +158,39 @@ public:
   }
 
 private:
+  void validate_phase_two_source(
+      const MovieControlPhaseTwoServices& standalone_services) const {
+    if (runtime_ && boundaries_.take_movie_control_phase_two_receipt)
+      throw std::runtime_error(
+          "intro activation has two MovieControl phase-two receipt sources");
+    const bool receipt_source =
+        runtime_ != nullptr ||
+        static_cast<bool>(boundaries_.take_movie_control_phase_two_receipt);
+    if (receipt_source) {
+      if (!standalone_services.empty())
+        throw std::runtime_error(
+            "MovieControl phase-two receipt and standalone services are mutually exclusive");
+    } else if (!standalone_services.complete()) {
+      throw std::runtime_error(
+          "intro activation requires either one phase-two receipt source or a complete standalone service table");
+    }
+  }
+
+  void complete_movie_control_phase_two(
+      const MovieControlPhaseTwoServices& standalone_services) {
+    if (runtime_) {
+      auto receipt = runtime_->issue_movie_control_phase_two_receipt();
+      movie_control_.adopt_phase_two_receipt(std::move(receipt));
+    } else if (boundaries_.take_movie_control_phase_two_receipt) {
+      auto receipt = boundaries_.take_movie_control_phase_two_receipt();
+      movie_control_.adopt_phase_two_receipt(std::move(receipt));
+    } else {
+      movie_control_.run_phase_two(standalone_services);
+    }
+    if (!movie_control_.phase_two_callback_returned())
+      throw std::runtime_error("MovieControl phase two did not complete");
+  }
+
   IntroRuntime* runtime_{};
   IntroStartupActivationBoundaries boundaries_{};
   MovieControlFirstUpdate& movie_control_;

@@ -18,6 +18,7 @@ struct NormalIntroSceneHostLifecycleServices {
   std::function<void()> reader_bracket;
   std::function<void()> outer_loader_tail;
   std::function<void()> enter_global_lifecycle;
+  std::function<MovieControlPhaseTwoReceipt()> take_movie_control_phase_two_receipt;
 };
 
 // Move-only proof that a retained session completed its reader bracket. Only
@@ -39,12 +40,16 @@ private:
   friend class NormalIntroSceneLifecycleServiceAdapters;
   NormalIntroScenePostReaderHostLifecycleServices(
       std::function<void()> outer_loader_tail,
-      std::function<void()> enter_global_lifecycle)
+      std::function<void()> enter_global_lifecycle,
+      std::function<MovieControlPhaseTwoReceipt()> take_movie_control_phase_two_receipt)
       : outer_loader_tail_(std::move(outer_loader_tail)),
-        enter_global_lifecycle_(std::move(enter_global_lifecycle)) {}
+        enter_global_lifecycle_(std::move(enter_global_lifecycle)),
+        take_movie_control_phase_two_receipt_(
+            std::move(take_movie_control_phase_two_receipt)) {}
 
   std::function<void()> outer_loader_tail_;
   std::function<void()> enter_global_lifecycle_;
+  std::function<MovieControlPhaseTwoReceipt()> take_movie_control_phase_two_receipt_;
 };
 
 // Concrete operations for a retained normal-scene session. The session, not

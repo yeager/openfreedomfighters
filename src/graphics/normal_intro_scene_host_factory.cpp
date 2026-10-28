@@ -16,7 +16,9 @@ NormalIntroSceneHost construct(const MovieControlHostEvidence &evidence,
       evidence.movie_delay(),
       {.reader_bracket = std::move(lifecycle.reader_bracket),
        .outer_loader_tail = std::move(lifecycle.outer_loader_tail),
-       .enter_global_lifecycle = std::move(lifecycle.enter_global_lifecycle)},
+       .enter_global_lifecycle = std::move(lifecycle.enter_global_lifecycle),
+       .take_movie_control_phase_two_receipt =
+           std::move(lifecycle.take_movie_control_phase_two_receipt)},
       first_cut};
 }
 } // namespace
@@ -43,7 +45,9 @@ NormalIntroSceneHost NormalIntroSceneHostFactory::create_after_reader_bracket(
       evidence,
       {.reader_bracket = {},
        .outer_loader_tail = std::move(lifecycle.outer_loader_tail_),
-       .enter_global_lifecycle = std::move(lifecycle.enter_global_lifecycle_)},
+       .enter_global_lifecycle = std::move(lifecycle.enter_global_lifecycle_),
+       .take_movie_control_phase_two_receipt =
+           std::move(lifecycle.take_movie_control_phase_two_receipt_)},
       first_cut);
 }
 } // namespace off::graphics

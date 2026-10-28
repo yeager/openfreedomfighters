@@ -54,7 +54,11 @@ camera registration into the SDL renderer. `NormalIntroSceneHost` now exposes
 through the controller owned by that host. The method is still an unbound
 boundary: startup does not construct the host or supply the manager gates,
 sequence-preparation/group-state operations, and player phase callbacks it
-requires. World startup likewise lacks a
+requires. Host activation can now adopt a one-use MovieControl phase-two
+receipt minted after the real component lifecycle; this preserves the exact
+runtime deadline and prevents the host from repeating phase-two side effects.
+It removes a future wiring hazard but does not create the missing production
+services. World startup likewise lacks a
 live active-root producer; the existing world frame input is diagnostic and
 is not a normal scene-manager result. Intro and world frame inputs are also
 currently mutually exclusive in `run_sdl_gpu_runtime`.

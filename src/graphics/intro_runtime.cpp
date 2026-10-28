@@ -2747,6 +2747,9 @@ std::optional<IntroSoundListener> IntroRuntime::sound_listener() {
 }
 
 void IntroRuntime::run_controller_phase_two(const IntroControllerPhaseTwoServices& external) {
+  if (movie_control_phase_two_receipt_issued_)
+    throw std::runtime_error(
+        "MovieControl phase-two compatibility rerun is unavailable after receipt issuance");
   auto bound=external;
   application_.bind_controller_phase_two(bound);
   controller_initialization_.run_phase_two(bound);
@@ -2841,8 +2844,43 @@ void IntroRuntime::bind_movie_control_phase_two_services(IntroControllerPhaseTwo
   movie_control_phase_two_services_=std::move(services);
 }
 
+MovieControlPhaseTwoReceipt
+IntroRuntime::issue_movie_control_phase_two_receipt() {
+  if (movie_control_phase_two_receipt_issued_ || components_.failed() ||
+      !components_.phases_completed() || controller_initialization_.failed() ||
+      !controller_initialization_.phase_two_completed() ||
+      !controller_initialization_.deadline_assigned() ||
+      !movie_control_lifecycle_phase_two_deadline_ ||
+      *movie_control_lifecycle_phase_two_deadline_ !=
+          controller_initialization_.deadline() ||
+      !movie_control_lifecycle_phase_two_generation_ ||
+      *movie_control_lifecycle_phase_two_generation_ !=
+          controller_initialization_.phase_two_completion_generation() ||
+      !movie_control_reader_matches())
+    throw std::runtime_error(
+        "MovieControl phase-two receipt requires completed live lifecycle evidence");
+
+  if (controller_component_ >= components_.size())
+    throw std::runtime_error("MovieControl phase-two receipt has no component");
+  const auto& component = components_.at(controller_component_);
+  const auto* controller = movie_controller_reader_state();
+  if (!component.constructed() || component.removed() || !controller ||
+      component.state().attached_owner != controller->owner.value ||
+      (component.state().status & 0x8U) == 0U)
+    throw std::runtime_error(
+        "MovieControl phase-two receipt is not backed by the completed live component");
+
+  MovieControlPhaseTwoReceipt receipt{
+      component_handle(controller_component_), controller->owner.value,
+      std::bit_cast<std::int32_t>(
+          *movie_control_lifecycle_phase_two_deadline_)};
+  movie_control_phase_two_receipt_issued_ = true;
+  return receipt;
+}
+
 void IntroRuntime::run_movie_control_phase_two(std::size_t component_index,runtime::ComponentRecord& record) {
   if(component_index!=controller_component_ || &record!=&components_.at(controller_component_) ||
+      movie_control_phase_two_receipt_issued_ ||
       !movie_control_phase_two_services_ || !movie_control_reader_matches())
     throw std::runtime_error("MovieControl phase two requires its source-backed component and retained scene services");
   auto services=*movie_control_phase_two_services_;
@@ -2881,6 +2919,10 @@ void IntroRuntime::run_movie_control_phase_two(std::size_t component_index,runti
   services.clear=guarded(services.clear);
   services.present=guarded(services.present);
   controller_initialization_.run_phase_two(services);
+  movie_control_lifecycle_phase_two_deadline_ =
+      controller_initialization_.deadline();
+  movie_control_lifecycle_phase_two_generation_ =
+      controller_initialization_.phase_two_completion_generation();
   // The dispatcher sets status 0x8 only after return. Phase one, owner work,
   // event-16 activation and complete-scene admission are separate operations.
 }
