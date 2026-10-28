@@ -135,3 +135,10 @@ coordinate offsets did not consistently match the reference across the tested
 edges, culling, interpolation, and blending cases. WineD3D is not a native
 Windows or hardware oracle; the local device still rejects drawing until its
 raster semantics are verified.
+
+A separate synthetic CPU raster model matched 15 additional opaque,
+constant-color geometry cases against WineD3D/llvmpipe on Linux, comparing
+complete 16×16 RGBA buffers. This checks a limited set of edges, clipping,
+subpixel positions, and culling; it does not verify blending, interpolation,
+double coverage, presentation, or native Windows behavior. The model has not
+yet been validated through the actual D3D8 device implementation.
