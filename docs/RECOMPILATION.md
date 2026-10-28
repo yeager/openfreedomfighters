@@ -43,8 +43,11 @@ No recompilation tool has yet been validated as a working route for this game.
 
 On macOS arm64, pcrecomp revision `a85ea970f9e0640ab6546d2ca7a01fccb132973d`
 ran its synthetic x86-32 differential suite against Unicorn: 371 of 372 tests
-matched, with a `sqrtps` mismatch and a nonzero exit status. A filtered shift
-test passed. Separately, an original synthetic PE32 program with no imports
+matched, with a `sqrtps` mismatch and a nonzero exit status. The mismatch was
+reproduced for a negative operand: host `sqrtf` and the Unicorn reference
+returned quiet NaNs with different sign bits. This is a bitwise difference in
+the synthetic test; its effect on the game is unknown. A filtered shift test
+passed. Separately, an original synthetic PE32 program with no imports
 was analyzed and lifted to C. Its generated entry function compiled and ran
 on macOS arm64 in a small harness with synthetic registers and guest memory,
 returning the expected result. This did not test game code, a PE loader,
