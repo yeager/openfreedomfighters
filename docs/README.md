@@ -85,6 +85,7 @@
 - [Roadmap and acceptance gates](ROADMAP.md)
 - [Phase execution specifications](PHASES.md)
 - [Localization plan](LOCALIZATION.md)
+- [Recompilation research](RECOMPILATION.md)
 - [Clean-room protocol](../CLEAN_ROOM.md)
 - [Continuous integration and releases](CI.md)
 - [Release engineering specification](RELEASE_ENGINEERING.md)
