@@ -76,6 +76,9 @@ The local Win32 HLE experiment also implements COM task-memory allocation,
 reallocation, and freeing using its guest heap. Synthetic tests cover zero-size
 operations and allocation failures; external COM allocators and invalid-pointer
 exceptions are not modeled.
+Local HLE changes also add limited window-class metadata queries and
+unregistration. The model does not implement complete module-local or global
+class scope, system-class metadata, or unlimited reuse of class slots.
 The local based-memory runtime now tracks logical guest virtual-memory regions
 under a shared lock for checked copies, allocation, decommit, and release. Its
 synthetic HLE suite passed 15 of 15 tests on Linux. This remains a simplified
