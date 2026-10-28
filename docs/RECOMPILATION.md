@@ -72,6 +72,10 @@ Local experiments also clamp lexical parent traversal at mapped drive and
 overlay roots and provide a `statvfs`-backed disk-space query. This is not a
 symlink sandbox, and Windows quota, network-path, access-control, and optical
 media behavior is not fully modeled.
+The local Win32 HLE experiment also implements COM task-memory allocation,
+reallocation, and freeing using its guest heap. Synthetic tests cover zero-size
+operations and allocation failures; external COM allocators and invalid-pointer
+exceptions are not modeled.
 A separate synthetic lifted guest also reached a host COM provider via an
 indirect vtable call. A further synthetic test exercised public D3D8 COM slots
 and x86 calling conventions for CreateDevice, Clear, and Present with stub
