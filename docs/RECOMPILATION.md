@@ -65,3 +65,10 @@ A separate synthetic lifted guest also reached a host COM provider via an
 indirect vtable call. A further synthetic test exercised public D3D8 COM slots
 and x86 calling conventions for CreateDevice, Clear, and Present with stub
 providers. It did not create a graphics device or test the game's renderer.
+
+An additional macOS Metal experiment connected synthetic lifted guest
+`Clear` and `Present` calls to a stub provider around an offscreen SDL GPU
+render pass. The host drew a synthetic image using `SdlIntroRenderer` and
+verified the resulting pixels by readback. The host supplied the active GPU
+resources and inserted the draw itself: the experiment did not test swapchain
+presentation, D3D8 rendering semantics, real guest draw calls, or the game.
