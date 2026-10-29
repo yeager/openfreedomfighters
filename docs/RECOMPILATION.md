@@ -195,6 +195,13 @@ outside the rectangle, and retry after a failed commit. A WineD3D/llvmpipe
 probe confirmed the valid-rectangle behavior; malformed rectangles remain
 restricted by the implementation and do not establish Wine or hardware parity.
 
+The local texture experiment also accepts matching LINEAR minification and
+magnification filters for its unmodulated, single-level constant-W profile.
+Synthetic WineD3D/llvmpipe comparisons match selected texel-center and alpha
+cases, but a varying-UV case has one-level color differences and some edge
+coverage differs. Linear filtering with diffuse modulation remains unsupported;
+these results do not establish hardware or pixel parity.
+
 The local pcrecomp checkout also fixes a D3D8 build failure when the optional
 software 3D profile is disabled. On Linux, the D3D8 device self-test passed
 with that profile disabled, with 3D enabled, and with textured 3D enabled.
