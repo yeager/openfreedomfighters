@@ -1216,6 +1216,8 @@ public:
   [[nodiscard]] const IntroFirstCutListReaderState* first_cut_list_reader_state() const noexcept {return first_cut_list_reader_state_?&*first_cut_list_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutComponentReaderState* first_cut_component_reader_state() const noexcept {return first_cut_component_reader_state_?&*first_cut_component_reader_state_:nullptr;}
   [[nodiscard]] const IntroFirstCutCameraReaderState* first_cut_camera_reader_state() const noexcept {return first_cut_camera_reader_state_?&*first_cut_camera_reader_state_:nullptr;}
+  // Source classification only; this does not constitute reader admission.
+  [[nodiscard]] bool is_basic_group_owner_reader_source(std::size_t source) const;
   void apply_supported_basic_group_owner_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] const std::map<std::size_t,IntroBasicGroupOwnerReaderState>& basic_group_owner_reader_states() const noexcept {return basic_group_owner_reader_states_;}
   // Non-mutating gate for the one recovered MatPos deferred reader.  The

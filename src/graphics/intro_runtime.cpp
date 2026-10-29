@@ -1585,16 +1585,10 @@ IntroDeferredReaderCoverageInventory IntroRuntime::reader_coverage_inventory() c
       return IntroDeferredReaderFamily::first_cut_list;
     if(work.source_directory_index==resources_.camera_index())
       return IntroDeferredReaderFamily::first_cut_camera;
-    if(work.source_directory_index<directory.size() &&
-       directory[work.source_directory_index].source_type==0x00100001U &&
-       directory[work.source_directory_index].attachments.empty()) {
-      try {
-        const auto block=resources_.sources().deferred_source_block(work.source_directory_index);
-        if(block.size()>sizeof(std::uint32_t) &&
-           data::BasicGroupDeferredReaderShape::matches(block.subspan(sizeof(std::uint32_t))))
-          return IntroDeferredReaderFamily::basic_group_owner;
-      } catch(const std::exception&) {}
-    }
+    try {
+      if(is_basic_group_owner_reader_source(work.source_directory_index))
+        return IntroDeferredReaderFamily::basic_group_owner;
+    } catch(const std::exception&) {}
     if(basic_light_owner_deferred_reader_states_.contains(work.source_directory_index) ||
        supports_basic_light_owner_deferred_reader(work))
       return IntroDeferredReaderFamily::basic_light_owner;
@@ -3318,6 +3312,16 @@ void IntroRuntime::apply_supported_first_cut_camera_deferred_reader(
   catch(...) { first_cut_camera_reader_state_.reset(); throw; }
 }
 
+
+bool IntroRuntime::is_basic_group_owner_reader_source(std::size_t source) const {
+  const auto& sources=resources_.sources();
+  if(source>=sources.directory().size()) return false;
+  const auto& row=sources.directory()[source];
+  if(row.source_type!=0x00100001U || row.source_variant!=0U || !row.attachments.empty()) return false;
+  const auto block=sources.deferred_source_block(source);
+  return block.size()>sizeof(std::uint32_t) &&
+      data::BasicGroupDeferredReaderShape::matches(block.subspan(sizeof(std::uint32_t)));
+}
 
 void IntroRuntime::apply_supported_basic_group_owner_deferred_reader(
     const IntroDeferredReaderWork& work) {

@@ -1176,6 +1176,61 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         host.bind_first_cut_fade_phase_one_services({[]{return std::array<std::int32_t,2>{640,480};},[](auto,auto){}});
     };
 
+    for(const bool variant_one : {true,false}) {
+        Fixture fixture(false,true);
+        const auto read_word=[&](std::size_t offset) {
+            std::uint32_t value{};
+            for(unsigned i=0;i<4;++i)
+                value|=std::to_integer<std::uint32_t>(fixture.payload.at(offset+i))<<(8U*i);
+            return value;
+        };
+        const auto directory=read_word(0U);
+        const auto group_record=static_cast<std::size_t>(read_word(directory+4U)&0x00ffffffU)*4U;
+        const auto pool=read_word(20U);
+        if(read_word(group_record+16U)!=0x00100001U || read_word(pool+4U)==0U)
+            throw std::runtime_error("synthetic leading group fixture is not available");
+        if(variant_one) {
+            fixture.payload.at(group_record+45U)=std::byte{1};
+            set(fixture.payload,pool+4U,read_word(pool+4U)-1U);
+            set(fixture.payload,pool+4U+8U*4U,read_word(pool+4U+8U*4U)+1U);
+        } else {
+            const auto block=read_word(group_record+32U);
+            fixture.payload.at(block+9U)=std::byte{0x42}; // unsupported scalar tag
+        }
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*runtime);
+        const auto source=find_record(runtime->resources().sources().directory(),group_record);
+        check(runtime->resources().sources().directory()[source].source_variant==(variant_one?1U:0U),
+              "synthetic group variant reaches the constructed normal scene");
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        session->complete_postconstruction_reader_bracket(41U);
+        auto& host=session->runtime();
+        const auto work=std::ranges::find(host.deferred_reader_work(),source,
+            &off::graphics::IntroDeferredReaderWork::source_directory_index);
+        check(work!=host.deferred_reader_work().end() && !host.is_basic_group_owner_reader_source(source),
+              "unsupported source is not classified as a basic-group reader");
+        if(work==host.deferred_reader_work().end())
+            throw std::runtime_error("synthetic group deferred work is absent");
+        rejects([&]{host.apply_supported_basic_group_owner_deferred_reader(*work);});
+        const auto coverage=host.reader_coverage_inventory();
+        const auto group_work_count=std::ranges::count_if(host.deferred_reader_work(),[&](const auto& entry) {
+            return host.resources().sources().directory()[entry.source_directory_index].source_type==0x00100001U;
+        });
+        check(group_work_count==1U,"the fixture has exactly one basic-group work item");
+        check(!host.basic_group_owner_reader_states().contains(source) &&
+              std::ranges::any_of(coverage.entries,[](const auto& entry) {
+                  return entry.source_type==0x00100001U &&
+                      entry.family==off::graphics::IntroDeferredReaderFamily::unclassified &&
+                      entry.state==off::graphics::IntroDeferredReaderImplementationState::unimplemented &&
+                      entry.count==1U;
+              }),"unsupported variant or malformed basic-group form does not receive reader coverage");
+    }
+
     Fixture unique_external(false,true,false,true,false,false,false,false,false,3,1,1,0);
     off::runtime::ApplicationServices external_app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
         {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});

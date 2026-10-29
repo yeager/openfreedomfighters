@@ -1,6 +1,5 @@
 #include "off/graphics/normal_intro_scene_session.hpp"
 #include "off/graphics/intro_runtime.hpp"
-#include "off/data/basic_group_deferred_reader_shape.hpp"
 
 #include <stdexcept>
 #include <utility>
@@ -48,13 +47,8 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                if (work.source_directory_index == r.camera_index())
                  runtime_->apply_supported_first_cut_camera_deferred_reader(work, display);
                const auto &source = r.sources().directory().at(work.source_directory_index);
-               if (source.source_type == 0x00100001U && source.attachments.empty()) {
-                 const auto block = r.sources().deferred_source_block(work.source_directory_index);
-                 if (block.size() > sizeof(std::uint32_t) &&
-                     data::BasicGroupDeferredReaderShape::matches(
-                         block.subspan(sizeof(std::uint32_t))))
-                   runtime_->apply_supported_basic_group_owner_deferred_reader(work);
-               }
+               if (runtime_->is_basic_group_owner_reader_source(work.source_directory_index))
+                 runtime_->apply_supported_basic_group_owner_deferred_reader(work);
                // A strict reader must not be used as an ordinary MatPos
                // classifier.  The runtime-owned predicate includes its full
                // no-side-effect source, component, KEYS and payload gates.
