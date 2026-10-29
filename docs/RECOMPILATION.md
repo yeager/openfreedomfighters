@@ -173,6 +173,12 @@ Separate varying-W interpolation experiments were reproducibly rebuilt and
 compared with the saved Wine reference; none consistently removed the observed
 differences, so the varying-W restriction remains.
 
+The texture-enabled experiment also has bounded managed vertex and 16-bit
+index buffers for triangle-list submission. Synthetic COM tests compare the
+buffered path with `DrawPrimitiveUP` and exercise lock staging, bounds and
+failure handling. Concurrent guest writes during `Unlock` are unsupported;
+the buffered path has not been verified against native D3D8 or the game.
+
 Seventeen additional synthetic shared-edge quad cases matched WineD3D/llvmpipe
 in complete RGBA buffers, including selected subpixel phases, winding orders,
 diagonals, and viewport offsets. A separate single slanted triangle still
