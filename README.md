@@ -83,11 +83,11 @@ captures, and executable analysis remain outside this repository.
 
 The optional `OFF_ENABLE_SDL_VULKAN_INTEROP` build adds an SDL external-pass
 boundary for future native GPU integrations. No gameplay pass currently uses
-it, and it is not a DLSS, FSR, or XeSS implementation. The SDL backend also
-lacks a concrete active-view host and normal scene frame producer, so no
-color/depth/motion-vector input reaches a temporal resolver. DLSS, FSR, and XeSS
-remain unavailable at runtime until normal scene inputs and native submission
-are connected.
+it, and it is not a DLSS, FSR, or XeSS implementation. A renderer-backed SDL
+active-view host exists, but normal startup does not bind it to an active scene
+or produce scene frames. No color/depth/motion-vector input reaches a temporal
+resolver. DLSS, FSR, and XeSS remain unavailable at runtime until normal scene
+inputs and native submission are connected.
 
 F10 opens the project-authored graphics settings panel. Keyboard and controller
 navigation, render scaling, and saved preferences are implemented. An explicit
