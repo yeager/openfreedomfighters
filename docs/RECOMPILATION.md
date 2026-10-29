@@ -179,6 +179,12 @@ buffered path with `DrawPrimitiveUP` and exercise lock staging, bounds and
 failure handling. Concurrent guest writes during `Unlock` are unsupported;
 the buffered path has not been verified against native D3D8 or the game.
 
+The same opt-in texture profile now supports a bounded `XYZ|DIFFUSE|TEX1`
+modulation path. Five synthetic constant-UV, constant-W color and alpha cases
+matched WineD3D/llvmpipe in full RGBA output. Synthetic UP and buffered
+submissions also matched each other in color and D16 depth. Wine depth readback
+was unavailable, so those checks do not establish depth or hardware parity.
+
 The local pcrecomp checkout also fixes a D3D8 build failure when the optional
 software 3D profile is disabled. On Linux, the D3D8 device self-test passed
 with that profile disabled, with 3D enabled, and with textured 3D enabled.
