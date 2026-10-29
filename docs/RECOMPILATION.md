@@ -169,6 +169,9 @@ images matched stored WineD3D/llvmpipe references byte for byte; this does not
 establish general texture or hardware parity. The guest-memory and device
 self-tests also passed with the texture experiment enabled, with 3D enabled
 without textures, and with D3D8 disabled on Linux.
+Separate varying-W interpolation experiments were reproducibly rebuilt and
+compared with the saved Wine reference; none consistently removed the observed
+differences, so the varying-W restriction remains.
 
 Seventeen additional synthetic shared-edge quad cases matched WineD3D/llvmpipe
 in complete RGBA buffers, including selected subpixel phases, winding orders,
