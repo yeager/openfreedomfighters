@@ -48,6 +48,18 @@ handler and an attachment requiring retirement fail closed; neither is
 silently treated as a successful no-op. This boundary does not establish a
 scheduler binding, an active cut or a rendered frame.
 
+A separate manual mapping request resolves a supported helper member, checks
+the sending list and target, then dispatches synchronously through the target
+attachment snapshot. The supported sequence handler leaves the mapping
+argument unchanged; after dispatch the request reads the member owner's current
+name and retains the companion field. Only the absent or zero-key script-hook
+path is supported. Dynamic mapping handlers and nonzero script keys fail closed;
+this request does not select a cache entry or run the item processor, start a
+cut, or schedule a frame. The parent factory currently has no independent
+generation: its identity check is sufficient only for the supported callbacks,
+which cannot replace it. A monotonic parent-factory generation and mutation
+tests are required before supporting callbacks that can replace the factory.
+
 For the supported first-cut list form, a scoped phase-one callback reads the
 owned attachment stream and checks the factory-owned helper against the
 validated sequence owner and resource. It registers project event identities,

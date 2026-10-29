@@ -1096,6 +1096,9 @@ public:
   // does not advance a clock, schedule a cut, or admit a frame.
   [[nodiscard]] std::optional<runtime::SequenceTiming> request_first_cut_sequence_timing(std::size_t member_index);
   [[nodiscard]] IntroRuntimeHandle resolve_first_cut_sequence_helper_member(std::size_t index) const;
+  // Scoped mapping request for a validated sequence-helper member. This
+  // does not select a candidate, update a cache, or admit a camera.
+  [[nodiscard]] runtime::SequenceMapping request_first_cut_sequence_mapping(std::size_t member_index);
   [[nodiscard]] const runtime::DeferredSequenceStartQueue::Handle* first_cut_queue_property() const noexcept {
     const auto found=queue_properties_.find("off-project.deferred-sequence-start-queue");
     return found==queue_properties_.end() ? nullptr : &found->second;

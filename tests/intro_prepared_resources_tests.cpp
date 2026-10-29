@@ -1670,6 +1670,22 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         check(output==off::runtime::SequenceTiming{4.0F,0.0F,false} && (components.at(index).state().status&1U),
               "retirement after timing callback fails closed while retaining its partial mutation");
     }
+    {
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        off::runtime::ComponentLifecycle components(sequence);
+        const auto index=components.append({1U,0U,0U,"SyntheticMapping",0U,0U,0.0F,false});
+        components.construct(index,[](auto& record) {
+          auto state=record.state();state.attached_owner=1U;
+          return off::runtime::ConstructedComponent{state,{}, {},{},
+              [](auto& component,auto,off::runtime::SequenceMapping& result) {
+                result.companion=7U;component.state().status|=1U;
+              }};
+        });
+        off::runtime::SequenceMapping output{"Synthetic",std::nullopt};
+        rejects([&]{components.at(index).dispatch_mapping(1U,output);});
+        check(output.companion==7U && (components.at(index).state().status&1U),
+              "mapping handler retirement fails closed while retaining partial output");
+    }
     for(const int scenario:{0,1,2,3,4,5}) {
         const bool input_present=scenario==1;
         Fixture fixture(false,true);
@@ -1739,6 +1755,31 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         host.components().run_scoped_phase_one(sequence_target);
         auto& sequence_record=host.components().at(sequence_index);
         auto& state=sequence_record.state();
+        const auto mapped=host.request_first_cut_sequence_mapping(1U);
+        const auto mapped_source=host.resources().sources().local_source_for_authored_reference(sequence_reader->authored.references[1]);
+        if(!mapped_source || !host.constructed_picture_owner(*mapped_source))
+          throw std::runtime_error("synthetic mapping picture owner is absent");
+        check(mapped.name==host.constructed_picture_owner(*mapped_source)->name && !mapped.companion,
+              "mapping dispatch preserves a live member name and absent companion");
+        auto& mapping_parent=const_cast<off::graphics::IntroConstructedListOwner&>(*host.constructed_list_owner(host.resources().first_cut_index()));
+        const auto parent_owner=mapping_parent.factory_component->owner;
+        mapping_parent.factory_component->owner=off::graphics::IntroRuntimeHandle{};
+        rejects([&]{(void)host.request_first_cut_sequence_mapping(1U);});
+        mapping_parent.factory_component->owner=parent_owner;
+        auto& mapping_picture=const_cast<off::graphics::IntroConstructedPictureOwner&>(*host.constructed_picture_owner(*mapped_source));
+        const auto mapping_generation=mapping_picture.factory_component->generation;
+        ++mapping_picture.factory_component->generation;
+        rejects([&]{(void)host.request_first_cut_sequence_mapping(1U);});
+        mapping_picture.factory_component->generation=mapping_generation;
+        const auto target_owner_handle_for_mapping=host.source_handle(host.resources().member_index());
+        const auto mapping_components=host.owner_components(target_owner_handle_for_mapping);
+        if(mapping_components.size()!=1U) throw std::runtime_error("synthetic mapping attachment count changed");
+        auto* mutable_mapping_indices=const_cast<std::size_t*>(mapping_components.data());
+        auto& unrelated=host.components().at(index);
+        const auto unrelated_owner=unrelated.state().attached_owner;
+        mutable_mapping_indices[0]=index;unrelated.state().attached_owner=target_owner_handle_for_mapping.value;
+        rejects([&]{(void)host.request_first_cut_sequence_mapping(1U);});
+        mutable_mapping_indices[0]=sequence_index;unrelated.state().attached_owner=unrelated_owner;
         const off::runtime::SequenceTiming expected{sequence_reader->authored.values[0],sequence_reader->authored.values[1],
                                                     sequence_reader->authored.authored_option!=0U};
         check(host.request_first_cut_sequence_timing(0U)==expected,"timing request reaches initialized sequence handler");
@@ -1769,6 +1810,7 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         aux->service=service;aux->service_generation=app.postload_script_generation();
         aux->exchange=service->create();aux->script_key=42U;
         target_owner.factory_component->postload_aux=std::move(aux);
+        rejects([&]{(void)host.request_first_cut_sequence_mapping(1U);});
         bool hook_called=false;
         service->bind_hook([&](auto key,auto,std::optional<off::runtime::SequenceTiming>& slot) {
           check(key==42U,"timing dispatch invokes target script hook");hook_called=true;slot=off::runtime::SequenceTiming{999.0F,888.0F,true};

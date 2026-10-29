@@ -49,6 +49,17 @@ void ComponentRecord::dispatch_timing(std::uint16_t event,std::optional<Sequence
       instance_->state.attached_owner!=owner || (instance_->state.status&1U))
     throw std::runtime_error("component timing handler changed identity or requires retirement");
 }
+void ComponentRecord::dispatch_mapping(std::uint16_t event,SequenceMapping& output) {
+  if(!constructed_ || removed_ || !instance_ || !instance_->mapping)
+    throw std::runtime_error("component has no live mapping event handler");
+  const auto handler=instance_->mapping;
+  const auto identity=identity_;
+  const auto owner=instance_->state.attached_owner;
+  handler(*this,event,output);
+  if(!constructed_ || removed_ || !instance_ || identity_!=identity ||
+      instance_->state.attached_owner!=owner || (instance_->state.status&1U))
+    throw std::runtime_error("component mapping handler changed identity or requires retirement");
+}
 void ComponentLifecycle::check_idle() const {
   if (failed_) throw std::runtime_error("Component lifecycle previously failed");
   if (busy_ || sequence_.busy_)

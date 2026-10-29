@@ -683,6 +683,92 @@ IntroRuntimeHandle IntroRuntime::resolve_first_cut_sequence_helper_member(std::s
   return IntroRuntimeHandle{*resolved};
 }
 
+runtime::SequenceMapping IntroRuntime::request_first_cut_sequence_mapping(std::size_t member_index) {
+  if(timing_request_running_ || resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      reader_bracket_stage_!=IntroReaderBracketStage::ordinary_reader_boundary_complete || !scene_reference_lease_ ||
+      !loader_owner_lease_ || !first_cut_list_reader_state_ || !first_cut_sequence_component_reader_state_ ||
+      !sequence_timing_event_lease_ || !event_names_.is_live(*sequence_timing_event_lease_))
+    throw std::runtime_error("first-cut mapping request requires a live initialized scene");
+  struct Guard { bool& running; explicit Guard(bool& value):running(value) {running=true;} ~Guard(){running=false;} } guard(timing_request_running_);
+  const auto member=resolve_first_cut_sequence_helper_member(member_index);
+  const auto name_for_member=[&]() -> std::string {
+    for(const auto& [row,camera]:live_cameras_) {
+      (void)row;
+      if(camera->metadata.owner==member) return camera->metadata.name;
+    }
+    for(const auto& [row,picture]:constructed_picture_owners_) {
+      (void)row;
+      if(picture.owner==member) return picture.name;
+    }
+    throw std::runtime_error("first-cut mapping member name is unavailable");
+  };
+  const auto& list=*first_cut_list_reader_state_;
+  const auto list_source=resources_.first_cut_index();
+  const auto list_owner=constructed_list_owners_.find(list_source);
+  if(list_owner==constructed_list_owners_.end() || !list_owner->second.factory_component)
+    throw std::runtime_error("first-cut mapping parent factory is unavailable");
+  const auto* list_factory=&*list_owner->second.factory_component;
+  const auto parent_live=[&]() {
+    const auto current=constructed_list_owners_.find(list_source);
+    return current!=constructed_list_owners_.end() && current->second.owner==list.owner &&
+        current->second.resource==list.resource && current->second.factory_component && &*current->second.factory_component==list_factory &&
+        list_factory->owner==list.owner && live_owner(list.owner.value) &&
+        associated_resource_owner(list.resource)==list.owner && resource_state_for_handle(list.resource);
+  };
+  if(!parent_live()) throw std::runtime_error("first-cut mapping parent is stale");
+  const auto list_payload=constructed_picture_components_.find(list.component_indices[0]);
+  const auto& list_record=components_.at(list.component_indices[0]);
+  if(list_payload==constructed_picture_components_.end() || !list_payload->second.cut_list ||
+      !list_payload->second.cut_list->initialized || !list_record.constructed() || list_record.removed() ||
+      (list_record.state().status&4U)==0U || list_record.state().attached_owner!=list.owner.value)
+    throw std::runtime_error("first-cut mapping list attachment is unavailable");
+  const auto event=list_payload->second.cut_list->initialization_events[5];
+  const auto lease=*sequence_timing_event_lease_;
+  if(!event || event_names_.find("off-project.sequence-mapping")!=event)
+    throw std::runtime_error("first-cut mapping event is unavailable");
+  const auto source=resources_.member_index();
+  const auto target=source_handle(source);
+  const auto target_owner=constructed_list_owners_.find(source);
+  if(target_owner==constructed_list_owners_.end() || target_owner->second.owner!=target ||
+      !target_owner->second.factory_component || target_owner->second.factory_component->owner!=target ||
+      associated_resource_owner(list.sequence_resource)!=target || !live_owner(target.value))
+    throw std::runtime_error("first-cut mapping target is unavailable");
+  runtime::SequenceMapping output{name_for_member(),std::nullopt};
+  // This bounded implementation supports the known no-script and zero-key
+  // hook branches; dynamic script mapping needs a real provider.
+  if(const auto& aux=target_owner->second.factory_component->postload_aux) {
+    const auto service=application_.postload_script_service();
+    if(!service || service!=aux->service || application_.postload_script_generation()!=aux->service_generation ||
+        !aux->exchange) throw std::runtime_error("first-cut mapping script service is stale");
+    service->invoke_mapping(aux->script_key,event,output);
+    if(application_.postload_script_service()!=service || application_.postload_script_generation()!=aux->service_generation)
+      throw std::runtime_error("first-cut mapping script service changed");
+  }
+  if(!parent_live() || !event_names_.is_live(lease) || resolve_first_cut_sequence_helper_member(member_index)!=member || !live_owner(target.value))
+    throw std::runtime_error("first-cut mapping identity changed during hook");
+  const auto indices=owner_components(target);
+  std::vector<std::pair<std::size_t,std::optional<std::uint32_t>>> snapshot;
+  snapshot.reserve(indices.size());
+  for(const auto index:indices) snapshot.emplace_back(index,components_.at(index).identity());
+  for(const auto& [index,identity]:snapshot) {
+    if(index>=components_.size()) continue;
+    auto& component=components_.at(index);
+    if(!component.constructed() || component.removed() || component.identity()!=identity ||
+        component.state().attached_owner!=target.value) continue;
+    const auto& state=component.state();
+    if(state.status&1U) throw std::runtime_error("first-cut mapping attachment requires unsupported retirement");
+    if(((state.requested&1U) && !(state.status&4U)) || state.script_reference!=0U) continue;
+    if(!event_names_.is_live(lease)) throw std::runtime_error("first-cut mapping event was retired");
+    component.dispatch_mapping(event,output);
+    if(!parent_live() || !event_names_.is_live(lease) || resolve_first_cut_sequence_helper_member(member_index)!=member ||
+        !live_owner(target.value)) throw std::runtime_error("first-cut mapping identity changed during dispatch");
+  }
+  // Selector input is the owner's current name, not a potentially replaced
+  // name in the mapping argument. Preserve only the companion output.
+  output.name=name_for_member();
+  return output;
+}
+
 void IntroRuntime::set_scene_resource_property_native(std::string key,IntroRuntimeResourceHandle resource) {
   if(resource_load_stage_==IntroResourceLoadStage::failed)
     throw std::runtime_error("Resource construction previously failed");
@@ -1329,7 +1415,19 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
             const auto& local=*payload->second.sequence_initialization;
             if(local.timing_event==event) output=runtime::SequenceTiming{local.values[0],local.values[1],local.option!=0U};
           };
-        return runtime::ConstructedComponent{state,std::move(phase_one),std::move(phase_two),std::move(timing)};
+        runtime::ComponentMappingCallback mapping;
+        if(cut && row==resources_.member_index())
+          mapping=[this,component_index](runtime::ComponentRecord& record,std::uint16_t event,runtime::SequenceMapping&) {
+            if(&record!=&components_.at(component_index) || !record.constructed() || record.removed())
+              throw std::runtime_error("sequence mapping handler is no longer live");
+            const auto payload=constructed_picture_components_.find(component_index);
+            if(payload==constructed_picture_components_.end() || !payload->second.sequence_initialization ||
+                !payload->second.sequence_initialization->initialized || payload->second.owner.value!=record.state().attached_owner ||
+                event_names_.find("off-project.sequence-mapping")!=event)
+              throw std::runtime_error("sequence mapping handler identity is unavailable");
+            // This sequence handler does not handle the mapping event.
+          };
+        return runtime::ConstructedComponent{state,std::move(phase_one),std::move(phase_two),std::move(timing),std::move(mapping)};
       });
       const auto notification=application_.register_component_class_instance(components_.at(component_index).source().factory_name);
       if(cut_list) {

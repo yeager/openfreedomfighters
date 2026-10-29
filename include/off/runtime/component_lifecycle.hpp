@@ -60,6 +60,7 @@ struct ComponentState {
 class ComponentRecord;
 using ComponentCallback = std::function<void(ComponentRecord&)>;
 using ComponentTimingCallback = std::function<void(ComponentRecord&,std::uint16_t,std::optional<SequenceTiming>&)>;
+using ComponentMappingCallback = std::function<void(ComponentRecord&,std::uint16_t,SequenceMapping&)>;
 struct ConstructedComponent {
   ComponentState state;
   // Callbacks retain the concrete component payload through their captures.
@@ -68,6 +69,7 @@ struct ConstructedComponent {
   ComponentCallback phase_two;
   // Synchronous timing output belongs to the caller for this invocation.
   ComponentTimingCallback timing;
+  ComponentMappingCallback mapping;
 };
 
 class ComponentRecord final {
@@ -81,6 +83,7 @@ public:
   [[nodiscard]] ComponentState& state();
   [[nodiscard]] const ComponentState& state() const;
   void dispatch_timing(std::uint16_t event,std::optional<SequenceTiming>& output);
+  void dispatch_mapping(std::uint16_t event,SequenceMapping& output);
 private:
   friend class ComponentLifecycle;
   explicit ComponentRecord(ComponentSource source) : source_(std::move(source)) {}

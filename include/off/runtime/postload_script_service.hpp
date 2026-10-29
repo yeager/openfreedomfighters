@@ -28,6 +28,9 @@ public:
     if(!hook) throw std::runtime_error("postload script hook service is unavailable");
     hook(key,event,output);
   }
+  void invoke_mapping(std::uint32_t key,std::uint16_t,SequenceMapping&) const {
+    if(key!=0U) throw std::runtime_error("postload mapping script service is unsupported");
+  }
 private:
   Hook hook_;
 };
