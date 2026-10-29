@@ -189,3 +189,6 @@ also missed a coverage pixel, so it remains outside the implementation.
 Eleven later synthetic bottom-clipping cases further contradicted that specific
 post-clipping quantization model: only four coverage masks matched WineD3D.
 This does not rule out other precision models or establish hardware behavior.
+Thirteen subsequent cases isolated a single boundary sample: eight differed
+at that pixel, while the tested model matched four coverage masks. These
+results do not identify a general clipping or edge-ownership rule.
