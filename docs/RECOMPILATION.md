@@ -228,6 +228,11 @@ attachment it reports not found. Synthetic Wine and HLE tests cover identity,
 descriptor and device lifetime. Standalone depth-surface creation and locking
 remain unsupported.
 
+The local D3D8 device can report the render states supported by its selected
+software profile, including the appropriate depth-enable default. Synthetic
+setter/getter, invalid-output and WineD3D comparisons passed on Linux; other
+states remain unavailable and these checks do not establish general parity.
+
 The local pcrecomp checkout also fixes a D3D8 build failure when the optional
 software 3D profile is disabled. On Linux, the D3D8 device self-test passed
 with that profile disabled, with 3D enabled, and with textured 3D enabled.
