@@ -75,7 +75,7 @@ struct IntroSynthesizedCameraMetadata {
   std::uint32_t class_identifier;
 };
 enum class IntroResourceLoadStage {
-  prepared, constructing_root, root_ready, directory_construction_complete, failed
+  prepared, constructing_root, root_ready, postload_pending, directory_construction_complete, failed
 };
 enum class IntroSoundLoadPolicy {prepared_compatibility,directory_construction};
 // This is the boundary around the deferred reader queue, not evidence that a
@@ -798,6 +798,11 @@ struct IntroLegalPictureComponentReaderState {
 struct IntroSourceScriptWork {
   IntroRuntimeResourceHandle resource;
   std::uint32_t source_offset;
+  std::size_t source_directory_index{};
+  IntroRuntimeHandle owner;
+  std::vector<std::byte> owned_frame;
+  std::string source_text, declaration_text;
+  std::size_t values_offset{};
 };
 struct IntroCameraRegistrationServices {
   std::function<std::int32_t()> width,height;

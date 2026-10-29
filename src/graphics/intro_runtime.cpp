@@ -639,9 +639,6 @@ void IntroRuntime::construct_source_directory_without_engine_renderer() {
         throw std::runtime_error("Unsupported local source class " +
                                  std::to_string(source.source_type) + " at directory entry " +
                                  std::to_string(row));
-      if(source.post_load_source_offset!=0U)
-        throw std::runtime_error("Unsupported local source post-load block at directory entry " +
-                                 std::to_string(row));
       if(!std::ranges::all_of(source.position,[](float value){return std::isfinite(value);}) ||
           !std::ranges::all_of(source.basis,[](float value){return std::isfinite(value);}))
         throw std::runtime_error("Invalid local source transform at directory entry " +
@@ -685,6 +682,26 @@ void IntroRuntime::construct_source_directory_without_engine_renderer() {
       if(!resource || associated_resource_owner(*resource)!=owner ||
           !resource_state_for_handle(*resource))
         throw std::runtime_error("Source row did not produce its expected live owner");
+      if(source.post_load_source_offset!=0U) {
+        const auto frame=resources_.sources().post_load_source_frame(row);
+        if(frame.size()<6U) throw std::runtime_error("postload frame has no bounded text prefix");
+        const auto first=std::find(frame.begin()+5,frame.end(),std::byte{0});
+        if(first==frame.end()) throw std::runtime_error("postload text is unterminated within its frame");
+        const auto first_end=static_cast<std::size_t>(first-frame.begin());
+        if(frame.size()-first_end<3U) throw std::runtime_error("postload declaration position is truncated");
+        const auto declaration_begin=first_end+2U; // one unknown separator byte
+        const auto second=std::find(frame.begin()+static_cast<std::ptrdiff_t>(declaration_begin),frame.end(),std::byte{0});
+        if(second==frame.end()) throw std::runtime_error("postload declaration is unterminated within its frame");
+        const auto values_offset=static_cast<std::size_t>(second-frame.begin())+1U;
+        if(values_offset>=frame.size()) throw std::runtime_error("postload value cursor is truncated");
+        IntroSourceScriptWork pending{*resource,source.post_load_source_offset,row,owner,
+            {frame.begin(),frame.end()},
+            std::string(reinterpret_cast<const char*>(frame.data()+5U),first_end-5U),
+            std::string(reinterpret_cast<const char*>(frame.data()+declaration_begin),
+                        static_cast<std::size_t>(second-frame.begin())-declaration_begin),
+            values_offset};
+        source_script_work_.push_back(std::move(pending));
+      }
       const auto loader_reference=loader_owner_references_.append_and_get(owner.value);
       loader_owner_list_.push_back(loader_reference);
       scene_references_.append(owner.value);
@@ -697,13 +714,15 @@ void IntroRuntime::construct_source_directory_without_engine_renderer() {
       throw std::runtime_error("Whole-directory construction did not map every local source");
     loader_owner_lease_=loader_owner_references_.seal();
     scene_reference_lease_=scene_references_.seal();
-    resource_load_stage_=IntroResourceLoadStage::directory_construction_complete;
+    resource_load_stage_=source_script_work_.empty() ? IntroResourceLoadStage::directory_construction_complete :
+        IntroResourceLoadStage::postload_pending;
   } catch(...) {
     scene_reference_lease_.reset();
     scene_references_.retire();
     loader_owner_lease_.reset();
     loader_owner_references_.retire();
     loader_owner_list_.clear();
+    source_script_work_.clear();
     manager_row_edit_=false;
     scene_resource_edit_=false;
     current_source_parent_=root_handle();

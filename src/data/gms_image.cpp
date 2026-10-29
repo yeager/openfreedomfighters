@@ -778,6 +778,19 @@ std::span<const std::byte> GmsImage::deferred_source_block(
     return payload.subspan(offset, size);
 }
 
+std::span<const std::byte> GmsImage::post_load_source_frame(std::size_t directory_index) const {
+    if(directory_index>=directory_.size()) throw std::runtime_error("postload source row is unavailable");
+    const auto offset=static_cast<std::size_t>(directory_[directory_index].post_load_source_offset);
+    const auto payload=resource_.payload();
+    if(offset==0U || offset>payload.size() || 4U>payload.size()-offset)
+        throw std::runtime_error("postload frame header is missing or truncated");
+    const auto header=ByteReader(payload).u32(offset);
+    const auto size=static_cast<std::size_t>(header & tagged_block_size_mask);
+    if(size<4U || size>payload.size()-offset)
+        throw std::runtime_error("postload frame size is invalid");
+    return payload.subspan(offset,size);
+}
+
 std::vector<std::uint32_t> GmsImage::intro_source_reference_list(
     std::size_t directory_index
 ) const {

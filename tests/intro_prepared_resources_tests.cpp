@@ -1141,6 +1141,54 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         target.begin_source_loading_without_engine_renderer();
         target.construct_source_directory_without_engine_renderer();
     };
+    for(const int postload_case:{0,1,2,3,4,5}) {
+        Fixture fixture(false,true);
+        const auto offset=fixture.payload.size();
+        Bytes frame(4);
+        frame.push_back(std::byte{0x84}); text(frame,"source");
+        frame.push_back(std::byte{0x7d}); text(frame,"int value;");
+        frame.push_back(std::byte{0xff});
+        const auto full_size=static_cast<std::uint32_t>(frame.size());
+        set(frame,0,(postload_case==1 ? 4U : postload_case==2 ? full_size+1U :
+                     postload_case==3 ? 7U : postload_case==4 ? full_size-2U : full_size) | 0x80000000U);
+        set(fixture.payload,512U+48U*7U+40U,static_cast<std::uint32_t>(offset));
+        if(postload_case==5) set(fixture.payload,512U+48U*6U+40U,static_cast<std::uint32_t>(offset));
+        fixture.payload.insert(fixture.payload.end(),frame.begin(),frame.end());
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        if(postload_case!=0 && postload_case!=5) {
+            rejects([&]{construct_directory(*runtime);});
+            check(runtime->resource_load_stage()==off::graphics::IntroResourceLoadStage::failed &&
+                  runtime->source_script_work().empty(),"malformed postload frame fails without pending work");
+            continue;
+        }
+        construct_directory(*runtime);
+        const auto work=runtime->source_script_work();
+        check(runtime->resource_load_stage()==off::graphics::IntroResourceLoadStage::postload_pending &&
+              work.size()==(postload_case==5 ? 2U : 1U) && work[0].source_offset==offset && work[0].owner==runtime->source_handle(work[0].source_directory_index) &&
+              work[0].source_text=="source" && work[0].declaration_text=="int value;" &&
+              work[0].owned_frame==frame && work[0].values_offset==frame.size()-1U,
+              "owned source-bound postload prefix stays pending without script completion");
+        if(postload_case==5 && work.size()==2U)
+            check(work[0].owner!=work[1].owner && work[1].owner==runtime->source_handle(work[1].source_directory_index) &&
+                  work[1].owned_frame==frame,"multiple pending rows preserve separate owners and independent frames");
+        check(!runtime->preflight_global_lifecycle().ready(),"pending postload does not admit global lifecycle");
+        rejects([&]{runtime->run_outer_loader_tail_through_saved_services({});});
+        check(runtime->resource_load_stage()==off::graphics::IntroResourceLoadStage::postload_pending,
+              "pending postload cannot enter outer loader tail");
+        const auto borrowed=runtime->resources().sources().post_load_source_frame(work[0].source_directory_index);
+        const_cast<std::byte*>(borrowed.data())[5]^=std::byte{1};
+        check(work[0].source_text=="source" && work[0].owned_frame==frame,
+              "pending source owns its frame independently of the original");
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        rejects([&]{session->complete_postconstruction_reader_bracket(41U);});
+        check(session->runtime().reader_bracket_stage()!=off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete,
+              "pending postload cannot fabricate reader or lifecycle completion");
+    }
     const auto find_record=[](const auto& directory,std::size_t offset) {
         const auto found=std::ranges::find(directory,offset,&off::data::GmsDirectoryEntry::record_offset);
         if(found==directory.end()) throw std::runtime_error("independent reader fixture record is absent");

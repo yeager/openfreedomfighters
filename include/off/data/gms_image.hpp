@@ -292,6 +292,9 @@ public:
     [[nodiscard]] std::span<const std::byte> deferred_source_block(
         std::size_t directory_index
     ) const;
+    // Declared header-bounded postload frame, borrowed from this image.
+    // Framing alone does not validate script grammar or owner lifetime.
+    [[nodiscard]] std::span<const std::byte> post_load_source_frame(std::size_t directory_index) const;
     // Caller must establish supported intro provenance; returns raw words without
     // relocation, preserving ordering, duplicates, and unresolved values.
     [[nodiscard]] std::vector<std::uint32_t> intro_source_reference_list(

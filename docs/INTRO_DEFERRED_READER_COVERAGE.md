@@ -54,3 +54,10 @@ the shared scene property store. It preserves completed prefix mutations on
 failure; it is not a transaction. The normal startup path does not yet bind a
 verified configuration or request-status producer, and no credits consumer
 is implemented. Without bound status, the callback rejects completion.
+
+The loader conservatively stages every nonzero postload source as pending. It
+checks the declared frame against the read input and copies the bounded frame
+and terminated prefix into owner-bound work. Pending work blocks the ordinary
+reader bracket, outer loader tail and lifecycle admission. There is no resume
+or script-service implementation, and this policy does not claim the native
+mode guard or script completion.
