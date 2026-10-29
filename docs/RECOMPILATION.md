@@ -179,6 +179,11 @@ buffered path with `DrawPrimitiveUP` and exercise lock staging, bounds and
 failure handling. Concurrent guest writes during `Unlock` are unsupported;
 the buffered path has not been verified against native D3D8 or the game.
 
+The local pcrecomp checkout also fixes a D3D8 build failure when the optional
+software 3D profile is disabled. On Linux, the D3D8 device self-test passed
+with that profile disabled, with 3D enabled, and with textured 3D enabled.
+This build fix does not establish renderer or game parity.
+
 Seventeen additional synthetic shared-edge quad cases matched WineD3D/llvmpipe
 in complete RGBA buffers, including selected subpixel phases, winding orders,
 diagonals, and viewport offsets. A separate single slanted triangle still
