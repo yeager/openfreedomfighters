@@ -214,6 +214,12 @@ handling were checked separately in the HLE tests because Wine depth readback
 was unavailable. Target-only and SDL failure cases passed undefined-behavior
 sanitizer runs on Linux. These checks do not establish general D3D8 parity.
 
+The local D3D8 compatibility device exposes its implicit backbuffer as a
+limited surface object, including identity, descriptor and owning-device
+reference handling. Synthetic Wine and HLE tests cover the supported COM
+operations and surface lifetime with bound resources. Surface locking and
+render-target switching remain unsupported; this does not show game rendering.
+
 The local pcrecomp checkout also fixes a D3D8 build failure when the optional
 software 3D profile is disabled. On Linux, the D3D8 device self-test passed
 with that profile disabled, with 3D enabled, and with textured 3D enabled.
