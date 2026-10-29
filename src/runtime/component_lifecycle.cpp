@@ -38,7 +38,7 @@ const ComponentState& ComponentRecord::state() const {
   if (!instance_) throw std::runtime_error("Component is not constructed: " + source_.factory_name);
   return instance_->state;
 }
-void ComponentRecord::dispatch_timing(std::uint16_t event,std::optional<float>& output) {
+void ComponentRecord::dispatch_timing(std::uint16_t event,std::optional<SequenceTiming>& output) {
   if(!constructed_ || removed_ || !instance_ || !instance_->timing)
     throw std::runtime_error("component has no live timing event handler");
   const auto handler=instance_->timing;

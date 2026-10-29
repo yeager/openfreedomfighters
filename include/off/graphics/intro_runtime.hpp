@@ -1082,11 +1082,11 @@ public:
   // Synchronous scoped hook; output remains caller-owned for the invocation.
   void dispatch_scoped_list_script_hook(std::uint32_t loader_reference,std::uint16_t event,
                                       const runtime::SceneEventNames::Lease& event_lease,
-                                      std::optional<float>& output);
+                                      std::optional<runtime::SequenceTiming>& output);
   void retire_scoped_list_script_aux(std::uint32_t loader_reference);
   // Manual synchronous request for an initialized first-cut list member. It
   // does not advance a clock, schedule a cut, or admit a frame.
-  [[nodiscard]] std::optional<float> request_first_cut_sequence_timing(std::size_t member_index);
+  [[nodiscard]] std::optional<runtime::SequenceTiming> request_first_cut_sequence_timing(std::size_t member_index);
   [[nodiscard]] const runtime::DeferredSequenceStartQueue::Handle* first_cut_queue_property() const noexcept {
     const auto found=queue_properties_.find("off-project.deferred-sequence-start-queue");
     return found==queue_properties_.end() ? nullptr : &found->second;

@@ -1,5 +1,6 @@
 #pragma once
 #include "off/data/postload_integer_profile.hpp"
+#include "off/runtime/sequence_timing.hpp"
 #include <memory>
 #include <functional>
 #include <optional>
@@ -19,9 +20,9 @@ public:
     exchange.entries.push_back({std::move(name),bits});
   }
   void release(std::unique_ptr<Exchange>& exchange) const noexcept {exchange.reset();}
-  using Hook = std::function<void(std::uint32_t,std::uint16_t,std::optional<float>&)>;
+  using Hook = std::function<void(std::uint32_t,std::uint16_t,std::optional<SequenceTiming>&)>;
   void bind_hook(Hook hook) {hook_=std::move(hook);}
-  void invoke(std::uint32_t key,std::uint16_t event,std::optional<float>& output) const {
+  void invoke(std::uint32_t key,std::uint16_t event,std::optional<SequenceTiming>& output) const {
     if(key==0U) return;
     const auto hook=hook_;
     if(!hook) throw std::runtime_error("postload script hook service is unavailable");

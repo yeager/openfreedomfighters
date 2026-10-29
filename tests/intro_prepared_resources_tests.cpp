@@ -1313,24 +1313,24 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         const auto owner_ref=runtime.loader_owner_references()[row];
         const auto event=runtime.declare_scene_event_name("SyntheticScriptEvent");
         const auto event_lease=runtime.scene_event_names().lease();
-        std::optional<float> output;
+        std::optional<off::runtime::SequenceTiming> output;
         runtime.dispatch_scoped_list_script_hook(owner_ref,event,event_lease,output);
         check(!output,"a zero script key leaves the output untouched");
         const_cast<off::runtime::PostloadScriptAux&>(*aux).script_key=42U;
         rejects([&]{runtime.dispatch_scoped_list_script_hook(owner_ref,event,event_lease,output);});
-        app.postload_script_service()->bind_hook([&](auto key,auto delivered,std::optional<float>& slot) {
+        app.postload_script_service()->bind_hook([&](auto key,auto delivered,std::optional<off::runtime::SequenceTiming>& slot) {
           check(key==42U && delivered==event,"script hook keeps the live auxiliary key and event");
           rejects([&]{runtime.retire_scoped_list_script_aux(owner_ref);});
-          app.postload_script_service()->bind_hook([](auto,auto,std::optional<float>& slot){slot=8.0F;});
-          slot=3.5F;
+          app.postload_script_service()->bind_hook([](auto,auto,std::optional<off::runtime::SequenceTiming>& slot){slot=off::runtime::SequenceTiming{8.0F,0.0F,false};});
+          slot=off::runtime::SequenceTiming{3.5F,0.0F,false};
         });
         runtime.dispatch_scoped_list_script_hook(owner_ref,event,event_lease,output);
-        check(output==3.5F,"script hook reaches the application-owned service");
+        check(output==off::runtime::SequenceTiming{3.5F,0.0F,false},"script hook reaches the application-owned service");
         runtime.dispatch_scoped_list_script_hook(owner_ref,event,event_lease,output);
-        check(output==8.0F,"rebinding a hook during dispatch affects only subsequent invocations");
+        check(output==off::runtime::SequenceTiming{8.0F,0.0F,false},"rebinding a hook during dispatch affects only subsequent invocations");
         if(mode==4) {
           const auto service=app.postload_script_service();
-          service->bind_hook([&](auto,auto,std::optional<float>&){app.install_postload_script_service(service);});
+          service->bind_hook([&](auto,auto,std::optional<off::runtime::SequenceTiming>&){app.install_postload_script_service(service);});
           rejects([&]{runtime.dispatch_scoped_list_script_hook(owner_ref,event,event_lease,output);});
           rejects([&]{runtime.retire_scoped_list_script_aux(owner_ref);});
         } else {
@@ -1596,11 +1596,11 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         components.construct(index,[](auto& record) {
           auto state=record.state();state.attached_owner=1U;
           return off::runtime::ConstructedComponent{state,{}, {},
-              [](auto& component,auto,std::optional<float>& result) {result=4.0F;component.state().status|=1U;}};
+              [](auto& component,auto,std::optional<off::runtime::SequenceTiming>& result) {result=off::runtime::SequenceTiming{4.0F,0.0F,false};component.state().status|=1U;}};
         });
-        std::optional<float> output;
+        std::optional<off::runtime::SequenceTiming> output;
         rejects([&]{components.at(index).dispatch_timing(1U,output);});
-        check(output==4.0F && (components.at(index).state().status&1U),
+        check(output==off::runtime::SequenceTiming{4.0F,0.0F,false} && (components.at(index).state().status&1U),
               "retirement after timing callback fails closed while retaining its partial mutation");
     }
     for(const int scenario:{0,1,2,3,4,5}) {
@@ -1672,7 +1672,8 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         host.components().run_scoped_phase_one(sequence_target);
         auto& sequence_record=host.components().at(sequence_index);
         auto& state=sequence_record.state();
-        const auto expected=sequence_reader->authored.values[0];
+        const off::runtime::SequenceTiming expected{sequence_reader->authored.values[0],sequence_reader->authored.values[1],
+                                                    sequence_reader->authored.authored_option!=0U};
         check(host.request_first_cut_sequence_timing(0U)==expected,"timing request reaches initialized sequence handler");
         state.script_reference=1U;
         check(!host.request_first_cut_sequence_timing(0U),"nonzero attachment script reference excludes timing handler");
@@ -1702,8 +1703,8 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         aux->exchange=service->create();aux->script_key=42U;
         target_owner.factory_component->postload_aux=std::move(aux);
         bool hook_called=false;
-        service->bind_hook([&](auto key,auto,std::optional<float>& slot) {
-          check(key==42U,"timing dispatch invokes target script hook");hook_called=true;slot=999.0F;
+        service->bind_hook([&](auto key,auto,std::optional<off::runtime::SequenceTiming>& slot) {
+          check(key==42U,"timing dispatch invokes target script hook");hook_called=true;slot=off::runtime::SequenceTiming{999.0F,888.0F,true};
         });
         check(host.request_first_cut_sequence_timing(0U)==expected && hook_called,
               "target hook runs before sequence attachment overwrites the shared output");

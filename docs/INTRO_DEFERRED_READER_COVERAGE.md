@@ -36,7 +36,8 @@ lifecycle completion, or intro playback.
 
 A manual scoped timing request can now call the live target's script hook,
 snapshot its attachments, and deliver a typed synchronous request to the
-initialized sequence handler. An eligible attachment without a supported
+initialized sequence handler. Its copied response retains both timing values
+and the option used by the two distinct update passes. An eligible attachment without a supported
 handler and an attachment requiring retirement fail closed; neither is
 silently treated as a successful no-op. This boundary does not establish a
 scheduler binding, an active cut or a rendered frame.

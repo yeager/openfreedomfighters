@@ -524,7 +524,7 @@ void IntroRuntime::run_scoped_list_owner_post(std::uint32_t reference) {
 
 void IntroRuntime::dispatch_scoped_list_script_hook(std::uint32_t reference,std::uint16_t event,
                                                    const runtime::SceneEventNames::Lease& event_lease,
-                                                   std::optional<float>& output) {
+                                                   std::optional<runtime::SequenceTiming>& output) {
   if(script_hook_running_) throw std::runtime_error("list script hook is reentrant");
   auto* owner=checked_scoped_list_owner(reference);
   if(!owner || !owner->factory_component) return;
@@ -564,7 +564,7 @@ void IntroRuntime::retire_scoped_list_script_aux(std::uint32_t reference) {
   aux.reset();
 }
 
-std::optional<float> IntroRuntime::request_first_cut_sequence_timing(std::size_t member_index) {
+std::optional<runtime::SequenceTiming> IntroRuntime::request_first_cut_sequence_timing(std::size_t member_index) {
   if(timing_request_running_ || resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
       reader_bracket_stage_!=IntroReaderBracketStage::ordinary_reader_boundary_complete || !scene_reference_lease_ ||
       !loader_owner_lease_ || !first_cut_list_reader_state_ || !first_cut_sequence_component_reader_state_ ||
@@ -594,7 +594,7 @@ std::optional<float> IntroRuntime::request_first_cut_sequence_timing(std::size_t
     throw std::runtime_error("first-cut timing target is unavailable");
   const auto event=*sequence_timing_event_;
   const auto lease=*sequence_timing_event_lease_;
-  std::optional<float> output;
+  std::optional<runtime::SequenceTiming> output;
   // Hook first: a live script handler may change the shared output or remove
   // objects. Snapshot the target's current attachments only after it returns.
   dispatch_scoped_list_script_hook(loader_owner_list_[source],event,lease,output);
@@ -1251,7 +1251,7 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
         };
         runtime::ComponentTimingCallback timing;
         if(cut && row==resources_.member_index())
-          timing=[this,component_index](runtime::ComponentRecord& record,std::uint16_t event,std::optional<float>& output) {
+          timing=[this,component_index](runtime::ComponentRecord& record,std::uint16_t event,std::optional<runtime::SequenceTiming>& output) {
             if(&record!=&components_.at(component_index) || !record.constructed() || record.removed())
               throw std::runtime_error("sequence timing handler is no longer live");
             const auto payload=constructed_picture_components_.find(component_index);
@@ -1259,7 +1259,7 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
                 !payload->second.sequence_initialization->initialized || payload->second.owner.value!=record.state().attached_owner)
               throw std::runtime_error("sequence timing handler has no initialized payload");
             const auto& local=*payload->second.sequence_initialization;
-            if(local.timing_event==event) output=local.values[0];
+            if(local.timing_event==event) output=runtime::SequenceTiming{local.values[0],local.values[1],local.option!=0U};
           };
         return runtime::ConstructedComponent{state,std::move(phase_one),std::move(phase_two),std::move(timing)};
       });
