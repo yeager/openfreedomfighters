@@ -53,6 +53,9 @@ IntroRuntime::IntroRuntime(IntroPreparedResources&& resources, runtime::Applicat
       prepared_camera_(resources_.camera()),selected_scene_filename_(std::move(selected_scene_filename)) {
   if(selected_scene_filename_.empty() || selected_scene_filename_.find('\0')!=std::string::npos)
     throw std::runtime_error("Scene filename must be nonempty and NUL-free");
+  if(application_.project_configuration_bound())
+    database_status_=std::string(application_.project_primary().empty() ?
+        application_.project_fallback() : application_.project_primary());
   auto suffix=selected_scene_filename_.size()>=4?selected_scene_filename_.substr(selected_scene_filename_.size()-4):std::string{};
   for(auto& value:suffix) if(value>='A' && value<='Z') value=static_cast<char>(value-'A'+'a');
   position_mode_.immediate=suffix==".wld" || suffix==".wl2";
@@ -436,7 +439,29 @@ std::optional<IntroSceneResourceProperty> IntroRuntime::scene_resource_property(
   if(key.find('\0')!=std::string_view::npos) throw std::runtime_error("Scene property key contains NUL");
   const auto found=scene_resource_properties_.find(key);
   if(found==scene_resource_properties_.end()) return std::nullopt;
+  if(found->second.geometry_owner_reference) {
+    if(!found->second.geometry_owner_lease) throw std::runtime_error("geometry owner property has no lease");
+    const auto owner=scene_references_.resolve(*found->second.geometry_owner_reference,*found->second.geometry_owner_lease);
+    if(owner && !live_owner(*owner)) throw std::runtime_error("geometry owner property owner is stale");
+  }
   return found->second;
+}
+
+bool IntroRuntime::read_scene_geometry_owner_reference(std::string_view key,std::uint32_t& output) const {
+  const auto property=scene_resource_property(key);
+  if(!property) return false;
+  if(!property->geometry_owner_reference || !property->geometry_owner_lease)
+    throw std::runtime_error("scene property is not a geometry owner reference");
+  output=*property->geometry_owner_reference;
+  return true;
+}
+
+void IntroRuntime::update_database_status_from_request(std::string request) {
+  if(resource_load_stage_==IntroResourceLoadStage::failed || request.find('\0')!=std::string::npos)
+    throw std::runtime_error("scene database request is unavailable or malformed");
+  auto project_copy=request;
+  application_.set_project_request(std::move(project_copy));
+  database_status_=std::move(request);
 }
 
 std::uint32_t IntroRuntime::project_reference_for_source(std::size_t source) const {
@@ -1014,6 +1039,10 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
         if(cut_list && row==resources_.first_cut_index())
           phase_one=[this,component_index](runtime::ComponentRecord& record) {
             run_first_cut_list_phase_one(component_index,record);
+          };
+        if(movie)
+          phase_one=[this,component_index](runtime::ComponentRecord& record) {
+            run_movie_control_phase_one(component_index,record);
           };
         if(black && std::ranges::any_of(resources_.first_cut().commands,[&](const auto& command) {
              const auto target=resources_.sources().local_source_for_authored_reference(command.target_reference);
@@ -3104,6 +3133,89 @@ IntroRuntime::issue_movie_control_phase_two_receipt() {
   movie_control_phase_two_receipt_issued_ = true;
   return receipt;
 }
+
+void IntroRuntime::run_movie_control_phase_one(std::size_t index,runtime::ComponentRecord& record) {
+  if(index!=controller_component_ || &record!=&components_.at(index) || !movie_control_reader_matches() ||
+      !scene_reference_lease_ || !movie_controller_reader_state_ || !movie_controller_component_reader_state_)
+    throw std::runtime_error("MovieControl phase one requires live readers and scene services");
+  const auto& read=*movie_controller_reader_state_;
+  auto& payload=constructed_picture_components_.at(index);
+  if(!payload.movie_control || payload.owner!=read.owner || record.state().attached_owner!=read.owner.value)
+    throw std::runtime_error("MovieControl phase-one receiver changed");
+  auto& local=*payload.movie_control;
+  if(local.phase_one_initialized) throw std::runtime_error("MovieControl phase one is once-only");
+  const auto resolve_component=[this](const std::optional<IntroRuntimeResourceHandle>& resource)
+      -> std::optional<IntroRuntimeHandle> {
+    if(!resource) return std::nullopt;
+    const auto owner=associated_resource_owner(*resource);
+    if(!owner || !resource_state_for_handle(*resource) || !live_owner(owner->value))
+      throw std::runtime_error("MovieControl phase-one reference is stale");
+    const auto list=std::ranges::find_if(constructed_list_owners_,[&](const auto& entry) {
+      return entry.second.owner==*owner && entry.second.factory_component &&
+          entry.second.factory_component->owner==*owner;
+    });
+    const auto group=std::ranges::find_if(constructed_group_owners_,[&](const auto& entry) {
+      return entry.second.owner==*owner && entry.second.factory_component &&
+          entry.second.factory_component->owner==*owner;
+    });
+    if(list==constructed_list_owners_.end() && group==constructed_group_owners_.end())
+      throw std::runtime_error("MovieControl phase-one component resolver is unsupported");
+    return owner;
+  };
+  local.phase_one_optional_owners[0]=resolve_component(read.first_optional_resource);
+  local.phase_one_optional_owners[1]=resolve_component(read.second_optional_resource);
+  if(!database_status_) throw std::runtime_error("MovieControl database status provider is unavailable");
+  std::string status=*database_status_;
+  for(auto& c:status) if(c>='A' && c<='Z') c=static_cast<char>(c-'A'+'a');
+  local.phase_one_status_matches=status.find("ff-intro")!=std::string::npos;
+  const auto copy_helper=[&](IntroRuntimeResourceHandle resource,
+                             const std::vector<std::optional<IntroRuntimeResourceHandle>>& expected) {
+    const auto owner=associated_resource_owner(resource);
+    if(!owner || !resource_state_for_handle(resource))
+      throw std::runtime_error("MovieControl phase-one list owner is stale");
+    const auto found=std::ranges::find_if(constructed_list_owners_,[&](const auto& entry) {
+      return entry.second.owner==*owner && entry.second.resource==resource;
+    });
+    if(found==constructed_list_owners_.end() || !found->second.factory_component ||
+        found->second.factory_component->owner!=*owner ||
+        !found->second.factory_component->controller_helper_ready ||
+        found->second.factory_component->controller_helper_unsupported)
+      throw std::runtime_error("MovieControl phase-one list helper is unsupported");
+    auto result=found->second.factory_component->helper;
+    std::size_t cursor=0;
+    for(const auto& member:expected) {
+      if(!member) continue;
+      if(cursor>=result.size()) throw std::runtime_error("MovieControl helper membership changed");
+      const auto token=result[cursor++];
+      const auto resolved=scene_references_.resolve(token,*scene_reference_lease_);
+      if(!resolved || !live_owner(*resolved)) throw std::runtime_error("MovieControl helper member is stale");
+      const auto member_resource=resource_handle(IntroRuntimeHandle{*resolved});
+      if(member_resource!=*member || associated_resource_owner(*member)!=IntroRuntimeHandle{*resolved})
+        throw std::runtime_error("MovieControl helper member changed");
+      static_cast<void>(resolve_component(member_resource));
+    }
+    if(cursor!=result.size()) throw std::runtime_error("MovieControl helper membership changed");
+    return result;
+  };
+  local.phase_one_helpers[0]=copy_helper(read.sequence_list_resource,read.sequence_members);
+  local.phase_one_helpers[1]=copy_helper(read.group_list_resource,read.group_members);
+  local.phase_one_index=0;
+  local.phase_one_latch=false;
+  const auto endpoint=constructed_list_owners_.find(read.source_directory_index);
+  if(endpoint==constructed_list_owners_.end() || !endpoint->second.factory_component ||
+      endpoint->second.owner!=read.owner || endpoint->second.factory_component->owner!=read.owner)
+    throw std::runtime_error("MovieControl endpoint component is unavailable");
+  const auto reference=project_reference_for_source(read.source_directory_index);
+  if(scene_references_.resolve(reference,*scene_reference_lease_)!=read.owner.value)
+    throw std::runtime_error("MovieControl endpoint reference changed");
+  IntroSceneResourceProperty property;
+  property.geometry_owner_reference=reference;
+  property.geometry_owner_lease=*scene_reference_lease_;
+  // Atomic replacement is project policy, not observed native rollback.
+  scene_resource_properties_.insert_or_assign("ZGEOM_MovieControl",std::move(property));
+  local.phase_one_initialized=true;
+}
+
 
 void IntroRuntime::run_movie_control_phase_two(std::size_t component_index,runtime::ComponentRecord& record) {
   if(component_index!=controller_component_ || &record!=&components_.at(controller_component_) ||

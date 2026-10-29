@@ -258,6 +258,10 @@ struct IntroConstructedPictureComponent {
     bool activated{},fixed_destination_override{},outer_option{};
     char destination_prefix{};
     std::array<std::uint16_t,7> events{};
+    std::array<std::optional<IntroRuntimeHandle>,2> phase_one_optional_owners;
+    std::array<std::vector<std::uint32_t>,2> phase_one_helpers;
+    bool phase_one_status_matches{},phase_one_latch{},phase_one_initialized{};
+    std::size_t phase_one_index{};
     // Exact cardinality awaits an independently specified field inventory.
     std::optional<std::vector<std::uint32_t>> additional_timing_words;
   };
@@ -909,6 +913,8 @@ struct IntroSceneResourceProperty {
   // not an allocated resource, owner identity or collection lease. Only zero
   // is admitted by the supported named/global reader.
   std::optional<std::uint32_t> scalar_reference_bits{};
+  std::optional<std::uint32_t> geometry_owner_reference{};
+  std::optional<SceneReferenceRegistry::Lease> geometry_owner_lease{};
 };
 struct IntroSourceResourceScope {
   std::uint32_t count_group{};
@@ -1046,6 +1052,10 @@ public:
   [[nodiscard]] const runtime::SceneEventNames& scene_event_names() const noexcept {return event_names_;}
   // Return a project token only within this runtime's live reference domain.
   [[nodiscard]] std::uint32_t project_reference_for_source(std::size_t source) const;
+  // Status is copied at scene database construction. Later app config edits
+  // do not rewrite it; this explicit request operation updates both stores.
+  void update_database_status_from_request(std::string request);
+  [[nodiscard]] const std::optional<std::string>& database_status() const noexcept {return database_status_;}
   [[nodiscard]] std::span<const std::uint32_t> loader_owner_references() const noexcept {return loader_owner_list_;}
   [[nodiscard]] std::optional<IntroRuntimeHandle> resolve_loader_owner_reference(std::uint32_t token) const;
   [[nodiscard]] IntroScopedListOwnerPreResult run_scoped_list_owner_pre(std::uint32_t loader_reference);
@@ -1147,6 +1157,8 @@ public:
   void apply_supported_window_deferred_reader(const IntroDeferredReaderWork& work);
   [[nodiscard]] IntroRuntimeHandle current_source_parent() const noexcept {return current_source_parent_.value?current_source_parent_:root_handle();}
   [[nodiscard]] std::optional<IntroSceneResourceProperty> scene_resource_property(std::string_view key) const;
+  // Missing property preserves output; incompatible metadata fails closed.
+  [[nodiscard]] bool read_scene_geometry_owner_reference(std::string_view key,std::uint32_t& output) const;
   void set_scene_resource_property_native(std::string key,IntroRuntimeResourceHandle resource);
   [[nodiscard]] std::uint32_t group_class_instance_count() const {return application_.group_class_instance_count();}
   [[nodiscard]] bool manager_row_edit() const noexcept {return manager_row_edit_;}
@@ -1545,6 +1557,7 @@ private:
   friend class FirstCutFadePhaseOneSession;
   [[nodiscard]] bool movie_control_reader_matches() const;
   void run_movie_control_phase_two(std::size_t component,runtime::ComponentRecord& record);
+  void run_movie_control_phase_one(std::size_t component,runtime::ComponentRecord& record);
   void allocate_source_scope(std::uint32_t count_group);
   std::map<std::size_t,std::unique_ptr<IntroWindowOwner>> window_owners_;
   IntroWindowOwner* window_owner_{}; // Non-owning first-cut convenience, never latest Window.
@@ -1595,6 +1608,7 @@ private:
   [[nodiscard]] IntroOwnerAuxiliary& ensure_owner_auxiliary(std::size_t source);
   PositionUpdateService position_updates_;
   std::string selected_scene_filename_;
+  std::optional<std::string> database_status_;
   PositionServiceMode position_mode_{false,false,0};
   bool directory_position_controls_prepared_{};
   std::vector<IntroRuntimeResourceHandle> loaded_resource_handles_;

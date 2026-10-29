@@ -1267,15 +1267,23 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         check((queued.scoped_lifecycle_flags&1U) && queued.factory_component->post_work_queue->size()==1,
               "unsupported post queue preserves the earlier owner flag without reporting completion");
     }
-    {
+    for(const int phase_case:{0,1,2,3,4,5}) {
         Fixture fixture(false,true);
         for(const auto offset:{9U,13U,17U}) set(fixture.payload,fixture.block_offsets[6]+offset,1U);
+        set(fixture.payload,fixture.block_offsets[2]+controller().size()-6U,1U);
         off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
             {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        if(phase_case==1) app.configure_project_file("OtherProject.gms");
+        else if(phase_case!=4) app.set_project_request("FF-Intro.gms");
         initialize_app(app);
         off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
         auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
             "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        if(phase_case==5) {
+            app.configure_project_file("ChangedAfterConstruction.gms");
+            check(runtime->database_status()=="FF-Intro.gms",
+                  "later app config change does not silently rewrite the database snapshot");
+        }
         construct_directory(*runtime);
         auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
         session->complete_postconstruction_reader_bracket(41U);
@@ -1291,7 +1299,38 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
               list->factory_component->helper[0]==list->factory_component->helper[1] &&
               list->factory_component->helper[1]==list->factory_component->helper[2],
               "controller list helper resolves the live group factory and preserves duplicate order");
-
+        if(phase_case==2) host.update_database_status_from_request("Elsewhere.gms");
+        if(phase_case==3) {
+            auto& altered=const_cast<off::graphics::IntroConstructedListOwner&>(*list);
+            altered.factory_component->helper[0]=0U;
+        }
+        const auto index=host.controller_component_index();
+        const auto* attachment=host.constructed_attachment(index);
+        if(!attachment || !attachment->movie_control) throw std::runtime_error("synthetic MovieControl is absent");
+        const auto& local=*attachment->movie_control;
+        std::uint32_t missing=123U;
+        check(!host.read_scene_geometry_owner_reference("missing",missing) && missing==123U,
+              "missing typed property preserves its output");
+        rejects([&]{(void)host.read_scene_geometry_owner_reference("rWindows",missing);});
+        const std::array<std::size_t,1> selected{index};
+        if(phase_case==3 || phase_case==4) {
+            rejects([&]{host.components().run_scoped_phase_one(selected);});
+            check(!local.phase_one_initialized && !(host.components().at(index).state().status&4U),
+                  "stale helper or unbound status rejects MovieControl completion");
+            if(phase_case==4)
+              check(!local.phase_one_optional_owners[0] && local.phase_one_optional_owners[1]==group->owner &&
+                    !host.scene_resource_property("ZGEOM_MovieControl"),
+                    "unbound status retains prior optional resolutions without property or completion");
+        } else {
+            host.components().run_scoped_phase_one(selected);
+            std::uint32_t reference{};
+            check(local.phase_one_initialized && (host.components().at(index).state().status&4U) &&
+                  local.phase_one_status_matches==(phase_case==0 || phase_case==5) && local.phase_one_helpers[0].size()==2U &&
+                  local.phase_one_helpers[1].size()==3U &&
+                  host.read_scene_geometry_owner_reference("ZGEOM_MovieControl",reference) &&
+                  reference==host.project_reference_for_source(host.resources().controller_index()),
+                  "MovieControl phase reads live database status and writes shared typed owner property");
+        }
     }
     for(const int scenario:{0,1,2,3,4,5}) {
         const bool input_present=scenario==1;

@@ -47,6 +47,17 @@ public:
   [[nodiscard]] audio::SoundPreferences& sound() noexcept { return sound_; }
   [[nodiscard]] graphics::PreviewCameraUpdate& preview_camera_update() noexcept { return preview_camera_update_; }
   [[nodiscard]] LiveVariableRegistry& live_variables() noexcept { return live_variables_; }
+  [[nodiscard]] std::string_view project_primary() const noexcept {return project_primary_;}
+  [[nodiscard]] std::string_view project_fallback() const noexcept {return project_fallback_;}
+  [[nodiscard]] bool project_configuration_bound() const noexcept {return project_configuration_bound_;}
+  void configure_project_file(std::string value) {
+    if(value.find('\0')!=std::string::npos) throw std::runtime_error("project configuration contains NUL");
+    project_primary_.clear(); project_fallback_=std::move(value); project_configuration_bound_=true;
+  }
+  void set_project_request(std::string value) {
+    if(value.find('\0')!=std::string::npos) throw std::runtime_error("project request contains NUL");
+    project_primary_=std::move(value); project_configuration_bound_=true;
+  }
   [[nodiscard]] InputMapRegistry& input_maps() noexcept {return input_maps_;}
   // Explicit native registration of the implemented concrete ZGROUP factory.
   // This is not the original full registry preparation/base-class resolution.
@@ -288,6 +299,8 @@ private:
   ClockSamplingServices sampling_;
   ApplicationClock clock_;
   audio::SoundTextConfiguration configuration_;
+  std::string project_primary_{"FF-Intro.gms"},project_fallback_;
+  bool project_configuration_bound_{};
   audio::SoundRecordRegistry sound_records_;
   audio::SoundPreferences sound_;
   graphics::PreviewCameraUpdate preview_camera_update_;

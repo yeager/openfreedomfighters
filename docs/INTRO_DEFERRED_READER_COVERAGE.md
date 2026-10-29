@@ -48,5 +48,9 @@ rows, with its own reference domain and lease. Scoped list-owner operations
 resolve that list again for each visit; they are not wired into the normal
 outer lifecycle. Controller-list preparation can retain helper references for
 the supported live list and basic-group factories. Other component families
-remain unsupported, and the helper-consuming MovieControl phase one is not
-implemented.
+remain unsupported. The scoped MovieControl phase-one callback consumes only
+supported helpers and writes a typed, scene-lease-bound owner reference into
+the shared scene property store. It preserves completed prefix mutations on
+failure; it is not a transaction. The normal startup path does not yet bind a
+verified configuration or request-status producer, and no credits consumer
+is implemented. Without bound status, the callback rejects completion.
