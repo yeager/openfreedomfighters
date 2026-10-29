@@ -182,3 +182,7 @@ pixel; one clipped quad differed at a shared edge where both rendered a pixel
 but selected different triangle colors. A subpixel coverage hypothesis fitted
 to earlier cases missed another pixel in this set, so it is not used by the
 implementation. These comparisons do not establish native hardware behavior.
+An expanded set of 36 synthetic cases produced 31 exact full-RGBA matches;
+four clipped-quad variants differed at one shared-edge color pixel and one
+thin triangle differed at one coverage pixel. The fitted subpixel hypothesis
+also missed a coverage pixel, so it remains outside the implementation.
