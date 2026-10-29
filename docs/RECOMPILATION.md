@@ -169,3 +169,9 @@ images matched stored WineD3D/llvmpipe references byte for byte; this does not
 establish general texture or hardware parity. The guest-memory and device
 self-tests also passed with the texture experiment enabled, with 3D enabled
 without textures, and with D3D8 disabled on Linux.
+
+Seventeen additional synthetic shared-edge quad cases matched WineD3D/llvmpipe
+in complete RGBA buffers, including selected subpixel phases, winding orders,
+diagonals, and viewport offsets. A separate single slanted triangle still
+shows edge-coverage differences; these cases do not establish general raster
+or native Windows parity.
