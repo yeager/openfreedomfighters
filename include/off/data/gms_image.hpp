@@ -36,6 +36,7 @@ struct GmsIntroMovieControllerSource {
     std::uint32_t authored_option{0};
     std::optional<std::uint32_t> first_optional_reference;
     std::optional<std::uint32_t> second_optional_reference;
+    bool operator==(const GmsIntroMovieControllerSource&) const = default;
 };
 
 // Offsets address the four-byte scalar payloads within the supplied bounded

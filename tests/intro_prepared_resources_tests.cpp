@@ -1744,6 +1744,73 @@ static OFF_NOINLINE void test_prepared_resource_variants() {
     rejects([&]{sound_host.construct_source_directory_without_engine_renderer();});
 }
 
+static OFF_NOINLINE void test_controller_reader_source_consistency() {
+    for (unsigned scenario=0; scenario<10; ++scenario) {
+        Fixture fixture(false,true);
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        app.initialize_native_group_registration();
+        app.initialize_native_window_language_registration();
+        app.initialize_native_picture_registration();
+        app.initialize_native_camera_registration();
+        app.initialize_native_second_window_scope_registration();
+        app.initialize_native_visual_registration();
+        app.initialize_native_room_animation_scope_registration();
+        app.initialize_native_lens_flare_animation_scope_registration();
+        app.initialize_native_remaining_intro_scope_registration();
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        off::graphics::IntroRuntime host(fixture.build(),app,sequence,"synthetic-scene",
+            off::graphics::IntroSoundLoadPolicy::directory_construction);
+        host.construct_root();
+        host.begin_source_loading_without_engine_renderer();
+        host.construct_source_directory_without_engine_renderer();
+        // Synthetic fault injection: the underlying prepared snapshot is not
+        // const, although its public accessor is read-only.
+        auto& prepared=const_cast<off::data::GmsIntroMovieControllerSource&>(host.resources().controller());
+        switch(scenario) {
+        case 1: prepared.sequence_reference ^= 1U; break;
+        case 2: prepared.group_reference ^= 1U; break;
+        case 3: prepared.additional_reference ^= 1U; break;
+        case 4: prepared.destination.push_back('x'); break;
+        case 5: prepared.authored_option ^= 1U; break;
+        case 6: prepared.first_optional_reference = prepared.first_optional_reference ? std::nullopt : std::optional<std::uint32_t>{1U}; break;
+        case 7: prepared.second_optional_reference = prepared.second_optional_reference ? std::nullopt : std::optional<std::uint32_t>{1U}; break;
+        case 8: {
+            const auto block=host.resources().sources().deferred_source_block(host.resources().controller_index());
+            // Corrupt the tag in the non-const owned synthetic payload after preparation.
+            const_cast<std::byte*>(block.data())[4U]=std::byte{0};
+            break;
+        }
+        case 9: {
+            const auto block=host.resources().sources().deferred_source_block(host.resources().controller_index());
+            const auto parsed=host.resources().sources().intro_movie_controller_block(host.resources().controller_index(),block);
+            const_cast<std::byte*>(block.data())[parsed.reference_offsets.front()] ^= std::byte{1};
+            break;
+        }
+        }
+        const auto run=[&] {
+            host.run_postconstruction_reader_bracket(0U,{
+                [](auto){},[](const auto&){},[]{},[](const auto&){},
+                [&](const auto& work) {
+                    if(work.source_directory_index==host.resources().controller_index())
+                        host.apply_supported_movie_control_deferred_reader(work);
+                },[](const auto&){},[]{}});
+        };
+        if(scenario==0) {
+            run();
+            const auto* state=host.movie_controller_reader_state();
+            check(state && state->authored==prepared &&
+                  host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete,
+                  "controller reader publishes matching bounded source in the actual bracket");
+        } else {
+            rejects(run);
+            check(host.movie_controller_reader_state()==nullptr &&
+                  host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::failed,
+                  "controller reader rejects each altered prepared field without publication");
+        }
+    }
+}
+
 static OFF_NOINLINE void test_sound_source_transforms() {
     using namespace off::graphics;
     const auto initialize=[](off::runtime::ApplicationServices& app) {
@@ -2705,6 +2772,7 @@ int main(int argc, char* argv[]) {
         TestGroup{"param-anim-light-runtime", test_param_anim_light_runtime},
         TestGroup{"particle-emitter-runtime", test_particle_emitter_runtime},
         TestGroup{"prepared-resource-variants", test_prepared_resource_variants},
+        TestGroup{"controller-reader-source-consistency", test_controller_reader_source_consistency},
         TestGroup{"sound-source-transforms", test_sound_source_transforms},
         TestGroup{"runtime-and-archive-lifecycle", test_runtime_and_archive_lifecycle},
         TestGroup{"runtime-scene-identity-and-later", test_runtime_scene_identity_and_later},

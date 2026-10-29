@@ -2940,6 +2940,16 @@ void IntroRuntime::apply_supported_movie_control_deferred_reader(const IntroDefe
     throw std::runtime_error("MovieControl reader has no constructed controller component");
   if(movie_controller_reader_state_)
     throw std::runtime_error("MovieControl source reader cannot run twice");
+  // Parse an owned bounded copy at the reader boundary and require it to
+  // agree with the source snapshot used to prepare dependent lists. This
+  // checks project input consistency; it does not relocate references or
+  // establish the identity of a native reference service.
+  const auto block=resources_.sources().deferred_source_block(work.source_directory_index);
+  const std::vector<std::byte> owned_block(block.begin(),block.end());
+  const auto parsed=resources_.sources().intro_movie_controller_block(
+      work.source_directory_index,owned_block);
+  if(parsed.source!=resources_.controller())
+    throw std::runtime_error("MovieControl reader source differs from prepared controller");
   const auto resolve=[this](std::uint32_t reference) -> IntroRuntimeResourceHandle {
     const auto source=resources_.sources().local_source_for_authored_reference(reference);
     if(!source || *source>=directory_resource_mapping_.size() || !directory_resource_mapping_[*source])
@@ -2960,7 +2970,7 @@ void IntroRuntime::apply_supported_movie_control_deferred_reader(const IntroDefe
     }
     return result;
   };
-  const auto& authored=resources_.controller();
+  const auto& authored=parsed.source;
   IntroMovieControllerReaderState state{
       .owner=source_handle(work.source_directory_index), .resource=work.resource,
       .source_directory_index=work.source_directory_index,.source_offset=work.source_offset,
