@@ -867,6 +867,19 @@ public:
         end_ = cursor_ + size;
         cursor_ += 4U;
     }
+    IntroComponentReader(std::span<const std::byte> payload,
+                         const GmsDirectoryEntry& entry,
+                         std::span<const std::string_view> identities,
+                         std::span<const std::byte> block)
+        : IntroComponentReader(payload,entry,identities) {
+        bytes_=block;
+        reader_=ByteReader(block);
+        if(block.size()<4U) fail();
+        const auto header=reader_.u32(0U);
+        if((header>>24U)!=0U || (header & tagged_block_size_mask)!=block.size()) fail();
+        cursor_=4U;
+        end_=block.size();
+    }
     [[noreturn]] static void fail() {
         throw std::runtime_error("GMS intro cut component is unsupported or malformed");
     }
@@ -903,6 +916,7 @@ public:
         return result;
     }
     void finish() { tag(0xffU); if (cursor_ != end_) fail(); }
+    [[nodiscard]] std::size_t position() const noexcept {return cursor_;}
 private:
     std::span<const std::byte> bytes_;
     ByteReader reader_;
@@ -912,13 +926,20 @@ private:
 } // namespace
 
 GmsIntroFirstCutSource GmsImage::intro_first_cut_source(std::size_t index) const {
+    return intro_first_cut_block(index,deferred_source_block(index)).source;
+}
+
+GmsIntroFirstCutBlock GmsImage::intro_first_cut_block(
+    std::size_t index, std::span<const std::byte> block) const {
     if (index >= directory_.size()) IntroComponentReader::fail();
     constexpr std::array<std::string_view, 6> identities{
         "ZLIST_CutSequenceList", "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand",
         "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand"};
-    IntroComponentReader reader(resource_.payload(), directory_[index], identities);
+    IntroComponentReader reader(resource_.payload(), directory_[index], identities,block);
     if (reader.scalar(0x89U) != 8U) IntroComponentReader::fail();
-    GmsIntroFirstCutSource result;
+    GmsIntroFirstCutBlock output;
+    auto& result=output.source;
+    output.sequence_reference_offset=reader.position();
     result.sequence_reference = reader.word();
     reader.tag(0x06U);
     constexpr std::array<std::uint8_t, 7> tags{0x83, 0x83, 0x03, 0x08, 0x03, 0x83, 0x03};
@@ -934,7 +955,7 @@ GmsIntroFirstCutSource GmsImage::intro_first_cut_source(std::size_t index) const
         reader.tag(0x06U);
     }
     reader.finish();
-    return result;
+    return output;
 }
 
 GmsIntroCutSequenceSource GmsImage::intro_cut_sequence_source(std::size_t index) const {

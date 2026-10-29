@@ -137,6 +137,11 @@ struct GmsIntroFirstCutSource {
     float final_value{0};
     std::array<GmsIntroCutCommandSource, 5> commands{};
 };
+// Offsets refer only to the supplied bounded block; they do not prove origin.
+struct GmsIntroFirstCutBlock {
+    GmsIntroFirstCutSource source;
+    std::size_t sequence_reference_offset{};
+};
 
 struct GmsIntroCutSequenceSource {
     std::array<std::uint32_t, 6> references{};
@@ -299,6 +304,8 @@ public:
     // Restricted supported-intro forms; caller establishes archive provenance.
     // Values remain authored data, not runtime events, clock units or defaults.
     [[nodiscard]] GmsIntroFirstCutSource intro_first_cut_source(std::size_t index) const;
+    [[nodiscard]] GmsIntroFirstCutBlock intro_first_cut_block(
+        std::size_t index, std::span<const std::byte> block) const;
     [[nodiscard]] GmsIntroCutSequenceSource intro_cut_sequence_source(std::size_t index) const;
     [[nodiscard]] GmsIntroExternalCutCommandsSource
     intro_external_cut_commands_source(std::size_t index) const;

@@ -1177,6 +1177,45 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
     };
 
     {
+        Fixture fixture(false,true);
+        const auto prepared=fixture.build();
+        const auto source=prepared.first_cut_index();
+        const auto borrowed=prepared.sources().deferred_source_block(source);
+        Bytes copy(borrowed.begin(),borrowed.end());
+        const auto parsed=prepared.sources().intro_first_cut_block(source,copy);
+        check(parsed.source.sequence_reference==prepared.first_cut().sequence_reference &&
+              parsed.sequence_reference_offset==9U,
+              "attachment-bearing first-cut block identifies its bounded list reference");
+        set(copy,parsed.sequence_reference_offset,23U);
+        check(prepared.sources().intro_first_cut_block(source,copy).source.sequence_reference==23U &&
+              prepared.sources().intro_first_cut_source(source).sequence_reference==prepared.first_cut().sequence_reference,
+              "owned first-cut prefix mutation leaves original source unchanged");
+        rejects([&]{(void)prepared.sources().intro_first_cut_block(source,std::span(copy).first(copy.size()-1U));});
+        copy.back()=std::byte{0};
+        rejects([&]{(void)prepared.sources().intro_first_cut_block(source,copy);});
+        rejects([&]{(void)prepared.sources().intro_first_cut_block(prepared.window_index(),borrowed);});
+    }
+    {
+        Fixture fixture(false,true);
+        auto prepared=fixture.build();
+        // Alter only the prepared snapshot, not its retained source bytes.
+        auto& changed=const_cast<off::data::GmsIntroFirstCutSource&>(prepared.first_cut());
+        changed.sequence_reference^=1U;
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(std::move(prepared),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*runtime);
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        rejects([&]{session->complete_postconstruction_reader_bracket(41U);});
+        check(!session->runtime().first_cut_list_reader_state() &&
+              session->stage()==off::graphics::NormalIntroSceneSessionStage::failed,
+              "a changed prepared list reference cannot publish the first-cut reader");
+    }
+
+    {
         Fixture fixture(true,true);
         off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
             {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});

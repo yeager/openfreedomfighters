@@ -3240,10 +3240,39 @@ void IntroRuntime::apply_supported_first_cut_list_deferred_reader(
     return *directory_resource_mapping_[*source];
   };
   const auto& authored=resources_.first_cut();
+  const auto block=resources_.sources().deferred_source_block(source_index);
+  std::vector<std::byte> owned_block(block.begin(),block.end());
+  const auto parsed=resources_.sources().intro_first_cut_block(source_index,owned_block);
+  if(parsed.source.sequence_reference!=authored.sequence_reference ||
+      parsed.source.settings_words!=authored.settings_words ||
+      std::bit_cast<std::uint32_t>(parsed.source.final_value)!=std::bit_cast<std::uint32_t>(authored.final_value))
+    throw std::runtime_error("First-cut list source differs from prepared input");
+  for(std::size_t i=0;i<authored.commands.size();++i) {
+    const auto& actual=parsed.source.commands[i];
+    const auto& expected=authored.commands[i];
+    if(actual.timeline_position!=expected.timeline_position || actual.event_reference!=expected.event_reference ||
+        actual.target_reference!=expected.target_reference || actual.event_argument!=expected.event_argument ||
+        actual.target_name!=expected.target_name)
+      throw std::runtime_error("First-cut list command differs from prepared input");
+  }
+  if(!scene_reference_lease_ || parsed.sequence_reference_offset>owned_block.size() ||
+      4U>owned_block.size()-parsed.sequence_reference_offset)
+    throw std::runtime_error("First-cut list reference has no live bounded scene input");
+  const auto token=scene_references_.relocate(parsed.source.sequence_reference,*scene_reference_lease_);
+  for(unsigned i=0;i<4U;++i)
+    owned_block[parsed.sequence_reference_offset+i]=static_cast<std::byte>((token>>(8U*i))&0xffU);
+  const auto relocated=resources_.sources().intro_first_cut_block(source_index,owned_block);
+  const auto resolved_owner=scene_references_.resolve(relocated.source.sequence_reference,*scene_reference_lease_);
+  if(!resolved_owner) throw std::runtime_error("First-cut list sequence has no live owner");
+  const IntroRuntimeHandle sequence_owner{*resolved_owner};
+  const auto sequence_resource=resource_handle(sequence_owner);
+  if(associated_resource_owner(sequence_resource)!=sequence_owner || !resource_state_for_handle(sequence_resource) ||
+      sequence_resource!=resolve_required(authored.sequence_reference))
+    throw std::runtime_error("First-cut list sequence owner no longer matches its source");
   IntroFirstCutListReaderState state{
       .owner=source_handle(source_index), .resource=work.resource,
       .component_indices={attachments[0],attachments[1],attachments[2],attachments[3],attachments[4],attachments[5]},
-      .authored=authored, .sequence_resource=resolve_required(authored.sequence_reference), .command_target_resources={}};
+      .authored=authored, .sequence_resource=sequence_resource, .command_target_resources={}};
   for(std::size_t index=0;index<authored.commands.size();++index)
     state.command_target_resources[index]=resolve_required(authored.commands[index].target_reference);
   first_cut_list_reader_state_=std::move(state);
