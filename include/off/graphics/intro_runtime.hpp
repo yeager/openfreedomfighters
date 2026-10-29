@@ -281,10 +281,19 @@ struct IntroConstructedListOwner {
   std::string name;
   std::uint32_t class_identifier{0x0800001aU},count{},component_mask{};
   bool backing_available{};
+  // Project owner state, distinct from resource flags and completion receipts.
+  std::uint32_t scoped_lifecycle_flags{};
   std::vector<std::uint64_t> attachments;
   struct FactoryComponent {
     IntroRuntimeHandle owner;
     std::vector<std::uint32_t> helper;
+    // Controller-list pre-reader publishes into helper itself. This project
+    // accepts it once only; unknown families leave it unavailable.
+    bool controller_helper_ready{};
+    bool controller_helper_unsupported{};
+    // Absent on fresh construction. Present queue requires the unsupported
+    // script/progress post-operation, even when its contents are empty.
+    std::optional<std::vector<std::uint64_t>> post_work_queue;
   };
   std::optional<FactoryComponent> factory_component;
   struct AnimationStorage {
@@ -293,6 +302,7 @@ struct IntroConstructedListOwner {
   };
   std::unique_ptr<AnimationStorage> animation_storage;
 };
+enum class IntroScopedListOwnerPreResult { invoked, skipped_flag, skipped_component, skipped_owner };
 struct IntroAuthoredGroupOwner {
   IntroRuntimeHandle owner;
   IntroRuntimeResourceHandle resource;
@@ -305,6 +315,8 @@ struct IntroAuthoredGroupOwner {
   std::optional<IntroRuntimeHandle> cached_window{},derived_reference{};
   std::vector<IntroRuntimeResourceHandle> category_two{};
   std::shared_ptr<IntroOwnerAuxiliary> auxiliary_state{};
+  struct FactoryComponent { IntroRuntimeHandle owner; };
+  std::optional<FactoryComponent> factory_component;
 };
 struct IntroConstructedRoomOwner {
   IntroAuthoredGroupOwner group;
@@ -1034,6 +1046,10 @@ public:
   [[nodiscard]] const runtime::SceneEventNames& scene_event_names() const noexcept {return event_names_;}
   // Return a project token only within this runtime's live reference domain.
   [[nodiscard]] std::uint32_t project_reference_for_source(std::size_t source) const;
+  [[nodiscard]] std::span<const std::uint32_t> loader_owner_references() const noexcept {return loader_owner_list_;}
+  [[nodiscard]] std::optional<IntroRuntimeHandle> resolve_loader_owner_reference(std::uint32_t token) const;
+  [[nodiscard]] IntroScopedListOwnerPreResult run_scoped_list_owner_pre(std::uint32_t loader_reference);
+  void run_scoped_list_owner_post(std::uint32_t loader_reference);
   [[nodiscard]] const runtime::DeferredSequenceStartQueue::Handle* first_cut_queue_property() const noexcept {
     const auto found=queue_properties_.find("off-project.deferred-sequence-start-queue");
     return found==queue_properties_.end() ? nullptr : &found->second;
@@ -1520,6 +1536,7 @@ private:
   void run_first_cut_fade_phase_one(std::size_t component,runtime::ComponentRecord& record);
   void run_first_cut_sequence_phase_one(std::size_t component,runtime::ComponentRecord& record);
   void run_first_cut_list_phase_one(std::size_t component,runtime::ComponentRecord& record);
+  IntroConstructedListOwner* checked_scoped_list_owner(std::uint32_t loader_reference);
   // Diagnostic-only companion to the factory callback above.  It deliberately
   // omits component-admission recording, so it cannot turn a local fade probe
   // into global lifecycle evidence.
@@ -1584,6 +1601,9 @@ private:
   std::vector<std::optional<IntroRuntimeResourceHandle>> directory_resource_mapping_;
   SceneReferenceRegistry scene_references_;
   std::optional<SceneReferenceRegistry::Lease> scene_reference_lease_;
+  SceneReferenceRegistry loader_owner_references_;
+  std::optional<SceneReferenceRegistry::Lease> loader_owner_lease_;
+  std::vector<std::uint32_t> loader_owner_list_;
   std::vector<IntroDeferredReaderWork> deferred_reader_work_;
   std::vector<IntroSourceScriptWork> source_script_work_;
   std::optional<IntroRuntimeHandle> default_camera_;

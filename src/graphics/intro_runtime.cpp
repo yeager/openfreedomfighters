@@ -445,6 +445,58 @@ std::uint32_t IntroRuntime::project_reference_for_source(std::size_t source) con
   return scene_references_.relocate(static_cast<std::uint32_t>(source+1U),*scene_reference_lease_);
 }
 
+std::optional<IntroRuntimeHandle> IntroRuntime::resolve_loader_owner_reference(std::uint32_t token) const {
+  if(!loader_owner_lease_ || resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete)
+    throw std::runtime_error("loader owner reference scope is unavailable");
+  const auto owner=loader_owner_references_.resolve(token,*loader_owner_lease_);
+  if(!owner) return std::nullopt;
+  if(!live_owner(*owner)) return std::nullopt;
+  return IntroRuntimeHandle{*owner};
+}
+
+IntroConstructedListOwner* IntroRuntime::checked_scoped_list_owner(std::uint32_t loader_reference) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !loader_owner_lease_)
+    throw std::runtime_error("scoped list owner requires a live scene");
+  if(std::ranges::find(loader_owner_list_,loader_reference)==loader_owner_list_.end())
+    throw std::runtime_error("scoped list owner reference is outside the loader list");
+  const auto resolved=resolve_loader_owner_reference(loader_reference);
+  if(!resolved) return nullptr;
+  const auto found=std::ranges::find_if(constructed_list_owners_,[&](const auto& item) {
+    return item.second.owner==*resolved;
+  });
+  if(found==constructed_list_owners_.end() ||
+      associated_resource_owner(found->second.resource)!=found->second.owner ||
+      !resource_state_for_handle(found->second.resource))
+    throw std::runtime_error("scoped list owner identity is unavailable");
+  return &found->second;
+}
+
+IntroScopedListOwnerPreResult IntroRuntime::run_scoped_list_owner_pre(std::uint32_t reference) {
+  const auto* resolved=checked_scoped_list_owner(reference);
+  if(!resolved) return IntroScopedListOwnerPreResult::skipped_owner;
+  const auto& owner=*resolved;
+  if(owner.scoped_lifecycle_flags&1U) return IntroScopedListOwnerPreResult::skipped_flag;
+  if(!owner.factory_component) return IntroScopedListOwnerPreResult::skipped_component;
+  if(owner.factory_component->owner!=owner.owner)
+    throw std::runtime_error("scoped list owner component changed");
+  // The verified list component pre-operation returns without side effects.
+  return IntroScopedListOwnerPreResult::invoked;
+}
+
+void IntroRuntime::run_scoped_list_owner_post(std::uint32_t reference) {
+  auto* resolved=checked_scoped_list_owner(reference);
+  if(!resolved) return;
+  auto& owner=*resolved;
+  // This owner flag is not a scene/resource completion receipt. It remains
+  // set if the subsequent component operation rejects unsupported work.
+  owner.scoped_lifecycle_flags|=1U;
+  if(!owner.factory_component) return;
+  if(owner.factory_component->owner!=owner.owner)
+    throw std::runtime_error("scoped list owner component changed");
+  if(owner.factory_component->post_work_queue)
+    throw std::runtime_error("list owner post queue requires unsupported script services");
+}
+
 void IntroRuntime::set_scene_resource_property_native(std::string key,IntroRuntimeResourceHandle resource) {
   if(resource_load_stage_==IntroResourceLoadStage::failed)
     throw std::runtime_error("Resource construction previously failed");
@@ -515,6 +567,8 @@ void IntroRuntime::construct_group_row_without_engine_renderer(std::size_t row) 
         group=&constructed_group_owners_.emplace(row,IntroAuthoredGroupOwner{owner,resource,std::move(name),source.source_type}).first->second;
         resource_owners_[index]=owner;
       }
+      if(source.source_type==0x00100001U)
+        group->factory_component.emplace(IntroAuthoredGroupOwner::FactoryComponent{owner});
       if(source.source_type==0x0010002eU || source.source_type==0x00100031U) group->cached_window=IntroRuntimeHandle{};
       if(source.source_type==0x00100031U) group->derived_reference=IntroRuntimeHandle{};
       const auto previous=application_.register_class_instance(source.source_type);
@@ -606,6 +660,8 @@ void IntroRuntime::construct_source_directory_without_engine_renderer() {
       if(!resource || associated_resource_owner(*resource)!=owner ||
           !resource_state_for_handle(*resource))
         throw std::runtime_error("Source row did not produce its expected live owner");
+      const auto loader_reference=loader_owner_references_.append_and_get(owner.value);
+      loader_owner_list_.push_back(loader_reference);
       scene_references_.append(owner.value);
       current_source_parent_=source.enters_child_pool?source_handle(row):actual_parent;
     }
@@ -614,11 +670,15 @@ void IntroRuntime::construct_source_directory_without_engine_renderer() {
         directory_resource_mapping_.size()!=directory.size() ||
         std::ranges::any_of(directory_resource_mapping_,[](const auto& resource){return !resource;}))
       throw std::runtime_error("Whole-directory construction did not map every local source");
+    loader_owner_lease_=loader_owner_references_.seal();
     scene_reference_lease_=scene_references_.seal();
     resource_load_stage_=IntroResourceLoadStage::directory_construction_complete;
   } catch(...) {
     scene_reference_lease_.reset();
     scene_references_.retire();
+    loader_owner_lease_.reset();
+    loader_owner_references_.retire();
+    loader_owner_list_.clear();
     manager_row_edit_=false;
     scene_resource_edit_=false;
     current_source_parent_=root_handle();
@@ -1501,6 +1561,48 @@ void IntroRuntime::prepare_deferred_references(IntroDeferredReaderWork& work) {
     translated.push_back(resource);
   }
   work.translated_references=std::move(translated);
+  const auto source_owner=constructed_list_owners_.find(work.source_directory_index);
+  if(source_owner==constructed_list_owners_.end() || !source_owner->second.factory_component ||
+      source_owner->second.owner!=source_handle(work.source_directory_index) ||
+      source_owner->second.factory_component->owner!=source_owner->second.owner)
+    return; // The ordinary reference reader remains available; no helper is claimed.
+  auto& factory=*source_owner->second.factory_component;
+  if(factory.controller_helper_ready || factory.controller_helper_unsupported || !factory.helper.empty())
+    throw std::runtime_error("Controller list helper producer cannot run twice");
+  std::vector<std::uint32_t> helper;
+  helper.reserve(relocated.references.size());
+  for(std::size_t index=0;index<relocated.references.size();++index) {
+    // Only a numerically zero relocated word is excluded before resolution.
+    if(relocated.references[index]==0U) continue;
+    const auto token=relocated.references[index];
+    // Marker-only null reaches this live resolver boundary. Classify it from
+    // the authored source word, never by interpreting an opaque token.
+    const auto owner=(parsed.references[index]&0x7fffffffU)==0U
+        ?scene_references_.resolve(0U,*scene_reference_lease_)
+        :scene_references_.resolve(token,*scene_reference_lease_);
+    if(!owner) continue;
+    const auto target=std::ranges::find_if(constructed_list_owners_,[&](const auto& entry) {
+      return entry.second.owner.value==*owner;
+    });
+    const bool list_live=target!=constructed_list_owners_.end() && target->second.factory_component &&
+        target->second.factory_component->owner==target->second.owner &&
+        associated_resource_owner(target->second.resource)==target->second.owner &&
+        resource_state_for_handle(target->second.resource).has_value();
+    const auto group=std::ranges::find_if(constructed_group_owners_,[&](const auto& entry) {
+      return entry.second.owner.value==*owner;
+    });
+    const bool group_live=group!=constructed_group_owners_.end() && group->second.class_identifier==0x00100001U &&
+        group->second.factory_component && group->second.factory_component->owner==group->second.owner &&
+        associated_resource_owner(group->second.resource)==group->second.owner &&
+        resource_state_for_handle(group->second.resource).has_value();
+    if(!list_live && !group_live) {
+      factory.controller_helper_unsupported=true;
+      return;
+    }
+    helper.push_back(token);
+  }
+  factory.helper=std::move(helper);
+  factory.controller_helper_ready=true;
 }
 
 IntroLifecyclePreflightReport IntroRuntime::preflight_global_lifecycle() const {
@@ -2182,6 +2284,9 @@ void IntroRuntime::run_postconstruction_reader_bracket(
   const auto fail=[this] {
     scene_reference_lease_.reset();
     scene_references_.retire();
+    loader_owner_lease_.reset();
+    loader_owner_references_.retire();
+    loader_owner_list_.clear();
     // The copied streams and their indices are scoped to this bracket. Event
     // names already declared in the scene table are not rolled back; the
     // failed runtime cannot consume them as an initialization receipt.
@@ -2197,7 +2302,11 @@ void IntroRuntime::run_postconstruction_reader_bracket(
     }
     for(auto& [index,list]:constructed_list_owners_) {
       static_cast<void>(index);
-      if(list.factory_component) list.factory_component->helper.clear();
+      if(list.factory_component) {
+        list.factory_component->helper.clear();
+        list.factory_component->controller_helper_ready=false;
+        list.factory_component->controller_helper_unsupported=false;
+      }
     }
     if(movie_controller_reader_state_) {
       const auto& reader=*movie_controller_reader_state_;
@@ -2940,6 +3049,8 @@ bool IntroRuntime::movie_control_reader_matches() const {
         directory_resource_mapping_[*source]!=work->resource ||
         associated_resource_owner(work->resource)!=source_handle(*source) ||
         !resource_state_for_handle(work->resource)) return false;
+    // This is a phase-two reader consistency gate, not admission for the
+    // controller's still-unsupported helper-consuming phase one.
     return work->translated_references==members;
   };
   return members_match(resources_.cut_references(),read.sequence_members) &&

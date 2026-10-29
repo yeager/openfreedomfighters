@@ -42,3 +42,11 @@ application-owned deferred-start queue. A present input-action provider is
 explicitly unsupported: the callback fails without marking phase completion.
 The queue and scoped phase do not establish start or completion delivery, an
 active view, or intro playback.
+
+The loader also retains a separate ordered owner-reference list for completed
+rows, with its own reference domain and lease. Scoped list-owner operations
+resolve that list again for each visit; they are not wired into the normal
+outer lifecycle. Controller-list preparation can retain helper references for
+the supported live list and basic-group factories. Other component families
+remain unsupported, and the helper-consuming MovieControl phase one is not
+implemented.

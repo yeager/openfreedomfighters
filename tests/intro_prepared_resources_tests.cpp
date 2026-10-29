@@ -1188,6 +1188,16 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
         session->complete_postconstruction_reader_bracket(41U);
         auto& host=session->runtime();
+        const auto owner_refs=host.loader_owner_references();
+        check(owner_refs.size()==host.resources().sources().directory().size(),
+              "loader owner producer appends every completed row");
+        for(std::size_t row=0;row<owner_refs.size();++row) {
+          check(host.resolve_loader_owner_reference(owner_refs[row])==host.source_handle(row) &&
+                owner_refs[row]!=host.project_reference_for_source(row),
+                "loader and relocation domains independently bind each source owner");
+        }
+        check(!host.resolve_loader_owner_reference(0U),"null loader owner reference remains null");
+        rejects([&]{(void)host.resolve_loader_owner_reference(host.project_reference_for_source(0));});
         const auto* list_reader=host.first_cut_list_reader_state();
         if(!list_reader) throw std::runtime_error("synthetic list reader is absent");
         const auto* list_component=host.constructed_attachment(list_reader->component_indices[0]);
@@ -1225,6 +1235,63 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
                   "real phase callback consumes the copied stream and same project timing event");
             rejects([&]{host.components().run_scoped_phase_one(target);});
         }
+    }
+    {
+        Fixture fixture(false,true);
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*runtime);
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        session->complete_postconstruction_reader_bracket(41U);
+        auto& host=session->runtime();
+        const auto source=host.resources().first_cut_index();
+        auto& owner=const_cast<off::graphics::IntroConstructedListOwner&>(*host.constructed_list_owner(source));
+        const auto resource_before=host.resource_state(owner.owner)->flags;
+        owner.scoped_lifecycle_flags=0x20U;
+        const auto reference=host.loader_owner_references()[source];
+        check(host.run_scoped_list_owner_pre(reference)==off::graphics::IntroScopedListOwnerPreResult::invoked,
+              "unmarked list owner runs its real no-op pre-operation");
+        host.run_scoped_list_owner_post(reference);
+        check(owner.scoped_lifecycle_flags==0x21U && host.resource_state(owner.owner)->flags==resource_before &&
+              host.run_scoped_list_owner_pre(reference)==off::graphics::IntroScopedListOwnerPreResult::skipped_flag,
+              "owner post preserves owner bits and changes only its later pre-operation guard");
+        const auto second=host.resources().member_index();
+        auto& queued=const_cast<off::graphics::IntroConstructedListOwner&>(*host.constructed_list_owner(second));
+        queued.factory_component->post_work_queue=std::vector<std::uint64_t>{1U};
+        rejects([&]{host.run_scoped_list_owner_post(host.loader_owner_references()[second]);});
+        rejects([&]{host.run_scoped_list_owner_post(host.project_reference_for_source(source));});
+        check((queued.scoped_lifecycle_flags&1U) && queued.factory_component->post_work_queue->size()==1,
+              "unsupported post queue preserves the earlier owner flag without reporting completion");
+    }
+    {
+        Fixture fixture(false,true);
+        for(const auto offset:{9U,13U,17U}) set(fixture.payload,fixture.block_offsets[6]+offset,1U);
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*runtime);
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        session->complete_postconstruction_reader_bracket(41U);
+        auto& host=session->runtime();
+        const auto group_source=host.resources().sources().local_source_for_authored_reference(1U);
+        const auto list_source=host.resources().sources().local_source_for_authored_reference(host.resources().controller().group_reference);
+        if(!group_source || !list_source) throw std::runtime_error("synthetic group resolution source is absent");
+        const auto* group=host.constructed_group_owner(*group_source);
+        const auto* list=host.constructed_list_owner(*list_source);
+        check(group && group->factory_component && group->factory_component->owner==group->owner &&
+              list && list->factory_component && list->factory_component->controller_helper_ready &&
+              list->factory_component->helper.size()==3U &&
+              list->factory_component->helper[0]==list->factory_component->helper[1] &&
+              list->factory_component->helper[1]==list->factory_component->helper[2],
+              "controller list helper resolves the live group factory and preserves duplicate order");
+
     }
     for(const int scenario:{0,1,2,3,4,5}) {
         const bool input_present=scenario==1;
@@ -1331,6 +1398,8 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
               !host.constructed_attachment(*copied_component)->sequence_initialization->initialized &&
               !(host.components().at(*copied_component).state().status&4U),
               "later bracket failure retires the copied stream without phase completion");
+        check(host.loader_owner_references().empty(),"failed bracket retires its loader owner list");
+        rejects([&]{(void)host.resolve_loader_owner_reference(0U);});
         check(copied_list_component && host.constructed_attachment(*copied_list_component)->cut_list_stream_index==0U &&
               !(host.components().at(*copied_list_component).state().status&4U),
               "later bracket failure retires the list stream without phase completion");
@@ -1425,6 +1494,9 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         const auto prepared=fixture.build();
         const auto source=prepared.first_cut_index();
         const auto borrowed=prepared.sources().deferred_source_block(source);
+        rejects([&]{(void)prepared.sources().intro_source_reference_list_block(source,borrowed);});
+        check(prepared.sources().directory()[source].attachments.size()==6U,
+              "first-cut attachment source is rejected by the attachment-free controller-list parser");
         Bytes copy(borrowed.begin(),borrowed.end());
         const auto parsed=prepared.sources().intro_first_cut_block(source,copy);
         check(parsed.source.sequence_reference==prepared.first_cut().sequence_reference &&
@@ -1739,6 +1811,20 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
     auto handoff_session=off::graphics::make_normal_intro_scene_session(std::move(handoff_runtime));
     handoff_session->complete_postconstruction_reader_bracket(0x52U);
     auto& handoff_host=handoff_session->runtime();
+    const auto& handoff_sources=handoff_host.resources().sources();
+    const auto cut_source=handoff_sources.local_source_for_authored_reference(handoff_host.resources().controller().sequence_reference);
+    const auto group_source=handoff_sources.local_source_for_authored_reference(handoff_host.resources().controller().group_reference);
+    if(!cut_source || !group_source) throw std::runtime_error("synthetic controller list sources are absent");
+    const auto* cut_owner=handoff_host.constructed_list_owner(*cut_source);
+    const auto* group_owner=handoff_host.constructed_list_owner(*group_source);
+    check(cut_owner && cut_owner->factory_component && cut_owner->factory_component->controller_helper_ready &&
+          cut_owner->factory_component->helper.size()==2U &&
+          cut_owner->factory_component->helper[0]==cut_owner->factory_component->helper[1] &&
+          !cut_owner->factory_component->controller_helper_unsupported,
+          "real deferred list producer preserves duplicate resolved list components");
+    check(group_owner && group_owner->factory_component && !group_owner->factory_component->controller_helper_ready &&
+          group_owner->factory_component->controller_helper_unsupported,
+          "unknown picture or camera resolver leaves controller helper unsupported");
     check(handoff_host.camera().parameters().authored.has_value() &&
           handoff_host.camera().parameters().near_distance==2.5F &&
           handoff_host.camera().priority()==4,
@@ -2170,13 +2256,14 @@ static OFF_NOINLINE void test_prepared_resource_variants() {
 static OFF_NOINLINE void test_controller_reader_source_consistency() {
     {
         off::graphics::SceneReferenceRegistry registry;
-        registry.append(std::uint64_t{0x100000001ULL});
-        registry.append(std::nullopt);
-        registry.append(std::uint64_t{0x200000002ULL});
+        const auto produced_first=registry.append_and_get(std::uint64_t{0x100000001ULL});
+        const auto produced_null=registry.append_and_get(std::nullopt);
+        const auto produced_last=registry.append_and_get(std::uint64_t{0x200000002ULL});
         const auto lease=registry.seal();
         const auto first=registry.relocate(1U,lease);
         const auto last=registry.relocate(0x80000003U,lease);
-        check(first!=1U && first!=0U && !(first&0x80000000U) &&
+        check(first==produced_first && produced_null==0U && last==produced_last &&
+              first!=1U && first!=0U && !(first&0x80000000U) &&
               last!=first && registry.resolve(first,lease)==0x100000001ULL &&
               registry.resolve(last,lease)==0x200000002ULL,
               "project reference tokens resolve independent 64-bit owners in row order");
@@ -2368,6 +2455,13 @@ static OFF_NOINLINE void test_controller_reader_source_consistency() {
                     altered.translated_references.front()=std::nullopt;
                     check(bind_failure()=="MovieControl phase two requires its complete live readers and unbound scene services",
                           "controller gate rejects a changed prepared list after the bracket");
+                }
+                if(scenario==0) {
+                    const auto index=host.controller_component_index();
+                    const std::array<std::size_t,1> selected{index};
+                    rejects([&]{host.components().run_scoped_phase_one(selected);});
+                    check(!(host.components().at(index).state().status&4U),
+                          "unsupported helper-consuming MovieControl phase one cannot complete");
                 }
             }
         } else {

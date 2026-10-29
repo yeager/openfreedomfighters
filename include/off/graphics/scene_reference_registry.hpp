@@ -62,16 +62,18 @@ public:
 
     // Call exactly once per successfully completed row, in source order.
     // A null owner is permitted only if the producer actually reached it.
-    void append(std::optional<std::uint64_t> owner) {
+    [[nodiscard]] std::uint32_t append_and_get(std::optional<std::uint64_t> owner) {
         std::lock_guard lock(state_->mutex);
         if(!state_->active || state_->sealed) fail();
-        if(!owner || *owner==0U) { state_->rows.push_back(0U); return; }
+        if(!owner || *owner==0U) { state_->rows.push_back(0U); return 0U; }
         const auto token=detail::claim_scene_reference_token(next_token_);
         const auto [entry,inserted]=state_->owners.emplace(token,*owner);
         if(!inserted) fail();
         try { state_->rows.push_back(token); }
         catch(...) { state_->owners.erase(entry); throw; }
+        return token;
     }
+    void append(std::optional<std::uint64_t> owner) { static_cast<void>(append_and_get(owner)); }
     [[nodiscard]] Lease seal() {
         std::lock_guard lock(state_->mutex);
         if(!state_->active || state_->sealed) fail();
