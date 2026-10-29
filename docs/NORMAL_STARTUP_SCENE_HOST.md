@@ -8,6 +8,9 @@ CPU preparation and GPU work must remain on their appropriate owning threads. Sc
 
 The normal application path retains a `NormalIntroSceneSession`, but does not
 create or activate `NormalIntroSceneHost` or provide its frame bridge. The SDL
+session and the application and component-sequence services it borrows now
+share a C++ lifetime owner; this alone does not activate the scene or admit a
+camera. The SDL
 GPU runtime does construct the device, bind window dimensions and display
 settings through `CameraDisplayServices`, attach `SdlIntroRenderer` to the
 camera renderer list, run the post-construction reader bracket, and prepare a

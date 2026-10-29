@@ -36,6 +36,7 @@
 #include "off/graphics/intro_outer_loader_tail_readiness.hpp"
 #include "off/graphics/intro_runtime.hpp"
 #include "off/graphics/normal_intro_scene_session.hpp"
+#include "off/graphics/owned_normal_intro_scene.hpp"
 #include "off/graphics/scene_gpu_plan.hpp"
 #include "off/graphics/scene_render.hpp"
 #include "off/graphics/world_scene_session.hpp"
@@ -1760,9 +1761,10 @@ static int run_application(int argc, char **argv) {
   std::optional<off::data::InstallVerification> verification;
   // One application owner retains logical sound records and category state.
   // No output device/channel service exists yet; no start event is fabricated.
-  off::runtime::ApplicationServices application(
+  auto application_owner=std::make_shared<off::runtime::ApplicationServices>(
       off::runtime::ClockExecutionPolicy::no_recording_or_replay,
       off::runtime::make_monotonic_clock_samples());
+  auto& application=*application_owner;
   // Native registration of the currently implemented concrete factory;
   // not the original complete class-list/base-class preparation.
   if (!verify_only && !diagnostic_scene) {
@@ -1780,13 +1782,13 @@ static int run_application(int argc, char **argv) {
   std::optional<off::graphics::WorldSceneSession> selected_world_scene;
   std::optional<off::graphics::SceneRenderResolutionSummary> scene_summary;
   // Scene-manager identity lifetime, independent of source archive catalogs.
-  off::runtime::SceneComponentSequence component_sequence{[&application] {
-    const auto time = application.component_dispatch_time();
+  auto component_sequence=std::make_shared<off::runtime::SceneComponentSequence>([application_owner] {
+    const auto time = application_owner->component_dispatch_time();
     if (!time)
       throw std::runtime_error(
           "Live application component dispatch time has not been produced");
     return *time;
-  }};
+  });
   std::optional<off::graphics::SceneRenderAsset> startup_ui_scene_resources;
   std::optional<off::runtime::StartupBootSceneRegistry> startup_boot_registry;
   std::optional<off::runtime::StartupBootMenuComponentEnvelope>
@@ -1794,7 +1796,8 @@ static int run_application(int argc, char **argv) {
   std::optional<off::graphics::StartupGraphicsAsset> startup_graphics;
   std::optional<off::graphics::StartupGraphicsExpandedPlan>
       startup_graphics_cpu_plan;
-  std::unique_ptr<off::graphics::NormalIntroSceneSession> intro_session;
+  std::shared_ptr<off::graphics::OwnedNormalIntroScene> intro_scene_owner;
+  off::graphics::NormalIntroSceneSession* intro_session=nullptr;
   // This may be rendered only as a labelled, static fallback while the
   // observed MovieControl/loader-tail path is incomplete. It is not a
   // cutscene frame and does not activate the retained intro session.
@@ -1867,12 +1870,12 @@ static int run_application(int argc, char **argv) {
             // Prepare authored first-cut resources without admitting a scene or
             // manufacturing lifecycle state. Keep ownership through the
             // runtime.
-            auto intro_runtime = std::make_unique<off::graphics::IntroRuntime>(
+            auto intro_owner = off::graphics::OwnedNormalIntroScene::create(
                 off::graphics::load_intro_prepared_resources(
                     data_path / "Scenes" / "FF-Intro.ZIP"),
-                application, component_sequence, "FF-Intro.gms",
+                application_owner, component_sequence, "FF-Intro.gms",
                 off::graphics::IntroSoundLoadPolicy::directory_construction);
-            auto& intro = *intro_runtime;
+            auto& intro = intro_owner->session().runtime();
             // Execute the actual fresh root stage. Authored source construction
             // and its loader tail are still required before fallback/view
             // admission.
@@ -1884,8 +1887,8 @@ static int run_application(int argc, char **argv) {
             intro.begin_source_loading_without_engine_renderer();
             intro.construct_source_directory_without_engine_renderer();
             // Transfer the CPU directory to the window-thread reader bracket.
-            intro_session = off::graphics::make_normal_intro_scene_session(
-                std::move(intro_runtime));
+            intro_scene_owner=std::move(intro_owner);
+            intro_session=&intro_scene_owner->session();
             // The real renderer must exist before display-dependent camera
             // readers run. Continue this session on the SDL window thread.
 
@@ -2070,7 +2073,7 @@ static int run_application(int argc, char **argv) {
       startup_window, mode, mode_specified,
       off::platform::application_graphics_settings_path(),
       scene_plan, *startup_graphics,
-      ui_fonts, ui_textures, intro_session.get(),
+      ui_fonts, ui_textures, intro_session,
       intro_static_fallback ? &*intro_static_fallback : nullptr,
       nullptr,
       frame_limit, show_graphics_menu,

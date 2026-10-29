@@ -7,6 +7,7 @@
 #include "off/data/matpos_owner_child_selector.hpp"
 #include "off/cutscene/first_cut_command_session.hpp"
 #include "off/graphics/normal_intro_scene_session.hpp"
+#include "off/graphics/owned_normal_intro_scene.hpp"
 #include "off/graphics/movie_control_first_cut_scene_frame_adapter.hpp"
 #include "off/graphics/intro_accepted_picture_registry.hpp"
 #include "off/graphics/intro_first_cut_accepted_picture_registry.hpp"
@@ -869,6 +870,39 @@ static OFF_NOINLINE void test_prepared_runtime_scopes() {
       check(session->stage()==off::graphics::NormalIntroSceneSessionStage::postconstructed &&
                 session->first_cut_player()==nullptr && session->first_cut_command_runner()==nullptr,
             "first-cut preparation rejects before the owned reader bracket without changing session state");
+    }
+    {
+      auto application=std::make_shared<off::runtime::ApplicationServices>(
+          off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+          off::runtime::ClockSamplingServices{[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+      auto sequence=std::make_shared<off::runtime::SceneComponentSequence>([application] {
+        const auto sample=application->component_dispatch_time();
+        if(!sample) throw std::runtime_error("synthetic component dispatch time unavailable");
+        return *sample;
+      });
+      bool missing_application=false, missing_sequence=false;
+      try { (void)off::graphics::OwnedNormalIntroScene::create(
+          fixture.build(),{},sequence,"synthetic.gms",off::graphics::IntroSoundLoadPolicy::directory_construction); }
+      catch(const std::invalid_argument&) { missing_application=true; }
+      try { (void)off::graphics::OwnedNormalIntroScene::create(
+          fixture.build(),application,{},"synthetic.gms",off::graphics::IntroSoundLoadPolicy::directory_construction); }
+      catch(const std::invalid_argument&) { missing_sequence=true; }
+      check(missing_application && missing_sequence,"owned scene rejects either absent dependency owner");
+      auto owner=off::graphics::OwnedNormalIntroScene::create(
+          fixture.build(),application,sequence,"synthetic.gms",off::graphics::IntroSoundLoadPolicy::directory_construction);
+      check(&owner->session().runtime().application()==application.get() &&
+            owner->session().stage()==off::graphics::NormalIntroSceneSessionStage::postconstructed,
+            "owned scene constructs its session with the retained application and no activation");
+      std::weak_ptr<off::graphics::OwnedNormalIntroScene> scene_lifetime=owner;
+      std::weak_ptr<off::runtime::ApplicationServices> app_lifetime=application;
+      std::weak_ptr<off::runtime::SceneComponentSequence> sequence_lifetime=sequence;
+      auto lease=owner->lifetime_owner();
+      owner.reset(); sequence.reset(); application.reset();
+      check(!scene_lifetime.expired() && !sequence_lifetime.expired() && !app_lifetime.expired(),
+            "scene lifetime owner retains session and both borrowed dependencies");
+      lease.reset();
+      check(scene_lifetime.expired() && sequence_lifetime.expired() && app_lifetime.expired(),
+            "scene lifetime owner releases all dependencies without a cycle");
     }
     {
       off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
