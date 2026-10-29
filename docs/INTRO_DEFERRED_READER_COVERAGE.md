@@ -16,3 +16,8 @@ Supported list blocks are likewise checked as bounded copies, translated
 through the scene registry, and compared with the controller's prepared member
 lists. This verifies project-side consistency; it does not establish that the
 original member reader or its helper has run.
+
+The supported first-cut form has its own bounded block parser because its
+attachment data follows the reference prefix. Its reader validates the full
+form and resolves the sequence reference through the scene lease. This is a
+project-side consistency check; it does not establish camera activation.
