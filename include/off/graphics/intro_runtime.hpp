@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/graphics/fresh_intro_camera.hpp"
+#include "off/graphics/scene_reference_registry.hpp"
 #include "off/cutscene/first_cut_player_initialization.hpp"
 #include "off/graphics/intro_prepared_resources.hpp"
 #include "off/data/keys_backing_evaluator.hpp"
@@ -1540,6 +1541,8 @@ private:
   bool directory_position_controls_prepared_{};
   std::vector<IntroRuntimeResourceHandle> loaded_resource_handles_;
   std::vector<std::optional<IntroRuntimeResourceHandle>> directory_resource_mapping_;
+  SceneReferenceRegistry scene_references_;
+  std::optional<SceneReferenceRegistry::Lease> scene_reference_lease_;
   std::vector<IntroDeferredReaderWork> deferred_reader_work_;
   std::vector<IntroSourceScriptWork> source_script_work_;
   std::optional<IntroRuntimeHandle> default_camera_;

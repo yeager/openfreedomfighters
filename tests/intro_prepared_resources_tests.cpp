@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
@@ -33,6 +34,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -1745,7 +1747,57 @@ static OFF_NOINLINE void test_prepared_resource_variants() {
 }
 
 static OFF_NOINLINE void test_controller_reader_source_consistency() {
-    for (unsigned scenario=0; scenario<10; ++scenario) {
+    {
+        off::graphics::SceneReferenceRegistry registry;
+        registry.append(std::uint64_t{0x100000001ULL});
+        registry.append(std::nullopt);
+        registry.append(std::uint64_t{0x200000002ULL});
+        const auto lease=registry.seal();
+        const auto first=registry.relocate(1U,lease);
+        const auto last=registry.relocate(0x80000003U,lease);
+        check(first!=1U && first!=0U && !(first&0x80000000U) &&
+              last!=first && registry.resolve(first,lease)==0x100000001ULL &&
+              registry.resolve(last,lease)==0x200000002ULL,
+              "project reference tokens resolve independent 64-bit owners in row order");
+        check(registry.relocate(0U,lease)==0U && registry.relocate(0x80000000U,lease)==0x80000000U &&
+              registry.relocate(2U,lease)==0U && !registry.resolve(0U,lease),
+              "project references distinguish mask-zero, null row and null token");
+        rejects([&]{(void)registry.relocate(4U,lease);});
+        rejects([&]{(void)registry.resolve(0x80000000U,lease);});
+        rejects([&]{registry.append(std::uint64_t{3});});
+        off::graphics::SceneReferenceRegistry foreign;
+        foreign.append(std::uint64_t{0x100000001ULL});
+        const auto other=foreign.seal();
+        rejects([&]{(void)registry.resolve(first,other);});
+        rejects([&]{(void)foreign.resolve(first,other);});
+        registry.retire();
+        rejects([&]{(void)registry.resolve(first,lease);});
+        rejects([&]{(void)registry.relocate(1U,lease);});
+        std::atomic<std::uint32_t> tiny{1U};
+        check(off::graphics::detail::claim_scene_reference_token(tiny)==1U,
+              "final available token can be claimed once");
+        rejects([&]{(void)off::graphics::detail::claim_scene_reference_token(tiny);});
+        off::graphics::SceneReferenceRegistry concurrent;
+        concurrent.append(std::uint64_t{42});
+        const auto concurrent_lease=concurrent.seal();
+        const auto token=concurrent.relocate(1U,concurrent_lease);
+        std::atomic<bool> started{false}, bad{false};
+        // This checks allowed outcomes around retirement, but scheduling can
+        // serialize the operations; it does not prove actual overlap.
+        std::thread reader([&] {
+            started.store(true,std::memory_order_release);
+            for(unsigned i=0;i<10000U;++i) {
+                try { if(concurrent.resolve(token,concurrent_lease)!=42U) bad.store(true); }
+                catch(const std::runtime_error&) { break; }
+            }
+        });
+        while(!started.load(std::memory_order_acquire)) std::this_thread::yield();
+        concurrent.retire();
+        reader.join();
+        check(!bad.load(),"concurrent resolution cannot observe a different owner during retirement");
+        rejects([&]{(void)concurrent.resolve(token,concurrent_lease);});
+    }
+    for (unsigned scenario=0; scenario<13; ++scenario) {
         Fixture fixture(false,true);
         off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
             {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
@@ -1787,26 +1839,51 @@ static OFF_NOINLINE void test_controller_reader_source_consistency() {
             const_cast<std::byte*>(block.data())[parsed.reference_offsets.front()] ^= std::byte{1};
             break;
         }
+        case 10:
+        case 11: {
+            const auto block=host.resources().sources().deferred_source_block(host.resources().controller_index());
+            const auto parsed=host.resources().sources().intro_movie_controller_block(host.resources().controller_index(),block);
+            const auto invalid=scenario==10 ? 0x7fffffffU : 0x80000000U;
+            prepared.second_optional_reference=invalid;
+            auto* bytes=const_cast<std::byte*>(block.data());
+            const auto offset=parsed.reference_offsets.back();
+            for(unsigned i=0;i<4;++i) bytes[offset+i]=static_cast<std::byte>((invalid>>(8U*i))&0xffU);
+            break;
+        }
         }
         const auto run=[&] {
-            host.run_postconstruction_reader_bracket(0U,{
+            host.run_postconstruction_reader_bracket(73U,{
                 [](auto){},[](const auto&){},[]{},[](const auto&){},
                 [&](const auto& work) {
                     if(work.source_directory_index==host.resources().controller_index())
                         host.apply_supported_movie_control_deferred_reader(work);
-                },[](const auto&){},[]{}});
+                },[&](const auto& work) {
+                    if(scenario==12 && work.source_directory_index==host.resources().controller_index()) {
+                        host.apply_supported_movie_control_component_reader(work);
+                        throw std::runtime_error("synthetic later controller callback failure");
+                    }
+                },[]{}});
         };
         if(scenario==0) {
             run();
             const auto* state=host.movie_controller_reader_state();
+            const auto sequence_row=host.resources().sources().local_source_for_authored_reference(prepared.sequence_reference);
+            const auto group_row=host.resources().sources().local_source_for_authored_reference(prepared.group_reference);
             check(state && state->authored==prepared &&
+                  sequence_row && group_row &&
+                  state->sequence_list_resource==host.resource_handle(host.source_handle(*sequence_row)) &&
+                  state->group_list_resource==host.resource_handle(host.source_handle(*group_row)) &&
                   host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete,
-                  "controller reader publishes matching bounded source in the actual bracket");
+                  "controller reader resolves project-local tokens to the two live owners in the actual bracket");
         } else {
             rejects(run);
             check(host.movie_controller_reader_state()==nullptr &&
+                  host.movie_controller_component_reader_state()==nullptr &&
                   host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::failed,
                   "controller reader rejects each altered prepared field without publication");
+            if(scenario==12)
+                check(host.reader_bracket_retained_saved_value()==73U,
+                      "later controller failure does not imply a complete bracket rollback");
         }
     }
 }

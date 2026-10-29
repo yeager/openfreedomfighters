@@ -589,6 +589,12 @@ void IntroRuntime::construct_source_directory_without_engine_renderer() {
         construct_group_row_without_engine_renderer(row);
       else
         construct_non_group_row_without_engine_renderer(row);
+      const auto resource=directory_resource_mapping_.at(row);
+      const auto owner=source_handle(row);
+      if(!resource || associated_resource_owner(*resource)!=owner ||
+          !resource_state_for_handle(*resource))
+        throw std::runtime_error("Source row did not produce its expected live owner");
+      scene_references_.append(owner.value);
       current_source_parent_=source.enters_child_pool?source_handle(row):actual_parent;
     }
 
@@ -596,8 +602,11 @@ void IntroRuntime::construct_source_directory_without_engine_renderer() {
         directory_resource_mapping_.size()!=directory.size() ||
         std::ranges::any_of(directory_resource_mapping_,[](const auto& resource){return !resource;}))
       throw std::runtime_error("Whole-directory construction did not map every local source");
+    scene_reference_lease_=scene_references_.seal();
     resource_load_stage_=IntroResourceLoadStage::directory_construction_complete;
   } catch(...) {
+    scene_reference_lease_.reset();
+    scene_references_.retire();
     manager_row_edit_=false;
     scene_resource_edit_=false;
     current_source_parent_=root_handle();
@@ -2114,6 +2123,15 @@ void IntroRuntime::run_postconstruction_reader_bracket(
         resource_state_for_handle(work.resource).has_value();
   };
   const auto fail=[this] {
+    scene_reference_lease_.reset();
+    scene_references_.retire();
+    if(movie_controller_reader_state_) {
+      const auto& reader=*movie_controller_reader_state_;
+      std::erase(supported_reader_admissions_,IntroReaderAdmissionIdentity{
+          reader.resource.value,reader.source_offset,reader.source_directory_index});
+    }
+    movie_controller_component_reader_state_.reset();
+    movie_controller_reader_state_.reset();
     reader_bracket_stage_=IntroReaderBracketStage::failed;
     resource_load_stage_=IntroResourceLoadStage::failed;
   };
@@ -2936,30 +2954,63 @@ void IntroRuntime::apply_supported_movie_control_deferred_reader(const IntroDefe
       work.resource!=directory_resource_mapping_.at(work.source_directory_index).value_or(IntroRuntimeResourceHandle{}))
     throw std::runtime_error("MovieControl reader requires its live deferred owner work");
   auto& component=components_.at(controller_component_);
-  if(!component.constructed() || component.source().factory_name!="ZGEOM_MovieControl")
+  const auto* attachment=constructed_attachment(controller_component_);
+  if(!component.constructed() || component.removed() ||
+      component.source().factory_name!="ZGEOM_MovieControl" ||
+      component.source().directory_index!=work.source_directory_index ||
+      component.source().attachment_index!=0U ||
+      component.state().attached_owner!=source_handle(work.source_directory_index).value ||
+      !attachment || !attachment->movie_control)
     throw std::runtime_error("MovieControl reader has no constructed controller component");
   if(movie_controller_reader_state_)
     throw std::runtime_error("MovieControl source reader cannot run twice");
   // Parse an owned bounded copy at the reader boundary and require it to
   // agree with the source snapshot used to prepare dependent lists. This
-  // checks project input consistency; it does not relocate references or
-  // establish the identity of a native reference service.
+  // checks project input consistency; the later translation uses project-local
+  // tokens and does not establish a native reference-service identity.
   const auto block=resources_.sources().deferred_source_block(work.source_directory_index);
-  const std::vector<std::byte> owned_block(block.begin(),block.end());
+  std::vector<std::byte> owned_block(block.begin(),block.end());
   const auto parsed=resources_.sources().intro_movie_controller_block(
       work.source_directory_index,owned_block);
   if(parsed.source!=resources_.controller())
     throw std::runtime_error("MovieControl reader source differs from prepared controller");
+  if(!scene_reference_lease_ ||
+      (parsed.source.first_optional_reference && !parsed.source.second_optional_reference))
+    throw std::runtime_error("MovieControl reference input has unsupported lifetime or optional fields");
+  // The offsets were produced by the restricted parser for this exact owned
+  // copy. Relocate only those scalar fields. Unknown layouts fail above;
+  // this is project-local translation, not native handle reconstruction.
+  for(const auto offset:parsed.reference_offsets) {
+    if(offset>owned_block.size() || 4U>owned_block.size()-offset)
+      throw std::runtime_error("MovieControl reference lies outside its owned block");
+    std::uint32_t raw{};
+    for(unsigned i=0;i<4;++i)
+      raw |= std::to_integer<std::uint32_t>(owned_block[offset+i]) << (8U*i);
+    const auto token=scene_references_.relocate(raw,*scene_reference_lease_);
+    for(unsigned i=0;i<4;++i)
+      owned_block[offset+i]=static_cast<std::byte>((token >> (8U*i)) & 0xffU);
+  }
+  const auto relocated=resources_.sources().intro_movie_controller_block(
+      work.source_directory_index,owned_block);
+  const auto resolve_token=[this](std::uint32_t token) -> IntroRuntimeResourceHandle {
+    const auto owner=scene_references_.resolve(token,*scene_reference_lease_);
+    if(!owner) throw std::runtime_error("MovieControl reader requires a live referenced owner");
+    const IntroRuntimeHandle identity{*owner};
+    const auto resource=resource_handle(identity);
+    if(associated_resource_owner(resource)!=identity || !resource_state_for_handle(resource))
+      throw std::runtime_error("MovieControl reference owner is no longer live");
+    return resource;
+  };
+  const auto resolve_optional_token=[&resolve_token](std::uint32_t token)
+      -> std::optional<IntroRuntimeResourceHandle> {
+    if(token==0U) return std::nullopt;
+    return resolve_token(token);
+  };
   const auto resolve=[this](std::uint32_t reference) -> IntroRuntimeResourceHandle {
     const auto source=resources_.sources().local_source_for_authored_reference(reference);
     if(!source || *source>=directory_resource_mapping_.size() || !directory_resource_mapping_[*source])
       throw std::runtime_error("MovieControl reader has an unresolved mandatory source reference");
     return *directory_resource_mapping_[*source];
-  };
-  const auto resolve_optional=[&resolve](std::uint32_t reference)
-      -> std::optional<IntroRuntimeResourceHandle> {
-    if(reference==0U) return std::nullopt;
-    return resolve(reference);
   };
   const auto translate=[&resolve](std::span<const std::uint32_t> references) {
     std::vector<std::optional<IntroRuntimeResourceHandle>> result;
@@ -2975,13 +3026,13 @@ void IntroRuntime::apply_supported_movie_control_deferred_reader(const IntroDefe
       .owner=source_handle(work.source_directory_index), .resource=work.resource,
       .source_directory_index=work.source_directory_index,.source_offset=work.source_offset,
       .component_index=controller_component_, .authored=authored,
-      .sequence_list_resource=resolve(authored.sequence_reference),
-      .group_list_resource=resolve(authored.group_reference),
-      .additional_resource=resolve_optional(authored.additional_reference),
-      .first_optional_resource=authored.first_optional_reference
-          ?resolve_optional(*authored.first_optional_reference):std::nullopt,
-      .second_optional_resource=authored.second_optional_reference
-          ?resolve_optional(*authored.second_optional_reference):std::nullopt,
+      .sequence_list_resource=resolve_token(relocated.source.sequence_reference),
+      .group_list_resource=resolve_token(relocated.source.group_reference),
+      .additional_resource=resolve_optional_token(relocated.source.additional_reference),
+      .first_optional_resource=relocated.source.first_optional_reference
+          ?resolve_optional_token(*relocated.source.first_optional_reference):std::nullopt,
+      .second_optional_resource=relocated.source.second_optional_reference
+          ?resolve_optional_token(*relocated.source.second_optional_reference):std::nullopt,
       .sequence_members=translate(resources_.cut_references()),
       .group_members=translate(resources_.group_references())};
   movie_controller_reader_state_=std::move(state);
