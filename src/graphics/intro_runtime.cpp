@@ -174,6 +174,10 @@ void IntroRuntime::apply_supported_sound_owner_deferred_reader(
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
       !work.processed)
     throw std::runtime_error("Sound owner reader requires processed directory work");
+  if(std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate) {
+       return std::addressof(candidate)==std::addressof(work);
+     })==deferred_reader_work_.end())
+    throw std::runtime_error("Sound owner reader requires bracket-owned work");
   const auto& directory=resources_.sources().directory();
   if(work.source_directory_index>=directory.size())
     throw std::runtime_error("Sound owner reader source is out of range");

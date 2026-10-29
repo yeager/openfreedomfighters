@@ -1177,6 +1177,48 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
     };
 
     {
+        Fixture fixture(true,true);
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*runtime);
+        const auto& directory=runtime->resources().sources().directory();
+        const auto row=std::ranges::find(directory,0x00200012U,&off::data::GmsDirectoryEntry::source_type);
+        if(row==directory.end()) throw std::runtime_error("synthetic sound owner is absent");
+        const auto source=static_cast<std::size_t>(std::distance(directory.begin(),row));
+        const auto work=std::ranges::find(runtime->deferred_reader_work(),source,
+            &off::graphics::IntroDeferredReaderWork::source_directory_index);
+        if(work==runtime->deferred_reader_work().end())
+            throw std::runtime_error("synthetic sound deferred work is absent");
+        auto& sound=runtime->sound_for_source(source);
+        auto& record=sound.record();
+        const auto before=record;
+        auto copied=*work;
+        copied.processed=true;
+        rejects([&]{runtime->apply_supported_sound_owner_deferred_reader(copied);});
+        const auto coverage=runtime->reader_coverage_inventory();
+        check(!sound.source_applied() && record.type==before.type &&
+              record.active_source==before.active_source && record.flags==before.flags &&
+              record.category==before.category && record.gain_multiplier==before.gain_multiplier &&
+              record.source_scalars==before.source_scalars && record.range==before.range &&
+              record.derived_range==before.derived_range && record.final_scalar==before.final_scalar &&
+              app.sound_records().prepared().empty() &&
+              std::ranges::any_of(coverage.entries,[](const auto& entry) {
+                  return entry.family==off::graphics::IntroDeferredReaderFamily::sound_owner &&
+                      entry.state==off::graphics::IntroDeferredReaderImplementationState::implemented_not_applied &&
+                      entry.count==1U;
+              }),"copied sound work cannot mutate the backend or publish reader admission");
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        session->complete_postconstruction_reader_bracket(41U);
+        check(session->stage()==off::graphics::NormalIntroSceneSessionStage::reader_bracket_complete &&
+              session->runtime().sound_for_source(source).source_applied(),
+              "the real normal bracket applies the canonical sound work");
+    }
+
+    {
         Fixture fixture(false,true);
         off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
             {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
