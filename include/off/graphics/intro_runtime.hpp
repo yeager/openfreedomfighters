@@ -1477,6 +1477,7 @@ private:
   };
   std::vector<SequenceStreamEntry> sequence_streams_;
   std::optional<std::uint16_t> sequence_timing_event_;
+  std::optional<runtime::SceneEventNames::Lease> sequence_timing_event_lease_;
   std::vector<std::optional<std::uint32_t>> source_event_name_mapping_;
   bool source_event_names_prepared_{};
   std::optional<float> loading_progress_;

@@ -12,7 +12,16 @@ namespace off::runtime {
 // Scene-owned declarations only: this registry does not deliver events.
 // Fresh scene construction produces counter zero and an absent lazy registry.
 class SceneEventNames final {
+  struct Generation { std::uint64_t value{1}; };
 public:
+  class Lease final {
+    friend class SceneEventNames;
+    std::weak_ptr<Generation> generation_;
+    std::uint64_t value_{};
+    Lease(const std::shared_ptr<Generation>& generation) : generation_(generation), value_(generation->value) {}
+  public:
+    Lease() = default;
+  };
   static constexpr std::size_t capacity=0x402;
   SceneEventNames();
   SceneEventNames(const SceneEventNames&)=delete;
@@ -24,6 +33,11 @@ public:
   [[nodiscard]] std::optional<std::string_view> name(std::uint16_t identity) const;
   [[nodiscard]] std::uint32_t counter() const noexcept {return counter_;}
   [[nodiscard]] bool initialized() const noexcept {return initialized_;}
+  // Project-owned lifetime ticket. A clear invalidates existing tickets even
+  // if identical numeric IDs are subsequently declared again. Like the table,
+  // these operations are confined to the scene's owning thread.
+  [[nodiscard]] Lease lease() const;
+  [[nodiscard]] bool is_live(const Lease& lease) const noexcept;
   // Explicit scene event-clear, never an implicit GMS-load or factory reset.
   void clear() noexcept;
 private:
@@ -36,5 +50,6 @@ private:
   std::unique_ptr<ReverseNames> by_identity_;
   std::uint32_t counter_{};
   bool initialized_{};
+  std::shared_ptr<Generation> generation_{std::make_shared<Generation>()};
 };
 } // namespace off::runtime

@@ -3270,7 +3270,8 @@ void IntroRuntime::run_first_cut_sequence_phase_one(std::size_t index,runtime::C
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
       reader_bracket_stage_!=IntroReaderBracketStage::ordinary_reader_boundary_complete ||
       !scene_reference_lease_ || !first_cut_sequence_component_reader_state_ ||
-      !first_cut_component_reader_state_ || !sequence_timing_event_ || index>=components_.size() ||
+      !first_cut_component_reader_state_ || !sequence_timing_event_ || !sequence_timing_event_lease_ ||
+      !event_names_.is_live(*sequence_timing_event_lease_) || index>=components_.size() ||
       &record!=&components_.at(index) || !record.constructed() || record.removed())
     throw std::runtime_error("First-cut sequence initialization has no live reader or event service");
   static_cast<void>(scene_references_.resolve(0U,*scene_reference_lease_));
@@ -3422,6 +3423,7 @@ void IntroRuntime::apply_supported_first_cut_component_reader(
   if(sequence_timing_event_ || event_names_.find(sequence_timing_event_name))
     throw std::runtime_error("First-cut project timing event is already registered");
   sequence_timing_event_=event_names_.declare(sequence_timing_event_name);
+  sequence_timing_event_lease_=event_names_.lease();
   first_cut_component_reader_state_={.owner=first_cut_list_reader_state_->owner,
       .resource=work.resource,.component_indices=first_cut_list_reader_state_->component_indices,
       .payloads=parsed};

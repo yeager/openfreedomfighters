@@ -1,5 +1,6 @@
 #include "off/runtime/scene_event_names.hpp"
 #include <stdexcept>
+#include <limits>
 #include <utility>
 
 namespace off::runtime {
@@ -49,7 +50,17 @@ std::optional<std::string_view> SceneEventNames::name(std::uint16_t identity) co
   if(!(*by_identity_)[identity]) return std::nullopt;
   return *(*by_identity_)[identity];
 }
+SceneEventNames::Lease SceneEventNames::lease() const {
+  if(generation_->value==0U) throw std::runtime_error("Scene event generation exhausted");
+  return Lease(generation_);
+}
+bool SceneEventNames::is_live(const Lease& lease) const noexcept {
+  const auto generation=lease.generation_.lock();
+  return generation && generation==generation_ && generation->value!=0U && generation->value==lease.value_;
+}
 void SceneEventNames::clear() noexcept {
+  if(generation_->value==std::numeric_limits<std::uint64_t>::max()) generation_->value=0U;
+  else if(generation_->value!=0U) ++generation_->value;
   by_name_.clear();
   for(auto& name:*by_identity_) name.reset();
   counter_=0;

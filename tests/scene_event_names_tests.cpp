@@ -14,6 +14,12 @@ int main() {
   static_assert(sizeof(off::runtime::SceneEventNames)<256,
                 "Scene event reverse storage must not inflate each caller's stack frame");
   off::runtime::SceneEventNames names;
+  const auto first_lease=names.lease();
+  off::runtime::SceneEventNames foreign;
+  check(names.is_live(first_lease) && !foreign.is_live(first_lease),"lease must bind to its event table");
+  off::runtime::SceneEventNames::Lease destroyed;
+  { off::runtime::SceneEventNames temporary; destroyed=temporary.lease(); }
+  check(!names.is_live(destroyed),"destroyed event tables must not leave live leases");
   check(!names.initialized() && names.counter()==0 && !names.find("FadeIn") && !names.name(0),
         "fresh event state and read-only lookup must not initialize the registry");
   check(names.declare("Unrelated")==1 && names.initialized() && names.counter()==1 &&
@@ -32,6 +38,9 @@ int main() {
   const std::string non_ascii="\xc3\x84";
   const auto unicode=names.declare(non_ascii+"A");
   check(names.name(unicode)==non_ascii+"a","canonicalization changes only ASCII A through Z");
+  names.clear();
+  check(!names.is_live(first_lease) && names.is_live(names.lease()),"clear must invalidate earlier event leases");
+  check(names.declare("Unrelated")==1 && !names.is_live(first_lease),"reusing an event number must not revive an old lease");
   names.clear();
   check(!names.initialized() && names.counter()==0 && !names.name(0x400) && !names.find("FadeIn"),
         "explicit scene clear releases reserved and dynamic names");

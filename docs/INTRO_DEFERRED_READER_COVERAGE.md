@@ -28,5 +28,8 @@ reader state is published. This does not determine which candidate is selected.
 For the supported sequence attachment, the reader also retains a bounded,
 scene-owned attachment stream. Its scoped first-phase callback reads that copy
 and registers a shared project timing identity before completing. A terminal
-reader failure retires the stream; this path does not establish native event
-delivery, global lifecycle completion, or intro playback.
+reader failure retires the stream. The timing identity also carries a
+scene-owned event-generation lease: clearing the event table invalidates it,
+even if a later declaration reuses the same numeric identity. This protects the
+scoped callback's lookup; it does not implement a deferred-start queue, native
+event delivery, global lifecycle completion, or intro playback.
