@@ -153,3 +153,11 @@ It does not advertise fullscreen modes. Synthetic Linux tests cover headless
 and unsupported cases, checked guest writes, display lookup failure, and
 concurrent snapshot access. macOS and Windows have not been verified for this
 change.
+
+The local pcrecomp checkout also has a separate opt-in fixed-function 3D
+experiment for a limited `XYZ|DIFFUSE` triangle profile. It includes transforms,
+viewport clipping, interpolated color, and D16 depth. Synthetic Linux tests
+exercise its COM path and full color/depth rollback on injected failures.
+Comparisons with WineD3D/llvmpipe still show differences at some clipped edges
+and one-step color differences with varying W. This is not general D3D8 parity
+and has not been verified against native Windows, macOS, or the game.
