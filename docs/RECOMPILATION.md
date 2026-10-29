@@ -175,3 +175,10 @@ in complete RGBA buffers, including selected subpixel phases, winding orders,
 diagonals, and viewport offsets. A separate single slanted triangle still
 shows edge-coverage differences; these cases do not establish general raster
 or native Windows parity.
+
+A further independent set of 22 synthetic cases produced 20 exact full-RGBA
+matches against WineD3D/llvmpipe. One thin triangle differed at a coverage
+pixel; one clipped quad differed at a shared edge where both rendered a pixel
+but selected different triangle colors. A subpixel coverage hypothesis fitted
+to earlier cases missed another pixel in this set, so it is not used by the
+implementation. These comparisons do not establish native hardware behavior.
