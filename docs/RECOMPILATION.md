@@ -208,6 +208,12 @@ queries, checked output writes, and texture format checks followed by texture
 creation. A WineD3D oracle confirmed the guest structure layout and query flow;
 the reported virtual capabilities are not a claim of hardware equivalence.
 
+The local D3D8 device also supports bounded rectangle clears. A synthetic
+multi-rectangle color capture matched WineD3D/llvmpipe; depth and failure
+handling were checked separately in the HLE tests because Wine depth readback
+was unavailable. Target-only and SDL failure cases passed undefined-behavior
+sanitizer runs on Linux. These checks do not establish general D3D8 parity.
+
 The local pcrecomp checkout also fixes a D3D8 build failure when the optional
 software 3D profile is disabled. On Linux, the D3D8 device self-test passed
 with that profile disabled, with 3D enabled, and with textured 3D enabled.
