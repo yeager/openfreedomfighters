@@ -1462,6 +1462,32 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
               "normal reader retains the list stream without claiming phase completion");
         const auto* reader=host.first_cut_sequence_component_reader_state();
         if(!reader) throw std::runtime_error("synthetic sequence reader is absent");
+        const auto* sequence_owner=host.constructed_list_owner(host.resources().member_index());
+        check(sequence_owner && sequence_owner->factory_component &&
+              sequence_owner->factory_component->sequence_helper_ready &&
+              !sequence_owner->factory_component->sequence_helper_unsupported,
+              "sequence reader produces its live factory helper");
+        std::vector<std::uint32_t> expected_helper;
+        for(const auto authored:reader->authored.references) {
+          if(!authored) continue;
+          const auto target_source=host.resources().sources().local_source_for_authored_reference(authored);
+          if(!target_source) throw std::runtime_error("synthetic sequence helper source is absent");
+          expected_helper.push_back(host.project_reference_for_source(*target_source));
+        }
+        check(sequence_owner->factory_component->helper==expected_helper,
+              "sequence helper retains live camera/picture references in source order");
+        for(std::size_t member=0;member<expected_helper.size();++member)
+          check(host.resolve_first_cut_sequence_helper_member(member).value!=0U,
+                "sequence helper re-resolves each retained live factory member");
+        const auto picture_source=host.resources().sources().local_source_for_authored_reference(reader->authored.references[1]);
+        if(!picture_source || !host.constructed_picture_owner(*picture_source))
+          throw std::runtime_error("synthetic sequence picture factory is absent");
+        auto& picture=const_cast<off::graphics::IntroConstructedPictureOwner&>(*host.constructed_picture_owner(*picture_source));
+        if(!picture.factory_component) throw std::runtime_error("synthetic picture factory component is absent");
+        const auto generation=picture.factory_component->generation;
+        ++picture.factory_component->generation;
+        rejects([&]{(void)host.resolve_first_cut_sequence_helper_member(1U);});
+        picture.factory_component->generation=generation;
         const auto index=reader->component_index;
         const auto* component=host.constructed_attachment(index);
         if(!component || !component->sequence_initialization)
@@ -1491,6 +1517,47 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
                   "real phase callback consumes the copied stream and same project timing event");
             rejects([&]{host.components().run_scoped_phase_one(target);});
         }
+    }
+    {
+        Fixture fixture(false,true);
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*runtime);
+        const auto picture_source=runtime->resources().sources().local_source_for_authored_reference(
+            runtime->resources().member().references[1]);
+        if(!picture_source || !runtime->constructed_picture_owner(*picture_source))
+          throw std::runtime_error("synthetic picture factory is absent");
+        auto& picture=const_cast<off::graphics::IntroConstructedPictureOwner&>(*runtime->constructed_picture_owner(*picture_source));
+        if(!picture.factory_component || !picture.factory_component->instance)
+          throw std::runtime_error("synthetic picture component is absent");
+        picture.factory_component->instance=nullptr;
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        session->complete_postconstruction_reader_bracket(41U);
+        const auto* owner=session->runtime().constructed_list_owner(session->runtime().resources().member_index());
+        check(owner && owner->factory_component && owner->factory_component->sequence_helper_unsupported &&
+              !owner->factory_component->sequence_helper_ready && owner->factory_component->helper.empty(),
+              "a detached picture component is not admitted to the sequence helper");
+    }
+    {
+        Fixture fixture(false,true);
+        set(fixture.payload,fixture.block_offsets[4]+25U,1U); // synthetic unsupported group member
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*runtime);
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        session->complete_postconstruction_reader_bracket(41U);
+        const auto* owner=session->runtime().constructed_list_owner(session->runtime().resources().member_index());
+        check(owner && owner->factory_component && owner->factory_component->sequence_helper_unsupported &&
+              !owner->factory_component->sequence_helper_ready && owner->factory_component->helper.empty(),
+              "unimplemented owner factory leaves the sequence helper explicitly unsupported");
     }
     {
         Fixture fixture(false,true);

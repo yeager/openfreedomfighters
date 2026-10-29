@@ -24,6 +24,12 @@ project-side consistency check; it does not establish camera activation.
 The supported sequence form is also checked against an owned bounded block;
 its candidate references resolve through the same live scene lease before
 reader state is published. This does not determine which candidate is selected.
+The sequence owner's factory helper retains supported live camera and picture
+member references in source order. The picture object is prepared before its
+factory association; each checked helper lookup re-resolves the owner and
+requires the same concrete instance and factory generation. Unsupported owner
+families leave the helper unavailable. This is not a complete component-event
+implementation or an item-processor result.
 
 For the supported sequence attachment, the reader also retains a bounded,
 scene-owned attachment stream. Its scoped first-phase callback reads that copy

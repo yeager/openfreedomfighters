@@ -628,6 +628,61 @@ std::optional<runtime::SequenceTiming> IntroRuntime::request_first_cut_sequence_
   return output;
 }
 
+std::optional<std::uint64_t> IntroRuntime::supported_sequence_member_factory_generation(
+    std::size_t source,IntroRuntimeHandle owner,IntroRuntimeResourceHandle resource) const {
+  if(!live_owner(owner.value) || associated_resource_owner(resource)!=owner || !resource_state_for_handle(resource))
+    return std::nullopt;
+  const auto camera=live_cameras_.find(source);
+  if(camera!=live_cameras_.end() && camera->second->metadata.owner==owner &&
+      camera->second->metadata.resource==resource && camera->second->factory_component &&
+      camera->second->factory_component->owner==owner && camera->second->factory_component->instance==&camera->second->camera &&
+      camera->second->factory_component->generation)
+    return camera->second->factory_component->generation;
+  const auto picture=constructed_picture_owners_.find(source);
+  if(picture!=constructed_picture_owners_.end() && picture->second.owner==owner && picture->second.resource==resource &&
+      picture->second.factory_component && picture->second.factory_component->owner==owner &&
+      picture->second.factory_component->instance && picture->second.factory_component->generation &&
+      std::ranges::any_of(pictures_,[&](const auto& candidate) {
+        return candidate && candidate.get()==picture->second.factory_component->instance &&
+            candidate->source_index()==source && candidate->handle()==owner;
+      })) return picture->second.factory_component->generation;
+  return std::nullopt;
+}
+
+IntroRuntimeHandle IntroRuntime::resolve_first_cut_sequence_helper_member(std::size_t index) const {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || !scene_reference_lease_ ||
+      !first_cut_sequence_reader_state_)
+    throw std::runtime_error("first-cut sequence helper is unavailable");
+  const auto source=resources_.member_index();
+  const auto owner=constructed_list_owners_.find(source);
+  if(owner==constructed_list_owners_.end() || !owner->second.factory_component ||
+      owner->second.owner!=first_cut_sequence_reader_state_->owner ||
+      owner->second.resource!=first_cut_sequence_reader_state_->resource ||
+      associated_resource_owner(owner->second.resource)!=owner->second.owner ||
+      !resource_state_for_handle(owner->second.resource) ||
+      owner->second.factory_component->owner!=owner->second.owner)
+    throw std::runtime_error("first-cut sequence helper owner is stale");
+  const auto& factory=*owner->second.factory_component;
+  if(!factory.sequence_helper_ready || factory.sequence_helper_unsupported ||
+      factory.helper.size()!=factory.sequence_member_generations.size() || index>=factory.helper.size())
+    throw std::runtime_error("first-cut sequence helper member is unavailable");
+  const auto resolved=scene_references_.resolve(factory.helper[index],*scene_reference_lease_);
+  if(!resolved) throw std::runtime_error("first-cut sequence helper member is absent");
+  std::size_t nonzero{};
+  std::optional<std::size_t> expected_source;
+  for(const auto raw:first_cut_sequence_reader_state_->authored.references) {
+    if(!raw) continue;
+    if(nonzero++==index) {expected_source=resources_.sources().local_source_for_authored_reference(raw);break;}
+  }
+  if(!expected_source || source_handle(*expected_source).value!=*resolved)
+    throw std::runtime_error("first-cut sequence helper member identity changed");
+  const auto resource=resource_handle(IntroRuntimeHandle{*resolved});
+  const auto generation=supported_sequence_member_factory_generation(*expected_source,IntroRuntimeHandle{*resolved},resource);
+  if(!generation || *generation!=factory.sequence_member_generations[index])
+    throw std::runtime_error("first-cut sequence helper member factory is stale");
+  return IntroRuntimeHandle{*resolved};
+}
+
 void IntroRuntime::set_scene_resource_property_native(std::string key,IntroRuntimeResourceHandle resource) {
   if(resource_load_stage_==IntroResourceLoadStage::failed)
     throw std::runtime_error("Resource construction previously failed");
@@ -929,6 +984,16 @@ void IntroRuntime::construct_non_group_row_without_engine_renderer(std::size_t r
             source.source_type==0x0020002dU?constructed_character_owners_.try_emplace(row).first->second.visual:
             constructed_visual_owners_.try_emplace(row).first->second;
         visual.owner=owner;visual.resource=resource;visual.name=std::move(name);visual.class_identifier=source.source_type;
+        if(source.source_type==0x00200046U) {
+          const auto picture=std::ranges::find_if(pictures_,[row](const auto& candidate) {
+            return candidate && candidate->source_index()==row;
+          });
+          if(picture!=pictures_.end() && (*picture)->handle()==owner) {
+            if(next_owner_factory_generation_==std::numeric_limits<std::uint64_t>::max())
+              throw std::runtime_error("owner factory generation exhausted");
+            visual.factory_component.emplace(IntroConstructedPictureOwner::FactoryComponent{owner,picture->get(),next_owner_factory_generation_++});
+          }
+        }
         mask=&visual.component_mask;attachments=&visual.attachments;
       } else if(source.source_type==0x0800001aU || source.source_type==0x08000049U) {
         auto& list=constructed_list_owners_.try_emplace(row).first->second;
@@ -946,6 +1011,9 @@ void IntroRuntime::construct_non_group_row_without_engine_renderer(std::size_t r
       } else if(source.source_type==0x00400003U) {
         auto camera=std::make_unique<IntroLiveCameraOwner>();
         camera->metadata={owner,resource,std::move(name)};camera->context=root_handle();
+        if(next_owner_factory_generation_==std::numeric_limits<std::uint64_t>::max())
+          throw std::runtime_error("owner factory generation exhausted");
+        camera->factory_component.emplace(IntroLiveCameraOwner::FactoryComponent{owner,&camera->camera,next_owner_factory_generation_++});
         live_cameras_.emplace(row,std::move(camera));
       } else {
         auto& object=constructed_object_owners_.try_emplace(row).first->second;
@@ -2515,6 +2583,9 @@ void IntroRuntime::run_postconstruction_reader_bracket(
         list.factory_component->helper.clear();
         list.factory_component->controller_helper_ready=false;
         list.factory_component->controller_helper_unsupported=false;
+        list.factory_component->sequence_helper_ready=false;
+        list.factory_component->sequence_helper_unsupported=false;
+        list.factory_component->sequence_member_generations.clear();
       }
     }
     if(movie_controller_reader_state_) {
@@ -3706,9 +3777,41 @@ void IntroRuntime::apply_supported_first_cut_sequence_deferred_reader(
       throw std::runtime_error("First-cut sequence reference no longer matches its live owner");
     state.members[index]=resource;
   }
+  auto sequence_owner=constructed_list_owners_.find(source_index);
+  if(sequence_owner==constructed_list_owners_.end() || sequence_owner->second.owner!=state.owner ||
+      sequence_owner->second.resource!=work.resource || !sequence_owner->second.factory_component ||
+      sequence_owner->second.factory_component->owner!=state.owner)
+    throw std::runtime_error("First-cut sequence helper requires its live list factory");
+  auto& factory=*sequence_owner->second.factory_component;
+  if(factory.sequence_helper_ready || factory.sequence_helper_unsupported || !factory.helper.empty())
+    throw std::runtime_error("First-cut sequence helper producer cannot run twice");
+  std::vector<std::uint32_t> helper;
+  std::vector<std::uint64_t> generations;
+  bool unsupported=false;
+  for(std::size_t i=0;i<parsed.source.references.size();++i) {
+    if(parsed.source.references[i]==0U) continue;
+    const auto token=relocated.source.references[i];
+    const auto resolved=scene_references_.resolve(token,*scene_reference_lease_);
+    if(!resolved) continue;
+    const auto source=resources_.sources().local_source_for_authored_reference(parsed.source.references[i]);
+    if(!source || source_handle(*source).value!=*resolved || !live_owner(*resolved))
+      throw std::runtime_error("First-cut sequence helper member is stale");
+    const auto resource=resource_handle(IntroRuntimeHandle{*resolved});
+    if(associated_resource_owner(resource)!=IntroRuntimeHandle{*resolved} || !resource_state_for_handle(resource))
+      throw std::runtime_error("First-cut sequence helper member resource is stale");
+    const auto generation=supported_sequence_member_factory_generation(*source,IntroRuntimeHandle{*resolved},resource);
+    if(!generation) {unsupported=true;break;}
+    helper.push_back(token);
+    generations.push_back(*generation);
+  }
+  if(unsupported) factory.sequence_helper_unsupported=true;
+  else {factory.helper=std::move(helper);factory.sequence_member_generations=std::move(generations);factory.sequence_helper_ready=true;}
   first_cut_sequence_reader_state_=std::move(state);
   try { record_supported_reader_admission(work); }
-  catch(...) { first_cut_sequence_reader_state_.reset(); throw; }
+  catch(...) {
+    first_cut_sequence_reader_state_.reset();factory.helper.clear();factory.sequence_member_generations.clear();
+    factory.sequence_helper_ready=false;factory.sequence_helper_unsupported=false;throw;
+  }
 }
 
 void IntroRuntime::apply_supported_first_cut_sequence_component_reader(

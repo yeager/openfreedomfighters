@@ -51,6 +51,7 @@ namespace off::graphics {
 struct CameraDisplayServices;
 
 class IntroRuntime;
+class IntroRuntimePicture;
 class FirstCutFadePhaseOneSession;
 
 struct IntroRuntimeHandle {
@@ -118,6 +119,8 @@ struct IntroLiveCameraOwner {
   FreshIntroCamera camera;
   IntroRuntimeHandle context;
   std::unique_ptr<IntroOwnerAuxiliary> auxiliary;
+  struct FactoryComponent { IntroRuntimeHandle owner; FreshIntroCamera* instance{}; std::uint64_t generation{}; };
+  std::optional<FactoryComponent> factory_component;
 };
 struct IntroVertAnimLocalState {
   std::array<std::uint32_t,2> zero_words{};
@@ -170,6 +173,8 @@ struct IntroConstructedPictureOwner {
   std::array<float,2> size_scale{1.0F,1.0F},alignment_offset{};
   bool backing_available{},submission_transform_dirty{},submission_cache_available{};
   std::vector<std::uint64_t> attachments;
+  struct FactoryComponent { IntroRuntimeHandle owner; IntroRuntimePicture* instance{}; std::uint64_t generation{}; };
+  std::optional<FactoryComponent> factory_component;
 };
 struct IntroConstructedPictureComponent {
   IntroRuntimeHandle owner;
@@ -297,6 +302,9 @@ struct IntroConstructedListOwner {
     // accepts it once only; unknown families leave it unavailable.
     bool controller_helper_ready{};
     bool controller_helper_unsupported{};
+    bool sequence_helper_ready{};
+    bool sequence_helper_unsupported{};
+    std::vector<std::uint64_t> sequence_member_generations;
     // Absent on fresh construction. Present queue requires the unsupported
     // script/progress post-operation, even when its contents are empty.
     // One shared auxiliary container for postload work and event hook state.
@@ -1087,6 +1095,7 @@ public:
   // Manual synchronous request for an initialized first-cut list member. It
   // does not advance a clock, schedule a cut, or admit a frame.
   [[nodiscard]] std::optional<runtime::SequenceTiming> request_first_cut_sequence_timing(std::size_t member_index);
+  [[nodiscard]] IntroRuntimeHandle resolve_first_cut_sequence_helper_member(std::size_t index) const;
   [[nodiscard]] const runtime::DeferredSequenceStartQueue::Handle* first_cut_queue_property() const noexcept {
     const auto found=queue_properties_.find("off-project.deferred-sequence-start-queue");
     return found==queue_properties_.end() ? nullptr : &found->second;
@@ -1647,9 +1656,12 @@ private:
   std::vector<std::uint32_t> loader_owner_list_;
   std::vector<IntroDeferredReaderWork> deferred_reader_work_;
   std::vector<IntroSourceScriptWork> source_script_work_;
+  std::uint64_t next_owner_factory_generation_{1};
   bool reader_bracket_running_{};
   bool script_hook_running_{};
   bool timing_request_running_{};
+  [[nodiscard]] std::optional<std::uint64_t> supported_sequence_member_factory_generation(
+      std::size_t source,IntroRuntimeHandle owner,IntroRuntimeResourceHandle resource) const;
   std::optional<IntroRuntimeHandle> default_camera_;
   std::optional<IntroSynthesizedCameraMetadata> default_camera_metadata_;
   std::unique_ptr<FreshIntroCamera> default_camera_owner_;
