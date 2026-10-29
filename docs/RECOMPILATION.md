@@ -219,6 +219,9 @@ limited surface object, including identity, descriptor and owning-device
 reference handling. Synthetic Wine and HLE tests cover the supported COM
 operations and surface lifetime with bound resources. Surface locking and
 render-target switching remain unsupported; this does not show game rendering.
+`GetRenderTarget` returns the same retained implicit surface as `GetBackBuffer`.
+Synthetic Wine and HLE tests cover identity, reference counts, alias rejection
+and device lifetime for that path.
 
 The local pcrecomp checkout also fixes a D3D8 build failure when the optional
 software 3D profile is disabled. On Linux, the D3D8 device self-test passed
