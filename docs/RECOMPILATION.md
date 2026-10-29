@@ -186,3 +186,6 @@ An expanded set of 36 synthetic cases produced 31 exact full-RGBA matches;
 four clipped-quad variants differed at one shared-edge color pixel and one
 thin triangle differed at one coverage pixel. The fitted subpixel hypothesis
 also missed a coverage pixel, so it remains outside the implementation.
+Eleven later synthetic bottom-clipping cases further contradicted that specific
+post-clipping quantization model: only four coverage masks matched WineD3D.
+This does not rule out other precision models or establish hardware behavior.
