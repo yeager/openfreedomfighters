@@ -2193,6 +2193,40 @@ int main() {
         if (count == 2U) check(*decoded.second_optional_reference == 0xc1234567U,
                               "preserve optional reference high bits");
     }
+    {
+        for (unsigned count = 0; count != 3; ++count) {
+            const auto source = off::data::GmsImage::parse(
+                off::data::PackedResource::parse(intro_controller_fixture("", count)));
+            const auto decoded = source.intro_movie_controller_block(1, source.deferred_source_block(1));
+            check(decoded.reference_offsets.size() == 3U + count,
+                  "controller field offsets respect optional reference presence");
+        }
+        const auto image = off::data::GmsImage::parse(
+            off::data::PackedResource::parse(intro_controller_fixture("", 2)));
+        const auto original = image.deferred_source_block(1);
+        std::vector<std::byte> copied(original.begin(), original.end());
+        const auto parsed = image.intro_movie_controller_block(1, copied);
+        check(parsed.reference_offsets.size() == 5U,
+              "bounded controller parser locates all reference scalar payloads");
+        for (std::size_t i = 0; i < parsed.reference_offsets.size(); ++i) {
+            check(parsed.reference_offsets[i] + 4U <= copied.size(),
+                  "located reference stays within owned block");
+            set_u32(copied, parsed.reference_offsets[i], static_cast<std::uint32_t>(i + 31U));
+        }
+        const auto changed = image.intro_movie_controller_block(1, copied);
+        check(changed.source.sequence_reference == 31U && changed.source.group_reference == 32U &&
+                  changed.source.additional_reference == 33U &&
+                  changed.source.first_optional_reference == 34U &&
+                  changed.source.second_optional_reference == 35U &&
+                  changed.source.authored_option == parsed.source.authored_option &&
+                  image.intro_movie_controller_source(1).sequence_reference == parsed.source.sequence_reference,
+              "explicit block parses modified references independently of original and option");
+        check_rejected([&] { static_cast<void>(image.intro_movie_controller_block(1, std::span(copied).first(copied.size()-1U))); },
+                       "bounded controller parser rejects a truncated owned copy");
+        copied.push_back(std::byte{0});
+        check_rejected([&] { static_cast<void>(image.intro_movie_controller_block(1, copied)); },
+                       "bounded controller parser rejects trailing unframed bytes");
+    }
     const std::string raw_destination(99U, static_cast<char>(0xfe));
     check(decode_intro(intro_controller_fixture(raw_destination)).destination == raw_destination,
           "preserve 99 raw non-ASCII destination bytes in owned output");

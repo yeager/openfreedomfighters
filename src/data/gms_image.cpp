@@ -1193,6 +1193,13 @@ GmsIntroSoundAttachments GmsImage::intro_sound_attachments(std::size_t index) co
 GmsIntroMovieControllerSource GmsImage::intro_movie_controller_source(
     std::size_t directory_index
 ) const {
+    return intro_movie_controller_block(directory_index,
+        deferred_source_block(directory_index)).source;
+}
+
+GmsIntroMovieControllerBlock GmsImage::intro_movie_controller_block(
+    std::size_t directory_index, std::span<const std::byte> block
+) const {
     const auto fail = []() {
         throw std::runtime_error("GMS intro movie-controller source is unsupported or malformed");
     };
@@ -1221,20 +1228,19 @@ GmsIntroMovieControllerSource GmsImage::intro_movie_controller_source(
     if (payload[identity_offset + identity.size()] != std::byte{0}) {
         fail();
     }
-    const ByteReader reader(payload);
-    const auto offset = static_cast<std::size_t>(entry.deferred_source_offset);
-    if (offset > payload.size() || 4U > payload.size() - offset) {
+    if (block.size() < 4U) {
         fail();
     }
-    const auto header = reader.u32(offset);
+    const ByteReader reader(block);
+    const auto header = reader.u32(0U);
     const auto size = static_cast<std::size_t>(header & tagged_block_size_mask);
-    if ((header >> 24U) != 0U || size < 4U || size > payload.size() - offset) {
+    if ((header >> 24U) != 0U || size < 4U || size != block.size()) {
         fail();
     }
-    const auto end = offset + size;
-    auto cursor = offset + 4U;
+    const auto end = size;
+    std::size_t cursor = 4U;
     const auto tag = [&](std::uint8_t expected) {
-        if (cursor == end || payload[cursor] != static_cast<std::byte>(expected)) {
+        if (cursor == end || block[cursor] != static_cast<std::byte>(expected)) {
             fail();
         }
         ++cursor;
@@ -1252,26 +1258,31 @@ GmsIntroMovieControllerSource GmsImage::intro_movie_controller_source(
         fail();
     }
     tag(0x06U);
-    GmsIntroMovieControllerSource result;
-    result.sequence_reference = scalar(0x88U);
-    result.group_reference = scalar(0x88U);
-    result.additional_reference = scalar(0x08U);
+    GmsIntroMovieControllerBlock result;
+    const auto reference = [&](std::uint8_t expected) {
+        const auto value = scalar(expected);
+        result.reference_offsets.push_back(cursor - sizeof(std::uint32_t));
+        return value;
+    };
+    result.source.sequence_reference = reference(0x88U);
+    result.source.group_reference = reference(0x88U);
+    result.source.additional_reference = reference(0x08U);
     tag(0x84U);
-    while (cursor < end && payload[cursor] != std::byte{0}) {
-        if (result.destination.size() == 99U) {
+    while (cursor < end && block[cursor] != std::byte{0}) {
+        if (result.source.destination.size() == 99U) {
             fail();
         }
-        result.destination.push_back(static_cast<char>(
-            std::to_integer<unsigned char>(payload[cursor++])));
+        result.source.destination.push_back(static_cast<char>(
+            std::to_integer<unsigned char>(block[cursor++])));
     }
     tag(0U);
-    result.authored_option = scalar(0x83U);
+    result.source.authored_option = scalar(0x83U);
     // Only the full two-token form is observed in the supported corpus. Prefix
     // absence is inferred from the reader's non-advancing closing-marker policy.
-    if (cursor < end && payload[cursor] == std::byte{0x88}) {
-        result.first_optional_reference = scalar(0x88U);
-        if (cursor < end && payload[cursor] == std::byte{0x08}) {
-            result.second_optional_reference = scalar(0x08U);
+    if (cursor < end && block[cursor] == std::byte{0x88}) {
+        result.source.first_optional_reference = reference(0x88U);
+        if (cursor < end && block[cursor] == std::byte{0x08}) {
+            result.source.second_optional_reference = reference(0x08U);
         }
     }
     tag(0x06U);

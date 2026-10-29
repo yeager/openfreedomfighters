@@ -38,6 +38,13 @@ struct GmsIntroMovieControllerSource {
     std::optional<std::uint32_t> second_optional_reference;
 };
 
+// Offsets address the four-byte scalar payloads within the supplied bounded
+// block. They do not resolve source references or grant runtime identity.
+struct GmsIntroMovieControllerBlock {
+    GmsIntroMovieControllerSource source;
+    std::vector<std::size_t> reference_offsets;
+};
+
 // Owner group only; following attached-component groups remain unread.
 struct GmsIntroSoundOwnerPrefix {
     std::uint32_t authored_type{};
@@ -236,6 +243,14 @@ public:
     // attachment grammar is not generic component dispatch or reference lookup.
     [[nodiscard]] GmsIntroMovieControllerSource intro_movie_controller_source(
         std::size_t directory_index
+    ) const;
+    // Validates the selected directory entry and attachment, then decodes an
+    // explicit header-inclusive block with the restricted grammar. The caller
+    // owns the block and its lifetime. The span is not checked against that
+    // entry's original bytes; successful decoding does not prove provenance,
+    // scene generation, runtime identity, or relocation completion.
+    [[nodiscard]] GmsIntroMovieControllerBlock intro_movie_controller_block(
+        std::size_t directory_index, std::span<const std::byte> block
     ) const;
     // Exact supported intro sound-owner prefix and attachment identities only.
     // Definition references address the COMPLETE SND bank, not GMS object slots.
