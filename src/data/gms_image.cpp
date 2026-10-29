@@ -959,19 +959,28 @@ GmsIntroFirstCutBlock GmsImage::intro_first_cut_block(
 }
 
 GmsIntroCutSequenceSource GmsImage::intro_cut_sequence_source(std::size_t index) const {
+    return intro_cut_sequence_block(index,deferred_source_block(index)).source;
+}
+
+GmsIntroCutSequenceBlock GmsImage::intro_cut_sequence_block(
+    std::size_t index, std::span<const std::byte> block) const {
     if (index >= directory_.size()) IntroComponentReader::fail();
     constexpr std::array<std::string_view, 1> identities{"ZLIST_CutSequence"};
-    IntroComponentReader reader(resource_.payload(), directory_[index], identities);
+    IntroComponentReader reader(resource_.payload(), directory_[index], identities,block);
     if (reader.scalar(0x89U) != 28U) IntroComponentReader::fail();
-    GmsIntroCutSequenceSource result;
-    for (auto& reference : result.references) reference = reader.word();
+    GmsIntroCutSequenceBlock output;
+    auto& result=output.source;
+    for (std::size_t i=0;i<result.references.size();++i) {
+        output.reference_offsets[i]=reader.position();
+        result.references[i]=reader.word();
+    }
     reader.tag(0x06U);
     result.values[0] = reader.finite_float(0x02U);
     result.values[1] = reader.finite_float(0x82U);
     result.authored_option = reader.scalar(0x03U);
     reader.tag(0x06U);
     reader.finish();
-    return result;
+    return output;
 }
 
 GmsIntroExternalCutCommandsSource

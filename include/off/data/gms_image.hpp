@@ -148,6 +148,11 @@ struct GmsIntroCutSequenceSource {
     std::array<float, 2> values{};
     std::uint32_t authored_option{0};
 };
+// Offsets are relative to the supplied block and do not establish provenance.
+struct GmsIntroCutSequenceBlock {
+    GmsIntroCutSequenceSource source;
+    std::array<std::size_t, 6> reference_offsets{};
+};
 
 // Restricted source form for the reviewed pair of externally hosted cut
 // commands. The external references remain authored source values; resolving
@@ -307,6 +312,8 @@ public:
     [[nodiscard]] GmsIntroFirstCutBlock intro_first_cut_block(
         std::size_t index, std::span<const std::byte> block) const;
     [[nodiscard]] GmsIntroCutSequenceSource intro_cut_sequence_source(std::size_t index) const;
+    [[nodiscard]] GmsIntroCutSequenceBlock intro_cut_sequence_block(
+        std::size_t index, std::span<const std::byte> block) const;
     [[nodiscard]] GmsIntroExternalCutCommandsSource
     intro_external_cut_commands_source(std::size_t index) const;
     // Exact retail StartLoader LoadScreen grammar only. It does not update a

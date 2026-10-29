@@ -3166,11 +3166,43 @@ void IntroRuntime::apply_supported_first_cut_sequence_deferred_reader(
     return *directory_resource_mapping_[*source];
   };
   const auto& authored=resources_.member();
+  const auto block=resources_.sources().deferred_source_block(source_index);
+  std::vector<std::byte> owned_block(block.begin(),block.end());
+  const auto parsed=resources_.sources().intro_cut_sequence_block(source_index,owned_block);
+  if(parsed.source.references!=authored.references || parsed.source.authored_option!=authored.authored_option ||
+      std::bit_cast<std::uint32_t>(parsed.source.values[0])!=std::bit_cast<std::uint32_t>(authored.values[0]) ||
+      std::bit_cast<std::uint32_t>(parsed.source.values[1])!=std::bit_cast<std::uint32_t>(authored.values[1]))
+    throw std::runtime_error("First-cut sequence source differs from prepared input");
+  if(!scene_reference_lease_)
+    throw std::runtime_error("First-cut sequence has no live scene reference lease");
+  for(std::size_t i=0;i<parsed.reference_offsets.size();++i) {
+    const auto offset=parsed.reference_offsets[i];
+    if(offset>owned_block.size() || 4U>owned_block.size()-offset)
+      throw std::runtime_error("First-cut sequence reference exceeds its owned block");
+    const auto token=scene_references_.relocate(parsed.source.references[i],*scene_reference_lease_);
+    for(unsigned byte=0;byte<4U;++byte)
+      owned_block[offset+byte]=static_cast<std::byte>((token>>(byte*8U))&0xffU);
+  }
+  const auto relocated=resources_.sources().intro_cut_sequence_block(source_index,owned_block);
   IntroFirstCutSequenceReaderState state{
       .owner=source_handle(source_index), .resource=work.resource,
       .component_index=component_index, .authored=authored, .members={}};
-  for(std::size_t index=0;index<authored.references.size();++index)
-    state.members[index]=resolve_optional(authored.references[index]);
+  for(std::size_t index=0;index<authored.references.size();++index) {
+    if(parsed.source.references[index]==0U) {
+      state.members[index]=std::nullopt;
+      continue;
+    }
+    // Marker-only zero is not silently equated with numeric zero. A token
+    // unsupported by the project registry fails closed during resolution.
+    const auto owner=scene_references_.resolve(relocated.source.references[index],*scene_reference_lease_);
+    if(!owner) throw std::runtime_error("First-cut sequence reference has no live owner");
+    const IntroRuntimeHandle identity{*owner};
+    const auto resource=resource_handle(identity);
+    if(associated_resource_owner(resource)!=identity || !resource_state_for_handle(resource) ||
+        resolve_optional(authored.references[index])!=resource)
+      throw std::runtime_error("First-cut sequence reference no longer matches its live owner");
+    state.members[index]=resource;
+  }
   first_cut_sequence_reader_state_=std::move(state);
   try { record_supported_reader_admission(work); }
   catch(...) { first_cut_sequence_reader_state_.reset(); throw; }

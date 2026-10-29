@@ -1179,6 +1179,84 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
     {
         Fixture fixture(false,true);
         const auto prepared=fixture.build();
+        const auto source=prepared.member_index();
+        const auto borrowed=prepared.sources().deferred_source_block(source);
+        Bytes copy(borrowed.begin(),borrowed.end());
+        const auto parsed=prepared.sources().intro_cut_sequence_block(source,copy);
+        check(parsed.source.references==prepared.member().references && parsed.reference_offsets[0]==9U &&
+              parsed.reference_offsets[5]==29U,
+              "attachment-bearing sequence copy exposes all bounded candidate offsets");
+        set(copy,parsed.reference_offsets[0],0U);
+        set(copy,parsed.reference_offsets[1],0x80000000U);
+        set(copy,parsed.reference_offsets[2],0x80000001U);
+        set(copy,parsed.reference_offsets[3],0x80000001U);
+        const auto changed=prepared.sources().intro_cut_sequence_block(source,copy);
+        check(changed.source.references[0]==0U && changed.source.references[1]==0x80000000U &&
+              changed.source.references[2]==0x80000001U && changed.source.references[3]==0x80000001U &&
+              prepared.sources().intro_cut_sequence_source(source).references==prepared.member().references,
+              "sequence copy retains null, marked zero, marked values and duplicates without changing source");
+        rejects([&]{(void)prepared.sources().intro_cut_sequence_block(source,std::span(copy).first(copy.size()-1U));});
+        copy.back()=std::byte{0};
+        rejects([&]{(void)prepared.sources().intro_cut_sequence_block(source,copy);});
+        rejects([&]{(void)prepared.sources().intro_cut_sequence_block(prepared.window_index(),borrowed);});
+    }
+
+    {
+        Fixture fixture(false,true);
+        // Prepared resources reject marker-only zero for this source family;
+        // do not bypass that public boundary to claim reader execution.
+        set(fixture.payload,fixture.block_offsets[4]+17U,0x80000000U);
+        rejects([&]{(void)fixture.build();});
+    }
+    {
+        Fixture fixture(false,true);
+        const auto at=fixture.block_offsets[4];
+        std::uint32_t repeated{};
+        for(unsigned i=0;i<4;++i)
+            repeated|=std::to_integer<std::uint32_t>(fixture.payload.at(at+21U+i))<<(8U*i);
+        if(!repeated) throw std::runtime_error("synthetic sequence duplicate is null");
+        set(fixture.payload,at+17U,repeated);
+        auto prepared=fixture.build();
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(std::move(prepared),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*runtime);
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        session->complete_postconstruction_reader_bracket(41U);
+        const auto* read=session->runtime().first_cut_sequence_reader_state();
+        check(read && read->authored.references[2]==repeated && read->authored.references[3]==repeated &&
+              read->members[2] && read->members[2]==read->members[3] &&
+              read->members[0] && read->members[1] && !read->members[4] && !read->members[5],
+              "normal sequence reader preserves duplicate order and separate null entries");
+    }
+
+    {
+        Fixture fixture(false,true);
+        auto prepared=fixture.build();
+        auto& snapshot=const_cast<off::data::GmsIntroCutSequenceSource&>(prepared.member());
+        if(snapshot.references[1]==snapshot.references[3])
+            throw std::runtime_error("synthetic candidate references are not distinct");
+        snapshot.references[3]=snapshot.references[1];
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(std::move(prepared),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*runtime);
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        rejects([&]{session->complete_postconstruction_reader_bracket(41U);});
+        check(!session->runtime().first_cut_sequence_reader_state() &&
+              session->stage()==off::graphics::NormalIntroSceneSessionStage::failed,
+              "changed sequence snapshot cannot publish normal reader state");
+    }
+
+    {
+        Fixture fixture(false,true);
+        const auto prepared=fixture.build();
         const auto source=prepared.first_cut_index();
         const auto borrowed=prepared.sources().deferred_source_block(source);
         Bytes copy(borrowed.begin(),borrowed.end());
