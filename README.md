@@ -28,12 +28,18 @@ for a portable installation.
 
 ## Current state
 
-Status reviewed 2026-10-28: the project is a native prototype, not a playable
-game. The latest local macOS build was observed running at 19:42 Stockholm
-time, but the visible intro remained a static title/legal card; two captures
-five seconds apart were identical. Animated intro playback, intro audio, the
-original menu, and gameplay are still unverified and unavailable through normal
-startup.
+Status reviewed 2026-10-29: the project is a native prototype, not a playable
+game. A build from the current startup/renderer source was run on TRV2 with
+Vulkan lavapipe under Xvfb. It reached a successful bounded frame and saved a
+1280×720 capture. The visible window showed the logo/legal splash and “Preparing
+startup…”. The runtime reported that it uploaded 23 source-backed intro images
+and rendered the static fallback; automatic intro playback remains pending.
+
+The startup menu still is not presented: its CPU plan has 77 source-backed
+picture submissions, but normal startup does not submit that plan to the GPU.
+Animated intro playback, intro audio, menu activation, and gameplay remain
+unavailable through normal startup. The capture and all retail data remain in
+private local analysis storage and are not part of this repository.
 
 The GitHub Build workflow for commit `1ac6f42` passed on Windows, Linux,
 macOS arm64, and macOS Intel, including install-layout checks. This confirms
