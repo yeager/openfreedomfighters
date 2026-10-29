@@ -184,6 +184,10 @@ modulation path. Five synthetic constant-UV, constant-W color and alpha cases
 matched WineD3D/llvmpipe in full RGBA output. Synthetic UP and buffered
 submissions also matched each other in color and D16 depth. Wine depth readback
 was unavailable, so those checks do not establish depth or hardware parity.
+A further synthetic constant-W triangle with varying texture coordinates also
+matched the full WineD3D/llvmpipe RGBA image. A varying-W draw was rejected
+without modifying the color or depth buffers; general perspective-correct
+texturing remains unsupported.
 
 The local pcrecomp checkout also fixes a D3D8 build failure when the optional
 software 3D profile is disabled. On Linux, the D3D8 device self-test passed
