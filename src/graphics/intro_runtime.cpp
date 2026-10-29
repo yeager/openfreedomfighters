@@ -1431,18 +1431,52 @@ void IntroRuntime::prepare_deferred_references(IntroDeferredReaderWork& work) {
   else
     return;
 
+  if(sequence_source && group_source && *sequence_source==*group_source &&
+      !std::ranges::equal(resources_.cut_references(),resources_.group_references()))
+    throw std::runtime_error("Aliased intro list sources have inconsistent prepared values");
+  if(!scene_reference_lease_ || directory_resource_mapping_.at(work.source_directory_index)!=work.resource ||
+      associated_resource_owner(work.resource)!=source_handle(work.source_directory_index) ||
+      !resource_state_for_handle(work.resource))
+    throw std::runtime_error("Intro list reference source has no live scene-bound owner");
+  const auto block=sources.deferred_source_block(work.source_directory_index);
+  std::vector<std::byte> owned_block(block.begin(),block.end());
+  const auto parsed=sources.intro_source_reference_list_block(work.source_directory_index,owned_block);
+  if(!std::ranges::equal(parsed.references,raw_references))
+    throw std::runtime_error("Intro list source differs from its prepared references");
+  for(const auto offset:parsed.reference_offsets) {
+    if(offset>owned_block.size() || 4U>owned_block.size()-offset)
+      throw std::runtime_error("Intro list reference lies outside its owned block");
+    std::uint32_t raw{};
+    for(unsigned i=0;i<4;++i)
+      raw |= std::to_integer<std::uint32_t>(owned_block[offset+i]) << (8U*i);
+    if((raw & 0x7fffffffU)>directory.size())
+      throw std::out_of_range("intro list reference index is out of range");
+    const auto token=scene_references_.relocate(raw,*scene_reference_lease_);
+    for(unsigned i=0;i<4;++i)
+      owned_block[offset+i]=static_cast<std::byte>((token >> (8U*i)) & 0xffU);
+  }
+  const auto relocated=sources.intro_source_reference_list_block(work.source_directory_index,owned_block);
+
   std::vector<std::optional<IntroRuntimeResourceHandle>> translated;
-  translated.reserve(raw_references.size());
-  for(const auto raw_reference:raw_references) {
-    const auto source=sources.local_source_for_authored_reference(raw_reference);
-    if(!source) {
+  translated.reserve(relocated.references.size());
+  for(std::size_t index=0;index<relocated.references.size();++index) {
+    // Masked-zero is classified from the authored word, never from an opaque
+    // project token. Its raw representation remains intact in the copy.
+    if((parsed.references[index] & 0x7fffffffU)==0U) {
       translated.push_back(std::nullopt);
       continue;
     }
-    if(*source>=directory_resource_mapping_.size() ||
-        !directory_resource_mapping_.at(*source))
-      throw std::runtime_error("Authored deferred reference has no runtime source-directory mapping");
-    translated.push_back(*directory_resource_mapping_.at(*source));
+    const auto token=relocated.references[index];
+    const auto owner=scene_references_.resolve(token,*scene_reference_lease_);
+    if(!owner) {
+      translated.push_back(std::nullopt);
+      continue;
+    }
+    const IntroRuntimeHandle identity{*owner};
+    const auto resource=resource_handle(identity);
+    if(associated_resource_owner(resource)!=identity || !resource_state_for_handle(resource))
+      throw std::runtime_error("Intro list reference owner is no longer live");
+    translated.push_back(resource);
   }
   work.translated_references=std::move(translated);
 }
@@ -2844,11 +2878,26 @@ bool IntroRuntime::movie_control_reader_matches() const {
   const auto members_match=[&](const auto& references,const auto& members) {
     if(references.size()!=members.size()) return false;
     for(std::size_t index=0;index<references.size();++index)
-      if(resolved(references[index])!=members[index]) return false;
+      if(((references[index] & 0x7fffffffU)==0U ? std::optional<IntroRuntimeResourceHandle>{}
+                                               : resolved(references[index]))!=members[index]) return false;
     return true;
   };
+  const auto prepared_list_matches=[&](std::uint32_t reference,const auto& members) {
+    if(!scene_reference_lease_) return false;
+    const auto source=resources_.sources().local_source_for_authored_reference(reference);
+    if(!source || *source>=directory_resource_mapping_.size()) return false;
+    const auto work=std::ranges::find(deferred_reader_work_,*source,
+        &IntroDeferredReaderWork::source_directory_index);
+    if(work==deferred_reader_work_.end() || !work->processed ||
+        directory_resource_mapping_[*source]!=work->resource ||
+        associated_resource_owner(work->resource)!=source_handle(*source) ||
+        !resource_state_for_handle(work->resource)) return false;
+    return work->translated_references==members;
+  };
   return members_match(resources_.cut_references(),read.sequence_members) &&
-      members_match(resources_.group_references(),read.group_members);
+      members_match(resources_.group_references(),read.group_members) &&
+      prepared_list_matches(authored.sequence_reference,read.sequence_members) &&
+      prepared_list_matches(authored.group_reference,read.group_members);
 }
 
 void IntroRuntime::bind_movie_control_phase_two_services(IntroControllerPhaseTwoServices services) {
@@ -3016,7 +3065,7 @@ void IntroRuntime::apply_supported_movie_control_deferred_reader(const IntroDefe
     std::vector<std::optional<IntroRuntimeResourceHandle>> result;
     result.reserve(references.size());
     for(const auto reference:references) {
-      if(reference==0U) result.push_back(std::nullopt);
+      if((reference & 0x7fffffffU)==0U) result.push_back(std::nullopt);
       else result.push_back(resolve(reference));
     }
     return result;

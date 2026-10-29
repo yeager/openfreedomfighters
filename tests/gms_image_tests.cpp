@@ -2310,6 +2310,24 @@ int main() {
              {}, {1U}, {0U, 0x80000000U, 0xffffffffU, 0x40000001U, 1U, 1U}}) {
         check(decode_list(intro_list_fixture(words)) == words,
               "decode raw list count, order, duplicates and unresolved words ignoring external padding");
+        const auto source=off::data::GmsImage::parse(off::data::PackedResource::parse(intro_list_fixture(words)));
+        const auto borrowed=source.deferred_source_block(1U);
+        std::vector<std::byte> copy(borrowed.begin(),borrowed.end());
+        const auto parsed=source.intro_source_reference_list_block(1U,copy);
+        check(parsed.references==words && parsed.reference_offsets.size()==words.size(),
+              "bounded list copy retains every raw word and element offset");
+        for(std::size_t i=0;i<parsed.reference_offsets.size();++i)
+            set_u32(copy,parsed.reference_offsets[i],static_cast<std::uint32_t>(i+21U));
+        const auto modified=source.intro_source_reference_list_block(1U,copy);
+        for(std::size_t i=0;i<modified.references.size();++i)
+            check(modified.references[i]==i+21U,"bounded list offset identifies its own word");
+        check(source.intro_source_reference_list(1U)==words,
+              "editing the owned list copy does not change source bytes");
+        check_rejected([&] { (void)source.intro_source_reference_list_block(1U,std::span(copy).first(copy.size()-1U)); },
+                       "bounded list copy rejects truncation");
+        copy.push_back(std::byte{0});
+        check_rejected([&] { (void)source.intro_source_reference_list_block(1U,copy); },
+                       "bounded list copy rejects trailing bytes");
     }
     const auto reject_list_mutation = [&](auto mutate) {
         auto bytes = intro_list_fixture({1U, 2U});

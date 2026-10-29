@@ -46,6 +46,13 @@ struct GmsIntroMovieControllerBlock {
     std::vector<std::size_t> reference_offsets;
 };
 
+// Element offsets are relative to a supplied, header-inclusive bounded block.
+// They identify authored words and do not establish runtime reference identity.
+struct GmsIntroSourceReferenceListBlock {
+    std::vector<std::uint32_t> references;
+    std::vector<std::size_t> reference_offsets;
+};
+
 // Owner group only; following attached-component groups remain unread.
 struct GmsIntroSoundOwnerPrefix {
     std::uint32_t authored_type{};
@@ -278,6 +285,12 @@ public:
     // relocation, preserving ordering, duplicates, and unresolved values.
     [[nodiscard]] std::vector<std::uint32_t> intro_source_reference_list(
         std::size_t directory_index
+    ) const;
+    // Validates the selected list source and a separate exact bounded block.
+    // The span's provenance, lifetime and any relocation remain the caller's
+    // responsibility; success is not a native-reader or identity receipt.
+    [[nodiscard]] GmsIntroSourceReferenceListBlock intro_source_reference_list_block(
+        std::size_t directory_index, std::span<const std::byte> block
     ) const;
     void validate_buf(std::span<const std::byte> bytes) const;
     // Borrowed from this owning image; checked independently of component payload.

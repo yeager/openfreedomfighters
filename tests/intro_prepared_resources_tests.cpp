@@ -1797,8 +1797,20 @@ static OFF_NOINLINE void test_controller_reader_source_consistency() {
         check(!bad.load(),"concurrent resolution cannot observe a different owner during retirement");
         rejects([&]{(void)concurrent.resolve(token,concurrent_lease);});
     }
-    for (unsigned scenario=0; scenario<13; ++scenario) {
+    for (unsigned scenario=0; scenario<18; ++scenario) {
         Fixture fixture(false,true);
+        if(scenario==14 || scenario==17)
+            set(fixture.payload,fixture.block_offsets[6]+9U,scenario==14 ? 0x80000000U : 0U);
+        if(scenario==15) {
+            const auto image=fixture.image();
+            std::optional<std::size_t> row;
+            for(std::size_t i=0;i<image.directory().size();++i)
+                for(std::size_t j=0;j<image.directory()[i].attachments.size();++j)
+                    if(image.attachment_identifier(i,j)=="ZGEOM_MovieControl") row=i;
+            if(!row) throw std::runtime_error("synthetic controller fixture is absent");
+            const auto authored=image.intro_movie_controller_source(*row);
+            set(fixture.payload,fixture.block_offsets[2]+16U,authored.sequence_reference);
+        }
         off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
             {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
         app.initialize_native_group_registration();
@@ -1850,7 +1862,16 @@ static OFF_NOINLINE void test_controller_reader_source_consistency() {
             for(unsigned i=0;i<4;++i) bytes[offset+i]=static_cast<std::byte>((invalid>>(8U*i))&0xffU);
             break;
         }
+        case 13: {
+            const auto row=host.resources().sources().local_source_for_authored_reference(prepared.sequence_reference);
+            const auto block=host.resources().sources().deferred_source_block(*row);
+            const auto parsed=host.resources().sources().intro_source_reference_list_block(*row,block);
+            const_cast<std::byte*>(block.data())[parsed.reference_offsets.front()] ^= std::byte{1};
+            break;
         }
+        }
+        bool injected_list_error=false;
+        bool controller_was_published=false;
         const auto run=[&] {
             host.run_postconstruction_reader_bracket(73U,{
                 [](auto){},[](const auto&){},[]{},[](const auto&){},
@@ -1858,13 +1879,28 @@ static OFF_NOINLINE void test_controller_reader_source_consistency() {
                     if(work.source_directory_index==host.resources().controller_index())
                         host.apply_supported_movie_control_deferred_reader(work);
                 },[&](const auto& work) {
-                    if(scenario==12 && work.source_directory_index==host.resources().controller_index()) {
+                    if((scenario==0 || scenario==12 || scenario==14 || scenario==15 || scenario==17) && work.source_directory_index==host.resources().controller_index()) {
                         host.apply_supported_movie_control_component_reader(work);
-                        throw std::runtime_error("synthetic later controller callback failure");
+                        if(scenario==12) throw std::runtime_error("synthetic later controller callback failure");
+                    }
+                    if(scenario==16 && work.source_directory_index==host.resources().controller_index()) {
+                        injected_list_error=true;
+                        controller_was_published=host.movie_controller_reader_state()!=nullptr;
+                        // Keep the synthetic prepared list and source block in
+                        // agreement while injecting an out-of-range index after
+                        // controller publication but before its list work.
+                        auto raw=host.resources().cut_references();
+                        const auto row=host.resources().sources().local_source_for_authored_reference(prepared.sequence_reference);
+                        const auto block=host.resources().sources().deferred_source_block(*row);
+                        const auto parsed=host.resources().sources().intro_source_reference_list_block(*row,block);
+                        const_cast<std::uint32_t*>(raw.data())[0]=0x7fffffffU;
+                        auto* bytes=const_cast<std::byte*>(block.data());
+                        for(unsigned i=0;i<4;++i)
+                            bytes[parsed.reference_offsets.front()+i]=static_cast<std::byte>((0x7fffffffU>>(8U*i))&0xffU);
                     }
                 },[]{}});
         };
-        if(scenario==0) {
+        if(scenario==0 || scenario==14 || scenario==15 || scenario==17) {
             run();
             const auto* state=host.movie_controller_reader_state();
             const auto sequence_row=host.resources().sources().local_source_for_authored_reference(prepared.sequence_reference);
@@ -1875,8 +1911,54 @@ static OFF_NOINLINE void test_controller_reader_source_consistency() {
                   state->group_list_resource==host.resource_handle(host.source_handle(*group_row)) &&
                   host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete,
                   "controller reader resolves project-local tokens to the two live owners in the actual bracket");
+            if(state && sequence_row && group_row) {
+                const auto seq=std::ranges::find(host.deferred_reader_work(),*sequence_row,
+                    &off::graphics::IntroDeferredReaderWork::source_directory_index);
+                const auto group=std::ranges::find(host.deferred_reader_work(),*group_row,
+                    &off::graphics::IntroDeferredReaderWork::source_directory_index);
+                check(seq!=host.deferred_reader_work().end() && group!=host.deferred_reader_work().end() &&
+                      seq->translated_references==state->sequence_members &&
+                      group->translated_references==state->group_members,
+                      "both prepared lists agree with independently retained controller members");
+                if(scenario==0)
+                    check(state->sequence_members.size()>=2U &&
+                          state->sequence_members[0] &&
+                          state->sequence_members[0]==state->sequence_members[1],
+                          "duplicate authored list members retain the same resolved owner through the actual gate");
+                if(scenario==14 || scenario==17)
+                    check(!state->group_members.empty() && !state->group_members.front() &&
+                          group!=host.deferred_reader_work().end() &&
+                          !group->translated_references.empty() && !group->translated_references.front(),
+                          "zero-index authored list word reaches the actual controller gate as a null member");
+                if(scenario==15)
+                    check(*sequence_row==*group_row && state->sequence_members==state->group_members,
+                          "aliased controller lists consume the same validated list work");
+                const auto bind_failure=[&] {
+                    try { host.bind_movie_control_phase_two_services({}); }
+                    catch(const std::runtime_error& error) { return std::string(error.what()); }
+                    return std::string{};
+                };
+                check(bind_failure()=="intro phase two requires every named service",
+                      "matched controller lists pass the reader gate before service validation");
+                if(seq!=host.deferred_reader_work().end() && !seq->translated_references.empty()) {
+                    // Simulate a corrupted project work result; the public
+                    // view is read-only but the underlying test object is not.
+                    auto& altered=const_cast<off::graphics::IntroDeferredReaderWork&>(*seq);
+                    altered.translated_references.front()=std::nullopt;
+                    check(bind_failure()=="MovieControl phase two requires its complete live readers and unbound scene services",
+                          "controller gate rejects a changed prepared list after the bracket");
+                }
+            }
         } else {
-            rejects(run);
+            if(scenario==16) {
+                std::string error;
+                try { run(); }
+                catch(const std::out_of_range& failure) { error=failure.what(); }
+                catch(const std::exception& failure) { error=failure.what(); }
+                check(injected_list_error && controller_was_published &&
+                      error=="intro list reference index is out of range",
+                      "list relocation rejects the injected out-of-range index after controller publication");
+            } else rejects(run);
             check(host.movie_controller_reader_state()==nullptr &&
                   host.movie_controller_component_reader_state()==nullptr &&
                   host.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::failed,

@@ -781,6 +781,13 @@ std::span<const std::byte> GmsImage::deferred_source_block(
 std::vector<std::uint32_t> GmsImage::intro_source_reference_list(
     std::size_t directory_index
 ) const {
+    return intro_source_reference_list_block(directory_index,
+        deferred_source_block(directory_index)).references;
+}
+
+GmsIntroSourceReferenceListBlock GmsImage::intro_source_reference_list_block(
+    std::size_t directory_index, std::span<const std::byte> block
+) const {
     const auto fail = []() {
         throw std::runtime_error("GMS intro source-reference list is unsupported or malformed");
     };
@@ -792,20 +799,18 @@ std::vector<std::uint32_t> GmsImage::intro_source_reference_list(
         !entry.attachments.empty() || entry.deferred_source_offset == 0U) {
         fail();
     }
-    const auto payload = resource_.payload();
-    const auto offset = static_cast<std::size_t>(entry.deferred_source_offset);
-    if (offset > payload.size() || 4U > payload.size() - offset) {
+    if (block.size() < 4U) {
         fail();
     }
-    const ByteReader reader(payload);
-    const auto header = reader.u32(offset);
+    const ByteReader reader(block);
+    const auto header = reader.u32(0U);
     const auto size = static_cast<std::size_t>(header & tagged_block_size_mask);
-    if ((header >> 24U) != 0U || size < 4U || size > payload.size() - offset) {
+    if ((header >> 24U) != 0U || size < 4U || size != block.size()) {
         fail();
     }
-    const auto end = offset + size;
-    auto cursor = offset + 4U;
-    if (5U > end - cursor || payload[cursor] != std::byte{0x89}) {
+    const auto end = size;
+    std::size_t cursor = 4U;
+    if (5U > end - cursor || block[cursor] != std::byte{0x89}) {
         fail();
     }
     ++cursor;
@@ -815,15 +820,17 @@ std::vector<std::uint32_t> GmsImage::intro_source_reference_list(
         fail();
     }
     const auto list_end = cursor + byte_count;
-    if (end - list_end != 2U || payload[list_end] != std::byte{0x06} ||
-        payload[list_end + 1U] != std::byte{0xff}) {
+    if (end - list_end != 2U || block[list_end] != std::byte{0x06} ||
+        block[list_end + 1U] != std::byte{0xff}) {
         fail();
     }
-    std::vector<std::uint32_t> result;
-    result.reserve((byte_count - 4U) / 4U);
+    GmsIntroSourceReferenceListBlock result;
+    result.references.reserve((byte_count - 4U) / 4U);
+    result.reference_offsets.reserve((byte_count - 4U) / 4U);
     cursor += 4U;
     while (cursor < list_end) {
-        result.push_back(reader.u32(cursor));
+        result.reference_offsets.push_back(cursor);
+        result.references.push_back(reader.u32(cursor));
         cursor += 4U;
     }
     return result;

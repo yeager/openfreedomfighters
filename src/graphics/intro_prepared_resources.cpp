@@ -179,10 +179,15 @@ IntroPreparedResources build_intro_prepared_resources(
   const auto validate_reference = [&](std::uint32_t reference) {
     static_cast<void>(gms.local_source_for_authored_reference(reference));
   };
+  const auto validate_list_reference = [&](std::uint32_t reference) {
+    // A zero source index is an empty list member even when its marker bit is
+    // retained. Do not apply this list-specific rule to unrelated fields.
+    if ((reference & 0x7fffffffU) != 0U) validate_reference(reference);
+  };
   for (const auto reference : result.cuts_)
-    validate_reference(reference);
+    validate_list_reference(reference);
   for (const auto reference : result.groups_)
-    validate_reference(reference);
+    validate_list_reference(reference);
   validate_reference(controller.additional_reference);
   if (controller.first_optional_reference)
     validate_reference(*controller.first_optional_reference);
