@@ -222,6 +222,11 @@ render-target switching remain unsupported; this does not show game rendering.
 `GetRenderTarget` returns the same retained implicit surface as `GetBackBuffer`.
 Synthetic Wine and HLE tests cover identity, reference counts, alias rejection
 and device lifetime for that path.
+When the supported 3D profile creates an implicit D16 depth attachment,
+`GetDepthStencilSurface` exposes it as a distinct retained surface; without an
+attachment it reports not found. Synthetic Wine and HLE tests cover identity,
+descriptor and device lifetime. Standalone depth-surface creation and locking
+remain unsupported.
 
 The local pcrecomp checkout also fixes a D3D8 build failure when the optional
 software 3D profile is disabled. On Linux, the D3D8 device self-test passed
