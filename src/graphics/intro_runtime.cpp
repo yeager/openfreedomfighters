@@ -2066,13 +2066,20 @@ void IntroRuntime::record_supported_owner_admission(std::size_t source, IntroRun
       owner!=source_handle(source) || !sound_for_source(source).source_applied_)
     return;
   const auto resource=directory_resource_mapping_.at(source);
-  if(!resource || !std::ranges::any_of(supported_reader_admissions_,[&](const auto& reader) {
-       return reader.source_directory_index==source && reader.resource==resource->value;
+  const auto& sound=sound_for_source(source);
+  if(!resource || associated_resource_owner(*resource)!=owner || !resource_state_for_handle(*resource) ||
+      sound.failed_ || !sound.active_ || !sound.owner_binding_ ||
+      sound.owner_binding_!=sound.lease_.binding() ||
+      !std::ranges::any_of(supported_reader_admissions_,[&](const auto& reader) {
+       return reader.source_directory_index==source && reader.resource==resource->value &&
+           reader.source_offset==resources_.sources().directory().at(source).deferred_source_offset;
      }))
     return;
   const IntroOwnerAdmissionIdentity identity{owner.value};
+  // The key describes the same live owner, not a one-use playback receipt.
+  // Current activity and binding are checked when coverage is consumed.
   if(std::ranges::find(supported_owner_admissions_,identity)!=supported_owner_admissions_.end())
-    throw std::runtime_error("Supported owner admission cannot be recorded twice");
+    return;
   supported_owner_admissions_.push_back(identity);
 }
 
@@ -2544,6 +2551,10 @@ void IntroRuntime::prepare_sound_owner(std::size_t source,
   if (!application_.clock().ready() || application_.clock().failed())
     throw std::runtime_error("Intro sound preparation requires a valid application clock");
   auto& owner = sound_for_source(source);
+  // A prior active playback must be stopped before preparing it again. This
+  // keeps a failed or skipped preparation from inheriting stale activity.
+  if(owner.active_)
+    throw std::runtime_error("Intro sound owner must be stopped before preparation");
   auto& record = owner.record();
   const auto& bank = resources_.sound_bank();
   if (!bank || !record.active_source)

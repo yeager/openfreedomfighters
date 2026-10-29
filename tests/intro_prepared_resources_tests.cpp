@@ -2082,6 +2082,30 @@ static OFF_NOINLINE void test_sound_source_transforms() {
     check(sound.active() && enabled==0U && record.position==signed_zero &&
           record.direction==std::array<float,3>{-4,8,16} && record.parent==parent.value,
           "successful preparation with owner enable false copies raw unnormalized direction and position without parent composition");
+    const auto binding=sound.owner_binding();
+    const auto first_coverage=host.preflight_global_lifecycle().covered_owners;
+    rejects([&]{host.prepare_sound_owner(row,services);});
+    check(sound.active() && !sound.failed() && sound.owner_binding()==binding &&
+          std::ranges::count(app.sound_records().prepared(),binding)==1 &&
+          host.preflight_global_lifecycle().covered_owners==first_coverage,
+          "preparing an active owner rejects before changing playback or coverage");
+    host.stop_sound_owner(row);
+    check(!sound.active() && host.preflight_global_lifecycle().covered_owners+1U==first_coverage,
+          "stopping the owner removes its live coverage without destroying its binding");
+    check(std::ranges::count(app.sound_records().prepared(),binding)==0,
+          "a single stop removes the only prepared backend occurrence");
+    record.active_source=0U;record.flags=0U;
+    host.prepare_sound_owner(row,services);
+    check(!sound.active() && !sound.failed() && sound.owner_binding()==binding &&
+          std::ranges::count(app.sound_records().prepared(),binding)==0 &&
+          host.preflight_global_lifecycle().covered_owners+1U==first_coverage,
+          "backend preparation failure after stop cannot revive owner coverage");
+    record.active_source=128U;
+    host.prepare_sound_owner(row,services);
+    check(sound.active() && !sound.failed() && sound.owner_binding()==binding &&
+          host.preflight_global_lifecycle().covered_owners==first_coverage &&
+          std::ranges::count(app.sound_records().prepared(),binding)==1,
+          "the same live sound owner can prepare again after stop without duplicating coverage");
     host.update_source_transform(owner,basis,{101,102,103});
     check(record.position==signed_zero && record.direction==std::array<float,3>{-4,8,16} &&
           initialized.basis==basis && initialized.position==position,
