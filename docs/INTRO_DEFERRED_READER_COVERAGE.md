@@ -24,3 +24,9 @@ project-side consistency check; it does not establish camera activation.
 The supported sequence form is also checked against an owned bounded block;
 its candidate references resolve through the same live scene lease before
 reader state is published. This does not determine which candidate is selected.
+
+For the supported sequence attachment, the reader also retains a bounded,
+scene-owned attachment stream. Its scoped first-phase callback reads that copy
+and registers a shared project timing identity before completing. A terminal
+reader failure retires the stream; this path does not establish native event
+delivery, global lifecycle completion, or intro playback.
