@@ -233,6 +233,11 @@ software profile, including the appropriate depth-enable default. Synthetic
 setter/getter, invalid-output and WineD3D comparisons passed on Linux; other
 states remain unavailable and these checks do not establish general parity.
 
+The supported 3D device initializes its viewport to the full target at device
+creation. Synthetic HLE tests exercise both querying it and drawing without an
+explicit viewport change; a WineD3D probe checked default and updated viewport
+values. Other required draw state still has to be configured explicitly.
+
 The local pcrecomp checkout also fixes a D3D8 build failure when the optional
 software 3D profile is disabled. On Linux, the D3D8 device self-test passed
 with that profile disabled, with 3D enabled, and with textured 3D enabled.
