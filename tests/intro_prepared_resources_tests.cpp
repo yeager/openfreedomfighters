@@ -1176,6 +1176,38 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         host.bind_first_cut_fade_phase_one_services({[]{return std::array<std::int32_t,2>{640,480};},[](auto,auto){}});
     };
 
+    {
+        Fixture fixture(false,true);
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*runtime);
+        const auto source=runtime->resources().window_index();
+        const auto work=std::ranges::find(runtime->deferred_reader_work(),source,
+            &off::graphics::IntroDeferredReaderWork::source_directory_index);
+        if(work==runtime->deferred_reader_work().end())
+            throw std::runtime_error("synthetic Window deferred work is absent");
+        auto copied=*work;
+        copied.processed=true;
+        rejects([&]{runtime->apply_supported_window_deferred_reader(copied);});
+        const auto coverage=runtime->reader_coverage_inventory();
+        check(!runtime->window_camera_projection_applied(),
+              "copied Window work cannot publish projection before its reader bracket");
+        check(std::ranges::any_of(coverage.entries,[](const auto& entry) {
+                  return entry.family==off::graphics::IntroDeferredReaderFamily::window_owner &&
+                      entry.state==off::graphics::IntroDeferredReaderImplementationState::implemented_not_applied &&
+                      entry.count==1U;
+              }),"copied Window work does not publish a reader admission");
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        session->complete_postconstruction_reader_bracket(41U);
+        check(session->runtime().window_camera_projection_applied() &&
+              session->stage()==off::graphics::NormalIntroSceneSessionStage::reader_bracket_complete,
+              "the canonical Window work remains readable by the normal bracket");
+    }
+
     for(const bool variant_one : {true,false}) {
         Fixture fixture(false,true);
         const auto read_word=[&](std::size_t offset) {

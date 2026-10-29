@@ -2454,6 +2454,10 @@ void IntroRuntime::apply_supported_window_deferred_reader(const IntroDeferredRea
   if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete || projected_ ||
       !work.processed || work.source_directory_index>=directory_resource_mapping_.size())
     throw std::runtime_error("Supported Window reader is unavailable at this loader stage");
+  if(std::ranges::find_if(deferred_reader_work_,[&](const auto& candidate) {
+       return std::addressof(candidate)==std::addressof(work);
+     })==deferred_reader_work_.end())
+    throw std::runtime_error("Supported Window reader requires bracket-owned work");
 
   const auto& sources=resources_.sources();
   const auto& directory=sources.directory();
