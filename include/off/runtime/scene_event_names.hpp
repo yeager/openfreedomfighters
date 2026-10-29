@@ -21,6 +21,11 @@ public:
     Lease(const std::shared_ptr<Generation>& generation) : generation_(generation), value_(generation->value) {}
   public:
     Lease() = default;
+    [[nodiscard]] bool expired() const noexcept { return generation_.expired(); }
+    [[nodiscard]] bool stale() const noexcept {
+      const auto generation=generation_.lock();
+      return !generation || generation->value==0U || generation->value!=value_;
+    }
   };
   static constexpr std::size_t capacity=0x402;
   SceneEventNames();
@@ -38,6 +43,7 @@ public:
   // these operations are confined to the scene's owning thread.
   [[nodiscard]] Lease lease() const;
   [[nodiscard]] bool is_live(const Lease& lease) const noexcept;
+  [[nodiscard]] bool owns(const Lease& lease) const noexcept;
   // Explicit scene event-clear, never an implicit GMS-load or factory reset.
   void clear() noexcept;
 private:

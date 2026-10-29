@@ -31,5 +31,14 @@ and registers a shared project timing identity before completing. A terminal
 reader failure retires the stream. The timing identity also carries a
 scene-owned event-generation lease: clearing the event table invalidates it,
 even if a later declaration reuses the same numeric identity. This protects the
-scoped callback's lookup; it does not implement a deferred-start queue, native
-event delivery, global lifecycle completion, or intro playback.
+scoped callback's lookup; it does not establish native event delivery, global
+lifecycle completion, or intro playback.
+
+For the supported first-cut list form, a scoped phase-one callback reads the
+owned attachment stream and checks the factory-owned helper against the
+validated sequence owner and resource. It registers project event identities,
+initializes per-member markers, and writes a non-owning reference to the
+application-owned deferred-start queue. A present input-action provider is
+explicitly unsupported: the callback fails without marking phase completion.
+The queue and scoped phase do not establish start or completion delivery, an
+active view, or intro playback.

@@ -919,12 +919,12 @@ static OFF_NOINLINE void test_prepared_runtime_scopes() {
             std::as_const(app).resolve_handle_collection(token)->members==std::vector<std::uint64_t>{123} &&
             !app.resolve_handle_collection(std::numeric_limits<std::uint64_t>::max()),
             "later object registrations preserve collection identity, contents and invalid-token distinction");
-      check(!app.vert_anim_event() && !app.cut_sequence_lists(),"shared component class state starts absent");
+      check(!app.vert_anim_event() && !app.cut_sequence_lists() && !app.deferred_sequence_starts(),"shared component class state starts absent");
       app.set_vert_anim_event(17);app.create_cut_sequence_list_collection();
       auto* shared=app.cut_sequence_lists();shared->members.push_back(456);
       rejects([&]{app.create_cut_sequence_list_collection();});
       app.set_vert_anim_event(29);
-      check(app.vert_anim_event()==29 && app.cut_sequence_lists()==shared && shared->members==std::vector<std::uint64_t>{456},
+      check(app.vert_anim_event()==29 && app.cut_sequence_lists()==shared && app.deferred_sequence_starts()==&shared->deferred_starts && shared->members==std::vector<std::uint64_t>{456},
             "shared event slot replaces its value while repeated collection creation never resets existing members");
       app.initialize_native_room_animation_scope_registration();
       static_cast<void>(app.register_class_instance(0x00100021U));
@@ -1188,6 +1188,12 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
         session->complete_postconstruction_reader_bracket(41U);
         auto& host=session->runtime();
+        const auto* list_reader=host.first_cut_list_reader_state();
+        if(!list_reader) throw std::runtime_error("synthetic list reader is absent");
+        const auto* list_component=host.constructed_attachment(list_reader->component_indices[0]);
+        check(list_component && list_component->cut_list_stream_index!=0U &&
+              !(host.components().at(list_reader->component_indices[0]).state().status&4U),
+              "normal reader retains the list stream without claiming phase completion");
         const auto* reader=host.first_cut_sequence_component_reader_state();
         if(!reader) throw std::runtime_error("synthetic sequence reader is absent");
         const auto index=reader->component_index;
@@ -1220,6 +1226,68 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
             rejects([&]{host.components().run_scoped_phase_one(target);});
         }
     }
+    for(const int scenario:{0,1,2,3,4,5}) {
+        const bool input_present=scenario==1;
+        Fixture fixture(false,true);
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        if(input_present) app.create_sequence_input_actions();
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*runtime);
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        session->complete_postconstruction_reader_bracket(41U);
+        auto& host=session->runtime();
+        const auto* read=host.first_cut_list_reader_state();
+        const auto* owner=host.constructed_list_owner(host.resources().first_cut_index());
+        if(!read || !owner || !owner->factory_component) throw std::runtime_error("synthetic list factory is absent");
+        const auto index=read->component_indices[0];
+        const auto* component=host.constructed_attachment(index);
+        if(!component || !component->cut_list) throw std::runtime_error("synthetic list attachment is absent");
+        const auto& local=*component->cut_list;
+        check(owner->factory_component->helper.size()==1 && !local.initialized && !host.first_cut_queue_property(),
+              "list reader builds helper without performing phase one");
+        const std::array<std::size_t,1> target{index};
+        if(input_present) {
+          rejects([&]{host.components().run_scoped_phase_one(target);});
+          check(!local.initialized && !(host.components().at(index).state().status&4U) && host.first_cut_queue_property() &&
+                local.raw_reference==read->authored.settings_words[3] && local.optional_scalar==read->authored.final_value &&
+                local.initialization_events[4]!=0U && local.first_markers==std::vector<std::uint8_t>{0} &&
+                local.second_markers==std::vector<std::uint8_t>{0},
+                "unsupported action provider retains preceding writes without completing the phase");
+          continue;
+        }
+        if(scenario>=2) {
+          if(scenario==2) {
+            auto& mutable_component=const_cast<off::graphics::IntroConstructedPictureComponent&>(*component);
+            mutable_component.cut_list_stream_index=0;
+          } else if(scenario==3) {
+            auto& mutable_owner=const_cast<off::graphics::IntroConstructedListOwner&>(*owner);
+            mutable_owner.factory_component->helper[0]=0;
+          } else if(scenario==4) {
+            auto& mutable_owner=const_cast<off::graphics::IntroConstructedListOwner&>(*owner);
+            mutable_owner.factory_component->helper.clear();
+          } else {
+            auto& mutable_owner=const_cast<off::graphics::IntroConstructedListOwner&>(*owner);
+            mutable_owner.factory_component->helper[0]=host.project_reference_for_source(host.resources().first_cut_index());
+          }
+          rejects([&]{host.components().run_scoped_phase_one(target);});
+          check(!local.initialized && !(host.components().at(index).state().status&4U) && !host.first_cut_queue_property(),
+                "missing list stream or helper owner fails before property or completion");
+          continue;
+        }
+        host.components().run_scoped_phase_one(target);
+        const auto* queue=app.deferred_sequence_starts();
+        check(local.initialized && (host.components().at(index).state().status&4U) &&
+              local.first_markers==std::vector<std::uint8_t>{0} && local.second_markers==std::vector<std::uint8_t>{0} &&
+              local.raw_reference==read->authored.settings_words[3] && local.optional_scalar==read->authored.final_value &&
+              queue && host.first_cut_queue_property() && queue->live(*host.first_cut_queue_property()) &&
+              local.initialization_events[4]==host.scene_event_names().find("off-project.sequence-timing-request"),
+              "actual list phase callback consumes helper, stream and queue service before completion");
+        rejects([&]{host.components().run_scoped_phase_one(target);});
+    }
     {
         Fixture fixture(false,true);
         off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
@@ -1230,6 +1298,7 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
             off::graphics::IntroSoundLoadPolicy::directory_construction);
         construct_directory(host);
         std::optional<std::size_t> copied_component;
+        std::optional<std::size_t> copied_list_component;
         bool end_reached=false;
         rejects([&]{host.run_postconstruction_reader_bracket(41U,{
             [](auto){},[](const auto&){},[]{},[](const auto&){},
@@ -1244,13 +1313,17 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
                     host.apply_supported_first_cut_sequence_component_reader(work);
                     copied_component=host.first_cut_sequence_component_reader_state()->component_index;
                 }
-                if(work.source_directory_index==host.resources().first_cut_index())
+                if(work.source_directory_index==host.resources().first_cut_index()) {
                     host.apply_supported_first_cut_component_reader(work);
+                    copied_list_component=host.first_cut_list_reader_state()->component_indices[0];
+                }
             },
             [&] {
                 end_reached=true;
                 if(!copied_component || !host.constructed_attachment(*copied_component)->sequence_initialization->stream_index)
                     throw std::runtime_error("synthetic stream copy was not reached");
+                if(!copied_list_component || !host.constructed_attachment(*copied_list_component)->cut_list_stream_index)
+                    throw std::runtime_error("synthetic list stream copy was not reached");
                 throw std::runtime_error("synthetic later bracket failure");
             }});});
         check(end_reached && copied_component && !host.first_cut_sequence_component_reader_state() &&
@@ -1258,6 +1331,9 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
               !host.constructed_attachment(*copied_component)->sequence_initialization->initialized &&
               !(host.components().at(*copied_component).state().status&4U),
               "later bracket failure retires the copied stream without phase completion");
+        check(copied_list_component && host.constructed_attachment(*copied_list_component)->cut_list_stream_index==0U &&
+              !(host.components().at(*copied_list_component).state().status&4U),
+              "later bracket failure retires the list stream without phase completion");
         if(copied_component) {
             const std::array<std::size_t,1> target{*copied_component};
             rejects([&]{host.components().run_scoped_phase_one(target);});
@@ -1673,6 +1749,15 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
               handoff_host.source_handle(handoff_host.resources().controller_index()).value,
               off::data::matpos_owner_child_selector),
           "complete reader bracket retains a valid empty KEYS registry when no MatPos owner exists");
+    const auto* handoff_list=handoff_host.first_cut_list_reader_state();
+    if(!handoff_list) throw std::runtime_error("handoff list reader is absent");
+    auto& handoff_list_payload=const_cast<off::graphics::IntroConstructedPictureComponent&>(
+        *handoff_host.constructed_attachment(handoff_list->component_indices[0]));
+    const auto saved_list_stream=handoff_list_payload.cut_list_stream_index;
+    handoff_list_payload.cut_list_stream_index=0;
+    rejects([&]{handoff_host.prepare_supported_first_cut_player();});
+    check(!handoff_host.first_cut_player_prepared_state(),"missing retained list stream cannot publish player preparation");
+    handoff_list_payload.cut_list_stream_index=saved_list_stream;
     handoff_session->prepare_supported_first_cut_player();
     auto* live_player=handoff_session->first_cut_player();
     check(live_player && !live_player->initialization().phase_one_complete() &&

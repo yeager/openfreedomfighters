@@ -148,6 +148,11 @@ struct IntroCutListConstructionState {
   std::int32_t playback_tracking{};
   std::optional<float> optional_scalar;
   std::optional<std::uint64_t> current_command;
+  std::uint32_t raw_reference{};
+  std::vector<std::uint8_t> first_markers,second_markers;
+  std::array<std::uint16_t,19> initialization_events{};
+  bool initialization_latch{};
+  bool initialized{};
   // Authored start/end/options remain unproduced; no reader runs here.
 };
 // Concrete constructor state, deliberately separate from the prepared asset view.
@@ -174,6 +179,9 @@ struct IntroConstructedPictureComponent {
   std::optional<std::uint32_t> script_reference;
   std::optional<IntroAnimationConstructionState> animation;
   std::optional<IntroCutListConstructionState> cut_list;
+  // Project stream table index, one based. This is retained reader input,
+  // not evidence of list phase-one completion.
+  std::size_t cut_list_stream_index{};
   std::optional<std::uint32_t> list_index;
   std::optional<std::int32_t> list_sentinel;
   std::optional<std::vector<std::uint64_t>> commands,auxiliary_list_a,auxiliary_list_b;
@@ -274,6 +282,11 @@ struct IntroConstructedListOwner {
   std::uint32_t class_identifier{0x0800001aU},count{},component_mask{};
   bool backing_available{};
   std::vector<std::uint64_t> attachments;
+  struct FactoryComponent {
+    IntroRuntimeHandle owner;
+    std::vector<std::uint32_t> helper;
+  };
+  std::optional<FactoryComponent> factory_component;
   struct AnimationStorage {
     std::uint32_t capacity{32},growth{32},count{},element_control{1};
     std::array<std::uint64_t,2> backing_references{};
@@ -1019,6 +1032,12 @@ public:
   void prepare_source_event_names();
   [[nodiscard]] std::uint16_t declare_scene_event_name(std::string_view name,std::uint16_t requested=0);
   [[nodiscard]] const runtime::SceneEventNames& scene_event_names() const noexcept {return event_names_;}
+  // Return a project token only within this runtime's live reference domain.
+  [[nodiscard]] std::uint32_t project_reference_for_source(std::size_t source) const;
+  [[nodiscard]] const runtime::DeferredSequenceStartQueue::Handle* first_cut_queue_property() const noexcept {
+    const auto found=queue_properties_.find("off-project.deferred-sequence-start-queue");
+    return found==queue_properties_.end() ? nullptr : &found->second;
+  }
   [[nodiscard]] std::span<const std::optional<std::uint32_t>> source_event_name_mapping() const noexcept {return source_event_name_mapping_;}
   // Explicit native cold-load setup before engine renderer creation. Retains
   // loader progress and queue controls; each local source is then constructed
@@ -1470,6 +1489,7 @@ private:
   std::vector<std::array<std::byte,12>> first_auxiliary_array_;
   std::vector<std::array<std::byte,8>> second_auxiliary_array_;
   runtime::SceneEventNames event_names_;
+  std::map<std::string,runtime::DeferredSequenceStartQueue::Handle,std::less<>> queue_properties_;
   struct SequenceStreamEntry {
     IntroRuntimeHandle owner;
     std::size_t component_index{};
@@ -1499,6 +1519,7 @@ private:
   [[nodiscard]] std::vector<std::size_t> first_cut_fade_target_sources() const;
   void run_first_cut_fade_phase_one(std::size_t component,runtime::ComponentRecord& record);
   void run_first_cut_sequence_phase_one(std::size_t component,runtime::ComponentRecord& record);
+  void run_first_cut_list_phase_one(std::size_t component,runtime::ComponentRecord& record);
   // Diagnostic-only companion to the factory callback above.  It deliberately
   // omits component-admission recording, so it cannot turn a local fade probe
   // into global lifecycle evidence.

@@ -58,6 +58,10 @@ bool SceneEventNames::is_live(const Lease& lease) const noexcept {
   const auto generation=lease.generation_.lock();
   return generation && generation==generation_ && generation->value!=0U && generation->value==lease.value_;
 }
+bool SceneEventNames::owns(const Lease& lease) const noexcept {
+  const auto generation=lease.generation_.lock();
+  return generation && generation==generation_;
+}
 void SceneEventNames::clear() noexcept {
   if(generation_->value==std::numeric_limits<std::uint64_t>::max()) generation_->value=0U;
   else if(generation_->value!=0U) ++generation_->value;

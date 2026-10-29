@@ -439,6 +439,12 @@ std::optional<IntroSceneResourceProperty> IntroRuntime::scene_resource_property(
   return found->second;
 }
 
+std::uint32_t IntroRuntime::project_reference_for_source(std::size_t source) const {
+  if(!scene_reference_lease_ || source>=resources_.sources().directory().size() || source>=0x7fffffffU)
+    throw std::runtime_error("project source reference is unavailable");
+  return scene_references_.relocate(static_cast<std::uint32_t>(source+1U),*scene_reference_lease_);
+}
+
 void IntroRuntime::set_scene_resource_property_native(std::string key,IntroRuntimeResourceHandle resource) {
   if(resource_load_stage_==IntroResourceLoadStage::failed)
     throw std::runtime_error("Resource construction previously failed");
@@ -717,6 +723,7 @@ void IntroRuntime::construct_non_group_row_without_engine_renderer(std::size_t r
       } else if(source.source_type==0x0800001aU || source.source_type==0x08000049U) {
         auto& list=constructed_list_owners_.try_emplace(row).first->second;
         list.owner=owner;list.resource=resource;list.name=std::move(name);list.class_identifier=source.source_type;
+        if(source.source_type==0x0800001aU) list.factory_component.emplace(IntroConstructedListOwner::FactoryComponent{owner,{}});
         mask=&list.component_mask;attachments=&list.attachments;
         if(source.source_type==0x08000049U) {
           resource_owners_[index]=owner;
@@ -943,6 +950,10 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
         if(cut && row==resources_.member_index())
           phase_one=[this,component_index](runtime::ComponentRecord& record) {
             run_first_cut_sequence_phase_one(component_index,record);
+          };
+        if(cut_list && row==resources_.first_cut_index())
+          phase_one=[this,component_index](runtime::ComponentRecord& record) {
+            run_first_cut_list_phase_one(component_index,record);
           };
         if(black && std::ranges::any_of(resources_.first_cut().commands,[&](const auto& command) {
              const auto target=resources_.sources().local_source_for_authored_reference(command.target_reference);
@@ -2175,12 +2186,18 @@ void IntroRuntime::run_postconstruction_reader_bracket(
     // names already declared in the scene table are not rolled back; the
     // failed runtime cannot consume them as an initialization receipt.
     sequence_streams_.clear();
+    queue_properties_.clear();
     sequence_timing_event_.reset();
     first_cut_sequence_component_reader_state_.reset();
     for(auto& [index,payload]:constructed_picture_components_) {
       static_cast<void>(index);
       if(payload.sequence_initialization)
         *payload.sequence_initialization=IntroConstructedPictureComponent::SequenceInitialization{};
+      payload.cut_list_stream_index=0;
+    }
+    for(auto& [index,list]:constructed_list_owners_) {
+      static_cast<void>(index);
+      if(list.factory_component) list.factory_component->helper.clear();
     }
     if(movie_controller_reader_state_) {
       const auto& reader=*movie_controller_reader_state_;
@@ -3308,6 +3325,74 @@ void IntroRuntime::run_first_cut_sequence_phase_one(std::size_t index,runtime::C
   local.initialized=true;
 }
 
+void IntroRuntime::run_first_cut_list_phase_one(std::size_t index,runtime::ComponentRecord& record) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      reader_bracket_stage_!=IntroReaderBracketStage::ordinary_reader_boundary_complete ||
+      !scene_reference_lease_ || !first_cut_list_reader_state_ || !first_cut_component_reader_state_ ||
+      !sequence_timing_event_ || !sequence_timing_event_lease_ || !event_names_.is_live(*sequence_timing_event_lease_) ||
+      index>=components_.size() || &record!=&components_.at(index) || !record.constructed() || record.removed())
+    throw std::runtime_error("First-cut list initialization requires live readers and services");
+  const auto& read=*first_cut_list_reader_state_;
+  const auto source=resources_.first_cut_index();
+  auto& owner=constructed_list_owners_.at(source);
+  auto& payload=constructed_picture_components_.at(index);
+  if(index!=read.component_indices[0] || record.source().factory_name!="ZLIST_CutSequenceList" ||
+      record.state().attached_owner!=read.owner.value || payload.owner!=read.owner || !payload.cut_list ||
+      !owner.factory_component || owner.factory_component->owner!=read.owner || owner.resource!=read.resource ||
+      associated_resource_owner(read.resource)!=read.owner || !resource_state_for_handle(read.resource))
+    throw std::runtime_error("First-cut list initialization receiver changed");
+  auto& local=*payload.cut_list;
+  if(local.initialized || !payload.cut_list_stream_index || payload.cut_list_stream_index>sequence_streams_.size())
+    throw std::runtime_error("First-cut list initialization stream is unavailable");
+  const auto& stream=sequence_streams_[payload.cut_list_stream_index-1U];
+  if(stream.owner!=read.owner || stream.component_index!=index)
+    throw std::runtime_error("First-cut list initialization stream identity changed");
+  const auto parsed=data::FirstCutListComponentReader::read(stream.bytes);
+  if(parsed.controls!=first_cut_component_reader_state_->payloads.list.controls ||
+      std::bit_cast<std::uint32_t>(parsed.final_value)!=std::bit_cast<std::uint32_t>(first_cut_component_reader_state_->payloads.list.final_value))
+    throw std::runtime_error("First-cut list initialization stream changed");
+  for(const auto i:{0U,1U,2U,4U,5U,6U}) local.controls[i]=parsed.controls[i]!=0U;
+  local.raw_reference=parsed.controls[3];
+  local.optional_scalar=parsed.final_value;
+  local.initialization_latch=false;
+  static_cast<void>(scene_references_.resolve(0U,*scene_reference_lease_));
+  if(owner.factory_component->helper.size()!=1U)
+    throw std::runtime_error("First-cut list helper membership changed");
+  for(const auto token:owner.factory_component->helper) {
+    const auto resolved=scene_references_.resolve(token,*scene_reference_lease_);
+    if(!resolved || !live_owner(*resolved)) throw std::runtime_error("First-cut list helper owner is unavailable");
+    const auto member=std::ranges::find_if(constructed_list_owners_,[&](const auto& item) {
+      return item.second.owner.value==*resolved;
+    });
+    if(member==constructed_list_owners_.end() || !member->second.factory_component ||
+        member->second.factory_component->owner!=member->second.owner ||
+        associated_resource_owner(member->second.resource)!=member->second.owner ||
+        member->second.resource!=read.sequence_resource ||
+        resolved!=scene_references_.resolve(project_reference_for_source(resources_.member_index()),*scene_reference_lease_))
+      throw std::runtime_error("First-cut list helper component is unavailable");
+  }
+  constexpr std::array<std::string_view,19> names{
+      "CutSequence_Start","CutSequence_End","off-project.sequence-begin","off-project.sequence-end-frame",
+      sequence_timing_event_name,"off-project.sequence-mapping","off-project.frame-begin","off-project.frame-end",
+      "off-project.sequence-activate","off-project.sequence-pause","off-project.sequence-resume",
+      "off-project.sequence-destination","off-project.sequence-display-info","off-project.sequence-remove",
+      "off-project.camera-add","off-project.camera-add-ordered","off-project.camera-remove",
+      "off-project.camera-add-forced","off-project.camera-remove-forced"};
+  for(std::size_t i=0;i<names.size();++i) local.initialization_events[i]=event_names_.declare(names[i]);
+  if(local.initialization_events[4]!=*sequence_timing_event_) throw std::runtime_error("First-cut list timing event changed");
+  const auto count=owner.factory_component->helper.size();
+  std::vector<std::uint8_t> first(count,0U),second(count,0U);
+  local.first_markers=std::move(first);
+  local.second_markers=std::move(second);
+  auto* queue=application_.deferred_sequence_starts();
+  if(!queue) throw std::runtime_error("First-cut list deferred-start queue is unavailable");
+  auto queue_handle=queue->handle();
+  if(!queue->live(queue_handle)) throw std::runtime_error("First-cut list deferred-start queue is stale");
+  queue_properties_.insert_or_assign("off-project.deferred-sequence-start-queue",queue_handle);
+  if(auto* input=application_.sequence_input_actions()) input->register_sequence_action();
+  local.initialized=true;
+}
+
 void IntroRuntime::apply_supported_first_cut_list_deferred_reader(
     const IntroDeferredReaderWork& work) {
   const auto source_index=resources_.first_cut_index();
@@ -3383,9 +3468,18 @@ void IntroRuntime::apply_supported_first_cut_list_deferred_reader(
       .authored=authored, .sequence_resource=sequence_resource, .command_target_resources={}};
   for(std::size_t index=0;index<authored.commands.size();++index)
     state.command_target_resources[index]=resolve_required(authored.commands[index].target_reference);
+  auto& list_owner=constructed_list_owners_.at(source_index);
+  const auto target_index=resources_.member_index();
+  const auto target=constructed_list_owners_.find(target_index);
+  if(!list_owner.factory_component || list_owner.factory_component->owner!=state.owner ||
+      !list_owner.factory_component->helper.empty() || target==constructed_list_owners_.end() ||
+      !target->second.factory_component || target->second.owner!=sequence_owner ||
+      target->second.factory_component->owner!=sequence_owner || target->second.resource!=sequence_resource)
+    throw std::runtime_error("First-cut list helper requires live factory component relations");
+  list_owner.factory_component->helper.push_back(token);
   first_cut_list_reader_state_=std::move(state);
   try { record_supported_reader_admission(work); }
-  catch(...) { first_cut_list_reader_state_.reset(); throw; }
+  catch(...) { first_cut_list_reader_state_.reset(); list_owner.factory_component->helper.clear(); throw; }
 }
 
 void IntroRuntime::apply_supported_first_cut_component_reader(
@@ -3422,11 +3516,32 @@ void IntroRuntime::apply_supported_first_cut_component_reader(
   }
   if(sequence_timing_event_ || event_names_.find(sequence_timing_event_name))
     throw std::runtime_error("First-cut project timing event is already registered");
+  const auto index=first_cut_list_reader_state_->component_indices[0];
+  auto& payload=constructed_picture_components_.at(index);
+  const auto& component=components_.at(index);
+  if(!scene_reference_lease_ || !payload.cut_list || payload.cut_list_stream_index ||
+      payload.owner!=first_cut_list_reader_state_->owner || !component.constructed() || component.removed() ||
+      component.source().factory_name!="ZLIST_CutSequenceList" || component.state().attached_owner!=payload.owner.value)
+    throw std::runtime_error("First-cut list stream requires its live factory component");
+  static_cast<void>(scene_references_.resolve(0U,*scene_reference_lease_));
+  auto suffix=data::FirstCutOwnerReader::read(resources_.sources().deferred_source_block(source_index)).component_suffix;
+  data::BoundedComponentBlockCursor cursor(suffix,suffix.size());
+  data::DeferredComponentAttachmentSnapshot snapshot;
+  if(!cursor.next_attachment(snapshot)) throw std::runtime_error("First-cut list attachment stream is absent");
+  const auto list_copy=snapshot.payload();
+  const auto copied=data::FirstCutListComponentReader::read(list_copy);
+  if(copied.controls!=parsed.list.controls || std::bit_cast<std::uint32_t>(copied.final_value)!=
+      std::bit_cast<std::uint32_t>(parsed.list.final_value))
+    throw std::runtime_error("First-cut list attachment stream disagrees with source");
+  SequenceStreamEntry entry{payload.owner,index,{list_copy.begin(),list_copy.end()}};
   sequence_timing_event_=event_names_.declare(sequence_timing_event_name);
   sequence_timing_event_lease_=event_names_.lease();
   first_cut_component_reader_state_={.owner=first_cut_list_reader_state_->owner,
       .resource=work.resource,.component_indices=first_cut_list_reader_state_->component_indices,
       .payloads=parsed};
+  try { sequence_streams_.push_back(std::move(entry)); }
+  catch(...) { first_cut_component_reader_state_.reset(); throw; }
+  payload.cut_list_stream_index=sequence_streams_.size();
 }
 
 void IntroRuntime::apply_supported_first_cut_camera_deferred_reader(
@@ -4140,6 +4255,19 @@ void IntroRuntime::prepare_supported_first_cut_player() {
       sequence_component.source().factory_name!="ZLIST_CutSequence" ||
       sequence_component.state().attached_owner!=sequence.owner.value)
     throw std::runtime_error("First-cut player has no live list or sequence component");
+  const auto& list_payload=constructed_picture_components_.at(list.component_indices[0]);
+  if(!scene_reference_lease_ || !list_payload.cut_list || !list_payload.cut_list_stream_index ||
+      list_payload.cut_list_stream_index>sequence_streams_.size())
+    throw std::runtime_error("First-cut player has no live list attachment stream");
+  static_cast<void>(scene_references_.resolve(0U,*scene_reference_lease_));
+  const auto& list_stream=sequence_streams_[list_payload.cut_list_stream_index-1U];
+  if(list_stream.owner!=list.owner || list_stream.component_index!=list.component_indices[0])
+    throw std::runtime_error("First-cut player list attachment stream identity changed");
+  const auto list_decoded=data::FirstCutListComponentReader::read(list_stream.bytes);
+  if(list_decoded.controls!=first_cut_component_reader_state_->payloads.list.controls ||
+      std::bit_cast<std::uint32_t>(list_decoded.final_value)!=
+          std::bit_cast<std::uint32_t>(first_cut_component_reader_state_->payloads.list.final_value))
+    throw std::runtime_error("First-cut player list attachment stream changed");
   constexpr std::array<std::string_view,5> command_factories{
       "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand",
       "ZLIST_CutSequenceCommand", "ZLIST_CutSequenceCommand"};

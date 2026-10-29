@@ -47,6 +47,13 @@ public:
         Lease(const std::shared_ptr<State>& state, std::uint64_t epoch) : state_(state),epoch_(epoch) {}
     public:
         Lease() = default;
+        [[nodiscard]] bool expired() const noexcept { return state_.expired(); }
+        [[nodiscard]] bool stale() const {
+            const auto state=state_.lock();
+            if(!state) return true;
+            std::lock_guard lock(state->mutex);
+            return !state->active || !state->sealed || state->epoch!=epoch_;
+        }
     };
     SceneReferenceRegistry() : state_(std::make_shared<State>()) {}
     SceneReferenceRegistry(const SceneReferenceRegistry&) = delete;
@@ -70,6 +77,12 @@ public:
         if(!state_->active || state_->sealed) fail();
         state_->sealed=true;
         return Lease(state_,state_->epoch);
+    }
+    // Identity-only check: a retired generation still belongs to its original
+    // registry, so its queued entries can be discarded by that registry.
+    [[nodiscard]] bool owns(const Lease& lease) const noexcept {
+        const auto state=lease.state_.lock();
+        return state && state==state_;
     }
     void retire() noexcept {
         if(state_) {

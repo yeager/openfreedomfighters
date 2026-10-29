@@ -7,6 +7,7 @@
 #include "off/runtime/live_variables.hpp"
 #include "off/runtime/input_maps.hpp"
 #include "off/runtime/ordinary_components.hpp"
+#include "off/runtime/deferred_sequence_start_queue.hpp"
 #include <utility>
 #include <stdexcept>
 #include <limits>
@@ -19,8 +20,17 @@
 #include <vector>
 
 namespace off::runtime {
+// A present subsystem cannot be treated as a successful registration until
+// its sequence prototype and retained action registration are implemented.
+class SequenceInputActionProvider final {
+public:
+  void register_sequence_action() {
+    throw std::runtime_error("sequence action prototype registration is unsupported");
+  }
+};
 struct ApplicationHandleCollection {
   std::vector<std::uint64_t> members;
+  DeferredSequenceStartQueue deferred_starts;
 };
 // Application-lifetime state, borrowed by scenes rather than reset when each
 // IntroRuntime is constructed. No global numeric/scene-reference stores are
@@ -184,6 +194,14 @@ public:
   void set_optional_console_for_native_testing(LiveVariableRegistry* console) noexcept {optional_console_=console;}
   [[nodiscard]] ApplicationHandleCollection* cut_sequence_lists() noexcept {return cut_sequence_lists_.get();}
   [[nodiscard]] const ApplicationHandleCollection* cut_sequence_lists() const noexcept {return cut_sequence_lists_.get();}
+  [[nodiscard]] DeferredSequenceStartQueue* deferred_sequence_starts() noexcept {
+    return cut_sequence_lists_ ? &cut_sequence_lists_->deferred_starts : nullptr;
+  }
+  [[nodiscard]] SequenceInputActionProvider* sequence_input_actions() noexcept { return sequence_input_actions_.get(); }
+  void create_sequence_input_actions() {
+    if(sequence_input_actions_) throw std::runtime_error("sequence input provider already exists");
+    sequence_input_actions_=std::make_unique<SequenceInputActionProvider>();
+  }
   void create_cut_sequence_list_collection() {
     if(cut_sequence_lists_) throw std::runtime_error("Shared CutSequenceList collection already exists");
     cut_sequence_lists_=std::make_unique<ApplicationHandleCollection>();
@@ -289,5 +307,6 @@ private:
   audio::SoundRecordRegistry* sound_record_backend_{&sound_records_};
   LiveVariableRegistry* optional_console_{&live_variables_};
   std::unique_ptr<ApplicationHandleCollection> cut_sequence_lists_;
+  std::unique_ptr<SequenceInputActionProvider> sequence_input_actions_;
 };
 } // namespace off::runtime
