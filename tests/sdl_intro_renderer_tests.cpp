@@ -1,4 +1,5 @@
 #include "off/platform/sdl_intro_renderer.hpp"
+#include "off/platform/sdl_active_view_host.hpp"
 #include "off/platform/intro_preview_diagnostic.hpp"
 #include <SDL3/SDL.h>
 #include <iostream>
@@ -24,6 +25,10 @@ struct Gpu {
     if(device) SDL_DestroyGPUDevice(device);
     SDL_Quit();
   }
+};
+struct SyntheticScene {
+  explicit SyntheticScene(const off::data::GmsIntroCameraSource& source) : camera(source) {}
+  off::graphics::FreshIntroCamera camera;
 };
 }
 int main() {
@@ -165,12 +170,124 @@ int main() {
     const auto recovered=gpu.renderer->begin_view_traversal(17);
     gpu.frame=gpu.renderer->prepare_view(gpu.command,draws,view,recovered);
     gpu.renderer->end_view_traversal(recovered);
+    // Keep this prepared frame alive until the command is submitted.
+    auto direct_view_frame=std::move(gpu.frame);
     const auto other_scene=gpu.renderer->begin_view_traversal(18);
     rejects([&] { (void)gpu.renderer->prepare_view(gpu.command,draws,view,other_scene); });
     gpu.renderer->end_view_traversal(other_scene);
     gpu.renderer->retire_scene_views(17);
     require(retained.expired(),"registered view retains camera until retirement");
     rejects([&] { gpu.renderer->unregister_view(view); });
+    {
+      auto scene=std::make_shared<SyntheticScene>(camera_source);
+      std::weak_ptr<SyntheticScene> scene_lifetime=scene;
+      apply_camera_display(scene->camera,{camera_renderers,display,[]{return false;}});
+      camera_node->bind(camera,static_cast<float>(camera.priority())); // invalid legacy camera
+      std::shared_ptr<const FreshIntroCamera> scene_camera(scene,&scene->camera);
+      SdlActiveViewHost host(*gpu.renderer);
+      require(host.activate(scene,false),"active host retains scene owner");
+      require(host.admit(false,true,11,scene_camera,2,{8,8})==SdlActiveViewHost::Coordinator::Outcome::service_unavailable,
+          "unavailable renderer leaves host unchanged");
+      require(host.deferred().empty(),"unavailable service does not queue a view");
+      auto unrelated=std::make_shared<FreshIntroCamera>(camera_source);
+      require(host.admit(true,true,11,unrelated,2,{8,8})==SdlActiveViewHost::Coordinator::Outcome::failure,
+          "camera must share its scene owner's lifetime");
+      require(host.admit(true,true,11,scene_camera,2,{8,8})==SdlActiveViewHost::Coordinator::Outcome::deferred,
+          "unready scene defers camera");
+      auto requests=host.deferred(); require(requests.size()==1,"one scene-bound request");
+      const auto grant=host.issue_grant(requests.front().id); require(grant.has_value(),"scene-issued grant");
+      requests.clear();
+      host.set_ready(true);
+      const auto outcomes=host.process_deferred(std::span(&*grant,1),{8,8},true,true);
+      require(outcomes.size()==1 && outcomes.front()==SdlActiveViewHost::Coordinator::Outcome::accepted,
+          "grant materializes actual renderer view");
+      const auto replay=host.process_deferred(std::span(&*grant,1),{8,8},true,true);
+      require(replay.size()==1 && replay.front()==SdlActiveViewHost::Coordinator::Outcome::failure,
+          "scene grant cannot be replayed");
+      require(host.admit(true,true,12,scene_camera,1,{8,8})==SdlActiveViewHost::Coordinator::Outcome::accepted,
+          "direct renderer view accepted");
+      const auto external=gpu.renderer->begin_view_traversal(999);
+      require(!host.begin_traversal(),"external renderer traversal blocks host traversal");
+      require(host.admit(true,true,13,scene_camera,3,{8,8})==SdlActiveViewHost::Coordinator::Outcome::failure,
+          "external traversal blocks host mutation");
+      gpu.renderer->end_view_traversal(external);
+      const auto host_traversal=host.begin_traversal(); require(host_traversal.has_value(),"host traversal");
+      require(host.admit(true,true,13,scene_camera,3,{8,8})==SdlActiveViewHost::Coordinator::Outcome::failure,
+          "admission cannot mutate an active traversal");
+      scene_camera.reset(); scene.reset();
+      require(!scene_lifetime.expired(),"scene remains owned through traversal");
+      const auto host_views=host.views(*host_traversal);
+      require(host_views.size()==2 && host_views[0].camera_identity==12 && host_views[1].camera_identity==11,
+          "host exposes admitted views in priority order");
+      gpu.frame=host.prepare(*host_traversal,host_views[0].id,gpu.command,draws);
+      host.retire();
+      require(host.views(*host_traversal).empty(),"retired scene cannot expose views");
+      rejects([&] { (void)host.prepare(*host_traversal,host_views[0].id,gpu.command,draws); });
+      require(host.end_traversal(*host_traversal),"retired traversal ends and releases views");
+      require(!host.end_traversal(*host_traversal),"ended traversal cannot be reused");
+      require(scene_lifetime.expired(),"retirement releases scene after traversal");
+    }
+    {
+      auto first_renderer=std::make_unique<SdlIntroRenderer>(gpu.device,std::span<const IntroPreparedImage>{});
+      auto second_renderer=std::make_unique<SdlIntroRenderer>(gpu.device,std::span<const IntroPreparedImage>{});
+      auto first_scene=std::make_shared<SyntheticScene>(camera_source);
+      auto second_scene=std::make_shared<SyntheticScene>(camera_source);
+      std::shared_ptr<const FreshIntroCamera> first_camera(first_scene,&first_scene->camera);
+      std::shared_ptr<const FreshIntroCamera> second_camera(second_scene,&second_scene->camera);
+      SdlActiveViewHost first(*first_renderer),second(*second_renderer);
+      require(first.activate(first_scene,false) && second.activate(second_scene,false),"two hosts activate scenes");
+      require(first.admit(true,true,1,first_camera,0,{8,8})==SdlActiveViewHost::Coordinator::Outcome::deferred &&
+              second.admit(true,true,1,second_camera,0,{8,8})==SdlActiveViewHost::Coordinator::Outcome::deferred,
+              "two hosts retain distinct requests");
+      const auto first_requests=first.deferred(), second_requests=second.deferred();
+      const auto first_grant=first.issue_grant(first_requests.front().id);
+      const auto second_grant=second.issue_grant(second_requests.front().id);
+      require(first_grant && second_grant,"both hosts issue grants with independent identity");
+      first.set_ready(true); second.set_ready(true);
+      const auto foreign=second.process_deferred(std::span(&*first_grant,1),{8,8},true,true);
+      require(foreign.size()==1 && foreign.front()==SdlActiveViewHost::Coordinator::Outcome::failure,
+              "foreign host grant cannot authorize a matching request");
+      const auto accepted=second.process_deferred(std::span(&*second_grant,1),{8,8},true,true);
+      require(accepted.size()==1 && accepted.front()==SdlActiveViewHost::Coordinator::Outcome::accepted,
+              "own grant remains usable after foreign grant rejection");
+    }
+    {
+      int deferred_reentry_rejected=0;
+      auto scene=std::shared_ptr<SyntheticScene>(new SyntheticScene(camera_source),
+          [&](SyntheticScene* ptr) {
+            try { (void)gpu.renderer->register_view(901,std::make_shared<FreshIntroCamera>(camera_source)); }
+            catch(const std::runtime_error&) { ++deferred_reentry_rejected; }
+            delete ptr;
+          });
+      std::weak_ptr<SyntheticScene> lifetime=scene;
+      std::shared_ptr<const FreshIntroCamera> camera_lease(scene,&scene->camera);
+      auto host=std::make_unique<SdlActiveViewHost>(*gpu.renderer);
+      require(host->activate(scene,true),"external-traversal test scene activated");
+      require(host->admit(true,true,21,camera_lease,0,{8,8})==SdlActiveViewHost::Coordinator::Outcome::accepted,
+              "external-traversal test view registered");
+      camera_lease.reset(); scene.reset();
+      const auto external=gpu.renderer->begin_view_traversal(900);
+      host.reset();
+      require(!lifetime.expired(),"retired view retains scene until external traversal ends");
+      gpu.renderer->end_view_traversal(external);
+      require(lifetime.expired(),"external traversal completion releases retired scene");
+      require(deferred_reentry_rejected==1,"deferred release rejects reentrant scene deleter");
+      auto later_camera=std::make_shared<FreshIntroCamera>(camera_source);
+      const auto later_view=gpu.renderer->register_view(902,later_camera);
+      gpu.renderer->unregister_view(later_view);
+    }
+    {
+      auto camera_lease=std::make_shared<FreshIntroCamera>(camera_source);
+      std::weak_ptr<FreshIntroCamera> lifetime=camera_lease;
+      const auto retired_view=gpu.renderer->register_view(910,camera_lease);
+      camera_lease.reset();
+      const auto traversal_to_stop=gpu.renderer->begin_view_traversal(910);
+      gpu.renderer->retire_view(retired_view);
+      require(!lifetime.expired(),"retired renderer view keeps owner during traversal");
+      rejects([&] { (void)gpu.renderer->prepare_view(gpu.command,draws,retired_view,traversal_to_stop); });
+      gpu.renderer->end_view_traversal(traversal_to_stop);
+      require(lifetime.expired(),"renderer releases retired owner after traversal");
+    }
     int unregister_reentry_rejected=0;
     auto unregister_camera=std::shared_ptr<FreshIntroCamera>(new FreshIntroCamera(camera_source),
         [&](FreshIntroCamera* ptr) {

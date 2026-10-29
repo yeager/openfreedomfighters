@@ -113,9 +113,13 @@ public:
   [[nodiscard]] RegisteredView register_view(std::uint64_t scene,
       std::shared_ptr<const graphics::FreshIntroCamera> camera);
   void unregister_view(RegisteredView view);
+  // Invalidate immediately; if a traversal is active, keep the camera owner
+  // until it ends, then release it on the renderer owner thread.
+  void retire_view(RegisteredView view);
   // Remove every view for a scene after its traversal has ended.
   void retire_scene_views(std::uint64_t scene);
   [[nodiscard]] ViewTraversal begin_view_traversal(std::uint64_t scene);
+  [[nodiscard]] bool view_traversal_active() const;
   void end_view_traversal(ViewTraversal traversal);
   [[nodiscard]] std::unique_ptr<SdlIntroFrame> prepare_view(
       SDL_GPUCommandBuffer* command, std::span<const SdlIntroDraw> draws,
@@ -132,7 +136,7 @@ public:
   [[nodiscard]] std::unique_ptr<SdlIntroFrame> prepare(
       SDL_GPUCommandBuffer* command, std::span<const SdlIntroDraw> draws, bool diagnostic_camera_bypass = false) const;
 private:
-  struct ViewRecord { std::uint64_t scene{}; std::shared_ptr<const graphics::FreshIntroCamera> camera; };
+  struct ViewRecord { std::uint64_t scene{}; std::shared_ptr<const graphics::FreshIntroCamera> camera; bool retiring{}; };
   void require_owner_thread() const;
   [[nodiscard]] std::unique_ptr<SdlIntroFrame> prepare_camera(
       SDL_GPUCommandBuffer* command, std::span<const SdlIntroDraw> draws,

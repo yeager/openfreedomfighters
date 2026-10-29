@@ -105,7 +105,7 @@ std::optional<ActiveViewCoordinator::Grant> ActiveViewCoordinator::issue_grant(
         [request_id](const Deferred& request) { return request.id == request_id; });
     if (it == scene->requests_.end() || it->grant || next_grant_ == 0 ||
         next_grant_ == std::numeric_limits<std::uint64_t>::max()) return std::nullopt;
-    it->grant = Grant{scene->id_, it->id, next_grant_++};
+    it->grant = Grant{identity_, scene, it->id, next_grant_++};
     return it->grant;
 }
 
@@ -123,13 +123,14 @@ std::vector<ActiveViewCoordinator::Outcome> ActiveViewCoordinator::process_defer
         result.push_back(Outcome::failure); return result;
     }
     for (const Grant& grant : grants) {
-        if (grant.scene != scene->id_ || grant.nonce == 0) {
+        if (grant.owner_.lock() != identity_ || grant.scene_.lock() != scene || grant.nonce_ == 0) {
             result.push_back(Outcome::failure); break;
         }
         auto request = std::find_if(scene->requests_.begin(), scene->requests_.end(),
             [&](const Deferred& candidate) {
-                return candidate.id == grant.request && candidate.grant &&
-                       candidate.grant->nonce == grant.nonce && candidate.grant->scene == grant.scene;
+                return candidate.id == grant.request_ && candidate.grant &&
+                       candidate.grant->nonce_ == grant.nonce_ && candidate.grant->scene_.lock() == scene &&
+                       candidate.grant->owner_.lock() == identity_;
             });
         if (request == scene->requests_.end()) { result.push_back(Outcome::failure); break; }
         const std::uint64_t id = request->id;

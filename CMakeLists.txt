@@ -550,6 +550,7 @@ else()
 endif()
 add_library(off_sdl_intro_renderer STATIC
     src/platform/sdl_intro_renderer.cpp
+    src/platform/sdl_active_view_host.cpp
     src/platform/sdl_startup_picture_executor.cpp
     src/platform/intro_picture_submission.cpp
     src/platform/intro_preview_diagnostic.cpp

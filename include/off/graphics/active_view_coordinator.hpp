@@ -32,10 +32,18 @@ public:
         std::shared_ptr<Resource> renderer_resource;
     };
     enum class Outcome { service_unavailable, service_not_ready, deferred, accepted, failure };
-    struct Grant final {
-        std::uint64_t scene{};
-        std::uint64_t request{};
-        std::uint64_t nonce{};
+    class Scene;
+    class Grant final {
+    public:
+        Grant() = default;
+    private:
+        friend class ActiveViewCoordinator;
+        Grant(std::weak_ptr<const char> owner, std::weak_ptr<const Scene> scene,
+              std::uint64_t request, std::uint64_t nonce)
+            : owner_(std::move(owner)), scene_(std::move(scene)), request_(request), nonce_(nonce) {}
+        std::weak_ptr<const char> owner_;
+        std::weak_ptr<const Scene> scene_;
+        std::uint64_t request_{}, nonce_{};
     };
     struct Deferred final {
         std::uint64_t id{};
@@ -125,6 +133,7 @@ private:
     void retire_impl(const std::shared_ptr<Scene>&) noexcept;
     void release_scene_resources(const std::shared_ptr<Scene>&) noexcept;
     Ops ops_;
+    const std::shared_ptr<const char> identity_{std::make_shared<const char>(0)};
     const std::thread::id device_thread_;
     const std::size_t deferred_capacity_;
     std::shared_ptr<Scene> active_;

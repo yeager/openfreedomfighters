@@ -14,10 +14,12 @@ camera renderer list, run the post-construction reader bracket, and prepare a
 cold first-cut player. These are preparation and diagnostic boundaries; they
 do not admit a live frame.
 
-The implemented SDL display-camera binding is not an active-view backend. The
-next code-only integration seam is a concrete SDL active-view host that owns
-state-zero/view lifetimes and supplies `RendererCameraViewAdmissionServices`
-from live device, window, and render-pass objects. It must preserve the
+The SDL active-view host connects the coordinator to registered renderer views
+and retains a caller-supplied scene lease. Synthetic GPU and lifetime tests
+exercise deferred admission, traversal, retirement, and frame preparation. It
+is not connected to normal startup or first-cut camera selection. The remaining
+integration must supply `RendererCameraViewAdmissionServices` from live device,
+window, and render-pass objects. It must preserve the
 `CameraRendererList` lifetime and provide real view ordering, use accounting,
 backend-record registration, and frame-traversal identity. No-op callbacks do
 not satisfy the admission contract. The source-free behavior requirements for

@@ -279,6 +279,17 @@ void SdlIntroRenderer::unregister_view(RegisteredView view) {
   if (view.owner_.lock()!=view_identity_ || !view.value_ || active_traversal_ || registered_views_.erase(view.value_)!=1)
     throw std::runtime_error("intro view is invalid or traversal is active");
 }
+void SdlIntroRenderer::retire_view(RegisteredView view) {
+  require_owner_thread();
+  ViewBoundary boundary(view_boundary_busy_);
+  if (view.owner_.lock()!=view_identity_ || !view.value_)
+    throw std::runtime_error("intro view belongs to another renderer");
+  const auto found=registered_views_.find(view.value_);
+  if (found==registered_views_.end() || found->second.retiring)
+    throw std::runtime_error("intro view is already retired");
+  if (active_traversal_) found->second.retiring=true;
+  else registered_views_.erase(found);
+}
 void SdlIntroRenderer::retire_scene_views(std::uint64_t scene) {
   require_owner_thread();
   ViewBoundary boundary(view_boundary_busy_);
@@ -297,6 +308,10 @@ SdlIntroRenderer::ViewTraversal SdlIntroRenderer::begin_view_traversal(std::uint
   active_traversal_=traversal;
   return traversal;
 }
+bool SdlIntroRenderer::view_traversal_active() const {
+  require_owner_thread();
+  return active_traversal_.has_value();
+}
 void SdlIntroRenderer::end_view_traversal(ViewTraversal traversal) {
   require_owner_thread();
   ViewBoundary boundary(view_boundary_busy_);
@@ -304,6 +319,9 @@ void SdlIntroRenderer::end_view_traversal(ViewTraversal traversal) {
       active_traversal_->value_!=traversal.value_ || active_traversal_->scene_!=traversal.scene_)
     throw std::runtime_error("intro view traversal is stale");
   active_traversal_.reset();
+  for(auto it=registered_views_.begin();it!=registered_views_.end();) {
+    if(it->second.retiring) it=registered_views_.erase(it); else ++it;
+  }
 }
 std::unique_ptr<SdlIntroFrame> SdlIntroRenderer::prepare_view(
     SDL_GPUCommandBuffer* command,std::span<const SdlIntroDraw> draws,
@@ -315,7 +333,7 @@ std::unique_ptr<SdlIntroFrame> SdlIntroRenderer::prepare_view(
     throw std::runtime_error("intro view traversal is stale");
   if (view.owner_.lock()!=view_identity_) throw std::runtime_error("intro view belongs to another renderer");
   const auto found=registered_views_.find(view.value_);
-  if (found==registered_views_.end() || found->second.scene!=traversal.scene_ || !found->second.camera)
+  if (found==registered_views_.end() || found->second.retiring || found->second.scene!=traversal.scene_ || !found->second.camera)
     throw std::runtime_error("intro view is not registered for this scene");
   return prepare_camera(command,draws,found->second.camera.get());
 }
