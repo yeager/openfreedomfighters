@@ -1176,6 +1176,96 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
         host.bind_first_cut_fade_phase_one_services({[]{return std::array<std::int32_t,2>{640,480};},[](auto,auto){}});
     };
 
+    for(const bool missing_stream : {false,true}) {
+        Fixture fixture(false,true);
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,
+            "synthetic-scene",off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*runtime);
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        session->complete_postconstruction_reader_bracket(41U);
+        auto& host=session->runtime();
+        const auto* reader=host.first_cut_sequence_component_reader_state();
+        if(!reader) throw std::runtime_error("synthetic sequence reader is absent");
+        const auto index=reader->component_index;
+        const auto* component=host.constructed_attachment(index);
+        if(!component || !component->sequence_initialization)
+            throw std::runtime_error("synthetic sequence factory capability is absent");
+        auto& local=const_cast<off::graphics::IntroConstructedPictureComponent::SequenceInitialization&>(
+            *component->sequence_initialization);
+        check(local.stream_index!=0U && !local.initialized && local.timing_event==0U &&
+              !(host.components().at(index).state().status&4U),
+              "normal reader copies the stream without completing sequence initialization");
+        if(missing_stream) local.stream_index=0U;
+        const std::array<std::size_t,1> target{index};
+        if(missing_stream) {
+            rejects([&]{host.components().run_scoped_phase_one(target);});
+            check(!local.initialized && !(host.components().at(index).state().status&4U),
+                  "missing sequence stream fails without marking phase completion");
+        } else {
+            // The synthetic source buffer remains runtime-owned. Change it
+            // after copying to prove that initialization consumes the copy.
+            const auto block=host.resources().sources().deferred_source_block(reader->source_directory_index);
+            const auto parsed=host.resources().sources().intro_cut_sequence_block(reader->source_directory_index,block);
+            auto* mutable_source=const_cast<std::byte*>(block.data());
+            mutable_source[parsed.attachment_offset+1U]^=std::byte{1};
+            host.components().run_scoped_phase_one(target);
+            check(local.initialized && (host.components().at(index).state().status&4U) &&
+                  local.values==reader->authored.values && local.option==reader->authored.authored_option &&
+                  local.timing_event!=0U && host.scene_event_names().find("off-project.sequence-timing-request")==local.timing_event,
+                  "real phase callback consumes the copied stream and same project timing event");
+            rejects([&]{host.components().run_scoped_phase_one(target);});
+        }
+    }
+    {
+        Fixture fixture(false,true);
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        off::graphics::IntroRuntime host(fixture.build(),app,sequence,"synthetic-scene",
+            off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(host);
+        std::optional<std::size_t> copied_component;
+        bool end_reached=false;
+        rejects([&]{host.run_postconstruction_reader_bracket(41U,{
+            [](auto){},[](const auto&){},[]{},[](const auto&){},
+            [&](const auto& work) {
+                if(work.source_directory_index==host.resources().member_index())
+                    host.apply_supported_first_cut_sequence_deferred_reader(work);
+                if(work.source_directory_index==host.resources().first_cut_index())
+                    host.apply_supported_first_cut_list_deferred_reader(work);
+            },
+            [&](const auto& work) {
+                if(work.source_directory_index==host.resources().member_index()) {
+                    host.apply_supported_first_cut_sequence_component_reader(work);
+                    copied_component=host.first_cut_sequence_component_reader_state()->component_index;
+                }
+                if(work.source_directory_index==host.resources().first_cut_index())
+                    host.apply_supported_first_cut_component_reader(work);
+            },
+            [&] {
+                end_reached=true;
+                if(!copied_component || !host.constructed_attachment(*copied_component)->sequence_initialization->stream_index)
+                    throw std::runtime_error("synthetic stream copy was not reached");
+                throw std::runtime_error("synthetic later bracket failure");
+            }});});
+        check(end_reached && copied_component && !host.first_cut_sequence_component_reader_state() &&
+              host.constructed_attachment(*copied_component)->sequence_initialization->stream_index==0U &&
+              !host.constructed_attachment(*copied_component)->sequence_initialization->initialized &&
+              !(host.components().at(*copied_component).state().status&4U),
+              "later bracket failure retires the copied stream without phase completion");
+        if(copied_component) {
+            const std::array<std::size_t,1> target{*copied_component};
+            rejects([&]{host.components().run_scoped_phase_one(target);});
+            check(!(host.components().at(*copied_component).state().status&4U),
+                  "retired scene stream cannot be consumed by the phase callback");
+        }
+    }
+
     {
         Fixture fixture(false,true);
         const auto prepared=fixture.build();

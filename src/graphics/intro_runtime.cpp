@@ -4,6 +4,7 @@
 #include "off/data/deferred_compact_block_profile.hpp"
 #include "off/data/basic_group_deferred_reader_shape.hpp"
 #include "off/data/basic_group_deferred_reader.hpp"
+#include "off/data/byte_reader.hpp"
 #include "off/data/matpos_deferred_component_reader.hpp"
 #include "off/data/matpos_owner_child_selector.hpp"
 #include "off/data/deferred_component_dispatcher.hpp"
@@ -21,6 +22,7 @@
 
 namespace off::graphics {
 namespace {
+constexpr std::string_view sequence_timing_event_name="off-project.sequence-timing-request";
 constexpr std::array<float,9> engine_identity{0,0,1,0,1,0,1,0,0};
 bool engine_identity_bits(const std::array<float,9>& matrix) {
   for(std::size_t i=0;i<engine_identity.size();++i)
@@ -865,6 +867,7 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
           local.stop_event=event_names_.declare("MSG_StopAnimation");
         }
         if(command) payload.command_text.emplace();
+        if(cut) payload.sequence_initialization.emplace();
         if(movie) {
           auto& local=payload.movie_control.emplace(IntroConstructedPictureComponent::MovieControlState{});
           constexpr std::array<std::string_view,7> names{
@@ -937,6 +940,10 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
         runtime::ComponentCallback phase_one=[](auto&){
           throw std::runtime_error("Constructed attachment requires its source reader and live initialization services");
         };
+        if(cut && row==resources_.member_index())
+          phase_one=[this,component_index](runtime::ComponentRecord& record) {
+            run_first_cut_sequence_phase_one(component_index,record);
+          };
         if(black && std::ranges::any_of(resources_.first_cut().commands,[&](const auto& command) {
              const auto target=resources_.sources().local_source_for_authored_reference(command.target_reference);
              return target && *target==row;
@@ -2164,6 +2171,17 @@ void IntroRuntime::run_postconstruction_reader_bracket(
   const auto fail=[this] {
     scene_reference_lease_.reset();
     scene_references_.retire();
+    // The copied streams and their indices are scoped to this bracket. Event
+    // names already declared in the scene table are not rolled back; the
+    // failed runtime cannot consume them as an initialization receipt.
+    sequence_streams_.clear();
+    sequence_timing_event_.reset();
+    first_cut_sequence_component_reader_state_.reset();
+    for(auto& [index,payload]:constructed_picture_components_) {
+      static_cast<void>(index);
+      if(payload.sequence_initialization)
+        *payload.sequence_initialization=IntroConstructedPictureComponent::SequenceInitialization{};
+    }
     if(movie_controller_reader_state_) {
       const auto& reader=*movie_controller_reader_state_;
       std::erase(supported_reader_admissions_,IntroReaderAdmissionIdentity{
@@ -3228,8 +3246,65 @@ void IntroRuntime::apply_supported_first_cut_sequence_component_reader(
       component.source().factory_name!="ZLIST_CutSequence" ||
       component.state().attached_owner!=state.owner.value)
     throw std::runtime_error("First-cut sequence component reader has no live CutSequence component");
+  auto& payload=constructed_picture_components_.at(state.component_index);
+  if(!payload.sequence_initialization || payload.owner!=state.owner ||
+      payload.sequence_initialization->stream_index || !scene_reference_lease_)
+    throw std::runtime_error("First-cut sequence stream has no live factory capability");
+  static_cast<void>(scene_references_.resolve(0U,*scene_reference_lease_));
+  const auto block=resources_.sources().deferred_source_block(source_index);
+  const auto parsed=resources_.sources().intro_cut_sequence_block(source_index,block);
+  if(parsed.source.references!=state.authored.references || parsed.source.authored_option!=state.authored.authored_option ||
+      std::bit_cast<std::uint32_t>(parsed.source.values[0])!=std::bit_cast<std::uint32_t>(state.authored.values[0]) ||
+      std::bit_cast<std::uint32_t>(parsed.source.values[1])!=std::bit_cast<std::uint32_t>(state.authored.values[1]) ||
+      parsed.attachment_offset>block.size() || parsed.attachment_extent>block.size()-parsed.attachment_offset)
+    throw std::runtime_error("First-cut sequence stream differs from its reader source");
+  const auto suffix=block.subspan(parsed.attachment_offset,parsed.attachment_extent);
+  SequenceStreamEntry entry{state.owner,state.component_index,{suffix.begin(),suffix.end()}};
+  sequence_streams_.push_back(std::move(entry));
+  payload.sequence_initialization->stream_index=sequence_streams_.size();
   first_cut_sequence_component_reader_state_={state.owner,state.resource,source_index,
       work.source_offset,state.component_index,state.authored,state.members};
+}
+
+void IntroRuntime::run_first_cut_sequence_phase_one(std::size_t index,runtime::ComponentRecord& record) {
+  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      reader_bracket_stage_!=IntroReaderBracketStage::ordinary_reader_boundary_complete ||
+      !scene_reference_lease_ || !first_cut_sequence_component_reader_state_ ||
+      !first_cut_component_reader_state_ || !sequence_timing_event_ || index>=components_.size() ||
+      &record!=&components_.at(index) || !record.constructed() || record.removed())
+    throw std::runtime_error("First-cut sequence initialization has no live reader or event service");
+  static_cast<void>(scene_references_.resolve(0U,*scene_reference_lease_));
+  const auto& read=*first_cut_sequence_component_reader_state_;
+  auto& payload=constructed_picture_components_.at(index);
+  if(index!=read.component_index || record.source().factory_name!="ZLIST_CutSequence" ||
+      record.state().class_ordinal!=96U || record.state().attached_owner!=read.owner.value ||
+      payload.owner!=read.owner || !payload.sequence_initialization ||
+      associated_resource_owner(read.resource)!=read.owner || !resource_state_for_handle(read.resource))
+    throw std::runtime_error("First-cut sequence initialization receiver changed");
+  auto& local=*payload.sequence_initialization;
+  // Project policy is once-only even though the observed manager path does
+  // not establish native deduplication.
+  if(local.initialized || !local.stream_index || local.stream_index>sequence_streams_.size())
+    throw std::runtime_error("First-cut sequence initialization stream is unavailable");
+  const auto& stream=sequence_streams_[local.stream_index-1U];
+  if(stream.owner!=read.owner || stream.component_index!=index || stream.bytes.size()!=16U ||
+      stream.bytes[0]!=std::byte{0x02} || stream.bytes[5]!=std::byte{0x82} ||
+      stream.bytes[10]!=std::byte{0x03} || stream.bytes[15]!=std::byte{0x06})
+    throw std::runtime_error("First-cut sequence initialization stream is invalid");
+  const data::ByteReader reader(stream.bytes);
+  const std::array<float,2> values{std::bit_cast<float>(reader.u32(1U)),std::bit_cast<float>(reader.u32(6U))};
+  const auto option=reader.u32(11U);
+  if(!std::isfinite(values[0]) || !std::isfinite(values[1]) ||
+      std::bit_cast<std::uint32_t>(values[0])!=std::bit_cast<std::uint32_t>(read.authored.values[0]) ||
+      std::bit_cast<std::uint32_t>(values[1])!=std::bit_cast<std::uint32_t>(read.authored.values[1]) ||
+      option!=read.authored.authored_option || event_names_.find(sequence_timing_event_name)!=sequence_timing_event_)
+    throw std::runtime_error("First-cut sequence initialization no longer matches its source or event");
+  const auto event=event_names_.declare(sequence_timing_event_name);
+  if(event!=*sequence_timing_event_) throw std::runtime_error("First-cut timing event identity changed");
+  local.values=values;
+  local.option=option;
+  local.timing_event=event;
+  local.initialized=true;
 }
 
 void IntroRuntime::apply_supported_first_cut_list_deferred_reader(
@@ -3344,6 +3419,9 @@ void IntroRuntime::apply_supported_first_cut_component_reader(
         record.event_argument!=command.event_argument || record.target_name!=command.target_name)
       throw std::runtime_error("First-cut component reader command payload disagrees with prepared source");
   }
+  if(sequence_timing_event_ || event_names_.find(sequence_timing_event_name))
+    throw std::runtime_error("First-cut project timing event is already registered");
+  sequence_timing_event_=event_names_.declare(sequence_timing_event_name);
   first_cut_component_reader_state_={.owner=first_cut_list_reader_state_->owner,
       .resource=work.resource,.component_indices=first_cut_list_reader_state_->component_indices,
       .payloads=parsed};

@@ -177,6 +177,15 @@ struct IntroConstructedPictureComponent {
   std::optional<std::uint32_t> list_index;
   std::optional<std::int32_t> list_sentinel;
   std::optional<std::vector<std::uint64_t>> commands,auxiliary_list_a,auxiliary_list_b;
+  // Created only by the verified CutSequence factory.
+  struct SequenceInitialization {
+    std::size_t stream_index{}; // one based; zero is unavailable
+    std::uint16_t timing_event{};
+    std::array<float,2> values{};
+    std::uint32_t option{};
+    bool initialized{};
+  };
+  std::optional<SequenceInitialization> sequence_initialization;
   struct ParamAnimationStorage {
     // Explicit replacement initialization; detached parsing never supplies a default event.
     std::uint16_t event_id{};
@@ -1461,6 +1470,13 @@ private:
   std::vector<std::array<std::byte,12>> first_auxiliary_array_;
   std::vector<std::array<std::byte,8>> second_auxiliary_array_;
   runtime::SceneEventNames event_names_;
+  struct SequenceStreamEntry {
+    IntroRuntimeHandle owner;
+    std::size_t component_index{};
+    std::vector<std::byte> bytes;
+  };
+  std::vector<SequenceStreamEntry> sequence_streams_;
+  std::optional<std::uint16_t> sequence_timing_event_;
   std::vector<std::optional<std::uint32_t>> source_event_name_mapping_;
   bool source_event_names_prepared_{};
   std::optional<float> loading_progress_;
@@ -1481,6 +1497,7 @@ private:
   [[nodiscard]] bool first_cut_fade_reader_matches(std::size_t component) const;
   [[nodiscard]] std::vector<std::size_t> first_cut_fade_target_sources() const;
   void run_first_cut_fade_phase_one(std::size_t component,runtime::ComponentRecord& record);
+  void run_first_cut_sequence_phase_one(std::size_t component,runtime::ComponentRecord& record);
   // Diagnostic-only companion to the factory callback above.  It deliberately
   // omits component-admission recording, so it cannot turn a local fade probe
   // into global lifecycle evidence.

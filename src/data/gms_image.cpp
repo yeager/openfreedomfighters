@@ -975,10 +975,12 @@ GmsIntroCutSequenceBlock GmsImage::intro_cut_sequence_block(
         result.references[i]=reader.word();
     }
     reader.tag(0x06U);
+    output.attachment_offset=reader.position();
     result.values[0] = reader.finite_float(0x02U);
     result.values[1] = reader.finite_float(0x82U);
     result.authored_option = reader.scalar(0x03U);
     reader.tag(0x06U);
+    output.attachment_extent=reader.position()-output.attachment_offset;
     reader.finish();
     return output;
 }

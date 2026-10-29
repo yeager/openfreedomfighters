@@ -152,6 +152,7 @@ struct GmsIntroCutSequenceSource {
 struct GmsIntroCutSequenceBlock {
     GmsIntroCutSequenceSource source;
     std::array<std::size_t, 6> reference_offsets{};
+    std::size_t attachment_offset{}, attachment_extent{};
 };
 
 // Restricted source form for the reviewed pair of externally hosted cut
