@@ -161,3 +161,11 @@ exercise its COM path and full color/depth rollback on injected failures.
 Comparisons with WineD3D/llvmpipe still show differences at some clipped edges
 and one-step color differences with varying W. This is not general D3D8 parity
 and has not been verified against native Windows, macOS, or the game.
+
+An additional opt-in texture experiment supports one managed A8R8G8B8 level,
+point sampling, clamp addressing, and a limited `XYZ|TEX1` triangle profile.
+It rejects textured triangles with varying clip W. Five synthetic constant-W
+images matched stored WineD3D/llvmpipe references byte for byte; this does not
+establish general texture or hardware parity. The guest-memory and device
+self-tests also passed with the texture experiment enabled, with 3D enabled
+without textures, and with D3D8 disabled on Linux.
