@@ -7,5 +7,7 @@ The runtime should admit a reader only when its owner identity, bounded input, a
 The controller parser can validate an explicitly bounded block copy and locate
 its reference fields. A successful parse does not prove the copy's origin,
 owner, reference-service generation, or relocation state. The normal reader
-does not yet consume a verified relocated copy, so this API does not enable
-intro playback.
+now translates supported controller references in an owned copy using a
+scene-owned project registry and resolves them through its live lease. These
+tokens are project identities; they do not establish native handle identity or
+complete the list, camera, and frame paths needed for intro playback.
