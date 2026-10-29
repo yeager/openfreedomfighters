@@ -11,3 +11,8 @@ now translates supported controller references in an owned copy using a
 scene-owned project registry and resolves them through its live lease. These
 tokens are project identities; they do not establish native handle identity or
 complete the list, camera, and frame paths needed for intro playback.
+
+Supported list blocks are likewise checked as bounded copies, translated
+through the scene registry, and compared with the controller's prepared member
+lists. This verifies project-side consistency; it does not establish that the
+original member reader or its helper has run.
