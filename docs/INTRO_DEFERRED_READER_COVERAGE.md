@@ -21,3 +21,6 @@ The supported first-cut form has its own bounded block parser because its
 attachment data follows the reference prefix. Its reader validates the full
 form and resolves the sequence reference through the scene lease. This is a
 project-side consistency check; it does not establish camera activation.
+The supported sequence form is also checked against an owned bounded block;
+its candidate references resolve through the same live scene lease before
+reader state is published. This does not determine which candidate is selected.
