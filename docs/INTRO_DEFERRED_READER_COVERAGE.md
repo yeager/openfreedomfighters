@@ -66,7 +66,12 @@ data-exchange operation does not execute a script or establish lifecycle or
 frame completion. The scoped script hook and cleanup are not yet connected to
 the normal event dispatcher.
 
-Normal startup does not bind these postload providers. A premature direct
-session reader attempt leaves the session postconstructed without preparing
-KEYS or calling reader services. The startup host and SDL error handling do not
-yet provide an end-to-end pending/resume path.
+The normal session can accept an explicitly supplied mode provider and resume
+the supported profile. The project-owned packed-channel provider takes an
+explicit project-selected value and a mutable mode object; neither establishes
+the original loader value or a binding to the global database. It preserves
+the previous packed state across select/restore when the same live objects
+remain unchanged. Unsupported work or a disabled mode stays pending without
+preparing KEYS or calling reader services. Main and SDL do not yet install or
+bind these providers, and the startup host and SDL error handling do not yet
+provide an end-to-end pending/resume path.

@@ -14,18 +14,20 @@ NormalIntroSceneSession::NormalIntroSceneSession(
 NormalIntroSceneSession::~NormalIntroSceneSession() = default;
 
 void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
-    std::uint64_t saved, const CameraDisplayServices* display) {
+    std::uint64_t saved, const CameraDisplayServices* display,
+    std::shared_ptr<IntroPostloadModeService> postload_mode) {
   if (stage_ != NormalIntroSceneSessionStage::postconstructed)
     throw std::runtime_error(
         "normal intro scene reader bracket is unavailable");
   // Pending script work is a resumable loader boundary, not a failed reader.
   // Check before preparing KEYS or entering the terminal error handler.
-  if (runtime_->resource_load_stage() == IntroResourceLoadStage::postload_pending)
+  const bool pending=runtime_->resource_load_stage() == IntroResourceLoadStage::postload_pending;
+  if (pending && !postload_mode)
     throw std::runtime_error("normal intro scene postload work is pending");
   try {
     // Required owner-local lookup preparation for the supported MatPos reader.
     // This deliberately does not prepare key backing or enter phase one.
-    runtime_->prepare_scene_lifetime_keys_registry();
+    if(!pending) runtime_->prepare_scene_lifetime_keys_registry();
     runtime_->run_postconstruction_reader_bracket(
         saved,
         {.external_loader_service = [this](std::uint64_t value) {
@@ -34,7 +36,10 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
          .source_script_work = [this](const IntroSourceScriptWork &work) {
            reader_bracket_observation_.source_scripts.push_back(work);
          },
-         .pre_reader_service = [this] { ++reader_bracket_observation_.pre_reader_calls; },
+         .pre_reader_service = [this,pending] {
+           if(pending) runtime_->prepare_scene_lifetime_keys_registry();
+           ++reader_bracket_observation_.pre_reader_calls;
+         },
          .prepare_deferred_reader = [this](const IntroDeferredReaderWork &) {
            ++reader_bracket_observation_.prepared_reader_calls;
          },
@@ -119,10 +124,13 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
                    runtime_->legal_picture_reader_state()->owner==runtime_->source_handle(work.source_directory_index))
                  runtime_->apply_supported_first_cut_legal_picture_component_reader(work);
              },
-         .end_reader_service = [this] { ++reader_bracket_observation_.end_reader_calls; }});
+         .end_reader_service = [this] { ++reader_bracket_observation_.end_reader_calls; },
+         .postload_mode_service = std::move(postload_mode)});
     stage_ = NormalIntroSceneSessionStage::reader_bracket_complete;
   } catch (...) {
-    stage_ = NormalIntroSceneSessionStage::failed;
+    if(runtime_->resource_load_stage()!=IntroResourceLoadStage::postload_pending ||
+        runtime_->reader_bracket_stage()!=IntroReaderBracketStage::not_started)
+      stage_ = NormalIntroSceneSessionStage::failed;
     throw;
   }
 }

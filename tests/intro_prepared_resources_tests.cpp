@@ -7,6 +7,7 @@
 #include "off/data/matpos_owner_child_selector.hpp"
 #include "off/cutscene/first_cut_command_session.hpp"
 #include "off/graphics/normal_intro_scene_session.hpp"
+#include "off/graphics/postload_mode_provider.hpp"
 #include "off/graphics/owned_normal_intro_scene.hpp"
 #include "off/graphics/movie_control_first_cut_scene_frame_adapter.hpp"
 #include "off/graphics/intro_accepted_picture_registry.hpp"
@@ -1341,6 +1342,60 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
           check(!runtime.constructed_list_owner(row)->factory_component->postload_aux,
                 "script auxiliary retirement releases its owned exchange");
         }
+    }
+    {
+        using off::graphics::PostloadPackedChannel;
+        for(std::uint32_t value=0;value<=0xffffU;++value)
+          check(PostloadPackedChannel::pack(PostloadPackedChannel::expand(static_cast<std::uint16_t>(value)))==value,
+                "packed channel expands and restores every valid 16-bit state");
+        check(PostloadPackedChannel::expand(PostloadPackedChannel::pack(0xffffffffU))==0x80f8f8f8U &&
+              PostloadPackedChannel::pack(0x7f070707U)==0U,
+              "channel conversion truncates low bits instead of replicating them");
+        auto mode=std::make_shared<off::graphics::PostloadModeState>();
+        auto channel=std::make_shared<PostloadPackedChannel>(0xa55aU);
+        off::graphics::PackedPostloadModeProvider provider(mode,channel,0x11223344U);
+        const auto saved=provider.select();
+        check(channel->state()==PostloadPackedChannel::pack(0x11223344U),"select changes actual channel state");
+        provider.restore(saved);
+        check(channel->state()==0xa55aU,"restore recovers the previous packed state");
+        const auto stale=provider.select(); mode->set_mode(1U);
+        rejects([&]{provider.restore(stale);});
+    }
+    {
+        Fixture fixture(false,true);
+        const auto offset=fixture.payload.size();
+        Bytes frame(4); frame.push_back(std::byte{4}); text(frame,"source");
+        frame.push_back(std::byte{5}); text(frame,"int alpha;");
+        frame.push_back(std::byte{3}); word(frame,123U); frame.push_back(std::byte{0xff});
+        set(frame,0,static_cast<std::uint32_t>(frame.size()));
+        set(fixture.payload,512U+48U*7U+40U,static_cast<std::uint32_t>(offset));
+        fixture.payload.insert(fixture.payload.end(),frame.begin(),frame.end());
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        app.install_postload_script_service(std::make_shared<off::runtime::PostloadScriptService>());
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        auto runtime=std::make_unique<off::graphics::IntroRuntime>(fixture.build(),app,sequence,"synthetic-scene",
+            off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(*runtime);
+        const auto row=runtime->source_script_work()[0].source_directory_index;
+        auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
+        auto mode=std::make_shared<off::graphics::PostloadModeState>();
+        auto channel=std::make_shared<off::graphics::PostloadPackedChannel>(0xa55aU);
+        auto provider=std::make_shared<off::graphics::PackedPostloadModeProvider>(mode,channel,0x11223344U);
+        mode->set_mode(1U);
+        rejects([&]{session->complete_postconstruction_reader_bracket(0U,nullptr,provider);});
+        check(session->stage()==off::graphics::NormalIntroSceneSessionStage::postconstructed &&
+              !session->runtime().scene_lifetime_keys_registry() && channel->state()==0xa55aU,
+              "disabled mode leaves pending session untouched");
+        mode->set_mode(0U);
+        session->complete_postconstruction_reader_bracket(0U,nullptr,provider);
+        const auto& aux=session->runtime().constructed_list_owner(row)->factory_component->postload_aux;
+        check(session->stage()==off::graphics::NormalIntroSceneSessionStage::reader_bracket_complete &&
+              channel->state()==0xa55aU && aux && aux->exchange && aux->exchange->entries[0].bits==123U &&
+              session->runtime().scene_lifetime_keys_registry() &&
+              session->reader_bracket_observation().pre_reader_calls==1U,
+              "normal session consumes a supported postload profile and restores the channel");
     }
     const auto find_record=[](const auto& directory,std::size_t offset) {
         const auto found=std::ranges::find(directory,offset,&off::data::GmsDirectoryEntry::record_offset);
