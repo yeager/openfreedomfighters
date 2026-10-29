@@ -189,6 +189,12 @@ matched the full WineD3D/llvmpipe RGBA image. A varying-W draw was rejected
 without modifying the color or depth buffers; general perspective-correct
 texturing remains unsupported.
 
+The local texture experiment also accepts bounded level-zero rectangle locks
+for its supported managed format. Synthetic tests cover row pitch, preservation
+outside the rectangle, and retry after a failed commit. A WineD3D/llvmpipe
+probe confirmed the valid-rectangle behavior; malformed rectangles remain
+restricted by the implementation and do not establish Wine or hardware parity.
+
 The local pcrecomp checkout also fixes a D3D8 build failure when the optional
 software 3D profile is disabled. On Linux, the D3D8 device self-test passed
 with that profile disabled, with 3D enabled, and with textured 3D enabled.
