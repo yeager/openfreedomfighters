@@ -8,6 +8,7 @@
 #include "off/runtime/input_maps.hpp"
 #include "off/runtime/ordinary_components.hpp"
 #include "off/runtime/deferred_sequence_start_queue.hpp"
+#include "off/runtime/postload_script_service.hpp"
 #include <utility>
 #include <stdexcept>
 #include <limits>
@@ -59,6 +60,18 @@ public:
     project_primary_=std::move(value); project_configuration_bound_=true;
   }
   [[nodiscard]] InputMapRegistry& input_maps() noexcept {return input_maps_;}
+  // One application-owned service identity; replacing it invalidates the
+  // binding held by an in-flight scene operation.
+  void install_postload_script_service(std::shared_ptr<PostloadScriptService> service) {
+    if(postload_script_generation_==std::numeric_limits<std::uint64_t>::max())
+      throw std::runtime_error("postload script service generation exhausted");
+    ++postload_script_generation_;
+    postload_script_service_=std::move(service);
+  }
+  [[nodiscard]] std::shared_ptr<PostloadScriptService> postload_script_service() const noexcept {
+    return postload_script_service_;
+  }
+  [[nodiscard]] std::uint64_t postload_script_generation() const noexcept {return postload_script_generation_;}
   // Explicit native registration of the implemented concrete ZGROUP factory.
   // This is not the original full registry preparation/base-class resolution.
   // Host creation/destruction does not reset or decrement the notification word.
@@ -306,6 +319,8 @@ private:
   graphics::PreviewCameraUpdate preview_camera_update_;
   LiveVariableRegistry live_variables_;
   InputMapRegistry input_maps_;
+  std::shared_ptr<PostloadScriptService> postload_script_service_;
+  std::uint64_t postload_script_generation_{};
   std::map<std::uint32_t,std::uint32_t> class_sequences_;
   std::map<std::string,std::uint32_t,std::less<>> component_class_sequences_;
   OrdinarySortingState ordinary_sorting_;

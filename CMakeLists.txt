@@ -335,6 +335,7 @@ add_library(off_core
     src/data/oct_image.cpp
     src/data/sound_definition_bank.cpp
     src/data/gms_image.cpp
+    src/data/postload_integer_profile.cpp
     src/data/install.cpp
     src/data/install_audit_cache.cpp
     src/data/install_manifest.cpp

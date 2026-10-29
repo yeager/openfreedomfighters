@@ -518,8 +518,50 @@ void IntroRuntime::run_scoped_list_owner_post(std::uint32_t reference) {
   if(!owner.factory_component) return;
   if(owner.factory_component->owner!=owner.owner)
     throw std::runtime_error("scoped list owner component changed");
-  if(owner.factory_component->post_work_queue)
+  if(owner.factory_component->postload_aux)
     throw std::runtime_error("list owner post queue requires unsupported script services");
+}
+
+void IntroRuntime::dispatch_scoped_list_script_hook(std::uint32_t reference,std::uint16_t event,
+                                                   const runtime::SceneEventNames::Lease& event_lease,
+                                                   std::optional<float>& output) {
+  if(script_hook_running_) throw std::runtime_error("list script hook is reentrant");
+  auto* owner=checked_scoped_list_owner(reference);
+  if(!owner || !owner->factory_component) return;
+  auto* aux=owner->factory_component->postload_aux.get();
+  if(!aux) return;
+  const auto service=application_.postload_script_service();
+  if(!service || service!=aux->service || application_.postload_script_generation()!=aux->service_generation ||
+      !aux->exchange || !event_names_.is_live(event_lease) || !event_names_.name(event))
+    throw std::runtime_error("list script hook requires a live service, exchange and event");
+  const auto generation=aux->service_generation;
+  const auto key=aux->script_key;
+  const auto* exchange=aux->exchange.get();
+  struct HookGuard {
+    bool& running;
+    explicit HookGuard(bool& value):running(value) {running=true;}
+    ~HookGuard() {running=false;}
+  } guard(script_hook_running_);
+  service->invoke(key,event,output);
+  if(application_.postload_script_service()!=service || application_.postload_script_generation()!=generation ||
+      !event_names_.is_live(event_lease) || checked_scoped_list_owner(reference)!=owner ||
+      !owner->factory_component || owner->factory_component->postload_aux.get()!=aux ||
+      aux->exchange.get()!=exchange)
+    throw std::runtime_error("list script hook service changed during dispatch");
+}
+
+void IntroRuntime::retire_scoped_list_script_aux(std::uint32_t reference) {
+  if(script_hook_running_) throw std::runtime_error("list script auxiliary is in use");
+  auto* owner=checked_scoped_list_owner(reference);
+  if(!owner || !owner->factory_component || !owner->factory_component->postload_aux) return;
+  auto& aux=owner->factory_component->postload_aux;
+  if(!aux->pending_work.empty() || !aux->exchange || !aux->service ||
+      application_.postload_script_service()!=aux->service ||
+      application_.postload_script_generation()!=aux->service_generation)
+    throw std::runtime_error("list script auxiliary cleanup is unsupported or stale");
+  aux->script_key=0U;
+  aux->service->release(aux->exchange);
+  aux.reset();
 }
 
 void IntroRuntime::set_scene_resource_property_native(std::string key,IntroRuntimeResourceHandle resource) {
@@ -2304,9 +2346,52 @@ FirstCutLegalPictureActivationResult IntroRuntime::activate_first_cut_legal_pict
 
 void IntroRuntime::run_postconstruction_reader_bracket(
     std::uint64_t retained_saved_value,const IntroPostconstructionReaderServices& services) {
-  if(resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+  const bool pending=resource_load_stage_==IntroResourceLoadStage::postload_pending;
+  if(reader_bracket_running_ || (!pending && resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete) ||
       reader_bracket_stage_!=IntroReaderBracketStage::not_started)
     throw std::runtime_error("Post-construction reader bracket is unavailable at this loader stage");
+  struct ReaderGuard {
+    bool& running;
+    explicit ReaderGuard(bool& value):running(value) {running=true;}
+    ~ReaderGuard() {running=false;}
+  } guard(reader_bracket_running_);
+
+  // The selected receiver and the owned exchange are deliberately limited to
+  // a validated list-owner/integer profile. Unknown profiles stay pending.
+  using PreparedPostload = std::pair<std::size_t,std::unique_ptr<data::PostloadIntegerProfile>>;
+  const auto prepare_postload=[&]() -> std::optional<std::vector<PreparedPostload>> {
+    if(!scene_reference_lease_ || !loader_owner_lease_) return std::nullopt;
+    std::vector<PreparedPostload> prepared;
+    for(const auto& work:source_script_work_) {
+      const auto row=work.source_directory_index;
+      if(row>=resources_.sources().directory().size() || row>=directory_resource_mapping_.size() ||
+          !directory_resource_mapping_[row] || *directory_resource_mapping_[row]!=work.resource ||
+          source_handle(row)!=work.owner || associated_resource_owner(work.resource)!=work.owner ||
+          !resource_state_for_handle(work.resource) || !live_owner(work.owner.value) ||
+          resources_.sources().directory()[row].post_load_source_offset!=work.source_offset ||
+          !std::ranges::equal(resources_.sources().post_load_source_frame(row),work.owned_frame))
+        return std::nullopt;
+      const auto resolved=scene_references_.resolve(project_reference_for_source(row),*scene_reference_lease_);
+      if(!resolved || *resolved!=work.owner.value) return std::nullopt;
+      const auto owner=constructed_list_owners_.find(row);
+      if(owner==constructed_list_owners_.end() || owner->second.owner!=work.owner ||
+          owner->second.resource!=work.resource || !owner->second.factory_component ||
+          owner->second.factory_component->owner!=work.owner ||
+          owner->second.factory_component->postload_aux)
+        return std::nullopt;
+      auto profile=data::parse_postload_integer_profile(work.owned_frame);
+      if(!profile || profile->source_text!=work.source_text) return std::nullopt;
+      prepared.emplace_back(row,std::make_unique<data::PostloadIntegerProfile>(std::move(*profile)));
+    }
+    if(prepared.empty()) return std::nullopt;
+    return prepared;
+  };
+  // No select, mutation or terminal failure for an unsupported profile.
+  const auto script_service=application_.postload_script_service();
+  const auto script_generation=application_.postload_script_generation();
+  if(pending && (!script_service || !services.postload_mode_service ||
+      !services.postload_mode_service->postload_enabled() || !prepare_postload()))
+    throw std::runtime_error("Postload work requires a supported profile and live select/restore services");
 
   // The restore decision is a real branch. This approved boundary contains no
   // restore reader sequence, so it must not borrow the ordinary route.
@@ -2367,19 +2452,84 @@ void IntroRuntime::run_postconstruction_reader_bracket(
     resource_load_stage_=IntroResourceLoadStage::failed;
   };
   try {
-    if(!services.external_loader_service || !services.pre_reader_service || !services.end_reader_service ||
-        (!source_script_work_.empty() && !services.source_script_work) ||
+    if((!pending && !services.external_loader_service) || !services.pre_reader_service || !services.end_reader_service ||
+        (!pending && !source_script_work_.empty() && !services.source_script_work) ||
         (!deferred_reader_work_.empty() && (!services.prepare_deferred_reader ||
             !services.owner_reader_boundary || !services.component_reader_boundary)))
       throw std::runtime_error("Post-construction reader bracket requires every available boundary service");
 
-    reader_bracket_retained_saved_value_=retained_saved_value;
-    services.external_loader_service(retained_saved_value);
-    for(const auto& work:source_script_work_) {
-      if(!mapped_script(work)) throw std::runtime_error("Queued source-script work lost its mapped owner");
-      services.source_script_work(work);
+    if(pending) {
+      const auto mode_service=services.postload_mode_service;
+      const auto saved=mode_service->select();
+      bool restoring=false;
+      try {
+        // The external operation may mutate state, so discard the preflight
+        // and validate/allocate again before any exchange is published.
+        auto prepared=prepare_postload();
+        if(!prepared) throw std::runtime_error("Postload state changed after select");
+        if(application_.postload_script_service()!=script_service || application_.postload_script_generation()!=script_generation)
+          throw std::runtime_error("Postload script service changed after select");
+        std::vector<std::pair<std::size_t,std::unique_ptr<runtime::PostloadScriptAux>>> auxiliaries;
+        auxiliaries.reserve(prepared->size());
+        for(auto& [row,profile]:*prepared) {
+          auto aux=std::make_unique<runtime::PostloadScriptAux>();
+          aux->service=script_service;
+          aux->service_generation=script_generation;
+          aux->source_text=profile->source_text;
+          aux->exchange=script_service->create();
+          for(const auto& entry:profile->entries)
+            script_service->insert_integer(*aux->exchange,entry.name,entry.bits);
+          auxiliaries.emplace_back(row,std::move(aux));
+        }
+        reader_bracket_retained_saved_value_=saved;
+        std::vector<const runtime::PostloadScriptAux*> published;
+        published.reserve(auxiliaries.size());
+        for(auto& [row,aux]:auxiliaries) {
+          published.push_back(aux.get());
+          constructed_list_owners_.at(row).factory_component->postload_aux=std::move(aux);
+        }
+        restoring=true;
+        mode_service->restore(saved);
+        if(application_.postload_script_service()!=script_service || application_.postload_script_generation()!=script_generation ||
+            !scene_reference_lease_ || !loader_owner_lease_)
+          throw std::runtime_error("Postload services changed after restore");
+        for(std::size_t i=0;i<source_script_work_.size();++i) {
+          const auto& work=source_script_work_[i];
+          const auto found=constructed_list_owners_.find(work.source_directory_index);
+          if(found==constructed_list_owners_.end() || found->second.owner!=work.owner ||
+              associated_resource_owner(work.resource)!=work.owner || !live_owner(work.owner.value) ||
+              scene_references_.resolve(project_reference_for_source(work.source_directory_index),*scene_reference_lease_)!=work.owner.value ||
+              !std::ranges::equal(resources_.sources().post_load_source_frame(work.source_directory_index),work.owned_frame) ||
+              !found->second.factory_component || !found->second.factory_component->postload_aux ||
+              found->second.factory_component->postload_aux.get()!=published[i] ||
+              found->second.factory_component->postload_aux->service!=script_service ||
+              found->second.factory_component->postload_aux->service_generation!=script_generation ||
+              !found->second.factory_component->postload_aux->exchange)
+            throw std::runtime_error("Postload owner changed after restore");
+          const auto& aux=*found->second.factory_component->postload_aux;
+          const auto& profile=*(*prepared)[i].second;
+          if(aux.source_text!=profile.source_text || aux.script_key!=0U || !aux.pending_work.empty() ||
+              aux.exchange->entries.size()!=profile.entries.size() ||
+              !std::ranges::equal(aux.exchange->entries,profile.entries,[](const auto& a,const auto& b) {
+                return a.name==b.name && a.bits==b.bits;
+              })) throw std::runtime_error("Postload exchange changed after restore");
+        }
+      } catch(...) {
+        // Project policy: best-effort restore on a post-select failure. Do
+        // not invoke restore twice if restore itself threw.
+        if(!restoring) { try { mode_service->restore(saved); } catch(...) {} }
+        throw;
+      }
+      resource_load_stage_=IntroResourceLoadStage::directory_construction_complete;
+    } else {
+      reader_bracket_retained_saved_value_=retained_saved_value;
+      services.external_loader_service(retained_saved_value);
+      for(const auto& work:source_script_work_) {
+        if(!mapped_script(work)) throw std::runtime_error("Queued source-script work lost its mapped owner");
+        services.source_script_work(work);
+      }
+      services.external_loader_service(retained_saved_value);
     }
-    services.external_loader_service(retained_saved_value);
     services.pre_reader_service();
     for(auto& work:deferred_reader_work_) {
       if(!mapped_deferred(work)) throw std::runtime_error("Deferred reader work lost its mapped owner or source span");

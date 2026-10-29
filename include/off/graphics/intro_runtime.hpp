@@ -7,6 +7,7 @@
 #include "off/data/keys_backing_evaluator.hpp"
 #include "off/data/first_cut_component_payload_session.hpp"
 #include "off/data/scene_lifetime_keys_registry.hpp"
+#include "off/data/postload_integer_profile.hpp"
 #include "off/data/matpos_deferred_component_reader.hpp"
 #include "off/data/vert_anim_deferred_component_reader.hpp"
 #include "off/data/lens_flare_deferred_reader.hpp"
@@ -20,6 +21,7 @@
 #include "off/graphics/movie_control_runtime_identity.hpp"
 #include "off/graphics/intro_lifecycle_admission.hpp"
 #include "off/runtime/application_services.hpp"
+#include "off/runtime/postload_script_service.hpp"
 #include "off/runtime/component_lifecycle.hpp"
 #include "off/runtime/scene_event_names.hpp"
 #include "off/graphics/picture_color_state.hpp"
@@ -297,7 +299,9 @@ struct IntroConstructedListOwner {
     bool controller_helper_unsupported{};
     // Absent on fresh construction. Present queue requires the unsupported
     // script/progress post-operation, even when its contents are empty.
-    std::optional<std::vector<std::uint64_t>> post_work_queue;
+    // One shared auxiliary container for postload work and event hook state.
+    // Presence does not represent an executed script.
+    std::unique_ptr<runtime::PostloadScriptAux> postload_aux;
   };
   std::optional<FactoryComponent> factory_component;
   struct AnimationStorage {
@@ -809,6 +813,13 @@ struct IntroCameraRegistrationServices {
   std::function<bool()> backend_ready;
   std::function<void(IntroRuntimeHandle)> admit_view;
 };
+class IntroPostloadModeService {
+public:
+  virtual ~IntroPostloadModeService()=default;
+  [[nodiscard]] virtual bool postload_enabled() const=0;
+  [[nodiscard]] virtual std::uint64_t select()=0;
+  virtual void restore(std::uint64_t saved)=0;
+};
 // Opaque service boundary recovered from the loader tail.  The retained value
 // is deliberately passed through without assigning it a native meaning.
 // Reader callbacks are ordering hooks only; parsing and translation belong to
@@ -821,6 +832,9 @@ struct IntroPostconstructionReaderServices {
   std::function<void(const IntroDeferredReaderWork&)> owner_reader_boundary;
   std::function<void(const IntroDeferredReaderWork&)> component_reader_boundary;
   std::function<void()> end_reader_service;
+  // Pending postload requires a real select/restore pair; the select result
+  // belongs to this invocation and is passed back to restore.
+  std::shared_ptr<IntroPostloadModeService> postload_mode_service;
 };
 // Pre-release loader-tail inputs retain only the boundary shape established by
 // the observed route.  They are deliberately not a public GMS grammar.
@@ -1065,6 +1079,11 @@ public:
   [[nodiscard]] std::optional<IntroRuntimeHandle> resolve_loader_owner_reference(std::uint32_t token) const;
   [[nodiscard]] IntroScopedListOwnerPreResult run_scoped_list_owner_pre(std::uint32_t loader_reference);
   void run_scoped_list_owner_post(std::uint32_t loader_reference);
+  // Synchronous scoped hook; output remains caller-owned for the invocation.
+  void dispatch_scoped_list_script_hook(std::uint32_t loader_reference,std::uint16_t event,
+                                      const runtime::SceneEventNames::Lease& event_lease,
+                                      std::optional<float>& output);
+  void retire_scoped_list_script_aux(std::uint32_t loader_reference);
   [[nodiscard]] const runtime::DeferredSequenceStartQueue::Handle* first_cut_queue_property() const noexcept {
     const auto found=queue_properties_.find("off-project.deferred-sequence-start-queue");
     return found==queue_properties_.end() ? nullptr : &found->second;
@@ -1625,6 +1644,8 @@ private:
   std::vector<std::uint32_t> loader_owner_list_;
   std::vector<IntroDeferredReaderWork> deferred_reader_work_;
   std::vector<IntroSourceScriptWork> source_script_work_;
+  bool reader_bracket_running_{};
+  bool script_hook_running_{};
   std::optional<IntroRuntimeHandle> default_camera_;
   std::optional<IntroSynthesizedCameraMetadata> default_camera_metadata_;
   std::unique_ptr<FreshIntroCamera> default_camera_owner_;

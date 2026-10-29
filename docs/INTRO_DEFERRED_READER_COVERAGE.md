@@ -55,9 +55,18 @@ failure; it is not a transaction. The normal startup path does not yet bind a
 verified configuration or request-status producer, and no credits consumer
 is implemented. Without bound status, the callback rejects completion.
 
-The loader conservatively stages every nonzero postload source as pending. It
-checks the declared frame against the read input and copies the bounded frame
-and terminated prefix into owner-bound work. Pending work blocks the ordinary
-reader bracket, outer loader tail and lifecycle admission. There is no resume
-or script-service implementation, and this policy does not claim the native
-mode guard or script completion.
+The loader stages every nonzero postload source as pending after checking its
+declared frame against the read input and copying the bounded prefix into
+owner-bound work. A scoped bracket can process a conservative profile with
+reference-free string framing and scalar integer declarations. It requires an
+explicit application-owned script data service and a mode/select/restore
+provider, checks owner and service generations, and retains the typed exchange
+in the list owner's auxiliary container. Other profiles remain pending. This
+data-exchange operation does not execute a script or establish lifecycle or
+frame completion. The scoped script hook and cleanup are not yet connected to
+the normal event dispatcher.
+
+Normal startup does not bind these postload providers. A premature direct
+session reader attempt leaves the session postconstructed without preparing
+KEYS or calling reader services. The startup host and SDL error handling do not
+yet provide an end-to-end pending/resume path.

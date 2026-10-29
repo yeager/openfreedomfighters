@@ -1196,6 +1196,139 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
               session->reader_bracket_observation().source_scripts.empty(),
               "pending postload retains its session without reader callbacks or completion");
     }
+    {
+        Bytes frame(4);
+        frame.push_back(std::byte{4}); text(frame,"script");
+        frame.push_back(std::byte{5}); text(frame,"int alpha; int beta;");
+        frame.push_back(std::byte{3}); word(frame,0x80000000U);
+        frame.push_back(std::byte{3}); word(frame,7U);
+        frame.push_back(std::byte{0xff});
+        set(frame,0,static_cast<std::uint32_t>(frame.size()) | 0x80000000U);
+        const auto parsed=off::data::parse_postload_integer_profile(frame);
+        check(parsed && parsed->entries.size()==2U && parsed->entries[0].name=="alpha" &&
+              parsed->entries[0].bits==0x80000000U && parsed->entries[1].name=="beta" &&
+              parsed->entries[1].bits==7U,"integer profile preserves declaration order and bit patterns");
+        auto continuation=frame; continuation[continuation.size()-6U]=std::byte{0x43};
+        check(!off::data::parse_postload_integer_profile(continuation),"integer vectors are not accepted as scalars");
+        auto reference=frame; reference[reference.size()-6U]=std::byte{8};
+        check(!off::data::parse_postload_integer_profile(reference),"reference-bearing walker tags are unsupported");
+        auto unknown=frame; unknown[unknown.size()-6U]=std::byte{2};
+        check(!off::data::parse_postload_integer_profile(unknown),"unknown walker tags are unsupported");
+        auto missing=frame; missing.pop_back(); set(missing,0,static_cast<std::uint32_t>(missing.size()));
+        check(!off::data::parse_postload_integer_profile(missing),"walker requires an in-frame terminal");
+        auto truncated=frame; set(truncated,0,static_cast<std::uint32_t>(truncated.size()-1U));
+        check(!off::data::parse_postload_integer_profile(truncated),"declared frame must match bounded input");
+    }
+    // The reference-free integer profile is staged in a real list owner only
+    // between a select and restore; this does not execute a script.
+    for(const int mode:{0,1,2,3,4,5,6,7,8,9}) {
+        Fixture fixture(false,true);
+        const auto offset=fixture.payload.size();
+        Bytes frame(4);
+        frame.push_back(std::byte{4}); text(frame,"source");
+        frame.push_back(std::byte{5}); text(frame,"int alpha;");
+        frame.push_back(std::byte{3}); word(frame,0xdeadbeefU);
+        frame.push_back(std::byte{0xff});
+        set(frame,0,static_cast<std::uint32_t>(frame.size()));
+        if(mode==2) frame[frame.size()-6U]=std::byte{2}; // unsupported reference kind
+        set(fixture.payload,512U+48U*7U+40U,static_cast<std::uint32_t>(offset));
+        fixture.payload.insert(fixture.payload.end(),frame.begin(),frame.end());
+        off::runtime::ApplicationServices app(off::runtime::ClockExecutionPolicy::no_recording_or_replay,
+            {[]{return std::int64_t{0};},[]{return std::int32_t{0};}});
+        initialize_app(app);
+        app.install_postload_script_service(std::make_shared<off::runtime::PostloadScriptService>());
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        off::graphics::IntroRuntime runtime(fixture.build(),app,sequence,"synthetic-scene",
+            off::graphics::IntroSoundLoadPolicy::directory_construction);
+        construct_directory(runtime);
+        const auto row=runtime.source_script_work()[0].source_directory_index;
+        std::vector<int> order;
+        struct TestMode final : off::graphics::IntroPostloadModeService {
+          std::function<std::uint64_t()> on_select;
+          std::function<void(std::uint64_t)> on_restore;
+          bool enabled{true};
+          bool postload_enabled() const override {return enabled;}
+          std::uint64_t select() override {return on_select();}
+          void restore(std::uint64_t value) override {on_restore(value);}
+        };
+        auto mode_service=std::make_shared<TestMode>();
+        off::graphics::IntroPostconstructionReaderServices services{
+          .external_loader_service=[](auto){},
+          .source_script_work=[&](const auto&){order.push_back(2);},
+          .pre_reader_service=[&]{order.push_back(4);},
+          .prepare_deferred_reader=[](const auto&){},
+          .owner_reader_boundary=[](const auto&){},
+          .component_reader_boundary=[](const auto&){},
+          .end_reader_service=[&]{order.push_back(5);},
+          .postload_mode_service=mode_service};
+        mode_service->on_select=[&] {
+            order.push_back(1);
+            if(mode==4) rejects([&]{runtime.run_postconstruction_reader_bracket(0U,services);});
+            if(mode==9) app.install_postload_script_service(app.postload_script_service());
+            if(mode==3) {
+              const auto borrowed=runtime.resources().sources().post_load_source_frame(row);
+              const_cast<std::byte*>(borrowed.data())[5]^=std::byte{1};
+            }
+            return std::uint64_t{91};
+          };
+        mode_service->on_restore=[&](auto saved){
+          check(saved==91U,"restore receives select result");order.push_back(3);
+          if(mode==5) app.install_postload_script_service(std::make_shared<off::runtime::PostloadScriptService>());
+          if(mode==6) app.install_postload_script_service(app.postload_script_service());
+        };
+        if(mode==1) services.postload_mode_service.reset();
+        if(mode==7) app.install_postload_script_service({});
+        if(mode==8) mode_service->enabled=false;
+        if(mode!=0 && mode!=4) {
+          rejects([&]{runtime.run_postconstruction_reader_bracket(0U,services);});
+          if(mode!=5 && mode!=6) check(!runtime.constructed_list_owner(row)->factory_component->postload_aux,
+                            "unsupported or invalidated input must not publish exchange");
+          if(mode==5 || mode==6 || mode==9) check(runtime.resource_load_stage()==off::graphics::IntroResourceLoadStage::failed,
+                            "service replacement after restore cannot complete the bracket");
+          else if(mode!=3) check(runtime.resource_load_stage()==off::graphics::IntroResourceLoadStage::postload_pending && order.empty(),
+                            "unsupported work stays pending without calling select");
+          else check(order==std::vector<int>{1,3},"post-select failure attempts to restore the saved value");
+          continue;
+        }
+        runtime.run_postconstruction_reader_bracket(0U,services);
+        const auto& aux=runtime.constructed_list_owner(row)->factory_component->postload_aux;
+        check(aux && aux->service && aux->exchange && aux->source_text=="source" && aux->exchange->entries.size()==1U &&
+              aux->exchange->entries[0].name=="alpha" && aux->exchange->entries[0].bits==0xdeadbeefU &&
+              order==std::vector<int>{1,3,4,5},
+              "validated integer exchange is owned and published between select and restore");
+        const auto owner_ref=runtime.loader_owner_references()[row];
+        const auto event=runtime.declare_scene_event_name("SyntheticScriptEvent");
+        const auto event_lease=runtime.scene_event_names().lease();
+        std::optional<float> output;
+        runtime.dispatch_scoped_list_script_hook(owner_ref,event,event_lease,output);
+        check(!output,"a zero script key leaves the output untouched");
+        const_cast<off::runtime::PostloadScriptAux&>(*aux).script_key=42U;
+        rejects([&]{runtime.dispatch_scoped_list_script_hook(owner_ref,event,event_lease,output);});
+        app.postload_script_service()->bind_hook([&](auto key,auto delivered,std::optional<float>& slot) {
+          check(key==42U && delivered==event,"script hook keeps the live auxiliary key and event");
+          rejects([&]{runtime.retire_scoped_list_script_aux(owner_ref);});
+          app.postload_script_service()->bind_hook([](auto,auto,std::optional<float>& slot){slot=8.0F;});
+          slot=3.5F;
+        });
+        runtime.dispatch_scoped_list_script_hook(owner_ref,event,event_lease,output);
+        check(output==3.5F,"script hook reaches the application-owned service");
+        runtime.dispatch_scoped_list_script_hook(owner_ref,event,event_lease,output);
+        check(output==8.0F,"rebinding a hook during dispatch affects only subsequent invocations");
+        if(mode==4) {
+          const auto service=app.postload_script_service();
+          service->bind_hook([&](auto,auto,std::optional<float>&){app.install_postload_script_service(service);});
+          rejects([&]{runtime.dispatch_scoped_list_script_hook(owner_ref,event,event_lease,output);});
+          rejects([&]{runtime.retire_scoped_list_script_aux(owner_ref);});
+        } else {
+          auto& mutable_names=const_cast<off::runtime::SceneEventNames&>(runtime.scene_event_names());
+          mutable_names.clear();
+          check(runtime.declare_scene_event_name("SyntheticScriptEvent",event)==event,"synthetic event ID is reused");
+          rejects([&]{runtime.dispatch_scoped_list_script_hook(owner_ref,event,event_lease,output);});
+          runtime.retire_scoped_list_script_aux(owner_ref);
+          check(!runtime.constructed_list_owner(row)->factory_component->postload_aux,
+                "script auxiliary retirement releases its owned exchange");
+        }
+    }
     const auto find_record=[](const auto& directory,std::size_t offset) {
         const auto found=std::ranges::find(directory,offset,&off::data::GmsDirectoryEntry::record_offset);
         if(found==directory.end()) throw std::runtime_error("independent reader fixture record is absent");
@@ -1316,10 +1449,11 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
               "owner post preserves owner bits and changes only its later pre-operation guard");
         const auto second=host.resources().member_index();
         auto& queued=const_cast<off::graphics::IntroConstructedListOwner&>(*host.constructed_list_owner(second));
-        queued.factory_component->post_work_queue=std::vector<std::uint64_t>{1U};
+        queued.factory_component->postload_aux=std::make_unique<off::runtime::PostloadScriptAux>();
+        queued.factory_component->postload_aux->pending_work.push_back(1U);
         rejects([&]{host.run_scoped_list_owner_post(host.loader_owner_references()[second]);});
         rejects([&]{host.run_scoped_list_owner_post(host.project_reference_for_source(source));});
-        check((queued.scoped_lifecycle_flags&1U) && queued.factory_component->post_work_queue->size()==1,
+        check((queued.scoped_lifecycle_flags&1U) && queued.factory_component->postload_aux->pending_work.size()==1,
               "unsupported post queue preserves the earlier owner flag without reporting completion");
     }
     for(const int phase_case:{0,1,2,3,4,5}) {
