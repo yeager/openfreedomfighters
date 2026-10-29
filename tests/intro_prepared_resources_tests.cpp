@@ -1589,6 +1589,20 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
                   "MovieControl phase reads live database status and writes shared typed owner property");
         }
     }
+    {
+        off::runtime::SceneComponentSequence sequence{[]{return std::uint32_t{1};}};
+        off::runtime::ComponentLifecycle components(sequence);
+        const auto index=components.append({1U,0U,0U,"SyntheticTiming",0U,0U,0.0F,false});
+        components.construct(index,[](auto& record) {
+          auto state=record.state();state.attached_owner=1U;
+          return off::runtime::ConstructedComponent{state,{}, {},
+              [](auto& component,auto,std::optional<float>& result) {result=4.0F;component.state().status|=1U;}};
+        });
+        std::optional<float> output;
+        rejects([&]{components.at(index).dispatch_timing(1U,output);});
+        check(output==4.0F && (components.at(index).state().status&1U),
+              "retirement after timing callback fails closed while retaining its partial mutation");
+    }
     for(const int scenario:{0,1,2,3,4,5}) {
         const bool input_present=scenario==1;
         Fixture fixture(false,true);
@@ -1649,6 +1663,50 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
               queue && host.first_cut_queue_property() && queue->live(*host.first_cut_queue_property()) &&
               local.initialization_events[4]==host.scene_event_names().find("off-project.sequence-timing-request"),
               "actual list phase callback consumes helper, stream and queue service before completion");
+        const auto* sequence_reader=host.first_cut_sequence_component_reader_state();
+        if(!sequence_reader) throw std::runtime_error("synthetic timing sequence is absent");
+        const auto sequence_index=sequence_reader->component_index;
+        check(!host.request_first_cut_sequence_timing(0U),"uninitialized sequence handler is skipped");
+        rejects([&]{(void)host.request_first_cut_sequence_timing(1U);});
+        const std::array<std::size_t,1> sequence_target{sequence_index};
+        host.components().run_scoped_phase_one(sequence_target);
+        auto& sequence_record=host.components().at(sequence_index);
+        auto& state=sequence_record.state();
+        const auto expected=sequence_reader->authored.values[0];
+        check(host.request_first_cut_sequence_timing(0U)==expected,"timing request reaches initialized sequence handler");
+        state.script_reference=1U;
+        check(!host.request_first_cut_sequence_timing(0U),"nonzero attachment script reference excludes timing handler");
+        state.script_reference=0U;
+        state.status&=~4U;
+        check(!host.request_first_cut_sequence_timing(0U),"phase-one status is required for the initialized class");
+        state.status|=4U;
+        const auto requested=state.requested,admitted=state.admitted;
+        state.requested=0U;state.admitted=0U;
+        check(host.request_first_cut_sequence_timing(0U)==expected,"special timing category does not require request-mask intersection or admission");
+        state.requested=requested;state.admitted=admitted;
+        const auto target_owner_handle=host.source_handle(host.resources().member_index());
+        const auto target_components=host.owner_components(target_owner_handle);
+        if(target_components.size()!=1U) throw std::runtime_error("synthetic timing attachment count changed");
+        auto* mutable_indices=const_cast<std::size_t*>(target_components.data());
+        auto& other=host.components().at(index);
+        const auto previous_owner=other.state().attached_owner;
+        mutable_indices[0]=index;other.state().attached_owner=target_owner_handle.value;
+        rejects([&]{(void)host.request_first_cut_sequence_timing(0U);});
+        mutable_indices[0]=sequence_index;other.state().attached_owner=previous_owner;
+        auto service=std::make_shared<off::runtime::PostloadScriptService>();
+        app.install_postload_script_service(service);
+        const auto target_row=host.resources().member_index();
+        auto& target_owner=const_cast<off::graphics::IntroConstructedListOwner&>(*host.constructed_list_owner(target_row));
+        auto aux=std::make_unique<off::runtime::PostloadScriptAux>();
+        aux->service=service;aux->service_generation=app.postload_script_generation();
+        aux->exchange=service->create();aux->script_key=42U;
+        target_owner.factory_component->postload_aux=std::move(aux);
+        bool hook_called=false;
+        service->bind_hook([&](auto key,auto,std::optional<float>& slot) {
+          check(key==42U,"timing dispatch invokes target script hook");hook_called=true;slot=999.0F;
+        });
+        check(host.request_first_cut_sequence_timing(0U)==expected && hook_called,
+              "target hook runs before sequence attachment overwrites the shared output");
         rejects([&]{host.components().run_scoped_phase_one(target);});
     }
     {

@@ -38,6 +38,17 @@ const ComponentState& ComponentRecord::state() const {
   if (!instance_) throw std::runtime_error("Component is not constructed: " + source_.factory_name);
   return instance_->state;
 }
+void ComponentRecord::dispatch_timing(std::uint16_t event,std::optional<float>& output) {
+  if(!constructed_ || removed_ || !instance_ || !instance_->timing)
+    throw std::runtime_error("component has no live timing event handler");
+  const auto handler=instance_->timing;
+  const auto identity=identity_;
+  const auto owner=instance_->state.attached_owner;
+  handler(*this,event,output);
+  if(!constructed_ || removed_ || !instance_ || identity_!=identity ||
+      instance_->state.attached_owner!=owner || (instance_->state.status&1U))
+    throw std::runtime_error("component timing handler changed identity or requires retirement");
+}
 void ComponentLifecycle::check_idle() const {
   if (failed_) throw std::runtime_error("Component lifecycle previously failed");
   if (busy_ || sequence_.busy_)

@@ -34,6 +34,13 @@ even if a later declaration reuses the same numeric identity. This protects the
 scoped callback's lookup; it does not establish native event delivery, global
 lifecycle completion, or intro playback.
 
+A manual scoped timing request can now call the live target's script hook,
+snapshot its attachments, and deliver a typed synchronous request to the
+initialized sequence handler. An eligible attachment without a supported
+handler and an attachment requiring retirement fail closed; neither is
+silently treated as a successful no-op. This boundary does not establish a
+scheduler binding, an active cut or a rendered frame.
+
 For the supported first-cut list form, a scoped phase-one callback reads the
 owned attachment stream and checks the factory-owned helper against the
 validated sequence owner and resource. It registers project event identities,

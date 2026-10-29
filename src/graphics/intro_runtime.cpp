@@ -564,6 +564,70 @@ void IntroRuntime::retire_scoped_list_script_aux(std::uint32_t reference) {
   aux.reset();
 }
 
+std::optional<float> IntroRuntime::request_first_cut_sequence_timing(std::size_t member_index) {
+  if(timing_request_running_ || resource_load_stage_!=IntroResourceLoadStage::directory_construction_complete ||
+      reader_bracket_stage_!=IntroReaderBracketStage::ordinary_reader_boundary_complete || !scene_reference_lease_ ||
+      !loader_owner_lease_ || !first_cut_list_reader_state_ || !first_cut_sequence_component_reader_state_ ||
+      !sequence_timing_event_ || !sequence_timing_event_lease_ || !event_names_.is_live(*sequence_timing_event_lease_))
+    throw std::runtime_error("first-cut timing request requires a live initialized scene");
+  struct Guard { bool& running; explicit Guard(bool& value):running(value) {running=true;} ~Guard(){running=false;} } guard(timing_request_running_);
+  const auto& list=*first_cut_list_reader_state_;
+  const auto list_source=resources_.first_cut_index();
+  auto& list_owner=constructed_list_owners_.at(list_source);
+  const auto list_payload=constructed_picture_components_.find(list.component_indices[0]);
+  const auto& list_record=components_.at(list.component_indices[0]);
+  if(!list_owner.factory_component || list_owner.owner!=list.owner || list_owner.resource!=list.resource ||
+      list_payload==constructed_picture_components_.end() || !list_payload->second.cut_list ||
+      !list_payload->second.cut_list->initialized || !list_record.constructed() || list_record.removed() ||
+      (list_record.state().status&4U)==0U || list_record.state().attached_owner!=list.owner.value ||
+      list_payload->second.cut_list->initialization_events[4]!=*sequence_timing_event_)
+    throw std::runtime_error("first-cut timing list attachment is unavailable");
+  const auto& helper=list_owner.factory_component->helper;
+  if(member_index>=helper.size()) throw std::runtime_error("first-cut timing member is unavailable");
+  const auto token=helper[member_index];
+  const auto target=scene_references_.resolve(token,*scene_reference_lease_);
+  if(!target) return std::nullopt;
+  const auto source=resources_.member_index();
+  if(source>=loader_owner_list_.size() || !live_owner(*target) || source_handle(source).value!=*target ||
+      associated_resource_owner(list.sequence_resource)!=IntroRuntimeHandle{*target} ||
+      scene_references_.resolve(project_reference_for_source(source),*scene_reference_lease_)!=target)
+    throw std::runtime_error("first-cut timing target is unavailable");
+  const auto event=*sequence_timing_event_;
+  const auto lease=*sequence_timing_event_lease_;
+  std::optional<float> output;
+  // Hook first: a live script handler may change the shared output or remove
+  // objects. Snapshot the target's current attachments only after it returns.
+  dispatch_scoped_list_script_hook(loader_owner_list_[source],event,lease,output);
+  if(!event_names_.is_live(lease) || !live_owner(*target) ||
+      scene_references_.resolve(token,*scene_reference_lease_)!=target)
+    throw std::runtime_error("first-cut timing target changed during hook");
+  const auto indices=owner_components(IntroRuntimeHandle{*target});
+  std::vector<std::pair<std::size_t,std::optional<std::uint32_t>>> snapshot;
+  snapshot.reserve(indices.size());
+  for(const auto index:indices) snapshot.emplace_back(index,components_.at(index).identity());
+  for(const auto& [index,identity]:snapshot) {
+    if(index>=components_.size()) continue;
+    auto& component=components_.at(index);
+    if(!component.constructed() || component.removed() || component.identity()!=identity ||
+        component.state().attached_owner!=*target) continue;
+    const auto& state=component.state();
+    if(state.status&1U)
+      throw std::runtime_error("first-cut timing attachment requires unsupported retirement");
+    // Timing is the special category that bypasses ordinary request-mask
+    // intersection. Init and script-reference guards still apply.
+    if(((state.requested&1U) && !(state.status&4U)) || state.script_reference!=0U) continue;
+    if(!event_names_.is_live(lease)) throw std::runtime_error("first-cut timing event was retired");
+    component.dispatch_timing(event,output);
+    if(!component.constructed() || component.removed() || component.identity()!=identity ||
+        component.state().attached_owner!=*target || (component.state().status&1U))
+      throw std::runtime_error("first-cut timing attachment changed or requires retirement");
+    if(!event_names_.is_live(lease) || !live_owner(*target) ||
+        scene_references_.resolve(token,*scene_reference_lease_)!=target)
+      throw std::runtime_error("first-cut timing target changed during dispatch");
+  }
+  return output;
+}
+
 void IntroRuntime::set_scene_resource_property_native(std::string key,IntroRuntimeResourceHandle resource) {
   if(resource_load_stage_==IntroResourceLoadStage::failed)
     throw std::runtime_error("Resource construction previously failed");
@@ -1185,7 +1249,19 @@ void IntroRuntime::construct_owner_attachments(std::size_t row,std::uint32_t& ma
         if(movie) phase_two=[this,component_index](runtime::ComponentRecord& record) {
           run_movie_control_phase_two(component_index,record);
         };
-        return runtime::ConstructedComponent{state,std::move(phase_one),std::move(phase_two)};
+        runtime::ComponentTimingCallback timing;
+        if(cut && row==resources_.member_index())
+          timing=[this,component_index](runtime::ComponentRecord& record,std::uint16_t event,std::optional<float>& output) {
+            if(&record!=&components_.at(component_index) || !record.constructed() || record.removed())
+              throw std::runtime_error("sequence timing handler is no longer live");
+            const auto payload=constructed_picture_components_.find(component_index);
+            if(payload==constructed_picture_components_.end() || !payload->second.sequence_initialization ||
+                !payload->second.sequence_initialization->initialized || payload->second.owner.value!=record.state().attached_owner)
+              throw std::runtime_error("sequence timing handler has no initialized payload");
+            const auto& local=*payload->second.sequence_initialization;
+            if(local.timing_event==event) output=local.values[0];
+          };
+        return runtime::ConstructedComponent{state,std::move(phase_one),std::move(phase_two),std::move(timing)};
       });
       const auto notification=application_.register_component_class_instance(components_.at(component_index).source().factory_name);
       if(cut_list) {

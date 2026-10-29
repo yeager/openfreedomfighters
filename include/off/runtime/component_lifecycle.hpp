@@ -58,12 +58,15 @@ struct ComponentState {
 
 class ComponentRecord;
 using ComponentCallback = std::function<void(ComponentRecord&)>;
+using ComponentTimingCallback = std::function<void(ComponentRecord&,std::uint16_t,std::optional<float>&)>;
 struct ConstructedComponent {
   ComponentState state;
   // Callbacks retain the concrete component payload through their captures.
   // Missing callbacks are errors when reached, never successful empty bodies.
   ComponentCallback phase_one;
   ComponentCallback phase_two;
+  // Synchronous timing output belongs to the caller for this invocation.
+  ComponentTimingCallback timing;
 };
 
 class ComponentRecord final {
@@ -76,6 +79,7 @@ public:
   [[nodiscard]] std::uint32_t scheduling_clock() const;
   [[nodiscard]] ComponentState& state();
   [[nodiscard]] const ComponentState& state() const;
+  void dispatch_timing(std::uint16_t event,std::optional<float>& output);
 private:
   friend class ComponentLifecycle;
   explicit ComponentRecord(ComponentSource source) : source_(std::move(source)) {}
