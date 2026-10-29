@@ -18,6 +18,10 @@ void NormalIntroSceneSession::complete_postconstruction_reader_bracket(
   if (stage_ != NormalIntroSceneSessionStage::postconstructed)
     throw std::runtime_error(
         "normal intro scene reader bracket is unavailable");
+  // Pending script work is a resumable loader boundary, not a failed reader.
+  // Check before preparing KEYS or entering the terminal error handler.
+  if (runtime_->resource_load_stage() == IntroResourceLoadStage::postload_pending)
+    throw std::runtime_error("normal intro scene postload work is pending");
   try {
     // Required owner-local lookup preparation for the supported MatPos reader.
     // This deliberately does not prepare key backing or enter phase one.
@@ -141,6 +145,8 @@ void NormalIntroSceneSession::complete_diagnostic_first_cut_fade_reader_bracket(
     std::uint64_t saved) {
   if (stage_ != NormalIntroSceneSessionStage::postconstructed)
     throw std::runtime_error("normal intro fade diagnostic reader bracket is unavailable");
+  if (runtime_->resource_load_stage() == IntroResourceLoadStage::postload_pending)
+    throw std::runtime_error("normal intro scene postload work is pending");
   try {
     runtime_->run_postconstruction_reader_bracket(
         saved,

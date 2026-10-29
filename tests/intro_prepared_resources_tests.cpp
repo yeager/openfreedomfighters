@@ -1186,8 +1186,15 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
               "pending source owns its frame independently of the original");
         auto session=off::graphics::make_normal_intro_scene_session(std::move(runtime));
         rejects([&]{session->complete_postconstruction_reader_bracket(41U);});
-        check(session->runtime().reader_bracket_stage()!=off::graphics::IntroReaderBracketStage::ordinary_reader_boundary_complete,
-              "pending postload cannot fabricate reader or lifecycle completion");
+        rejects([&]{session->complete_postconstruction_reader_bracket(41U);});
+        rejects([&]{session->complete_diagnostic_first_cut_fade_reader_bracket(41U);});
+        check(session->stage()==off::graphics::NormalIntroSceneSessionStage::postconstructed &&
+              session->runtime().resource_load_stage()==off::graphics::IntroResourceLoadStage::postload_pending &&
+              session->runtime().reader_bracket_stage()==off::graphics::IntroReaderBracketStage::not_started &&
+              !session->runtime().scene_lifetime_keys_registry() &&
+              session->reader_bracket_observation().external_loader_values.empty() &&
+              session->reader_bracket_observation().source_scripts.empty(),
+              "pending postload retains its session without reader callbacks or completion");
     }
     const auto find_record=[](const auto& directory,std::size_t offset) {
         const auto found=std::ranges::find(directory,offset,&off::data::GmsDirectoryEntry::record_offset);
