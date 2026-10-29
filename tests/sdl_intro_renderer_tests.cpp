@@ -122,8 +122,94 @@ int main() {
     auto invalid_camera=camera_source; invalid_camera.far_distance=4;
     camera.apply_authored_parameters(invalid_camera);
     rejects([&] { (void)gpu.renderer->prepare(gpu.command,draws); });
+    auto view_camera=std::make_shared<FreshIntroCamera>(camera_source);
+    apply_camera_display(*view_camera,{camera_renderers,display,[]{return false;}});
+    camera_node->bind(camera,static_cast<float>(camera.priority())); // still invalid
+    const auto view=gpu.renderer->register_view(17,view_camera);
+    std::weak_ptr<FreshIntroCamera> retained=view_camera;
+    view_camera.reset();
+    const auto traversal=gpu.renderer->begin_view_traversal(17);
+    rejects([&] { gpu.renderer->unregister_view(view); });
+    rejects([&] { gpu.renderer->retire_scene_views(17); });
+    rejects([&] { (void)gpu.renderer->register_view(17,retained.lock()); });
+    {
+      auto other_renderer=std::make_unique<SdlIntroRenderer>(gpu.device,std::span<const IntroPreparedImage>{});
+      auto other_camera=std::make_shared<FreshIntroCamera>(camera_source);
+      const auto foreign_view=other_renderer->register_view(17,other_camera);
+      const auto foreign_traversal=other_renderer->begin_view_traversal(17);
+      rejects([&] { (void)gpu.renderer->prepare_view(gpu.command,draws,foreign_view,traversal); });
+      rejects([&] { (void)gpu.renderer->prepare_view(gpu.command,draws,view,foreign_traversal); });
+      rejects([&] { gpu.renderer->end_view_traversal(foreign_traversal); });
+      other_renderer->end_view_traversal(foreign_traversal);
+      other_renderer.reset();
+      auto replacement=std::make_unique<SdlIntroRenderer>(gpu.device,std::span<const IntroPreparedImage>{});
+      const auto replacement_view=replacement->register_view(17,other_camera);
+      const auto replacement_traversal=replacement->begin_view_traversal(17);
+      rejects([&] { (void)replacement->prepare_view(gpu.command,draws,foreign_view,replacement_traversal); });
+      rejects([&] { (void)replacement->prepare_view(gpu.command,draws,replacement_view,foreign_traversal); });
+      replacement->end_view_traversal(replacement_traversal);
+      replacement->retire_scene_views(17);
+      const auto after_retirement=replacement->begin_view_traversal(17);
+      rejects([&] { (void)replacement->prepare_view(gpu.command,draws,replacement_view,after_retirement); });
+      replacement->end_view_traversal(after_retirement);
+    }
+    bool wrong_thread_rejected=false;
+    std::thread other([&] { try { gpu.renderer->end_view_traversal(traversal); }
+      catch(const std::runtime_error&) { wrong_thread_rejected=true; } });
+    other.join();
+    require(wrong_thread_rejected,"view traversal is restricted to renderer owner thread");
+    auto bad_view_draw=draw; bad_view_draw.state.fog_enabled=true;
+    rejects([&] { (void)gpu.renderer->prepare_view(gpu.command,std::span(&bad_view_draw,1),view,traversal); });
+    gpu.renderer->end_view_traversal(traversal);
+    rejects([&] { (void)gpu.renderer->prepare_view(gpu.command,draws,view,traversal); });
+    const auto recovered=gpu.renderer->begin_view_traversal(17);
+    gpu.frame=gpu.renderer->prepare_view(gpu.command,draws,view,recovered);
+    gpu.renderer->end_view_traversal(recovered);
+    const auto other_scene=gpu.renderer->begin_view_traversal(18);
+    rejects([&] { (void)gpu.renderer->prepare_view(gpu.command,draws,view,other_scene); });
+    gpu.renderer->end_view_traversal(other_scene);
+    gpu.renderer->retire_scene_views(17);
+    require(retained.expired(),"registered view retains camera until retirement");
+    rejects([&] { gpu.renderer->unregister_view(view); });
+    int unregister_reentry_rejected=0;
+    auto unregister_camera=std::shared_ptr<FreshIntroCamera>(new FreshIntroCamera(camera_source),
+        [&](FreshIntroCamera* ptr) {
+          try { gpu.renderer->retire_scene_views(31); }
+          catch(const std::runtime_error&) { ++unregister_reentry_rejected; }
+          delete ptr;
+        });
+    const auto unregister_view=gpu.renderer->register_view(31,unregister_camera);
+    unregister_camera.reset();
+    gpu.renderer->unregister_view(unregister_view);
+    require(unregister_reentry_rejected==1,"unregister rejects deleter reentry");
+    int retirement_reentry_rejected=0;
+    for(int i=0;i<2;++i) {
+      auto retirement_camera=std::shared_ptr<FreshIntroCamera>(new FreshIntroCamera(camera_source),
+          [&](FreshIntroCamera* ptr) {
+            try { (void)gpu.renderer->register_view(32,std::make_shared<FreshIntroCamera>(camera_source)); }
+            catch(const std::runtime_error&) { ++retirement_reentry_rejected; }
+            delete ptr;
+          });
+      (void)gpu.renderer->register_view(32,retirement_camera);
+    }
+    gpu.renderer->retire_scene_views(32);
+    require(retirement_reentry_rejected==2,"scene retirement rejects each deleter reentry");
+    int teardown_reentry_rejected=0;
+    {
+      auto renderer=std::make_unique<SdlIntroRenderer>(gpu.device,std::span<const IntroPreparedImage>{});
+      auto* raw=renderer.get();
+      auto teardown_camera=std::shared_ptr<FreshIntroCamera>(new FreshIntroCamera(camera_source),
+          [&](FreshIntroCamera* ptr) {
+            try { raw->retire_scene_views(33); }
+            catch(const std::runtime_error&) { ++teardown_reentry_rejected; }
+            delete ptr;
+          });
+      (void)renderer->register_view(33,teardown_camera);
+      teardown_camera.reset();
+      renderer.reset();
+    }
+    require(teardown_reentry_rejected==1,"renderer teardown rejects deleter reentry");
     camera.apply_authored_parameters(camera_source);
-    gpu.frame=gpu.renderer->prepare(gpu.command,draws);
     require(gpu.frame->indexed_draw_count()==2,"two indexed draws");
     require(gpu.renderer->cached_sampler_count()==1,"identical draws share a cached sampler");
     require(gpu.renderer->cached_pipeline_count()==1,"identical draws share a cached pipeline");

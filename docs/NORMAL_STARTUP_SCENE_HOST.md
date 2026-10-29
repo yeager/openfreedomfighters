@@ -23,6 +23,13 @@ backend-record registration, and frame-traversal identity. No-op callbacks do
 not satisfy the admission contract. The source-free behavior requirements for
 this seam are recorded in [the active-view host specification](SDL_ACTIVE_VIEW_HOST_SPEC.md).
 
+The SDL renderer now also provides a scene-keyed view registration primitive.
+It retains the supplied camera, binds view and traversal tokens to the renderer
+instance, and uses the registered camera when preparing a frame. A synthetic
+GPU readback test covers this path on macOS. The caller remains responsible for
+scene lifetime, retirement, and ending traversal; this primitive does not supply
+admission, frame ordering, or the normal startup host.
+
 That host alone is not sufficient to activate normal startup. The loader-tail
 path still lacks implementations for its required allocation diagnostics,
 resource-association effects, source lease, camera-zero/fallback transform,

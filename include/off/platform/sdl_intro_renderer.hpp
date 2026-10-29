@@ -4,6 +4,8 @@
 #include "off/graphics/picture_expansion.hpp"
 #include "off/platform/picture_stage_shader.hpp"
 #include <memory>
+#include <thread>
+#include <unordered_map>
 #include "off/graphics/camera_display.hpp"
 
 namespace off::platform {
@@ -62,6 +64,26 @@ private:
 // through construction. No fallback texture, original admission or scene timing.
 class SdlIntroRenderer final {
 public:
+  class RegisteredView final {
+  public:
+    RegisteredView() = default;
+  private:
+    friend class SdlIntroRenderer;
+    RegisteredView(std::weak_ptr<const char> owner, std::uint64_t value)
+        : owner_(std::move(owner)), value_(value) {}
+    std::weak_ptr<const char> owner_;
+    std::uint64_t value_{};
+  };
+  class ViewTraversal final {
+  public:
+    ViewTraversal() = default;
+  private:
+    friend class SdlIntroRenderer;
+    ViewTraversal(std::weak_ptr<const char> owner, std::uint64_t value, std::uint64_t scene)
+        : owner_(std::move(owner)), value_(value), scene_(scene) {}
+    std::weak_ptr<const char> owner_;
+    std::uint64_t value_{}, scene_{};
+  };
   SdlIntroRenderer(SDL_GPUDevice* device,
                    std::span<const graphics::IntroPreparedImage> images);
   ~SdlIntroRenderer();
@@ -83,6 +105,21 @@ public:
   // Resource-cache counts are exposed for diagnostics and renderer tests.
   [[nodiscard]] std::size_t cached_sampler_count() const noexcept;
   [[nodiscard]] std::size_t cached_pipeline_count() const noexcept;
+  // Renderer-owned associations. The supplied owner must keep the actual
+  // camera alive (an aliasing shared_ptr may retain its owning scene). These
+  // APIs are confined to the renderer's creation thread. This is a renderer
+  // primitive, not a scene host: the caller owns scene identity and retirement.
+  // It does not admit a scene, infer a camera, or submit GPU commands.
+  [[nodiscard]] RegisteredView register_view(std::uint64_t scene,
+      std::shared_ptr<const graphics::FreshIntroCamera> camera);
+  void unregister_view(RegisteredView view);
+  // Remove every view for a scene after its traversal has ended.
+  void retire_scene_views(std::uint64_t scene);
+  [[nodiscard]] ViewTraversal begin_view_traversal(std::uint64_t scene);
+  void end_view_traversal(ViewTraversal traversal);
+  [[nodiscard]] std::unique_ptr<SdlIntroFrame> prepare_view(
+      SDL_GPUCommandBuffer* command, std::span<const SdlIntroDraw> draws,
+      RegisteredView view, ViewTraversal traversal) const;
   // Selected camera resolves both viewport and perspective before GPU work.
   // Diagnostic bypass keeps both explicitly supplied draw values unchanged.
   // No active pass may exist. Validates CPU inputs before encoding commands;
@@ -95,6 +132,11 @@ public:
   [[nodiscard]] std::unique_ptr<SdlIntroFrame> prepare(
       SDL_GPUCommandBuffer* command, std::span<const SdlIntroDraw> draws, bool diagnostic_camera_bypass = false) const;
 private:
+  struct ViewRecord { std::uint64_t scene{}; std::shared_ptr<const graphics::FreshIntroCamera> camera; };
+  void require_owner_thread() const;
+  [[nodiscard]] std::unique_ptr<SdlIntroFrame> prepare_camera(
+      SDL_GPUCommandBuffer* command, std::span<const SdlIntroDraw> draws,
+      const graphics::FreshIntroCamera* camera) const;
   friend struct SdlIntroFrame::Impl;
   struct Impl;
   std::shared_ptr<Impl> impl_;
@@ -104,5 +146,13 @@ private:
   graphics::CameraPixelRectangle camera_parent_{};
   std::uint32_t display_width_{},display_height_{};
   std::unique_ptr<graphics::CameraRendererNode> camera_node_;
+  // Handles retain only a weak reference to this identity. A new renderer gets
+  // a new control block even if its object and IDs reuse the same addresses.
+  const std::shared_ptr<const char> view_identity_{std::make_shared<const char>(0)};
+  const std::thread::id owner_thread_{std::this_thread::get_id()};
+  mutable bool view_boundary_busy_{};
+  std::unordered_map<std::uint64_t,ViewRecord> registered_views_;
+  std::optional<ViewTraversal> active_traversal_;
+  std::uint64_t next_view_{1},next_traversal_{1};
 };
 } // namespace off::platform

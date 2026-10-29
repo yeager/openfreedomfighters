@@ -13,6 +13,11 @@
 
 namespace off::platform {
 namespace {
+struct ViewBoundary final {
+  explicit ViewBoundary(bool& busy) : busy_(busy) { busy_=true; }
+  ~ViewBoundary() { busy_=false; }
+  bool& busy_;
+};
 constexpr std::size_t max_cached_gpu_state_objects=64;
 [[noreturn]] void fail(const char* text) { throw std::runtime_error(std::string(text)+": "+SDL_GetError()); }
 struct Vertex { std::array<float,3> position; std::array<float,4> color; std::array<float,2> uv; };
@@ -219,7 +224,12 @@ void SdlIntroRenderer::upload_images(
     if(!waited) fail("wait for intro image upload");
   }
 }
-SdlIntroRenderer::~SdlIntroRenderer()=default;
+SdlIntroRenderer::~SdlIntroRenderer() {
+  // Camera owners can have caller-supplied deleters. Keep the boundary closed
+  // while those owners are released, including during renderer teardown.
+  view_boundary_busy_=true;
+  registered_views_.clear();
+}
 void SdlIntroRenderer::attach_camera_display(graphics::CameraRendererList& list,
     const graphics::CameraDisplayDimensions& display) {
   if(camera_node_) throw std::runtime_error("renderer display already attached");
@@ -246,18 +256,90 @@ std::optional<SDL_GPUViewport> SdlIntroRenderer::selected_camera_viewport() cons
 std::size_t SdlIntroRenderer::image_count() const noexcept { return impl_->images.size(); }
 std::size_t SdlIntroRenderer::cached_sampler_count() const noexcept { return impl_->samplers.size(); }
 std::size_t SdlIntroRenderer::cached_pipeline_count() const noexcept { return impl_->pipelines.size(); }
+void SdlIntroRenderer::require_owner_thread() const {
+  if (std::this_thread::get_id()!=owner_thread_)
+    throw std::runtime_error("intro renderer view operations require the device-owning thread");
+  if (view_boundary_busy_)
+    throw std::runtime_error("intro renderer view operation reentered its boundary");
+}
+SdlIntroRenderer::RegisteredView SdlIntroRenderer::register_view(
+    std::uint64_t scene,std::shared_ptr<const graphics::FreshIntroCamera> camera) {
+  require_owner_thread();
+  ViewBoundary boundary(view_boundary_busy_);
+  if (!scene || !camera || active_traversal_ || next_view_==std::numeric_limits<std::uint64_t>::max())
+    throw std::runtime_error("intro view registration requires a live scene and camera outside traversal");
+  const auto id=next_view_;
+  registered_views_.emplace(id,ViewRecord{scene,std::move(camera)});
+  ++next_view_;
+  return RegisteredView{view_identity_,id};
+}
+void SdlIntroRenderer::unregister_view(RegisteredView view) {
+  require_owner_thread();
+  ViewBoundary boundary(view_boundary_busy_);
+  if (view.owner_.lock()!=view_identity_ || !view.value_ || active_traversal_ || registered_views_.erase(view.value_)!=1)
+    throw std::runtime_error("intro view is invalid or traversal is active");
+}
+void SdlIntroRenderer::retire_scene_views(std::uint64_t scene) {
+  require_owner_thread();
+  ViewBoundary boundary(view_boundary_busy_);
+  if (!scene || active_traversal_)
+    throw std::runtime_error("intro scene retirement requires an idle renderer and scene");
+  for(auto it=registered_views_.begin(); it!=registered_views_.end();) {
+    if(it->second.scene==scene) it=registered_views_.erase(it); else ++it;
+  }
+}
+SdlIntroRenderer::ViewTraversal SdlIntroRenderer::begin_view_traversal(std::uint64_t scene) {
+  require_owner_thread();
+  ViewBoundary boundary(view_boundary_busy_);
+  if (!scene || active_traversal_ || next_traversal_==std::numeric_limits<std::uint64_t>::max())
+    throw std::runtime_error("intro view traversal requires a scene and an idle renderer");
+  ViewTraversal traversal{view_identity_,next_traversal_++,scene};
+  active_traversal_=traversal;
+  return traversal;
+}
+void SdlIntroRenderer::end_view_traversal(ViewTraversal traversal) {
+  require_owner_thread();
+  ViewBoundary boundary(view_boundary_busy_);
+  if (traversal.owner_.lock()!=view_identity_ || !active_traversal_ || !traversal.value_ ||
+      active_traversal_->value_!=traversal.value_ || active_traversal_->scene_!=traversal.scene_)
+    throw std::runtime_error("intro view traversal is stale");
+  active_traversal_.reset();
+}
+std::unique_ptr<SdlIntroFrame> SdlIntroRenderer::prepare_view(
+    SDL_GPUCommandBuffer* command,std::span<const SdlIntroDraw> draws,
+    RegisteredView view,ViewTraversal traversal) const {
+  require_owner_thread();
+  ViewBoundary boundary(view_boundary_busy_);
+  if (traversal.owner_.lock()!=view_identity_ || !active_traversal_ || !traversal.value_ ||
+      active_traversal_->value_!=traversal.value_ || active_traversal_->scene_!=traversal.scene_)
+    throw std::runtime_error("intro view traversal is stale");
+  if (view.owner_.lock()!=view_identity_) throw std::runtime_error("intro view belongs to another renderer");
+  const auto found=registered_views_.find(view.value_);
+  if (found==registered_views_.end() || found->second.scene!=traversal.scene_ || !found->second.camera)
+    throw std::runtime_error("intro view is not registered for this scene");
+  return prepare_camera(command,draws,found->second.camera.get());
+}
 SdlIntroFrame::SdlIntroFrame(std::unique_ptr<Impl> p):impl_(std::move(p)) {}
 SdlIntroFrame::~SdlIntroFrame()=default;
 
 std::unique_ptr<SdlIntroFrame> SdlIntroRenderer::prepare(SDL_GPUCommandBuffer* command,std::span<const SdlIntroDraw> draws, bool diagnostic_camera_bypass) const {
+  return prepare_camera(command,draws,diagnostic_camera_bypass ? nullptr : selected_camera_);
+}
+std::unique_ptr<SdlIntroFrame> SdlIntroRenderer::prepare_camera(SDL_GPUCommandBuffer* command,std::span<const SdlIntroDraw> draws,const graphics::FreshIntroCamera* camera) const {
   if(!command) throw std::runtime_error("intro prepare requires command buffer");
   auto p=std::make_unique<SdlIntroFrame::Impl>(); p->owner=impl_; p->command=command;
   std::vector<Vertex> vertices; std::vector<Uint16> indices;
-  const auto camera_viewport=diagnostic_camera_bypass ? std::optional<SDL_GPUViewport>{} : selected_camera_viewport();
+  std::optional<SDL_GPUViewport> camera_viewport;
+  if(camera) {
+    const auto v=graphics::camera_pixel_viewport(camera->parameters().viewport,camera_parent_);
+    if(v.x<0 || v.y<0 || v.width<=0 || v.height<=0)
+      throw std::runtime_error("camera viewport is unsupported by SDL backend");
+    camera_viewport=SDL_GPUViewport{float(v.x),float(v.y),float(v.width),float(v.height),0,1};
+  }
   std::optional<graphics::PictureProjection> camera_projection;
   if(camera_viewport)
-    camera_projection=graphics::prepare_camera_picture_projection(selected_camera_->parameters(),
-        selected_camera_->flags(),display_width_,display_height_,camera_parent_);
+    camera_projection=graphics::prepare_camera_picture_projection(camera->parameters(),
+        camera->flags(),display_width_,display_height_,camera_parent_);
   for(auto draw:draws) {
     if(camera_viewport) {
       draw.viewport=*camera_viewport;
