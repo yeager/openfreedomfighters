@@ -1221,7 +1221,7 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
     }
     // The reference-free integer profile is staged in a real list owner only
     // between a select and restore; this does not execute a script.
-    for(const int mode:{0,1,2,3,4,5,6,7,8,9}) {
+    for(const int mode:{0,1,2,3,4,5,6,7,8,9,10}) {
         Fixture fixture(false,true);
         const auto offset=fixture.payload.size();
         Bytes frame(4);
@@ -1275,15 +1275,28 @@ static OFF_NOINLINE void test_visual_scope_lifecycle() {
           check(saved==91U,"restore receives select result");order.push_back(3);
           if(mode==5) app.install_postload_script_service(std::make_shared<off::runtime::PostloadScriptService>());
           if(mode==6) app.install_postload_script_service(app.postload_script_service());
+          if(mode==10) {
+            auto& owner=const_cast<off::graphics::IntroConstructedListOwner&>(*runtime.constructed_list_owner(row));
+            owner.factory_component->postload_aux->exchange->entries[0].bits=0U;
+          }
         };
         if(mode==1) services.postload_mode_service.reset();
         if(mode==7) app.install_postload_script_service({});
         if(mode==8) mode_service->enabled=false;
         if(mode!=0 && mode!=4) {
-          rejects([&]{runtime.run_postconstruction_reader_bracket(0U,services);});
-          if(mode!=5 && mode!=6) check(!runtime.constructed_list_owner(row)->factory_component->postload_aux,
+          if(mode==10) {
+            bool expected_failure=false;
+            try {runtime.run_postconstruction_reader_bracket(0U,services);}
+            catch(const std::runtime_error& error) {
+              expected_failure=std::string_view(error.what())=="Postload exchange changed after restore";
+            }
+            check(expected_failure && order==std::vector<int>{1,3} &&
+                  runtime.reader_bracket_stage()==off::graphics::IntroReaderBracketStage::failed,
+                  "exchange mutation is detected after select/restore and before any reader callback");
+          } else rejects([&]{runtime.run_postconstruction_reader_bracket(0U,services);});
+          if(mode!=5 && mode!=6 && mode!=10) check(!runtime.constructed_list_owner(row)->factory_component->postload_aux,
                             "unsupported or invalidated input must not publish exchange");
-          if(mode==5 || mode==6 || mode==9) check(runtime.resource_load_stage()==off::graphics::IntroResourceLoadStage::failed,
+          if(mode==5 || mode==6 || mode==9 || mode==10) check(runtime.resource_load_stage()==off::graphics::IntroResourceLoadStage::failed,
                             "service replacement after restore cannot complete the bracket");
           else if(mode!=3) check(runtime.resource_load_stage()==off::graphics::IntroResourceLoadStage::postload_pending && order.empty(),
                             "unsupported work stays pending without calling select");
