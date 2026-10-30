@@ -47,6 +47,10 @@ intro fallback. This does not confirm animated intro playback, intro audio,
 original menus, or gameplay, which remain incomplete. The GPU runtime receives
 no active intro frame bridge.
 
+A bounded macOS Metal run of the current `main` build completed 120 frames and
+reported the static source-backed intro fallback rendered. The animated intro
+and its audio remain unverified.
+
 The source audit confirms that normal startup retains a
 `NormalIntroSceneSession`, and the SDL GPU runtime binds display dimensions,
 camera display-list state, and the static presentation adapter. It does not
