@@ -18,17 +18,21 @@ NVIDIA also says DLSS 5 integration uses the Streamline framework. See NVIDIA's
 [DLSS 5 research overview](https://research.nvidia.com/labs/adlr/DLSS5/), and
 [launch announcement](https://www.nvidia.com/en-us/geforce/news/dlss-5-3d-guided-neural-rendering/).
 
-As checked on 2026-10-30, the public Streamline 2.14.16 repository documents
-DLSS Super Resolution, Ray Reconstruction, and Frame Generation, but its public
-headers, guides, and source tree do not expose a DLSS 5 Neural Rendering feature
-or integration contract. NVIDIA's product-level statement that DLSS 5 uses
-Streamline is not enough to infer the feature API, required engine resources,
-supported native APIs, or redistribution terms for a custom renderer. Keep DLSS
-5 as a distinct implementation target and request/use NVIDIA's authorized
-integration materials when available. Do not substitute community loaders,
-leaked binaries, or DLSS Super Resolution and label them DLSS 5. See the
-[official Streamline repository](https://github.com/NVIDIA-RTX/Streamline) and
-[Streamline programming guide](https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuide.md).
+As checked on 2026-10-30, Streamline 2.14.0's official changelog adds the
+`sl.dlss_nr` plugin. The public Streamline core header also declares
+`kFeatureDLSS_NR` and generic uplift input-color, output-color, and optional
+control-mask buffer types. This establishes a real public integration surface;
+the earlier claim that Streamline exposed no DLSS 5 feature was incorrect.
+However, the public repository does not contain a DLSS-NR-specific feature
+header, programming guide, or sample that establishes the complete feature
+resource contract, native API/platform and GPU requirements, model/runtime
+availability, or DLSS-NR-specific redistribution terms. The project must obtain
+and validate the authorized plugin package and its applicable terms before
+building or shipping an adapter. Do not infer missing details from SR/FG/RR,
+or substitute community loaders or label Super Resolution as DLSS 5. See the
+[Streamline changelog](https://github.com/NVIDIA-RTX/Streamline/blob/main/changelog.txt),
+[core feature and buffer declarations](https://github.com/NVIDIA-RTX/Streamline/blob/main/include/sl_core_types.h),
+and [Streamline programming guide](https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuide.md).
 
 As checked on 2026-10-30, NVIDIA's public DLSS SDK release history lists
 310.9.16 (released 2026-10-16), and NVIDIA identifies DLSS 4.5 as its current
@@ -105,11 +109,11 @@ permit the intended use, and must remain separate from the native FSR adapter.
 6. Compare disocclusion, foliage, particles, HUD edges, thin geometry, camera cuts,
    and ultrawide output against native and portable paths.
 7. Add latency instrumentation and only then evaluate Frame Generation.
-8. Integrate DLSS 5 neural rendering as a separate final render stage once
-   NVIDIA's authorized Streamline feature interface, resource contract,
-   supported platforms, and distribution terms for custom engines are available.
-   Validate its art-direction controls and temporal behavior without changing
-   the public renderer contract or removing fallbacks.
+8. Validate NVIDIA's authorized `sl.dlss_nr` package, complete resource
+   contract, supported platforms, and applicable distribution terms. Then
+   integrate DLSS 5 as a separate final render stage, with the engine frame,
+   motion vectors, and required art-direction inputs. Validate temporal
+   behavior without changing the public renderer contract or removing fallbacks.
 
 ## Acceptance gates
 
