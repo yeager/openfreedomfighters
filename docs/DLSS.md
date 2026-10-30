@@ -9,26 +9,30 @@ only if OpenFreedomFighters later gains a ray-traced lighting path, and Frame
 Generation remains independently selectable and later than a stable native
 renderer. DLSS is never required to run Modern+.
 
-DLSS 5 is a current NVIDIA neural-rendering product: NVIDIA announced its
-[3D-guided neural-rendering stage and developer controls](https://developer.nvidia.com/blog/whats-new-for-game-developers-dlss-5-with-3d-guided-neural-rendering-nvidia-ace-updates-and-new-rtx-kit-capabilities/)
-in September 2026, including availability in a supported title. The public DLSS
-developer material reviewed for this plan does not provide enough SDK/API and redistribution detail
-to integrate that stage into this custom renderer. Treat DLSS 5 as an integration
-target only after NVIDIA provides an authorized SDK, custom-engine documentation,
-native API/platform requirements, and compatible distribution terms. Do not
-substitute community loaders, leaked binaries, or DLSS 4.x Super Resolution and
-label them DLSS 5.
+DLSS 5 is a released NVIDIA neural-rendering product. NVIDIA describes it as a
+final, one-frame-in/one-frame-out rendering stage conditioned on the rendered
+frame, engine motion vectors, temporal state, and developer art-direction
+controls. NVIDIA reports availability in NBA 2K27 on GeForce RTX 50 Series.
+NVIDIA also says DLSS 5 integration uses the Streamline framework. See NVIDIA's
+[DLSS 5 developer overview](https://developer.nvidia.com/blog/whats-new-for-game-developers-dlss-5-with-3d-guided-neural-rendering-nvidia-ace-updates-and-new-rtx-kit-capabilities/),
+[DLSS 5 research overview](https://research.nvidia.com/labs/adlr/DLSS5/), and
+[launch announcement](https://www.nvidia.com/en-us/geforce/news/dlss-5-3d-guided-neural-rendering/).
 
-NVIDIA's developer forum also says that DLSS 5 customization details have not
-been publicly disclosed. That supports keeping DLSS 5 out of the implementation
-until an authorized integration contract is published; it is not evidence that
-the capability is unavailable in supported commercial titles. See the
-[NVIDIA developer response](https://forums.developer.nvidia.com/t/will-you-be-able-to-train-custom-models-for-dlss5/378886/2).
+As checked on 2026-10-30, the public Streamline 2.14.16 repository documents
+DLSS Super Resolution, Ray Reconstruction, and Frame Generation, but its public
+headers, guides, and source tree do not expose a DLSS 5 Neural Rendering feature
+or integration contract. NVIDIA's product-level statement that DLSS 5 uses
+Streamline is not enough to infer the feature API, required engine resources,
+supported native APIs, or redistribution terms for a custom renderer. Keep DLSS
+5 as a distinct implementation target and request/use NVIDIA's authorized
+integration materials when available. Do not substitute community loaders,
+leaked binaries, or DLSS Super Resolution and label them DLSS 5. See the
+[official Streamline repository](https://github.com/NVIDIA-RTX/Streamline) and
+[Streamline programming guide](https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuide.md).
 
-As checked on 2026-10-27, NVIDIA's public DLSS SDK releases list 310.9.16
-(released 2026-10-16), while NVIDIA's developer page identifies DLSS 4.5 as the
-current Super Resolution integration target. The DLSS 5 product announcement
-does not itself provide a custom-engine SDK contract. Recheck the official
+As checked on 2026-10-30, NVIDIA's public DLSS SDK release history lists
+310.9.16 (released 2026-10-16), and NVIDIA identifies DLSS 4.5 as its current
+Super Resolution integration target. Recheck the official
 [release history](https://github.com/NVIDIA/DLSS/releases) before beginning an
 adapter; SDK versions and redistribution requirements can change.
 
@@ -101,9 +105,11 @@ permit the intended use, and must remain separate from the native FSR adapter.
 6. Compare disocclusion, foliage, particles, HUD edges, thin geometry, camera cuts,
    and ultrawide output against native and portable paths.
 7. Add latency instrumentation and only then evaluate Frame Generation.
-8. Re-evaluate DLSS 5 neural rendering separately from Super Resolution when
-   NVIDIA publishes an authorized custom-engine integration path, without
-   changing the public renderer contract or removing fallbacks.
+8. Integrate DLSS 5 neural rendering as a separate final render stage once
+   NVIDIA's authorized Streamline feature interface, resource contract,
+   supported platforms, and distribution terms for custom engines are available.
+   Validate its art-direction controls and temporal behavior without changing
+   the public renderer contract or removing fallbacks.
 
 ## Acceptance gates
 
