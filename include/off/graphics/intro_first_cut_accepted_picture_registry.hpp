@@ -12,7 +12,7 @@ namespace off::graphics {
 class IntroFirstCutAcceptedPictureRegistry final {
 public:
   explicit IntroFirstCutAcceptedPictureRegistry(const IntroRuntime& runtime) noexcept
-      : runtime_(runtime) {}
+      : runtime_(runtime), records_(runtime) {}
   IntroFirstCutAcceptedPictureRegistry(const IntroFirstCutAcceptedPictureRegistry&) = delete;
   IntroFirstCutAcceptedPictureRegistry& operator=(const IntroFirstCutAcceptedPictureRegistry&) = delete;
   IntroFirstCutAcceptedPictureRegistry(IntroFirstCutAcceptedPictureRegistry&&) = delete;
@@ -26,8 +26,10 @@ public:
   void register_after_generic_accept(const PictureQueuedDrawRecord& record,
                                      IntroRuntimeHandle owner,
                                      IntroRuntimeResourceHandle resource) {
-    validate_live_legal_picture(owner, resource);
-    records_.register_accepted(record, owner, resource);
+    const auto source = validate_live_legal_picture(owner, resource);
+    records_.register_accepted(
+        record, owner, resource,
+        IntroPictureSourceIdentity{runtime_.root_handle(), source});
   }
 
   [[nodiscard]] const IntroAcceptedPictureRecord* resolve(
@@ -40,8 +42,8 @@ public:
   [[nodiscard]] std::size_t size() const noexcept { return records_.size(); }
 
 private:
-  void validate_live_legal_picture(IntroRuntimeHandle owner,
-                                   IntroRuntimeResourceHandle resource) const {
+  [[nodiscard]] std::size_t validate_live_legal_picture(
+      IntroRuntimeHandle owner, IntroRuntimeResourceHandle resource) const {
     if(runtime_.resource_load_stage()!=IntroResourceLoadStage::directory_construction_complete)
       throw std::runtime_error("First-cut accepted-picture runtime is not constructed");
     const auto source=runtime_.resources().sources().local_source_for_authored_reference(
@@ -55,6 +57,7 @@ private:
     const auto associated_owner=runtime_.associated_resource_owner(resource);
     if(resource!=expected_resource || !associated_owner || *associated_owner!=expected_owner)
       throw std::runtime_error("First-cut accepted-picture resource is not the legal picture resource");
+    return *source;
   }
 
   const IntroRuntime& runtime_;
