@@ -19,20 +19,25 @@ NVIDIA also says DLSS 5 integration uses the Streamline framework. See NVIDIA's
 [launch announcement](https://www.nvidia.com/en-us/geforce/news/dlss-5-3d-guided-neural-rendering/).
 
 As checked on 2026-10-30, Streamline 2.14.0's official changelog adds the
-`sl.dlss_nr` plugin. The public Streamline core header also declares
-`kFeatureDLSS_NR` and generic uplift input-color, output-color, and optional
-control-mask buffer types. This establishes a real public integration surface;
-the earlier claim that Streamline exposed no DLSS 5 feature was incorrect.
-However, the public repository does not contain a DLSS-NR-specific feature
-header, programming guide, or sample that establishes the complete feature
-resource contract, native API/platform and GPU requirements, model/runtime
-availability, or DLSS-NR-specific redistribution terms. The project must obtain
-and validate the authorized plugin package and its applicable terms before
+`sl.dlss_nr` plugin. The public core header declares `kFeatureDLSS_NR`, generic
+uplift input-color, output-color and optional control-mask buffer types, plus
+the common feature tagging and evaluation API. The official Streamline 2.14.16
+SDK archive includes `bin/x64/sl.dlss.dll`; its public file inventory has no
+separately named NR binary, feature-specific header, programming guide, or
+sample. This confirms a first-party Streamline path exists, correcting the
+earlier claim that no DLSS 5 feature was exposed.
+
+The public materials still do not establish DLSS-NR's complete resource and
+option contract, native API/platform and GPU requirements, model/runtime
+availability, or the applicable redistribution terms for its runtime assets.
+The project must validate those requirements for the official package before
 building or shipping an adapter. Do not infer missing details from SR/FG/RR,
 or substitute community loaders or label Super Resolution as DLSS 5. See the
-[Streamline changelog](https://github.com/NVIDIA-RTX/Streamline/blob/main/changelog.txt),
-[core feature and buffer declarations](https://github.com/NVIDIA-RTX/Streamline/blob/main/include/sl_core_types.h),
-and [Streamline programming guide](https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuide.md).
+[Streamline 2.14.16 release](https://github.com/NVIDIA-RTX/Streamline/releases/tag/v2.14.16),
+[changelog](https://github.com/NVIDIA-RTX/Streamline/blob/v2.14.16/changelog.txt),
+[core tagging and evaluation API](https://github.com/NVIDIA-RTX/Streamline/blob/v2.14.16/include/sl_core_api.h),
+[core feature and buffer declarations](https://github.com/NVIDIA-RTX/Streamline/blob/v2.14.16/include/sl_core_types.h),
+and [Streamline programming guide](https://github.com/NVIDIA-RTX/Streamline/blob/v2.14.16/docs/ProgrammingGuide.md).
 
 As checked on 2026-10-30, NVIDIA's public DLSS SDK release history lists
 310.9.16 (released 2026-10-16), and NVIDIA identifies DLSS 4.5 as its current
