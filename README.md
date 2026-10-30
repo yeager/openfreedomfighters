@@ -28,7 +28,7 @@ for a portable installation.
 
 ## Current state
 
-Status reviewed 2026-10-29: the project is a native prototype, not a playable
+Status reviewed 2026-10-30: the project is a native prototype, not a playable
 game. A bounded Linux runtime check confirmed that the SDL Vulkan path can
 present the static intro fallback. It does not play the intro timeline or
 activate the main menu. Intro playback, intro audio, menu activation, and
