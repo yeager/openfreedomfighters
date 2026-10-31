@@ -32,12 +32,15 @@ option contract, native API/platform and GPU requirements, model/runtime
 availability, or the applicable redistribution terms for its runtime assets.
 The project must validate those requirements for the official package before
 building or shipping an adapter. Do not infer missing details from SR/FG/RR,
-or substitute community loaders or label Super Resolution as DLSS 5. See the
+or substitute community loaders or label Super Resolution as DLSS 5. Streamline
+2.14.16's programming guide lists Windows 10 RS3+ and Vulkan 1.2+ for its host
+environment; this does not establish Linux/Proton, macOS, or Steam Deck support.
+See the
 [Streamline 2.14.16 release](https://github.com/NVIDIA-RTX/Streamline/releases/tag/v2.14.16),
 [changelog](https://github.com/NVIDIA-RTX/Streamline/blob/v2.14.16/changelog.txt),
 [core tagging and evaluation API](https://github.com/NVIDIA-RTX/Streamline/blob/v2.14.16/include/sl_core_api.h),
 [core feature and buffer declarations](https://github.com/NVIDIA-RTX/Streamline/blob/v2.14.16/include/sl_core_types.h),
-and [Streamline programming guide](https://github.com/NVIDIA-RTX/Streamline/blob/v2.14.16/docs/ProgrammingGuide.md).
+and [Streamline programming guide, machine prerequisites](https://github.com/NVIDIA-RTX/Streamline/blob/v2.14.16/docs/ProgrammingGuide.md#11-machine-configuration).
 
 As checked on 2026-10-30, NVIDIA's public DLSS SDK release history lists
 310.9.16 (released 2026-10-16), and NVIDIA identifies DLSS 4.5 as its current
@@ -59,12 +62,13 @@ The planned engine-owned vendor-neutral temporal-upscaler interface will accept:
 - an output-resolution destination that is complete before UI composition.
 
 No user-selectable temporal adapter or resolver is currently exposed. The SDL
-Modern path is spatial-only: fixed render scaling followed by linear output
-scaling. Native-resolution, portable temporal, and DLSS adapters are future
-implementations of this contract. A future FSR adapter may use the same contract
-only after its official SDK and platform requirements are validated. Simulation,
-input sampling, audio, saves, and replay state never depend on the selected
-adapter or on generated presentation frames.
+Modern path has optional AMD FSR 1 EASU+RCAS for SDR UNORM color images; it does
+not provide temporal inputs. Native-resolution temporal, portable temporal, and
+DLSS adapters remain future implementations of this contract. A future
+temporal FSR adapter may use the same contract only after its official SDK and
+platform requirements are validated. Simulation, input sampling, audio, saves,
+and replay state never depend on the selected adapter or on generated
+presentation frames.
 
 ## Platform and packaging policy
 
@@ -108,9 +112,10 @@ permit the intended use, and must remain separate from the native FSR adapter.
 4. Integrate DLSS 4.5 Super Resolution behind the same contract, beginning with
    the first-class Windows x64/D3D12 target and then each additional native target
    explicitly supported by NVIDIA's SDK.
-5. Evaluate an optional FSR adapter independently against AMD's official supported
-   APIs and redistribution terms; do not expose or label it before the adapter,
-   required frame inputs, and quality validation exist.
+5. Evaluate a temporal FSR adapter independently against AMD's official
+   supported APIs and redistribution terms; do not expose or label it before
+   the adapter, required frame inputs, and quality validation exist. FSR 1 is
+   already available as a separate spatial option.
 6. Compare disocclusion, foliage, particles, HUD edges, thin geometry, camera cuts,
    and ultrawide output against native and portable paths.
 7. Add latency instrumentation and only then evaluate Frame Generation.
