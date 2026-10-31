@@ -484,6 +484,7 @@ struct IntroParticleEmitterDeferredShape {
   std::array<std::size_t, 6> tag_classes{};
   std::uint64_t framing_digest{};
   std::size_t count{};
+  std::size_t admitted_readers{};
   [[nodiscard]] bool operator==(const IntroParticleEmitterDeferredShape&) const = default;
 };
 struct IntroParticleEmitterDeferredDispatchInventory {

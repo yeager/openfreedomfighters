@@ -1215,6 +1215,8 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool readiness_o
             << "particle-emitter-attachment-instances=" << particle_dispatch.attachment_instances << '\n'
             << "particle-emitter-owners-with-deferred-blocks=" << particle_dispatch.owners_with_deferred_blocks << '\n';
   for(const auto& shape:particle_dispatch.shapes) {
+    if(shape.admitted_readers>shape.count)
+      throw std::runtime_error("ParticleEmitter structural inventory has inconsistent admission totals");
     std::cout << "particle-emitter-structural-shape="
               << "bytes=" << shape.block_bytes
               << " attachments=" << shape.attachment_count
@@ -1223,7 +1225,9 @@ int run_first_cut_probe(const std::filesystem::path &data_path, bool readiness_o
               << ',' << shape.tag_classes[2] << ',' << shape.tag_classes[3]
               << ',' << shape.tag_classes[4] << ',' << shape.tag_classes[5]
               << " framing-digest=" << shape.framing_digest
-              << " count=" << shape.count << '\n';
+              << " count=" << shape.count
+              << " admitted=" << shape.admitted_readers
+              << " unadmitted=" << shape.count-shape.admitted_readers << '\n';
   }
   write_unimplemented_attachment_reader_frontier_probe(
       std::cout,unimplemented_reader_frontier);

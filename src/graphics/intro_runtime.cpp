@@ -2316,13 +2316,16 @@ IntroRuntime::particle_emitter_deferred_dispatch_inventory() const {
     const auto profile = data::DeferredCompactBlockProfiler::profile(
         block.subspan(sizeof(std::uint32_t)));
     ++result.owners_with_deferred_blocks;
+    const bool reader_admitted =
+        particle_emitter_deferred_reader_states_.contains(row);
     IntroParticleEmitterDeferredShape shape{
         .block_bytes = block.size(),
         .attachment_count = source.attachments.size(),
         .attachment_delimiters = profile.attachment_delimiters,
         .tag_classes = profile.value_kinds,
         .framing_digest = profile.framing_digest,
-        .count = 1U};
+        .count = 1U,
+        .admitted_readers = reader_admitted ? 1U : 0U};
     const auto existing = std::ranges::find_if(
         result.shapes, [&shape](const IntroParticleEmitterDeferredShape& candidate) {
           return candidate.block_bytes == shape.block_bytes &&
@@ -2333,8 +2336,10 @@ IntroRuntime::particle_emitter_deferred_dispatch_inventory() const {
         });
     if (existing == result.shapes.end())
       result.shapes.push_back(shape);
-    else
+    else {
       ++existing->count;
+      existing->admitted_readers += reader_admitted ? 1U : 0U;
+    }
   }
   std::ranges::sort(result.shapes, {}, [](const IntroParticleEmitterDeferredShape& shape) {
     return std::tuple{shape.block_bytes, shape.attachment_count,
