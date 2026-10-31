@@ -30,4 +30,14 @@ enabled only when its spatial resources are available; the runtime reports it
 active only for submitted EASU and RCAS frames. SDK discovery or successful
 compilation alone is not runtime support.
 
+The retained `FF-StartUp` registry and boot-menu initialization receipt do not
+select a gameplay scene or authorize a scene transition. The registry only
+proves checked source ownership and hierarchy; the receipt only proves the
+BootMenu reader and initialization boundary. The diagnostic
+`WorldSceneSession` likewise exposes source candidates, not an active root,
+camera, visibility set, or gameplay draw order. The next world-rendering gate
+is a source-backed selected-scene lease/receipt from normal startup. A
+frame-scoped draw producer can be connected to SDL only after that authority
+and the corresponding transform, camera, and visibility inputs are available.
+
 Any diagnostic rendering must remain labeled diagnostic. Do not publish retail assets, private captures, executable analysis, or source-derived corpus data.

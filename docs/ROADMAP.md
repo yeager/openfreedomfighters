@@ -7,6 +7,7 @@ The roadmap is organized around a playable, compatible application rather than i
 - Load user-owned installation data through bounded, validated parsers.
 - Complete normal scene activation, ownership, update, input, and teardown.
 - Reproduce intro playback and transition into a navigable main menu.
+- Produce a source-backed selected-scene lease/receipt from normal startup before adding a gameplay frame producer.
 - Render scene geometry through a verified object, transform, camera, and draw-record path.
 - Preserve Original compatibility while adding independently selectable Modern rendering features.
 - Keep temporal and vendor upscalers unavailable until real frame inputs and native submission are connected.
