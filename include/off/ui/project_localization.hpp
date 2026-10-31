@@ -42,6 +42,7 @@ enum class MessageId : std::size_t {
   technical_details,
   verifying_game_data,
   preparing_startup,
+  intro_playback_pending,
   original,
   modern,
   modern_plus,
@@ -151,8 +152,8 @@ struct CatalogBuildResult {
 [[nodiscard]] const ProjectCatalog &f10_catalog();
 
 // Builds the project-owned window title used while the native renderer shows
-// the admitted static intro fallback.  It deliberately reuses the startup
-// preparation status: the fallback is not a separate cutscene lifecycle.
+// the admitted static intro fallback. The text reports that animated playback
+// has not started; it does not claim that scene activation has succeeded.
 // Neither input is interpreted as retail text or an asset identifier.
 [[nodiscard]] std::string intro_fallback_window_title(
     std::string_view explicit_locale,

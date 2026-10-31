@@ -367,7 +367,7 @@ bool append_intro_fallback_status(GraphicsMenuDrawList &list,
       list.target.height == 0U || !std::isfinite(list.ui_scale) ||
       list.ui_scale < 0.5F || list.ui_scale > 4.0F)
     return false;
-  const auto text = localized(l10n::MessageId::preparing_startup,
+  const auto text = localized(l10n::MessageId::intro_playback_pending,
                               explicit_locale, platform_locales);
   if (text.empty() || list.texts.size() >= maximum_ui_texts ||
       list.rectangles.size() >= maximum_ui_rects)

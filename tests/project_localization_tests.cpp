@@ -83,10 +83,10 @@ int main() {
         "startup preparation status resolves as UTF-8");
   const std::array<std::string_view, 1> swedish_host{{"sv-SE"}};
   check(intro_fallback_window_title("", swedish_host) ==
-            "OpenFreedomFighters — Förbereder uppstart...",
+            "OpenFreedomFighters — Introsekvensen har inte startat.",
         "static intro fallback title follows the system locale");
   check(intro_fallback_window_title("ja-JP", swedish_host) ==
-            "OpenFreedomFighters — 起動を準備中...",
+            "OpenFreedomFighters — イントロはまだ再生されていません。",
         "explicit locale takes priority for the static intro fallback title");
   constexpr std::array<std::string_view, locale_count> locale_tags{{
       "en-US", "sv-SE", "da-DK", "nb-NO", "fi-FI", "de-DE", "fr-FR",
