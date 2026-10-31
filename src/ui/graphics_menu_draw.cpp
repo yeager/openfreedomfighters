@@ -381,16 +381,16 @@ bool append_intro_fallback_status(GraphicsMenuDrawList &list,
   const float target_width = static_cast<float>(list.target.width);
   const float target_height = static_cast<float>(list.target.height);
   // Keep the status panel inside tiny and unusually shaped output extents.
-  // At normal sizes this remains exactly the existing 360x42 panel with a
-  // 12-unit inset.
+  // At normal sizes this leaves enough room for the longest built-in
+  // translation while keeping the full status inside the output extent.
   const float scale = std::min(
-      {list.ui_scale, 1.0F, target_width / 384.0F, target_height / 54.0F});
+      {list.ui_scale, 1.0F, target_width / 584.0F, target_height / 54.0F});
   if (!(scale > 0.0F))
     return false;
   const float padding = 12.0F * scale;
   const float height = 42.0F * scale;
   const float width = std::min(target_width - padding * 2.0F,
-                               360.0F * scale);
+                               560.0F * scale);
   if (!(width > 0.0F) || !(height > 0.0F))
     return false;
   const UiRect bounds{padding,
