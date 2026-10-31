@@ -7,8 +7,9 @@
 A clean-room native reimplementation of *Freedom Fighters*, targeting Windows,
 macOS, Linux and Steam Deck.
 
-**Not playable yet.** The build opens a window and loads startup data, but
-normal startup does not yet run the original intro, menus, or gameplay.
+**Not playable yet.** The clean-room build opens a window and loads startup
+data, but normal startup does not yet play the intro, open the original menus,
+or run gameplay.
 
 You need your own copy of the game. Buy *Freedom Fighters* from the
 [official Steam store page](https://store.steampowered.com/app/1347780/Freedom_Fighters/).
@@ -28,7 +29,7 @@ for a portable installation.
 
 ## Current state
 
-Status reviewed 2026-10-30: the project is a native prototype, not a playable
+Status reviewed 2026-10-31: the project is a native prototype, not a playable
 game. A bounded Linux runtime check confirmed that the SDL Vulkan path can
 present the static intro fallback. It does not play the intro timeline or
 activate the main menu. Intro playback, intro audio, menu activation, and
