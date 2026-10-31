@@ -65,6 +65,17 @@ values. The existing ordinary intro dispatcher is also disconnected from the
 loop and currently supplies a concrete update only for the default preview
 camera; it does not dispatch MovieControl.
 
+The existing first-cut frame path is one-shot. View admission mints a
+`FirstCutFrameAdmissionPermit`; legal-picture activation supplies a separate
+one-use receipt; `FirstCutPictureFrame::assemble` consumes both and advances
+the frame generation. `SdlFirstCutPictureFrameBridge` pins that generation and
+rejects reassembly while it is in use. The SDL loop can therefore redraw an
+already assembled, admitted picture, but there is no production source that
+advances the intro timeline, creates new ordered picture records, and assembles
+subsequent frames. A playback implementation needs a frame-update contract
+whose timing and picture records come from the active scene while preserving
+view and resource ownership; replaying the initial one-shot receipts is invalid.
+
 World startup likewise lacks a live active-root producer; the existing world
 frame input is diagnostic and is not a normal scene-manager result. Intro and
 world frame inputs are currently mutually exclusive in `run_sdl_gpu_runtime`.
