@@ -84,6 +84,12 @@ bool SdlActiveViewHost::activate(std::shared_ptr<const void> owner,bool ready) {
   ++next_scene_; scene_owner_=std::move(owner); scene_=std::move(scene);
   return true;
 }
+bool SdlActiveViewHost::activate(
+    const graphics::SelectedIntroCameraViewLease& camera, bool ready) {
+  if (!camera.valid())
+    return false;
+  return activate(camera.scene_owner_, ready);
+}
 void SdlActiveViewHost::set_ready(bool ready) {
   require_owner(); Boundary boundary(busy_);
   if (!scene_) throw std::runtime_error("active view host has no scene");
@@ -102,6 +108,15 @@ SdlActiveViewHost::Coordinator::Outcome SdlActiveViewHost::admit(
   try {
     return coordinator_.admit(true,true,scene_,identity,std::make_shared<CameraLease>(std::move(camera)),priority,dimensions);
   } catch (...) { return Coordinator::Outcome::failure; }
+}
+SdlActiveViewHost::Coordinator::Outcome SdlActiveViewHost::admit(
+    bool present, bool ready,
+    const graphics::SelectedIntroCameraViewLease& camera,
+    std::uint32_t priority, Coordinator::Dimensions dimensions) {
+  if (!camera.valid())
+    return Coordinator::Outcome::failure;
+  return admit(present, ready, camera.camera_identity_, camera.camera_, priority,
+               dimensions);
 }
 std::vector<SdlActiveViewHost::Coordinator::Deferred> SdlActiveViewHost::deferred() const {
   require_owner(); Boundary boundary(busy_);

@@ -2,6 +2,7 @@
 
 #include "off/graphics/intro_runtime.hpp"
 #include "off/graphics/normal_intro_scene_session.hpp"
+#include "off/graphics/selected_intro_camera_view_lease.hpp"
 
 #include <memory>
 #include <stdexcept>
@@ -34,6 +35,27 @@ public:
   [[nodiscard]] NormalIntroSceneSession& session() noexcept { return *session_; }
   [[nodiscard]] const NormalIntroSceneSession& session() const noexcept { return *session_; }
   [[nodiscard]] std::shared_ptr<const void> lifetime_owner() const { return shared_from_this(); }
+  // Available only after the source-backed first-cut player has been prepared.
+  // Its preparation validates that the sequence camera reference, Window's
+  // selected-camera reference, resource mapping, and live camera owner agree.
+  [[nodiscard]] SelectedIntroCameraViewLease
+  first_cut_camera_view_lease() const {
+    const auto& runtime = session_->runtime();
+    const auto* prepared = runtime.first_cut_player_prepared_state();
+    if (!prepared || prepared->camera_owner.value == 0U ||
+        prepared->camera_resource.value == 0U ||
+        runtime.resource_handle(prepared->camera_owner) !=
+            prepared->camera_resource)
+      throw std::runtime_error(
+          "first-cut camera view lease requires a live prepared camera");
+
+    const auto& camera = runtime.camera_for_owner(prepared->camera_owner);
+    auto owner = shared_from_this();
+    std::shared_ptr<const FreshIntroCamera> camera_alias(
+        owner, std::addressof(camera));
+    return SelectedIntroCameraViewLease(
+        std::move(owner), std::move(camera_alias), prepared->camera_owner.value);
+  }
 
 private:
   OwnedNormalIntroScene(IntroPreparedResources&& resources,

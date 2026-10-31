@@ -1,6 +1,7 @@
 #pragma once
 
 #include "off/graphics/active_view_coordinator.hpp"
+#include "off/graphics/selected_intro_camera_view_lease.hpp"
 #include "off/platform/sdl_intro_renderer.hpp"
 
 #include <memory>
@@ -39,9 +40,17 @@ public:
   // camera is an aliasing shared_ptr with the same control block. Matching
   // control blocks cannot prove that the camera pointer belongs to that owner.
   [[nodiscard]] bool activate(std::shared_ptr<const void> scene_owner, bool ready);
+  // Source-owned first-cut overload. The lease binds the selected camera
+  // pointer to the owning intro scene before this host sees either value.
+  [[nodiscard]] bool activate(
+      const graphics::SelectedIntroCameraViewLease& camera, bool ready);
   void set_ready(bool ready);
   [[nodiscard]] Coordinator::Outcome admit(bool service_present, bool service_ready,
       std::uint64_t camera_identity, std::shared_ptr<const graphics::FreshIntroCamera> camera,
+      std::uint32_t priority, Coordinator::Dimensions dimensions);
+  [[nodiscard]] Coordinator::Outcome admit(
+      bool service_present, bool service_ready,
+      const graphics::SelectedIntroCameraViewLease& camera,
       std::uint32_t priority, Coordinator::Dimensions dimensions);
   [[nodiscard]] std::vector<Coordinator::Deferred> deferred() const;
   [[nodiscard]] std::optional<Coordinator::Grant> issue_grant(std::uint64_t request_id);
