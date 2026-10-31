@@ -23,7 +23,7 @@ namespace {
 [[nodiscard]] bool valid(Upscaler value) {
   return value == Upscaler::native || value == Upscaler::temporal ||
          value == Upscaler::dlss || value == Upscaler::fsr ||
-         value == Upscaler::xess;
+         value == Upscaler::xess || value == Upscaler::fsr1_spatial;
 }
 
 [[nodiscard]] bool valid(ShadowQuality value) {
@@ -101,14 +101,22 @@ resolve_graphics_settings(const RequestedGraphicsSettings &requested,
     effective.upscaler = Upscaler::native;
     effective.shadow_quality = ShadowQuality::reference;
   } else {
+    // FSR 1 is a spatial pass over current color and is not a temporal
+    // vendor-provider feature. It remains distinct from the Modern+ adapters.
+    if (effective.profile != Mode::modern &&
+        effective.upscaler == Upscaler::fsr1_spatial) {
+      effective.upscaler = Upscaler::native;
+      effective.fallbacks.push_back(
+          {GraphicsField::upscaler, FallbackReason::fsr1_spatial_unavailable});
+    }
     if (effective.modern_plus && !capabilities.modern_plus) {
       effective.modern_plus = false;
       effective.fallbacks.push_back({GraphicsField::modern_plus,
                                      FallbackReason::modern_plus_unavailable});
     }
-    // Vendor reconstruction is a Modern+ feature.  The runtime negotiator
-    // already applies the same policy when it exposes bindings, but settings
-    // can also be resolved by tools, tests, and a restored preferences file.
+    // Vendor reconstruction is a Modern+ feature. The runtime negotiator
+    // applies the same policy when it exposes provider bindings, but settings
+    // can also be resolved from restored preferences.
     // Keep this second boundary so a stale or malformed capability object can
     // never activate a vendor path from the plain Modern profile.
     // Resolve against the effective profile, not just user intent.  A stale
@@ -139,6 +147,12 @@ resolve_graphics_settings(const RequestedGraphicsSettings &requested,
                                                           : Upscaler::native;
       effective.fallbacks.push_back(
           {GraphicsField::upscaler, FallbackReason::xess_upscaler_unavailable});
+    } else if (effective.upscaler == Upscaler::fsr1_spatial &&
+               !capabilities.fsr1_spatial_upscaler) {
+      effective.upscaler = Upscaler::native;
+      effective.fallbacks.push_back(
+          {GraphicsField::upscaler,
+           FallbackReason::fsr1_spatial_unavailable});
     } else if (effective.upscaler == Upscaler::temporal &&
                !capabilities.temporal_upscaler) {
       effective.upscaler = Upscaler::native;

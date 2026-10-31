@@ -63,9 +63,15 @@ milestones. No normal world-scene frame has been verified. See the
 [normal startup scene host](docs/NORMAL_STARTUP_SCENE_HOST.md) for the missing
 integration boundaries.
 
-Optional FSR SDK build support exists, but the SDL renderer has no FSR frame
-adapter or validated gameplay inputs, so FSR remains unavailable at runtime.
-See the [FSR integration status](docs/FSR.md).
+The SDL renderer now includes a separate AMD FSR 1 spatial path using EASU and
+RCAS on the current color image. It is enabled only when the active GPU can
+create the required shader pipelines and SDR UNORM targets; sRGB/HDR currently
+fall back to native scaling. Six EASU/RCAS frames were submitted on macOS Metal
+and Linux Vulkan/llvmpipe; physical hardware and image quality still need
+verification. Temporal FSR, DLSS,
+and XeSS remain unavailable until the normal
+scene frame supplies their required inputs. See the [FSR integration status](docs/FSR.md)
+and [FSR 1 specification](docs/FSR1_SPATIAL_SPEC.md).
 
 The diagnostic scene preview is a project-authored inspection tool. It does
 not establish gameplay transforms or rendering parity. See the
@@ -93,8 +99,9 @@ boundary for future native GPU integrations. No gameplay pass currently uses
 it, and it is not a DLSS, FSR, or XeSS implementation. A renderer-backed SDL
 active-view host exists, but normal startup does not bind it to an active scene
 or produce scene frames. No color/depth/motion-vector input reaches a temporal
-resolver. DLSS, FSR, and XeSS remain unavailable at runtime until normal scene
-inputs and native submission are connected.
+resolver. DLSS, temporal FSR, and XeSS remain unavailable at runtime until
+normal scene inputs and native submission are connected. FSR 1 is the separate
+spatial color-only path described above.
 
 F10 opens the project-authored graphics settings panel. Keyboard and controller
 navigation, render scaling, and saved preferences are implemented. An explicit
@@ -126,11 +133,11 @@ These are targets, not working renderers:
 - **Modern:** higher resolutions, improved lighting, shadows and filtering.
 - **Modern+:** optional HD assets and future DLSS 4.5, AMD FSR, and Intel XeSS-SR backends on supported hardware.
 
-The settings panel has a mode selector and a working 50--200% render-scale
-control. The current SDL Modern path is spatial-only: it records DLSS, FSR, and
-XeSS requests but uses fixed render scaling and linear output scaling until a
-verified native adapter exists. No portable temporal fallback or resolver is
-implemented or exposed. HD asset support is not implemented. See [Modern graphics](docs/MODERN_GRAPHICS.md),
+The settings panel has a mode selector, a working 50--200% render-scale
+control, and an optional FSR 1 spatial EASU/RCAS path for supported SDR UNORM
+formats. The current runtime still records DLSS, temporal FSR, and XeSS requests
+without a verified temporal resolver or native adapter. HD asset support is not
+implemented. See [Modern graphics](docs/MODERN_GRAPHICS.md),
 [DLSS](docs/DLSS.md), [FSR](docs/FSR.md), and [XeSS](docs/XESS.md) for scope and licensing.
 Project-authored UI strings already select the system locale across 20 locales,
 including Swedish. Complete game-text localization, shaping and full retail-font

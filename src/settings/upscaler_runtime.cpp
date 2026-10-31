@@ -20,6 +20,8 @@ namespace {
     return 2;
   case Upscaler::xess:
     return 3;
+  case Upscaler::fsr1_spatial:
+    return 4;
   case Upscaler::native:
     break;
   }

@@ -16,15 +16,16 @@ struct RuntimePresentationSettings {
   graphics::RenderScaleExtent output_extent{};
   graphics::RenderScaleExtent content_extent{};
   bool spatial_resample{false};
+  bool fsr1_spatial_active{false};
+  bool fsr1_spatial_fallback{false};
   friend bool operator==(const RuntimePresentationSettings &,
                          const RuntimePresentationSettings &) = default;
 };
 
-// Modern+ is an implementation capability, not a profile label.  A platform
-// renderer must clear it until it has bound the enhanced presentation path it
-// intends to use.  Vendor provider bits are Modern+-only as well, so clearing
-// the profile capability keeps stale discovery/configuration claims out of F10
-// before settings resolution.
+// Modern+ is an implementation capability, not a profile label. A platform
+// renderer must clear it until it has bound the enhanced presentation path.
+// Vendor provider bits are Modern+-only; native spatial FSR 1 is negotiated
+// separately and can remain available in plain Modern.
 [[nodiscard]] settings::GraphicsCapabilities
 negotiate_runtime_presentation_capabilities(
     settings::GraphicsCapabilities base,
@@ -36,6 +37,7 @@ negotiate_runtime_presentation_capabilities(
 [[nodiscard]] std::optional<RuntimePresentationSettings>
 resolve_runtime_presentation_settings(
     const settings::EffectiveGraphicsSettings &effective,
-    graphics::RenderScaleExtent output_extent) noexcept;
+    graphics::RenderScaleExtent output_extent,
+    bool fsr1_spatial_available = false) noexcept;
 
 } // namespace off::platform

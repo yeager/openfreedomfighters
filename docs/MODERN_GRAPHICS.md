@@ -4,7 +4,7 @@ OpenFreedomFighters has an Original compatibility profile and a Modern profile. 
 
 Modern rendering should improve resolution handling, filtering, anti-aliasing, lighting, shadows, effects, and color output while preserving clear fallbacks. UI and subtitles should be composed at output resolution.
 
-The current normal scene path is incomplete. It does not yet supply a complete live scene frame to a temporal resolver, so the runtime must not advertise temporal upscaling or DLSS/FSR/XeSS merely because a setting, library, or SDK is present. Vendor support requires real inputs, native submission, runtime/version checks, history invalidation, and image-quality validation. See [DLSS.md](DLSS.md), [FSR.md](FSR.md), and [XESS.md](XESS.md).
+The current normal scene path is incomplete. It does not yet supply a complete live scene frame to a temporal resolver, so the runtime must not advertise temporal upscaling, DLSS, temporal FSR, or XeSS merely because a setting, library, or SDK is present. Vendor support requires real inputs, native submission, runtime/version checks, history invalidation, and image-quality validation. See [DLSS.md](DLSS.md), [FSR.md](FSR.md), and [XESS.md](XESS.md). FSR 1 is a separate spatial path that uses the current color image without temporal inputs; its project shaders and SDL EASU/RCAS submissions are implemented for SDR UNORM formats. Six-frame runs verified submission on macOS Metal and Linux Vulkan/llvmpipe; physical hardware and image quality still require validation. See [FSR1_SPATIAL_SPEC.md](FSR1_SPATIAL_SPEC.md).
 
 The SDL GPU depth target is used only when the source-only diagnostic scene is
 provided; normal startup currently supplies no world-scene plan to that draw
@@ -23,8 +23,11 @@ it does not by itself enable a vendor upscaler or change runtime capabilities.
 The current SDL runtime still lacks a concrete active-view host and normal
 scene-frame producer. The project's display-camera binding and diagnostic
 presentation are not frame admission. Therefore, no normal color/depth/motion
-vector set is submitted to DLSS, FSR, or XeSS, and those options must remain
-unavailable as runtime features until a complete scene pass and backend adapter
-exist. SDK discovery or successful compilation alone is not runtime support.
+vector set is submitted to DLSS, temporal FSR, or XeSS, and those options must
+remain unavailable as runtime features until a complete scene pass and backend
+adapter exist. FSR 1 is separate: it consumes the current color target and is
+enabled only when its spatial resources are available; the runtime reports it
+active only for submitted EASU and RCAS frames. SDK discovery or successful
+compilation alone is not runtime support.
 
 Any diagnostic rendering must remain labeled diagnostic. Do not publish retail assets, private captures, executable analysis, or source-derived corpus data.

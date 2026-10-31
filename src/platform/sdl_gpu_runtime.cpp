@@ -11,6 +11,7 @@
 #include "off/platform/sdl_menu_keyboard.hpp"
 #include "off/platform/scene_texture_filtering.hpp"
 #include "off/platform/sdl_swapchain_frame.hpp"
+#include "off/platform/fsr1_spatial_shader.hpp"
 #include "off/settings/upscaler_runtime.hpp"
 #include "off/settings/graphics_settings_store.hpp"
 #include "off/ui/graphics_menu_draw.hpp"
@@ -30,6 +31,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -94,6 +96,14 @@ struct GpuRenderScaleTarget {
   Uint32 height{0};
   SDL_GPUTextureFormat format{SDL_GPU_TEXTUREFORMAT_INVALID};
   bool storage_writable{false};
+};
+
+struct GpuFsr1Spatial {
+  SDL_GPUGraphicsPipeline *easu_pipeline{nullptr};
+  SDL_GPUGraphicsPipeline *rcas_pipeline{nullptr};
+  SDL_GPUSampler *sampler{nullptr};
+  SDL_GPUTextureFormat format{SDL_GPU_TEXTUREFORMAT_INVALID};
+  GpuRenderScaleTarget easu_target;
 };
 
 struct OverlayBatch {
@@ -218,6 +228,212 @@ void release_render_scale_target(SDL_GPUDevice *device,
   target.storage_writable =
       (usage & SDL_GPU_TEXTUREUSAGE_COMPUTE_STORAGE_WRITE) != 0;
   return true;
+}
+
+void release_fsr1_pipelines(SDL_GPUDevice *device, GpuFsr1Spatial &fsr1) {
+  if (fsr1.easu_pipeline != nullptr)
+    SDL_ReleaseGPUGraphicsPipeline(device, fsr1.easu_pipeline);
+  if (fsr1.rcas_pipeline != nullptr)
+    SDL_ReleaseGPUGraphicsPipeline(device, fsr1.rcas_pipeline);
+  if (fsr1.sampler != nullptr)
+    SDL_ReleaseGPUSampler(device, fsr1.sampler);
+  fsr1.easu_pipeline = nullptr;
+  fsr1.rcas_pipeline = nullptr;
+  fsr1.sampler = nullptr;
+  fsr1.format = SDL_GPU_TEXTUREFORMAT_INVALID;
+}
+
+void release_fsr1_spatial(SDL_GPUDevice *device, GpuFsr1Spatial &fsr1) {
+  release_fsr1_pipelines(device, fsr1);
+  release_render_scale_target(device, fsr1.easu_target);
+}
+
+[[nodiscard]] SDL_GPUGraphicsPipeline *create_fsr1_pipeline(
+    SDL_GPUDevice *device, SDL_GPUShader *vertex, SDL_GPUShader *fragment,
+    SDL_GPUTextureFormat format) {
+  const SDL_GPUColorTargetDescription target{
+      .format = format,
+      .blend_state = {.enable_blend = false}};
+  const SDL_GPUGraphicsPipelineCreateInfo info{
+      .vertex_shader = vertex,
+      .fragment_shader = fragment,
+      .vertex_input_state = {},
+      .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+      .rasterizer_state = {.fill_mode = SDL_GPU_FILLMODE_FILL,
+                           .cull_mode = SDL_GPU_CULLMODE_NONE,
+                           .front_face = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE},
+      .multisample_state = {.sample_count = SDL_GPU_SAMPLECOUNT_1},
+      .target_info = {.color_target_descriptions = &target,
+                      .num_color_targets = 1,
+                      .depth_stencil_format = SDL_GPU_TEXTUREFORMAT_INVALID,
+                      .has_depth_stencil_target = false}};
+  return SDL_CreateGPUGraphicsPipeline(device, &info);
+}
+
+[[nodiscard]] bool ensure_fsr1_spatial_resources(
+    SDL_GPUDevice *device, SDL_GPUTextureFormat format, Uint32 output_width,
+    Uint32 output_height, GpuFsr1Spatial &fsr1) {
+  if (format == SDL_GPU_TEXTUREFORMAT_INVALID || output_width == 0 ||
+      output_height == 0)
+    return false;
+  // FSR 1 samples and writes linear color. Keep this path SDR UNORM until the
+  // renderer has an explicit sRGB/HDR transfer-function contract.
+  if (format != SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM &&
+      format != SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM) {
+    SDL_Log("FSR 1 unavailable: SDL swapchain format %u is outside the "
+            "supported SDR UNORM formats",
+            static_cast<unsigned>(format));
+    return false;
+  }
+  constexpr Uint32 required_usage = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET |
+                                   SDL_GPU_TEXTUREUSAGE_SAMPLER;
+  if (!SDL_GPUTextureSupportsFormat(device, format, SDL_GPU_TEXTURETYPE_2D,
+                                    required_usage)) {
+    SDL_Log("FSR 1 unavailable: SDL GPU format %u cannot be sampled and "
+            "used as a color target",
+            static_cast<unsigned>(format));
+    return false;
+  }
+  if (fsr1.format != format || fsr1.easu_pipeline == nullptr ||
+      fsr1.rcas_pipeline == nullptr || fsr1.sampler == nullptr) {
+    if (fsr1.easu_target.texture != nullptr)
+      release_render_scale_target(device, fsr1.easu_target);
+    release_fsr1_pipelines(device, fsr1);
+    SDL_GPUShader *vertex = nullptr;
+    SDL_GPUShader *easu = nullptr;
+    SDL_GPUShader *rcas = nullptr;
+    SDL_GPUGraphicsPipeline *easu_pipeline = nullptr;
+    SDL_GPUGraphicsPipeline *rcas_pipeline = nullptr;
+    SDL_GPUSampler *sampler = nullptr;
+    std::string creation_error;
+    try {
+      vertex = create_fsr1_spatial_shader(
+          device, Fsr1SpatialShaderStage::fullscreen_vertex);
+      easu = create_fsr1_spatial_shader(
+          device, Fsr1SpatialShaderStage::easu_fragment);
+      rcas = create_fsr1_spatial_shader(
+          device, Fsr1SpatialShaderStage::rcas_fragment);
+      easu_pipeline = create_fsr1_pipeline(device, vertex, easu, format);
+      rcas_pipeline = create_fsr1_pipeline(device, vertex, rcas, format);
+      const SDL_GPUSamplerCreateInfo sampler_info{
+          .min_filter = SDL_GPU_FILTER_NEAREST,
+          .mag_filter = SDL_GPU_FILTER_NEAREST,
+          .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+          .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+          .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+          .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE};
+      sampler = SDL_CreateGPUSampler(device, &sampler_info);
+    } catch (const std::exception &error) {
+      creation_error = error.what();
+    }
+    if (vertex != nullptr)
+      SDL_ReleaseGPUShader(device, vertex);
+    if (easu != nullptr)
+      SDL_ReleaseGPUShader(device, easu);
+    if (rcas != nullptr)
+      SDL_ReleaseGPUShader(device, rcas);
+    if (easu_pipeline == nullptr || rcas_pipeline == nullptr ||
+        sampler == nullptr) {
+      if (creation_error.empty())
+        creation_error = SDL_GetError();
+      SDL_Log("FSR 1 unavailable on %s: %s", SDL_GetGPUDeviceDriver(device),
+              creation_error.empty() ? "GPU resource creation failed"
+                                     : creation_error.c_str());
+      if (easu_pipeline != nullptr)
+        SDL_ReleaseGPUGraphicsPipeline(device, easu_pipeline);
+      if (rcas_pipeline != nullptr)
+        SDL_ReleaseGPUGraphicsPipeline(device, rcas_pipeline);
+      if (sampler != nullptr)
+        SDL_ReleaseGPUSampler(device, sampler);
+      return false;
+    }
+    fsr1.easu_pipeline = easu_pipeline;
+    fsr1.rcas_pipeline = rcas_pipeline;
+    fsr1.sampler = sampler;
+    fsr1.format = format;
+  }
+  return ensure_render_scale_target(device, output_width, output_height,
+                                    format, fsr1.easu_target);
+}
+
+struct alignas(16) Fsr1EasuUniforms {
+  std::array<std::uint32_t, 4> con0;
+  std::array<std::uint32_t, 4> con1;
+  std::array<std::uint32_t, 4> con2;
+  std::array<std::uint32_t, 4> con3;
+};
+
+struct alignas(16) Fsr1RcasUniforms {
+  std::array<std::uint32_t, 4> con;
+};
+
+[[nodiscard]] std::uint32_t float_bits(float value) noexcept {
+  return std::bit_cast<std::uint32_t>(value);
+}
+
+[[nodiscard]] Fsr1EasuUniforms make_fsr1_easu_uniforms(
+    Uint32 input_width, Uint32 input_height, Uint32 output_width,
+    Uint32 output_height) noexcept {
+  const float in_width = static_cast<float>(input_width);
+  const float in_height = static_cast<float>(input_height);
+  const float out_width = static_cast<float>(output_width);
+  const float out_height = static_cast<float>(output_height);
+  const float inv_width = 1.0F / in_width;
+  const float inv_height = 1.0F / in_height;
+  const float scale_x = in_width / out_width;
+  const float scale_y = in_height / out_height;
+  return {{float_bits(scale_x), float_bits(scale_y),
+           float_bits(0.5F * scale_x - 0.5F),
+           float_bits(0.5F * scale_y - 0.5F)},
+          {float_bits(inv_width), float_bits(inv_height), float_bits(inv_width),
+           float_bits(-inv_height)},
+          {float_bits(-inv_width), float_bits(2.0F * inv_height),
+           float_bits(inv_width), float_bits(2.0F * inv_height)},
+          {float_bits(0.0F), float_bits(4.0F * inv_height),
+           float_bits(0.0F), float_bits(0.0F)}};
+}
+
+[[nodiscard]] Fsr1RcasUniforms make_fsr1_rcas_uniforms() noexcept {
+  // Match the attenuation used by AMD's public FSR 1 sample.
+  return {{float_bits(std::exp2(-0.25F)), 0U, 0U, 0U}};
+}
+
+template <typename Uniforms>
+[[nodiscard]] bool encode_fsr1_pass(
+    SDL_GPUCommandBuffer *command, SDL_GPUTexture *source,
+    SDL_GPUTexture *destination, SDL_GPUGraphicsPipeline *pipeline,
+    SDL_GPUSampler *sampler, const Uniforms &uniforms) {
+  const SDL_GPUColorTargetInfo target{
+      .texture = destination,
+      .load_op = SDL_GPU_LOADOP_DONT_CARE,
+      .store_op = SDL_GPU_STOREOP_STORE};
+  SDL_GPURenderPass *pass =
+      SDL_BeginGPURenderPass(command, &target, 1, nullptr);
+  if (pass == nullptr)
+    return false;
+  SDL_BindGPUGraphicsPipeline(pass, pipeline);
+  const SDL_GPUTextureSamplerBinding binding{.texture = source,
+                                             .sampler = sampler};
+  SDL_BindGPUFragmentSamplers(pass, 0, &binding, 1);
+  SDL_PushGPUFragmentUniformData(command, 0, &uniforms,
+                                 static_cast<Uint32>(sizeof(uniforms)));
+  SDL_DrawGPUPrimitives(pass, 3, 1, 0, 0);
+  SDL_EndGPURenderPass(pass);
+  return true;
+}
+
+[[nodiscard]] bool encode_fsr1_spatial_passes(
+    SDL_GPUCommandBuffer *command, SDL_GPUTexture *source,
+    SDL_GPUTexture *destination, Uint32 input_width, Uint32 input_height,
+    Uint32 output_width, Uint32 output_height, GpuFsr1Spatial &fsr1) {
+  const auto easu_uniforms = make_fsr1_easu_uniforms(
+      input_width, input_height, output_width, output_height);
+  if (!encode_fsr1_pass(command, source, fsr1.easu_target.texture,
+                        fsr1.easu_pipeline, fsr1.sampler, easu_uniforms))
+    return false;
+  const auto rcas_uniforms = make_fsr1_rcas_uniforms();
+  return encode_fsr1_pass(command, fsr1.easu_target.texture, destination,
+                          fsr1.rcas_pipeline, fsr1.sampler, rcas_uniforms);
 }
 
 void release_overlay(SDL_GPUDevice *device, GpuOverlay &overlay) {
@@ -1315,11 +1531,26 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     return result;
   }
 
+  GpuFsr1Spatial fsr1;
+  int initial_output_width{}, initial_output_height{};
+  const auto initial_swapchain_format =
+      SDL_GetGPUSwapchainTextureFormat(device, window);
+  const bool initial_output_size_ready =
+      SDL_GetWindowSizeInPixels(window, &initial_output_width,
+                                &initial_output_height) &&
+      initial_output_width > 0 && initial_output_height > 0;
+  const bool fsr1_spatial_ready =
+      initial_output_size_ready && ensure_fsr1_spatial_resources(
+          device, initial_swapchain_format,
+          static_cast<Uint32>(initial_output_width),
+          static_cast<Uint32>(initial_output_height), fsr1);
+
   settings::GraphicsCapabilities capabilities;
   capabilities.mailbox_present = SDL_WindowSupportsGPUPresentMode(
       device, window, SDL_GPU_PRESENTMODE_MAILBOX);
   capabilities.immediate_present = SDL_WindowSupportsGPUPresentMode(
       device, window, SDL_GPU_PRESENTMODE_IMMEDIATE);
+  capabilities.fsr1_spatial_upscaler = fsr1_spatial_ready;
   // No enhanced Modern+ presentation path is bound in this SDL GPU runtime
   // yet.  Keep the profile and its vendor options unavailable rather than
   // accepting a setting that would render through the plain native path.
@@ -1353,6 +1584,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
                                     : "initial graphics configuration is invalid");
     gpu_intro.reset();
     startup_textures.reset();
+    release_fsr1_spatial(device, fsr1);
     release_overlay(device, overlay);
     release_scene(device, gpu);
     SDL_ReleaseWindowFromGPUDevice(device, window);
@@ -1393,7 +1625,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     }
   } catch(const std::exception& error) {
     const RuntimeResult failed{false,std::string("camera display reader initialization failed: ")+error.what()};
-    gpu_intro.reset(); startup_textures.reset(); release_overlay(device,overlay); release_scene(device,gpu);
+    gpu_intro.reset(); startup_textures.reset(); release_fsr1_spatial(device,fsr1); release_overlay(device,overlay); release_scene(device,gpu);
     SDL_ReleaseWindowFromGPUDevice(device,window); SDL_DestroyGPUDevice(device); return failed;
   }
   menu.set_confirmed(initial_graphics.requested, *initial_resolution.effective);
@@ -1425,6 +1657,9 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
   bool running = true;
   bool screenshot_captured = screenshot_path.empty();
   std::size_t frames = 0;
+  std::size_t fsr1_frames_submitted = 0;
+  bool fsr1_fallback_used = false;
+  bool fsr1_requested_during_run = false;
   std::optional<SdlMenuGamepad> menu_gamepad;
   if (gamepad_session.initialized) {
     menu_gamepad.emplace(
@@ -1654,8 +1889,16 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     }
     SDL_GPUTexture *presentation_target =
         capture_texture != nullptr ? capture_texture : frame_output_target.texture;
-    const auto presentation = resolve_runtime_presentation_settings(
-        menu.live_effective(), {output_width, output_height});
+    const auto effective_graphics = menu.live_effective();
+    const bool fsr1_requested =
+        effective_graphics.upscaler == settings::Upscaler::fsr1_spatial;
+    const bool fsr1_frame_available =
+        fsr1_requested && ensure_fsr1_spatial_resources(
+                              device, swapchain_format, output_width,
+                              output_height, fsr1);
+    auto presentation = resolve_runtime_presentation_settings(
+        effective_graphics, {output_width, output_height},
+        fsr1_frame_available);
     if (!presentation) {
       result = {.success = false,
                 .message = "effective graphics presentation is unsupported"};
@@ -1666,6 +1909,10 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         SDL_ReleaseGPUTexture(device, capture_texture);
       break;
     }
+    fsr1_requested_during_run =
+        fsr1_requested_during_run || fsr1_requested;
+    fsr1_fallback_used =
+        fsr1_fallback_used || presentation->fsr1_spatial_fallback;
     SDL_GPUTexture *content_target = presentation_target;
     if (presentation->spatial_resample) {
       if (!ensure_render_scale_target(device, presentation->content_extent.width,
@@ -1793,6 +2040,7 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
     // while still advertising no temporal capability.  The renderer-neutral
     // TemporalHistoryLifecycle, TemporalJitterProvider and
     // TemporalResolveInputLifecycle remain the contract for that future pass.
+    bool fsr1_passes_encoded = false;
     if (presentation_target != nullptr) {
       const SDL_GPUColorTargetInfo target{
           .texture = content_target,
@@ -1884,7 +2132,18 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         admitted_intro_host_frame->draw(command, pass);
       SDL_EndGPURenderPass(pass);
 
-      if (content_target != presentation_target) {
+      if (presentation->fsr1_spatial_active) {
+        fsr1_passes_encoded = encode_fsr1_spatial_passes(
+            command, content_target, presentation_target, content_width,
+            content_height, output_width, output_height, fsr1);
+        if (!fsr1_passes_encoded) {
+          presentation->fsr1_spatial_active = false;
+          presentation->fsr1_spatial_fallback = true;
+          fsr1_fallback_used = true;
+        }
+      }
+
+      if (content_target != presentation_target && !fsr1_passes_encoded) {
         const SDL_GPUBlitInfo scale_blit{
             .source = {.texture = content_target,
                        .w = content_width,
@@ -2058,6 +2317,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       release_overlay_transfers();
       break;
     }
+    if (fsr1_passes_encoded)
+      ++fsr1_frames_submitted;
     if (capture_fence != nullptr) {
       SDL_GPUFence *fences[]{capture_fence};
       if (!SDL_WaitForGPUFences(device, true, fences, 1)) {
@@ -2140,7 +2401,19 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
         " source-backed intro images uploaded; automatic intro playback pending)";
   if (result.success && intro_static_fallback != nullptr)
     result.message += " (incomplete static intro fallback rendered from source-backed data; playback pending)";
+  if (result.success && fsr1_requested_during_run) {
+    if (fsr1_frames_submitted != 0) {
+      result.message += " (FSR 1 EASU+RCAS submitted for " +
+                        std::to_string(fsr1_frames_submitted) + " frames";
+      if (fsr1_fallback_used)
+        result.message += "; native scaling used when unavailable";
+      result.message += ")";
+    } else {
+      result.message += " (FSR 1 requested; native scaling used because the active GPU format or shaders are unavailable)";
+    }
+  }
   gpu_intro.reset();
+  release_fsr1_spatial(device, fsr1);
   release_overlay(device, overlay);
   startup_textures.reset();
   release_render_scale_target(device, render_scale_target);

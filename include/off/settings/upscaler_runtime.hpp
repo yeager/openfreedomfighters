@@ -11,7 +11,8 @@ namespace off::settings {
 // submission path. This is deliberately not a dynamic-library loader: vendor
 // SDK discovery, licensing, and device creation stay in the platform backend.
 // The renderer submits a completed binding here only after it can provide the
-// required temporal inputs and execute the provider for a real frame.
+// required temporal inputs and execute the provider for a real frame. Spatial
+// FSR 1 is negotiated by the renderer's native pass implementation instead.
 struct UpscalerRuntimeBinding {
   Upscaler backend{Upscaler::native};
   bool native_device_ready{false};

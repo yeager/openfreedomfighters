@@ -11,9 +11,16 @@ namespace off::settings {
 
 enum class WindowMode : std::uint8_t { windowed, borderless_desktop };
 enum class PresentMode : std::uint8_t { vsync, mailbox, immediate };
-// Vendor backends are retained as user intent.  A backend becomes effective
-// only when the renderer has loaded and validated its actual implementation.
-enum class Upscaler : std::uint8_t { native, temporal, dlss, fsr, xess };
+// Backend choices are retained as user intent. A choice becomes effective
+// only when the renderer has validated its implementation and frame path.
+enum class Upscaler : std::uint8_t {
+  native,
+  temporal,
+  dlss,
+  fsr,
+  xess,
+  fsr1_spatial,
+};
 enum class ShadowQuality : std::uint8_t { reference, high, ultra };
 
 struct WindowSize {
@@ -46,6 +53,7 @@ struct GraphicsCapabilities {
   bool dlss_upscaler{false};
   bool fsr_upscaler{false};
   bool xess_upscaler{false};
+  bool fsr1_spatial_upscaler{false};
   WindowSize minimum_windowed_size{640, 360};
   WindowSize maximum_windowed_size{16384, 16384};
 };
@@ -68,7 +76,8 @@ enum class FallbackReason : std::uint8_t {
   temporal_upscaler_unavailable,
   dlss_upscaler_unavailable,
   fsr_upscaler_unavailable,
-  xess_upscaler_unavailable
+  xess_upscaler_unavailable,
+  fsr1_spatial_unavailable,
 };
 
 struct GraphicsFallback {

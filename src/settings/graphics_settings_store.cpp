@@ -35,7 +35,8 @@ bool valid(const RequestedGraphicsSettings &s) {
           s.present_mode == PresentMode::immediate) &&
          (s.upscaler == Upscaler::native || s.upscaler == Upscaler::temporal ||
           s.upscaler == Upscaler::dlss || s.upscaler == Upscaler::fsr ||
-          s.upscaler == Upscaler::xess) &&
+          s.upscaler == Upscaler::xess ||
+          s.upscaler == Upscaler::fsr1_spatial) &&
          (s.shadow_quality == ShadowQuality::reference ||
           s.shadow_quality == ShadowQuality::high ||
           s.shadow_quality == ShadowQuality::ultra) &&

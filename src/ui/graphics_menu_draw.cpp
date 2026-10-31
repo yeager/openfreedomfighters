@@ -78,6 +78,8 @@ std::string upscaler_name(settings::Upscaler value,
     return "FSR";
   case settings::Upscaler::xess:
     return localized(l10n::MessageId::xess, explicit_locale, platform_locales);
+  case settings::Upscaler::fsr1_spatial:
+    return "FSR 1 (spatial)";
   }
   return {};
 }

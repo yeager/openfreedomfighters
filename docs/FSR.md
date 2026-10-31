@@ -1,10 +1,23 @@
 # FSR integration plan
 
 AMD FidelityFX Super Resolution (FSR) is the planned optional AMD
-super-resolution backend for Modern+. It is never required to run the game.
-The F10 graphics menu stores an FSR request, but the current renderer reports
-the capability as unavailable and deterministically uses the available
+temporal super-resolution backend for Modern+. It is never required to run the
+game. The F10 graphics menu stores an FSR request, but the current renderer
+reports the capability as unavailable and deterministically uses the available
 spatial/native path. It does not expose a temporal fallback.
+
+AMD FSR 1 is a separate spatial technique, specified in
+[FSR1_SPATIAL_SPEC.md](FSR1_SPATIAL_SPEC.md). It uses only the current color
+image and must not be presented as FSR 3 or as a temporal upscaler. The current
+settings model keeps `FSR 1 (spatial)` distinct from temporal `FSR`. The SDL
+renderer now has project-owned wrappers for AMD EASU and RCAS, generated DXIL,
+SPIR-V, and MSL variants, and a two-pass GPU submission path. Runtime capability
+is enabled only when shader, pipeline, sampler, and target creation succeed for
+the current SDR UNORM swapchain format. sRGB and HDR formats still fall back
+to native scaling. Bounded six-frame runs submitted both passes on macOS Metal
+and Linux Vulkan using Mesa llvmpipe software rendering. Physical GPU support,
+Windows/D3D12, Steam Deck, broader Mac GPU coverage, and image quality remain
+unverified.
 
 ## Boundary
 
@@ -30,9 +43,11 @@ input, saves, replay hashes, or mission state.
    frame pacing, and safe fallback behavior on AMD and non-AMD hardware.
 5. Report the actual runtime version; never label a fallback path as FSR.
 
-Until these gates are complete, FSR intent is safely retained and the spatial
-path stays available on Windows, Linux, Steam Deck, and macOS. A portable
-temporal path is a separate future deliverable, not a current fallback.
+Until these gates are complete, temporal FSR intent is safely retained and
+falls back to the native path. FSR 1 spatial shader variants are included for
+SDL's DXIL, SPIR-V, and MSL backends, but runtime execution must be verified on
+Windows, Linux, Steam Deck, and macOS. A portable temporal path is a separate
+future deliverable, not a current fallback.
 
 ## Optional SDK build
 

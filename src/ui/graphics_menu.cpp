@@ -224,8 +224,8 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
   }
   case GraphicsMenuRow::upscaler: {
     auto value = static_cast<unsigned>(draft_.upscaler);
-    for (unsigned attempt = 0; attempt < 5U; ++attempt) {
-      value = forward ? (value + 1U) % 5U : (value + 4U) % 5U;
+    for (unsigned attempt = 0; attempt < 6U; ++attempt) {
+      value = forward ? (value + 1U) % 6U : (value + 5U) % 6U;
       auto candidate = draft_;
       candidate.upscaler = static_cast<settings::Upscaler>(value);
       const auto resolved =

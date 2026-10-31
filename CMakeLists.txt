@@ -524,7 +524,11 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/picture_stage.frag"
     "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/generated/picture_stage.frag.hlsl"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/picture_stage_dxil.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/picture_stage_frag.hpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/picture_stage_frag.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/fsr1_easu.frag"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/fsr1_fullscreen.vert"
+    "${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/fsr1_rcas.frag"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/fsr1_spatial_shaders.hpp")
 include(ShaderSourceHash)
 off_shader_source_sha("${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/picture_stage.frag" OFF_PICTURE_SHADER_SOURCE_SHA)
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/picture_stage_frag.hpp"
@@ -543,7 +547,35 @@ file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/picture
 if(NOT OFF_PICTURE_DXIL_SOURCE_SHA STREQUAL "// HLSL SHA256: ${OFF_PICTURE_HLSL_SHA}")
     message(FATAL_ERROR "Picture DXIL source is stale; regenerate with tools/build_picture_dxil.py")
 endif()
+off_shader_source_sha("${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/fsr1_easu.frag" OFF_FSR1_EASU_SOURCE_SHA)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/fsr1_spatial_shaders.hpp"
+     OFF_FSR1_EASU_GENERATED_SHA REGEX "^// EASU wrapper SHA256: ")
+if(NOT OFF_FSR1_EASU_GENERATED_SHA STREQUAL "// EASU wrapper SHA256: ${OFF_FSR1_EASU_SOURCE_SHA}")
+    message(FATAL_ERROR "FSR 1 EASU shader is stale; regenerate with tools/build_fsr1_shaders.py and tools/embed_fsr1_shaders.py")
+endif()
+off_shader_source_sha("${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/fsr1_fullscreen.vert" OFF_FSR1_FULLSCREEN_SOURCE_SHA)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/fsr1_spatial_shaders.hpp"
+     OFF_FSR1_FULLSCREEN_GENERATED_SHA REGEX "^// FULLSCREEN_VERT wrapper SHA256: ")
+if(NOT OFF_FSR1_FULLSCREEN_GENERATED_SHA STREQUAL "// FULLSCREEN_VERT wrapper SHA256: ${OFF_FSR1_FULLSCREEN_SOURCE_SHA}")
+    message(FATAL_ERROR "FSR 1 full-screen vertex shader is stale; regenerate with tools/build_fsr1_shaders.py and tools/embed_fsr1_shaders.py")
+endif()
+off_shader_source_sha("${CMAKE_CURRENT_SOURCE_DIR}/assets/shaders/fsr1_rcas.frag" OFF_FSR1_RCAS_SOURCE_SHA)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/include/off/platform/generated/fsr1_spatial_shaders.hpp"
+     OFF_FSR1_RCAS_GENERATED_SHA REGEX "^// RCAS wrapper SHA256: ")
+if(NOT OFF_FSR1_RCAS_GENERATED_SHA STREQUAL "// RCAS wrapper SHA256: ${OFF_FSR1_RCAS_SOURCE_SHA}")
+    message(FATAL_ERROR "FSR 1 RCAS shader is stale; regenerate with tools/build_fsr1_shaders.py and tools/embed_fsr1_shaders.py")
+endif()
 target_link_libraries(off_sdl_picture_stage_shader PUBLIC off_core ${OFF_SDL3_TARGET})
+add_library(off_sdl_fsr1_spatial_shader STATIC src/platform/fsr1_spatial_shader.cpp)
+target_include_directories(off_sdl_fsr1_spatial_shader PUBLIC include)
+target_link_libraries(off_sdl_fsr1_spatial_shader PUBLIC ${OFF_SDL3_TARGET})
+target_compile_features(off_sdl_fsr1_spatial_shader PUBLIC cxx_std_23)
+set_target_properties(off_sdl_fsr1_spatial_shader PROPERTIES CXX_EXTENSIONS OFF)
+if(MSVC)
+    target_compile_options(off_sdl_fsr1_spatial_shader PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(off_sdl_fsr1_spatial_shader PRIVATE -Wall -Wextra -Wpedantic -Wconversion)
+endif()
 if(MSVC)
     target_compile_options(off_sdl_picture_stage_shader PRIVATE /W4 /permissive-)
 else()
@@ -589,7 +621,7 @@ if(OFF_SDL_VULKAN_INTEROP_ENABLED)
 endif()
 target_link_libraries(
     openfreedomfighters PRIVATE
-    off_core off_sdl_audio_output off_sdl_picture_clear off_sdl_picture_stage_shader off_sdl_intro_renderer off_sdl_intro_presentation ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
+    off_core off_sdl_audio_output off_sdl_picture_clear off_sdl_picture_stage_shader off_sdl_fsr1_spatial_shader off_sdl_intro_renderer off_sdl_intro_presentation ${OFF_SDL3_TARGET} SDL3_ttf::SDL3_ttf
 )
 if(OFF_SDL_VULKAN_INTEROP_ENABLED)
     target_link_libraries(openfreedomfighters PRIVATE off_sdl_vulkan_interop)
