@@ -60,10 +60,10 @@ wrapper/source files and the pinned public dependency.
 ## Acceptance evidence
 
 The Modern menu and settings resolver keep FSR 1 independent of temporal FSR.
-A bounded six-frame macOS Metal run and a six-frame Linux Vulkan run submitted
-EASU then RCAS before output-size UI. The Linux run used Mesa llvmpipe
-software rendering, so it verifies the Linux/Vulkan path but not physical GPU
-performance. DXIL and SPIR-V shader validation passed. D3D12/Windows, Steam Deck
-hardware, Linux hardware, image quality, and broader Mac GPU support still
-require validation. Unsupported formats use native scaling and are not
-reported as active FSR 1.
+A bounded six-frame run on an Apple M4 GPU through macOS Metal and a six-frame
+Linux Vulkan run submitted EASU then RCAS before output-size UI. The Linux run
+used Mesa llvmpipe software rendering, so it verifies the Linux/Vulkan path but
+not physical GPU performance. DXIL and SPIR-V shader validation passed.
+D3D12/Windows, Steam Deck hardware, Linux hardware, image quality, and broader
+Mac GPU support still require validation. Unsupported formats use native
+scaling and are not reported as active FSR 1.

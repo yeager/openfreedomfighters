@@ -66,9 +66,9 @@ integration boundaries.
 The SDL renderer now includes a separate AMD FSR 1 spatial path using EASU and
 RCAS on the current color image. It is enabled only when the active GPU can
 create the required shader pipelines and SDR UNORM targets; sRGB/HDR currently
-fall back to native scaling. Six EASU/RCAS frames were submitted on macOS Metal
-and Linux Vulkan/llvmpipe; physical hardware and image quality still need
-verification. Temporal FSR, DLSS,
+fall back to native scaling. Six EASU/RCAS frames were submitted on Apple M4 via
+macOS Metal and Linux Vulkan/llvmpipe. Other physical GPU backends and image
+quality still need verification. Temporal FSR, DLSS,
 and XeSS remain unavailable until the normal
 scene frame supplies their required inputs. See the [FSR integration status](docs/FSR.md)
 and [FSR 1 specification](docs/FSR1_SPATIAL_SPEC.md).

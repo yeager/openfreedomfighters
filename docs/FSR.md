@@ -14,10 +14,10 @@ renderer now has project-owned wrappers for AMD EASU and RCAS, generated DXIL,
 SPIR-V, and MSL variants, and a two-pass GPU submission path. Runtime capability
 is enabled only when shader, pipeline, sampler, and target creation succeed for
 the current SDR UNORM swapchain format. sRGB and HDR formats still fall back
-to native scaling. Bounded six-frame runs submitted both passes on macOS Metal
-and Linux Vulkan using Mesa llvmpipe software rendering. Physical GPU support,
-Windows/D3D12, Steam Deck, broader Mac GPU coverage, and image quality remain
-unverified.
+to native scaling. A bounded six-frame run submitted both passes on an Apple M4
+GPU through macOS Metal; a second run used Linux Vulkan with Mesa llvmpipe
+software rendering. Windows/D3D12, Steam Deck, broader Mac and Linux GPU
+coverage, and image quality remain unverified.
 
 ## Boundary
 
