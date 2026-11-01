@@ -88,3 +88,12 @@ reader/session stays cold until those services have source-backed providers.
 The explicit `--diagnostic-first-cut-picture-step` option follows the selected
 command's authored source reference for a still preview; it also does not claim
 reader admission or command execution.
+
+## Reader-service source boundary (2026-11-01)
+
+The normal application has no project-owned value provider for the reader
+bracket's opaque retained value or its external-loader service. The current
+session adapter records those calls but does not implement their production
+semantics. Do not pass an invented constant or a no-op service to force reader
+completion: the controller evidence and normal scene host must remain
+unavailable until those operations have defined project-owned behavior.
