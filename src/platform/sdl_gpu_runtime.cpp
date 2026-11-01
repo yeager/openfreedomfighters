@@ -393,9 +393,14 @@ struct alignas(16) Fsr1RcasUniforms {
            float_bits(0.0F), float_bits(0.0F)}};
 }
 
-[[nodiscard]] Fsr1RcasUniforms make_fsr1_rcas_uniforms() noexcept {
-  // Match the attenuation used by AMD's public FSR 1 sample.
-  return {{float_bits(std::exp2(-0.25F)), 0U, 0U, 0U}};
+[[nodiscard]] Fsr1RcasUniforms
+make_fsr1_rcas_uniforms(std::uint16_t sharpness_percent) noexcept {
+  // FSR 1 defines sharpness in [0, 1]. Preserve the previous 0.25 default
+  // while allowing the graphics menu to change only this spatial pass.
+  const auto sharpness =
+      static_cast<float>(std::min<std::uint16_t>(sharpness_percent, 100U)) /
+      100.0F;
+  return {{float_bits(std::exp2(-sharpness)), 0U, 0U, 0U}};
 }
 
 template <typename Uniforms>
@@ -425,13 +430,14 @@ template <typename Uniforms>
 [[nodiscard]] bool encode_fsr1_spatial_passes(
     SDL_GPUCommandBuffer *command, SDL_GPUTexture *source,
     SDL_GPUTexture *destination, Uint32 input_width, Uint32 input_height,
-    Uint32 output_width, Uint32 output_height, GpuFsr1Spatial &fsr1) {
+    Uint32 output_width, Uint32 output_height,
+    std::uint16_t sharpness_percent, GpuFsr1Spatial &fsr1) {
   const auto easu_uniforms = make_fsr1_easu_uniforms(
       input_width, input_height, output_width, output_height);
   if (!encode_fsr1_pass(command, source, fsr1.easu_target.texture,
                         fsr1.easu_pipeline, fsr1.sampler, easu_uniforms))
     return false;
-  const auto rcas_uniforms = make_fsr1_rcas_uniforms();
+  const auto rcas_uniforms = make_fsr1_rcas_uniforms(sharpness_percent);
   return encode_fsr1_pass(command, fsr1.easu_target.texture, destination,
                           fsr1.rcas_pipeline, fsr1.sampler, rcas_uniforms);
 }
@@ -2138,7 +2144,8 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       if (presentation->fsr1_spatial_active) {
         fsr1_passes_encoded = encode_fsr1_spatial_passes(
             command, content_target, presentation_target, content_width,
-            content_height, output_width, output_height, fsr1);
+            content_height, output_width, output_height,
+            effective_graphics.fsr1_sharpness_percent, fsr1);
         if (!fsr1_passes_encoded) {
           presentation->fsr1_spatial_active = false;
           presentation->fsr1_spatial_fallback = true;

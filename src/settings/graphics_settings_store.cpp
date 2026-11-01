@@ -41,7 +41,8 @@ bool valid(const RequestedGraphicsSettings &s) {
           s.shadow_quality == ShadowQuality::high ||
           s.shadow_quality == ShadowQuality::ultra) &&
          s.windowed_size.width && s.windowed_size.height &&
-         s.render_scale_percent >= 50 && s.render_scale_percent <= 200;
+         s.render_scale_percent >= 50 && s.render_scale_percent <= 200 &&
+         s.fsr1_sharpness_percent <= 100;
 }
 std::string serialize(const RequestedGraphicsSettings &s) {
   return std::string(header) +
@@ -56,7 +57,9 @@ std::string serialize(const RequestedGraphicsSettings &s) {
          "\nrender_scale_percent=" + std::to_string(s.render_scale_percent) +
          "\nupscaler=" + std::to_string(static_cast<unsigned>(s.upscaler)) +
          "\nshadow_quality=" +
-         std::to_string(static_cast<unsigned>(s.shadow_quality)) + "\n";
+         std::to_string(static_cast<unsigned>(s.shadow_quality)) +
+         "\nfsr1_sharpness_percent=" +
+         std::to_string(s.fsr1_sharpness_percent) + "\n";
 }
 #ifndef _WIN32
 bool write_all(int fd, std::string_view v) {
@@ -167,11 +170,11 @@ load_graphics_settings(const std::filesystem::path &path) {
     return {GraphicsSettingsLoadStatus::io_error, {}};
   if (d.size() > max_document)
     return {GraphicsSettingsLoadStatus::invalid, {}};
-  std::array<std::string, 9> values;
-  std::array<bool, 9> seen{};
+  std::array<std::string, 10> values;
+  std::array<bool, 10> seen{};
   std::size_t pos = 0;
   unsigned row = 0;
-  const std::array<std::string_view, 9> keys{"profile",
+  const std::array<std::string_view, 10> keys{"profile",
                                              "window_mode",
                                              "width",
                                              "height",
@@ -179,7 +182,8 @@ load_graphics_settings(const std::filesystem::path &path) {
                                              "modern_plus",
                                              "render_scale_percent",
                                              "upscaler",
-                                             "shadow_quality"};
+                                             "shadow_quality",
+                                             "fsr1_sharpness_percent"};
   while (pos < d.size()) {
     const auto nl = d.find('\n', pos),
                end = nl == std::string::npos ? d.size() : nl;
@@ -198,22 +202,22 @@ load_graphics_settings(const std::filesystem::path &path) {
     if (eq == std::string_view::npos || eq == 0 ||
         line.find('=', eq + 1) != std::string_view::npos)
       return {GraphicsSettingsLoadStatus::invalid, {}};
-    unsigned index = 9;
+    unsigned index = 10;
     for (unsigned i = 0; i < keys.size(); ++i)
       if (line.substr(0, eq) == keys[i]) {
         index = i;
         break;
       }
     const auto v = line.substr(eq + 1);
-    if (index == 9 || seen[index] || v.empty())
+    if (index == 10 || seen[index] || v.empty())
       return {GraphicsSettingsLoadStatus::invalid, {}};
     seen[index] = true;
     values[index] = v;
   }
   if (row == 0)
     return {GraphicsSettingsLoadStatus::invalid, {}};
-  for (bool s : seen)
-    if (!s)
+  for (std::size_t i = 0; i < 9; ++i)
+    if (!seen[i])
       return {GraphicsSettingsLoadStatus::invalid, {}};
   const auto p = number<unsigned>(values[0]);
   const auto w = number<unsigned>(values[1]);
@@ -223,7 +227,11 @@ load_graphics_settings(const std::filesystem::path &path) {
   const auto scale = number<std::uint16_t>(values[6]);
   const auto u = number<unsigned>(values[7]);
   const auto sh = number<unsigned>(values[8]);
+  const auto fsr1_sharpness = seen[9]
+                                  ? number<std::uint16_t>(values[9])
+                                  : std::optional<std::uint16_t>{25};
   if (!p || !w || !x || !y || !pm || !scale || !u || !sh ||
+      !fsr1_sharpness ||
       (values[5] != "0" && values[5] != "1"))
     return {GraphicsSettingsLoadStatus::invalid, {}};
   RequestedGraphicsSettings s{static_cast<Mode>(*p),
@@ -233,7 +241,8 @@ load_graphics_settings(const std::filesystem::path &path) {
                               values[5] == "1",
                               *scale,
                               static_cast<Upscaler>(*u),
-                              static_cast<ShadowQuality>(*sh)};
+                              static_cast<ShadowQuality>(*sh),
+                              *fsr1_sharpness};
   return valid(s)
              ? GraphicsSettingsLoadResult{GraphicsSettingsLoadStatus::loaded, s}
              : GraphicsSettingsLoadResult{GraphicsSettingsLoadStatus::invalid,

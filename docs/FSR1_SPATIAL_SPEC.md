@@ -14,6 +14,13 @@ AMD recommends running the stages after tone mapping and before high-frequency
 overlays such as subtitles. See the [official FSR 1 overview](https://gpuopen.com/fidelityfx-superresolution/)
 and the [official FSR 1 source repository](https://github.com/GPUOpen-Effects/FidelityFX-FSR).
 
+The F10 graphics menu exposes FSR 1 sharpness from 0% to 100% in 5% steps.
+The value maps to the FSR 1 dispatch interval [0, 1]; 0% disables additional
+sharpening and 100% selects its maximum. The default is 25%, preserving the
+previous RCAS attenuation. This setting affects FSR 1 only and is retained
+independently of the selected upscaler so it can be adjusted before enabling
+FSR 1.
+
 ## Frame contract
 
 - Input is the current scene color image at the effective render extent, after

@@ -43,6 +43,7 @@ enum class UiControl : std::uint8_t {
   present_mode,
   render_scale,
   upscaler,
+  fsr1_sharpness,
   shadows,
   apply,
   cancel,

@@ -58,6 +58,7 @@ enum class MessageId : std::size_t {
   reference,
   high,
   ultra,
+  fsr1_sharpness,
   count
 };
 

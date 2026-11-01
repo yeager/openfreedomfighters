@@ -71,6 +71,10 @@ resolve_graphics_settings(const RequestedGraphicsSettings &requested,
     return {.effective = std::nullopt,
             .error = GraphicsValidationError::render_scale_out_of_range};
   }
+  if (requested.fsr1_sharpness_percent > 100) {
+    return {.effective = std::nullopt,
+            .error = GraphicsValidationError::fsr1_sharpness_out_of_range};
+  }
   if (!capabilities.original_profile && !capabilities.modern_profile) {
     return {.effective = std::nullopt,
             .error = GraphicsValidationError::no_supported_profile};
@@ -85,6 +89,7 @@ resolve_graphics_settings(const RequestedGraphicsSettings &requested,
       .render_scale_percent = requested.render_scale_percent,
       .upscaler = requested.upscaler,
       .shadow_quality = requested.shadow_quality,
+      .fsr1_sharpness_percent = requested.fsr1_sharpness_percent,
       .fallbacks = {},
   };
   const auto requested_profile_available = requested.profile == Mode::original

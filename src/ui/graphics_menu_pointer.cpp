@@ -60,6 +60,9 @@ GraphicsMenuEffect dispatch_graphics_menu_pointer(GraphicsMenuSession &menu,
   case UiControl::upscaler:
     row = GraphicsMenuRow::upscaler;
     break;
+  case UiControl::fsr1_sharpness:
+    row = GraphicsMenuRow::fsr1_sharpness;
+    break;
   case UiControl::shadows:
     row = GraphicsMenuRow::shadows;
     break;

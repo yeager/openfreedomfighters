@@ -17,7 +17,7 @@ constexpr UiColor white{240, 243, 248, 255};
 constexpr UiColor muted{166, 174, 187, 255};
 constexpr float reference_width = 640.0F;
 constexpr float reference_height = 360.0F;
-constexpr std::size_t visible_option_slots = 7;
+constexpr std::size_t visible_option_slots = 8;
 using PlatformLocales = std::span<const std::string_view>;
 
 bool contains(const UiRect &rect, float x, float y) {
@@ -302,6 +302,8 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
       localized(l10n::MessageId::render_scale, explicit_locale,
                 platform_locales),
       localized(l10n::MessageId::upscaler, explicit_locale, platform_locales),
+      localized(l10n::MessageId::fsr1_sharpness, explicit_locale,
+                platform_locales),
       localized(l10n::MessageId::shadows, explicit_locale, platform_locales)};
   const std::array values{
       profile_name(draft, explicit_locale, platform_locales),
@@ -311,11 +313,12 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
       present_name(draft.present_mode, explicit_locale, platform_locales),
       std::to_string(draft.render_scale_percent) + "%",
       upscaler_name(draft.upscaler, explicit_locale, platform_locales),
+      std::to_string(draft.fsr1_sharpness_percent) + "%",
       shadow_name(draft.shadow_quality, explicit_locale, platform_locales)};
   const std::array controls{UiControl::profile,      UiControl::window_mode,
                             UiControl::window_size,  UiControl::present_mode,
                             UiControl::render_scale, UiControl::upscaler,
-                            UiControl::shadows};
+                            UiControl::fsr1_sharpness, UiControl::shadows};
   static_assert(labels.size() == visible_option_slots);
   for (std::size_t i = 0; i < visible_option_slots; ++i) {
     const float reference_y = 160.0F + static_cast<float>(i) * 18.0F;
@@ -345,8 +348,8 @@ build_graphics_menu_draw_list(const GraphicsMenuSession &menu, UiExtent target,
   for (std::size_t i = 0; i < actions.size(); ++i) {
     const float x = 190.0F + static_cast<float>(i) * 150.0F;
     out.hit_targets.push_back(
-        {reference_rect(x, 292.0F, 130.0F, 18.0F), actions[i], true});
-    add_text(UiLayer::content, point_x(x), point_y(294.0F), action_labels[i],
+        {reference_rect(x, 322.0F, 130.0F, 18.0F), actions[i], true});
+    add_text(UiLayer::content, point_x(x), point_y(324.0F), action_labels[i],
              menu.selected_row() == action_rows[i] ? white : muted);
   }
   return finish();

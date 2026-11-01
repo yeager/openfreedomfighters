@@ -38,6 +38,9 @@ struct RequestedGraphicsSettings {
   std::uint16_t render_scale_percent{100};
   Upscaler upscaler{Upscaler::native};
   ShadowQuality shadow_quality{ShadowQuality::reference};
+  // FidelityFX FSR 1 dispatch sharpness, represented as percent in its
+  // documented [0, 1] interval. Kept independently of temporal FSR.
+  std::uint16_t fsr1_sharpness_percent{25};
   friend bool operator==(const RequestedGraphicsSettings &,
                          const RequestedGraphicsSettings &) = default;
 };
@@ -96,6 +99,7 @@ struct EffectiveGraphicsSettings {
   std::uint16_t render_scale_percent{100};
   Upscaler upscaler{Upscaler::native};
   ShadowQuality shadow_quality{ShadowQuality::reference};
+  std::uint16_t fsr1_sharpness_percent{25};
   std::vector<GraphicsFallback> fallbacks;
   friend bool operator==(const EffectiveGraphicsSettings &,
                          const EffectiveGraphicsSettings &) = default;
@@ -107,7 +111,8 @@ enum class GraphicsValidationError : std::uint8_t {
   window_size_below_minimum,
   window_size_above_maximum,
   no_supported_profile,
-  render_scale_out_of_range
+  render_scale_out_of_range,
+  fsr1_sharpness_out_of_range
 };
 
 struct GraphicsResolution {

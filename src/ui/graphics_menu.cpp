@@ -1,5 +1,6 @@
 #include "off/ui/graphics_menu.hpp"
 
+#include <algorithm>
 #include <array>
 #include <stdexcept>
 #include <utility>
@@ -18,6 +19,7 @@ requested_from_effective(const settings::EffectiveGraphicsSettings &value) {
       .render_scale_percent = value.render_scale_percent,
       .upscaler = value.upscaler,
       .shadow_quality = value.shadow_quality,
+      .fsr1_sharpness_percent = value.fsr1_sharpness_percent,
   };
 }
 
@@ -111,7 +113,8 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
       GraphicsMenuRow::window_size,  GraphicsMenuRow::present_mode,
       GraphicsMenuRow::apply,        GraphicsMenuRow::cancel,
       GraphicsMenuRow::render_scale, GraphicsMenuRow::upscaler,
-      GraphicsMenuRow::shadows,      GraphicsMenuRow::defaults};
+      GraphicsMenuRow::fsr1_sharpness, GraphicsMenuRow::shadows,
+      GraphicsMenuRow::defaults};
   std::size_t index = 0;
   for (std::size_t i = 0; i < rows.size(); ++i)
     if (rows[i] == selected_row_)
@@ -242,6 +245,17 @@ GraphicsMenuEffect GraphicsMenuSession::handle_key(GraphicsMenuKey key,
     auto value = static_cast<unsigned>(draft_.shadow_quality);
     value = forward ? (value + 1U) % 3U : (value + 2U) % 3U;
     draft_.shadow_quality = static_cast<settings::ShadowQuality>(value);
+    break;
+  }
+  case GraphicsMenuRow::fsr1_sharpness: {
+    constexpr std::uint16_t step = 5;
+    auto &sharpness = draft_.fsr1_sharpness_percent;
+    if (forward) {
+      sharpness = static_cast<std::uint16_t>(
+          std::min<unsigned>(100U, static_cast<unsigned>(sharpness) + step));
+    } else if (sharpness >= step) {
+      sharpness = static_cast<std::uint16_t>(sharpness - step);
+    }
     break;
   }
   case GraphicsMenuRow::apply:
