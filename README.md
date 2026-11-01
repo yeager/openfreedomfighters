@@ -48,10 +48,12 @@ intro fallback. This does not confirm animated intro playback, intro audio,
 original menus, or gameplay, which remain incomplete. The GPU runtime receives
 no active intro frame bridge.
 
-A bounded macOS Metal run of the current `main` build completed 120 frames and
-reported the static source-backed intro fallback rendered. The animated intro
-and its audio remain unverified. The latest launched macOS window still shows
-the static fallback; normal startup has not started the intro sequence.
+A bounded macOS Metal run of the latest local build completed two frames and
+saved a screenshot of the static source-backed legal-picture fallback. The
+image is visible, with the status label “Introsekvensen har inte startat.” The
+ordinary reader bracket remains cold, so the 0/420 deferred readers, animated
+intro, and intro audio remain unverified. The build no longer supplies a
+fabricated `0U` retained value to the reader bracket merely to show this still.
 
 The source audit confirms that normal startup retains a
 `NormalIntroSceneSession`, and the SDL GPU runtime binds display dimensions,

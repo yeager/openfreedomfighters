@@ -75,3 +75,16 @@ concrete project-owned outer-loader and global-lifecycle services, then connect
 the first-cut update, selected camera/view, ordered picture records, audio, and
 teardown through that same session. Keep the host and frame bridge fail-closed
 until those providers return real operation results and receipts.
+
+## Startup image while activation is pending (2026-11-01)
+
+SDL now builds its labelled static fallback directly from the prepared legal
+picture source using the exact-source preview policy. It does not run the
+ordinary postconstruction reader bracket or pass a fabricated retained value
+to its external-loader hook. The fallback remains a still image: it does not
+complete the outer-loader tail, activate MovieControl, select/admit a camera
+view, advance the first-cut clock, or present an animated frame. The retained
+reader/session stays cold until those services have source-backed providers.
+The explicit `--diagnostic-first-cut-picture-step` option follows the selected
+command's authored source reference for a still preview; it also does not claim
+reader admission or command execution.

@@ -212,6 +212,23 @@ IntroPreviewSnapshot build_admitted_first_cut_picture_step(
                              found->policy);
 }
 
+IntroPreviewSnapshot build_first_cut_picture_step_preview(
+    const IntroRuntime &runtime, std::size_t command_index,
+    IntroPreviewTarget target) {
+  const auto &commands = runtime.resources().first_cut().commands;
+  if (command_index >= commands.size())
+    throw std::runtime_error(
+        "first-cut source preview command index is out of range");
+  const auto source =
+      runtime.resources().sources().local_source_for_authored_reference(
+          commands[command_index].target_reference);
+  if (!source)
+    throw std::runtime_error(
+        "first-cut source preview target reference is unresolved");
+  return build_intro_preview(runtime, *source, target,
+                             IntroPreviewPolicy::exact_source_picture);
+}
+
 std::span<const IntroPreparedImage> select_intro_gpu_upload_images(
     std::span<const IntroPreparedImage> retained_images,
     const IntroPreviewSnapshot *explicit_diagnostic) noexcept {

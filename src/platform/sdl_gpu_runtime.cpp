@@ -1601,13 +1601,16 @@ run_sdl_gpu_runtime(const StartupWindow &startup_window, Mode mode,
       gpu_intro->attach_camera_display(camera_renderers,display);
       const graphics::CameraDisplayServices services{camera_renderers,display,[wide_screen] { return wide_screen; }};
       if(intro_session->stage()==graphics::NormalIntroSceneSessionStage::postconstructed) {
-        intro_session->complete_postconstruction_reader_bracket(0U,&services);
-        intro_session->prepare_supported_first_cut_player();
         if(!admitted_intro_frame && !intro_static_fallback) {
           const graphics::IntroPreviewTarget target{static_cast<std::uint32_t>(pixel_width),static_cast<std::uint32_t>(pixel_height)};
+          const auto legal_picture_source =
+              intro->resources().sources().local_source_for_authored_reference(
+                  intro->resources().member().references[1]);
+          if (!legal_picture_source)
+            throw std::runtime_error("intro legal-picture source reference is unresolved");
           deferred_fallback=diagnostic_picture_step
-              ? graphics::build_admitted_first_cut_picture_step(*intro,*diagnostic_picture_step,target)
-              : graphics::build_incomplete_intro_fallback(*intro,target);
+              ? graphics::build_first_cut_picture_step_preview(*intro,*diagnostic_picture_step,target)
+              : graphics::build_intro_preview(*intro, *legal_picture_source, target);
           intro_static_fallback=&*deferred_fallback;
           const auto title=ui::l10n::intro_fallback_window_title(explicit_locale,platform_locales);
           SDL_SetWindowTitle(window,title.c_str());

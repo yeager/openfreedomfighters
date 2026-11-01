@@ -106,6 +106,13 @@ admitted_first_cut_picture_preview_steps(const IntroRuntime &runtime);
     const IntroRuntime &runtime, std::size_t command_index,
     IntroPreviewTarget target);
 
+// Builds an explicitly requested still preview from the exact picture source
+// targeted by one retained first-cut command. This is source inspection only:
+// it does not require reader receipts or claim that the command was admitted.
+[[nodiscard]] IntroPreviewSnapshot build_first_cut_picture_step_preview(
+    const IntroRuntime &runtime, std::size_t command_index,
+    IntroPreviewTarget target);
+
 // Selects the CPU image set for one SDL intro-renderer lifetime.  Normal
 // retained startup owns every prepared intro image.  The explicitly supplied
 // static fallback snapshot instead owns exactly the images named by its already
