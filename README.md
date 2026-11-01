@@ -29,7 +29,7 @@ for a portable installation.
 
 ## Current state
 
-Status reviewed 2026-10-31: the project is a native prototype, not a playable
+Status reviewed 2026-11-01: the project is a native prototype, not a playable
 game. A bounded Linux runtime check confirmed that the SDL Vulkan path can
 present the static intro fallback. It does not play the intro timeline or
 activate the main menu. Intro playback, intro audio, menu activation, and
@@ -50,7 +50,8 @@ no active intro frame bridge.
 
 A bounded macOS Metal run of the current `main` build completed 120 frames and
 reported the static source-backed intro fallback rendered. The animated intro
-and its audio remain unverified.
+and its audio remain unverified. The latest launched macOS window still shows
+the static fallback; normal startup has not started the intro sequence.
 
 The source audit confirms that normal startup retains a
 `NormalIntroSceneSession`, and the SDL GPU runtime binds display dimensions,

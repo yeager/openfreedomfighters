@@ -46,3 +46,32 @@ must be supplied from project-owned behavior before the host can safely run.
 
 This status is a source-only integration review. It contains no retail-derived
 observations and makes no claim of intro playback or rendering parity.
+
+## Source-side activation frontier (2026-11-01)
+
+The application creates and retains `OwnedNormalIntroScene`, constructs its
+source directory, and passes the resulting `NormalIntroSceneSession` to SDL.
+The normal path does not create `MovieControlHostEvidence`, bind
+`NormalIntroSceneLifecycleServiceAdapters`, call
+`NormalIntroSceneHostFactory`, or construct a `NormalIntroSceneHost`. SDL gets
+no `NormalIntroSceneHostFrameBridge`; it therefore keeps presenting the
+labelled static fallback.
+
+The existing first-cut player preparation validates its parsed sequence,
+camera, legal picture, and source ownership. The existing legal-picture
+activation operation still requires live global-lifecycle completion,
+positive-time member activation, renderer flags, position state, viewport
+dimensions, and an actual position-update service. Its result is only one
+receipt: frame assembly also requires an admitted first-cut view, a completed
+ordered-picture record, and source-backed picture submissions. Source review
+does not provide those values or a normal ordered-picture producer.
+
+`OwnedNormalIntroScene` now exposes a lifetime-bound lease for the prepared
+first-cut camera. The normal runtime still does not register that camera with
+the live SDL view host or construct an admitted first-cut frame.
+
+The current gate is before host construction and activation. Next, provide
+concrete project-owned outer-loader and global-lifecycle services, then connect
+the first-cut update, selected camera/view, ordered picture records, audio, and
+teardown through that same session. Keep the host and frame bridge fail-closed
+until those providers return real operation results and receipts.
